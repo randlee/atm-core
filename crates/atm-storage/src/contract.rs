@@ -914,6 +914,17 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         self.list_messages(scope, query, deadline).await
     }
 
+    /// Counts messages through the storage-owned SQL criteria path.  This
+    /// deliberately returns aggregates rather than materialized messages so a
+    /// mailbox list can report buckets without exhausting its read deadline.
+    async fn count_messages(
+        &self,
+        scope: MailboxScope,
+        filters: crate::search::SearchFilters,
+        group_by: Option<crate::search::SearchCountGroupBy>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<crate::search::SearchCount>, ReadLaneError>;
+
     async fn load_message(
         &self,
         scope: MailboxScope,

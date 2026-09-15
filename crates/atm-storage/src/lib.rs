@@ -69,12 +69,13 @@ pub use peer_catalog_audit::TrustedPeerCatalogAudit;
 pub use roles::ROLE_WORKER;
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
 pub use search::{
-    AsyncMessageSearchStore, InMemoryMessageSearchStore, MessageSearchPage, MessageSearchQuery,
-    MessageSearchStore, SearchAggregate, SearchAtom, SearchCursor, SearchDeadline,
-    SearchExpression, SearchFilters, SearchGroup, SearchGroupBy, SearchGroupField, SearchKey,
-    SearchLimit, SearchMatchField, SearchMetadataMatch, SearchPageRequest, SearchResultKey,
-    SearchTimestampField, SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch,
-    StoredWorkflowMetadata, TimeRange,
+    AsyncMessageSearchStore, InMemoryMessageSearchStore, MailboxBucket, MessageSearchPage,
+    MessageSearchQuery, MessageSearchStore, SearchAckState, SearchAggregate, SearchAtom,
+    SearchCount, SearchCountGroupBy, SearchCursor, SearchDeadline, SearchExpression, SearchFilters,
+    SearchGroup, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit, SearchMatchField,
+    SearchMetadataMatch, SearchPageRequest, SearchReadState, SearchResultKey, SearchTimestampField,
+    SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch, StoredWorkflowMetadata,
+    TimeRange,
 };
 pub use task_op::{MoveTarget, TaskOp};
 pub use task_state::{

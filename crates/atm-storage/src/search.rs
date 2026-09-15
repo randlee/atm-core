@@ -355,6 +355,47 @@ pub struct SearchFilters {
     pub workflow_transition: Option<WorkflowTransition>,
     pub workflow_iteration: Option<WorkflowIteration>,
     pub time_range: Option<TimeRange>,
+    /// Durable mailbox read-state predicate. Visibility remains implicit for
+    /// storage-owned search/count operations.
+    pub read_state: Option<SearchReadState>,
+    /// Durable acknowledgement-state predicate.
+    pub ack_state: Option<SearchAckState>,
+    /// Restricts results to the current terminal message in each successor
+    /// chain, matching mailbox list collapse semantics.
+    pub current_only: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SearchReadState {
+    Unread,
+    Read,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SearchAckState {
+    Pending,
+    Acknowledged,
+    NotRequired,
+}
+
+/// Aggregate grouping supported by the storage-owned message counter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SearchCountGroupBy {
+    Bucket,
+}
+
+/// One SQL aggregate result.  A bucket is absent for an ungrouped count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchCount {
+    pub bucket: Option<MailboxBucket>,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MailboxBucket {
+    Unread,
+    PendingAck,
+    History,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

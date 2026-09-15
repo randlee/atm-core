@@ -1021,12 +1021,13 @@ mod tests {
     use atm_storage::{
         AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
         DecomposedMessageRecord, InstanceTag, MemberKey, MergedVarsJson, MessageSearchQuery,
-        MessageWriteOrigin, MoveTarget, QueuePosition, SearchAtom, SearchDeadline,
-        SearchExpression, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit,
-        SearchMetadataMatch, SearchValue, SimpleAggregate, StorageFactory, TaskCloseOutcome,
-        TaskEvent, TaskEventKind, TaskOp, TaskState, TemplateFirstSeen, TemplateFrontmatter,
-        TemplateListFilter, TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
-        TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
+        MessageWriteOrigin, MoveTarget, QueuePosition, SearchAtom, SearchCountGroupBy,
+        SearchDeadline, SearchExpression, SearchFilters, SearchGroupBy, SearchGroupField,
+        SearchKey, SearchLimit, SearchMetadataMatch, SearchValue, SimpleAggregate, StorageFactory,
+        TaskCloseOutcome, TaskEvent, TaskEventKind, TaskOp, TaskState, TemplateFirstSeen,
+        TemplateFrontmatter, TemplateListFilter, TemplateMessageAdmission, TemplateOutputFormat,
+        TemplateRegistration, TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission,
+        WorkflowScopeId,
     };
     use chrono::Utc;
     use rusqlite::{Connection, OptionalExtension, params};
@@ -3457,6 +3458,42 @@ mod tests {
         assert_eq!(counts.unread, 1);
         assert_eq!(counts.pending_ack, 1);
         assert_eq!(counts.history, 1);
+    }
+
+    #[tokio::test]
+    async fn mailbox_reader_counts_buckets_without_materializing_messages() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let mut unread = message("atm:count-unread", "unread");
+        let mut pending = message("atm:count-pending", "pending");
+        let mut history = message("atm:count-history", "history");
+        pending.envelope.requires_ack = true;
+        pending.envelope.pending_ack_at = Some(IsoTimestamp::from_datetime(Utc::now()));
+        history.envelope.read = true;
+        for record in [&mut unread, &mut pending, &mut history] {
+            store.save_message(record).expect("save message");
+        }
+
+        let counts = backend
+            .async_mailbox_reader()
+            .count_messages(
+                MailboxScope::new(team(), agent()),
+                SearchFilters {
+                    team: Some(team()),
+                    agent: Some(agent()),
+                    ..SearchFilters::default()
+                },
+                Some(SearchCountGroupBy::Bucket),
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("reader count");
+
+        assert_eq!(
+            counts.iter().map(|entry| entry.count).sum::<usize>(),
+            3,
+            "bucket aggregate counts every durable message without loading rows"
+        );
     }
 
     #[test]

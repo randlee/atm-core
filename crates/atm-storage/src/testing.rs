@@ -162,6 +162,105 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
         Ok(selected)
     }
 
+    async fn count_messages(
+        &self,
+        scope: MailboxScope,
+        filters: crate::search::SearchFilters,
+        group_by: Option<crate::search::SearchCountGroupBy>,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<crate::search::SearchCount>, ReadLaneError> {
+        if filters
+            .team
+            .as_ref()
+            .is_some_and(|team| team != &scope.team)
+            || filters
+                .agent
+                .as_ref()
+                .is_some_and(|agent| agent != &scope.agent)
+        {
+            return Err(ReadLaneError::UnauthorizedScope);
+        }
+        let messages = self
+            .messages
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory mailbox reader lock poisoned".to_owned(),
+            })?;
+        let mut unread = 0usize;
+        let mut pending_ack = 0usize;
+        let mut history = 0usize;
+        for message in messages.iter().filter(|message| {
+            message.team == scope.team
+                && message.agent == scope.agent
+                && filters
+                    .from_agent
+                    .as_ref()
+                    .is_none_or(|from| message.envelope.from == *from)
+        }) {
+            let pending = matches!(
+                crate::derive_ack_requirement(&message.envelope),
+                crate::AckRequirementState::RequiredPending
+            );
+            let bucket = if pending {
+                crate::search::MailboxBucket::PendingAck
+            } else if message.envelope.read {
+                crate::search::MailboxBucket::History
+            } else {
+                crate::search::MailboxBucket::Unread
+            };
+            match filters.read_state {
+                Some(crate::search::SearchReadState::Unread) if message.envelope.read => continue,
+                Some(crate::search::SearchReadState::Read) if !message.envelope.read => continue,
+                _ => {}
+            }
+            match filters.ack_state {
+                Some(crate::search::SearchAckState::Pending) if !pending => continue,
+                Some(crate::search::SearchAckState::Acknowledged)
+                    if !matches!(
+                        crate::derive_ack_requirement(&message.envelope),
+                        crate::AckRequirementState::RequiredAcknowledged
+                    ) =>
+                {
+                    continue;
+                }
+                Some(crate::search::SearchAckState::NotRequired)
+                    if !matches!(
+                        crate::derive_ack_requirement(&message.envelope),
+                        crate::AckRequirementState::NotRequired
+                    ) =>
+                {
+                    continue;
+                }
+                _ => {}
+            }
+            match bucket {
+                crate::search::MailboxBucket::Unread => unread += 1,
+                crate::search::MailboxBucket::PendingAck => pending_ack += 1,
+                crate::search::MailboxBucket::History => history += 1,
+            }
+        }
+        Ok(match group_by {
+            Some(crate::search::SearchCountGroupBy::Bucket) => vec![
+                crate::search::SearchCount {
+                    bucket: Some(crate::search::MailboxBucket::Unread),
+                    count: unread,
+                },
+                crate::search::SearchCount {
+                    bucket: Some(crate::search::MailboxBucket::PendingAck),
+                    count: pending_ack,
+                },
+                crate::search::SearchCount {
+                    bucket: Some(crate::search::MailboxBucket::History),
+                    count: history,
+                },
+            ],
+            None => vec![crate::search::SearchCount {
+                bucket: None,
+                count: unread + pending_ack + history,
+            }],
+        })
+    }
+
     async fn load_message(
         &self,
         scope: MailboxScope,

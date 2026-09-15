@@ -113,6 +113,7 @@ fn primary_search_sql(uses_fts: bool, filters: &SqlFilters) -> String {
              FROM mail_message_search_documents d
              JOIN mail_messages_fts ON mail_messages_fts.rowid = d.search_rowid
              JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
+             LEFT JOIN mail_message_states ms ON (ms.team, ms.agent, ms.message_key) = (d.team, d.agent, d.message_key)
              LEFT JOIN message_templates t ON t.template_sha = m.template_sha
              WHERE mail_messages_fts MATCH ?{}
              ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
@@ -129,6 +130,7 @@ fn primary_search_sql(uses_fts: bool, filters: &SqlFilters) -> String {
                     m.workflow_iteration, m.applied_template_tags_json, m.effective_tags_json
              FROM mail_message_search_documents d
              JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
+             LEFT JOIN mail_message_states ms ON (ms.team, ms.agent, ms.message_key) = (d.team, d.agent, d.message_key)
              LEFT JOIN message_templates t ON t.template_sha = m.template_sha
              WHERE 1 = 1 {}
              ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
@@ -159,6 +161,7 @@ fn execute_template_search(
          JOIN mail_messages m ON m.template_sha = td.template_sha
          JOIN mail_message_search_documents d
            ON (d.team, d.agent, d.message_key) = (m.team, m.agent, m.message_key)
+         LEFT JOIN mail_message_states ms ON (ms.team, ms.agent, ms.message_key) = (d.team, d.agent, d.message_key)
          LEFT JOIN message_templates t ON t.template_sha = m.template_sha
          WHERE message_templates_fts MATCH ?{}
          ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
@@ -673,12 +676,47 @@ fn compile_sql_filters(filters: &atm_storage::SearchFilters) -> SqlFilters {
     push_time_filters(filters, &mut clauses, &mut parameters);
     push_tag_filters(filters, &mut clauses, &mut parameters);
     push_json_filters(filters, &mut clauses, &mut parameters);
+    push_message_state_filters(filters, &mut clauses);
     SqlFilters {
         clause: clauses
             .into_iter()
             .map(|clause| format!(" AND {clause}"))
             .collect(),
         parameters,
+    }
+}
+
+fn push_message_state_filters(filters: &atm_storage::SearchFilters, clauses: &mut Vec<String>) {
+    // Search, list, and aggregate count share these durable state predicates.
+    // The state join is supplied by every search SQL shape as `ms`.
+    clauses.push("ms.deleted_at IS NULL".to_owned());
+    clauses.push(
+        "(ms.expires_at IS NULL OR ms.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+            .to_owned(),
+    );
+    match filters.read_state {
+        Some(atm_storage::SearchReadState::Unread) => clauses
+            .push("COALESCE(ms.read, json_extract(m.envelope_json, '$.read'), 0) = 0".to_owned()),
+        Some(atm_storage::SearchReadState::Read) => clauses
+            .push("COALESCE(ms.read, json_extract(m.envelope_json, '$.read'), 0) != 0".to_owned()),
+        None => {}
+    }
+    match filters.ack_state {
+        Some(atm_storage::SearchAckState::Pending) => {
+            clauses.push("ms.pending_ack_at IS NOT NULL AND ms.acknowledged_at IS NULL".to_owned())
+        }
+        Some(atm_storage::SearchAckState::Acknowledged) => {
+            clauses.push("ms.acknowledged_at IS NOT NULL".to_owned());
+        }
+        Some(atm_storage::SearchAckState::NotRequired) => {
+            clauses.push("ms.pending_ack_at IS NULL".to_owned());
+        }
+        None => {}
+    }
+    if filters.current_only {
+        clauses.push(
+            "(d.message_id IS NULL OR NOT EXISTS (SELECT 1 FROM mail_messages successor WHERE successor.team = d.team AND successor.agent = d.agent AND successor.parent_message_id = d.message_id))".to_owned(),
+        );
     }
 }
 
