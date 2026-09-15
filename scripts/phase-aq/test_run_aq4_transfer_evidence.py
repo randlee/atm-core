@@ -95,7 +95,7 @@ def _install_fake_slow_atm(bin_dir: Path, *, sleep_seconds: float, stderr_line: 
         "\n".join(
             [
                 "#!/bin/sh",
-                f'echo "{stderr_line}" 1>&2',
+                f'printf "%s\\n" "{stderr_line}" 1>&2',
                 f"sleep {sleep_seconds}",
                 "",
             ]
@@ -1170,7 +1170,7 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             bin_dir = root / "bin"
             bin_dir.mkdir()
             fake_atm = _install_fake_slow_atm(
-                bin_dir, sleep_seconds=5.0, stderr_line="fake atm: about to wedge"
+                bin_dir, sleep_seconds=30.0, stderr_line="fake atm: about to wedge"
             )
             cwd = root / "cwd"
             cwd.mkdir()
@@ -1181,7 +1181,11 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
                 env,
                 ["send", "aq4-receiver@aq4-transfer-evidence", "hi", "--host", "localhost"],
                 identity="aq4-sender",
-                timeout=0.5,
+                # The timeout starts after process creation, but a loaded
+                # host may delay the child's first instruction.  Give the
+                # fixture ample startup headroom; it blocks for 30 seconds,
+                # so the timeout path still completes in about two seconds.
+                timeout=2.0,
                 cwd=cwd,
             )
 
