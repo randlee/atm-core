@@ -66,8 +66,9 @@ atm teams update-member "$ATM_TEAM" "$ATM_IDENTITY" \
 Then run the package installer with that same gateway Python interpreter:
 
 The installer defaults to the `telegram` platform. For a headless Hermes
-gateway, pass `--platform api_server`; the accepted values are `telegram` and
-`api_server`.
+gateway, `--platform api_server` is one supported example. The installer
+validates the requested platform against the public `Platform` members exposed
+by the installed Hermes gateway.
 
 ```bash
 python -m hermes_atm install \
@@ -94,11 +95,13 @@ Reset the managed gateway once after installation. This loads the generated
 receiver and native-tools plugin and publishes the graft receiver record for
 the profile.
 
-The reset should expose exactly these native Hermes tools:
+The reset registers these native Hermes tools:
 
-- `atm_send` for ordinary mailbox delivery, with optional acknowledgement
-- `atm_read` for bounded, read-only message inspection
+- `atm_send` for ordinary mailbox delivery
+- `atm_read` to read a message; pass `peek=true` to inspect without marking it
+  read
 - `atm_list` for bounded mailbox metadata
+- `atm_ack` to acknowledge a message that requires acknowledgement
 
 The tools use the installed profile's identity, team, and workspace root; tool
 arguments cannot override them. Their results are structured success or error

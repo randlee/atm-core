@@ -1,8 +1,20 @@
 {
-  "install_root": "~/.local/atm/1.6.0",
-  "binary_path": "~/.local/atm/1.6.0/bin/atm",
-  "daemon_binary_path": "~/.local/atm/1.6.0/bin/atm-daemon",
-  "doc_root": "~/.local/atm/1.6.0/share/doc/atm",
-  "doc_entrypoint": "~/.local/atm/1.6.0/share/doc/atm/README.md",
+  "github_archive": {
+    "binary_path": "bin/atm",
+    "daemon_binary_path": "bin/atm-daemon",
+    "doc_entrypoint": "share/doc/atm/README.md"
+  },
+  "homebrew": {
+    "doc_root": "pkgshare"
+  },
+  "prerelease": {
+    "install_root": "~/.atm-builds/vX.Y.Z",
+    "binary_path": "~/.atm-builds/vX.Y.Z/bin/atm",
+    "doc_entrypoint": "~/.atm-builds/vX.Y.Z/share/doc/atm/README.md"
+  },
+  "windows_channels": {
+    "winget": "use the published winget manifest location",
+    "scoop": "use the published scoop manifest location"
+  },
   "runtime_state_root": "~/.atm"
 }

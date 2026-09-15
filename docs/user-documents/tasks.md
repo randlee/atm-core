@@ -48,18 +48,18 @@ every team member without truncation. Both commands default to 200 rows and
 accept `--limit N` or `--all`; events retain the most recent rows and display
 them in sequence order. When a limit drops rows, ATM prints
 `N more rows omitted (--all)` on stderr. `atm task events <id> --json` returns
-that task's append-only events and prompt-handoff audit entries. An unknown task id
-prints the event header only (or `[]` as JSON) and succeeds. See ADR-062 for
-the task tables and audit/replay contract.
+an object with `events` and `handoffs` arrays. An unknown task id prints the
+event header only (or `{"events":[],"handoffs":[]}` as JSON) and succeeds. See
+ADR-062 for the task tables and audit/replay contract.
 
 For a Herdr-backed assignee, ATM re-sends the Task reminder body while an open
 task remains unattended: at most once per minute, after ordinary queued mail
 has had its turn. A blocked assignee is not prompted, but the task event log
 records the blocked reminder. Reminders stop as soon as the task is completed.
 
-Task attention has three layers: the task reminder mail, the lead escalation
-at every tenth reminder, and optional configured escalation recipients. Manage
-the latter with:
+Task attention has three layers: the task reminder mail, one lead escalation
+when the reminder count reaches 10, and optional configured escalation
+recipients. Manage the latter with:
 
 ```sh
 atm escalation add oncall@atm-dev
@@ -74,18 +74,18 @@ list is inherited. `atm doctor` shows the effective list and its source.
 Human task rows use this stable layout:
 
 ```
-TASK_ID     STATE     ASSIGNEE  ASSIGNER   ASSIGNED_AT               REMINDERS
-t-42        active    cipher    fenix      2026-09-05T10:12:03Z      3
-t-43        assigned  cipher    fenix      2026-09-05T10:12:04Z      0
+pos  state     task_id     assigned_at               reminders assigner
+1    active    t-42        2026-09-05T10:12:03Z      3         fenix
+2    assigned  t-43        2026-09-05T10:12:04Z      0         fenix
 ```
 
 Human task-event rows use this stable layout:
 
 ```
-SEQ  AT                        EVENT      FROM      TO        ACTOR    DETAIL
-1    2026-09-05T10:12:03Z      assigned   -         assigned  fenix    -
-2    2026-09-05T10:12:40Z      started    assigned  active    cipher   -
-3    2026-09-05T10:13:40Z      reminded   active    active    atm-daemon emitted
+seq at event from→to actor detail
+1 2026-09-05T10:12:03Z assigned -→assigned fenix -
+2 2026-09-05T10:12:40Z started assigned→active cipher -
+3 2026-09-05T10:13:40Z reminded active→active atm-daemon emitted
 ```
 
 `atm task move` reorders only the caller's open queue; select exactly one of

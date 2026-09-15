@@ -21,20 +21,17 @@ ruling records this database-wide rule. A Herdr member's alias must also match
 server, for example `team-lead_atm-dev`.
 
 `atm send <alias>` and `atm send <alias>@<team>` resolve to the canonical
-roster member before self-send validation and mailbox lookup. Workspace
-`.atm.toml` aliases take precedence. `ATM_IDENTITY=<alias>` and `--as <alias>`
-likewise resolve to the canonical sender identity.
+roster member before self-send validation and mailbox lookup.
+`ATM_IDENTITY=<alias>` and `--as <alias>` likewise resolve to the canonical
+sender identity.
 
 ## AQ2 dual-channel delivery
 
-For an `atm-graft` message-received delivery, the agent loop receives the
-canonical `<atm …>` dispatch payload followed by two newlines and the exact
-immutable message body admitted with that event:
-`rendered_nudge + "\n\n" + message_body`. The separate Telegram notification is
-plain text, formatted with the sender and subject; it is a visible notice, not
-the dispatch envelope and does not replace the message body. This is the
-contract implemented by `GraftReceiveHook` in
-`crates/atm-graft/src/nudge_sink.rs`.
+For an `atm-graft` message-received delivery, the agent loop receives only the
+rendered canonical `<atm …>` dispatch payload. The separate Telegram
+notification is plain text, formatted with the sender and subject; it is a
+visible notice, not the dispatch envelope. This is the contract implemented
+by `GraftReceiveHook` in `crates/atm-graft/src/nudge_sink.rs`.
 
 ## Task lines (Phase BB)
 

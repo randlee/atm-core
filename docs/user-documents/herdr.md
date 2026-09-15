@@ -15,11 +15,12 @@ members for queued work and task reminders.
 
 ## Endpoint And Version Support
 
-The default Herdr endpoint is `$HOME/.config/herdr/herdr.sock`. A roster member
-may instead name a Herdr session; the default session uses the configuration
-root and a named session selects that named Herdr server. Configure the member
-with `--backend herdr` and, when needed, `--session <name>`; ATM does not start
-or rename a Herdr server for you.
+The default Herdr endpoint is `$XDG_CONFIG_HOME/herdr/herdr.sock` when
+`XDG_CONFIG_HOME` is set; otherwise it is `$HOME/.config/herdr/herdr.sock`.
+A roster member may instead name a Herdr session; the default session uses the
+configuration root and a named session selects that named Herdr server.
+Configure the member with `--backend herdr` and, when needed, `--session
+<name>`; ATM does not start or rename a Herdr server for you.
 
 ATM supports released Herdr versions 0.8.0 and later. Version 0.8.2 is the
 current all-platform recording target; 0.8.1 was never released. See `atm
