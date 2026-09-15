@@ -4,13 +4,14 @@
 //! schedules `spawn_blocking` work for ordinary mailbox reads.
 
 use atm_storage::{
-    AsyncMailboxReader, AtmError, IsoTimestamp, MailboxScope, Message, MessageKey, MessageQuery,
-    ReadDeadline, ReadLaneError, SearchCount, SearchCountGroupBy, SearchFilters,
+    AsyncMailboxReader, AtmError, IsoTimestamp, MailboxListQuery, MailboxScope, Message,
+    MessageKey, MessageQuery, ReadDeadline, ReadLaneError, SearchCount, SearchCountGroupBy,
+    SearchFilters,
 };
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use crate::reader_pool::ReaderPool;
-use crate::search_store::compile_sql_filters;
+use crate::search_store::{SqlFilterAliases, compile_sql_filters_for};
 use crate::shared_db::{SharedDbTarget, deserialize_json, sqlite_error};
 
 struct MailboxReader {
@@ -66,6 +67,39 @@ impl MailboxReader {
                         .map_err(read_lane_storage_error)
                 })
                 .await
+        }
+    }
+
+    async fn submit_matching_list(
+        &self,
+        scope: MailboxScope,
+        mut query: MailboxListQuery,
+        deadline: ReadDeadline,
+        tool_class: bool,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        if query
+            .filters
+            .team
+            .as_ref()
+            .is_some_and(|team| team != &scope.team)
+            || query
+                .filters
+                .agent
+                .as_ref()
+                .is_some_and(|agent| agent != &scope.agent)
+        {
+            return Err(ReadLaneError::UnauthorizedScope);
+        }
+        query.filters.team = Some(scope.team.clone());
+        query.filters.agent = Some(scope.agent.clone());
+        let submit = move |connection: &Connection, target: &SharedDbTarget| {
+            list_matching_messages(connection, target, &scope, &query)
+                .map_err(read_lane_storage_error)
+        };
+        if tool_class {
+            self.pool.submit_tool(deadline.remaining(), submit).await
+        } else {
+            self.pool.submit(deadline.remaining(), submit).await
         }
     }
 
@@ -133,6 +167,90 @@ impl MailboxReader {
     }
 }
 
+fn list_matching_messages(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    scope: &MailboxScope,
+    query: &MailboxListQuery,
+) -> Result<Vec<Message>, AtmError> {
+    let compiled = compile_sql_filters_for(&query.filters, SqlFilterAliases::MAILBOX);
+    let limit = query
+        .limit
+        .map(|value| i64::try_from(value).unwrap_or(i64::MAX))
+        .unwrap_or(-1);
+    let sql = format!(
+        "SELECT m.message_key, m.envelope_json, ms.message_key, ms.read,
+                ms.pending_ack_at, ms.acknowledged_at, ms.expires_at
+         FROM mail_messages m
+         LEFT JOIN mail_message_states ms
+           ON (ms.team, ms.agent, ms.message_key) = (m.team, m.agent, m.message_key)
+         LEFT JOIN message_templates t ON t.template_sha = m.template_sha
+         WHERE 1 = 1 {}
+         ORDER BY m.message_at DESC, m.message_key DESC
+         LIMIT ?",
+        compiled.clause
+    );
+    let transaction = open_reader_transaction(connection, target)?;
+    let mut statement = transaction.prepare_cached(&sql).map_err(|error| {
+        sqlite_error(
+            target,
+            "failed to prepare criteria mailbox reader query",
+            error,
+        )
+    })?;
+    let mut parameters = compiled.parameters;
+    parameters.push(rusqlite::types::Value::Integer(limit));
+    let rows = statement
+        .query_map(params_from_iter(parameters), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<i64>>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+            ))
+        })
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                "failed to execute criteria mailbox reader query",
+                error,
+            )
+        })?;
+    let messages = rows
+        .map(|row| {
+            let (key, envelope_json, state_key, read, pending_ack_at, acknowledged_at, expires_at) =
+                row.map_err(|error| {
+                    sqlite_error(target, "failed to decode criteria mailbox row", error)
+                })?;
+            let state = state_key
+                .map(|_| {
+                    Ok::<StoredState, AtmError>(StoredState {
+                        read: read.unwrap_or_default() != 0,
+                        pending_ack_at: parse_timestamp(pending_ack_at, "pending_ack_at")?,
+                        acknowledged_at: parse_timestamp(acknowledged_at, "acknowledged_at")?,
+                        expires_at: parse_timestamp(expires_at, "expires_at")?,
+                    })
+                })
+                .transpose()?;
+            Ok(Message {
+                team: scope.team.clone(),
+                agent: scope.agent.clone(),
+                message_key: MessageKey::new(key)?,
+                envelope: apply_state(
+                    deserialize_json(&envelope_json, "sqlite message envelope")?,
+                    state.as_ref(),
+                ),
+            })
+        })
+        .collect::<Result<Vec<_>, AtmError>>()?;
+    drop(statement);
+    close_reader_transaction(transaction, target)?;
+    Ok(messages)
+}
+
 pub(crate) fn start_mailbox_reader(
     pool: ReaderPool,
 ) -> std::sync::Arc<dyn AsyncMailboxReader + Send + Sync> {
@@ -158,6 +276,16 @@ impl AsyncMailboxReader for MailboxReader {
         deadline: ReadDeadline,
     ) -> Result<Vec<Message>, ReadLaneError> {
         self.submit_tool_list(scope, query, deadline).await
+    }
+
+    async fn list_matching_messages(
+        &self,
+        scope: MailboxScope,
+        query: MailboxListQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        self.submit_matching_list(scope, query, deadline, true)
+            .await
     }
 
     async fn count_messages(
@@ -229,8 +357,9 @@ fn list_messages(
     let mut statement = transaction
         .prepare(
             "SELECT mail_messages.message_key, mail_messages.envelope_json,
-                 mail_message_states.read, mail_message_states.pending_ack_at,
-                 mail_message_states.acknowledged_at, mail_message_states.expires_at
+                 mail_message_states.message_key, mail_message_states.read,
+                 mail_message_states.pending_ack_at, mail_message_states.acknowledged_at,
+                 mail_message_states.expires_at
          FROM mail_messages
          LEFT JOIN mail_message_states
            ON mail_message_states.team = mail_messages.team
@@ -249,7 +378,7 @@ fn list_messages(
         .map_err(|error| {
             sqlite_error(target, "failed to prepare mailbox reader list query", error)
         })?;
-    let messages = decode_list_messages(&transaction, target, query, limit, &mut statement)?;
+    let messages = decode_list_messages(target, query, limit, &mut statement)?;
     drop(statement);
     close_reader_transaction(transaction, target)?;
     Ok(messages)
@@ -269,7 +398,6 @@ fn open_reader_transaction<'connection>(
 }
 
 fn decode_list_messages(
-    _transaction: &rusqlite::Transaction<'_>,
     target: &SharedDbTarget,
     query: &MessageQuery,
     limit: i64,
@@ -288,10 +416,11 @@ fn decode_list_messages(
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
-                    row.get::<_, Option<i64>>(2)?,
-                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<i64>>(3)?,
                     row.get::<_, Option<String>>(4)?,
                     row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
                 ))
             },
         )
@@ -299,22 +428,28 @@ fn decode_list_messages(
             sqlite_error(target, "failed to execute mailbox reader list query", error)
         })?;
     rows.map(|row| {
-        let (key, envelope_json, read, pending_ack_at, acknowledged_at, expires_at) = row
-            .map_err(|error| sqlite_error(target, "failed to decode mailbox reader row", error))?;
+        let (key, envelope_json, state_key, read, pending_ack_at, acknowledged_at, expires_at) =
+            row.map_err(|error| {
+                sqlite_error(target, "failed to decode mailbox reader row", error)
+            })?;
         let key = MessageKey::new(key)?;
-        let state = StoredState {
-            read: read.unwrap_or_default() != 0,
-            pending_ack_at: parse_timestamp(pending_ack_at, "pending_ack_at")?,
-            acknowledged_at: parse_timestamp(acknowledged_at, "acknowledged_at")?,
-            expires_at: parse_timestamp(expires_at, "expires_at")?,
-        };
+        let state = state_key
+            .map(|_| {
+                Ok::<StoredState, AtmError>(StoredState {
+                    read: read.unwrap_or_default() != 0,
+                    pending_ack_at: parse_timestamp(pending_ack_at, "pending_ack_at")?,
+                    acknowledged_at: parse_timestamp(acknowledged_at, "acknowledged_at")?,
+                    expires_at: parse_timestamp(expires_at, "expires_at")?,
+                })
+            })
+            .transpose()?;
         Ok(Message {
             team: query.team.clone(),
             agent: query.agent.clone(),
             message_key: key,
             envelope: apply_state(
                 deserialize_json(&envelope_json, "sqlite message envelope")?,
-                Some(&state),
+                state.as_ref(),
             ),
         })
     })
@@ -483,22 +618,40 @@ fn count_messages(
     filters: &SearchFilters,
     group_by: Option<SearchCountGroupBy>,
 ) -> Result<Vec<SearchCount>, AtmError> {
-    let compiled = compile_sql_filters(filters);
-    let bucket = "CASE WHEN ms.pending_ack_at IS NOT NULL AND ms.acknowledged_at IS NULL THEN 1 WHEN COALESCE(ms.read, json_extract(m.envelope_json, '$.read'), 0) = 0 THEN 0 ELSE 2 END";
+    let compiled = compile_sql_filters_for(filters, SqlFilterAliases::MAILBOX);
+    let pending_ack_at =
+        "COALESCE(ms.pending_ack_at, json_extract(m.envelope_json, '$.pendingAckAt'))";
+    let acknowledged_at =
+        "COALESCE(ms.acknowledged_at, json_extract(m.envelope_json, '$.acknowledgedAt'))";
+    let bucket = format!(
+        "CASE WHEN {pending_ack_at} IS NOT NULL AND {acknowledged_at} IS NULL THEN 1 WHEN COALESCE(ms.read, json_extract(m.envelope_json, '$.read'), 0) = 0 THEN 0 ELSE 2 END"
+    );
     let (group_expression, tag_join) = match group_by {
-        Some(SearchCountGroupBy::Bucket) => (bucket.to_owned(), ""),
+        Some(SearchCountGroupBy::Bucket) => (bucket, ""),
         Some(SearchCountGroupBy::FromAgent) => ("m.from_agent".to_owned(), ""),
         Some(SearchCountGroupBy::Tag) => {
-            ("tag.value".to_owned(), " JOIN json_each(m.tags_json) tag")
+            let tag_column = if filters.effective_tags.is_empty() {
+                "m.tags_json"
+            } else {
+                "m.effective_tags_json"
+            };
+            (
+                "tag.value".to_owned(),
+                if tag_column == "m.tags_json" {
+                    " JOIN json_each(COALESCE(m.tags_json, '[]')) tag"
+                } else {
+                    " JOIN json_each(COALESCE(m.effective_tags_json, '[]')) tag"
+                },
+            )
         }
         None => ("'all'".to_owned(), ""),
     };
     let sql = format!(
         "SELECT CAST({group_expression} AS TEXT), COUNT(*)
-      FROM mail_message_search_documents d
-      JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
+      FROM mail_messages m
       LEFT JOIN mail_message_states ms
         ON (ms.team, ms.agent, ms.message_key) = (m.team, m.agent, m.message_key){tag_join}
+      LEFT JOIN message_templates t ON t.template_sha = m.template_sha
       WHERE 1 = 1 {}
       GROUP BY {group_expression}",
         compiled.clause

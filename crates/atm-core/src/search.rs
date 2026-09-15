@@ -135,9 +135,13 @@ impl SearchInput {
             workflow_transition: self.parse_workflow_transition()?,
             workflow_iteration: self.parse_workflow_iteration()?,
             time_range: self.parse_time_range()?,
+            message_id: None,
+            task_id: None,
+            contains: None,
             read_state: None,
             ack_state: None,
             current_only: false,
+            mailbox_selection: None,
         })
     }
 

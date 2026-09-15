@@ -332,6 +332,18 @@ pub struct MessageQuery {
     pub limit: Option<usize>,
 }
 
+/// A storage-owned, criteria-based mailbox page.
+///
+/// Unlike [`MessageQuery`], this carries the complete typed predicate to the
+/// reader backend so it can apply visibility, successor collapse, ordering,
+/// and a page limit before it materializes message envelopes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MailboxListQuery {
+    pub filters: crate::search::SearchFilters,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+}
+
 /// The mailbox a read operation is authorized to inspect.
 ///
 /// This deliberately travels with every asynchronous mailbox request instead
@@ -896,6 +908,18 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         &self,
         scope: MailboxScope,
         query: MessageQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError>;
+
+    /// Lists a bounded page after applying the storage-owned typed criteria.
+    ///
+    /// This is deliberately separate from the narrow legacy-compatible
+    /// [`MessageQuery`] shape: callers that need mailbox display selection
+    /// must not load an entire mailbox merely to select one page.
+    async fn list_matching_messages(
+        &self,
+        scope: MailboxScope,
+        query: MailboxListQuery,
         deadline: ReadDeadline,
     ) -> Result<Vec<Message>, ReadLaneError>;
 

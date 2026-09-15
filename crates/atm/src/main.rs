@@ -73,9 +73,6 @@ async fn main() {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("{error}");
-            if let Some(cause) = error.cause().filter(|cause| !cause.is_empty()) {
-                eprintln!("  Cause: {cause}");
-            }
             exit_code_for_atm_error(&error)
         }
     };

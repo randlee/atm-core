@@ -14,11 +14,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::contract::{
     AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncTaskLedgerReader,
     GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
-    GraftReceiverRegistration, MailboxScope, Message, MessageKey, MessageQuery, NudgeClaim,
-    PendingNudgeStore, ReadDeadline, ReadLaneError, sealed,
+    GraftReceiverRegistration, MailboxListQuery, MailboxScope, Message, MessageKey, MessageQuery,
+    NudgeClaim, PendingNudgeStore, ReadDeadline, ReadLaneError, sealed,
 };
 use crate::error::AtmError;
-use crate::schema::AtmMessageId;
+use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::task_state::{PromptHandoff, TaskEventRow, TaskRow};
 use crate::types::{AgentName, IsoTimestamp, MemberKey, OwnerGeneration, TaskId, TeamName};
 
@@ -128,6 +128,47 @@ impl InMemoryMailboxReader {
     }
 }
 
+fn mailbox_filter_matches(
+    envelope: &MessageEnvelope,
+    filters: &crate::search::SearchFilters,
+) -> bool {
+    let pending = matches!(
+        crate::derive_ack_requirement(envelope),
+        crate::AckRequirementState::RequiredPending
+    );
+    match filters.read_state {
+        Some(crate::search::SearchReadState::Unread) if envelope.read => return false,
+        Some(crate::search::SearchReadState::Read) if !envelope.read => return false,
+        _ => {}
+    }
+    match filters.ack_state {
+        Some(crate::search::SearchAckState::Pending) if !pending => return false,
+        Some(crate::search::SearchAckState::Acknowledged)
+            if !matches!(
+                crate::derive_ack_requirement(envelope),
+                crate::AckRequirementState::RequiredAcknowledged
+            ) =>
+        {
+            return false;
+        }
+        Some(crate::search::SearchAckState::NotRequired)
+            if !matches!(
+                crate::derive_ack_requirement(envelope),
+                crate::AckRequirementState::NotRequired
+            ) =>
+        {
+            return false;
+        }
+        _ => {}
+    }
+    match filters.mailbox_selection {
+        Some(crate::search::SearchMailboxSelection::Actionable) => pending || !envelope.read,
+        Some(crate::search::SearchMailboxSelection::Unread) => !pending && !envelope.read,
+        Some(crate::search::SearchMailboxSelection::PendingAck) => pending,
+        Some(crate::search::SearchMailboxSelection::All) | None => true,
+    }
+}
+
 impl sealed::Sealed for InMemoryMailboxReader {}
 
 #[async_trait::async_trait]
@@ -156,6 +197,111 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
             .filter(|message| message.team == query.team && message.agent == query.agent)
             .cloned()
             .collect::<Vec<_>>();
+        if let Some(limit) = query.limit {
+            selected.truncate(limit);
+        }
+        Ok(selected)
+    }
+
+    async fn list_matching_messages(
+        &self,
+        scope: MailboxScope,
+        query: MailboxListQuery,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate
+                .list_matching_messages(scope, query, _deadline)
+                .await;
+        }
+        if query
+            .filters
+            .team
+            .as_ref()
+            .is_some_and(|team| team != &scope.team)
+            || query
+                .filters
+                .agent
+                .as_ref()
+                .is_some_and(|agent| agent != &scope.agent)
+        {
+            return Err(ReadLaneError::UnauthorizedScope);
+        }
+        let messages = self
+            .messages
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory mailbox reader lock poisoned".to_owned(),
+            })?;
+        let successor_ids = messages
+            .iter()
+            .filter(|message| message.team == scope.team && message.agent == scope.agent)
+            .filter_map(|message| message.envelope.parent_message_id)
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut selected =
+            messages
+                .iter()
+                .filter(|message| message.team == scope.team && message.agent == scope.agent)
+                .filter(|message| {
+                    !query.filters.current_only
+                        || message
+                            .envelope
+                            .message_id
+                            .is_none_or(|message_id| !successor_ids.contains(&message_id))
+                })
+                .filter(|message| {
+                    query
+                        .filters
+                        .from_agent
+                        .as_ref()
+                        .is_none_or(|agent| &message.envelope.from == agent)
+                })
+                .filter(|message| {
+                    query
+                        .filters
+                        .message_id
+                        .is_none_or(|message_id| message.envelope.message_id == Some(message_id))
+                })
+                .filter(|message| {
+                    query
+                        .filters
+                        .task_id
+                        .as_ref()
+                        .is_none_or(|task_id| message.envelope.task_id.as_ref() == Some(task_id))
+                })
+                .filter(|message| {
+                    query.filters.time_range.as_ref().is_none_or(|range| {
+                        range
+                            .since
+                            .is_none_or(|since| message.envelope.timestamp >= since)
+                            && range
+                                .until
+                                .is_none_or(|until| message.envelope.timestamp <= until)
+                    })
+                })
+                .filter(|message| {
+                    query.filters.contains.as_ref().is_none_or(|contains| {
+                        let contains = contains.to_ascii_lowercase();
+                        message
+                            .envelope
+                            .text
+                            .to_ascii_lowercase()
+                            .contains(&contains)
+                            || message.envelope.summary.as_ref().is_some_and(|summary| {
+                                summary.to_ascii_lowercase().contains(&contains)
+                            })
+                    })
+                })
+                .filter(|message| mailbox_filter_matches(&message.envelope, &query.filters))
+                .cloned()
+                .collect::<Vec<_>>();
+        selected.sort_by(|left, right| {
+            right
+                .envelope
+                .timestamp
+                .cmp(&left.envelope.timestamp)
+                .then_with(|| right.message_key.cmp(&left.message_key))
+        });
         if let Some(limit) = query.limit {
             selected.truncate(limit);
         }
