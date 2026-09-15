@@ -126,7 +126,7 @@ impl MailboxReader {
         }
         self.pool
             .submit_tool(deadline.remaining(), move |connection, target| {
-                count_messages(connection, target, &scope, &filters, group_by)
+                count_messages(connection, target, &filters, group_by)
                     .map_err(read_lane_storage_error)
             })
             .await
@@ -228,7 +228,9 @@ fn list_messages(
     let transaction = open_reader_transaction(connection, target)?;
     let mut statement = transaction
         .prepare(
-            "SELECT mail_messages.message_key, mail_messages.envelope_json
+            "SELECT mail_messages.message_key, mail_messages.envelope_json,
+                 mail_message_states.read, mail_message_states.pending_ack_at,
+                 mail_message_states.acknowledged_at, mail_message_states.expires_at
          FROM mail_messages
          LEFT JOIN mail_message_states
            ON mail_message_states.team = mail_messages.team
@@ -267,7 +269,7 @@ fn open_reader_transaction<'connection>(
 }
 
 fn decode_list_messages(
-    transaction: &rusqlite::Transaction<'_>,
+    _transaction: &rusqlite::Transaction<'_>,
     target: &SharedDbTarget,
     query: &MessageQuery,
     limit: i64,
@@ -282,23 +284,37 @@ fn decode_list_messages(
                 query.task_id.as_ref().map(|value| value.as_str()),
                 limit,
             ],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<i64>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                ))
+            },
         )
         .map_err(|error| {
             sqlite_error(target, "failed to execute mailbox reader list query", error)
         })?;
     rows.map(|row| {
-        let (key, envelope_json) = row
+        let (key, envelope_json, read, pending_ack_at, acknowledged_at, expires_at) = row
             .map_err(|error| sqlite_error(target, "failed to decode mailbox reader row", error))?;
         let key = MessageKey::new(key)?;
-        let state = load_state(transaction, target, &query.team, &query.agent, &key)?;
+        let state = StoredState {
+            read: read.unwrap_or_default() != 0,
+            pending_ack_at: parse_timestamp(pending_ack_at, "pending_ack_at")?,
+            acknowledged_at: parse_timestamp(acknowledged_at, "acknowledged_at")?,
+            expires_at: parse_timestamp(expires_at, "expires_at")?,
+        };
         Ok(Message {
             team: query.team.clone(),
             agent: query.agent.clone(),
             message_key: key,
             envelope: apply_state(
                 deserialize_json(&envelope_json, "sqlite message envelope")?,
-                state.as_ref(),
+                Some(&state),
             ),
         })
     })
@@ -464,12 +480,11 @@ fn parse_timestamp(raw: Option<String>, field: &str) -> Result<Option<IsoTimesta
 fn count_messages(
     connection: &Connection,
     target: &SharedDbTarget,
-    _scope: &MailboxScope,
     filters: &SearchFilters,
     group_by: Option<SearchCountGroupBy>,
 ) -> Result<Vec<SearchCount>, AtmError> {
     let compiled = compile_sql_filters(filters);
-    let bucket = "CASE WHEN s.pending_ack_at IS NOT NULL AND s.acknowledged_at IS NULL THEN 1 WHEN COALESCE(s.read, json_extract(m.envelope_json, '$.read'), 0) = 0 THEN 0 ELSE 2 END";
+    let bucket = "CASE WHEN ms.pending_ack_at IS NOT NULL AND ms.acknowledged_at IS NULL THEN 1 WHEN COALESCE(ms.read, json_extract(m.envelope_json, '$.read'), 0) = 0 THEN 0 ELSE 2 END";
     let (group_expression, tag_join) = match group_by {
         Some(SearchCountGroupBy::Bucket) => (bucket.to_owned(), ""),
         Some(SearchCountGroupBy::FromAgent) => ("m.from_agent".to_owned(), ""),
@@ -482,11 +497,11 @@ fn count_messages(
         "SELECT CAST({group_expression} AS TEXT), COUNT(*)
       FROM mail_message_search_documents d
       JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
-      LEFT JOIN mail_message_states s
-        ON (s.team, s.agent, s.message_key) = (m.team, m.agent, m.message_key){tag_join}
+      LEFT JOIN mail_message_states ms
+        ON (ms.team, ms.agent, ms.message_key) = (m.team, m.agent, m.message_key){tag_join}
       WHERE 1 = 1 {}
       GROUP BY {group_expression}",
-        compiled.clause.replace("ms.", "s.")
+        compiled.clause
     );
     let mut statement = connection
         .prepare_cached(&sql)

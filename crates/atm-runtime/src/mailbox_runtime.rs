@@ -479,6 +479,7 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
                 SearchFilters {
                     team: Some(command.scope().team.clone()),
                     agent: Some(command.scope().agent.clone()),
+                    current_only: true,
                     ..SearchFilters::default()
                 },
                 Some(SearchCountGroupBy::Bucket),
@@ -490,6 +491,7 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
             .select_all_for_tool(
                 command.scope().clone(),
                 command.selection().clone(),
+                command.pushdown_limit(),
                 deadline,
             )
             .await?;
@@ -689,11 +691,16 @@ impl StorageAsyncMailboxRuntime {
         &self,
         scope: MailboxScope,
         request: MailboxSelectionRequest,
+        limit: Option<usize>,
         deadline: RequestDeadline,
     ) -> Result<MailboxSelectionResult, AtmError> {
         let messages = self
             .reader
-            .list_messages_for_tool(scope.clone(), query(&scope), read_deadline(deadline)?)
+            .list_messages_for_tool(
+                scope.clone(),
+                query_with_limit(&scope, limit),
+                read_deadline(deadline)?,
+            )
             .await
             .map_err(AtmError::from)?;
         Ok(select_mailbox_candidates(
@@ -793,12 +800,16 @@ impl StorageAsyncMailboxRuntime {
 }
 
 fn query(scope: &MailboxScope) -> MessageQuery {
+    query_with_limit(scope, None)
+}
+
+fn query_with_limit(scope: &MailboxScope, limit: Option<usize>) -> MessageQuery {
     MessageQuery {
         team: scope.team.clone(),
         agent: scope.agent.clone(),
         sender: None,
         task_id: None,
-        limit: None,
+        limit,
     }
 }
 
