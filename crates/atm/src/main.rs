@@ -683,7 +683,7 @@ fn map_command_event(
         service: service_name.clone(),
         target: target_category.clone(),
         action,
-        message: None,
+        message: event.error_message,
         identity: ProcessIdentity::default(),
         trace: None,
         request_id: None,
