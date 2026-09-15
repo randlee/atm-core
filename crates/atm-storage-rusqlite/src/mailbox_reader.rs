@@ -220,35 +220,49 @@ fn list_matching_messages(
             )
         })?;
     let messages = rows
-        .map(|row| {
-            let (key, envelope_json, state_key, read, pending_ack_at, acknowledged_at, expires_at) =
-                row.map_err(|error| {
-                    sqlite_error(target, "failed to decode criteria mailbox row", error)
-                })?;
-            let state = state_key
-                .map(|_| {
-                    Ok::<StoredState, AtmError>(StoredState {
-                        read: read.unwrap_or_default() != 0,
-                        pending_ack_at: parse_timestamp(pending_ack_at, "pending_ack_at")?,
-                        acknowledged_at: parse_timestamp(acknowledged_at, "acknowledged_at")?,
-                        expires_at: parse_timestamp(expires_at, "expires_at")?,
-                    })
-                })
-                .transpose()?;
-            Ok(Message {
-                team: scope.team.clone(),
-                agent: scope.agent.clone(),
-                message_key: MessageKey::new(key)?,
-                envelope: apply_state(
-                    deserialize_json(&envelope_json, "sqlite message envelope")?,
-                    state.as_ref(),
-                ),
-            })
-        })
+        .map(|row| decode_matching_message(row, target, scope))
         .collect::<Result<Vec<_>, AtmError>>()?;
     drop(statement);
     close_reader_transaction(transaction, target)?;
     Ok(messages)
+}
+
+type MatchingRow = (
+    String,
+    String,
+    Option<String>,
+    Option<i64>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
+fn decode_matching_message(
+    row: rusqlite::Result<MatchingRow>,
+    target: &SharedDbTarget,
+    scope: &MailboxScope,
+) -> Result<Message, AtmError> {
+    let (key, envelope_json, state_key, read, pending_ack_at, acknowledged_at, expires_at) =
+        row.map_err(|error| sqlite_error(target, "failed to decode criteria mailbox row", error))?;
+    let state = state_key
+        .map(|_| {
+            Ok::<StoredState, AtmError>(StoredState {
+                read: read.unwrap_or_default() != 0,
+                pending_ack_at: parse_timestamp(pending_ack_at, "pending_ack_at")?,
+                acknowledged_at: parse_timestamp(acknowledged_at, "acknowledged_at")?,
+                expires_at: parse_timestamp(expires_at, "expires_at")?,
+            })
+        })
+        .transpose()?;
+    Ok(Message {
+        team: scope.team.clone(),
+        agent: scope.agent.clone(),
+        message_key: MessageKey::new(key)?,
+        envelope: apply_state(
+            deserialize_json(&envelope_json, "sqlite message envelope")?,
+            state.as_ref(),
+        ),
+    })
 }
 
 pub(crate) fn start_mailbox_reader(
@@ -626,7 +640,26 @@ fn count_messages(
     let bucket = format!(
         "CASE WHEN {pending_ack_at} IS NOT NULL AND {acknowledged_at} IS NULL THEN 1 WHEN COALESCE(ms.read, json_extract(m.envelope_json, '$.read'), 0) = 0 THEN 0 ELSE 2 END"
     );
-    let (group_expression, tag_join) = match group_by {
+    let (group_expression, tag_join) = count_group_sql(filters, group_by, bucket);
+    let sql = format!(
+        "SELECT CAST({group_expression} AS TEXT), COUNT(*)
+      FROM mail_messages m
+      LEFT JOIN mail_message_states ms
+        ON (ms.team, ms.agent, ms.message_key) = (m.team, m.agent, m.message_key){tag_join}
+      LEFT JOIN message_templates t ON t.template_sha = m.template_sha
+      WHERE 1 = 1 {}
+      GROUP BY {group_expression}",
+        compiled.clause
+    );
+    decode_counts(connection, target, compiled.parameters, group_by, &sql)
+}
+
+fn count_group_sql(
+    filters: &SearchFilters,
+    group_by: Option<SearchCountGroupBy>,
+    bucket: String,
+) -> (String, &'static str) {
+    match group_by {
         Some(SearchCountGroupBy::Bucket) => (bucket, ""),
         Some(SearchCountGroupBy::FromAgent) => ("m.from_agent".to_owned(), ""),
         Some(SearchCountGroupBy::Tag) => {
@@ -645,22 +678,21 @@ fn count_messages(
             )
         }
         None => ("'all'".to_owned(), ""),
-    };
-    let sql = format!(
-        "SELECT CAST({group_expression} AS TEXT), COUNT(*)
-      FROM mail_messages m
-      LEFT JOIN mail_message_states ms
-        ON (ms.team, ms.agent, ms.message_key) = (m.team, m.agent, m.message_key){tag_join}
-      LEFT JOIN message_templates t ON t.template_sha = m.template_sha
-      WHERE 1 = 1 {}
-      GROUP BY {group_expression}",
-        compiled.clause
-    );
+    }
+}
+
+fn decode_counts(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    parameters: Vec<rusqlite::types::Value>,
+    group_by: Option<SearchCountGroupBy>,
+    sql: &str,
+) -> Result<Vec<SearchCount>, AtmError> {
     let mut statement = connection
-        .prepare_cached(&sql)
+        .prepare_cached(sql)
         .map_err(|error| sqlite_error(target, "failed to prepare mailbox count query", error))?;
     let rows = statement
-        .query_map(params_from_iter(compiled.parameters), |row| {
+        .query_map(params_from_iter(parameters), |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
         })
         .map_err(|error| sqlite_error(target, "failed to execute mailbox count query", error))?;

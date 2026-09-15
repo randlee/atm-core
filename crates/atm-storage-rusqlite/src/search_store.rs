@@ -727,7 +727,6 @@ fn push_message_state_filters(
     // The state join is supplied by every search SQL shape as `ms`.
     let state = aliases.state;
     let message = aliases.message;
-    let document = aliases.document;
     let read =
         format!("COALESCE({state}.read, json_extract({message}.envelope_json, '$.read'), 0)");
     let pending_ack_at = format!(
@@ -773,8 +772,14 @@ fn push_message_state_filters(
         Some(atm_storage::SearchMailboxSelection::All) | None => {}
     }
     if filters.current_only {
-        clauses.push(format!(
-            "({document}.message_id IS NULL OR NOT EXISTS (
+        push_current_only_filter(aliases, clauses);
+    }
+}
+
+fn push_current_only_filter(aliases: SqlFilterAliases, clauses: &mut Vec<String>) {
+    let document = aliases.document;
+    clauses.push(format!(
+        "({document}.message_id IS NULL OR NOT EXISTS (
                     SELECT 1
                     FROM mail_messages successor
                     LEFT JOIN mail_message_states successor_state
@@ -795,11 +800,21 @@ fn push_message_state_filters(
                            ) > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
                       )
                 ))"
-        ));
-    }
+    ));
 }
 
 fn push_scalar_filters(
+    filters: &atm_storage::SearchFilters,
+    aliases: SqlFilterAliases,
+    clauses: &mut Vec<String>,
+    parameters: &mut Vec<SqlValue>,
+) {
+    push_identity_scalar_filters(filters, aliases, clauses, parameters);
+    push_content_scalar_filters(filters, aliases, clauses, parameters);
+    push_workflow_scalar_filters(filters, aliases, clauses, parameters);
+}
+
+fn push_identity_scalar_filters(
     filters: &atm_storage::SearchFilters,
     aliases: SqlFilterAliases,
     clauses: &mut Vec<String>,
@@ -848,6 +863,14 @@ fn push_scalar_filters(
             task_id.to_string(),
         );
     }
+}
+
+fn push_content_scalar_filters(
+    filters: &atm_storage::SearchFilters,
+    aliases: SqlFilterAliases,
+    clauses: &mut Vec<String>,
+    parameters: &mut Vec<SqlValue>,
+) {
     if let Some(contains) = &filters.contains {
         clauses.push(format!(
             "(instr(lower(COALESCE({}.summary, '')), lower(?)) > 0 OR instr(lower(COALESCE({}.message_text, '')), lower(?)) > 0)",
@@ -872,6 +895,14 @@ fn push_scalar_filters(
             category.clone(),
         );
     }
+}
+
+fn push_workflow_scalar_filters(
+    filters: &atm_storage::SearchFilters,
+    aliases: SqlFilterAliases,
+    clauses: &mut Vec<String>,
+    parameters: &mut Vec<SqlValue>,
+) {
     if let Some(scope_kind) = &filters.workflow_scope_kind {
         push_equals(
             clauses,

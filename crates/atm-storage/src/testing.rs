@@ -128,6 +128,155 @@ impl InMemoryMailboxReader {
     }
 }
 
+fn select_matching_in_memory(
+    messages: &[Message],
+    scope: &MailboxScope,
+    query: &MailboxListQuery,
+) -> Vec<Message> {
+    let successors = messages
+        .iter()
+        .filter(|message| message.team == scope.team && message.agent == scope.agent)
+        .filter_map(|message| message.envelope.parent_message_id)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut selected = messages
+        .iter()
+        .filter(|message| message.team == scope.team && message.agent == scope.agent)
+        .filter(|message| matches_mailbox_query(message, query, &successors))
+        .cloned()
+        .collect::<Vec<_>>();
+    selected.sort_by(|left, right| {
+        right
+            .envelope
+            .timestamp
+            .cmp(&left.envelope.timestamp)
+            .then_with(|| right.message_key.cmp(&left.message_key))
+    });
+    if let Some(limit) = query.limit {
+        selected.truncate(limit);
+    }
+    selected
+}
+
+fn matches_mailbox_query(
+    message: &Message,
+    query: &MailboxListQuery,
+    successors: &std::collections::BTreeSet<AtmMessageId>,
+) -> bool {
+    let filters = &query.filters;
+    (!filters.current_only
+        || message
+            .envelope
+            .message_id
+            .is_none_or(|id| !successors.contains(&id)))
+        && filters
+            .from_agent
+            .as_ref()
+            .is_none_or(|agent| &message.envelope.from == agent)
+        && filters
+            .message_id
+            .is_none_or(|id| message.envelope.message_id == Some(id))
+        && filters
+            .task_id
+            .as_ref()
+            .is_none_or(|id| message.envelope.task_id.as_ref() == Some(id))
+        && matches_time_and_text(message, filters)
+        && mailbox_filter_matches(&message.envelope, filters)
+}
+
+fn matches_time_and_text(message: &Message, filters: &crate::search::SearchFilters) -> bool {
+    let time_matches = filters.time_range.as_ref().is_none_or(|range| {
+        range
+            .since
+            .is_none_or(|since| message.envelope.timestamp >= since)
+            && range
+                .until
+                .is_none_or(|until| message.envelope.timestamp <= until)
+    });
+    time_matches
+        && filters.contains.as_ref().is_none_or(|needle| {
+            let needle = needle.to_ascii_lowercase();
+            message.envelope.text.to_ascii_lowercase().contains(&needle)
+                || message
+                    .envelope
+                    .summary
+                    .as_ref()
+                    .is_some_and(|text| text.to_ascii_lowercase().contains(&needle))
+        })
+}
+
+fn in_memory_counts(
+    messages: &[Message],
+    scope: &MailboxScope,
+    filters: &crate::search::SearchFilters,
+    group_by: Option<crate::search::SearchCountGroupBy>,
+) -> Result<Vec<crate::search::SearchCount>, ReadLaneError> {
+    if matches!(
+        group_by,
+        Some(crate::search::SearchCountGroupBy::FromAgent | crate::search::SearchCountGroupBy::Tag)
+    ) {
+        return Err(ReadLaneError::Unavailable {
+            message: "in-memory mailbox reader does not emulate grouped sender/tag SQL counts"
+                .to_owned(),
+        });
+    }
+    let buckets = messages
+        .iter()
+        .filter(|message| message.team == scope.team && message.agent == scope.agent)
+        .filter(|message| {
+            filters
+                .from_agent
+                .as_ref()
+                .is_none_or(|from| message.envelope.from == *from)
+        })
+        .filter_map(|message| counted_bucket(message, filters))
+        .fold([0; 3], |mut counts, bucket| {
+            counts[bucket] += 1;
+            counts
+        });
+    Ok(in_memory_count_result(buckets, group_by))
+}
+
+fn counted_bucket(message: &Message, filters: &crate::search::SearchFilters) -> Option<usize> {
+    let requirement = crate::derive_ack_requirement(&message.envelope);
+    let pending = matches!(requirement, crate::AckRequirementState::RequiredPending);
+    if matches!(filters.read_state, Some(crate::search::SearchReadState::Unread) if message.envelope.read)
+        || matches!(filters.read_state, Some(crate::search::SearchReadState::Read) if !message.envelope.read)
+        || matches!(filters.ack_state, Some(crate::search::SearchAckState::Pending) if !pending)
+        || matches!(filters.ack_state, Some(crate::search::SearchAckState::Acknowledged) if !matches!(requirement, crate::AckRequirementState::RequiredAcknowledged))
+        || matches!(filters.ack_state, Some(crate::search::SearchAckState::NotRequired) if !matches!(requirement, crate::AckRequirementState::NotRequired))
+    {
+        return None;
+    }
+    Some(if pending {
+        1
+    } else if message.envelope.read {
+        2
+    } else {
+        0
+    })
+}
+
+fn in_memory_count_result(
+    buckets: [usize; 3],
+    group_by: Option<crate::search::SearchCountGroupBy>,
+) -> Vec<crate::search::SearchCount> {
+    let bucket = |index, key| crate::search::SearchCount {
+        key: Some(crate::search::SearchCountKey::Bucket(key)),
+        count: buckets[index],
+    };
+    match group_by {
+        Some(crate::search::SearchCountGroupBy::Bucket) => vec![
+            bucket(0, crate::search::MailboxBucket::Unread),
+            bucket(1, crate::search::MailboxBucket::PendingAck),
+            bucket(2, crate::search::MailboxBucket::History),
+        ],
+        _ => vec![crate::search::SearchCount {
+            key: None,
+            count: buckets.iter().sum(),
+        }],
+    }
+}
+
 fn mailbox_filter_matches(
     envelope: &MessageEnvelope,
     filters: &crate::search::SearchFilters,
@@ -233,79 +382,7 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
             .map_err(|_| ReadLaneError::Unavailable {
                 message: "in-memory mailbox reader lock poisoned".to_owned(),
             })?;
-        let successor_ids = messages
-            .iter()
-            .filter(|message| message.team == scope.team && message.agent == scope.agent)
-            .filter_map(|message| message.envelope.parent_message_id)
-            .collect::<std::collections::BTreeSet<_>>();
-        let mut selected =
-            messages
-                .iter()
-                .filter(|message| message.team == scope.team && message.agent == scope.agent)
-                .filter(|message| {
-                    !query.filters.current_only
-                        || message
-                            .envelope
-                            .message_id
-                            .is_none_or(|message_id| !successor_ids.contains(&message_id))
-                })
-                .filter(|message| {
-                    query
-                        .filters
-                        .from_agent
-                        .as_ref()
-                        .is_none_or(|agent| &message.envelope.from == agent)
-                })
-                .filter(|message| {
-                    query
-                        .filters
-                        .message_id
-                        .is_none_or(|message_id| message.envelope.message_id == Some(message_id))
-                })
-                .filter(|message| {
-                    query
-                        .filters
-                        .task_id
-                        .as_ref()
-                        .is_none_or(|task_id| message.envelope.task_id.as_ref() == Some(task_id))
-                })
-                .filter(|message| {
-                    query.filters.time_range.as_ref().is_none_or(|range| {
-                        range
-                            .since
-                            .is_none_or(|since| message.envelope.timestamp >= since)
-                            && range
-                                .until
-                                .is_none_or(|until| message.envelope.timestamp <= until)
-                    })
-                })
-                .filter(|message| {
-                    query.filters.contains.as_ref().is_none_or(|contains| {
-                        let contains = contains.to_ascii_lowercase();
-                        message
-                            .envelope
-                            .text
-                            .to_ascii_lowercase()
-                            .contains(&contains)
-                            || message.envelope.summary.as_ref().is_some_and(|summary| {
-                                summary.to_ascii_lowercase().contains(&contains)
-                            })
-                    })
-                })
-                .filter(|message| mailbox_filter_matches(&message.envelope, &query.filters))
-                .cloned()
-                .collect::<Vec<_>>();
-        selected.sort_by(|left, right| {
-            right
-                .envelope
-                .timestamp
-                .cmp(&left.envelope.timestamp)
-                .then_with(|| right.message_key.cmp(&left.message_key))
-        });
-        if let Some(limit) = query.limit {
-            selected.truncate(limit);
-        }
-        Ok(selected)
+        Ok(select_matching_in_memory(&messages, &scope, &query))
     }
 
     async fn count_messages(
@@ -332,93 +409,7 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
             .map_err(|_| ReadLaneError::Unavailable {
                 message: "in-memory mailbox reader lock poisoned".to_owned(),
             })?;
-        let mut unread = 0usize;
-        let mut pending_ack = 0usize;
-        let mut history = 0usize;
-        for message in messages.iter().filter(|message| {
-            message.team == scope.team
-                && message.agent == scope.agent
-                && filters
-                    .from_agent
-                    .as_ref()
-                    .is_none_or(|from| message.envelope.from == *from)
-        }) {
-            let pending = matches!(
-                crate::derive_ack_requirement(&message.envelope),
-                crate::AckRequirementState::RequiredPending
-            );
-            let bucket = if pending {
-                crate::search::MailboxBucket::PendingAck
-            } else if message.envelope.read {
-                crate::search::MailboxBucket::History
-            } else {
-                crate::search::MailboxBucket::Unread
-            };
-            match filters.read_state {
-                Some(crate::search::SearchReadState::Unread) if message.envelope.read => continue,
-                Some(crate::search::SearchReadState::Read) if !message.envelope.read => continue,
-                _ => {}
-            }
-            match filters.ack_state {
-                Some(crate::search::SearchAckState::Pending) if !pending => continue,
-                Some(crate::search::SearchAckState::Acknowledged)
-                    if !matches!(
-                        crate::derive_ack_requirement(&message.envelope),
-                        crate::AckRequirementState::RequiredAcknowledged
-                    ) =>
-                {
-                    continue;
-                }
-                Some(crate::search::SearchAckState::NotRequired)
-                    if !matches!(
-                        crate::derive_ack_requirement(&message.envelope),
-                        crate::AckRequirementState::NotRequired
-                    ) =>
-                {
-                    continue;
-                }
-                _ => {}
-            }
-            match bucket {
-                crate::search::MailboxBucket::Unread => unread += 1,
-                crate::search::MailboxBucket::PendingAck => pending_ack += 1,
-                crate::search::MailboxBucket::History => history += 1,
-            }
-        }
-        Ok(match group_by {
-            Some(crate::search::SearchCountGroupBy::Bucket) => vec![
-                crate::search::SearchCount {
-                    key: Some(crate::search::SearchCountKey::Bucket(
-                        crate::search::MailboxBucket::Unread,
-                    )),
-                    count: unread,
-                },
-                crate::search::SearchCount {
-                    key: Some(crate::search::SearchCountKey::Bucket(
-                        crate::search::MailboxBucket::PendingAck,
-                    )),
-                    count: pending_ack,
-                },
-                crate::search::SearchCount {
-                    key: Some(crate::search::SearchCountKey::Bucket(
-                        crate::search::MailboxBucket::History,
-                    )),
-                    count: history,
-                },
-            ],
-            Some(crate::search::SearchCountGroupBy::FromAgent)
-            | Some(crate::search::SearchCountGroupBy::Tag) => {
-                return Err(ReadLaneError::Unavailable {
-                    message:
-                        "in-memory mailbox reader does not emulate grouped sender/tag SQL counts"
-                            .to_owned(),
-                });
-            }
-            None => vec![crate::search::SearchCount {
-                key: None,
-                count: unread + pending_ack + history,
-            }],
-        })
+        in_memory_counts(&messages, &scope, &filters, group_by)
     }
 
     async fn load_message(
