@@ -1851,6 +1851,27 @@ class AdmissionCapacityTests(unittest.TestCase):
         reap.assert_called_once_with(process)
         output.join.assert_called_once_with()
 
+    def test_failed_daemon_readiness_carries_owned_log_evidence(self):
+        process = mock.Mock()
+        output = mock.Mock()
+        output.evidence.return_value = {
+            "owned_daemon_log_tail": ["ATM_DAEMON_READY", "fatal config failure"],
+        }
+        with (
+            mock.patch.object(TRANSPORT.subprocess, "Popen", return_value=process),
+            mock.patch.object(TRANSPORT.DaemonOutputCapture, "start", return_value=output),
+            mock.patch.object(TRANSPORT, "await_daemon_ready", side_effect=RUNNER.SmokeError("not ready")),
+            mock.patch.object(TRANSPORT, "reap_owned_daemon"),
+            mock.patch.object(TRANSPORT, "require_clean_host_daemon_state"),
+        ):
+            with self.assertRaises(TRANSPORT.DaemonStartError) as raised:
+                RUNNER.start_capacity_daemon(Path("/tmp/daemon"), Path("/tmp"), {}, "mutual-tls")
+
+        self.assertEqual(
+            raised.exception.daemon_output["owned_daemon_log_tail"][-1],
+            "fatal config failure",
+        )
+
     def test_capacity_daemon_launches_the_shipped_binary_with_explicit_peer_wire_and_port(self):
         process = mock.Mock()
         process.stdout = mock.Mock()
@@ -1894,6 +1915,50 @@ class AdmissionCapacityTests(unittest.TestCase):
             evidence["stderr_tail"][-1],
             f"stderr-{RUNNER.DAEMON_OUTPUT_TAIL_LINES + 1}",
         )
+
+    def test_daemon_output_capture_persists_and_analyzes_its_owned_log(self):
+        with tempfile.TemporaryDirectory() as directory:
+            capture = RUNNER.DaemonOutputCapture()
+            capture._log_file = Path(directory) / "daemon-output.log"
+            capture._log_output = capture._log_file.open("w", encoding="utf-8", buffering=1)
+            capture._append_tail(capture._stdout_tail, '{"level":"INFO","message":"ready"}\n')
+            capture._append_tail(capture._stderr_tail, '{"level":"WARN","message":"slow reader"}\n')
+            capture._append_tail(capture._stderr_tail, '{"level":"ERROR","message":"reader failed"}\n')
+
+            evidence = capture.evidence()
+
+            self.assertEqual(capture._log_file.read_text(encoding="utf-8").count("level"), 3)
+            self.assertEqual(evidence["owned_daemon_log"], "daemon-output.log")
+            self.assertEqual(len(evidence["owned_daemon_log_tail"]), 3)
+            self.assertFalse(evidence["log_analysis"]["passed"])
+            self.assertEqual(len(evidence["log_analysis"]["warning_records"]), 1)
+            self.assertEqual(len(evidence["log_analysis"]["error_records"]), 1)
+            capture.join()
+
+    def test_failed_durability_read_retains_redacted_cli_output_in_lifecycle_evidence(self):
+        result = {"exit_code": 5, "stdout": "", "stderr": "ATM_MAILBOX_LOCK_TIMEOUT"}
+        doctor = {"exit_code": 0, "stdout": "{\"summary\":{\"status\":\"healthy\"}}", "stderr": ""}
+        evidence: dict[str, object] = {"lifecycle": {}}
+        with mock.patch.object(SUPPORT, "command_result", side_effect=[result, doctor]):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "could not count durable"):
+                RUNNER.run_lifecycle_phase(
+                    evidence,
+                    "durability",
+                    lambda: RUNNER.verify_durability_after_restart(
+                        RUNNER.CapacityRoster(
+                            run_id="target", team="target-team", agent="target-agent",
+                            recipient="target-recipient",
+                        ),
+                        1,
+                        atm=Path("/tmp/atm"),
+                        environment={"ATM_HOME": "/tmp/atm"},
+                    ),
+                )
+
+        capture = evidence["lifecycle"]["durability"][0]["cli_capture"]
+        self.assertEqual(capture["exit_code"], 5)
+        self.assertEqual(capture["stderr"], "ATM_MAILBOX_LOCK_TIMEOUT")
+        self.assertEqual(evidence["lifecycle"]["durability"][0]["doctor_capture"], doctor)
 
 
 if __name__ == "__main__":

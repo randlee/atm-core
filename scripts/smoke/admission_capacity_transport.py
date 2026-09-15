@@ -90,6 +90,14 @@ def benchmark_doctor_payload(result: dict[str, object]) -> dict[str, object]:
     raise SmokeError(f"capacity doctor failed: {detail.strip()}")
 
 
+class DaemonStartError(SmokeError):
+    """A readiness failure that retains the benchmark-owned daemon output."""
+
+    def __init__(self, message: str, daemon_output: dict[str, object]) -> None:
+        super().__init__(message)
+        self.daemon_output = daemon_output
+
+
 def await_daemon_ready(process: subprocess.Popen[str], output: Any) -> None:
     """Wait only for the daemon's explicit readiness signal."""
     deadline = __import__("time").monotonic() + READY_TIMEOUT_SECONDS
@@ -120,7 +128,7 @@ def start_capacity_daemon(
     if direct_peer_port := env.get(CAPACITY_DIRECT_PEER_PORT_ENV):
         command.extend(("--direct-peer-port", direct_peer_port))
     process = subprocess.Popen(command, cwd=home, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    output = DaemonOutputCapture.start(process)
+    output = DaemonOutputCapture.start(process, home / "daemon-output.log")
     try:
         await_daemon_ready(process, output)
     except (OSError, SmokeError) as error:
@@ -129,7 +137,10 @@ def start_capacity_daemon(
         tails = output.evidence()
         stdout_tail = " | ".join(str(line) for line in tails.get("stdout_tail", [])[-8:]) or "<unavailable>"
         stderr_tail = " | ".join(str(line) for line in tails.get("stderr_tail", [])[-8:]) or "<unavailable>"
-        raise SmokeError(f"{error}; daemon stdout tail: {stdout_tail}; daemon stderr tail: {stderr_tail}") from error
+        raise DaemonStartError(
+            f"{error}; daemon stdout tail: {stdout_tail}; daemon stderr tail: {stderr_tail}",
+            tails,
+        ) from error
     return process, output
 
 

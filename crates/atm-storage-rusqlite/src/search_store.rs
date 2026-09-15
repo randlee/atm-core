@@ -5,15 +5,16 @@ use std::sync::Arc;
 use atm_storage::{
     AsyncMessageSearchStore, AtmError, MessageSearchPage, MessageSearchQuery, MessageSearchStore,
     SearchAggregate, SearchCursor, SearchDeadline, SearchExpression, SearchGroup, SearchGroupBy,
-    SearchGroupField, SearchMatchField, SearchMetadataMatch, SearchResultKey, SimpleAggregate,
-    StoredSearchAddress, StoredSearchMatch, StoredWorkflowMetadata, TemplateFrontmatter,
-    TemplateTag, WorkflowIteration, WorkflowScopeId, WorkflowScopeKind, WorkflowSnapshot,
-    WorkflowStage, WorkflowState, WorkflowTransition,
+    SearchGroupField, SearchMatchField, SearchResultKey, SimpleAggregate, StoredSearchAddress,
+    StoredSearchMatch, StoredWorkflowMetadata, TemplateFrontmatter, TemplateTag, WorkflowIteration,
+    WorkflowScopeId, WorkflowScopeKind, WorkflowSnapshot, WorkflowStage, WorkflowState,
+    WorkflowTransition,
 };
 use rusqlite::{Connection, params_from_iter, types::Value as SqlValue};
 use serde_json::Value;
 
 use crate::shared_db::{SharedDb, SharedDbTarget, sqlite_error};
+use crate::sql_filters::{SqlFilters, compile_sql_filters};
 
 pub(crate) fn search_store(db: Arc<SharedDb>) -> Arc<dyn MessageSearchStore> {
     Arc::new(SqliteMessageSearchStore::new(db))
@@ -113,6 +114,7 @@ fn primary_search_sql(uses_fts: bool, filters: &SqlFilters) -> String {
              FROM mail_message_search_documents d
              JOIN mail_messages_fts ON mail_messages_fts.rowid = d.search_rowid
              JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
+             LEFT JOIN mail_message_states ms ON (ms.team, ms.agent, ms.message_key) = (d.team, d.agent, d.message_key)
              LEFT JOIN message_templates t ON t.template_sha = m.template_sha
              WHERE mail_messages_fts MATCH ?{}
              ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
@@ -129,6 +131,7 @@ fn primary_search_sql(uses_fts: bool, filters: &SqlFilters) -> String {
                     m.workflow_iteration, m.applied_template_tags_json, m.effective_tags_json
              FROM mail_message_search_documents d
              JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
+             LEFT JOIN mail_message_states ms ON (ms.team, ms.agent, ms.message_key) = (d.team, d.agent, d.message_key)
              LEFT JOIN message_templates t ON t.template_sha = m.template_sha
              WHERE 1 = 1 {}
              ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
@@ -159,6 +162,7 @@ fn execute_template_search(
          JOIN mail_messages m ON m.template_sha = td.template_sha
          JOIN mail_message_search_documents d
            ON (d.team, d.agent, d.message_key) = (m.team, m.agent, m.message_key)
+         LEFT JOIN mail_message_states ms ON (ms.team, ms.agent, ms.message_key) = (d.team, d.agent, d.message_key)
          LEFT JOIN message_templates t ON t.template_sha = m.template_sha
          WHERE message_templates_fts MATCH ?{}
          ORDER BY d.message_at DESC, d.team ASC, d.agent ASC, d.message_key ASC",
@@ -658,193 +662,6 @@ fn scalar_json_text(value: &Value) -> String {
         Value::Null => "null".to_owned(),
         Value::Array(_) | Value::Object(_) => value.to_string(),
     }
-}
-
-#[derive(Debug, Clone)]
-struct SqlFilters {
-    clause: String,
-    parameters: Vec<SqlValue>,
-}
-
-fn compile_sql_filters(filters: &atm_storage::SearchFilters) -> SqlFilters {
-    let mut clauses = Vec::new();
-    let mut parameters = Vec::new();
-    push_scalar_filters(filters, &mut clauses, &mut parameters);
-    push_time_filters(filters, &mut clauses, &mut parameters);
-    push_tag_filters(filters, &mut clauses, &mut parameters);
-    push_json_filters(filters, &mut clauses, &mut parameters);
-    SqlFilters {
-        clause: clauses
-            .into_iter()
-            .map(|clause| format!(" AND {clause}"))
-            .collect(),
-        parameters,
-    }
-}
-
-fn push_scalar_filters(
-    filters: &atm_storage::SearchFilters,
-    clauses: &mut Vec<String>,
-    parameters: &mut Vec<SqlValue>,
-) {
-    if let Some(team) = &filters.team {
-        push_equals(clauses, parameters, "d.team", team.to_string());
-    }
-    if let Some(agent) = &filters.agent {
-        push_equals(clauses, parameters, "d.agent", agent.to_string());
-    }
-    if let Some(from_agent) = &filters.from_agent {
-        push_equals(clauses, parameters, "d.from_agent", from_agent.to_string());
-    }
-    if let Some(template_sha) = &filters.template_sha {
-        push_equals(
-            clauses,
-            parameters,
-            "m.template_sha",
-            template_sha.to_string(),
-        );
-    }
-    if let Some(category) = &filters.category {
-        push_equals(clauses, parameters, "m.category", category.clone());
-    }
-    if let Some(scope_kind) = &filters.workflow_scope_kind {
-        push_equals(
-            clauses,
-            parameters,
-            "m.workflow_scope_kind",
-            scope_kind.to_string(),
-        );
-    }
-    if let Some(scope_id) = &filters.workflow_scope_id {
-        push_equals(
-            clauses,
-            parameters,
-            "m.workflow_scope_id",
-            scope_id.as_str().to_owned(),
-        );
-    }
-    if let Some(state) = &filters.workflow_state {
-        push_equals(clauses, parameters, "m.workflow_state", state.to_string());
-    }
-    if let Some(stage) = &filters.workflow_stage {
-        push_equals(clauses, parameters, "m.workflow_stage", stage.to_string());
-    }
-    if let Some(transition) = &filters.workflow_transition {
-        push_equals(
-            clauses,
-            parameters,
-            "m.workflow_transition",
-            transition.to_string(),
-        );
-    }
-    if let Some(iteration) = &filters.workflow_iteration {
-        push_equals(
-            clauses,
-            parameters,
-            "m.workflow_iteration",
-            iteration.as_str().to_owned(),
-        );
-    }
-}
-
-fn push_equals(
-    clauses: &mut Vec<String>,
-    parameters: &mut Vec<SqlValue>,
-    column: &str,
-    value: String,
-) {
-    clauses.push(format!("{column} = ?"));
-    parameters.push(SqlValue::Text(value));
-}
-
-fn push_time_filters(
-    filters: &atm_storage::SearchFilters,
-    clauses: &mut Vec<String>,
-    parameters: &mut Vec<SqlValue>,
-) {
-    if let Some(time_range) = &filters.time_range {
-        if let Some(since) = time_range.since {
-            clauses.push("d.message_at >= ?".to_owned());
-            parameters.push(SqlValue::Text(since.to_string()));
-        }
-        if let Some(until) = time_range.until {
-            clauses.push("d.message_at <= ?".to_owned());
-            parameters.push(SqlValue::Text(until.to_string()));
-        }
-    }
-}
-
-fn push_tag_filters(
-    filters: &atm_storage::SearchFilters,
-    clauses: &mut Vec<String>,
-    parameters: &mut Vec<SqlValue>,
-) {
-    for tag in &filters.tags {
-        clauses.push(
-            "EXISTS (SELECT 1 FROM json_each(COALESCE(m.tags_json, '[]')) AS tag WHERE CAST(tag.value AS TEXT) = ?)"
-                .to_owned(),
-        );
-        parameters.push(SqlValue::Text(tag.clone()));
-    }
-    for tag in &filters.effective_tags {
-        clauses.push(
-            "EXISTS (SELECT 1 FROM json_each(COALESCE(m.effective_tags_json, '[]')) AS effective_tag WHERE CAST(effective_tag.value AS TEXT) = ?)"
-                .to_owned(),
-        );
-        parameters.push(SqlValue::Text(tag.as_str().to_owned()));
-    }
-}
-
-fn push_json_filters(
-    filters: &atm_storage::SearchFilters,
-    clauses: &mut Vec<String>,
-    parameters: &mut Vec<SqlValue>,
-) {
-    for (key, value) in &filters.vars {
-        clauses.push(json_scalar_filter("m.vars_json"));
-        push_json_scalar_parameters(parameters, &format!("$.{}", key.as_str()), value.as_str());
-    }
-    for (key, matcher) in &filters.template_metadata {
-        let path = format!("$.metadata.{}", key.as_str());
-        match matcher {
-            SearchMetadataMatch::Exact(value) => {
-                clauses.push(json_scalar_filter("t.schema_json"));
-                push_json_scalar_parameters(parameters, &path, value.as_str());
-            }
-            SearchMetadataMatch::Prefix(value) => {
-                clauses.push(json_scalar_prefix_filter("t.schema_json"));
-                push_json_scalar_prefix_parameters(parameters, &path, value.as_str());
-            }
-        }
-    }
-}
-
-fn json_scalar_filter(column: &str) -> String {
-    format!(
-        "(CASE json_type({column}, ?) WHEN 'true' THEN 'true' WHEN 'false' THEN 'false' WHEN 'null' THEN 'null' ELSE CAST(json_extract({column}, ?) AS TEXT) END = ?)"
-    )
-}
-
-fn json_scalar_prefix_filter(column: &str) -> String {
-    format!(
-        "(CASE json_type({column}, ?) WHEN 'true' THEN 'true' WHEN 'false' THEN 'false' WHEN 'null' THEN 'null' ELSE CAST(json_extract({column}, ?) AS TEXT) END LIKE ? ESCAPE '\\')"
-    )
-}
-
-fn push_json_scalar_parameters(parameters: &mut Vec<SqlValue>, path: &str, value: &str) {
-    parameters.push(SqlValue::Text(path.to_owned()));
-    parameters.push(SqlValue::Text(path.to_owned()));
-    parameters.push(SqlValue::Text(value.to_owned()));
-}
-
-fn push_json_scalar_prefix_parameters(parameters: &mut Vec<SqlValue>, path: &str, value: &str) {
-    parameters.push(SqlValue::Text(path.to_owned()));
-    parameters.push(SqlValue::Text(path.to_owned()));
-    let escaped = value
-        .replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_");
-    parameters.push(SqlValue::Text(format!("{escaped}%")));
 }
 
 fn deduplicate(matches: &mut Vec<SearchRecord>) {

@@ -234,6 +234,21 @@ impl AsyncListCommand {
         self.loads_seen_watermark
     }
 
+    /// SQL may own the limit only when no subsequent in-memory filter or
+    /// selection policy could change which rows appear on the page.
+    #[must_use]
+    pub fn pushdown_limit(&self) -> Option<usize> {
+        (self.selection_mode == ReadSelection::All
+            && self.selection.sender_filter.is_none()
+            && self.selection.participant_filter.is_none()
+            && self.selection.timestamp_filter.is_none()
+            && self.selection.task_filter.is_none()
+            && self.selection.contains_filter.is_none()
+            && self.selection.message_id_filter.is_none())
+        .then_some(self.limit)
+        .flatten()
+    }
+
     #[must_use]
     pub fn with_seen_watermark(mut self, seen_watermark: Option<IsoTimestamp>) -> Self {
         self.selection.seen_watermark = seen_watermark;

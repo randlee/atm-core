@@ -32,6 +32,7 @@ mod shared_db;
 mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
 mod shared_db_support;
+mod sql_filters;
 mod task_ledger_reader;
 mod task_migration;
 mod task_sql;
@@ -1012,19 +1013,20 @@ mod tests {
     use super::{SqliteStorageBackend, SqliteStorageFactory};
     use crate::reader_pool::SharedReadPoolConfig;
     use atm_storage::contract::{
-        AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, MailboxScope, Message,
-        MessageKey, MessageQuery, ReadDeadline, ReadLaneError, RosterHarness, RosterMember,
-        RosterMemberKind, RosterSnapshot,
+        AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, MailboxListQuery,
+        MailboxScope, Message, MessageKey, MessageQuery, ReadDeadline, ReadLaneError,
+        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, IsoTimestamp, ModelName, TeamName};
     use atm_storage::{
         AtmError, DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome,
         DecomposedMessageRecord, InstanceTag, MemberKey, MergedVarsJson, MessageSearchQuery,
-        MessageWriteOrigin, MoveTarget, QueuePosition, SearchAtom, SearchDeadline,
-        SearchExpression, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit,
-        SearchMetadataMatch, SearchValue, SimpleAggregate, StorageFactory, TaskCloseOutcome,
-        TaskEvent, TaskEventKind, TaskOp, TaskState, TemplateFirstSeen, TemplateFrontmatter,
+        MessageWriteOrigin, MoveTarget, QueuePosition, SearchAckState, SearchAtom,
+        SearchCountGroupBy, SearchDeadline, SearchExpression, SearchFilters, SearchGroupBy,
+        SearchGroupField, SearchKey, SearchLimit, SearchMailboxSelection, SearchMetadataMatch,
+        SearchReadState, SearchValue, SimpleAggregate, StorageFactory, TaskCloseOutcome, TaskEvent,
+        TaskEventKind, TaskOp, TaskState, TemplateFirstSeen, TemplateFrontmatter,
         TemplateListFilter, TemplateMessageAdmission, TemplateOutputFormat, TemplateRegistration,
         TemplateRegistrationOutcome, TemplateSha, WorkflowAdmission, WorkflowScopeId,
     };
@@ -3457,6 +3459,338 @@ mod tests {
         assert_eq!(counts.unread, 1);
         assert_eq!(counts.pending_ack, 1);
         assert_eq!(counts.history, 1);
+    }
+
+    #[tokio::test]
+    async fn mailbox_reader_counts_buckets_without_materializing_messages() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let mut unread = message("atm:count-unread", "unread");
+        let mut pending = message("atm:count-pending", "pending");
+        let mut history = message("atm:count-history", "history");
+        pending.envelope.requires_ack = true;
+        pending.envelope.pending_ack_at = Some(IsoTimestamp::from_datetime(Utc::now()));
+        history.envelope.read = true;
+        for record in [&mut unread, &mut pending, &mut history] {
+            store.save_message(record).expect("save message");
+        }
+
+        let counts = backend
+            .async_mailbox_reader()
+            .count_messages(
+                MailboxScope::new(team(), agent()),
+                SearchFilters {
+                    team: Some(team()),
+                    agent: Some(agent()),
+                    ..SearchFilters::default()
+                },
+                Some(SearchCountGroupBy::Bucket),
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("reader count");
+
+        let count_for = |bucket| {
+            counts
+                .iter()
+                .find_map(|entry| match entry.key {
+                    Some(atm_storage::SearchCountKey::Bucket(found)) if found == bucket => {
+                        Some(entry.count)
+                    }
+                    _ => None,
+                })
+                .unwrap_or_default()
+        };
+        assert_eq!(
+            count_for(atm_storage::MailboxBucket::Unread),
+            1,
+            "the SQL aggregate reports unread independently"
+        );
+        assert_eq!(
+            count_for(atm_storage::MailboxBucket::PendingAck),
+            1,
+            "the SQL aggregate reports pending acknowledgements independently"
+        );
+        assert_eq!(
+            count_for(atm_storage::MailboxBucket::History),
+            1,
+            "the SQL aggregate reports history independently"
+        );
+
+        let listed = backend
+            .async_mailbox_reader()
+            .list_matching_messages(
+                MailboxScope::new(team(), agent()),
+                MailboxListQuery {
+                    filters: SearchFilters {
+                        team: Some(team()),
+                        agent: Some(agent()),
+                        current_only: true,
+                        mailbox_selection: Some(SearchMailboxSelection::All),
+                        ..SearchFilters::default()
+                    },
+                    limit: None,
+                },
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("reader list");
+        let mut listed_buckets = [0_usize; 3];
+        for message in listed {
+            let bucket = if message.envelope.pending_ack_at.is_some()
+                && message.envelope.acknowledged_at.is_none()
+            {
+                1
+            } else if message.envelope.read {
+                2
+            } else {
+                0
+            };
+            listed_buckets[bucket] += 1;
+        }
+        assert_eq!(
+            [
+                count_for(atm_storage::MailboxBucket::Unread),
+                count_for(atm_storage::MailboxBucket::PendingAck),
+                count_for(atm_storage::MailboxBucket::History),
+            ],
+            listed_buckets,
+            "grouped SQL buckets match the same criteria reader list"
+        );
+    }
+
+    #[tokio::test]
+    async fn criteria_count_honors_unread_pending_sender_and_tag_filters() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let mut unread = message("atm:criteria-unread", "unread");
+        unread.envelope.from = "unread-sender".parse().expect("sender");
+        let mut pending = message("atm:criteria-pending", "pending");
+        pending.envelope.from = "pending-sender".parse().expect("sender");
+        pending.envelope.requires_ack = true;
+        pending.envelope.pending_ack_at = Some(IsoTimestamp::from_datetime(Utc::now()));
+        let tagged = message("atm:criteria-tagged", "tagged");
+        for record in [&unread, &pending, &tagged] {
+            store.save_message(record).expect("save message");
+        }
+        let template = template_registration('e');
+        backend
+            .template_catalog_store()
+            .admit_decomposed_message(DecomposedMessageAdmission {
+                template: template.clone(),
+                message: DecomposedMessageRecord {
+                    key: tagged.message_key.clone(),
+                    template_sha: template.sha,
+                    vars: MergedVarsJson::default(),
+                    category: None,
+                    tags: instance_tags(&["eq016"]),
+                    content_format: Some("markdown".to_owned()),
+                    workflow: None,
+                },
+            })
+            .expect("decompose tagged message");
+        let reader = backend.async_mailbox_reader();
+        let count = |filters| async {
+            reader
+                .count_messages(
+                    MailboxScope::new(team(), agent()),
+                    filters,
+                    None,
+                    ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+                )
+                .await
+                .expect("criteria count")[0]
+                .count
+        };
+        let base = || SearchFilters {
+            team: Some(team()),
+            agent: Some(agent()),
+            current_only: true,
+            ..SearchFilters::default()
+        };
+
+        let mut unread_filter = base();
+        unread_filter.read_state = Some(SearchReadState::Unread);
+        assert_eq!(count(unread_filter).await, 3, "unread count is SQL-owned");
+
+        let mut pending_filter = base();
+        pending_filter.from_agent = Some("pending-sender".parse().expect("sender"));
+        pending_filter.ack_state = Some(SearchAckState::Pending);
+        assert_eq!(
+            count(pending_filter).await,
+            1,
+            "pending-ack count respects the sender filter"
+        );
+
+        let mut tag_filter = base();
+        tag_filter.tags = vec!["eq016".to_owned()];
+        assert_eq!(
+            count(tag_filter).await,
+            1,
+            "tag count uses the SQL filter generator"
+        );
+    }
+
+    #[tokio::test]
+    async fn mailbox_reader_current_only_count_collapses_successors() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let source_id = AtmMessageId::new();
+        let reply_id = AtmMessageId::new();
+        let mut source = message(&format!("atm:{source_id}"), "source");
+        let mut reply = message(&format!("atm:{reply_id}"), "reply");
+        source.envelope.message_id = Some(source_id);
+        reply.envelope.message_id = Some(reply_id);
+        reply.envelope.parent_message_id = Some(source_id);
+        store.save_message(&source).expect("save source");
+        store.save_message(&reply).expect("save reply");
+
+        let old = store
+            .mailbox_bucket_counts(&team(), &agent())
+            .expect("old aggregate")
+            .expect("sqlite aggregate");
+        let counts = backend
+            .async_mailbox_reader()
+            .count_messages(
+                MailboxScope::new(team(), agent()),
+                SearchFilters {
+                    team: Some(team()),
+                    agent: Some(agent()),
+                    current_only: true,
+                    ..SearchFilters::default()
+                },
+                Some(SearchCountGroupBy::Bucket),
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("reader count");
+
+        let count_for = |bucket| {
+            counts
+                .iter()
+                .find_map(|entry| match entry.key {
+                    Some(atm_storage::SearchCountKey::Bucket(found)) if found == bucket => {
+                        Some(entry.count)
+                    }
+                    _ => None,
+                })
+                .unwrap_or_default()
+        };
+        assert_eq!(count_for(atm_storage::MailboxBucket::Unread), old.unread);
+        assert_eq!(
+            count_for(atm_storage::MailboxBucket::PendingAck),
+            old.pending_ack
+        );
+        assert_eq!(count_for(atm_storage::MailboxBucket::History), old.history);
+    }
+
+    #[tokio::test]
+    async fn criteria_reader_preserves_envelope_state_when_no_state_row_exists() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let mut record = message("atm:envelope-state", "read in envelope");
+        record.envelope.read = true;
+        backend
+            .message_store()
+            .save_message(&record)
+            .expect("save message");
+        backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "DELETE FROM mail_message_states WHERE message_key = ?1",
+                        params![record.message_key.as_str()],
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+                Ok(())
+            })
+            .expect("remove state row to model a legacy durable message");
+
+        let listed = backend
+            .async_mailbox_reader()
+            .list_matching_messages(
+                MailboxScope::new(team(), agent()),
+                MailboxListQuery {
+                    filters: SearchFilters {
+                        team: Some(team()),
+                        agent: Some(agent()),
+                        current_only: true,
+                        mailbox_selection: Some(SearchMailboxSelection::All),
+                        ..SearchFilters::default()
+                    },
+                    limit: Some(1),
+                },
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("criteria reader list");
+
+        assert!(
+            listed[0].envelope.read,
+            "a NULL state join retains envelope read=true"
+        );
+    }
+
+    #[tokio::test]
+    async fn criteria_reader_collapses_successors_before_limit() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let source_id = AtmMessageId::new();
+        let reply_id = AtmMessageId::new();
+        let mut source = message(&format!("atm:{source_id}"), "superseded source");
+        let mut reply = message(&format!("atm:{reply_id}"), "terminal reply");
+        let mut independent = message("atm:independent", "independent terminal");
+        source.envelope.message_id = Some(source_id);
+        reply.envelope.message_id = Some(reply_id);
+        reply.envelope.parent_message_id = Some(source_id);
+        source.envelope.timestamp =
+            IsoTimestamp::from_datetime(Utc::now() + chrono::Duration::seconds(2));
+        reply.envelope.timestamp =
+            IsoTimestamp::from_datetime(Utc::now() + chrono::Duration::seconds(1));
+        independent.envelope.timestamp = IsoTimestamp::from_datetime(Utc::now());
+        for record in [&source, &reply, &independent] {
+            backend
+                .message_store()
+                .save_message(record)
+                .expect("save message");
+        }
+        let query = |limit| MailboxListQuery {
+            filters: SearchFilters {
+                team: Some(team()),
+                agent: Some(agent()),
+                current_only: true,
+                mailbox_selection: Some(SearchMailboxSelection::All),
+                ..SearchFilters::default()
+            },
+            limit: Some(limit),
+        };
+        let reader = backend.async_mailbox_reader();
+        let one = reader
+            .list_matching_messages(
+                MailboxScope::new(team(), agent()),
+                query(1),
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("page one");
+        let two = reader
+            .list_matching_messages(
+                MailboxScope::new(team(), agent()),
+                query(2),
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("page two");
+
+        assert_eq!(
+            one,
+            vec![reply.clone()],
+            "the superseded row cannot consume limit one"
+        );
+        assert_eq!(
+            two,
+            vec![reply, independent],
+            "limit two returns both terminal messages"
+        );
     }
 
     #[test]

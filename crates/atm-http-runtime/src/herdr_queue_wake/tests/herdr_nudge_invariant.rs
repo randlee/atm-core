@@ -1686,6 +1686,8 @@ async fn refusal_reader_error_holds_before_disposition() {
 async fn refusal_reader_deadline_timeout_holds_before_disposition() {
     assert_refusal_read_failure_holds(atm_storage::ReadLaneError::DeadlineExpired {
         stage: "reading refusal history",
+        budget_ms: 3_000,
+        elapsed_ms: 3_000,
     })
     .await;
 }

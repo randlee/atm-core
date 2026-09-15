@@ -13,11 +13,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::contract::{MessageKey, sealed};
 use crate::error::AtmError;
+use crate::schema::AtmMessageId;
 use crate::template_workflow::{
     EffectiveTag, MessageTagProvenance, WorkflowIteration, WorkflowScopeId, WorkflowScopeKind,
     WorkflowSnapshot, WorkflowStage, WorkflowState, WorkflowTransition,
 };
-use crate::types::{AgentName, ChatId, IsoTimestamp, TeamName, TemplateSha};
+use crate::types::{AgentName, ChatId, IsoTimestamp, TaskId, TeamName, TemplateSha};
+
+mod mailbox_filters;
+pub use mailbox_filters::{
+    SearchAckState, SearchCount, SearchCountGroupBy, SearchCountKey, SearchMailboxSelection,
+    SearchReadState,
+};
 
 /// One bounded literal term in a typed search expression.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -336,6 +343,7 @@ impl Default for SearchPageRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[rustfmt::skip]
 pub struct SearchFilters {
     pub team: Option<TeamName>,
     pub agent: Option<AgentName>,
@@ -355,6 +363,14 @@ pub struct SearchFilters {
     pub workflow_transition: Option<WorkflowTransition>,
     pub workflow_iteration: Option<WorkflowIteration>,
     pub time_range: Option<TimeRange>,
+    /// Exact durable protocol identifier named by the mailbox command.
+    pub message_id: Option<AtmMessageId>, pub task_id: Option<TaskId>, pub contains: Option<String>, pub read_state: Option<SearchReadState>, pub ack_state: Option<SearchAckState>, pub current_only: bool, pub mailbox_selection: Option<SearchMailboxSelection>, }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MailboxBucket {
+    Unread,
+    PendingAck,
+    History,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

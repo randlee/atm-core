@@ -492,8 +492,10 @@ def run_capacity(
         reap_owned_daemon(process)
         if daemon_output is not None:
             daemon_output.join()
+            captured_output = daemon_output.evidence()
+            evidence.setdefault("daemon_outputs", []).append(captured_output)
             if output_key is not None:
-                evidence[output_key] = daemon_output.evidence()
+                evidence[output_key] = captured_output
         process = None
         daemon_output = None
 

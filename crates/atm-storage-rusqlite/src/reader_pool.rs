@@ -493,13 +493,11 @@ impl ReaderPool {
             Arc::clone(&self.inner.tool_class_slots).acquire_owned(),
         )
         .await
-        .map_err(|_| ReadLaneError::DeadlineExpired {
-            stage: "waiting for tool read capacity",
-        })?
+        .map_err(|_| deadline_expired("waiting for tool read capacity", deadline))?
         .map_err(|_| ReadLaneError::Unavailable {
             message: "tool read capacity closed".to_owned(),
         })?;
-        self.submit_with_class_at(expires_at, Some(permit), operation)
+        self.submit_with_class_at(expires_at, deadline, Some(permit), operation)
             .await
     }
 
@@ -513,13 +511,14 @@ impl ReaderPool {
         T: Send + 'static,
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
-        self.submit_with_class_at(deadline_at(deadline)?, tool_class_slot, operation)
+        self.submit_with_class_at(deadline_at(deadline)?, deadline, tool_class_slot, operation)
             .await
     }
 
     async fn submit_with_class_at<T, F>(
         &self,
         expires_at: Instant,
+        deadline: Duration,
         tool_class_slot: Option<OwnedSemaphorePermit>,
         operation: F,
     ) -> Result<T, ReadLaneError>
@@ -538,9 +537,9 @@ impl ReaderPool {
             run: Box::new(move |connection, target, disposition| {
                 let result = match disposition {
                     RequestDisposition::Execute => operation(connection, target),
-                    RequestDisposition::ExpiredInQueue => Err(ReadLaneError::DeadlineExpired {
-                        stage: "waiting in queue",
-                    }),
+                    RequestDisposition::ExpiredInQueue => {
+                        Err(deadline_expired("waiting in queue", deadline))
+                    }
                     RequestDisposition::Rejected(error) => Err(error),
                 };
                 let _ = reply.send(result);
@@ -566,9 +565,7 @@ impl ReaderPool {
                     .metrics
                     .expired_in_queue
                     .fetch_add(1, Ordering::Relaxed);
-                return Err(ReadLaneError::DeadlineExpired {
-                    stage: "waiting in queue",
-                });
+                return Err(deadline_expired("waiting in queue", deadline));
             }
             Ok(Err(_)) => {
                 self.inner
@@ -583,7 +580,7 @@ impl ReaderPool {
         }
         let remaining = expires_at.saturating_duration_since(Instant::now());
         match tokio::time::timeout(remaining, response).await {
-            Err(_) => Err(self.expire_waiting_request(reservation, request_id)),
+            Err(_) => Err(self.expire_waiting_request(reservation, request_id, deadline)),
             Ok(Err(_)) => Err(ReadLaneError::Unavailable {
                 message: "reader worker closed its reply channel".to_owned(),
             }),
@@ -610,16 +607,14 @@ impl ReaderPool {
                     });
                 }
                 Err(tokio::sync::TryAcquireError::NoPermits) if Instant::now() >= expires_at => {
-                    return Err(ReadLaneError::DeadlineExpired {
-                        stage: "waiting for tool read capacity",
-                    });
+                    return Err(deadline_expired("waiting for tool read capacity", deadline));
                 }
                 Err(tokio::sync::TryAcquireError::NoPermits) => {
                     thread::park_timeout(Duration::from_millis(2));
                 }
             }
         };
-        self.submit_blocking_with_class_at(expires_at, Some(permit), operation)
+        self.submit_blocking_with_class_at(expires_at, deadline, Some(permit), operation)
     }
 
     /// Submits a synchronous compatibility read through the shared pool.
@@ -636,7 +631,7 @@ impl ReaderPool {
         T: Send + 'static,
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
-        self.submit_blocking_with_class_at(deadline_at(deadline)?, None, operation)
+        self.submit_blocking_with_class_at(deadline_at(deadline)?, deadline, None, operation)
     }
 
     pub(crate) fn request_deadline(&self) -> Duration {
@@ -646,6 +641,7 @@ impl ReaderPool {
     fn submit_blocking_with_class_at<T, F>(
         &self,
         expires_at: Instant,
+        deadline: Duration,
         tool_class_slot: Option<OwnedSemaphorePermit>,
         operation: F,
     ) -> Result<T, ReadLaneError>
@@ -664,20 +660,20 @@ impl ReaderPool {
             run: Box::new(move |connection, target, disposition| {
                 let result = match disposition {
                     RequestDisposition::Execute => operation(connection, target),
-                    RequestDisposition::ExpiredInQueue => Err(ReadLaneError::DeadlineExpired {
-                        stage: "waiting in queue",
-                    }),
+                    RequestDisposition::ExpiredInQueue => {
+                        Err(deadline_expired("waiting in queue", deadline))
+                    }
                     RequestDisposition::Rejected(error) => Err(error),
                 };
                 let _ = reply.send(result);
             }),
         };
-        self.enqueue_request(&reservation, request, expires_at)?;
+        self.enqueue_request(&reservation, request, expires_at, deadline)?;
         response
             .recv_timeout(expires_at.saturating_duration_since(Instant::now()))
             .map_err(|error| match error {
                 mpsc::RecvTimeoutError::Timeout => {
-                    self.expire_waiting_request(reservation, request_id)
+                    self.expire_waiting_request(reservation, request_id, deadline)
                 }
                 mpsc::RecvTimeoutError::Disconnected => ReadLaneError::Unavailable {
                     message: "reader worker closed its reply channel".to_owned(),
@@ -692,6 +688,7 @@ impl ReaderPool {
         reservation: &WorkerReservation,
         mut request: Request,
         expires_at: Instant,
+        deadline: Duration,
     ) -> Result<(), ReadLaneError> {
         let metrics = &self.inner.metrics;
         loop {
@@ -704,9 +701,7 @@ impl ReaderPool {
                     metrics.queue_depth.fetch_sub(1, Ordering::Relaxed);
                     if Instant::now() >= expires_at {
                         metrics.expired_in_queue.fetch_add(1, Ordering::Relaxed);
-                        return Err(ReadLaneError::DeadlineExpired {
-                            stage: "waiting in queue",
-                        });
+                        return Err(deadline_expired("waiting in queue", deadline));
                     }
                     request = returned;
                     thread::park_timeout(Duration::from_millis(2));
@@ -748,6 +743,7 @@ impl ReaderPool {
         &self,
         reservation: WorkerReservation,
         request_id: RequestId,
+        deadline: Duration,
     ) -> ReadLaneError {
         if reservation.state.active.load(Ordering::Acquire)
             && RequestId::is_active(&reservation.state.active_request, request_id)
@@ -758,17 +754,13 @@ impl ReaderPool {
                 .interrupted_while_active
                 .fetch_add(1, Ordering::Relaxed);
             self.schedule_quarantine(reservation, request_id);
-            ReadLaneError::DeadlineExpired {
-                stage: "executing active query",
-            }
+            deadline_expired("executing active query", deadline)
         } else {
             self.inner
                 .metrics
                 .expired_in_queue
                 .fetch_add(1, Ordering::Relaxed);
-            ReadLaneError::DeadlineExpired {
-                stage: "waiting in queue",
-            }
+            deadline_expired("waiting in queue", deadline)
         }
     }
 }
@@ -782,9 +774,19 @@ impl Drop for PoolShutdownGuard {
 fn deadline_at(deadline: Duration) -> Result<Instant, ReadLaneError> {
     Instant::now()
         .checked_add(deadline)
-        .ok_or(ReadLaneError::DeadlineExpired {
-            stage: "computing reader deadline",
-        })
+        .ok_or_else(|| deadline_expired("computing reader deadline", deadline))
+}
+
+fn deadline_expired(stage: &'static str, budget: Duration) -> ReadLaneError {
+    let budget_ms = u64::try_from(budget.as_millis()).unwrap_or(u64::MAX);
+    ReadLaneError::DeadlineExpired {
+        stage,
+        budget_ms,
+        // The reader pool emits this only at the request deadline.  Report
+        // the total instead of an inferred remaining duration so operators
+        // can compare it directly with the configured request budget.
+        elapsed_ms: budget_ms,
+    }
 }
 
 impl PoolInner {
@@ -1331,6 +1333,8 @@ mod tests {
             deadline_at(Duration::MAX),
             Err(atm_storage::ReadLaneError::DeadlineExpired {
                 stage: "computing reader deadline",
+                budget_ms: u64::MAX,
+                elapsed_ms: u64::MAX,
             })
         );
     }
@@ -1393,7 +1397,9 @@ mod tests {
         assert_eq!(
             capped,
             atm_storage::ReadLaneError::DeadlineExpired {
-                stage: "waiting for tool read capacity"
+                stage: "waiting for tool read capacity",
+                budget_ms: 10,
+                elapsed_ms: 10,
             }
         );
         pool.submit(Duration::from_millis(50), |_, _| {
@@ -1430,7 +1436,9 @@ mod tests {
         assert_eq!(
             queued,
             atm_storage::ReadLaneError::DeadlineExpired {
-                stage: "waiting in queue"
+                stage: "waiting in queue",
+                budget_ms: 10,
+                elapsed_ms: 10,
             }
         );
         let saturated = pool
@@ -1490,7 +1498,9 @@ mod tests {
         assert_eq!(
             timed_out,
             atm_storage::ReadLaneError::DeadlineExpired {
-                stage: "executing active query"
+                stage: "executing active query",
+                budget_ms: 15,
+                elapsed_ms: 15,
             }
         );
         // Lifecycle notifications are the completion signal. The timeout is
@@ -1599,7 +1609,9 @@ mod tests {
         assert_eq!(
             timed_out,
             atm_storage::ReadLaneError::DeadlineExpired {
-                stage: "executing active query"
+                stage: "executing active query",
+                budget_ms: 500,
+                elapsed_ms: 500,
             }
         );
         started_rx.await.expect("statement started before deadline");

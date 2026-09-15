@@ -7,7 +7,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::error::{AtmError, AtmErrorCode};
+use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
 use crate::task_state::TaskCloseOutcome;
 use crate::types::{AgentName, IsoTimestamp, MemberKey, ModelName, PaneId, TaskId, TeamName};
@@ -82,6 +82,7 @@ impl AsRef<str> for MessageKey {
 }
 
 pub use crate::peer_contract::*;
+pub use crate::read_lane_error::ReadLaneError;
 pub use crate::task_state::{TaskEventRow, TaskRow};
 pub use crate::task_store::*;
 
@@ -332,6 +333,18 @@ pub struct MessageQuery {
     pub limit: Option<usize>,
 }
 
+/// A storage-owned, criteria-based mailbox page.
+///
+/// Unlike [`MessageQuery`], this carries the complete typed predicate to the
+/// reader backend so it can apply visibility, successor collapse, ordering,
+/// and a page limit before it materializes message envelopes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MailboxListQuery {
+    pub filters: crate::search::SearchFilters,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+}
+
 /// The mailbox a read operation is authorized to inspect.
 ///
 /// This deliberately travels with every asynchronous mailbox request instead
@@ -378,70 +391,6 @@ impl ReadDeadline {
     #[must_use]
     pub const fn remaining(self) -> Duration {
         self.remaining
-    }
-}
-
-/// Explicit resource-management outcomes from a bounded reader lane.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ReadLaneError {
-    UnauthorizedScope,
-    Saturated {
-        reason: &'static str,
-    },
-    DeadlineExpired {
-        stage: &'static str,
-    },
-    Unavailable {
-        message: String,
-    },
-    Storage {
-        code: AtmErrorCode,
-        message: String,
-        cause: Option<String>,
-    },
-}
-
-impl fmt::Display for ReadLaneError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnauthorizedScope => {
-                formatter.write_str("mailbox scope does not authorize this read")
-            }
-            Self::Saturated { reason } => {
-                write!(formatter, "mailbox reader lane is saturated: {reason}")
-            }
-            Self::DeadlineExpired { stage } => {
-                write!(formatter, "mailbox reader deadline expired while {stage}")
-            }
-            Self::Unavailable { message } => {
-                write!(formatter, "mailbox reader lane is unavailable: {message}")
-            }
-            Self::Storage { message, cause, .. } => {
-                write!(formatter, "mailbox reader storage failure: {message}")?;
-                if let Some(cause) = cause {
-                    write!(formatter, "; cause: {cause}")?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
-impl std::error::Error for ReadLaneError {}
-
-/// Translates the storage-owned reader-lane outcomes exactly once into the
-/// stable ATM error vocabulary. The original lane outcome remains attached as
-/// the machine-visible cause instead of being flattened into unavailability.
-impl From<ReadLaneError> for AtmError {
-    fn from(error: ReadLaneError) -> Self {
-        let code = match &error {
-            ReadLaneError::UnauthorizedScope => AtmErrorCode::MailboxReadFailed,
-            ReadLaneError::Saturated { .. } => AtmErrorCode::DaemonConnectionSaturated,
-            ReadLaneError::DeadlineExpired { .. } => AtmErrorCode::MailboxLockTimeout,
-            ReadLaneError::Unavailable { .. } => AtmErrorCode::DaemonUnavailable,
-            ReadLaneError::Storage { code, .. } => *code,
-        };
-        AtmError::new(code, "bounded mailbox reader lane request failed").with_cause(error)
     }
 }
 
@@ -899,6 +848,18 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
         deadline: ReadDeadline,
     ) -> Result<Vec<Message>, ReadLaneError>;
 
+    /// Lists a bounded page after applying the storage-owned typed criteria.
+    ///
+    /// This is deliberately separate from the narrow legacy-compatible
+    /// [`MessageQuery`] shape: callers that need mailbox display selection
+    /// must not load an entire mailbox merely to select one page.
+    async fn list_matching_messages(
+        &self,
+        scope: MailboxScope,
+        query: MailboxListQuery,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError>;
+
     /// Runs a bounded exploratory mailbox list through the tool-class slice
     /// of the shared reader pool.
     ///
@@ -913,6 +874,17 @@ pub trait AsyncMailboxReader: sealed::Sealed + Send + Sync {
     ) -> Result<Vec<Message>, ReadLaneError> {
         self.list_messages(scope, query, deadline).await
     }
+
+    /// Counts messages through the storage-owned SQL criteria path.  This
+    /// deliberately returns aggregates rather than materialized messages so a
+    /// mailbox list can report buckets without exhausting its read deadline.
+    async fn count_messages(
+        &self,
+        scope: MailboxScope,
+        filters: crate::search::SearchFilters,
+        group_by: Option<crate::search::SearchCountGroupBy>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<crate::search::SearchCount>, ReadLaneError>;
 
     async fn load_message(
         &self,

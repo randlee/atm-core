@@ -783,6 +783,25 @@ pub(crate) fn error_response(error: AtmError) -> Response {
     } else {
         StatusCode::SERVICE_UNAVAILABLE
     };
+    if matches!(
+        error.code(),
+        AtmErrorCode::MailboxLockTimeout
+            | AtmErrorCode::MailboxReadFailed
+            | AtmErrorCode::DaemonConnectionSaturated
+            | AtmErrorCode::DaemonUnavailable
+    ) && error
+        .message()
+        .starts_with("bounded mailbox reader request failed:")
+    {
+        // `ReadLaneError` has already reduced this to a stable, safe detail.
+        // Record every reader-lane outcome before HTTP redacts its diagnostic
+        // cause so the owned daemon log and local CLI identify one failure.
+        tracing::error!(
+            error_code = %error.code(),
+            detail = %error.message(),
+            "mailbox reader request failed"
+        );
+    }
     // Preserve the public code/message contract while redacting diagnostic
     // causes before serializing through the untrusted HTTP boundary.
     let body = HttpErrorBody::from(&error);

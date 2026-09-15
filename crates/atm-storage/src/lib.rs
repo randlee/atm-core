@@ -11,6 +11,7 @@ pub mod error_codes;
 pub mod factory;
 pub mod peer_catalog_audit;
 mod peer_contract;
+mod read_lane_error;
 pub mod request_budget;
 pub mod schema;
 pub mod search;
@@ -43,15 +44,15 @@ pub use contract::{
     AsyncMessageStore, AsyncTaskLedgerReader, BuiltInNudgeTemplateKind, CertificateFingerprint,
     GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
     GraftReceiverRegistration, HttpsInterface, LocalCertificate, MAX_NUDGE_ATTEMPTS,
-    MailMessageState, MailboxBucketCounts, MailboxScope, Message, MessageAdmissionOutcome,
-    MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore, NudgeClaim,
-    NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, PrivateKeyRef, ReadDeadline,
-    ReadLaneError, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberEphemeralState,
-    RosterMemberKind, RosterRuntimeIdentity, RosterRuntimeMirror, RosterRuntimeMutationOutcome,
-    RosterRuntimeObservation, RosterRuntimeObservationUpdate, RosterSnapshot, RosterStateRevision,
-    RosterStore, RosterUniqueName, RuntimeMemberState, RuntimeObservationAvailability,
-    RuntimeObservationSource, StaleNudgeTemplateOverrideKind, StorageNotifier,
-    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
+    MailMessageState, MailboxBucketCounts, MailboxListQuery, MailboxScope, Message,
+    MessageAdmissionOutcome, MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent,
+    MessageStore, NudgeClaim, NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore,
+    PrivateKeyRef, ReadDeadline, RosterChangedEvent, RosterHarness, RosterMember,
+    RosterMemberEphemeralState, RosterMemberKind, RosterRuntimeIdentity, RosterRuntimeMirror,
+    RosterRuntimeMutationOutcome, RosterRuntimeObservation, RosterRuntimeObservationUpdate,
+    RosterSnapshot, RosterStateRevision, RosterStore, RosterUniqueName, RuntimeMemberState,
+    RuntimeObservationAvailability, RuntimeObservationSource, StaleNudgeTemplateOverrideKind,
+    StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
     derive_ack_requirement, roster_unique_name_collision_error, roster_unique_name_collisions,
     roster_write_delta, team_scoped_roster_unique_name_collisions,
 };
@@ -66,15 +67,17 @@ pub use factory::{
     StorageHandles, WriteThroughRosterStore,
 };
 pub use peer_catalog_audit::TrustedPeerCatalogAudit;
+pub use read_lane_error::ReadLaneError;
 pub use roles::ROLE_WORKER;
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
 pub use search::{
-    AsyncMessageSearchStore, InMemoryMessageSearchStore, MessageSearchPage, MessageSearchQuery,
-    MessageSearchStore, SearchAggregate, SearchAtom, SearchCursor, SearchDeadline,
+    AsyncMessageSearchStore, InMemoryMessageSearchStore, MailboxBucket, MessageSearchPage,
+    MessageSearchQuery, MessageSearchStore, SearchAckState, SearchAggregate, SearchAtom,
+    SearchCount, SearchCountGroupBy, SearchCountKey, SearchCursor, SearchDeadline,
     SearchExpression, SearchFilters, SearchGroup, SearchGroupBy, SearchGroupField, SearchKey,
-    SearchLimit, SearchMatchField, SearchMetadataMatch, SearchPageRequest, SearchResultKey,
-    SearchTimestampField, SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch,
-    StoredWorkflowMetadata, TimeRange,
+    SearchLimit, SearchMailboxSelection, SearchMatchField, SearchMetadataMatch, SearchPageRequest,
+    SearchReadState, SearchResultKey, SearchTimestampField, SearchValue, SimpleAggregate,
+    StoredSearchAddress, StoredSearchMatch, StoredWorkflowMetadata, TimeRange,
 };
 pub use task_op::{MoveTarget, TaskOp};
 pub use task_state::{
