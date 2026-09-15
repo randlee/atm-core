@@ -71,11 +71,11 @@ pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, Pending
 pub use search::{
     AsyncMessageSearchStore, InMemoryMessageSearchStore, MailboxBucket, MessageSearchPage,
     MessageSearchQuery, MessageSearchStore, SearchAckState, SearchAggregate, SearchAtom,
-    SearchCount, SearchCountGroupBy, SearchCursor, SearchDeadline, SearchExpression, SearchFilters,
-    SearchGroup, SearchGroupBy, SearchGroupField, SearchKey, SearchLimit, SearchMatchField,
-    SearchMetadataMatch, SearchPageRequest, SearchReadState, SearchResultKey, SearchTimestampField,
-    SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch, StoredWorkflowMetadata,
-    TimeRange,
+    SearchCount, SearchCountGroupBy, SearchCountKey, SearchCursor, SearchDeadline,
+    SearchExpression, SearchFilters, SearchGroup, SearchGroupBy, SearchGroupField, SearchKey,
+    SearchLimit, SearchMatchField, SearchMetadataMatch, SearchPageRequest, SearchReadState,
+    SearchResultKey, SearchTimestampField, SearchValue, SimpleAggregate, StoredSearchAddress,
+    StoredSearchMatch, StoredWorkflowMetadata, TimeRange,
 };
 pub use task_op::{MoveTarget, TaskOp};
 pub use task_state::{

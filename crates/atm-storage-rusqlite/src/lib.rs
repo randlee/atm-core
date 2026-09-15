@@ -3496,6 +3496,39 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn mailbox_reader_current_only_count_collapses_successors() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let source_id = AtmMessageId::new();
+        let reply_id = AtmMessageId::new();
+        let mut source = message(&format!("atm:{source_id}"), "source");
+        let mut reply = message(&format!("atm:{reply_id}"), "reply");
+        source.envelope.message_id = Some(source_id);
+        reply.envelope.message_id = Some(reply_id);
+        reply.envelope.parent_message_id = Some(source_id);
+        store.save_message(&source).expect("save source");
+        store.save_message(&reply).expect("save reply");
+
+        let counts = backend
+            .async_mailbox_reader()
+            .count_messages(
+                MailboxScope::new(team(), agent()),
+                SearchFilters {
+                    team: Some(team()),
+                    agent: Some(agent()),
+                    current_only: true,
+                    ..SearchFilters::default()
+                },
+                None,
+                ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+            )
+            .await
+            .expect("reader count");
+
+        assert_eq!(counts[0].count, 1, "only the terminal reply is counted");
+    }
+
     #[test]
     fn sqlite_backend_saves_loads_lists_and_deletes_messages() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");

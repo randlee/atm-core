@@ -7,9 +7,10 @@ use atm_storage::{
     AsyncMailboxReader, AtmError, IsoTimestamp, MailboxScope, Message, MessageKey, MessageQuery,
     ReadDeadline, ReadLaneError, SearchCount, SearchCountGroupBy, SearchFilters,
 };
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use crate::reader_pool::ReaderPool;
+use crate::search_store::compile_sql_filters;
 use crate::shared_db::{SharedDbTarget, deserialize_json, sqlite_error};
 
 struct MailboxReader {
@@ -463,51 +464,69 @@ fn parse_timestamp(raw: Option<String>, field: &str) -> Result<Option<IsoTimesta
 fn count_messages(
     connection: &Connection,
     target: &SharedDbTarget,
-    scope: &MailboxScope,
+    _scope: &MailboxScope,
     filters: &SearchFilters,
     group_by: Option<SearchCountGroupBy>,
 ) -> Result<Vec<SearchCount>, AtmError> {
-    // This is intentionally one aggregate query on the reader lane.  The
-    // next slice routes its WHERE criteria through search_store's shared
-    // generator; team/agent are pinned to the authorized mailbox here.
-    let from_filter = filters.from_agent.as_ref().map(|agent| agent.as_str());
-    let sql = "SELECT
-        CASE
-          WHEN s.pending_ack_at IS NOT NULL AND s.acknowledged_at IS NULL THEN 1
-          WHEN COALESCE(s.read, json_extract(m.envelope_json, '$.read'), 0) = 0 THEN 0
-          ELSE 2
-        END AS bucket,
-        COUNT(*)
-      FROM mail_messages m
+    let compiled = compile_sql_filters(filters);
+    let bucket = "CASE WHEN s.pending_ack_at IS NOT NULL AND s.acknowledged_at IS NULL THEN 1 WHEN COALESCE(s.read, json_extract(m.envelope_json, '$.read'), 0) = 0 THEN 0 ELSE 2 END";
+    let (group_expression, tag_join) = match group_by {
+        Some(SearchCountGroupBy::Bucket) => (bucket.to_owned(), ""),
+        Some(SearchCountGroupBy::FromAgent) => ("m.from_agent".to_owned(), ""),
+        Some(SearchCountGroupBy::Tag) => {
+            ("tag.value".to_owned(), " JOIN json_each(m.tags_json) tag")
+        }
+        None => ("'all'".to_owned(), ""),
+    };
+    let sql = format!(
+        "SELECT CAST({group_expression} AS TEXT), COUNT(*)
+      FROM mail_message_search_documents d
+      JOIN mail_messages m ON (m.team, m.agent, m.message_key) = (d.team, d.agent, d.message_key)
       LEFT JOIN mail_message_states s
-        ON (s.team, s.agent, s.message_key) = (m.team, m.agent, m.message_key)
-      WHERE m.team = ?1 AND m.agent = ?2
-        AND s.deleted_at IS NULL
-        AND (s.expires_at IS NULL OR s.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-        AND (?3 IS NULL OR m.from_agent = ?3)
-      GROUP BY bucket";
+        ON (s.team, s.agent, s.message_key) = (m.team, m.agent, m.message_key){tag_join}
+      WHERE 1 = 1 {}
+      GROUP BY {group_expression}",
+        compiled.clause.replace("ms.", "s.")
+    );
     let mut statement = connection
-        .prepare_cached(sql)
+        .prepare_cached(&sql)
         .map_err(|error| sqlite_error(target, "failed to prepare mailbox count query", error))?;
     let rows = statement
-        .query_map(
-            params![scope.team.as_str(), scope.agent.as_str(), from_filter],
-            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
-        )
+        .query_map(params_from_iter(compiled.parameters), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
         .map_err(|error| sqlite_error(target, "failed to execute mailbox count query", error))?;
     let mut counts = rows
         .map(|row| {
-            let (bucket, count) = row.map_err(|error| {
+            let (key, count) = row.map_err(|error| {
                 sqlite_error(target, "failed to decode mailbox count row", error)
             })?;
-            let bucket = match bucket {
-                0 => Some(atm_storage::MailboxBucket::Unread),
-                1 => Some(atm_storage::MailboxBucket::PendingAck),
-                2 => Some(atm_storage::MailboxBucket::History),
-                _ => return Err(AtmError::mailbox_read("invalid mailbox count bucket")),
+            let key = match group_by {
+                Some(SearchCountGroupBy::Bucket) => match key.as_str() {
+                    "0" => atm_storage::SearchCountKey::Bucket(atm_storage::MailboxBucket::Unread),
+                    "1" => {
+                        atm_storage::SearchCountKey::Bucket(atm_storage::MailboxBucket::PendingAck)
+                    }
+                    "2" => atm_storage::SearchCountKey::Bucket(atm_storage::MailboxBucket::History),
+                    _ => return Err(AtmError::mailbox_read("invalid mailbox count bucket")),
+                },
+                Some(SearchCountGroupBy::FromAgent) => {
+                    atm_storage::SearchCountKey::FromAgent(key.parse().map_err(|error| {
+                        AtmError::validation(format!("invalid counted sender: {error}"))
+                    })?)
+                }
+                Some(SearchCountGroupBy::Tag) => atm_storage::SearchCountKey::Tag(key),
+                None => {
+                    return Ok(SearchCount {
+                        key: None,
+                        count: usize::try_from(count).map_err(|_| {
+                            AtmError::validation("mailbox count exceeds usize range")
+                        })?,
+                    });
+                }
             };
             Ok(SearchCount {
-                bucket,
+                key: Some(key),
                 count: usize::try_from(count)
                     .map_err(|_| AtmError::validation("mailbox count exceeds usize range"))?,
             })
@@ -515,10 +534,7 @@ fn count_messages(
         .collect::<Result<Vec<_>, _>>()?;
     if group_by.is_none() {
         let count = counts.iter().map(|count| count.count).sum();
-        counts = vec![SearchCount {
-            bucket: None,
-            count,
-        }];
+        counts = vec![SearchCount { key: None, count }];
     }
     Ok(counts)
 }

@@ -664,12 +664,12 @@ fn scalar_json_text(value: &Value) -> String {
 }
 
 #[derive(Debug, Clone)]
-struct SqlFilters {
-    clause: String,
-    parameters: Vec<SqlValue>,
+pub(crate) struct SqlFilters {
+    pub(crate) clause: String,
+    pub(crate) parameters: Vec<SqlValue>,
 }
 
-fn compile_sql_filters(filters: &atm_storage::SearchFilters) -> SqlFilters {
+pub(crate) fn compile_sql_filters(filters: &atm_storage::SearchFilters) -> SqlFilters {
     let mut clauses = Vec::new();
     let mut parameters = Vec::new();
     push_scalar_filters(filters, &mut clauses, &mut parameters);

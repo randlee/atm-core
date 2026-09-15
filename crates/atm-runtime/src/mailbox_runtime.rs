@@ -18,7 +18,7 @@ use atm_core::read::selection::{
 };
 use atm_storage::{
     AsyncMailboxReader, AsyncMessageStore, AtmError, IsoTimestamp, MailboxScope, Message,
-    MessageKey, MessageQuery, ReadDeadline,
+    MessageKey, MessageQuery, ReadDeadline, SearchCountGroupBy, SearchFilters,
 };
 
 /// Bounded, composition-owned handoff settings for post-read state updates.
@@ -472,13 +472,28 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
         deadline: RequestDeadline,
     ) -> Result<ListOutcome, AtmError> {
         let command = self.authorize_list(command, deadline).await?;
-        let selection = self
+        let counts = self
+            .reader
+            .count_messages(
+                command.scope().clone(),
+                SearchFilters {
+                    team: Some(command.scope().team.clone()),
+                    agent: Some(command.scope().agent.clone()),
+                    ..SearchFilters::default()
+                },
+                Some(SearchCountGroupBy::Bucket),
+                read_deadline(deadline)?,
+            )
+            .await
+            .map_err(AtmError::from)?;
+        let mut selection = self
             .select_all_for_tool(
                 command.scope().clone(),
                 command.selection().clone(),
                 deadline,
             )
             .await?;
+        selection.bucket_counts = bucket_counts_from_storage(counts);
         Ok(complete_async_list(&command, selection))
     }
 
@@ -565,6 +580,32 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
         self.try_handoff_selected(scope, &selection, true)?;
         Ok(selection)
     }
+}
+
+fn bucket_counts_from_storage(
+    counts: Vec<atm_storage::SearchCount>,
+) -> atm_core::read::BucketCounts {
+    let mut buckets = atm_core::read::BucketCounts {
+        unread: 0,
+        pending_ack: 0,
+        history: 0,
+    };
+    for count in counts {
+        match count.key {
+            Some(atm_storage::SearchCountKey::Bucket(atm_storage::MailboxBucket::Unread)) => {
+                buckets.unread = count.count
+            }
+            Some(atm_storage::SearchCountKey::Bucket(atm_storage::MailboxBucket::PendingAck)) => {
+                buckets.pending_ack = count.count
+            }
+            Some(atm_storage::SearchCountKey::Bucket(atm_storage::MailboxBucket::History)) => {
+                buckets.history = count.count
+            }
+            None => {}
+            _ => {}
+        }
+    }
+    buckets
 }
 
 impl StorageAsyncMailboxRuntime {

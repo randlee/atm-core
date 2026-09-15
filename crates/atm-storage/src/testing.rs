@@ -242,20 +242,34 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
         Ok(match group_by {
             Some(crate::search::SearchCountGroupBy::Bucket) => vec![
                 crate::search::SearchCount {
-                    bucket: Some(crate::search::MailboxBucket::Unread),
+                    key: Some(crate::search::SearchCountKey::Bucket(
+                        crate::search::MailboxBucket::Unread,
+                    )),
                     count: unread,
                 },
                 crate::search::SearchCount {
-                    bucket: Some(crate::search::MailboxBucket::PendingAck),
+                    key: Some(crate::search::SearchCountKey::Bucket(
+                        crate::search::MailboxBucket::PendingAck,
+                    )),
                     count: pending_ack,
                 },
                 crate::search::SearchCount {
-                    bucket: Some(crate::search::MailboxBucket::History),
+                    key: Some(crate::search::SearchCountKey::Bucket(
+                        crate::search::MailboxBucket::History,
+                    )),
                     count: history,
                 },
             ],
+            Some(crate::search::SearchCountGroupBy::FromAgent)
+            | Some(crate::search::SearchCountGroupBy::Tag) => {
+                return Err(ReadLaneError::Unavailable {
+                    message:
+                        "in-memory mailbox reader does not emulate grouped sender/tag SQL counts"
+                            .to_owned(),
+                });
+            }
             None => vec![crate::search::SearchCount {
-                bucket: None,
+                key: None,
                 count: unread + pending_ack + history,
             }],
         })
