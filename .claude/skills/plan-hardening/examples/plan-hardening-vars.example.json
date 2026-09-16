@@ -1,6 +1,7 @@
 {
   "task_id": "phase-x-plan-hardening-step-1",
   "phase": "phase-X",
+  "assignee": "arch-ctm",
   "description": "Plan hardening for phase-X current plan state",
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "plan/phase-x",

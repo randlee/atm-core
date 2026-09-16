@@ -17,10 +17,12 @@ required_variables:
 optional_variables:
   - lead
   - cc
+  - assignee
   - dependency_relations
 defaults:
   lead: team-lead
   cc: team-lead
+  assignee: "arch-ctm"
   dependency_relations: "- See authoritative sprint doc."
 metadata:
   type: dev-task
@@ -34,7 +36,7 @@ metadata:
     stage: dev
     transition: start
 ---
-<atm-task id="{{ task_id }}" sprint="{{ sprint }}" assignee="arch-ctm">
+<atm-task id="{{ task_id }}" sprint="{{ sprint }}" assignee="{{ assignee }}">
   <description>{{ description }}</description>
 
   <worktree>{{ worktree_path }}</worktree>

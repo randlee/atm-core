@@ -1,7 +1,7 @@
 ---
 name: codex-orchestration
 version: 0.1.0
-description: Orchestrate atm-core sprint work where an appointed lead coordinates, arch-ctm is the sole developer, and quality-mgr enforces the QA gate.
+description: Orchestrate sprint work where an appointed lead coordinates, the assigned developer (`assignee`) is the sole developer, and quality-mgr enforces the QA gate.
 depends_on:
   quality-management-gh: 1.x
   quality-mgr: 0.x
@@ -16,14 +16,18 @@ depends_on:
 
 # Codex Orchestration
 
-This skill defines the repo-local orchestration workflow for `atm-core`.
+This skill defines the repo-local orchestration workflow for this repository.
 
 ## Model
 
 - The **lead** coordinates sprint sequencing, worktree assignments, PR flow,
   and every dispatch and report in this skill. `team-lead` is the default
   lead; `fenix` or any other identity may hold the role.
-- `arch-ctm` is the sole developer for Codex-driven implementation work
+- the developer named by the `assignee` variable is the sole developer for
+  Codex-driven implementation work. Every dev-facing template declares
+  `assignee` as an optional variable with a repo default in its frontmatter;
+  the lead overrides it with `--var assignee=<identity>` or an `assignee` key
+  in the vars file. Body text never names a developer.
 - `quality-mgr` runs the QA gate after each delivery
 
 ## Lead Role
@@ -81,13 +85,13 @@ Before starting a sprint:
 
 ## Sprint Flow
 
-1. the lead assigns development to `arch-ctm` using `dev-template.xml.j2`.
+1. the lead assigns development to the developer (`assignee`) using `dev-template.xml.j2`.
    Every dev assignment must include the sprint-plan document path as
    `sprint_doc`, and that sprint document is the authoritative source for the
    task. Assignment prose may summarize, but it must not replace or weaken the
    sprint doc.
-2. `arch-ctm` starts, implements, commits, pushes, and reports branch plus SHA.
-3. Before QA-1, `arch-ctm` performs a self-directed Rust best-practices sweep on
+2. the developer starts, implements, commits, pushes, and reports branch plus SHA.
+3. Before QA-1, the developer performs a self-directed Rust best-practices sweep on
    the integration branch using the same `review_targets` planned for QA-1 and
    fixes all RBP findings found there. This is a developer cleanup step, not a
    QA surprise.
@@ -118,18 +122,19 @@ Before starting a sprint:
    section of the report and does not affect the verdict. All QA-1
    first-pass findings from every reviewer must still be fixed before
    merge — merge gate is 0B+0I+0m with no exceptions and no backlog
-   deferral. QA-1 findings route back to `arch-ctm` via
+   deferral. QA-1 findings route back to the developer via
    `fix-assignment.xml.j2` before QA-2, following the standard
    triage-and-fix path. `ruthless-boundary-qa`, `rust-best-practices-agent`,
    and `rust-service-hardening-agent` remain part of docs-only plan review
    and phase-ending review regardless of sprint round.
 8. If QA passes and CI is green, merge may proceed.
 9. After every QA round that reports any finding, at any severity, the lead
-   runs `/triaging-findings` the same way: every finding is recorded, correlated
+   runs `/triaging-findings` (where the repository carries that skill) the
+   same way: every finding is recorded, correlated
    across worktrees, and promoted to the current top layer of the stack. No
    finding is skipped, deferred, or left without a fix dispatch.
 10. After triage completes, the lead routes concrete fixes back to
-   `arch-ctm` using `fix-assignment.xml.j2`. Fix assignments must also include
+   the developer using `fix-assignment.xml.j2`. Fix assignments must also include
    `sprint_doc`, and the sprint document remains authoritative if the task
    summary omits or compresses details.
 
@@ -159,7 +164,7 @@ of §0.
    - `rust-service-hardening-agent`
 5. If plan QA passes, the hardened plan is ready for implementation dispatch.
 6. If plan QA fails, the lead uses the normal codex-orchestration
-   triage-and-fix loop to route concrete fixes back to `arch-ctm`.
+   triage-and-fix loop to route concrete fixes back to the developer.
 
 ## QA Coverage Rule
 
@@ -176,8 +181,9 @@ of §0.
 ## Phase-End Review
 
 For extraction-readiness or phase-close reviews, use `review-template.xml.j2`
-to assign a read-only review to `arch-ctm`.
-After the phase lands, run the `triaging-findings` post-mortem
+to assign a read-only review to the developer (`assignee`).
+After the phase lands, where the repository carries `triaging-findings`, run
+its post-mortem
 (`.claude/skills/triaging-findings/references/post-mortem.md`); the write-up
 lives in `docs/postmortems/` and feeds the stack guidelines above.
 

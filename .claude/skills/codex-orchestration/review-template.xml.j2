@@ -15,9 +15,11 @@ required_variables:
 optional_variables:
   - lead
   - cc
+  - assignee
 defaults:
   lead: team-lead
   cc: team-lead
+  assignee: "arch-ctm"
 metadata:
   type: review-task
   tags:
@@ -30,7 +32,7 @@ metadata:
     stage: review
     transition: start
 ---
-<atm-review id="{{ task_id }}" phase="{{ phase }}" assignee="arch-ctm">
+<atm-review id="{{ task_id }}" phase="{{ phase }}" assignee="{{ assignee }}">
   <description>Phase-ending code review. Read-only analysis only; no code changes.</description>
 
   <branch>{{ branch }}</branch>

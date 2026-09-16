@@ -1,4 +1,4 @@
-# Step 1 — Plan Scope Review (`arch-ctm`)
+# Step 1 — Plan Scope Review (developer)
 
 ## Execute
 
@@ -24,26 +24,27 @@ Make sure the vars file includes the current round metadata:
 - `previous_reviewed_commit`
 - `findings_hash`
 
-**2. Send to `arch-ctm`**
+**2. Send to the developer**
 
 ```bash
-atm send arch-ctm --stdin < /tmp/step-1-message.xml
+ASSIGNEE="$(jq -r .assignee /tmp/plan-hardening-vars.json)"
+atm send "$ASSIGNEE" --stdin < /tmp/step-1-message.xml
 ```
 
 **3. Check the response**
 
-Read the `arch-ctm` response and confirm it contains fenced JSON.
+Read the developer's response and confirm it contains fenced JSON.
 The expected output shape is specified inside `01-plan-scope-review.xml.j2`.
 Do not proceed to Step 2 until that fenced JSON is present and well formed.
 If the response is incomplete or malformed, send a correction request to
-`arch-ctm` immediately.
+the developer immediately.
 Save the extracted fenced JSON to `/tmp/step-1.json`.
 
 **4. Route by status**
 
 - `PASS` -> proceed to Step 2
-- `FAIL` -> re-render and re-send Step 1 to `arch-ctm`
-- if `arch-ctm` ACKs but returns no new fenced JSON, increment `round_index`,
+- `FAIL` -> re-render and re-send Step 1 to the developer
+- if the developer ACKs but returns no new fenced JSON, increment `round_index`,
   update `round_id`, refresh `replay_nonce` with the current UTC timestamp,
   and re-render Step 1 before re-sending
 

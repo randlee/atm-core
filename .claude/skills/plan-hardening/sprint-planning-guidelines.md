@@ -61,8 +61,8 @@ alone would leave implementation choices open.
 ## Recommended Agent / Model
 
 Optional `recommended_agent`/`recommended_model` select from the current
-developer pool: Cipher-311d/fast for bounded or documentation work;
-arch-ctm/deep-reasoning for algorithmic, architectural, or performance work.
+developer pool: a fast agent for bounded or documentation work; a
+deep-reasoning agent for algorithmic, architectural, or performance work.
 They are advice, not an assignment.
 
 ## Dependency Relations

@@ -1,7 +1,7 @@
 ---
 name: 01-plan-scope-review-task
 version: 2.0.0
-description: lead assignment template for the initial arch-ctm guidelines pass before background scope review.
+description: lead assignment template for the initial developer guidelines pass before background scope review.
 format: xml
 required_variables:
   - task_id
@@ -16,9 +16,11 @@ required_variables:
   - round_index
   - replay_nonce
 optional_variables:
+  - assignee
   - lead
   - cc
 defaults:
+  assignee: "arch-ctm"
   lead: team-lead
   cc: team-lead
 metadata:
@@ -34,7 +36,7 @@ metadata:
     transition: scope-review
     iteration_variable: round_index
 ---
-<atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="arch-ctm" mode="plan-hardening-guidelines-pass">
+<atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="{{ assignee }}" mode="plan-hardening-guidelines-pass">
   <description>{{ description }}</description>
 
   <worktree>{{ worktree_path }}</worktree>
