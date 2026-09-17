@@ -1,0 +1,794 @@
+repowise dead-code — /Users/randlee/Documents/github/atm-core
+[
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/scripts/worktree_abort.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 50,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/scripts/worktree_cleanup.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 80,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/scripts/worktree_create.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 50,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/scripts/worktree_scan.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 70,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/scripts/worktree_update.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 90,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/skills/daemon-switch/scripts/daemon-switch.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 280,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/skills/graph-orchestration/scripts/assignee-busy",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 0,
+    "primary_owner": null
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/skills/graph-orchestration/scripts/check_assignee.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 20,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/skills/graph-orchestration/scripts/next-dev-task",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 0,
+    "primary_owner": null
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/skills/graph-orchestration/scripts/preflight",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 0,
+    "primary_owner": null
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/skills/graph-orchestration/scripts/preflight.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 130,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/skills/graph-orchestration/scripts/validate-findings.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 190,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/skills/triage-report/scripts/triage_report.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 380,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".claude/skills/triaging-findings/scripts/check_dependencies.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 90,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".just/lint_same_host_portability.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 150,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": ".just/run_tests.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 30,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "crates/atm-core/src/api/http_frame_reader.rs",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 600,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "crates/atm-daemon/bin_support/daemon_observability.rs",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 1030,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "crates/atm-daemon/src/local_ipc_transport/accept_loop.rs",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 20,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "crates/atm-daemon/src/runtime_health/admission_view.rs",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 80,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "crates/atm-daemon/src/runtime_health/doctor_reporting.rs",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 40,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 40,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "crates/atm-daemon/src/runtime_health/post_commit_work.rs",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 410,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "crates/sc-lint-boundary/src/graph/ingest.rs",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 540,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "crates/sc-lint-boundary/src/graph/reference_collector.rs",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 130,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "docs/reports/generate_diagram_pages.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 310,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "docs/reports/assets/diagram-panels.js",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 10,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/atm-nudge.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 220,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/check-capability-degradation.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 60,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/check-function-length.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 200,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/check-legacy-mailbox-paths.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 90,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/check-silent-emit.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 70,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/claude_inbox_send.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 40,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/find_todos.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 110,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/triage_carry_forward.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 70,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/validate_release.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 390,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/verify_release_archive.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 40,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/verify_user_docs.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 180,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/fuzz/run_local_http_framing_campaign.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 230,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/phase-ai/run-hermes-graft-smoke.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 30,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/phase-ai/run-hermes-steer-smoke.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 50,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/smoke/combine_inbound_peer_smoke.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 90,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/smoke/render_report.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 40,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/smoke/run_admission_capacity.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 540,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/smoke/run_feature_smoke.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 450,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/smoke/run_graft_same_host.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 120,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/smoke/run_peer_pair.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 310,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/smoke/run_thorough.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 40,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/smoke/run_thorough_retry.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 10,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unreachable_file",
+    "file_path": "scripts/smoke/run_thorough_shared_host.py",
+    "symbol_name": null,
+    "confidence": 0.4,
+    "reason": "File has no importers (in_degree=0)",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 130,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unused_export",
+    "file_path": ".claude/scripts/worktree_scan.py",
+    "symbol_name": "WorktreeStatus",
+    "confidence": 0.4,
+    "reason": "Public symbol 'WorktreeStatus' has no importers",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 10,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unused_export",
+    "file_path": ".claude/scripts/worktree_shared.py",
+    "symbol_name": "validate_allowed_path",
+    "confidence": 0.4,
+    "reason": "Public symbol 'validate_allowed_path' has no importers",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 6,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unused_export",
+    "file_path": ".claude/scripts/worktree_shared.py",
+    "symbol_name": "load_runtime_context",
+    "confidence": 0.4,
+    "reason": "Public symbol 'load_runtime_context' has no importers",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 8,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unused_export",
+    "file_path": ".claude/scripts/worktree_shared.py",
+    "symbol_name": "find_repo_root",
+    "confidence": 0.4,
+    "reason": "Public symbol 'find_repo_root' has no importers",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 8,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unused_export",
+    "file_path": ".claude/scripts/worktree_shared.py",
+    "symbol_name": "is_git_repo",
+    "confidence": 0.4,
+    "reason": "Public symbol 'is_git_repo' has no importers",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 16,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unused_export",
+    "file_path": ".claude/scripts/worktree_shared.py",
+    "symbol_name": "validate_hook_json",
+    "confidence": 0.4,
+    "reason": "Public symbol 'validate_hook_json' has no importers",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 3,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unused_export",
+    "file_path": ".claude/scripts/worktree_shared.py",
+    "symbol_name": "invoke_agent_runner",
+    "confidence": 0.4,
+    "reason": "Public symbol 'invoke_agent_runner' has no importers",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 17,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unused_export",
+    "file_path": ".claude/scripts/worktree_shared.py",
+    "symbol_name": "sync_tracking_with_remote",
+    "confidence": 0.4,
+    "reason": "Public symbol 'sync_tracking_with_remote' has no importers",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 71,
+    "primary_owner": "rand.lee"
+  },
+  {
+    "kind": "unused_export",
+    "file_path": ".just/check_env_var_boundary.py",
+    "symbol_name": "find_function_definition_line",
+    "confidence": 0.4,
+    "reason": "Public symbol 'find_function_definition_line' has no importers",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "environment"
+    ],
+    "lines": 5,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unused_export",
+    "file_path": "scripts/atm-nudge.py",
+    "symbol_name": "emit_hook_result",
+    "confidence": 0.4,
+    "reason": "Public symbol 'emit_hook_result' has no importers",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 1,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unused_export",
+    "file_path": "scripts/smoke/fixtures.py",
+    "symbol_name": "clone_fixture",
+    "confidence": 0.4,
+    "reason": "Public symbol 'clone_fixture' has no importers",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 28,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "unused_export",
+    "file_path": "scripts/smoke/run_thorough_retry.py",
+    "symbol_name": "verify_retry_evidence",
+    "confidence": 0.4,
+    "reason": "Public symbol 'verify_retry_evidence' has no importers",
+    "safe_to_delete": false,
+    "risk_factors": [
+      "script"
+    ],
+    "lines": 43,
+    "primary_owner": "Rand Lee"
+  },
+  {
+    "kind": "zombie_package",
+    "file_path": "tools",
+    "symbol_name": null,
+    "confidence": 0.5,
+    "reason": "Package 'tools' has no importers from other packages",
+    "safe_to_delete": false,
+    "risk_factors": [],
+    "lines": 300,
+    "primary_owner": "Rand Lee"
+  }
+]
