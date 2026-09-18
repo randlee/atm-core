@@ -23,12 +23,12 @@ Expected reviewer launch input shape:
 
 ```json
 {
-  "source_of_truth": "docs/plans/phase-X/plan-phase-X.md",
+  "source_of_truth": "docs/plans/phase-bc/phase-bc-plan.md",
   "references": [
     "docs/project-plan.md"
   ],
   "worktree_path": "/absolute/path/to/worktree",
-  "branch": "feature/branch-name",
+  "branch": "plan/phase-bc",
   "review_cycle_limit": 3,
   "review_cycle_index": 1,
   "reviewed_commit": "abc1234",

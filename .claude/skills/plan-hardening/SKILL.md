@@ -36,11 +36,15 @@ Sprint plan approved by:
 - `critical-plan-reviewer`
 - `quality-mgr`
 
-The approved plan is cut along crate boundaries, not features: a boundary
-map, a contract sprint that fixes interfaces, parallel layer sprints that each
-close one boundary against contract tests, and final integration sprints that
-own every end-to-end criterion. The phase plan carries a wave table with its
-critical path and width. Hardening exists to make that shape safe to run in
+The approved plan is a set of parallel tracks with non-intersecting
+`owned_paths`, aiming at the shortest critical path with the fewest sprints.
+A cross-boundary feature is cut into a contract sprint, parallel layer
+sprints that each close one boundary against contract tests, and its own
+integration sprint that owns its end-to-end criteria. Independent changes
+and single-boundary features stay as their own sprints or stacked tracks;
+thin layer sprints are as much a defect as full-stack feature sprints. The
+phase plan carries a wave table with critical path, width and sprint count,
+and every name follows "Naming" in the guidelines. Hardening exists to make that shape safe to run in
 parallel; it must never make a plan more serial. Record `critical_path` and
 `width` from the `plan-scope-reviewer` output in the round table's Note
 column, and treat a round that lengthens the critical path as a regression to

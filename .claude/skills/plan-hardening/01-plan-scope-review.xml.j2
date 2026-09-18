@@ -77,10 +77,16 @@ metadata:
 
     In this pass:
     - tighten the current plan docs to match the sprint-planning guidelines
-    - build the boundary map from `boundaries/<crate>/*.toml` and cut sprints
-      from it: one contract sprint that fixes every interface the phase
-      changes, parallel layer sprints that each own one boundary, and final
-      integration sprints that own every end-to-end criterion
+    - build the boundary map from `boundaries/<crate>/*.toml` and lay the
+      plan out as parallel tracks per "Tracks And Balance": a cross-boundary
+      feature becomes a contract sprint, parallel layer sprints that each own
+      one boundary, and its own integration sprint; independent changes and
+      single-boundary features stay one sprint or one stacked track; no thin
+      or pass-through sprints; aim for the shortest critical path with the
+      fewest sprints
+    - apply "Naming" from the guidelines to every plan path, sprint doc,
+      sprint id and branch: lower case, `docs/plans/phase-<phase>/`,
+      `integrate/phase-<phase>`, `sprint/<phase>-<n>-<slug>`
     - give every sprint a `closure_type`, a `target_boundary` and disjoint
       `owned_paths`, and publish the wave table with critical path and width
     - default every relation to `parallel_safe`; keep a `must_follow` only

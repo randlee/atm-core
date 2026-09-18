@@ -96,15 +96,35 @@ lint-clean against the ADR-fixed contract", is adopted with three changes.
   exist. That sprint is short, and it is the only thing the layer sprints
   follow.
 
-The resulting shape is three waves: contract, layers, integration. Critical
-path is three sprints whatever the phase size. Width is the number of
-boundaries the phase touches.
+The resulting shape of one cross-boundary feature is three waves: contract,
+layers, integration. Its critical path is three sprints whatever its size.
+
+**Guard against the opposite extreme.** Cutting everything by layer is as
+wrong as cutting everything by feature. It produces thin sprints, each paying
+for a worktree, PR, QA pass and CI run, and it defers all integration risk to
+one late checkpoint. The guidelines therefore plan in **tracks** and score a
+plan on the shortest critical path with the fewest sprints:
+
+- Independent changes inside one boundary are separate sprints. Two
+  independent SQL schema changes are parallel siblings when their paths are
+  disjoint, or one `gh stack` track when they share a file. Either way they
+  run beside every other track.
+- Independent features on disjoint paths stay vertical tracks.
+- A layer cut is used only where two or more layer sprints are substantial.
+  A thin contract with one implementer and one consumer is one sprint.
+- Pass-through edits never get a sprint.
+- Each cross-boundary feature integrates in its own integration sprint as
+  soon as its layers close. One phase-wide checkpoint at the end is a finding.
+
+`plan-scope-reviewer` raises `OVER-SPLIT` for the horizontal extreme, beside
+`VERTICAL-SLICE` and `SERIAL-RISK` for the vertical one, and reports sprint
+count with critical path and width.
 
 ## 4. Answers To The Open Questions
 
-**Where does the integration checkpoint live?** In one or more
-`integration` sprints in the final wave of the phase, before the phase-ending
-review. They own composition-root wiring, CLI and end-to-end behaviour,
+**Where does the integration checkpoint live?** In one `integration` sprint
+per cross-boundary feature, at the end of that feature's track, before the
+phase-ending review. They own composition-root wiring, CLI and end-to-end behaviour,
 colima and smoke procedures, and user docs. Every feature-level acceptance
 criterion lives there exactly once. The phase-ending review stays as the
 full-reviewer gate on top.
@@ -139,6 +159,7 @@ criteria owned by another. That schema change is not in this PR.
 | `.claude/skills/plan-hardening/SKILL.md` and task templates 01, 02 | Hardening must not lengthen the critical path. The planner is told to cut from the boundary map. The central question of scope hardening is now the boundary cut. |
 | `.claude/skills/codex-orchestration/sprint-plan.md.j2`, `docs/templates/sprint-plan.md.j2` | New fields `closure_type`, `target_boundary`, `owned_paths`, `vertical_rationale`. Acceptance criteria carry a root. |
 | `.claude/skills/codex-orchestration/SKILL.md` | QA scope follows the closure type. |
+| `CLAUDE.md`, hardening examples and step files | Branch diagram and examples use the one naming convention. |
 
 `closure_type` and `target_boundary` are now required variables in the
 orchestration sprint-plan template. Nothing in code or tests renders that
@@ -174,7 +195,38 @@ Three structural observations go beyond wording.
   and 4 could review the same commit at the same time, because their scopes
   do not overlap. That change is not in this PR.
 
-## 7. Decisions For Rand
+## 7. Naming Conventions
+
+Found on develop: no single rule, and four forms in use.
+
+| Thing | Forms found |
+|---|---|
+| Plan directory | `phase-AA` to `phase-Z` upper case, `phase-af` onward lower case |
+| Phase plan file | `phase-bb-plan.md` in use, `plan-phase-X.md` in the hardening examples |
+| Sprint doc | `sprint-BB.4-task-start.md` (upper case, dot); older `sprint-aj-6-...` |
+| Sprint branch | `feature/pN-s1-...` in `CLAUDE.md`, `feature/pAJ-s6-...` in the triage fallback, `feature/bb7-docs` in practice |
+| Plan branch | `plan/phase-ap` and `docs/phase-ba-plan` |
+| Phase branch | `integrate/phase-bb`; older `integrate/phase-AK` |
+
+Now fixed in one table, "Naming" in the guidelines, summarised in
+`CLAUDE.md` and checked by `plan-scope-reviewer` as a `NAMING` finding:
+
+- everything lower case; phase id `bc`, sprint id `bc-4`
+- plans land in `docs/plans/phase-<phase>/` as `phase-<phase>-plan.md` and
+  `sprint-<phase>-<n>-<slug>.md`
+- phase work on `integrate/phase-<phase>`
+- sprint work on `sprint/<phase>-<n>-<slug>`, same slug as the sprint doc;
+  fix layers on `fix/<phase>-<n>-<slug>`
+- plan written on `plan/phase-<phase>`
+
+The triage and stack scripts need no change. They match `integrate/phase-`
+without regard to case and read each sprint's declared branch from
+`.sprints/`. The old `feature/pAJ-s6` inference is a fallback for phases with
+no declared branch. Existing phases are not renamed. `.sprints/<PHASE>/`
+directories and triage sprint IRIs (`BB`, `BB6`) are data identifiers, still
+upper case, and are left for a ruling.
+
+## 8. Decisions For Rand
 
 1. **QA once on top of the stack, or one QA per layer sprint?** The ruling of
    2026-09-13 says QA and CI gate only the top of one append-only stack. The
@@ -192,7 +244,14 @@ Three structural observations go beyond wording.
    fires inside the phase branch, it needs a phase-scoped allowance.
 3. **QA capacity.** All 45 QA rounds went to one `quality-mgr`. Ten parallel
    sprints need several QA coordinators, or the queue moves from dev to QA.
-4. **Follow-ups not in this PR:** the boundary-map script, the triage boundary
+4. **Upper-case triage identifiers.** `.sprints/BB/` and sprint IRIs such as
+   `BB6` are read by four scripts and their tests. Lower-casing them is a code
+   change with a migration, so it is not in this PR. Say if you want it.
+5. **Plan branch target.** The plan PR still targets `develop` from
+   `plan/phase-<phase>`, so the plan is reviewable before the phase branch
+   exists. If you want the plan written on `integrate/phase-<phase>` itself,
+   that is a one-line change to the table.
+6. **Follow-ups not in this PR:** the boundary-map script, the triage boundary
    root, `quality-mgr.md` and `qa-template.xml.j2` wording for per-crate
    sweeps in boundary sprints, and a trial of the new shape on the next
    phase plan with critical path and width recorded for comparison.
