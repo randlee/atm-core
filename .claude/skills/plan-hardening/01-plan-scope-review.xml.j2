@@ -77,6 +77,15 @@ metadata:
 
     In this pass:
     - tighten the current plan docs to match the sprint-planning guidelines
+    - build the boundary map from `boundaries/<crate>/*.toml` and cut sprints
+      from it: one contract sprint that fixes every interface the phase
+      changes, parallel layer sprints that each own one boundary, and final
+      integration sprints that own every end-to-end criterion
+    - give every sprint a `closure_type`, a `target_boundary` and disjoint
+      `owned_paths`, and publish the wave table with critical path and width
+    - default every relation to `parallel_safe`; keep a `must_follow` only
+      when it names a contract artifact that cannot move to the contract
+      sprint, and re-cut ownership instead of accepting a same-file ordering
     - create missing sprint docs when the plan already implies they are needed
     - make the sprint set reviewable by `plan-scope-reviewer`
     - do not rely on `{{ lead }}` to restate plan details

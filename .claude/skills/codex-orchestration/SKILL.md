@@ -172,6 +172,13 @@ of §0.
   deliverable points to a boundary, packaging, release-tracking, readiness, or
   validation gate
 - QA cannot PASS unless deliverable completion is 100%
+- QA scope follows the sprint doc's `closure_type`
+  (`.claude/skills/plan-hardening/sprint-planning-guidelines.md`): a
+  `contract` or `boundary` sprint is judged against its one
+  `target_boundary`, its boundary-rooted criteria and its per-crate
+  validation; behaviour listed under "This Sprint Does Not Close" is not a
+  finding against it. End-to-end, CLI, live-daemon and smoke proof is judged
+  in `integration` sprints and the phase-ending review
 
 ## Phase-End Review
 

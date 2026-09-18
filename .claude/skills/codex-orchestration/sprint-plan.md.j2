@@ -1,6 +1,6 @@
 ---
 name: sprint-plan
-version: 1.1.0
+version: 1.2.0
 description: Generate a sprint plan document for atm-core phases.
 format: markdown
 required_variables:
@@ -8,7 +8,11 @@ required_variables:
   - title
   - branch
   - target
+  - closure_type
+  - target_boundary
 optional_variables:
+  - owned_paths
+  - vertical_rationale
   - lead
   - status
   - worktree
@@ -25,6 +29,8 @@ optional_variables:
   - acceptance_criteria
   - validation
 defaults:
+  owned_paths: []
+  vertical_rationale: ""
   lead: team-lead
   status: planned
   worktree: ""
@@ -54,6 +60,8 @@ branch: {{ branch }}
 {% endif %}{% if recommended_agent %}recommended_agent: {{ recommended_agent }}
 {% endif %}{% if recommended_model %}recommended_model: {{ recommended_model }}
 {% endif %}target: {{ target }}
+closure_type: {{ closure_type }}
+target_boundary: {{ target_boundary }}
 ---
 
 # Sprint {{ id }} — {{ title }}
@@ -68,6 +76,20 @@ branch: {{ branch }}
 
 {% for item in goal %}- {{ item }}
 {% endfor %}
+## Closure
+
+Closure type: `{{ closure_type }}` (`contract`, `boundary`, `integration` or
+`docs`; see `.claude/skills/plan-hardening/sprint-planning-guidelines.md`).
+Target boundary: `{{ target_boundary }}`.
+{% if vertical_rationale %}
+Vertical rationale (this sprint spans more than one boundary): {{ vertical_rationale }}
+{% endif %}
+## Owned Paths
+
+No other sprint in the same wave may own a path matched here.
+
+{% for path in owned_paths %}- `{{ path }}`
+{% endfor %}
 ## Hard Dependencies
 
 {% for dep in dependencies %}- {{ dep }}
@@ -76,7 +98,9 @@ branch: {{ branch }}
 
 `must_follow` merge-forward trigger: parent development is pushed, not QA;
 merge parent → child before every dev/fix round. PR-completion trigger: parent
-PR merges first. `parallel_safe`: no gate; state non-intersecting ownership.
+PR merges first. `parallel_safe` is the default: no gate; state
+non-intersecting ownership. A `must_follow` rationale names the contract
+artifact this sprint consumes; "same file" is a split defect, not a rationale.
 
 {% for relation in dependencies_relation %}- {{ relation.sprint }} ({{ relation.relation }} — {{ relation.rationale }})
 {% endfor %}{% endif %}
@@ -87,9 +111,12 @@ PR merges first. `parallel_safe`: no gate; state non-intersecting ownership.
 ## Deliverables
 
 Every listed deliverable is expected to land at a production-ready level for
-the scope this sprint claims. If that cannot be done cleanly in one sprint, the
-sprint must be split before implementation begins. No deliverable may be
-silently dropped or partially deferred.
+the closure type this sprint claims. A `boundary` sprint closes its one crate
+against the fixed contract and its contract tests; behaviour that passes
+through other crates is listed under "This Sprint Does Not Close" and owned
+by an integration sprint. If the deliverables cannot land cleanly in one
+sprint, split along boundaries into siblings that can share a wave. No
+deliverable may be silently dropped or partially deferred.
 
 {% for item in deliverables %}- {{ item }}
 {% endfor %}
@@ -107,9 +134,14 @@ explicit code samples or signatures showing the intended end state.
 {% endfor %}
 ## This Sprint Does Not Close
 
+Name the integration sprint that closes each item.
+
 {% for item in non_closure %}- {{ item }}
 {% endfor %}
 ## Acceptance Criteria
+
+Each criterion carries its root: `boundary:<boundary_id>` in `contract` and
+`boundary` sprints, `req:<ID>` in integration sprints.
 
 {% for criterion in acceptance_criteria %}- {{ criterion }}
 {% endfor %}

@@ -112,10 +112,14 @@ metadata:
 
     This is the first required hardening pass. Your job is to attack the plan
     from the sprint-shape and deliverable side before any broader consistency
-    pass. The central question is: are the deliverables split across sprints
-    adequately so that every committed item can land at a production-ready
-    level with no silent drops, no shape-only completion, and no ambiguous
-    ownership?
+    pass. The central question is: are the deliverables split along crate
+    boundaries so that every sprint can close its one boundary against the
+    fixed contract at a production-ready level, in parallel with its siblings,
+    with no silent drops, no stubbed side of a contract, no ambiguous
+    ownership, and every end-to-end criterion owned by an integration sprint?
+    When a finding asks for a split, split into sibling sprints that can
+    share a wave. Never resolve a finding by adding a serial sprint or by
+    pulling end-to-end proof into a layer sprint.
 
     Use `.claude/skills/plan-hardening/sprint-planning-guidelines.md` as a
     required reference for sprint splitting, authoritative checklist shape,
