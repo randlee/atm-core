@@ -144,7 +144,37 @@ criteria owned by another. That schema change is not in this PR.
 orchestration sprint-plan template. Nothing in code or tests renders that
 template, so no gate breaks. Existing sprint docs are not migrated.
 
-## 6. Decisions For Rand
+## 6. Audit Of The Plan-Hardening Loop
+
+Question: did the skill or its agents put any emphasis on parallel sprints?
+On develop, almost none. The whole loop carried one sentence, in the
+guidelines: "Prefer parallel-safe splits where credible. Plan-scope-reviewer
+verifies this."
+
+| Loop part | Parallelism content on develop | After this PR |
+|---|---|---|
+| `SKILL.md` | none; hard stop says "split it" | expected result is the wave shape; serial split rejected |
+| Step 1 task template (planner) | one line on relation tags | cut from boundary map, publish wave table |
+| Step 2 `plan-scope-reviewer` | one check on relation rationale | boundary cut, `owned_paths`, critical path, width, two new findings |
+| Step 3 task template (planner) | none; central question was production-ready split | central question is the boundary cut |
+| Step 4 `critical-plan-reviewer` | none; `FALSE-CLOSURE` pushed toward full-stack sprints | closure judged per sprint type |
+| Step 5 consistency template | none | guard: the pass must not make the plan more serial |
+| Step 6 `quality-mgr` plan QA | none; `req-qa` could flag a boundary sprint as a coverage gap | sprint docs judged at their closure type |
+| Round tables, steps 2 and 4 | track only finding counts | record critical path and width per round |
+| `ruthless-boundary-qa`, `req-qa`, `arch-qa`, `schema-reviewer`, `boundary-guard` | none | unchanged |
+
+Three structural observations go beyond wording.
+
+- The loop measured one thing, finding counts, and drove them to zero. It
+  never measured the plan's shape. A plan could pass every gate fully serial.
+- Every reviewer in the loop can only add obligations. None could say "this
+  plan is too serial". `plan-scope-reviewer` now can.
+- The loop itself is serial with one author: six steps, `arch-ctm` writes,
+  two background reviewers take turns, each with a three-cycle cap. Steps 2
+  and 4 could review the same commit at the same time, because their scopes
+  do not overlap. That change is not in this PR.
+
+## 7. Decisions For Rand
 
 1. **QA once on top of the stack, or one QA per layer sprint?** The ruling of
    2026-09-13 says QA and CI gate only the top of one append-only stack. The
