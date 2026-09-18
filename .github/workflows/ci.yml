@@ -3,7 +3,26 @@ name: CI
 on:
   workflow_call:
   pull_request:
-    branches: [develop, main, "integrate/*", "fix/*", "feature/*", "sprint/*", "docs/*", "plan/*", "evidence/*", "triage/*"]
+    # `branches` filters on the PR *base*. Any branch a stacked layer can sit
+    # on must be listed, or that layer's PR gets no CI at all. `*` does not
+    # match `/`, which the lower-case naming rule already forbids in slugs.
+    branches:
+      - develop
+      - main
+      - "integrate/*"
+      - "integration/*"
+      - "sprint/*"
+      - "fix/*"
+      - "hotfix/*"
+      - "feature/*"
+      - "plan/*"
+      - "docs/*"
+      - "chore/*"
+      - "ci/*"
+      - "release/*"
+      - "merge/*"
+      - "evidence/*"
+      - "triage/*"
   push:
     branches: [develop, main]
 
