@@ -84,12 +84,14 @@ Target boundary: `{{ target_boundary }}`.
 {% if vertical_rationale %}
 Vertical rationale (this sprint spans more than one boundary): {{ vertical_rationale }}
 {% endif %}
+
 ## Owned Paths
 
 No other sprint in the same wave may own a path matched here.
 
 {% for path in owned_paths %}- `{{ path }}`
 {% endfor %}
+
 ## Hard Dependencies
 
 {% for dep in dependencies %}- {{ dep }}

@@ -24,10 +24,16 @@ This skill defines the repo-local orchestration workflow for this repository.
   and every dispatch and report in this skill. `team-lead` is the default
   lead; `fenix` or any other identity may hold the role.
 - the developer named by the `assignee` variable is the sole developer for
-  Codex-driven implementation work. Every dev-facing template declares
-  `assignee` as an optional variable with a repo default in its frontmatter;
-  the lead overrides it with `--var assignee=<identity>` or an `assignee` key
-  in the vars file. Body text never names a developer.
+  **one sprint**. Every dev-facing template declares `assignee` as an
+  optional variable with a repo default in its frontmatter; the lead
+  overrides it with `--var assignee=<identity>` or an `assignee` key in the
+  vars file. Body text never names a developer.
+- sprints that are `parallel_safe` run at the same time under different
+  assignees. When more than one sprint is in flight the lead passes
+  `assignee` explicitly on every dev, fix and review dispatch, taking it from
+  the sprint doc's `recommended_agent` when set. The frontmatter default is
+  for single-developer runs only: relying on it with parallel sprints queues
+  every sprint on one agent and makes the plan serial again.
 - `quality-mgr` runs the QA gate after each delivery
 
 ## Lead Role
