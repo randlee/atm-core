@@ -128,7 +128,7 @@ After all sprints merge:
 ## Scrum-Master Lifecycle
 
 - fresh per sprint
-- named tmux teammate
+- named ATM teammate
 - can spawn background sub-agents
 - shut down after sprint completion
 - never does dev work
@@ -151,8 +151,9 @@ atm inbox
 
 The template tracks state and the task assignment queues the work and nudges
 the agent; see `.claude/skills/codex-orchestration/SKILL.md` "Assignment
-Templates". Plain `atm send` is for questions and notices only. Never use
-`tmux send-keys`.
+Templates". Plain `atm send` is for questions and notices only. ATM nudges the recipient
+of every message, and an assigned task re-nudges an agent that stops working;
+there is no manual nudge.
 
 ## Anti-Patterns
 

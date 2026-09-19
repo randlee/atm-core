@@ -208,7 +208,7 @@ wording is [docs/agent-conventions.md](docs/agent-conventions.md).
 
 ATM CLI commands that require caller context must receive it explicitly from the invoking shell (`ATM_IDENTITY`, `ATM_TEAM`) or from supported command-line overrides such as `--as` / `--team`; `.atm.toml` must not be treated as a caller-identity fallback.
 
-**Note**: ARCH-CTM gets his identity from `ATM_IDENTITY=arch-ctm` set in his tmux session (via rmux or manually).
+**Note**: each agent gets its identity from `ATM_IDENTITY` set in its own session environment (for example `ATM_IDENTITY=arch-ctm`).
 
 ### Communicating with Team Agents
 
@@ -232,7 +232,10 @@ atm inbox
 
 **Re-dispatch ARCH-CTM** (when he hasn't replied):
 
-- Never `tmux send-keys`. Re-issue the assignment with
+- Nudges are built into ATM: every message nudges its recipient, and an
+  assigned task queues and re-nudges an agent that stops working. Never nudge
+  by hand. If an agent still has not picked up its work, re-issue the
+  assignment with
   `atm task assign <agent> --task-id <same id> --template <j2> --vars <json>`
   (same template and vars). Work is always assigned this way, to developers
   and to `quality-mgr`: the template tracks state, the task assignment queues
