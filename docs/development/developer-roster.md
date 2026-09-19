@@ -4,17 +4,20 @@ The repo-local list of developer agents that sprint plans assign work to. The
 shared planning and orchestration skills never name an agent; they point
 here. Update this file when the pool changes.
 
-| Agent | Model | Tier | Assign when the sprint is |
+| Tier | Agent (model) | Or | Assign when the sprint is |
 |---|---|---|---|
-| `cipher` | luna | fast | bounded and mechanical: docs, templates, pass-through edits, test additions, small fix layers, a thin layer sprint against a fixed contract |
-| `arch-ctm` | terra | workhorse | standard implementation: a full layer sprint (implementer or consumer), a contract sprint with a settled design, integration wiring |
-| `solar` | sol | difficult | hard or open-ended: a contract sprint that still needs design decisions, algorithmic, concurrency or performance work, schema migrations with data risk, defects that resisted a first fix |
+| workhorse (default) | `arch-ctm` (terra) | a Sonnet or Opus background agent | typical work: a full layer sprint (implementer or consumer), a contract sprint with a settled design, integration wiring |
+| fast | `cipher` (luna) | another luna agent | easier work: docs, templates, pass-through edits, test additions, small fix layers, a thin layer sprint against a fixed contract |
+| difficult | `solar` (sol) | a Fable background agent | hard or open-ended work: a contract sprint that still needs design decisions, algorithmic, concurrency or performance work, schema migrations with data risk, defects that resisted a first fix |
+
+Typical work goes to the workhorse tier. Move a sprint down to the fast tier
+or up to the difficult tier only when the work calls for it.
 
 Rules:
 
 - A sprint doc names one agent from this table in `recommended_agent`, and
   its model in `recommended_model`. Choose by the tier the work needs. Do not
-  spend `solar` on work `cipher` can close.
+  spend the difficult tier on work the fast tier can close.
 - Plans do not count agents. Staffing is the lead's job at dispatch: one
   agent runs one sprint at a time, and when ready sprints outnumber idle
   agents of the needed tier, the lead starts another agent of that tier and
