@@ -243,10 +243,14 @@ that sprint's doc; layer sprints reference them and do not restate them.
 
 ## Recommended Agent / Model
 
-Optional `recommended_agent`/`recommended_model` select from the current
-developer pool: Cipher-311d/fast for bounded or documentation work;
-arch-ctm/deep-reasoning for algorithmic, architectural, or performance work.
-They are advice, not an assignment. Layer sprints are bounded by construction
+Each sprint names its agent and model in `recommended_agent` /
+`recommended_model`, chosen by the tier the work needs: a fast agent for
+bounded or documentation work; the workhorse for typical work; a
+deep-reasoning agent for algorithmic, architectural, or performance work.
+When the repository keeps a developer roster
+(`docs/development/developer-roster.md`), name the agent from it, preferring
+a named team member over a background agent. How many agents run is decided
+at dispatch, not in the plan. Layer sprints are bounded by construction
 and suit one developer and one QA pass each, running concurrently.
 
 ## QA Consumption

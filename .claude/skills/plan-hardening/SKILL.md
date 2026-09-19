@@ -59,11 +59,11 @@ Always use:
 
 | # | Route to | Input required | Output expected | Read before executing |
 |---|----------|----------------|-----------------|-----------------------|
-| 1 | `arch-ctm` | vars file | `step-1` fenced JSON | `steps/step-1.md` |
+| 1 | developer | vars file | `step-1` fenced JSON | `steps/step-1.md` |
 | 2 | `plan-scope-reviewer` (background) | context + `step-1` JSON | `step-2` fenced JSON | `steps/step-2.md` |
-| 3 | `arch-ctm` | `step-2` JSON | `step-3` fenced JSON | `steps/step-3.md` |
+| 3 | developer | `step-2` JSON | `step-3` fenced JSON | `steps/step-3.md` |
 | 4 | `critical-plan-reviewer` (background) | context + `step-3` JSON | `step-4` fenced JSON | `steps/step-4.md` |
-| 5 | `arch-ctm` | `step-4` JSON | `step-5` fenced JSON | `steps/step-5.md` |
+| 5 | developer | `step-4` JSON | `step-5` fenced JSON | `steps/step-5.md` |
 | 6 | `quality-mgr` | `step-5` JSON + QA vars file | codex-orchestration plan-QA handoff | `steps/step-6.md` |
 
 ## Round Tracking
@@ -93,10 +93,10 @@ Use the example in:
 Cycle-cap behavior:
 
 - every `FAIL` from `plan-scope-reviewer` or `critical-plan-reviewer` must be
-  routed to `arch-ctm` immediately through the matching plan-editing step
+  routed to the developer immediately through the matching plan-editing step
 - no reviewer findings may be accepted as-is or bypass the plan-editing agent
 - if a reviewer returns `FAIL` on the final allowed reviewer cycle, `team-lead`
-  must still send those findings to `arch-ctm` for one final correction pass
+  must still send those findings to the developer for one final correction pass
 - after that final correction pass, if no reviewer cycles remain, stop the
   hardening run as `cap-exhausted / not converged` and report status plainly
 - do not ask the user how to proceed, do not offer multiple-choice options,
@@ -120,7 +120,7 @@ Cycle-cap behavior:
   sibling sprints before implementation; a serial split of a feature sprint
   is not an accepted correction
 - if a reviewer loop reaches its configured cap without converging, stop after
-  routing the last findings to `arch-ctm` and report `cap-exhausted / not
+  routing the last findings to the developer and report `cap-exhausted / not
   converged`; do not continue launching background reviewers and do not ask
   the user for a decision mid-loop
 
@@ -132,8 +132,8 @@ Every template in this skill declares ATM template metadata
 message rendered from one of them is discoverable without reading its body:
 
 ```sh
-atm search --team atm-dev --workflow-stage plan --since <ISO> --json
-atm search --team atm-dev --type 'plan-*' --since <ISO> --json
+atm search --team <team> --workflow-stage plan --since <ISO> --json
+atm search --team <team> --type 'plan-*' --since <ISO> --json
 ```
 
 Rounds that run a reviewer as a background agent (steps 2 and 4) produce no

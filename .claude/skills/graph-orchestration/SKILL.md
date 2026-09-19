@@ -101,7 +101,7 @@ template carries is the dev-facing copy of §0.
 | Phase TTL location | `.sprints/<PHASE>/structure.ttl` + `.sprints/<PHASE>/events.ttl` (relative to repo root) |
 | Findings storage | `.triage/*/findings/*.ttl` — managed by triaging-findings skill |
 | Test command | `just test` |
-| Dev assignee | Set per-sprint at dispatch time (j2 variable) |
+| Dev assignee | The agent named on the dispatch command, per sprint; never a template variable |
 | QA reviewer set | `req-qa`, `arch-qa`, `rust-qa-agent` every pass; RBP/service-hardening/ruthless on QA-1 or finding recheck |
 
 ## Phase Setup
@@ -395,7 +395,7 @@ TASK_ID="GO-$(date +%s)"
 # --stdin the output. To preview/validate the exact body first, run
 # `atm compose` with the same --template/--vars/--var arguments. The daemon-owned template admission path records the
 # template and vars structurally, so the dispatch is queryable from outside.
-atm send arch-ctm \
+atm send <agent> \
   --task-id "$TASK_ID" \
   --template ".claude/skills/graph-orchestration/$TEMPLATE" \
   --vars /tmp/graph-vars.json \
@@ -403,7 +403,6 @@ atm send arch-ctm \
   --var worktree_path="$WORKTREE_PATH" \
   --var branch="$BRANCH" \
   --var pr_target="$PR_TARGET" \
-  --var assignee="arch-ctm" \
   --var phase_local="F" \
   --var ttl_dir=".sprints/F" \
   --var finding_ids="$FINDING_IDS"

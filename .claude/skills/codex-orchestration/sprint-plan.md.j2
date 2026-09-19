@@ -1,7 +1,7 @@
 ---
 name: sprint-plan
 version: 1.2.0
-description: Generate a sprint plan document for atm-core phases. Naming is lower case - id `<phase>-<n>` (bc-4), branch `sprint/<phase>-<n>-<slug>`, target `integrate/phase-<phase>`, output `docs/plans/phase-<phase>/sprint-<phase>-<n>-<slug>.md`.
+description: Generate a sprint plan document for repository phases. Naming is lower case - id `<phase>-<n>` (bc-4), branch `sprint/<phase>-<n>-<slug>`, target `integrate/phase-<phase>`, output `docs/plans/phase-<phase>/sprint-<phase>-<n>-<slug>.md`.
 format: markdown
 required_variables:
   - id
@@ -84,12 +84,14 @@ Target boundary: `{{ target_boundary }}`.
 {% if vertical_rationale %}
 Vertical rationale (this sprint spans more than one boundary): {{ vertical_rationale }}
 {% endif %}
+
 ## Owned Paths
 
 No other sprint in the same wave may own a path matched here.
 
 {% for path in owned_paths %}- `{{ path }}`
 {% endfor %}
+
 ## Hard Dependencies
 
 {% for dep in dependencies %}- {{ dep }}

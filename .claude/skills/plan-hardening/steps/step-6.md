@@ -2,15 +2,14 @@
 
 ## Execute
 
-**1. Render the message**
+**1. Preview the message**
 
 ```bash
-sc-compose render \
-  --root .claude/skills/codex-orchestration \
-  --file qa-template.xml.j2 \
-  --var-file /tmp/plan-hardening-qa-vars.json \
-  --output /tmp/step-6-message.xml
+atm compose --template .claude/skills/codex-orchestration/qa-template.xml.j2 \
+  --vars /tmp/plan-hardening-qa-vars.json
 ```
+
+This is a preview only; the rendered text is never what gets sent.
 
 The vars file or rendered task must include the QA assignment fields required
 by `qa-template.xml.j2`, and it must use `step-5` fenced JSON to populate the
@@ -49,15 +48,18 @@ memory.
 
 **2. Send to `quality-mgr`**
 
-Use native ATM messaging to send the rendered task to the named teammate
-`quality-mgr`:
+Assign the task to `quality-mgr` with the template, so the assignment is
+queued, nudged and tracked:
 
 ```bash
-atm send quality-mgr --file /tmp/step-6-message.xml --team <team> --task-id <task_id>
+VARS=/tmp/plan-hardening-qa-vars.json
+atm task assign quality-mgr --task-id "$(jq -r .task_id "$VARS")" \
+  --template .claude/skills/codex-orchestration/qa-template.xml.j2 \
+  --vars "$VARS"
 ```
 
-Always use `--file` for this handoff. Do not use `--stdin`: its known input
-handling bug is tracked separately.
+Never send a rendered file with `--file` or `--stdin`: it drops the template's
+workflow metadata, so the QA round cannot be found or counted afterwards.
 
 **3. Handoff**
 

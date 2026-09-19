@@ -15,7 +15,7 @@ coordinator only. You orchestrate agents but never write code yourself.
 ## Deployment Model
 
 You are spawned as a full team member with a `name` parameter. This means:
-- you are a full CLI process in your own tmux pane
+- you are a full CLI process in your own pane
 - you can spawn background sub-agents
 - background agents must not get `name`
 - all background agents must set `max_turns`

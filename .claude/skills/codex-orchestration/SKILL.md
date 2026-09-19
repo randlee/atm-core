@@ -1,7 +1,7 @@
 ---
 name: codex-orchestration
 version: 0.1.0
-description: Orchestrate atm-core sprint work where an appointed lead coordinates, arch-ctm is the sole developer, and quality-mgr enforces the QA gate.
+description: Orchestrate sprint work where an appointed lead coordinates, the developer the lead assigns each sprint to is its sole developer, and quality-mgr enforces the QA gate.
 depends_on:
   quality-management-gh: 1.x
   quality-mgr: 0.x
@@ -16,14 +16,27 @@ depends_on:
 
 # Codex Orchestration
 
-This skill defines the repo-local orchestration workflow for `atm-core`.
+This skill defines the repo-local orchestration workflow for this repository.
 
 ## Model
 
 - The **lead** coordinates sprint sequencing, worktree assignments, PR flow,
   and every dispatch and report in this skill. `team-lead` is the default
   lead; `fenix` or any other identity may hold the role.
-- `arch-ctm` is the sole developer for Codex-driven implementation work
+- the developer is the agent the lead assigns the task to:
+  `atm task assign <agent> --template <template> --vars <json>`. That
+  positional agent is the only place a developer is named. No template takes
+  an assignee variable and no message body names its recipient; the agent
+  that receives a task is its assignee, and the task ledger records it.
+- a developer is the sole developer for **one sprint**. Sprints that are
+  `parallel_safe` run at the same time under different developers: the lead
+  dispatches each sprint to the agent its sprint doc names in
+  `recommended_agent` (chosen at plan time from the repository's developer
+  roster by model tier), substituting only an idle agent of the same or a
+  higher tier. Sending every sprint to one agent makes
+  a parallel plan serial again. Agent count is the lead's concern, not the
+  plan's: when ready sprints outnumber idle developers of the needed tier,
+  start another agent of that tier instead of queueing the sprint.
 - `quality-mgr` runs the QA gate after each delivery
 
 ## Lead Role
@@ -68,8 +81,8 @@ Before starting a sprint:
 7. `quality-mgr` must also read:
    - `.claude/skills/quality-management-gh/SKILL.md`
 8. Every ATM assignment is sent with
-   `atm send <agent> --task-id "$TASK_ID" --template <template> --vars <json>`;
-   the same `TASK_ID` is supplied as the template's `task_id` variable. Never
+   `atm task assign <agent> --task-id "$TASK_ID" --template <template> --vars <json>`;
+   the same `TASK_ID` is the `task_id` key in the vars file. Never
    render a template yourself and send the output as message text or via `--stdin`.
    To view or validate the exact body before sending, use
    `atm compose --template <template> --vars <json>` (same renderer, same
@@ -81,13 +94,13 @@ Before starting a sprint:
 
 ## Sprint Flow
 
-1. the lead assigns development to `arch-ctm` using `dev-template.xml.j2`.
+1. the lead assigns development to a developer using `dev-template.xml.j2`.
    Every dev assignment must include the sprint-plan document path as
    `sprint_doc`, and that sprint document is the authoritative source for the
    task. Assignment prose may summarize, but it must not replace or weaken the
    sprint doc.
-2. `arch-ctm` starts, implements, commits, pushes, and reports branch plus SHA.
-3. Before QA-1, `arch-ctm` performs a self-directed Rust best-practices sweep on
+2. the developer starts, implements, commits, pushes, and reports branch plus SHA.
+3. Before QA-1, the developer performs a self-directed Rust best-practices sweep on
    the integration branch using the same `review_targets` planned for QA-1 and
    fixes all RBP findings found there. This is a developer cleanup step, not a
    QA surprise.
@@ -118,18 +131,20 @@ Before starting a sprint:
    section of the report and does not affect the verdict. All QA-1
    first-pass findings from every reviewer must still be fixed before
    merge — merge gate is 0B+0I+0m with no exceptions and no backlog
-   deferral. QA-1 findings route back to `arch-ctm` via
+   deferral. QA-1 findings route back to the developer via
    `fix-assignment.xml.j2` before QA-2, following the standard
    triage-and-fix path. `ruthless-boundary-qa`, `rust-best-practices-agent`,
    and `rust-service-hardening-agent` remain part of docs-only plan review
    and phase-ending review regardless of sprint round.
 8. If QA passes and CI is green, merge may proceed.
 9. After every QA round that reports any finding, at any severity, the lead
-   runs `/triaging-findings` the same way: every finding is recorded, correlated
+   runs `/triaging-findings` (where the repository carries that skill) the
+   same way: every finding is recorded, correlated
    across worktrees, and promoted to the current top layer of the stack. No
    finding is skipped, deferred, or left without a fix dispatch.
-10. After triage completes, the lead routes concrete fixes back to
-   `arch-ctm` using `fix-assignment.xml.j2`. Fix assignments must also include
+10. After triage completes, the lead routes concrete fixes to a developer of
+   the tier the fix needs, using `fix-assignment.xml.j2`: easy fixes go to the
+   fast tier for speed, not back to the sprint's developer by default. Fix assignments must also include
    `sprint_doc`, and the sprint document remains authoritative if the task
    summary omits or compresses details.
 
@@ -159,7 +174,7 @@ of §0.
    - `rust-service-hardening-agent`
 5. If plan QA passes, the hardened plan is ready for implementation dispatch.
 6. If plan QA fails, the lead uses the normal codex-orchestration
-   triage-and-fix loop to route concrete fixes back to `arch-ctm`.
+   triage-and-fix loop to route concrete fixes back to the developer.
 
 ## QA Coverage Rule
 
@@ -183,8 +198,9 @@ of §0.
 ## Phase-End Review
 
 For extraction-readiness or phase-close reviews, use `review-template.xml.j2`
-to assign a read-only review to `arch-ctm`.
-After the phase lands, run the `triaging-findings` post-mortem
+to assign a read-only review to a developer.
+After the phase lands, where the repository carries `triaging-findings`, run
+its post-mortem
 (`.claude/skills/triaging-findings/references/post-mortem.md`); the write-up
 lives in `docs/postmortems/` and feeds the stack guidelines above.
 
@@ -220,13 +236,32 @@ Do not assume ATM-specific PR monitoring commands exist.
 Dispatch form (mandatory for every assignment below):
 
 ```bash
-TASK_ID="<task-id>"
-atm send <agent> \
+VARS=<vars.json>                       # carries task_id
+TASK_ID="$(jq -r .task_id "$VARS")"
+atm task assign <agent> \
   --task-id "$TASK_ID" \
   --template <path/to/template.j2> \
-  --vars <vars.json> \
-  --var task_id="$TASK_ID"
+  --vars "$VARS"
 ```
+
+This form is mandatory for every orchestration assignment, to developers and
+to `quality-mgr` alike (`atm task assign quality-mgr ... --template
+qa-template.xml.j2`), for two reasons:
+
+- **the template** is what makes state tracked: its frontmatter declares the
+  message type, tags and workflow state/stage/scope, so the dispatch is
+  queryable with `atm search` and the reports can count it. Rendered text
+  sent with `--stdin`, `--file` or inline carries none of that.
+- **the task assignment** is what queues the work on the agent and nudges it
+  at the right time, and what `atm task start` / `atm task close` act on. A
+  plain `atm send` opens no task.
+
+`<agent>` is the only routing input. `atm send <agent> --task-id ... --template
+... --vars ...` is the same operation under its alias and is acceptable;
+nothing else is. A re-dispatch to an idle or silent agent re-issues the same
+`atm task assign` with the same `--task-id`, template and vars. Status
+questions, notices and replies that assign no work stay plain `atm send` or
+`atm queue`.
 
 Install the repository templates on the daemon host after this change merges:
 
