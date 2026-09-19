@@ -121,6 +121,10 @@ For the current plan state, verify:
   own layers close
 - report sprint count with critical path and width, and flag any re-cut that
   raised the count without improving either
+- every sprint names one agent and model from the repository's developer
+  roster (`docs/development/developer-roster.md`), the tier fits the work,
+  and width is computed over distinct agents: same-wave sprints on one agent
+  are serial and lengthen the critical path
 - every plan path, sprint doc name, sprint id and branch name follows
   "Naming" in the guidelines: lower case, `docs/plans/phase-<phase>/`,
   `integrate/phase-<phase>`, `sprint/<phase>-<n>-<slug>`, same slug in doc and
@@ -138,6 +142,8 @@ For the current plan state, verify:
   parallel work, one phase-wide integration checkpoint, or a contract sprint
   that makes unrelated tracks wait)
 - `NAMING` (any break of the guidelines' "Naming" table)
+- `AGENT-LOAD` (no named agent, agent not on the roster, tier mismatch, or
+  a wave that queues several sprints on one agent while others are unused)
 - `SPLIT-RISK`
 - `DROP-RISK`
 - `NON-PROD`
@@ -158,6 +164,7 @@ They may never be downgraded to `Minor`:
 - `SERIAL-RISK`
 - `OVER-SPLIT`
 - `NAMING`
+- `AGENT-LOAD`
 - `SPLIT-RISK`
 - `DROP-RISK`
 - `NON-PROD`
@@ -188,6 +195,7 @@ Return fenced JSON only.
     "critical_path": 3,
     "width": 6,
     "sprint_count": 9,
+    "distinct_agents_in_widest_wave": 3,
     "tracks": 3,
     "must_follow_edges": 2,
     "parallel_safe_edges": 13
@@ -210,7 +218,7 @@ Return fenced JSON only.
     {
       "id": "PLAN-SCOPE-001",
       "severity": "Blocking | Important | Minor",
-      "category": "VERTICAL-SLICE | SERIAL-RISK | OVER-SPLIT | NAMING | SPLIT-RISK | DROP-RISK | NON-PROD | MULTI-SOURCE | REDUNDANT | OVERLONG | QA-UNFRIENDLY | MISSING-CODE-SAMPLE | VAGUE | GAP",
+      "category": "VERTICAL-SLICE | SERIAL-RISK | OVER-SPLIT | NAMING | AGENT-LOAD | SPLIT-RISK | DROP-RISK | NON-PROD | MULTI-SOURCE | REDUNDANT | OVERLONG | QA-UNFRIENDLY | MISSING-CODE-SAMPLE | VAGUE | GAP",
       "classification": "structural | wording",
       "affects_ac": false,
       "target_refs": [

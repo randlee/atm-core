@@ -30,8 +30,10 @@ This skill defines the repo-local orchestration workflow for this repository.
   that receives a task is its assignee, and the task ledger records it.
 - a developer is the sole developer for **one sprint**. Sprints that are
   `parallel_safe` run at the same time under different developers: the lead
-  picks the agent per dispatch, from the sprint doc's `recommended_agent` when
-  set, otherwise any idle developer. Sending every sprint to one agent makes
+  dispatches each sprint to the agent its sprint doc names in
+  `recommended_agent` (chosen at plan time from the repository's developer
+  roster by model tier), substituting only an idle agent of the same or a
+  higher tier. Sending every sprint to one agent makes
   a parallel plan serial again.
 - `quality-mgr` runs the QA gate after each delivery
 
