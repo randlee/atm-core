@@ -27,9 +27,18 @@ Make sure the vars file includes the current round metadata:
 **2. Send to the developer**
 
 ```bash
-ASSIGNEE="$(jq -r .assignee /tmp/plan-hardening-vars.json)"
-atm send "$ASSIGNEE" --stdin < /tmp/step-1-message.xml
+VARS=/tmp/plan-hardening-vars.json
+AGENT=<developer>                      # the plan author chosen by the lead
+TASK_ID="$(jq -r .task_id "$VARS")"
+atm task assign "$AGENT" --task-id "$TASK_ID" \
+  --template .claude/skills/plan-hardening/01-plan-scope-review.xml.j2 --vars "$VARS"
 ```
+
+The rendered file from sub-step 1 is a preview only. Send the template, not
+the rendered text: a plain `atm send --stdin` opens no task, so the
+developer's `atm task start` in the template's first step would fail. The
+agent is named only on this command; the vars file and the message body carry
+no assignee. Use the same agent for steps 1, 3 and 5 of one hardening run.
 
 **3. Check the response**
 

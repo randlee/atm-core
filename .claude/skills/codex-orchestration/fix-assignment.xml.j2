@@ -22,13 +22,11 @@ optional_variables:
   - cc
   - validation_requirements
   - dependency_relations
-  - assignee
 defaults:
   lead: team-lead
   cc: team-lead
   validation_requirements: ""
   dependency_relations: "- See authoritative sprint doc."
-  assignee: "arch-ctm"
 metadata:
   type: fix-task
   tags:
@@ -41,7 +39,7 @@ metadata:
     stage: fix
     transition: start
 ---
-<atm-task id="{{ task_id }}" phase="{{ phase }}" assignee="{{ assignee }}" mode="fix">
+<atm-task id="{{ task_id }}" phase="{{ phase }}" mode="fix">
   <description>{{ description }}</description>
 
   <branch>{{ branch }}</branch>

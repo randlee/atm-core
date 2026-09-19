@@ -12,7 +12,6 @@ required_variables:
   - worktree_path
   - branch
   - pr_target
-  - assignee
   - phase_local
   - ttl_dir
 optional_variables:
@@ -40,7 +39,7 @@ metadata:
     stage: dev
     transition: start
 ---
-<atm-task id="{{ task_id }}" sprint="{{ sprint }}" node="{{ node_id }}" order="{{ node_order }}" assignee="{{ assignee }}">
+<atm-task id="{{ task_id }}" sprint="{{ sprint }}" node="{{ node_id }}" order="{{ node_order }}">
   <description>Implement sprint node {{ node_id }} (order {{ node_order }}) in {{ sprint }}.</description>
 
   <worktree>{{ worktree_path }}</worktree>

@@ -59,11 +59,11 @@ Always use:
 
 | # | Route to | Input required | Output expected | Read before executing |
 |---|----------|----------------|-----------------|-----------------------|
-| 1 | developer (`assignee`) | vars file | `step-1` fenced JSON | `steps/step-1.md` |
+| 1 | developer | vars file | `step-1` fenced JSON | `steps/step-1.md` |
 | 2 | `plan-scope-reviewer` (background) | context + `step-1` JSON | `step-2` fenced JSON | `steps/step-2.md` |
-| 3 | developer (`assignee`) | `step-2` JSON | `step-3` fenced JSON | `steps/step-3.md` |
+| 3 | developer | `step-2` JSON | `step-3` fenced JSON | `steps/step-3.md` |
 | 4 | `critical-plan-reviewer` (background) | context + `step-3` JSON | `step-4` fenced JSON | `steps/step-4.md` |
-| 5 | developer (`assignee`) | `step-4` JSON | `step-5` fenced JSON | `steps/step-5.md` |
+| 5 | developer | `step-4` JSON | `step-5` fenced JSON | `steps/step-5.md` |
 | 6 | `quality-mgr` | `step-5` JSON + QA vars file | codex-orchestration plan-QA handoff | `steps/step-6.md` |
 
 ## Round Tracking

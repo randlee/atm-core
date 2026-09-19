@@ -1,7 +1,7 @@
 ---
 name: codex-orchestration
 version: 0.1.0
-description: Orchestrate sprint work where an appointed lead coordinates, the assigned developer (`assignee`) is the sole developer, and quality-mgr enforces the QA gate.
+description: Orchestrate sprint work where an appointed lead coordinates, the developer the lead assigns each sprint to is its sole developer, and quality-mgr enforces the QA gate.
 depends_on:
   quality-management-gh: 1.x
   quality-mgr: 0.x
@@ -23,17 +23,16 @@ This skill defines the repo-local orchestration workflow for this repository.
 - The **lead** coordinates sprint sequencing, worktree assignments, PR flow,
   and every dispatch and report in this skill. `team-lead` is the default
   lead; `fenix` or any other identity may hold the role.
-- the developer named by the `assignee` variable is the sole developer for
-  **one sprint**. Every dev-facing template declares `assignee` as an
-  optional variable with a repo default in its frontmatter; the lead
-  overrides it with `--var assignee=<identity>` or an `assignee` key in the
-  vars file. Body text never names a developer.
-- sprints that are `parallel_safe` run at the same time under different
-  assignees. When more than one sprint is in flight the lead passes
-  `assignee` explicitly on every dev, fix and review dispatch, taking it from
-  the sprint doc's `recommended_agent` when set. The frontmatter default is
-  for single-developer runs only: relying on it with parallel sprints queues
-  every sprint on one agent and makes the plan serial again.
+- the developer is the agent the lead assigns the task to:
+  `atm task assign <agent> --template <template> --vars <json>`. That
+  positional agent is the only place a developer is named. No template takes
+  an assignee variable and no message body names its recipient; the agent
+  that receives a task is its assignee, and the task ledger records it.
+- a developer is the sole developer for **one sprint**. Sprints that are
+  `parallel_safe` run at the same time under different developers: the lead
+  picks the agent per dispatch, from the sprint doc's `recommended_agent` when
+  set, otherwise any idle developer. Sending every sprint to one agent makes
+  a parallel plan serial again.
 - `quality-mgr` runs the QA gate after each delivery
 
 ## Lead Role
@@ -78,8 +77,8 @@ Before starting a sprint:
 7. `quality-mgr` must also read:
    - `.claude/skills/quality-management-gh/SKILL.md`
 8. Every ATM assignment is sent with
-   `atm send <agent> --task-id "$TASK_ID" --template <template> --vars <json>`;
-   the same `TASK_ID` is supplied as the template's `task_id` variable. Never
+   `atm task assign <agent> --task-id "$TASK_ID" --template <template> --vars <json>`;
+   the same `TASK_ID` is the `task_id` key in the vars file. Never
    render a template yourself and send the output as message text or via `--stdin`.
    To view or validate the exact body before sending, use
    `atm compose --template <template> --vars <json>` (same renderer, same
@@ -91,7 +90,7 @@ Before starting a sprint:
 
 ## Sprint Flow
 
-1. the lead assigns development to the developer (`assignee`) using `dev-template.xml.j2`.
+1. the lead assigns development to a developer using `dev-template.xml.j2`.
    Every dev assignment must include the sprint-plan document path as
    `sprint_doc`, and that sprint document is the authoritative source for the
    task. Assignment prose may summarize, but it must not replace or weaken the
@@ -194,7 +193,7 @@ of §0.
 ## Phase-End Review
 
 For extraction-readiness or phase-close reviews, use `review-template.xml.j2`
-to assign a read-only review to the developer (`assignee`).
+to assign a read-only review to a developer.
 After the phase lands, where the repository carries `triaging-findings`, run
 its post-mortem
 (`.claude/skills/triaging-findings/references/post-mortem.md`); the write-up
@@ -232,13 +231,17 @@ Do not assume ATM-specific PR monitoring commands exist.
 Dispatch form (mandatory for every assignment below):
 
 ```bash
-TASK_ID="<task-id>"
-atm send <agent> \
+VARS=<vars.json>                       # carries task_id
+TASK_ID="$(jq -r .task_id "$VARS")"
+atm task assign <agent> \
   --task-id "$TASK_ID" \
   --template <path/to/template.j2> \
-  --vars <vars.json> \
-  --var task_id="$TASK_ID"
+  --vars "$VARS"
 ```
+
+`<agent>` is the only routing input. `atm send <agent> --task-id ...` is an
+alias that also accepts `--var`; prefer `atm task assign` so every dispatch
+has one form.
 
 Install the repository templates on the daemon host after this change merges:
 

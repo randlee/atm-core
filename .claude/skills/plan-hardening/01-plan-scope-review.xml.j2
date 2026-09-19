@@ -16,11 +16,9 @@ required_variables:
   - round_index
   - replay_nonce
 optional_variables:
-  - assignee
   - lead
   - cc
 defaults:
-  assignee: "arch-ctm"
   lead: team-lead
   cc: team-lead
 metadata:
@@ -36,7 +34,7 @@ metadata:
     transition: scope-review
     iteration_variable: round_index
 ---
-<atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="{{ assignee }}" mode="plan-hardening-guidelines-pass">
+<atm-task id="{{ task_id }}" sprint="{{ phase }}" mode="plan-hardening-guidelines-pass">
   <description>{{ description }}</description>
 
   <worktree>{{ worktree_path }}</worktree>
