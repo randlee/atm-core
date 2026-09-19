@@ -185,16 +185,18 @@ work and nudges the agent. A plain send opens no task, so the agent cannot
 - The assignee runs `atm task start <task-id> "<one line>"` when `task_ready`
   arrives, reports at meaningful milestones, and closes with a commit or PR
   reference.
-- **A task must be closed when the work is done.** An agent's queue releases
-  the next task only when the current one closes, so an open finished task
-  blocks everything behind it. Check `atm task list --all` whenever an agent
-  looks idle with work queued.
-- If the work is complete and the task is still open, ask the assignee to
-  close it: `atm send <agent> "Please close <task-id>: atm task close <task-id> completed --stdin"`.
-- If the assignee still does not close it, close it yourself:
+- **Every task must be closed.** Write the close into the assignment itself:
+  the body ends with the instruction to run
+  `atm task close <task-id> completed` with the commit or PR as the report
+  when the work is done. The orchestration dispatch templates already end
+  this way; a hand-written assignment must too. An agent's queue releases the next task only when
+  the current one closes, so an open finished task blocks everything behind
+  it.
+- When work is reported complete, verify the task is closed with
+  `atm task list --all`. If it is still open, close it yourself:
   `atm task close <task-id> completed "<what was delivered, commit or PR>"`.
-  The assignee is told the assigner closed the task, so put the real result
-  in the reason.
+  Do not spend a round trip asking the agent to close it. The assignee is
+  told the assigner closed the task, so put the real result in the reason.
 
 ### Communication Rules
 
