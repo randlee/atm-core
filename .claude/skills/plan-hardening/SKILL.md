@@ -1,6 +1,6 @@
 ---
 name: plan-hardening
-version: 1.5.0
+version: 1.6.0
 description: >
   Team-lead drives plan hardening after the current plan state already exists
   in repo docs.
@@ -35,6 +35,20 @@ Sprint plan approved by:
 - `plan-scope-reviewer`
 - `critical-plan-reviewer`
 - `quality-mgr`
+
+The approved plan is a set of parallel tracks with non-intersecting
+`owned_paths`, aiming at the shortest critical path with the fewest sprints.
+A cross-boundary feature is cut into a contract sprint, parallel layer
+sprints that each close one boundary against contract tests, and its own
+integration sprint that owns its end-to-end criteria. Independent changes
+and single-boundary features stay as their own sprints or stacked tracks;
+thin layer sprints are as much a defect as full-stack feature sprints. The
+phase plan carries a wave table with critical path, width and sprint count,
+and every name follows "Naming" in the guidelines. Hardening exists to make that shape safe to run in
+parallel; it must never make a plan more serial. Record `critical_path` and
+`width` from the `plan-scope-reviewer` output in the round table's Note
+column, and treat a round that lengthens the critical path as a regression to
+be explained.
 
 ## Required Reference
 
@@ -102,7 +116,9 @@ Cycle-cap behavior:
 - substantial scope drift from the user-discussed plan is a hard stop
 - remaining in-scope work without sprint ownership is a hard stop
 - if a sprint cannot credibly land its committed deliverables at a
-  production-ready level, split it before implementation
+  production-ready level for its closure type, split it along boundaries into
+  sibling sprints before implementation; a serial split of a feature sprint
+  is not an accepted correction
 - if a reviewer loop reaches its configured cap without converging, stop after
   routing the last findings to `arch-ctm` and report `cap-exhausted / not
   converged`; do not continue launching background reviewers and do not ask
