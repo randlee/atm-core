@@ -239,9 +239,24 @@ atm task assign <agent> \
   --vars "$VARS"
 ```
 
-`<agent>` is the only routing input. `atm send <agent> --task-id ...` is an
-alias that also accepts `--var`; prefer `atm task assign` so every dispatch
-has one form.
+This form is mandatory for every orchestration assignment, to developers and
+to `quality-mgr` alike (`atm task assign quality-mgr ... --template
+qa-template.xml.j2`), for two reasons:
+
+- **the template** is what makes state tracked: its frontmatter declares the
+  message type, tags and workflow state/stage/scope, so the dispatch is
+  queryable with `atm search` and the reports can count it. Rendered text
+  sent with `--stdin`, `--file` or inline carries none of that.
+- **the task assignment** is what queues the work on the agent and nudges it
+  at the right time, and what `atm task start` / `atm task close` act on. A
+  plain `atm send` opens no task.
+
+`<agent>` is the only routing input. `atm send <agent> --task-id ... --template
+... --vars ...` is the same operation under its alias and is acceptable;
+nothing else is. A re-dispatch to an idle or silent agent re-issues the same
+`atm task assign` with the same `--task-id`, template and vars. Status
+questions, notices and replies that assign no work stay plain `atm send` or
+`atm queue`.
 
 Install the repository templates on the daemon host after this change merges:
 

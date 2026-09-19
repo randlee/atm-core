@@ -141,15 +141,18 @@ After all sprints merge:
 
 ## ATM CLI Communication
 
-Use ATM CLI for arch-ctm:
+Assign work with a template and a task, never with a plain message:
 
 ```bash
-atm send arch-ctm "message"
+atm task assign <agent> --task-id <task-id> --template <template.j2> --vars <vars.json>
 atm read
 atm inbox
 ```
 
-Use tmux nudges when required by the local runtime setup.
+The template tracks state and the task assignment queues the work and nudges
+the agent; see `.claude/skills/codex-orchestration/SKILL.md` "Assignment
+Templates". Plain `atm send` is for questions and notices only. Never use
+`tmux send-keys`.
 
 ## Anti-Patterns
 

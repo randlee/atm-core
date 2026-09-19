@@ -232,19 +232,23 @@ atm inbox
 
 **Re-dispatch ARCH-CTM** (when he hasn't replied):
 
-- Never `tmux send-keys`. Resend via `atm send`, including the current j2
-  template task assignment (same rendered content).
+- Never `tmux send-keys`. Re-issue the assignment with
+  `atm task assign <agent> --task-id <same id> --template <j2> --vars <json>`
+  (same template and vars). Work is always assigned this way, to developers
+  and to `quality-mgr`: the template tracks state, the task assignment queues
+  the work and nudges the agent. Plain `atm send` is for questions and
+  notices only.
 - ⚠️ **A codex agent-idle nudge is not informational — it is a stop condition.**
   A codex agent (e.g. arch-ctm) WILL NOT resume or restart work on its own
   after going idle. Do not treat idle as "still working" or defer action —
   the ONLY way it does more work is if team-lead sends a task assignment via
-  `atm send`. Ignoring or deferring on an idle nudge stalls the agent
+  `atm task assign`. Ignoring or deferring on an idle nudge stalls the agent
   indefinitely.
 
 ### Communication Rules
 
 1. **No broadcast messages** — all communications are direct (team-lead ↔ specific agent)
-2. **Poll for replies** — after sending to arch-ctm, wait 30-60s then `atm read`. If no reply after 2 minutes, resend the task assignment via `atm send`
+2. **Poll for replies** — after sending to arch-ctm, wait 30-60s then `atm read`. If no reply after 2 minutes, re-issue the same `atm task assign`
 3. **arch-ctm is async** — he processes messages on his next turn. Do not block waiting; continue other work and check back
 
 ### ATM CLI Quick Reference
