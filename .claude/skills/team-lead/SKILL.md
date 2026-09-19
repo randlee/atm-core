@@ -189,9 +189,9 @@ work and nudges the agent. A plain send opens no task, so the agent cannot
   the body ends with the instruction to run
   `atm task close <task-id> completed` with the commit or PR as the report
   when the work is done. The orchestration dispatch templates already end
-  this way; a hand-written assignment must too. An agent's queue releases the next task only when
-  the current one closes, so an open finished task blocks everything behind
-  it.
+  this way; a hand-written assignment must too. An agent's queue releases
+  the next task only when the current one closes, so an open finished task
+  blocks everything behind it.
 - When work is reported complete, verify the task is closed with
   `atm task list --all`. If it is still open, close it yourself:
   `atm task close <task-id> completed "<what was delivered, commit or PR>"`.
