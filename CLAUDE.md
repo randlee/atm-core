@@ -267,16 +267,16 @@ interrupt the current task.
 
 ## Initialization Process
 
-**If `ATM_IDENTITY=team-lead`**: Run the `/team-lead` skill.
-It confirms identity, detects whether a restore is needed, and either proceeds
-directly to project status (fast path) or invokes the full restore procedure.
-See `.claude/skills/team-lead/SKILL.md` for the startup steps and
-`.claude/skills/team-lead/backup-and-restore-team.md` for the restore procedure.
+**If `ATM_IDENTITY=team-lead`**: Run the `/team-lead` skill
+(`.claude/skills/team-lead/SKILL.md`). It confirms identity, verifies the ATM
+runtime, and checks that `.atm.toml` aliases, the ATM roster and the live
+agents agree, repairing the roster when they do not.
 
-**If `ATM_IDENTITY` is any other value**: Skip team restore — you are not the team lead.
+**If `ATM_IDENTITY` is any other value**: Skip the roster check — you are not the team lead.
 
-> ⚠️ Do NOT use `atm teams resume` — it archives the team directory. The startup skill
-> uses the correct restore procedure (backup → TeamDelete → TeamCreate → restore).
+> The daemon's store is the only roster. Repair a member with
+> `atm teams update-member`; never remove and re-add, and change `.atm.toml`
+> only through a PR to `develop`.
 
 After startup completes:
 1. Read project plan (`docs/project-plan.md`)
