@@ -6,9 +6,9 @@ here. Update this file when the pool changes.
 
 | Tier | Agent (model) | Or | Assign when the sprint is |
 |---|---|---|---|
-| workhorse (default) | `arch-ctm` (terra) | a Sonnet or Opus background agent | typical work: a full layer sprint (implementer or consumer), a contract sprint with a settled design, integration wiring |
+| workhorse (default) | `arch-ctm` (terra) | `rust-developer` background agent on Sonnet or Opus | typical work: a full layer sprint (implementer or consumer), a contract sprint with a settled design, integration wiring |
 | fast | `cipher` (luna) | another luna agent | easier work: docs, templates, pass-through edits, test additions, small fix layers, a thin layer sprint against a fixed contract |
-| difficult | `solar` (sol) | a Fable background agent | hard or open-ended work: a contract sprint that still needs design decisions, algorithmic, concurrency or performance work, schema migrations with data risk, defects that resisted a first fix |
+| difficult | `solar` (sol) | `rust-developer` background agent on Fable | hard or open-ended work: a contract sprint that still needs design decisions, algorithmic, concurrency or performance work, schema migrations with data risk, defects that resisted a first fix |
 
 Typical work goes to the workhorse tier. Move a sprint down to the fast tier
 or up to the difficult tier only when the work calls for it.
@@ -19,7 +19,10 @@ Rules:
   its model in `recommended_model`. Choose by the tier the work needs. Do not
   spend the difficult tier on work the fast tier can close.
 - Prefer the named team member. Use the background-agent equivalent only
-  when no named agent of that tier is available.
+  when no named agent of that tier is available. A background developer is
+  always the `rust-developer` agent, run on the model its tier names; a
+  sprint doc records it as `recommended_agent: rust-developer` with that
+  model.
 - Fixes are routed by tier too. `cipher` is the default for easy fixes,
   because speed matters most there; typical fixes go to the workhorse and a
   defect that resisted a first fix goes to the difficult tier.
