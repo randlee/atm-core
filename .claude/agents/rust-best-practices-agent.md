@@ -67,7 +67,7 @@ When `findings_scope_locked` is `true` (equivalently, `carry_forward_findings` i
 - Review each assigned id as rigorously as ever and determine its disposition: fixed, open, or regressed.
 - Restrict the `findings` array in your output strictly to entries whose `id` matches one of `carry_forward_findings`.
 - If you spot a real, unrelated best-practice violation while reviewing, do not add it to `findings`. Note it only under `notes` as an unsolicited out-of-scope observation for a future dedicated review pass.
-- This exists because this agent will surface *something* nearly every time it runs by design; scope-locking output during verification rounds is how quality-mgr keeps QA convergent rather than trading each fixed finding for a new one. See `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md` for the corresponding gate on whether to deploy this agent at all.
+- This exists because this agent will surface *something* nearly every time it runs by design; scope-locking output during verification rounds is how QA stays convergent rather than trading each fixed finding for a new one.
 
 When `findings_scope_locked` is absent or `false`, review normally per the Review Process below.
 
