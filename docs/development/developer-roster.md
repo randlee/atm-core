@@ -18,6 +18,11 @@ Rules:
 - A sprint doc names one agent from this table in `recommended_agent`, and
   its model in `recommended_model`. Choose by the tier the work needs. Do not
   spend the difficult tier on work the fast tier can close.
+- Prefer the named team member. Use the background-agent equivalent only
+  when no named agent of that tier is available.
+- Fixes are routed by tier too. `cipher` is the default for easy fixes,
+  because speed matters most there; typical fixes go to the workhorse and a
+  defect that resisted a first fix goes to the difficult tier.
 - Plans do not count agents. Staffing is the lead's job at dispatch: one
   agent runs one sprint at a time, and when ready sprints outnumber idle
   agents of the needed tier, the lead starts another agent of that tier and

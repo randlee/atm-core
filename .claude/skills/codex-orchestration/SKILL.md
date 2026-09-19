@@ -142,8 +142,9 @@ Before starting a sprint:
    same way: every finding is recorded, correlated
    across worktrees, and promoted to the current top layer of the stack. No
    finding is skipped, deferred, or left without a fix dispatch.
-10. After triage completes, the lead routes concrete fixes back to
-   the developer using `fix-assignment.xml.j2`. Fix assignments must also include
+10. After triage completes, the lead routes concrete fixes to a developer of
+   the tier the fix needs, using `fix-assignment.xml.j2`: easy fixes go to the
+   fast tier for speed, not back to the sprint's developer by default. Fix assignments must also include
    `sprint_doc`, and the sprint document remains authoritative if the task
    summary omits or compresses details.
 
