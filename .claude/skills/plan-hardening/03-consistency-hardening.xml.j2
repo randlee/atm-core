@@ -35,6 +35,7 @@ metadata:
     transition: consistency-hardening
     iteration_variable: round_index
 ---
+{% autoescape false -%}
 <atm-task id="{{ task_id }}" sprint="{{ phase }}" mode="plan-hardening-consistency">
   <description>{{ description }}</description>
 
@@ -261,13 +262,14 @@ metadata:
   </plan-hardening-consistency>
 
   <workflow>
-    <step id="a">Start the task immediately with `atm task start {{ task_id }} "&lt;one line on what you will do first&gt;"`. If the required fenced JSON handoff from `critical-plan-reviewer` is missing or malformed, reject the task immediately. If the task includes questions or concerns, report them to the lead before proceeding; if it materially changes the discussed scope, state that consistency hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="a">Start the task immediately with `atm task start {{ task_id }} "<one line on what you will do first>"`. If the required fenced JSON handoff from `critical-plan-reviewer` is missing or malformed, reject the task immediately. If the task includes questions or concerns, report them to the lead before proceeding; if it materially changes the discussed scope, state that consistency hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="b">Immediately after task start, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
     <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away with a plain `atm send {{ lead }} --stdin` (never close the task on a push) so {{ lead }} critical review can begin in parallel. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only, delivered as the close: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF` with the PASS/FAIL line and the fenced JSON in the body. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. The next step after this pass is codex-orchestration plan QA through `quality-mgr`, not another local plan-hardening review loop. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
+    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only, delivered as the close: `atm task close {{ task_id }} completed --stdin <<'EOF' … EOF` with the PASS/FAIL line and the fenced JSON in the body. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. The next step after this pass is codex-orchestration plan QA through `quality-mgr`, not another local plan-hardening review loop. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="h">After the close, read ATM again: the next queued task starts only now.</step>
   </workflow>
 </atm-task>
+{%- endautoescape %}

@@ -25,6 +25,7 @@ metadata:
     transition: notice
     iteration_variable: round_index
 ---
+{% autoescape false -%}
 <plan-review-notice phase="{{ phase }}" reviewer="{{ reviewer }}" round="{{ round_index }}" verdict="{{ verdict }}">
   <pr-number>{{ pr_number }}</pr-number>
   <branch>{{ branch }}</branch>
@@ -34,3 +35,4 @@ metadata:
   </summary>
   <note>Informational only. No reply or task action is required.</note>
 </plan-review-notice>
+{%- endautoescape %}
