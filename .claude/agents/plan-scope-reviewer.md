@@ -142,8 +142,11 @@ For the current plan state, verify:
   parallel work, one phase-wide integration checkpoint, or a contract sprint
   that makes unrelated tracks wait)
 - `NAMING` (any break of the guidelines' "Naming" table)
-- `AGENT-LOAD` (no named agent, agent not on the roster, tier mismatch, or
-  a wave that queues several sprints on one agent while others are unused)
+- `AGENT-LOAD` (no named agent; an agent neither on the roster nor requested
+  in the plan's "Agents required" line; tier mismatch; or a wave that queues
+  several sprints on one agent instead of requesting another agent of that
+  tier. The roster is not a cap: recommend more agents, never a narrower
+  wave)
 - `SPLIT-RISK`
 - `DROP-RISK`
 - `NON-PROD`

@@ -255,7 +255,11 @@ performance work. This file never names an agent; the roster does.
   serial, so **width counts distinct agents, not sprints**, and the critical
   path counts the queue on each agent. A plan that is ten sprints wide on
   paper and names one agent throughout is a serial plan.
-- Balance the wave across the roster, and size sprints to the tier: cut work
+- The roster is not a cap on width. When a wave needs more developers of a
+  tier than the roster lists, the plan says so in an "Agents required" line
+  (count per tier) and names the additional agents; the lead starts them
+  before the wave begins. Never serialise a wave to fit the current roster.
+- Balance the wave across the agents, and size sprints to the tier: cut work
   so the fast agent can take the bounded sprints and the strongest model is
   kept for the sprints that need it.
 - The lead dispatches to the named agent and may substitute an idle agent of
@@ -292,8 +296,9 @@ Structural findings:
   `owned_paths`, or a `must_follow` edge with no named contract artifact
 - a thin sprint, a layer cut that creates no parallel work, or a single
   phase-wide integration checkpoint
-- a sprint with no named agent, an agent not on the roster, a tier that does
-  not fit the work, or a wave whose stated width ignores agents named twice
+- a sprint with no named agent, an agent neither on the roster nor requested
+  in "Agents required", a tier that does not fit the work, a wave whose stated
+  width ignores agents named twice, or a wave serialised to fit the roster
 - a plan, sprint doc or branch name that breaks "Naming"
 - phase-level false closure: feature behaviour no integration sprint owns
 

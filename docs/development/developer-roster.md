@@ -17,8 +17,12 @@ Rules:
   not by who is free. Do not spend `solar` on work `cipher` can close.
 - One agent runs one sprint at a time. Two sprints in the same wave that name
   the same agent are serial in practice; the plan's width and critical path
-  must count them that way. Spread a wave across the roster, or stack the two
-  sprints as one track.
+  must count them that way.
+- **The roster is not a cap.** More agents can be started at any tier. When a
+  wave needs more developers than this table lists, the plan does not narrow
+  itself to fit: it names the extra agents it needs by tier (for example
+  `arch-ctm-2`, workhorse) in an "Agents required" line of the wave table, and
+  the lead starts them and adds them here before the wave begins.
 - The lead dispatches to the named agent with
   `atm task assign <agent> --template <template> --vars <json>`. If that
   agent is busy and another of the same or a higher tier is idle, the lead
