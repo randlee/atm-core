@@ -44,6 +44,7 @@ with free-form input.
     "actix-web",
     "reqwest"
   ],
+  "service_indicators_extra": ["optional additional service indicators"],
   "round_limit": false,
   "changed_files": ["optional changed-file hint for limited recheck rounds"],
   "triage_records": ["optional prior finding records to recheck"],
