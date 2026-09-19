@@ -34,7 +34,9 @@ This skill defines the repo-local orchestration workflow for this repository.
   `recommended_agent` (chosen at plan time from the repository's developer
   roster by model tier), substituting only an idle agent of the same or a
   higher tier. Sending every sprint to one agent makes
-  a parallel plan serial again.
+  a parallel plan serial again. Agent count is the lead's concern, not the
+  plan's: when ready sprints outnumber idle developers of the needed tier,
+  start another agent of that tier instead of queueing the sprint.
 - `quality-mgr` runs the QA gate after each delivery
 
 ## Lead Role

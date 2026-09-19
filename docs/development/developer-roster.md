@@ -12,20 +12,16 @@ here. Update this file when the pool changes.
 
 Rules:
 
-- Every sprint doc names one agent from this table in `recommended_agent`,
-  and its model in `recommended_model`. Choose by the tier the work needs,
-  not by who is free. Do not spend `solar` on work `cipher` can close.
-- One agent runs one sprint at a time. Two sprints in the same wave that name
-  the same agent are serial in practice; the plan's width and critical path
-  must count them that way.
-- **The roster is not a cap.** More agents can be started at any tier. When a
-  wave needs more developers than this table lists, the plan does not narrow
-  itself to fit: it names the extra agents it needs by tier (for example
-  `arch-ctm-2`, workhorse) in an "Agents required" line of the wave table, and
-  the lead starts them and adds them here before the wave begins.
-- The lead dispatches to the named agent with
-  `atm task assign <agent> --template <template> --vars <json>`. If that
-  agent is busy and another of the same or a higher tier is idle, the lead
-  may substitute and records the change in the sprint doc.
+- A sprint doc names one agent from this table in `recommended_agent`, and
+  its model in `recommended_model`. Choose by the tier the work needs. Do not
+  spend `solar` on work `cipher` can close.
+- Plans do not count agents. Staffing is the lead's job at dispatch: one
+  agent runs one sprint at a time, and when ready sprints outnumber idle
+  agents of the needed tier, the lead starts another agent of that tier and
+  adds it to this table. A ready sprint is never queued behind a busy agent
+  to fit the current roster.
+- The lead dispatches with
+  `atm task assign <agent> --template <template> --vars <json>`, and may
+  substitute an idle agent of the same or a higher tier for the named one.
 - `quality-mgr` is the QA coordinator and is not a developer; it is never
   named here.

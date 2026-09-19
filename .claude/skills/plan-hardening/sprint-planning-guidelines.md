@@ -241,32 +241,16 @@ must have explicit code samples or signatures when prose alone would leave
 implementation choices open. In a phase with a contract sprint they live in
 that sprint's doc; layer sprints reference them and do not restate them.
 
-## Named Agent / Model
+## Recommended Agent / Model
 
-Every sprint doc names its developer in `recommended_agent` and that agent's
-model in `recommended_model`, chosen from the repository's developer roster
-(`docs/development/developer-roster.md`) by the model tier the work needs: a
-fast agent for bounded or mechanical work, the workhorse for standard
-implementation, the strongest model for design-heavy, algorithmic or
-performance work. This file never names an agent; the roster does.
-
-- The wave table lists the agent beside each sprint.
-- One agent runs one sprint at a time. Two same-wave sprints on one agent are
-  serial, so **width counts distinct agents, not sprints**, and the critical
-  path counts the queue on each agent. A plan that is ten sprints wide on
-  paper and names one agent throughout is a serial plan.
-- The roster is not a cap on width. When a wave needs more developers of a
-  tier than the roster lists, the plan says so in an "Agents required" line
-  (count per tier) and names the additional agents; the lead starts them
-  before the wave begins. Never serialise a wave to fit the current roster.
-- Balance the wave across the agents, and size sprints to the tier: cut work
-  so the fast agent can take the bounded sprints and the strongest model is
-  kept for the sprints that need it.
-- The lead dispatches to the named agent and may substitute an idle agent of
-  the same or a higher tier; the sprint doc records the change.
-
-Layer sprints are bounded by construction and suit one developer and one QA
-pass each, running concurrently.
+Optional `recommended_agent`/`recommended_model` select from the current
+developer pool: a fast agent for bounded or documentation work; a
+deep-reasoning agent for algorithmic, architectural, or performance work.
+When the repository keeps a developer roster
+(`docs/development/developer-roster.md`), name the agent from it by the model
+tier the work needs. They are advice, not an assignment: how many agents run
+and who takes each sprint is decided at dispatch. Layer sprints are bounded by construction
+and suit one developer and one QA pass each, running concurrently.
 
 ## QA Consumption
 
@@ -296,9 +280,6 @@ Structural findings:
   `owned_paths`, or a `must_follow` edge with no named contract artifact
 - a thin sprint, a layer cut that creates no parallel work, or a single
   phase-wide integration checkpoint
-- a sprint with no named agent, an agent neither on the roster nor requested
-  in "Agents required", a tier that does not fit the work, a wave whose stated
-  width ignores agents named twice, or a wave serialised to fit the roster
 - a plan, sprint doc or branch name that breaks "Naming"
 - phase-level false closure: feature behaviour no integration sprint owns
 
