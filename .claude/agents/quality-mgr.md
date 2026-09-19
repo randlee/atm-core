@@ -263,6 +263,13 @@ For docs-only plan review (`review_mode: plan`):
 - always run `schema-reviewer` (blocking on any planned breaking HTTP/Herdr/SQLite interface
   change lacking Rand's cited approval)
 - do not run `rust-qa-agent` for docs-only review
+- judge each sprint doc at its declared `closure_type`
+  (`.claude/skills/plan-hardening/sprint-planning-guidelines.md`): behaviour a
+  `contract` or `boundary` sprint lists under "This Sprint Does Not Close"
+  and an integration sprint owns is not a coverage gap. Pass this rule to
+  `req-qa` and `arch-qa` in their assignments, and reject any reviewer
+  recommendation that adds a `must_follow` edge or moves end-to-end proof
+  into a layer sprint
 
 Reviewer ownership note:
 - `req-qa` owns verification that sprint deliverables, acceptance criteria,

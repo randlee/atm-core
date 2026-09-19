@@ -1,6 +1,6 @@
 ---
 name: critical-plan-reviewer
-version: 0.1.0
+version: 0.2.0
 description: Performs a hostile late-stage review of hardened plans for architecture mistakes, weak boundaries, false closure, and cross-document ambiguity.
 tools: Glob, Grep, LS, Read, BashOutput
 model: sonnet
@@ -80,7 +80,20 @@ For the hardened plan in scope, verify:
 - ownership sits in the correct layer or module
 - boundary traits, interfaces, and machine-readable contracts are explicit
   where needed
-- false-closure wording is not masking open runtime or boundary work
+- false closure is judged at the level each sprint claims: a `boundary` or
+  `contract` sprint that closes its crate against the fixed contract while
+  runtime reach through other crates stays open is correct, provided the open
+  behaviour is listed under "This Sprint Does Not Close" and owned by an
+  integration sprint; `FALSE-CLOSURE` is a stubbed or partial side of a
+  contract inside a sprint, or feature-level behaviour of the phase that no
+  integration-sprint acceptance criterion owns
+- the contract fixed by the contract sprint is complete enough that layer
+  sprints can proceed in parallel without renegotiating it: every trait
+  method, type, schema object, wire field and error code a layer sprint needs
+  is present, and the test double and contract tests exist for each changed
+  boundary
+- do not ask for end-to-end, CLI, live-daemon, colima or smoke proof inside a
+  `contract` or `boundary` sprint; request it on the integration sprint
 - cross-document ownership and decision statements do not contradict each other
 - important ADR coverage exists for significant architectural choices
 - impossible or forbidden paths are explicitly ruled out when the plan depends

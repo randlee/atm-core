@@ -1,6 +1,6 @@
 ---
 name: 03-consistency-hardening-task
-version: 1.0.0
+version: 1.1.0
 description: lead assignment template for cross-document consistency and ambiguity hardening after critical plan review.
 format: xml
 required_variables:
@@ -109,6 +109,13 @@ metadata:
   </required-input>
 
   <plan-hardening-consistency>
+    Parallelism guard: this pass must not make the plan more serial. Do not
+    add a `must_follow` edge, merge layer sprints, widen a sprint's
+    `owned_paths` across a boundary, or move end-to-end proof into a
+    `contract` or `boundary` sprint to resolve a finding. If the wave table's
+    critical path or width changes in this pass, report both old and new
+    values and the reason in the fenced JSON `parallelism` block.
+
     Read the current plan docs from disk first, using `<source-of-truth>` and
     `<references>`, before doing anything else.
 
@@ -247,6 +254,7 @@ metadata:
         "final_finding_count": 0,
         "docs_modified": [],
         "docs_created": [],
+        "parallelism": {"critical_path_before": 0, "critical_path_after": 0, "width_before": 0, "width_after": 0, "reason": ""},
         "ready_for_next_step": true,
         "errors": []
       }

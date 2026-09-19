@@ -1,6 +1,6 @@
 ---
 name: sprint-plan
-version: 1.1.0
+version: 1.2.0
 description: Machine-parsable sprint planning template for one Phase R sprint with concrete sub-tasks, development work, required tests, dependencies, and acceptance gates.
 format: markdown
 required_variables:
@@ -11,6 +11,9 @@ required_variables:
   - branch
   - status
   - estimated_scope
+  - closure_type
+  - target_boundary
+  - owned_paths
   - goal
   - scope_summary
   - governing_requirements
@@ -36,6 +39,8 @@ worktree: {{ worktree }}
 branch: {{ branch }}
 status: {{ status }}
 estimated_scope: {{ estimated_scope }}
+closure_type: {{ closure_type }}
+target_boundary: {{ target_boundary }}
 ```
 
 ## Goal
@@ -45,6 +50,14 @@ estimated_scope: {{ estimated_scope }}
 ## Scope Summary
 
 {{ scope_summary }}
+
+## Owned Paths
+
+Globs this sprint owns. No other sprint in the same wave may match them. A
+sprint that spans more than one boundary records its `vertical_rationale`
+here.
+
+{{ owned_paths }}
 
 ## Governing Requirements
 
@@ -64,9 +77,15 @@ estimated_scope: {{ estimated_scope }}
 
 ## Hard Dependencies
 
+`parallel_safe` is the default. Each `must_follow` names the contract artifact
+this sprint consumes.
+
 {{ hard_dependencies }}
 
 ## Non-Goals
+
+For `contract` and `boundary` sprints, list the behaviour through other crates
+that stays open and the integration sprint that closes it.
 
 {{ non_goals }}
 
@@ -86,6 +105,9 @@ Required shape for every sub-task:
 {{ split_recommendation }}
 
 ## Acceptance Criteria
+
+Each criterion carries its root: `boundary:<boundary_id>` in `contract` and
+`boundary` sprints, `req:<ID>` in integration sprints.
 
 {{ acceptance_criteria }}
 

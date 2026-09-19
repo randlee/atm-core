@@ -16,10 +16,10 @@
 **Worktree Creation Pattern**:
 ```bash
 # ✅ CORRECT: Create worktree from develop
-/sc-git-worktree --create feature/1-2a-work-bead develop
+/sc-git-worktree --create plan/phase-bc develop
 
 # ❌ WRONG: Creating from main
-/sc-git-worktree --create feature/1-2a-work-bead main
+/sc-git-worktree --create plan/phase-bc main
 ```
 
 ---
@@ -135,13 +135,21 @@ Each phase gets a dedicated integration branch off `develop`:
 ```
 main
   └── develop
-        └── integrate/phase-N              ← created at phase start
-              ├── feature/pN-s1-...        ← PR targets integrate/phase-N
-              ├── feature/pN-s2-...        ← PR targets integrate/phase-N
-              └── feature/pN-s3-...        ← PR targets integrate/phase-N
+        └── integrate/phase-bc             ← created at phase start
+              ├── sprint/bc-1-<slug>       ← PR targets integrate/phase-bc
+              ├── sprint/bc-2-<slug>       ← PR targets integrate/phase-bc
+              └── sprint/bc-3-<slug>       ← PR targets integrate/phase-bc
 
-        After all sprints merge → one PR: integrate/phase-N → develop
+        After all sprints merge → one PR: integrate/phase-bc → develop
 ```
+
+**Naming (always lower case):** phase id `bc`, sprint id `bc-4`. The plan
+lives in `docs/plans/phase-bc/` (`phase-bc-plan.md`,
+`sprint-bc-4-<slug>.md`) and is written on `plan/phase-bc`. All phase work
+happens on `integrate/phase-bc`. Sprint branches are `sprint/bc-4-<slug>`
+with the same slug as the sprint doc; fix layers are `fix/bc-4-<slug>`.
+`feature/` is not used for sprint work. The full table is "Naming" in
+[`.claude/skills/plan-hardening/sprint-planning-guidelines.md`](./.claude/skills/plan-hardening/sprint-planning-guidelines.md).
 
 **Rules:**
 - Always merge PRs with a merge commit (`gh pr merge --merge`); never squash
