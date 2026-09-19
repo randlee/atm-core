@@ -1,6 +1,7 @@
 //! Shared audited storage contract and canonical storage-facing domain types
 //! for ATM backends and their callers.
 
+pub mod address;
 pub mod analyst_query;
 pub mod contract;
 pub mod diagnostics;
@@ -10,9 +11,11 @@ pub mod error_codes;
 pub mod factory;
 pub mod peer_catalog_audit;
 mod peer_contract;
+mod read_lane_error;
 pub mod request_budget;
 pub mod schema;
 pub mod search;
+pub mod task_op;
 pub mod task_state;
 pub mod task_store;
 pub mod template_catalog;
@@ -33,6 +36,7 @@ pub mod roles {
     pub const ROLE_WORKER: &str = "worker";
 }
 
+pub use address::AgentAddress;
 pub use analyst_query::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue};
 pub use contract::{
     AckRequirementState, AckTransition, AcknowledgementCommit, AcknowledgementReplyBuilder,
@@ -40,17 +44,17 @@ pub use contract::{
     AsyncMessageStore, AsyncTaskLedgerReader, BuiltInNudgeTemplateKind, CertificateFingerprint,
     GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
     GraftReceiverRegistration, HttpsInterface, LocalCertificate, MAX_NUDGE_ATTEMPTS,
-    MailMessageState, MailboxBucketCounts, MailboxScope, Message, MessageFingerprint, MessageKey,
-    MessageQuery, MessageReceivedEvent, MessageStore, NudgeClaim, NudgeTemplateOverrideStore,
-    PeerConfigStore, PendingNudgeStore, PrivateKeyRef, ReadDeadline, ReadLaneError,
-    RosterChangedEvent, RosterHarness, RosterMember, RosterMemberEphemeralState, RosterMemberKind,
-    RosterRuntimeIdentity, RosterRuntimeMirror, RosterRuntimeMutationOutcome,
-    RosterRuntimeObservation, RosterRuntimeObservationUpdate, RosterSnapshot, RosterStateRevision,
-    RosterStore, RosterUniqueName, RuntimeMemberState, RuntimeObservationAvailability,
-    RuntimeObservationSource, StorageNotifier, TeamNudgeTemplateOverrideMode,
-    TeamNudgeTemplateOverrideRow, TrustedPeer, derive_ack_requirement,
-    roster_unique_name_collision_error, roster_unique_name_collisions, roster_write_delta,
-    team_scoped_roster_unique_name_collisions,
+    MailMessageState, MailboxBucketCounts, MailboxListQuery, MailboxScope, Message,
+    MessageAdmissionOutcome, MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent,
+    MessageStore, NudgeClaim, NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore,
+    PrivateKeyRef, ReadDeadline, RosterChangedEvent, RosterHarness, RosterMember,
+    RosterMemberEphemeralState, RosterMemberKind, RosterRuntimeIdentity, RosterRuntimeMirror,
+    RosterRuntimeMutationOutcome, RosterRuntimeObservation, RosterRuntimeObservationUpdate,
+    RosterSnapshot, RosterStateRevision, RosterStore, RosterUniqueName, RuntimeMemberState,
+    RuntimeObservationAvailability, RuntimeObservationSource, StaleNudgeTemplateOverrideKind,
+    StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
+    derive_ack_requirement, roster_unique_name_collision_error, roster_unique_name_collisions,
+    roster_write_delta, team_scoped_roster_unique_name_collisions,
 };
 pub use diagnostics::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
@@ -63,23 +67,30 @@ pub use factory::{
     StorageHandles, WriteThroughRosterStore,
 };
 pub use peer_catalog_audit::TrustedPeerCatalogAudit;
+pub use read_lane_error::ReadLaneError;
 pub use roles::ROLE_WORKER;
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
 pub use search::{
-    AsyncMessageSearchStore, InMemoryMessageSearchStore, MessageSearchPage, MessageSearchQuery,
-    MessageSearchStore, SearchAggregate, SearchAtom, SearchCursor, SearchDeadline,
+    AsyncMessageSearchStore, InMemoryMessageSearchStore, MailboxBucket, MessageSearchPage,
+    MessageSearchQuery, MessageSearchStore, SearchAckState, SearchAggregate, SearchAtom,
+    SearchCount, SearchCountGroupBy, SearchCountKey, SearchCursor, SearchDeadline,
     SearchExpression, SearchFilters, SearchGroup, SearchGroupBy, SearchGroupField, SearchKey,
-    SearchLimit, SearchMatchField, SearchMetadataMatch, SearchPageRequest, SearchResultKey,
-    SearchTimestampField, SearchValue, SimpleAggregate, StoredSearchAddress, StoredSearchMatch,
-    StoredWorkflowMetadata, TimeRange,
+    SearchLimit, SearchMailboxSelection, SearchMatchField, SearchMetadataMatch, SearchPageRequest,
+    SearchReadState, SearchResultKey, SearchTimestampField, SearchValue, SimpleAggregate,
+    StoredSearchAddress, StoredSearchMatch, StoredWorkflowMetadata, TimeRange,
 };
+pub use task_op::{MoveTarget, TaskOp};
 pub use task_state::{
-    DAEMON_ACTOR_NAME, TaskActor, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
-    TaskRejected, TaskRow, TaskState, Transition, admit, transition,
+    DAEMON_ACTOR_NAME, PromptHandoff, PromptTrigger, QueuePosition, RefusalRun, TaskActor,
+    TaskCloseOutcome, TaskClosedOutcome, TaskEvent, TaskEventKind, TaskEventMarker, TaskEventRow,
+    TaskRejected, TaskRow, TaskState, TaskStateTag, TaskTransition, Transition, admit, transition,
 };
+#[cfg(any(test, feature = "test-utils"))]
+pub use task_store::DummyTaskStore;
 pub use task_store::{
-    DummyTaskStore, EscalationScope, MAX_ESCALATION_RECIPIENTS, MessageWriteOrigin,
-    ReminderOutcome, TASK_STALLED_REMINDER_THRESHOLD, TaskStore,
+    EscalationScope, MAX_ESCALATION_RECIPIENTS, MessageWriteOrigin, ReminderOutcome,
+    TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TASK_REMINDER_INTERVAL_MS, TASK_STALLED_REMINDER_THRESHOLD,
+    TaskStore, next_reminder_due,
 };
 pub use template_catalog::{
     DecomposedMessageAdmission, DecomposedMessageAdmissionOutcome, DecomposedMessageRecord,
@@ -102,4 +113,5 @@ pub use types::{
     LocalCapability, MemberKey, ModelName, OwnerGeneration, PaneId, TaskId, TeamName,
     TemplateFrontmatter, TemplateSha,
 };
+pub use validation::RETIRED_TEMPLATE_KINDS;
 pub use validation::{validate_agent_at_team, validate_path_segment};

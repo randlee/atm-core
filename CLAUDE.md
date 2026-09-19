@@ -16,10 +16,10 @@
 **Worktree Creation Pattern**:
 ```bash
 # ✅ CORRECT: Create worktree from develop
-/sc-git-worktree --create feature/1-2a-work-bead develop
+/sc-git-worktree --create plan/phase-bc develop
 
 # ❌ WRONG: Creating from main
-/sc-git-worktree --create feature/1-2a-work-bead main
+/sc-git-worktree --create plan/phase-bc main
 ```
 
 ---
@@ -29,7 +29,7 @@
 When receiving a message `<atm from="omega-prime...` containing an
 orchestration alert or sprint-plan violation or merge-conflict notice:
 
-1. Acknowledge immediately (ATM ack protocol)
+1. For an alert explicitly marked `--requires-ack`, acknowledge immediately through the ATM ack protocol
 2. Verify compliance with the sprint plan's dependency rules
    (`must_follow`, `parallel_safe`)
 3. If a pipeline sequencing violation is confirmed, correct the assignment order before proceeding
@@ -70,7 +70,7 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 - Agent team execution: Scrum Master → Dev(s) + QA(s), Opus Architect on escalation
 - All work on dedicated worktrees via `sc-git-worktree`
 
-**Current Status**: Phase AX merged to develop (PR #1253, 98661ea18, 2026-09-06 — 7 sprints incl. task-state tracking and every-backend nudge templates; AX.7 live-evidence sprint superseded 2026-09-05, moved to release readiness). Phase AY (native-IPC transport cutover for Herdr) has all sprints merged into `integrate/phase-ay`; its phase-ending gate is in progress and the merge to `develop` is pending Rand approval.
+**Current Status**: Phase AX merged to develop (PR #1253, 98661ea18, 2026-09-06 — 7 sprints incl. task-state tracking and every-backend nudge templates; AX.7 live-evidence sprint superseded 2026-09-05, moved to release readiness). Phase AY (native-IPC transport cutover for Herdr) has all sprints merged into `integrate/phase-ay`; its phase-ending gate is in progress and the merge to `develop` is pending Rand approval. Phase BB has all seven sprints merged into `integrate/phase-bb`; its phase-ending gate and readiness review are in progress, with the merge to `develop` pending.
 
 ---
 
@@ -78,10 +78,9 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 
 **Primary references — read as needed:**
 
-- [`docs/team-protocol.md`](./docs/team-protocol.md) - **MUST READ** ATM dogfooding messaging protocol (ack -> work -> completion -> acknowledgement)
+- [`docs/team-protocol.md`](./docs/team-protocol.md) - **MUST READ** ATM dogfooding messaging protocol (task start -> work -> task close; the close is terminal)
 - [`docs/requirements.md`](./docs/requirements.md) - System requirements, architecture, plugin design
 - [`docs/project-plan.md`](./docs/project-plan.md) - Phased sprint plan with dependency graphs
-- [`docs/agent-team-api.md`](./docs/agent-team-api.md) - Claude agent team API reference (schema baseline: Claude Code 2.1.39)
 - [`docs/cross-platform-guidelines.md`](./docs/cross-platform-guidelines.md) - Mandatory Windows CI compliance patterns
 
 **Rust development reference — read only when implementation decisions are needed:**
@@ -100,14 +99,27 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 
 ## Workflow
 
+### Small fixes: one PR, no stack, no QA task
+
+A change with one owner and a bounded scope (a bug fix, a test repair, a docs
+edit, a lint gate — anything well under a few hundred lines) is **one PR off
+`develop` with the fix and its tests together**: the dev runs `just lint` and
+`just test`, the lead performs the one acceptance check the fix exists for
+(a browser click, a CLI run), CI goes green, merge. No gh stack, no
+`quality-mgr` dispatch, no triage records. *Why (Rand, 2026-09-13):* the EQ-005
+procedure-link fix was thirty lines and took an hour to land, then an afternoon
+of stacked layers, two QA rounds, and a bottom-alone merge that turned `develop`
+red; a second QA pass on a small stack only doubles the qualitative
+best-practices findings.
+
 ### Sprint Execution Pattern (Dev-QA Loop)
 
-Every sprint follows this pattern:
+Every phase sprint follows this pattern:
 
 1. **Create worktree** using `sc-git-worktree` skill
 2. **Dev work** by assigned dev agent(s)
-3. **QA validation** by assigned QA agent(s)
-4. **Retry loop** if QA fails (max attempts configurable)
+3. **QA validation** by assigned QA agent(s) — dispatched once, on the **top of the stack**, never per layer (a QA already running on a mid layer of a large phase stack may finish; nothing new is dispatched below the top)
+4. **Fix round** for each QA verdict with findings, on a new layer cut from the top of the phase stack; the reviewed layer stays frozen (`docs/development/gh-stack-guidelines.md` §0)
 5. **Commit/Push/PR** to phase integration branch
 6. **Agent-teams review** documenting what worked/didn't
 
@@ -123,19 +135,27 @@ Each phase gets a dedicated integration branch off `develop`:
 ```
 main
   └── develop
-        └── integrate/phase-N              ← created at phase start
-              ├── feature/pN-s1-...        ← PR targets integrate/phase-N
-              ├── feature/pN-s2-...        ← PR targets integrate/phase-N
-              └── feature/pN-s3-...        ← PR targets integrate/phase-N
+        └── integrate/phase-bc             ← created at phase start
+              ├── sprint/bc-1-<slug>       ← PR targets integrate/phase-bc
+              ├── sprint/bc-2-<slug>       ← PR targets integrate/phase-bc
+              └── sprint/bc-3-<slug>       ← PR targets integrate/phase-bc
 
-        After all sprints merge → one PR: integrate/phase-N → develop
+        After all sprints merge → one PR: integrate/phase-bc → develop
 ```
+
+**Naming (always lower case):** phase id `bc`, sprint id `bc-4`. The plan
+lives in `docs/plans/phase-bc/` (`phase-bc-plan.md`,
+`sprint-bc-4-<slug>.md`) and is written on `plan/phase-bc`. All phase work
+happens on `integrate/phase-bc`. Sprint branches are `sprint/bc-4-<slug>`
+with the same slug as the sprint doc; fix layers are `fix/bc-4-<slug>`.
+`feature/` is not used for sprint work. The full table is "Naming" in
+[`.claude/skills/plan-hardening/sprint-planning-guidelines.md`](./.claude/skills/plan-hardening/sprint-planning-guidelines.md).
 
 **Rules:**
 - Always merge PRs with a merge commit (`gh pr merge --merge`); never squash
-- Sprint PRs target `integrate/phase-N` (not `develop` directly)
-- After each sprint merges to the integration branch, subsequent sprints merge latest `integrate/phase-N` into their feature branch before creating their PR
-- When all phase sprints are complete, one final PR merges `integrate/phase-N → develop`
+- The phase's sprint and fix PRs form one append-only `gh stack` above `integrate/phase-N`: every unit of work is a new worktree cut from the current top of the stack, its PR opens on the first push with base = the layer below, nothing below the top is ever edited again, and nobody waits for a lower layer's QA or CI. The single definition is [`docs/development/gh-stack-guidelines.md`](./docs/development/gh-stack-guidelines.md) §0.
+- The stack exists so CI runs once and the merge happens once: **QA and CI gate only the top layer.** The stack lands into `integrate/phase-N` once, from the top, after the top's CI is green; when all phase sprints are complete, one final PR merges `integrate/phase-N → develop`
+- A lower layer may be collapsed into the trunk early only when its own CI is green by itself; a layer whose red is fixed on the layer above merges together with that layer, never alone (merging #1492 without #1493 put a known-red test on `develop`, 2026-09-13)
 - Phase integration branch is then cleaned up
 
 ### Worktree Cleanup Policy
@@ -188,7 +208,7 @@ wording is [docs/agent-conventions.md](docs/agent-conventions.md).
 
 ATM CLI commands that require caller context must receive it explicitly from the invoking shell (`ATM_IDENTITY`, `ATM_TEAM`) or from supported command-line overrides such as `--as` / `--team`; `.atm.toml` must not be treated as a caller-identity fallback.
 
-**Note**: ARCH-CTM gets his identity from `ATM_IDENTITY=arch-ctm` set in his tmux session (via rmux or manually).
+**Note**: each agent gets its identity from `ATM_IDENTITY` set in its own session environment (for example `ATM_IDENTITY=arch-ctm`).
 
 ### Communicating with Team Agents
 
@@ -212,19 +232,26 @@ atm inbox
 
 **Re-dispatch ARCH-CTM** (when he hasn't replied):
 
-- Never `tmux send-keys`. Resend via `atm send`, including the current j2
-  template task assignment (same rendered content).
+- Nudges are built into ATM: every message nudges its recipient, and an
+  assigned task queues and re-nudges an agent that stops working. Never nudge
+  by hand. If an agent still has not picked up its work, re-issue the
+  assignment with
+  `atm task assign <agent> --task-id <same id> --template <j2> --vars <json>`
+  (same template and vars). Work is always assigned this way, to developers
+  and to `quality-mgr`: the template tracks state, the task assignment queues
+  the work and nudges the agent. Plain `atm send` is for questions and
+  notices only.
 - ⚠️ **A codex agent-idle nudge is not informational — it is a stop condition.**
   A codex agent (e.g. arch-ctm) WILL NOT resume or restart work on its own
   after going idle. Do not treat idle as "still working" or defer action —
   the ONLY way it does more work is if team-lead sends a task assignment via
-  `atm send`. Ignoring or deferring on an idle nudge stalls the agent
+  `atm task assign`. Ignoring or deferring on an idle nudge stalls the agent
   indefinitely.
 
 ### Communication Rules
 
 1. **No broadcast messages** — all communications are direct (team-lead ↔ specific agent)
-2. **Poll for replies** — after sending to arch-ctm, wait 30-60s then `atm read`. If no reply after 2 minutes, resend the task assignment via `atm send`
+2. **Poll for replies** — after sending to arch-ctm, wait 30-60s then `atm read`. If no reply after 2 minutes, re-issue the same `atm task assign`
 3. **arch-ctm is async** — he processes messages on his next turn. Do not block waiting; continue other work and check back
 
 ### ATM CLI Quick Reference
@@ -236,6 +263,20 @@ atm inbox
 | Inbox summary | `atm inbox` |
 | List teams | `atm teams` |
 | Team members | `atm members` |
+| Assign or reassign a task | `atm task assign <agent> [message source] [--task-id <id>] [--before <other-id> \| --head]` |
+| Start an assigned task | `atm task start <task-id> "<one-line plan>"` |
+| Close a task | `atm task close <task-id> <completed\|refused\|cancelled> [reason or report source]` |
+| Reorder a queued task | `atm task move <task-id> --before <other-id> \| --head \| --end` |
+| List open tasks | `atm task list [--all]` |
+| Show task history | `atm task events <task-id>` |
+
+`atm task start` is the only assigned-to-active task transition; `atm ack`
+never changes task state.
+
+`atm send <agent> --task-id <id> ...` is an alias for `atm task assign`.
+`atm send <assigner> --task-id <id> --task-complete ...` is an alias for
+`atm task close <id> completed`. Use `atm queue` for anything that must not
+interrupt the current task.
 
 ---
 

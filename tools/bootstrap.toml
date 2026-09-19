@@ -23,6 +23,15 @@ cargo-audit = ["quick-install"]
 cargo-shear = []
 cargo-modules = ["quick-install"]
 
+[cargo-binstall]
+version = "1.22.0"
+
+[cargo-binstall.checksums]
+aarch64-apple-darwin = "c364fd10e494b4fc0cc88a89995446364379a914930f0b0182b1151ad27690a1"
+x86_64-apple-darwin = "88f4459e166c50ece5f240934197ef60b88d12a7b459cb4cea15ab0b7d5dc123"
+x86_64-pc-windows-msvc = "0950f5a9f3422f74dea181d11f8b4d4447d1e9d1a9fdadcb72ff5b0b63c95207"
+x86_64-unknown-linux-gnu = "4a2621d4b8cb2a1c2433aab2746597b3a10138c33106a303600ebbe76a0e5930"
+
 [sc-compose]
 version = "1.6.1"
 

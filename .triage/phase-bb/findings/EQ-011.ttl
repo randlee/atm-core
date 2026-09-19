@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/EQ-011>
+  a triage:Finding ;
+  triage:findingId "EQ-011" ;
+  triage:title "atm-daemon does not parse --help at all -- it and a bare invocation both SIGABRT (exit 134, no output) when a root daemon is already running as a non-root user" ;
+  triage:description "fenix, 2026-09-14, relayed from colima v1.5.18 in-container transcripts (run 20260914T153243230345Z). As a non-root user with a root-owned atm-daemon already running: both `atm-daemon` and `atm-daemon --help` abort with SIGABRT (exit 134) and no output, even with RUST_BACKTRACE=full. `--help` is not parsed as a request for usage text at all -- the binary attempts to start the daemon regardless of the argument, then aborts. Flagged by fenix as a candidate finding, filing left to team-lead's judgement; filed because (a) --help silently not being recognized is a real CLI-contract defect independent of the permission conflict, and (b) SIGABRT with zero diagnostic output on a second-daemon-owner conflict is a worse failure mode than a clean refusal/error message, even though the underlying 'don't let two daemons fight over one mailbox' behavior may be correct by design." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "evidence_verification" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "fenix, colima v1.5.18 run 20260914T153243230345Z, relayed 2026-09-14 (ATM message 01M2GBDYVQ3HRJ5KYKCZ6MAQ21) -- not independently reproduced outside that container transcript" ;
+  triage:repeatable false ;
+  triage:sweepScope "atm-daemon's argv parsing entrypoint: confirm --help (and likely --version, any other flag) is inspected BEFORE any daemon-start/singleton-ownership logic runs; separately, a non-root process encountering an already-running root-owned daemon should produce an actionable error/exit code, never a silent SIGABRT. Manual repro first (start atm-daemon as root, then as non-root run `atm-daemon --help` and diff against a clean-environment `--help`) before any fix." ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BB8 ;
+  triage:foundAt "2026-09-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/EQ-011/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/EQ-011/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src" ;
+  triage:line 1 ;
+  triage:snippet "atm-daemon and atm-daemon --help, run as non-root with a root-owned atm-daemon already running (colima v1.5.18 run 20260914T153243230345Z, in-container transcript): both SIGABRT, exit 134, zero output even with RUST_BACKTRACE=full; --help is not parsed as a usage request before daemon-start logic runs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integration/colima-v1.5.18" ;
+  triage:headSha "unknown-evidence-pr-pending" ;
+  triage:occursIn <urn:atm:triage:worktree/EQ-011/1> .
+
+<urn:atm:triage:worktree/EQ-011/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "develop" ;
+  triage:branch "develop" ;
+  triage:headSha "84f4370da" ;
+  triage:orderIndex 1 .

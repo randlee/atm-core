@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA5-QA1-003>
+  a triage:Finding ;
+  triage:findingId "BA5-QA1-003" ;
+  triage:title "rusqlite boundary leak: atm-http-runtime adds a raw rusqlite dev-dependency and Connection, 8 lint-boundaries errors" ;
+  triage:description "Originally found QA-1 @ b617a9eab: crates/atm-http-runtime/Cargo.toml:47 added rusqlite as dev-dependency; herdr_queue_wake.rs test helpers opened raw rusqlite::Connection -- 8 lint-boundaries errors (only atm-storage-rusqlite may depend on rusqlite). fenix's BA5-FIX-R1 (PR #1407 #5643008929) verified fixed at e6ef9b488: rusqlite removed from atm-http-runtime, storage test-support behind pre-existing gate, boundaries lint pass. quality-mgr BA.5 QA-2 (PR #1407 #5643436355) re-confirmed fixed at 7997f8aaa. followup_pass re-verification at current heads: all worktrees clean across integrate/phase-ba, ba3, ba5, ba4, ba6; finding fully fixed and propagated." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T02:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA5 ;
+  triage:foundAt "2026-09-12T02:14:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-12T02:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "qa-triage" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:worktree/integrate-phase-ba>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ba" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "0a18028a7" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/ba3-nudge-invariant>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba3-nudge-invariant" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "e7b61a645" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ba5-queue-ephemeral-item>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba5-queue-ephemeral-item" ;
+  triage:branch "feature/ba5-queue-ephemeral-item" ;
+  triage:headSha "7997f8aaa" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/ba4-atm-task-commands>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba4-atm-task-commands" ;
+  triage:branch "feature/ba4-atm-task-commands" ;
+  triage:headSha "b84a46a1e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/ba6-task-nudge-documentation>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/ba6-task-nudge-documentation" ;
+  triage:branch "docs/ba6-task-nudge-documentation" ;
+  triage:headSha "a49b922aa" ;
+  triage:orderIndex 4 .

@@ -7,23 +7,23 @@ account. Its complete, exact version set is in
 closure is in [`tools/bootstrap-requirements.txt`](../../tools/bootstrap-requirements.txt).
 
 The recipe deliberately does not select a latest release, a version range, or
-an M5-specific installation path. It installs the manifest's exact Cargo tools
-from verified prebuilt artifacts when `cargo-binstall` is available, falls back
-to locked crates.io installs when an artifact is unavailable, and installs the
-released `sc-compose` CLI from its platform-matching GitHub release archive
-(never Cargo source or a Git revision). The release archive SHA256 is pinned in
-`tools/bootstrap.toml` and checked against the release `checksums.txt`; a mismatch
-or missing asset is a hard failure. It creates a
+an M5-specific installation path. It installs the manifest's pinned
+`cargo-binstall` from a checksummed upstream release archive, then uses that
+exact binary to install the manifest's Cargo tools from prebuilt artifacts;
+compiling from Cargo source is never allowed. It also installs the released
+`sc-compose` CLI from its platform-matching GitHub release archive (never Cargo
+source or a Git revision). Release archive SHA256 values are pinned in
+`tools/bootstrap.toml`; a mismatch or missing asset is a hard failure. It creates a
 repository-local `.bootstrap-venv`, installs the exact Python packages there
 with `--no-deps`, then verifies every reported version against Cargo or
 Binstall's installation receipt; the sc-compose release binary is verified by
 its pinned SHA256 and its `--version` output.
 
-CI restores the bootstrap outputs (`~/.cargo/bin`, Cargo/Binstall receipts, and
+CI may pre-seed the same pinned `cargo-binstall`, while `just bootstrap` always
+installs or verifies it itself. CI restores the bootstrap outputs (`~/.cargo/bin`, Binstall receipts, and
 `.bootstrap-venv`) with a key derived from this manifest and the Python
 requirements before invoking `just bootstrap`. The test jobs restore their
-Cargo registry/index/build caches first as well, so a genuine registry
-fallback remains bounded and never runs ahead of a warm workspace cache.
+Cargo registry/index/build caches first as well.
 
 ## Seed contract
 

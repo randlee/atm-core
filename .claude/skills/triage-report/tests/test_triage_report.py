@@ -256,7 +256,7 @@ def test_malformed_selected_finding_without_found_in_is_unattributed(tmp_path):
     assert report["merge_blocked"] is True
 
 
-def test_promoted_finding_gates_its_open_branch_only(tmp_path):
+def test_promoted_finding_counts_against_its_origin_sprint_until_closed(tmp_path):
     root, qa = _inputs(tmp_path)
     findings = root / ".triage" / "phase-AI" / "findings" / "S1.ttl"
     with findings.open("a") as stream:
@@ -274,9 +274,39 @@ def test_promoted_finding_gates_its_open_branch_only(tmp_path):
 
     report = triage_report.build_report(root, "AICH", qa)
     first, second = report["rows"]
-    assert first["qa"]["blockers"] == 1
-    assert second["qa"]["blockers"] == 1
+    # F4 was found in S1 and is still open at the Finding level: it stays on
+    # S1's row no matter which branch its open occurrence lives on (a stacked
+    # fix layer or a promotion never moves ownership).  S2's own finding F3
+    # is fixed, so S2 shows nothing left.
+    assert first["qa"]["blockers"] == 2
+    assert second["qa"]["blockers"] == 0
     assert report["current_integration_counts"]["blockers"] == 2  # F1 + F4, once each
+    assert sum(row["qa"]["blockers"] for row in report["rows"]) == (
+        report["current_integration_counts"]["blockers"]
+    )
+
+
+def test_open_finding_in_undeclared_sprint_is_a_data_gap(tmp_path):
+    root, qa = _inputs(tmp_path)
+    findings = root / ".triage" / "phase-AI" / "findings" / "S1.ttl"
+    with findings.open("a") as stream:
+        stream.write(
+            "triage:F6 a triage:Finding ; triage:findingId \"F6\" ; "
+            "triage:foundIn triage:AICH-S9 ; "
+            "triage:foundAt \"2026-07-25T08:00:00Z\"^^xsd:dateTime ; "
+            "triage:severity \"blocking\" ; triage:description \"orphan\" ; "
+            "triage:hasOccurrence triage:O6 .\n"
+            "triage:O6 a triage:Occurrence ; triage:branch \"feature/s9\" ; "
+            "triage:status \"open\" ; triage:closed false .\n"
+        )
+
+    report = triage_report.build_report(root, "AICH", qa)
+    codes = [item["code"] for item in report["remediations"]]
+    assert "TTL.FINDING_SPRINT_UNDECLARED" in codes
+    assert any("F6" in gap and "AICH-S9" in gap for gap in report["data_gaps"])
+    # Sprint rows only count declared sprints; the orphan is in the summary only.
+    assert sum(row["qa"]["blockers"] for row in report["rows"]) == 1
+    assert report["current_integration_counts"]["blockers"] == 2
 
 
 def test_fixed_finding_with_open_occurrence_is_diagnostic_not_blocker(tmp_path):
@@ -673,3 +703,53 @@ def test_github_state_prefers_open_replay_and_retains_merged_history(tmp_path, m
     assert state["AICH-S1"]["merged"] is False
     assert state["AICH-S1"]["ci_status"] == "fail"
     assert [attempt["pr_number"] for attempt in state["AICH-S1"]["delivery_attempts"]] == [631, 640]
+
+
+def test_completed_sprint_awaiting_qa_dispatch_renders_with_a_warning(tmp_path):
+    """Dev complete with no QA run yet is "QA not dispatched": the report still
+    renders (it is the status surface and must never be the thing that fails)
+    and the row carries a warning naming the missing evidence-master row."""
+    root, qa_path = _inputs(tmp_path)
+    runs = json.loads(qa_path.read_text())["runs"]
+    qa_path.write_text(json.dumps({"runs": [run for run in runs if run["aich_sprint"] != "AICH-S1"]}))
+    report = triage_report.build_report(root, "AICH", qa_path)
+    first = report["rows"][0]
+    assert first["dev_status"] == "done"
+    assert first["qa"]["run_id"] is None
+    assert first["qa_icon"] == "—"
+    assert first["data_status"] == "warning"
+    assert [item["code"] for item in first["diagnostics"]] == ["TTL.QA_RUN_MISSING"]
+    assert not any(gap.startswith("AICH-S1:") for gap in report["data_gaps"])
+    assert not any(item["code"] == "TTL.QA_RUN_MISSING" for item in report["remediations"])
+
+
+def test_qa_run_assigned_without_verdict_renders_in_flight(tmp_path):
+    """A QA assignment row appended at dispatch (no result yet, verdict
+    "PENDING" or empty) is QA in flight: shown as in progress, never as a
+    failure or a data gap."""
+    root, qa_path = _inputs(tmp_path)
+    master = json.loads(qa_path.read_text())
+    master["runs"] = [run for run in master["runs"] if run["aich_sprint"] != "AICH-S1"] + [
+        {"run_id": "S1-QA2", "aich_sprint": "AICH-S1", "run_type": "qa",
+         "assignment_time_utc": "2026-07-25T06:00:00Z", "result_time_utc": None,
+         "verdict": "PENDING", "pass": None, "blockers": None, "important": None, "minor": None},
+    ]
+    qa_path.write_text(json.dumps(master))
+    report = triage_report.build_report(root, "AICH", qa_path)
+    first = report["rows"][0]
+    assert first["qa"]["run_id"] == "S1-QA2"
+    assert first["qa_icon"] == "🌀"
+    assert first["data_status"] == "ok"
+    assert "| AICH-S1 (AI.21-pre) | ✅ | 🌀 | ✅ | #1 🏁 |" in report["table"]
+    assert "QA: 🌀 PENDING" in report["detailed_rows"]
+    assert not any(gap.startswith("AICH-S1:") for gap in report["data_gaps"])
+
+
+def test_ttl_only_skips_github_without_reporting_a_gap(tmp_path, monkeypatch):
+    root, qa = _inputs(tmp_path)
+    monkeypatch.setattr(triage_report, "_github_state", lambda *_: (_ for _ in ()).throw(AssertionError("GitHub must not be observed")))
+
+    report = triage_report.build_report(root, "AICH", qa, ttl_only=True)
+
+    assert "GITHUB.ORIGIN_UNAVAILABLE" not in [item["code"] for item in report["remediations"]]
+    assert [row["qa"]["blockers"] for row in report["rows"]] == [1, 0]

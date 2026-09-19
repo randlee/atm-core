@@ -8,9 +8,7 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 use std::num::NonZeroU16;
 
-use crate::composition::{
-    AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
-};
+use crate::composition::reload_running_runtime_view_outcome;
 use crate::observability::CliObservability;
 
 /// Manage durable cross-host HTTPS control-plane configuration.
@@ -142,13 +140,13 @@ enum MigrationAction {
 }
 
 impl PeerCommand {
-    pub async fn run(self, observability: &CliObservability) -> Result<()> {
+    pub async fn run(self, _observability: &CliObservability) -> Result<()> {
         match self.command {
             PeerSubcommand::Trust(command) => {
                 let changed =
                     with_default_peer_config_store(|store| command.run_with_store(store))?;
-                if changed {
-                    Self::reload_runtime_view(observability).await?;
+                if changed && !reload_running_runtime_view_outcome().await? {
+                    println!("trusted peer change applies at the next daemon start");
                 }
                 Ok(())
             }
@@ -165,17 +163,6 @@ impl PeerCommand {
             PeerSubcommand::Certificate(command) => command.run_with_store(store),
             PeerSubcommand::Trust(command) => command.run_with_store(store).map(|_| ()),
         }
-    }
-
-    async fn reload_runtime_view(observability: &CliObservability) -> Result<()> {
-        let (home_dir, current_dir) = resolve_command_runtime_context("peer trust reload")?;
-        let composition = CliComposition::bootstrap(
-            "peer trust reload",
-            observability,
-            InvocationDir::new(&current_dir),
-            AtmHomePath::new(&home_dir),
-        )?;
-        Ok(composition.reload_runtime_view().await?)
     }
 }
 

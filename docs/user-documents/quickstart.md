@@ -1,7 +1,7 @@
 ---
 title: Quickstart
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.6.0
 ---
 
 # Quickstart
@@ -53,21 +53,21 @@ atm peek quality-mgr@atm-dev --team atm-dev --as quality-mgr --json
 The command examples in this guide use only supported CLI surfaces. They do
 not rely on direct database access or private files under `~/.atm/`.
 
-## Installed Docs From The Install Root
+## Installed Docs By Release Channel
 
-If the installed ATM binary is at:
-
-- `~/.local/atm/1.4.3/bin/atm`
-
-then the installed long-form doc entrypoint is:
-
-- `~/.local/atm/1.4.3/share/doc/atm/README.md`
+A GitHub archive contains `bin/atm` and `share/doc/atm/README.md`. A
+prerelease install uses `~/.atm-builds/vX.Y.Z` as its configured root with the
+same relative paths. Homebrew installs the bundled docs under `pkgshare`; use
+the published Winget or Scoop manifest for that channel's managed location.
+See [Install Layout](./install-layout.md) for the complete channel distinction.
 
 ## Next Documents
 
 - identity and caller resolution: [Identity And Team](./identity-and-team.md)
 - queue inspection and message handling: [Mailbox Workflows](./mailbox-workflows.md)
 - diagnostics: [Doctor And Log](./doctor-and-log.md)
+- durable task lifecycle: [Tasks](./tasks.md)
+- native-IPC Herdr members: [Herdr Integration](./herdr.md)
 - shell-ready examples: [examples/quickstart/](./examples/quickstart/)
 
 Return to the [ATM User Guide](./README.md).

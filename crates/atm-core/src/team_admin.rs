@@ -16,6 +16,7 @@ use crate::delivery_channel::LocalMessageReceivedBackend;
 use crate::error::AtmError;
 use crate::schema::HomeDirPath;
 use crate::types::{AgentName, HostName, ModelName, PaneId, TeamName};
+use atm_storage::RETIRED_TEMPLATE_KINDS;
 
 #[path = "team_admin/filesystem.rs"]
 mod filesystem;
@@ -235,15 +236,20 @@ impl DisableNudgeTemplateOverrideRequest {
 pub struct ClearNudgeTemplateOverrideRequest {
     pub caller_team: TeamName,
     pub team: TeamName,
-    pub kind: BuiltInNudgeTemplateKind,
+    pub kind: String,
 }
 
 impl ClearNudgeTemplateOverrideRequest {
     pub fn new(caller_team: TeamName, team: &str, kind: &str) -> Result<Self, AtmError> {
+        match kind.parse::<BuiltInNudgeTemplateKind>() {
+            Ok(_) => {}
+            Err(_) if RETIRED_TEMPLATE_KINDS.contains(&kind) => {}
+            Err(error) => return Err(error),
+        }
         Ok(Self {
             caller_team,
             team: team.parse()?,
-            kind: kind.parse()?,
+            kind: kind.to_owned(),
         })
     }
 }
@@ -272,7 +278,7 @@ pub struct DisableNudgeTemplateOverrideOutcome {
 pub struct ClearNudgeTemplateOverrideOutcome {
     pub action: &'static str,
     pub team: TeamName,
-    pub kind: BuiltInNudgeTemplateKind,
+    pub kind: String,
     pub cleared: bool,
 }
 
@@ -374,6 +380,7 @@ pub fn set_nudge_template_override_with_store(
         "set-nudge-template",
     )?;
     validate_nudge_template_body(&request.template_body)?;
+    crate::send::nudge_template::validate_built_in_nudge_template_body(&request.template_body)?;
 
     let row = override_store.save_template_override(
         &request.team,
@@ -433,7 +440,7 @@ pub fn clear_nudge_template_override_with_store(
         request.team.clone(),
         "clear-nudge-template",
     )?;
-    let cleared = override_store.clear_template_override(&request.team, request.kind)?;
+    let cleared = override_store.clear_template_override(&request.team, &request.kind)?;
     Ok(ClearNudgeTemplateOverrideOutcome {
         action: "clear-nudge-template",
         team: request.team,
@@ -473,7 +480,7 @@ pub(crate) fn ordered_roster_member_summaries(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
     use std::path::PathBuf;
     use std::sync::Mutex;
 
@@ -513,7 +520,7 @@ mod tests {
 
     #[derive(Default)]
     struct RecordingNudgeTemplateOverrideStore {
-        rows: Mutex<BTreeMap<(TeamName, BuiltInNudgeTemplateKind), TeamNudgeTemplateOverrideRow>>,
+        rows: Mutex<HashMap<(TeamName, BuiltInNudgeTemplateKind), TeamNudgeTemplateOverrideRow>>,
     }
 
     impl RecordingRosterStore {
@@ -646,6 +653,28 @@ mod tests {
     }
 
     impl NudgeTemplateOverrideStore for RecordingNudgeTemplateOverrideStore {
+        fn list_stale_template_override_kinds(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<crate::boundary::StaleNudgeTemplateOverrideKind>, crate::error::AtmError>
+        {
+            Ok(Vec::new())
+        }
+
+        fn list_template_overrides(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<crate::boundary::TeamNudgeTemplateOverrideRow>, crate::error::AtmError>
+        {
+            Ok(self
+                .rows
+                .lock()
+                .expect("override store lock")
+                .values()
+                .cloned()
+                .collect())
+        }
+
         fn load_template_override(
             &self,
             team: &TeamName,
@@ -704,8 +733,11 @@ mod tests {
         fn clear_template_override(
             &self,
             team: &TeamName,
-            kind: BuiltInNudgeTemplateKind,
+            kind: &str,
         ) -> Result<bool, crate::error::AtmError> {
+            let Ok(kind) = kind.parse::<BuiltInNudgeTemplateKind>() else {
+                return Ok(false);
+            };
             Ok(self
                 .rows
                 .lock()
@@ -1773,6 +1805,38 @@ mod tests {
         .expect_err("empty body");
 
         assert_eq!(error.code(), AtmErrorCode::EmptyNudgeTemplateBody);
+    }
+
+    #[test]
+    fn set_nudge_template_override_rejects_unknown_placeholder_before_write() {
+        let override_store = RecordingNudgeTemplateOverrideStore::default();
+        let error = set_nudge_template_override_with_store(
+            &override_store,
+            SetNudgeTemplateOverrideRequest::new(
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                "delivery_ack",
+                "<atm>{{unknown}}</atm>".to_string(),
+            )
+            .expect("request"),
+        )
+        .expect_err("unknown placeholder");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(
+            error
+                .message()
+                .contains("unsupported built-in nudge placeholder")
+        );
+        assert!(
+            override_store
+                .load_template_override(
+                    &TEST_TEAM.parse().expect("team"),
+                    BuiltInNudgeTemplateKind::DeliveryAck,
+                )
+                .expect("load")
+                .is_none()
+        );
     }
 
     #[test]

@@ -15,7 +15,7 @@ Ownership:
 
 Primary source used by this repo:
 
-- `agent-team-mail/docs/agent-team-api.md`
+No in-repo copy; schema baseline Claude Code 2.1.39.
 
 Enforcement model in this repo:
 

@@ -1,0 +1,26 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT11-prompt-handoffs",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "prompted-task-events-only",
+      "status": "pass",
+      "detail": "Pre-case reset: `ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm teams clear-nudge-template --team fx-at11 --kind task_reminder --json` -> {\"action\":\"clear-nudge-template\",\"team\":\"fx-at11\",\"kind\":\"task_reminder\",\"cleared\":false} (no prior override). Assigned 3 tasks to fx-at11-beta: `atm task assign fx-at11-beta \"AT11 case1 task1 at11-c1-t1-1789411694\" --task-id at11-c1-t1-1789411694 --json` -> {\"task_id\":\"at11-c1-t1-1789411694\"}; likewise at11-c1-t2-1789411694 and at11-c1-t3-1789411694. Polled `atm task events at11-c1-t1-1789411694 --json` every 5s (as fx-at11-beta): task_queued handoff at 2026-09-14T18:48:18.426Z, task_ready handoff at 2026-09-14T18:48:20.808528474Z, task_reminder handoff (attempt 1) appeared at 2026-09-14T18:49:25.808428274Z with matching events[] entries {\"event\":\"assigned\",...}, {\"event\":\"reminded\",\"seq\":2,...}, {\"event\":\"reminded\",\"seq\":3,...}. Observed interval = reminder_at - ready_at = 18:49:25.808428274 - 18:48:20.808528474 ~= 64.9999 s (~65s). Started task1: `atm task start at11-c1-t1-1789411694 \"starting task1\" --json` (as fx-at11-beta) -> {\"outcome\":\"sent\",\"task_id\":\"at11-c1-t1-1789411694\",...}; re-fetched events showed events[] appended {\"event\":\"started\",\"seq\":4,\"from_state\":\"assigned\",\"to_state\":\"active\"} and handoffs[] appended {\"kind\":\"task_started\",...}, giving task1 order queued, ready, reminder, started. `atm task events at11-c1-t2-1789411694 --json` and `atm task events at11-c1-t3-1789411694 --json` each showed only a single handoffs[] entry {\"kind\":\"task_queued\"} and events[] only {\"event\":\"assigned\"} (no ready/reminder/started). All three criteria met -> pass. task1 order: queued, ready, reminder, started; task2/task3: queued only."
+    },
+    {
+      "name": "disabled-reminder-doctor-finding",
+      "status": "pass",
+      "detail": "`ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm teams disable-nudge-template --team fx-at11 --kind task_reminder --json` -> {\"action\":\"disable-nudge-template\",\"team\":\"fx-at11\",\"kind\":\"task_reminder\",\"updated_at\":\"2026-09-14T18:49:50.220612996Z\"}. Assigned new task: `atm task assign fx-at11-beta \"AT11 case2 task1 at11-c2-t1-1789411793\" --task-id at11-c2-t1-1789411793 --json` -> {\"task_id\":\"at11-c2-t1-1789411793\"}. `atm task events at11-c2-t1-1789411793 --json` showed handoffs[] task_queued at 2026-09-14T18:49:53.207Z and task_ready at 2026-09-14T18:49:55.808293020Z. Waited in a foreground polling loop (5s sleeps, split across two Bash calls of <=100s each) for 235s total after ready (95s + 140s), exceeding observed_interval*2 = 65s*2 = 130s. Re-fetched `atm task events at11-c2-t1-1789411793 --json` at 2026-09-14T18:52:38Z: events[] still only [\"assigned\",\"reminded\" seq2 emitted at 18:49:55.808 which is the task_ready-triggering entry] and handoffs[] still only [task_queued, task_ready] -- no task_reminder handoff or reminded seq>2 appeared. `ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm doctor --json --team fx-at11` returned findings[] containing {\"severity\":\"warning\",\"code\":\"ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED\",\"message\":\"disabled_task_nudge_template_override: team fx-at11 has disabled `task_reminder`\",\"remediation\":\"atm teams clear-nudge-template --team fx-at11 --kind task_reminder\"}. Both conditions met -> pass. (queued+ready present, no reminder after 235s > 130s threshold; doctor reports disabled_task_nudge_template_override)"
+    },
+    {
+      "name": "cleanup",
+      "status": "pass",
+      "detail": "Closed case1 tasks: `atm task close at11-c1-t1-1789411694 completed \"case1 cleanup\" --json` (as fx-at11-beta) -> {\"outcome\":\"sent\",\"task_id\":\"at11-c1-t1-1789411694\",...}; `atm task close at11-c1-t2-1789411694 cancelled \"case1 cleanup\" --json` -> {\"outcome\":\"sent\",\"task_id\":\"at11-c1-t2-1789411694\",...}; `atm task close at11-c1-t3-1789411694 cancelled \"case1 cleanup\" --json` -> {\"outcome\":\"sent\",\"task_id\":\"at11-c1-t3-1789411694\",...}. Verified with `atm task list --json` (as fx-at11-beta) -> [] before starting case 2. Closed case2 task: `atm task close at11-c2-t1-1789411793 cancelled \"case2 cleanup\" --json` -> {\"outcome\":\"sent\",\"task_id\":\"at11-c2-t1-1789411793\",...}. Cleared nudge override: `ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm teams clear-nudge-template --team fx-at11 --kind task_reminder --json` -> {\"action\":\"clear-nudge-template\",\"team\":\"fx-at11\",\"kind\":\"task_reminder\",\"cleared\":true}. Final `atm task list --json` (as fx-at11-beta) -> [] confirming empty queue."
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {"atm": "1.5.19", "hermes_atm": "", "atm_graft": ""},
+  "started_at": "2026-09-14T18:48:14Z",
+  "finished_at": "2026-09-14T18:52:49Z"
+}

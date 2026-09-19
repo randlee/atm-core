@@ -1,0 +1,31 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT9-task-start",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "started-line-at-write-time",
+      "status": "pass",
+      "detail": "atm task start at9-1789446509-c1 'starting case1' --json (as fx-at9-beta) => {\"action\":\"send\",\"team\":\"fx-at9\",\"agent\":\"fx-at9-alpha\",\"sender\":\"fx-at9-beta\",\"outcome\":\"sent\",\"message_id\":\"01M2HN5Q0C73G5C5M5ZYTW31WJ\",\"requires_ack\":false,\"task_id\":\"at9-1789446509-c1\",\"summary\":\"starting case1\"} identified the started task publicly before alpha's read. Then atm list --unread --json (as fx-at9-alpha) showed row {\"message_id\":\"01M2HN5Q0C73G5C5M5ZYTW31WJ\",\"summary\":\"starting case1\",\"from\":\"fx-at9-beta\",\"read\":false,\"task_id\":\"at9-1789446509-c1\"}, and atm read --message-id 01M2HN5Q0C73G5C5M5ZYTW31WJ --json returned message with \"taskId\":\"at9-1789446509-c1\",\"taskOp\":{\"op\":\"start\"}. atm task events at9-1789446509-c1 --json confirmed {\"event\":\"started\",\"from_state\":\"assigned\",\"to_state\":\"active\"} and handoffs[] entry {\"kind\":\"task_started\",\"task_id\":\"at9-1789446509-c1\"}."
+    },
+    {
+      "name": "out-of-order-start-reorders-queue",
+      "status": "pass",
+      "detail": "Assigned at9-1789446532-c2a then at9-1789446532-c2b; started the second (at9-1789446532-c2b) as beta. atm task list --json (as fx-at9-beta) => [{\"task_id\":\"at9-1789446532-c2b\",\"state\":\"active\",\"position\":1,...},{\"task_id\":\"at9-1789446532-c2a\",\"state\":\"assigned\",\"position\":2,...}] showing the started task active and ordered ahead of the still-assigned task."
+    },
+    {
+      "name": "unstarted-task-keeps-reminding",
+      "status": "pass",
+      "detail": "Assigned at9-1789446553-c3 and never started it. Polled atm task events at9-1789446553-c3 --json every 5s for 110s. Final output events[] included three \"reminded\" entries (seq2 at 04:29:13.957Z is the initial ready notification, from_state/to_state \"assigned\"; seq3 at 04:30:13.958Z; seq4 at 04:31:18.960Z, all from_state/to_state \"assigned\"). handoffs[] = [{\"kind\":\"task_queued\"},{\"kind\":\"task_ready\"},{\"kind\":\"task_reminder\",\"attempt\":1,\"at\":\"2026-09-15T04:30:13.958658321Z\"},{\"kind\":\"task_reminder\",\"attempt\":2,\"at\":\"2026-09-15T04:31:18.960944334Z\"}] — exactly two task_reminder handoffs (the initial task_ready handoff excluded per contract). atm task list --json (as fx-at9-beta) confirmed task still {\"state\":\"assigned\",\"reminder_count\":3}."
+    },
+    {
+      "name": "cleanup",
+      "status": "pass",
+      "detail": "atm task close at9-1789446509-c1 completed 'case1 done' --json, atm task close at9-1789446532-c2b completed 'case2b done' --json, atm task close at9-1789446532-c2a completed 'case2a done' --json, atm task close at9-1789446553-c3 completed 'case3 cleanup close' --json all returned outcome \"sent\". atm task list --json (as fx-at9-beta) returned [] after each case's cleanup."
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {"atm": "1.5.20", "hermes_atm": "", "atm_graft": ""},
+  "started_at": "2026-09-15T04:28:29.617896503Z",
+  "finished_at": "2026-09-15T04:31:41.237557460Z"
+}

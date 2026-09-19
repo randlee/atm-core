@@ -1,6 +1,6 @@
 ---
 name: plan-hardening
-version: 1.5.0
+version: 1.6.0
 description: >
   Team-lead drives plan hardening after the current plan state already exists
   in repo docs.
@@ -36,6 +36,20 @@ Sprint plan approved by:
 - `critical-plan-reviewer`
 - `quality-mgr`
 
+The approved plan is a set of parallel tracks with non-intersecting
+`owned_paths`, aiming at the shortest critical path with the fewest sprints.
+A cross-boundary feature is cut into a contract sprint, parallel layer
+sprints that each close one boundary against contract tests, and its own
+integration sprint that owns its end-to-end criteria. Independent changes
+and single-boundary features stay as their own sprints or stacked tracks;
+thin layer sprints are as much a defect as full-stack feature sprints. The
+phase plan carries a wave table with critical path, width and sprint count,
+and every name follows "Naming" in the guidelines. Hardening exists to make that shape safe to run in
+parallel; it must never make a plan more serial. Record `critical_path` and
+`width` from the `plan-scope-reviewer` output in the round table's Note
+column, and treat a round that lengthens the critical path as a regression to
+be explained.
+
 ## Required Reference
 
 Always use:
@@ -45,11 +59,11 @@ Always use:
 
 | # | Route to | Input required | Output expected | Read before executing |
 |---|----------|----------------|-----------------|-----------------------|
-| 1 | `arch-ctm` | vars file | `step-1` fenced JSON | `steps/step-1.md` |
+| 1 | developer | vars file | `step-1` fenced JSON | `steps/step-1.md` |
 | 2 | `plan-scope-reviewer` (background) | context + `step-1` JSON | `step-2` fenced JSON | `steps/step-2.md` |
-| 3 | `arch-ctm` | `step-2` JSON | `step-3` fenced JSON | `steps/step-3.md` |
+| 3 | developer | `step-2` JSON | `step-3` fenced JSON | `steps/step-3.md` |
 | 4 | `critical-plan-reviewer` (background) | context + `step-3` JSON | `step-4` fenced JSON | `steps/step-4.md` |
-| 5 | `arch-ctm` | `step-4` JSON | `step-5` fenced JSON | `steps/step-5.md` |
+| 5 | developer | `step-4` JSON | `step-5` fenced JSON | `steps/step-5.md` |
 | 6 | `quality-mgr` | `step-5` JSON + QA vars file | codex-orchestration plan-QA handoff | `steps/step-6.md` |
 
 ## Round Tracking
@@ -79,10 +93,10 @@ Use the example in:
 Cycle-cap behavior:
 
 - every `FAIL` from `plan-scope-reviewer` or `critical-plan-reviewer` must be
-  routed to `arch-ctm` immediately through the matching plan-editing step
+  routed to the developer immediately through the matching plan-editing step
 - no reviewer findings may be accepted as-is or bypass the plan-editing agent
 - if a reviewer returns `FAIL` on the final allowed reviewer cycle, `team-lead`
-  must still send those findings to `arch-ctm` for one final correction pass
+  must still send those findings to the developer for one final correction pass
 - after that final correction pass, if no reviewer cycles remain, stop the
   hardening run as `cap-exhausted / not converged` and report status plainly
 - do not ask the user how to proceed, do not offer multiple-choice options,
@@ -102,17 +116,44 @@ Cycle-cap behavior:
 - substantial scope drift from the user-discussed plan is a hard stop
 - remaining in-scope work without sprint ownership is a hard stop
 - if a sprint cannot credibly land its committed deliverables at a
-  production-ready level, split it before implementation
+  production-ready level for its closure type, split it along boundaries into
+  sibling sprints before implementation; a serial split of a feature sprint
+  is not an accepted correction
 - if a reviewer loop reaches its configured cap without converging, stop after
-  routing the last findings to `arch-ctm` and report `cap-exhausted / not
+  routing the last findings to the developer and report `cap-exhausted / not
   converged`; do not continue launching background reviewers and do not ask
   the user for a decision mid-loop
+
+## Workflow Metadata
+
+Every template in this skill declares ATM template metadata
+(`metadata.type`, `metadata.tags`, `metadata.workflow`; see
+`docs/template-workflow-metadata.md`). The declared stage is `plan`, so any
+message rendered from one of them is discoverable without reading its body:
+
+```sh
+atm search --team <team> --workflow-stage plan --since <ISO> --json
+atm search --team <team> --type 'plan-*' --since <ISO> --json
+```
+
+Rounds that run a reviewer as a background agent (steps 2 and 4) produce no
+ATM message on their own; the step docs require a `plan-review-notice` send
+after each such round so the run stays observable. Rounds routed to a team
+agent instead of a background agent use `plan-critical-review.xml.j2` (or
+the numbered assignment templates) and are recorded by that dispatch.
+Install the templates before the first send:
+
+```sh
+mkdir -p ~/.atm/templates/plan-hardening && cp .claude/skills/plan-hardening/*.j2 ~/.atm/templates/plan-hardening/
+```
 
 ## Render
 
 - `.claude/skills/plan-hardening/01-plan-scope-review.xml.j2`
 - `.claude/skills/plan-hardening/02-sprint-scope-hardening.xml.j2`
 - `.claude/skills/plan-hardening/03-consistency-hardening.xml.j2`
+- `.claude/skills/plan-hardening/plan-critical-review.xml.j2`
+- `.claude/skills/plan-hardening/plan-review-notice.xml.j2`
 - `.claude/skills/plan-hardening/steps/step-1.md`
 - `.claude/skills/plan-hardening/steps/step-2.md`
 - `.claude/skills/plan-hardening/steps/step-3.md`

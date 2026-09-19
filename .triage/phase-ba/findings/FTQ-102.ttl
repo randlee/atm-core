@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/FTQ-102>
+  a triage:Finding ;
+  triage:findingId "FTQ-102" ;
+  triage:title "nudge_mode.rs block_on spins unbounded" ;
+  triage:description "flaky-test-qa phase-ending critical review @ 9f5aef2fe. Finding: a block_on loop in crates/atm-core/tests/nudge_mode.rs spins with no bound, risking an unbounded busy-wait under contention. Pre-existing on develop, not a Phase BA regression. fenix's ruling: fix on review-1 (cipher item 6): bound the loop to 1000 polls. Fixed, ACCEPTED by fenix." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-102/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/FTQ-102/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/nudge_mode.rs" ;
+  triage:line 1 ;
+  triage:snippet "nudge_mode.rs block_on loop spins unbounded" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher fix/phase-ba-review-1, final head 112f8f384 (item 6, bounded to 1000 polls; gates re-run at 7354f6fd0 then again at 112f8f384), ACCEPTED by fenix." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "112f8f384" ;
+  triage:occursIn <urn:atm:triage:worktree/FTQ-102/1> .
+
+<urn:atm:triage:worktree/FTQ-102/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher), above integrate/phase-ba" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "112f8f384" ;
+  triage:orderIndex 7 .

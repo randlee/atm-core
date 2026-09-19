@@ -101,15 +101,6 @@ pub(crate) fn command_args(op: HerdrOp<'_>) -> Vec<String> {
             "server".to_owned(),
             "--json".to_owned(),
         ],
-        HerdrOp::Notify { title, body } => vec![
-            "notification".to_owned(),
-            "show".to_owned(),
-            title.to_owned(),
-            "--body".to_owned(),
-            body.to_owned(),
-            "--sound".to_owned(),
-            "request".to_owned(),
-        ],
     }
 }
 

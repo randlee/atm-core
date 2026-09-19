@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-016>
+  a triage:Finding ;
+  triage:findingId "BB1-016" ;
+  triage:title "from_str body relocated to atm-storage/src/validation.rs, not contract.rs as D1 pins it" ;
+  triage:description "fenix critical design review, PR #1438 comment https://github.com/randlee/atm-core/pull/1438#issuecomment-5648340494 (2026-09-12T20:01:44Z), reviewed at b06b3e262. from_str body relocated to atm-storage/src/validation.rs:4-28 while D1 pins it at contract.rs; contract.rs prod=991 explains the relocation (line-count pressure)." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:source "fenix critical review" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage/src/validation.rs:4-28; crates/atm-storage/src/contract.rs" ;
+  triage:status "accepted" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (fenix): acceptable; record the relocation in the PR body. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-016/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-016/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/validation.rs" ;
+  triage:line 4 ;
+  triage:snippet "from_str implementation lives in validation.rs instead of contract.rs as D1 specifies, due to contract.rs line-count pressure" ;
+  triage:status "accepted" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-016/1> .
+
+<urn:atm:triage:worktree/BB1-016/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .

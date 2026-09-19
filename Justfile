@@ -178,6 +178,9 @@ fuzz *args:
     {{python_cmd}} .just/run_fuzz.py {{args}}
 
 # Generate or verify the durable public verification-report index.
+procedures *args:
+    {{python_cmd}} scripts/procedures/render_procedure_pages.py {{args}}
+
 reports-index *args:
     {{python_cmd}} .just/generate_report_index.py {{args}}
 
@@ -232,6 +235,10 @@ validate target='all':
 # Cross-host stages use public ATM clients against already-running peer daemons.
 smoke feature='normal' *args:
     {{python_cmd}} .just/run_smoke.py {{feature}} {{args}}
+
+# Run the ordered integration sequence in one colima testbed container.
+integration platform='colima' *args:
+    {{python_cmd}} scripts/integration/run_colima.py {{platform}} {{args}}
 
 # Bootstrap the dedicated disposable benchmark OS account. This action writes
 # only that account's manifest and refuses an account with existing ATM state.

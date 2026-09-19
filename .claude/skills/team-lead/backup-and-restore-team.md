@@ -45,11 +45,11 @@ Compare against the expected roster for `atm-dev`:
 | arch-ctm | codex | high | `/Users/randlee/Documents/github/atm-core` |
 | quality-mgr | quality-mgr | sonnet | `/Users/randlee/Documents/github/atm-core` |
 
-If a member's `tmuxPaneId` is stale (pane no longer exists or now hosts a
-different agent), discover the correct pane before touching membership:
+If a member's roster alias is stale (its Herdr agent no longer exists or was
+renamed), discover the live agent name before touching membership:
 
 ```bash
-tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_current_command}'
+herdr agent list
 ```
 
 ## Step 3 — Add Or Update Members
@@ -57,9 +57,9 @@ tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_titl
 Add any member missing from the roster:
 
 ```bash
-atm teams add-member "$ATM_TEAM" team-lead --agent-type team-lead --model claude-sonnet-4-6 --home-dir /Users/randlee/Documents/github/atm-core --pane-id <pane>
-atm teams add-member "$ATM_TEAM" {{TEAM_MEMBER}} --agent-type rust-arch --model codex-high --home-dir /Users/randlee/Documents/github/atm-core --pane-id <pane>
-atm teams add-member "$ATM_TEAM" quality-mgr --agent-type quality-mgr --model claude-sonnet --home-dir /Users/randlee/Documents/github/atm-core --pane-id <pane>
+atm teams add-member "$ATM_TEAM" team-lead --agent-type team-lead --model claude-sonnet-4-6 --home-dir /Users/randlee/Documents/github/atm-core --backend herdr --session default --alias <herdr-agent-name>
+atm teams add-member "$ATM_TEAM" {{TEAM_MEMBER}} --agent-type rust-arch --model codex-high --home-dir /Users/randlee/Documents/github/atm-core --backend herdr --session default --alias <herdr-agent-name>
+atm teams add-member "$ATM_TEAM" quality-mgr --agent-type quality-mgr --model claude-sonnet --home-dir /Users/randlee/Documents/github/atm-core --backend herdr --session default --alias <herdr-agent-name>
 ```
 
 Note the flag is `--agent-type`, not `--type`.
@@ -68,7 +68,7 @@ For a member that already exists but has a stale pane, model, or home dir,
 use `update-member` instead of re-adding:
 
 ```bash
-atm teams update-member "$ATM_TEAM" <member> --pane-id <correct-pane-id>
+atm teams update-member "$ATM_TEAM" <member> --backend herdr --session default --alias <herdr-agent-name>
 ```
 
 `update-member` also accepts `--home-dir`, `--harness`, `--agent-type`, and
@@ -160,9 +160,8 @@ atm members --team "$ATM_TEAM"
 atm send arch-ctm "New session (session-id: $SESSION_ID). Team $ATM_TEAM verified. Please acknowledge and confirm status."
 ```
 
-The recipient's `.atm.toml` `post_send_hooks` fires the nudge automatically on
-send — no manual `tmux send-keys` nudge is needed. See `atm help hooks` for
-how post-send hooks resolve and how to debug one that doesn't fire.
+ATM nudges the recipient automatically on send; there is no manual nudge.
+If one doesn't fire, check `atm doctor` for that member's receiver.
 
 ## Common Failure Modes
 
@@ -170,7 +169,7 @@ how post-send hooks resolve and how to debug one that doesn't fire.
 |---------|-------|-----|
 | `atm teams add-member` rejects `--type` | flag was renamed | use `--agent-type` |
 | `atm doctor` reports daemon unreachable | daemon not running or wrong `ATM_DAEMON_BIN` | check `echo "$ATM_DAEMON_BIN"` matches the installed binary, restart daemon if needed |
-| member present in `atm members` but sends never land | stale `--pane-id` | `atm teams update-member "$ATM_TEAM" <member> --pane-id <correct-pane-id>` |
+| member present in `atm members` but sends never land | stale `--alias` | `atm teams update-member "$ATM_TEAM" <member> --backend herdr --session default --alias <herdr-agent-name>` |
 | `atm send` fails with agent not found | member missing from roster | `atm teams add-member` per Step 3 |
 | self-send or wrong identity routing | teammate launched with wrong `ATM_IDENTITY` | relaunch with the correct identity; see `atm help identity` |
 | task list looks empty after a restart | Claude Code UI task panel stale state | create one real task through the task tool to refresh it |

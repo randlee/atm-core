@@ -170,8 +170,8 @@ Error codes should describe the failure class, not a specific prose message.
   <member> --agent-type <other type>`
 - `ATM_ROSTER_RESERVED_NAME` — rename the member: `atm-daemon is reserved for
   daemon-originated messages`
-- `ATM_TASK_STALLED` — check the assignee or close the task: `atm send <assignee>
-  --task-complete <task_id> --stdin`
+- `ATM_TASK_STALLED` — check the assignee or close the task: `atm task close
+  <task_id> completed --stdin`
 - `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to
   its Herdr agent and answer the prompt`
 - `ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET` — Herdr exposes an unnamed agent;

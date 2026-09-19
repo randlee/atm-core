@@ -15,6 +15,13 @@ pub(crate) struct PreparedReceivedHook {
     pub(crate) recipient: ResolvedRecipient,
     pub(crate) delivery_snapshot: DeliveryRecipientSnapshot,
     pub(crate) messages: Vec<LogicalMessage>,
+    pub(crate) reassign_notice: Option<PreparedReassignNotice>,
+}
+
+pub(crate) struct PreparedReassignNotice {
+    pub(crate) recipient: ResolvedRecipient,
+    pub(crate) delivery_snapshot: DeliveryRecipientSnapshot,
+    pub(crate) message: LogicalMessage,
 }
 
 pub(crate) fn prepare_received_hook<R: RetainedServiceRuntime + ?Sized>(
@@ -49,9 +56,33 @@ pub(crate) fn prepare_received_hook<R: RetainedServiceRuntime + ?Sized>(
         warnings: Vec::new(),
     };
     let plan = build_send_delivery_plan(&hook_context, requires_ack, is_ack, persistence)?;
+    let reassign_notice =
+        persistence
+            .reassign_notice
+            .as_ref()
+            .map(|notice| {
+                let recipient = ResolvedRecipient {
+                    team: notice.team.clone(),
+                    agent: notice.agent.clone(),
+                };
+                let delivery_snapshot = DeliveryPolicyCoordinator::new()
+                    .resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)?;
+                let message = LogicalMessage::new(notice.envelope.clone(), false, false, None)
+                    .map_err(|error| AtmError::validation(error.to_string()))?
+                    .with_task_transition(crate::boundary::TaskTransition::Closed {
+                        outcome: crate::boundary::TaskClosedOutcome::Reassigned,
+                    });
+                Ok::<PreparedReassignNotice, AtmError>(PreparedReassignNotice {
+                    recipient,
+                    delivery_snapshot,
+                    message,
+                })
+            })
+            .transpose()?;
     Ok(Some(PreparedReceivedHook {
         recipient: context.recipient.clone(),
         delivery_snapshot,
         messages: plan.messages,
+        reassign_notice,
     }))
 }

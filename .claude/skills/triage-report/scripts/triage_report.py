@@ -334,6 +334,21 @@ def _status_icon(status: str | None) -> str:
     return "—"
 
 
+# Verdict values a QA assignment row carries before its result lands.
+IN_FLIGHT_VERDICTS = frozenset({"", "PENDING", "ASSIGNED", "IN_PROGRESS", "RUNNING"})
+
+
+def _qa_icon(qa: dict[str, Any]) -> str:
+    """PASS/FAIL from the recorded verdict; a run assigned without a verdict
+    is QA in flight; no run at all is shown as absent, never guessed."""
+    verdict = str(qa.get("verdict") or "").strip().upper()
+    if verdict == "PASS":
+        return ICONS["done"]
+    if verdict in IN_FLIGHT_VERDICTS:
+        return ICONS["in_progress"] if qa.get("run_id") else "—"
+    return ICONS["fail"]
+
+
 def _gate_icon(value: bool | None) -> str:
     if value is True:
         return ICONS["ready"]
@@ -595,9 +610,13 @@ def _live_counts(
 ) -> dict[str, dict[str, int]]:
     """Return unresolved B/I/M counts through the shared graph query.
 
-    These are the merge and dispatch gates.  QA evidence describes the review
-    that happened at a particular commit; it must not replace current TTL
-    state when a real unresolved occurrence remains on a sprint branch.
+    These are the merge and dispatch gates: how many findings found in each
+    sprint are still open.  A finding belongs to the sprint it was found in
+    (``triage:foundIn``) until its Finding-level status is terminal; where its
+    fix lives (a stacked fix layer, a promoted branch) never moves it, so a
+    phase delivered as a gh stack still shows per-sprint counts whose sum is
+    the integration summary.  QA evidence describes the review that happened
+    at a particular commit; it must not replace current TTL state.
     """
     runner = _graph_runner()
     query = (
@@ -613,10 +632,7 @@ def _live_counts(
 
     results: dict[str, dict[str, int]] = {}
     for sprint in sprints:
-        branch = sprint["branch"]
         bindings = {"SPRINT": runner.URIRef(sprint["iri"])}
-        if branch:
-            bindings["BRANCH"] = Literal(branch)
         try:
             rows = runner.run_sparql(graph, query, bindings)
         except Exception as exc:  # noqa: BLE001 - normalize graph runner failures
@@ -692,6 +708,37 @@ def _current_integration_findings(
                 raise ReportError(f"{path.name}: finding {finding_id} has invalid severity {raw_severity!r}")
             (legacy if origin.endswith("-Legacy") else active)[key] += 1
     return active, legacy, stale
+
+
+def _undeclared_origin_findings(
+    findings_dir: Path,
+    sprints: list[dict[str, Any]],
+) -> list[tuple[str, str, str]]:
+    """Return (finding_id, origin, file) for open findings no declared sprint owns.
+
+    Every open finding must count in exactly one sprint row, or the per-sprint
+    table and the integration summary silently diverge.  Legacy origins are
+    reported separately and are not an error.
+    """
+    declared = {sprint["iri"] for sprint in sprints}
+    undeclared: list[tuple[str, str, str]] = []
+    for path in sorted(findings_dir.glob("*.ttl")):
+        try:
+            graph = _parse_ttl(path)
+        except ReportError:
+            continue
+        for finding in set(graph.subjects(RDF.type, TRIAGE.Finding)):
+            statuses = {str(value).lower() for value in graph.objects(finding, TRIAGE.status)}
+            if statuses & TERMINAL_FINDING_STATUSES:
+                continue
+            origins = [str(value) for value in graph.objects(finding, TRIAGE.foundIn)]
+            if any(origin in declared for origin in origins):
+                continue
+            if any(_local(origin).endswith("-Legacy") for origin in origins):
+                continue
+            finding_id = str(next(graph.objects(finding, TRIAGE.findingId), path.stem))
+            undeclared.append((finding_id, ", ".join(_local(o) for o in origins) or "none", path.name))
+    return undeclared
 
 
 def _origin_repo(root: Path) -> str | None:
@@ -799,8 +846,15 @@ def build_report(
     integration_root: Path,
     phase: str | None = None,
     qa_master: Path | None = None,
+    ttl_only: bool = False,
 ) -> dict[str, Any]:
-    """Build canonical report data. No presentation-layer inference occurs here."""
+    """Build canonical report data. No presentation-layer inference occurs here.
+
+    ``ttl_only`` skips GitHub observation entirely (PR/CI/merge cells stay
+    unknown and are not reported as a data gap).  It exists for the pre-push
+    hook, which validates that the Turtle-derived table renders from the
+    pushed tree, where there is no origin and no network.
+    """
     if _RDFLIB_ERROR:
         raise ReportError(f"rdflib is required; install it with pip install rdflib ({_RDFLIB_ERROR})")
     root = Path(integration_root).resolve()
@@ -847,7 +901,7 @@ def build_report(
     qa = _qa_runs(qa_data)
     live_counts = _live_counts(phase_path, findings_dir, sprints)
     current_counts, legacy_counts, stale_occurrences = _current_integration_findings(findings_dir)
-    github, github_repo = _github_state(root, sprints)
+    github, github_repo = ({}, None) if ttl_only else _github_state(root, sprints)
     dev = _dev_states(events)
     data_gaps: list[str] = []
     target_branch = _integration_branch(phase_name, plan_phase)
@@ -880,7 +934,7 @@ def build_report(
                 action="Restore the authoritative QA evidence master with its recorded QA runs.",
             )
         )
-    if github_repo is None:
+    if github_repo is None and not ttl_only:
         problem = "GitHub origin is unavailable; PR/CI/merge cells are unknown"
         data_gaps.append(problem)
         remediations.append(
@@ -1000,25 +1054,23 @@ def build_report(
             }
         )
         if run is None and qa_data is not None and dev_done:
-            # QA only ever runs after dev sends a Completion. A sprint that
-            # is merely assigned (in progress, not yet completed) has no QA
-            # run to be missing -- that is the normal "in flight" state, not
-            # lost evidence. Only a completed sprint with no recorded
-            # verdict is a real gap.
-            problem = f"{sid}: no authoritative QA run"
-            data_gaps.append(problem)
-            remediations.append(
-                _remediation(
-                    code="TTL.QA_RUN_MISSING",
-                    source="qa_evidence_master",
-                    path=qa_master,
-                    root=root,
-                    target_branch=target_branch,
-                    problem=problem,
-                    action="Add or restore the final authoritative QA run for this sprint.",
-                    sprint_id=sid,
-                )
+            # QA runs after dev sends a Completion, and the QA assignment row
+            # is appended to the evidence master at dispatch. A completed
+            # sprint with no run yet is "QA not dispatched": the report still
+            # renders (the report is the status surface, never the thing that
+            # fails) and the row carries a warning naming the missing row.
+            rows[-1]["diagnostics"].append(
+                {
+                    "sprint": sid,
+                    "level": "warning",
+                    "code": "TTL.QA_RUN_MISSING",
+                    "path": _source_path(qa_master, root) if isinstance(qa_master, Path) else str(qa_master),
+                    "problem": f"{sid}: dev complete, no QA run recorded",
+                    "action": "Append the QA assignment row to the evidence master at dispatch.",
+                }
             )
+            if rows[-1]["data_status"] == "ok":
+                rows[-1]["data_status"] = "warning"
         if sprint["branch"] is None:
             problem = f"{sid}: triage:branch is missing"
             data_gaps.append(problem)
@@ -1058,6 +1110,28 @@ def build_report(
                         )
                     )
 
+    for finding_id, origin, file_name in _undeclared_origin_findings(findings_dir, sprints):
+        problem = (
+            f"{finding_id}: open finding with triage:foundIn {origin} is not owned by any "
+            f"declared {phase_name} sprint, so it is counted in the integration summary but "
+            "in no sprint row"
+        )
+        data_gaps.append(problem)
+        remediations.append(
+            _remediation(
+                code="TTL.FINDING_SPRINT_UNDECLARED",
+                source="finding_record",
+                path=findings_dir / file_name,
+                root=root,
+                target_branch=target_branch,
+                problem=problem,
+                action=(
+                    "Set the finding's triage:foundIn to the sprint it was found in (a sprint "
+                    "declared in the phase structure), or declare that sprint."
+                ),
+            )
+        )
+
     for index, row in enumerate(rows):
         previous = rows[:index]
         if not previous:
@@ -1079,8 +1153,7 @@ def build_report(
             )
         )
         row["dev_icon"] = ICONS.get(row["dev_status"], "—")
-        qa_value = row["qa"]["verdict"]
-        row["qa_icon"] = "✅" if qa_value and qa_value.upper() == "PASS" else (ICONS["fail"] if qa_value else "—")
+        row["qa_icon"] = _qa_icon(row["qa"])
         row["ci_icon"] = _status_icon(row["ci_status"])
         row["ready_icon"] = _gate_icon(row["ready_to_merge"])
         row["ok_icon"] = _gate_icon(row["ok_to_merge"])
@@ -1099,7 +1172,7 @@ def build_report(
         )
         detail = (
             f"Sprint: {row['id']} ({phase_sprint})\n"
-            f"DEV: {row['dev_icon']}  QA: {row['qa_icon']} {q['verdict'] or 'UNKNOWN'}  "
+            f"DEV: {row['dev_icon']}  QA: {row['qa_icon']} {q['verdict'] or ('PENDING' if q['run_id'] else 'UNKNOWN')}  "
             f"CI: {row['ci_icon']}  PR: {_pr_cell(row)}\n"
             f"Live B/I/M: {q['blockers'] if q['blockers'] is not None else '?'} / "
             f"{q['important'] if q['important'] is not None else '?'} / "
@@ -1194,10 +1267,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--format", choices=("table", "detailed", "json", "vars"), default="table")
     parser.add_argument("--mode", choices=("table", "detailed"), default="table", help="template display mode for --format vars")
     parser.add_argument("--json", action="store_true", help="alias for --format json")
+    parser.add_argument(
+        "--ttl-only",
+        action="store_true",
+        help="skip GitHub observation (pre-push hook: validate the Turtle-derived table only)",
+    )
     args = parser.parse_args(argv)
     try:
         root = args.integration_root or discover_integration_root(Path.cwd(), args.phase)
-        report = build_report(root, args.phase, args.qa_master)
+        report = build_report(root, args.phase, args.qa_master, ttl_only=args.ttl_only)
     except ReportError as exc:
         print(
             json.dumps(

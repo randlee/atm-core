@@ -64,9 +64,9 @@ the observed prompt text per case.
 | C10 | cipher `--task-complete` with an unassigned id | exit 3, no message written |
 | C11 | cipher acks the second task then stays idle 3 min without completing | Task reminders ~60 s apart, none closer; stop after `--task-complete` |
 | C12 | `atm teams update-member atm-dev team-lead --agent-type general-purpose`; doctor; restore `lead` | `ATM_ROSTER_NO_LEAD` warning appears, then clears |
-| C13 | `atm list --tasks` and `atm list --task-events <first>` after C11 | rows and events consistent with C8–C11 |
+| C13 | `atm task list` and `atm task events <first>` after C11 | rows and events consistent with C8–C11 |
 | C14 | a task to cipher left idle and unacked for ≥ 10 min | ten `Reminded` rows; one queued message from `atm-daemon` in team-lead's inbox; doctor warns `ATM_TASK_STALLED`; clears after `--task-complete` |
-| C15 | `atm send cipher --task-id t-adm --stdin` from a peer host (cross-host send via `--peer`) | delivered; `atm list --tasks` shows no row for `t-adm` |
+| C15 | `atm send cipher --task-id t-adm --stdin` from a peer host (cross-host send via `--peer`) | delivered; `atm task list` shows no row for `t-adm` |
 | C15b | cipher `atm ack` of the C15 message | ack succeeds (exit 0); still no row and no event for `t-adm` |
 | C16 | `atm send tmux-member --task-id t-tm --stdin` (one member temporarily on `--backend tmux`) | no steer; queue marker set; Task body delivered on idle |
 | C17 | `atm send loki@hermes --task-id t-gr --stdin` (graft member, if the hermes testbed is up) | one graft dispatch with `kind: queue`; hermes-agent surfaces the Task body when idle; else recorded as not run |

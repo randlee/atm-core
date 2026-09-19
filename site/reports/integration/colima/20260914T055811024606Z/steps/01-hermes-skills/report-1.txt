@@ -1,0 +1,14 @@
+ATM TEST REPORT
+skill: atm-setup-environment
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.17 daemon 1.5.17
+result: PASS   (6/6 steps)
+steps:
+  0 PASS Start line — 01M2F7Z2CHF63NVTM7N7S1D2FA
+  1 PASS Daemon answers — status: healthy, client_context.version: 1.5.17, daemon_context.version: 1.5.17
+  2 PASS Roster complete — stub-alpha@testbed, stub-beta@testbed, tester@testbed, hermes@testbed, oversight@testbed all present
+  3 PASS Doctor passes — error_count: 0, no warnings on expected teams
+  4 PASS Self round trip — message id: 01M2F7ZB0JVNAVHKHN5QG52RHE, mutation_applied: true, count: 1, unread: 0 after read
+  5 PASS Cross-host peer — peer trust enabled: yes (localhost), message id: 01M2F7ZMZZBERPDEEB8QMP1D8P
+elapsed: 50s

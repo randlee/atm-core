@@ -1,0 +1,25 @@
+{
+  "feature": "graft-hermes",
+  "host": "rand-m5.local",
+  "platform": "macos",
+  "run_id": "20260913T080014282352Z",
+  "status": "FAIL",
+  "source_revision": "4cb8be1cee7b7f0d5b42a76aa83344128f861164",
+  "procedure": "graft-hermes",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.5.17",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    },
+    {
+      "name": "graft outbound durable write and receiver round trip",
+      "status": "FAIL",
+      "detail": "Traceback (most recent call last):\n  File \"/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-bb/scripts/phase-ai/run-hermes-graft-smoke.py\", line 204, in <module>\n    main()\n    ~~~~^^\n  File \"/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-bb/scripts/phase-ai/run-hermes-graft-smoke.py\", line 152, in main\n    raise TimeoutError(f\"no graft nudge arrived within {args.timeout:.1f}s\")\nTimeoutError: no graft nudge arrived within 15.0s",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    }
+  ]
+}

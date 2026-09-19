@@ -1,0 +1,123 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Phase BB is dispatched with plain ATM sends (codex-orchestration), not the
+# graph-orchestration workflow, but /triage-report derives its DEV column
+# from these events regardless of dispatch method (fenix ruling,
+# 2026-09-12T19:49:01Z, overruling the earlier "intentionally empty"
+# convention). Record one triage:Assignment per dev dispatch using the
+# timestamp from `atm task events <task-id>`, never from memory; add a
+# matching triage:Completion when that sprint's dev push is accepted (not
+# merely when the ATM task closes -- a FAILed QA round gets no Completion).
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:BB1 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-12T18:38:28Z"^^xsd:dateTime .
+
+triage:a2 a triage:Assignment ;
+    triage:ofSprint triage:BB3 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-12T18:38:28Z"^^xsd:dateTime .
+
+triage:a3 a triage:Assignment ;
+    triage:ofSprint triage:BB3 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-12T19:14:53Z"^^xsd:dateTime .
+
+triage:a4 a triage:Assignment ;
+    triage:ofSprint triage:BB2 ;
+    triage:assignedTo "solar" ;
+    triage:assignedAt "2026-09-12T19:47:43Z"^^xsd:dateTime .
+
+triage:a5 a triage:Assignment ;
+    triage:ofSprint triage:BB4 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-12T19:49:50Z"^^xsd:dateTime .
+
+triage:a6 a triage:Assignment ;
+    triage:ofSprint triage:BB5 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-12T20:28:11Z"^^xsd:dateTime .
+
+triage:a7 a triage:Assignment ;
+    triage:ofSprint triage:BB1 ;
+    triage:assignedTo "solar" ;
+    triage:assignedAt "2026-09-12T20:02:36Z"^^xsd:dateTime .
+
+triage:a8 a triage:Assignment ;
+    triage:ofSprint triage:BB3 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-12T20:21:42Z"^^xsd:dateTime .
+
+triage:a9 a triage:Assignment ;
+    triage:ofSprint triage:BB2 ;
+    triage:assignedTo "fenix" ;
+    triage:assignedAt "2026-09-12T20:38:39Z"^^xsd:dateTime .
+
+triage:a10 a triage:Assignment ;
+    triage:ofSprint triage:BB4 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-12T20:44:53Z"^^xsd:dateTime .
+
+triage:a11 a triage:Assignment ;
+    triage:ofSprint triage:BB3 ;
+    triage:assignedTo "solar" ;
+    triage:assignedAt "2026-09-12T21:09:11Z"^^xsd:dateTime .
+
+triage:c1 a triage:Completion ;
+    triage:ofSprint triage:BB1 ;
+    triage:at "2026-09-12T19:56:26Z"^^xsd:dateTime .
+
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:BB2 ;
+    triage:at "2026-09-12T19:57:39Z"^^xsd:dateTime .
+
+triage:c3 a triage:Completion ;
+    triage:ofSprint triage:BB4 ;
+    triage:at "2026-09-12T20:37:14Z"^^xsd:dateTime .
+
+triage:c4 a triage:Completion ;
+    triage:ofSprint triage:BB3 ;
+    triage:at "2026-09-12T20:53:29Z"^^xsd:dateTime .
+
+triage:c5 a triage:Completion ;
+    triage:ofSprint triage:BB1 ;
+    triage:at "2026-09-12T21:10:13Z"^^xsd:dateTime .
+
+triage:a12 a triage:Assignment ;
+    triage:ofSprint triage:BB3 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-12T22:24:23Z"^^xsd:dateTime .
+
+triage:a13 a triage:Assignment ;
+    triage:ofSprint triage:BB5 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-12T22:24:23Z"^^xsd:dateTime .
+
+triage:c6 a triage:Completion ;
+    triage:ofSprint triage:BB5 ;
+    triage:at "2026-09-12T22:56:30Z"^^xsd:dateTime .
+
+triage:a14 a triage:Assignment ;
+    triage:ofSprint triage:BB6 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-09-12T22:58:24Z"^^xsd:dateTime .
+
+triage:c7 a triage:Completion ;
+    triage:ofSprint triage:BB3 ;
+    triage:at "2026-09-12T23:08:15Z"^^xsd:dateTime .
+
+triage:c8 a triage:Completion ;
+    triage:ofSprint triage:BB5 ;
+    triage:at "2026-09-12T23:25:29Z"^^xsd:dateTime .
+
+triage:a15 a triage:Assignment ;
+    triage:ofSprint triage:BB3 ;
+    triage:assignedTo "cipher" ;
+    triage:assignedAt "2026-09-12T23:26:37Z"^^xsd:dateTime .
+
+triage:a16 a triage:Assignment ;
+    triage:ofSprint triage:BB6 ;
+    triage:assignedTo "solar" ;
+    triage:assignedAt "2026-09-12T23:34:42Z"^^xsd:dateTime .

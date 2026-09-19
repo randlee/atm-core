@@ -567,7 +567,8 @@ Acceptance:
 - Every reviewed non-retained file must also appear there with a `do not copy` decision.
 - Workflow-axis transitions must be enforced by code structure, not only by tests.
 - Display bucket behavior must remain separate from the canonical two-axis workflow model.
-- Task-linked mail must be ack-required from creation time.
+- Task-linked mail is never ack-required; readiness is signalled by the task pass
+  and the assignee starts it with `atm task start`.
 - Generic logging query/follow/filter behavior should live in `sc-observability` where possible, not in ATM-specific code.
 - Persisted config/schema compatibility issues must recover at the narrowest
   safe scope, and identity/routing fields must never be guessed.
@@ -576,7 +577,8 @@ Acceptance:
   must be deduplicated by unresolved condition.
 
 Cross-document invariants that must stay locked during implementation:
-- `taskId` implies ack-required send behavior
+- `taskId` implies task-linked mail that never requires acknowledgement;
+  readiness is signalled by `task_ready`, and start by `atm task start`
 - `mutation_applied = true` means a displayed message's legal read/seen
   transition was accepted into the supervised non-blocking handoff; durable
   `read = true` visibility may follow later
@@ -605,7 +607,8 @@ The rewrite is ready when:
   defaults or committed `tmux_pane_id` routing truth
 - retained command behavior is preserved, and any current-runtime shape changes
   are intentionally documented
-- task-linked mail remains pending until acknowledged
+- task-linked mail is actionable on `task_ready` and never waits for an
+  acknowledgement
 - the file-by-file migration plan is complete enough to implement directly
 - the retained command tests pass against the new crate layout
 
@@ -1785,6 +1788,57 @@ pushed before child work starts, the parent is merged forward before every
 child development/fix round, and parent PRs merge first. No Phase AZ sprint
 touches the frozen synchronous daemon or uses live daemon/test-daemon, release,
 tag, publish, or installation evidence.
+
+## 59. Phase BA — One Invariant, One Queue, One Task Command Set [LANDED ON integrate/phase-ba 2026-09-12 — review-findings closeout in progress]
+
+Phase BA replaces the retired Phase AZ task work with the simpler design in
+[the Phase BA plan](./plans/phase-ba/phase-ba-plan.md). BA.1 and BA.2 form the
+initial stack; BA.3 follows BA.2, BA.4 and BA.5 then run in parallel, and BA.6
+closes the phase documentation. The six sprints plus three consolidated cleanup
+layers landed on `integrate/phase-ba` at `9f5aef2fe` (2026-09-12) through the
+top PR #1414; the phase PR to `develop` is #1418 (draft until the
+review-findings stack below lands). Post-mortem:
+[`docs/postmortems/phase-ba-postmortem.md`](./postmortems/phase-ba-postmortem.md);
+stack practice: [`docs/development/gh-stack-guidelines.md`](./development/gh-stack-guidelines.md).
+
+| Sprint | Status | Branch | Authoritative sprint doc |
+| --- | --- | --- | --- |
+| `BA.1` | `merged` (into BA.2 stack) | `feature/ba1-ack-task-separation` | `docs/plans/phase-ba/sprint-BA.1-ack-task-separation.md` |
+| `BA.2` | `merged` (#1400) | `feature/ba2-task-identity-queue` | `docs/plans/phase-ba/sprint-BA.2-task-identity-queue.md` |
+| `BA.3` | `merged` (#1402) | `feature/ba3-nudge-invariant` | `docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md` |
+| `BA.4` | `merged` (#1408) | `feature/ba4-atm-task-commands` | `docs/plans/phase-ba/sprint-BA.4-atm-task-commands.md` |
+| `BA.5` | `merged` (#1407) | `feature/ba5-queue-ephemeral-item` | `docs/plans/phase-ba/sprint-BA.5-queue-ephemeral-item.md` |
+| `BA.6` | `merged` (#1412) | `docs/ba6-task-nudge-documentation` | `docs/plans/phase-ba/sprint-BA.6-docs.md` |
+| cleanup | `merged` (#1413, #1414, #1415) | `fix/phase-ba-cleanup`, `fix/phase-ba-cleanup-b`, `fix/phase-ba-merge-fix` | consolidated non-blocking findings, bounded blocking, BA.3 fixtures under merged tick order |
+| review-findings | `in progress` (#1419 …) | `fix/phase-ba-review-1` → `-2` → `-3`, `docs/phase-ba-post-mortem` | phase-ending review, production readiness review, post-mortem — stacked above `integrate/phase-ba` |
+
+## 60. Phase BB — Task Transitions You Can See [MERGED INTO INTEGRATE/PHASE-BB — PHASE-ENDING GATE AND READINESS REVIEW IN PROGRESS; DEVELOP PR PENDING]
+
+Phase BB replaces the two task-family nudge kinds with six per-transition
+kinds so every task transition is visible in the recipient's prompt line, and
+adds `atm task start` for the assignee. Design authority:
+[`docs/plans/nudge-transition-templates/design.md`](./plans/nudge-transition-templates/design.md);
+plan: [the Phase BB plan](./plans/phase-bb/phase-bb-plan.md). Base `develop`
+at `281e6f546`; integration branch `integrate/phase-bb`. All seven sprints
+are merged into `integrate/phase-bb`: stack #1457 landed via #1474, with
+follow-up fixes #1476, #1477 and #1479; BB.7 landed via #1470 and #1478. The
+phase-ending gate and readiness review are in progress, and the develop PR is
+pending. Wave 1 is BB.1, BB.2
+and BB.3 in parallel; BB.4, BB.5 and BB.6 stack on BB.1 in that order; BB.7
+closes the phase documentation after BB.6 and BB.2 merge. Triage seed:
+PR #1431 (SMK-004, SMK-005, SMK-006). BB.7 D6 keeps this table current;
+team-lead lands the final status when the phase PR merges.
+
+| Sprint | Status | Branch | Authoritative sprint doc |
+| --- | --- | --- | --- |
+| `BB.1` | `merged (#1452)` | `feature/bb1-transition-templates` | `docs/plans/phase-bb/sprint-BB.1-transition-templates.md` |
+| `BB.2` | `merged (#1452)` | `feature/bb2-orchestration-templates-1516` | `docs/plans/phase-bb/sprint-BB.2-orchestration-templates-1516.md` |
+| `BB.3` | `merged (#1468)` | `feature/bb3-test-procedure-pages` | `docs/plans/phase-bb/sprint-BB.3-test-procedure-pages.md` |
+| `BB.4` | `merged (#1452)` | `feature/bb4-task-start` | `docs/plans/phase-bb/sprint-BB.4-task-start.md` |
+| `BB.5` | `merged (#1452)` | `feature/bb5-assignment-write-task-pass` | `docs/plans/phase-bb/sprint-BB.5-assignment-write-task-pass.md` |
+| `BB.6` | `merged (#1470)` | `feature/bb6-docs-prompt-handoffs` | `docs/plans/phase-bb/sprint-BB.6-prompt-handoffs.md` |
+| `BB.7` | `merged (#1470, #1478)` | `feature/bb7-docs` | `docs/plans/phase-bb/sprint-BB.7-docs.md` |
+| `BB.8` | `complete (#1500, #1501)` | `feature/bb8-2-colima-driver` | `docs/plans/phase-bb/sprint-BB.8-colima-integration.md` |
 
 ## Daemon-Switch Scope Reduction
 

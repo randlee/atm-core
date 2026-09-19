@@ -75,7 +75,7 @@ Use fenced JSON for machine-readable status payloads:
   },
   "blocking_ids": ["QA-001"],
   "next_action": "Fix lock acquisition rollback semantics",
-  "owner": "arch-ctm",
+  "owner": "<assignee>",
   "merge_readiness": "not ready",
   "merge_reason": "Blocking findings remain"
 }
@@ -126,7 +126,7 @@ Suggested commands:
 - in-flight update:
   `atm compose --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr comment <PR> --body-file -`
 - ATM verdict:
-  `atm send team-lead --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
+  `atm task close <task-id> completed --template ~/.atm/templates/quality-management-gh/findings-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
 
 ## Final Quality Report to PR (Closeout)
 
@@ -142,7 +142,7 @@ Suggested command:
 - PR closeout:
   `atm compose --template ~/.atm/templates/quality-management-gh/quality-report.md.j2 --vars <scratch>/qa-<pr>-vars.json | gh pr review <PR> --approve --body-file -`
 - ATM verdict:
-  `atm send team-lead --template ~/.atm/templates/quality-management-gh/quality-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
+  `atm task close <task-id> completed --template ~/.atm/templates/quality-management-gh/quality-report.md.j2 --vars <scratch>/qa-<pr>-vars.json`
 
 Use the final template only for `PASS` closeout.
 
@@ -159,10 +159,8 @@ Use the final template only for `PASS` closeout.
 
 ## ATM Coordination Protocol
 
-For each task:
-1. immediate acknowledgement
-2. execute QA work
-3. send completion or status summary
-4. receiver acknowledgement
-
-No silent processing.
+The sequence for every QA task assignment is defined once in
+[`docs/team-protocol.md`](../../../docs/team-protocol.md) (Required Flow):
+task start, work, task close. The verdict travels in the `atm task close` report
+above; the close is terminal and the lead never acknowledges it. No silent
+processing.

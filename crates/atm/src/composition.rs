@@ -113,8 +113,37 @@ pub(crate) fn resolve_command_runtime_context(
 /// If a daemon is already serving, this authenticated reload makes the
 /// mutation visible before the command reports completion.
 pub(crate) async fn reload_running_runtime_view() -> Result<(), AtmError> {
+    reload_running_runtime_view_impl(true).await.map(|_| ())
+}
+
+/// Refresh an already-running daemon and report whether a daemon accepted the
+/// reload. A missing host runtime directory means no daemon has started yet;
+/// other runtime-directory inspection failures remain errors.
+pub(crate) async fn reload_running_runtime_view_outcome() -> Result<bool, AtmError> {
+    reload_running_runtime_view_impl(false).await
+}
+
+async fn reload_running_runtime_view_impl(
+    treat_wait_timeout_as_unavailable: bool,
+) -> Result<bool, AtmError> {
+    let endpoint = resolve_daemon_local_ipc_endpoint()?;
+    let runtime_directory = endpoint.as_ref().parent().ok_or_else(|| {
+        AtmError::daemon_unavailable(
+            "local HTTP endpoint record has no runtime directory for reload",
+        )
+    })?;
+    match std::fs::metadata(runtime_directory) {
+        Ok(_) => {}
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(source) => {
+            return Err(
+                AtmError::daemon_unavailable("failed to inspect local runtime directory")
+                    .with_cause(source),
+            );
+        }
+    }
+
     let reload = async {
-        let endpoint = resolve_daemon_local_ipc_endpoint()?;
         let transport = atm_http_runtime::preferred_local_client(
             endpoint.as_ref(),
             SAME_HOST_REQUEST_DEADLINE,
@@ -132,16 +161,15 @@ pub(crate) async fn reload_running_runtime_view() -> Result<(), AtmError> {
     };
 
     match reload.await {
-        Ok(()) => Ok(()),
+        Ok(()) => Ok(true),
         Err(error)
-            if matches!(
-                error.code(),
-                AtmErrorCode::DaemonUnavailable | AtmErrorCode::WaitTimeout
-            ) =>
+            if error.code() == AtmErrorCode::DaemonUnavailable
+                || (treat_wait_timeout_as_unavailable
+                    && error.code() == AtmErrorCode::WaitTimeout) =>
         {
             // Administrative mutations persist independently; only refresh an
             // already-running runtime view, never start one just for reload.
-            Ok(())
+            Ok(false)
         }
         Err(error) => Err(error),
     }
@@ -224,7 +252,7 @@ impl<'a> CliComposition<'a> {
         self.async_transport.as_ref()
     }
 
-    async fn execute_request(
+    pub(crate) async fn execute_request(
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
@@ -423,16 +451,6 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) async fn reload_runtime_view(&self) -> Result<(), AtmError> {
-        match self
-            .execute_request(RequestEnvelope::ReloadRuntimeView)
-            .await?
-        {
-            ResponseEnvelope::RuntimeViewReloaded => Ok(()),
-            other => Err(unexpected_response("runtime reload", other)),
-        }
-    }
-
     pub(crate) fn bootstrap(
         command: &'static str,
         observability: &'a CliObservability,
@@ -477,7 +495,7 @@ impl AtmGraftClient for CliComposition<'_> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::fs;
     use std::io;
     use std::io::Write;
@@ -583,26 +601,34 @@ mod tests {
         (result, buffer.contents())
     }
 
-    struct LoopbackFixture {
+    pub(crate) struct LoopbackFixture {
         _env_guard: EnvGuard,
         _runtime_guard: atm_runtime_test_support::SqliteRuntimeGuard,
         _tempdir: TempDir,
-        home_dir: std::path::PathBuf,
-        current_dir: std::path::PathBuf,
+        pub(crate) home_dir: std::path::PathBuf,
+        pub(crate) current_dir: std::path::PathBuf,
     }
 
     impl LoopbackFixture {
-        fn new(recipient: &str) -> Self {
+        pub(crate) fn new(recipient: &str) -> Self {
+            Self::new_with_identity(recipient, TEST_SENDER)
+        }
+
+        pub(crate) fn new_with_identity(recipient: &str, identity: &str) -> Self {
             super::install_retained_runtime_factory();
             let tempdir = tempfile::tempdir().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
             let current_dir = tempdir.path().join("cwd");
             fs::create_dir_all(&current_dir).expect("cwd");
             fs::write(current_dir.join(".atm.toml"), "[atm]\n").expect("fixture atm config");
-            let env_guard = EnvGuard::set_many([(
-                "ATM_HOME",
-                Some(home_dir.to_str().expect("utf-8 tempdir path")),
-            )]);
+            let env_guard = EnvGuard::set_many([
+                (
+                    "ATM_HOME",
+                    Some(home_dir.to_str().expect("utf-8 tempdir path")),
+                ),
+                ("ATM_IDENTITY", Some(identity)),
+                ("ATM_TEAM", Some(TEST_TEAM)),
+            ]);
             let runtime_guard = install_isolated_sqlite_runtime(&home_dir);
             let fixture = Self {
                 _env_guard: env_guard,
@@ -613,6 +639,74 @@ mod tests {
             };
             fixture.write_team_config(recipient);
             fixture
+        }
+
+        pub(crate) fn composition<'a>(
+            &self,
+            observability: &'a CliObservability,
+        ) -> CliComposition<'a> {
+            use atm_http_runtime::CanonicalWriteHandler as _;
+
+            let transport_observability: Arc<
+                dyn atm_core::observability::ObservabilityPort + Send + Sync,
+            > = Arc::new(atm_core::observability::NullObservability);
+            let router = self.router(Arc::clone(&transport_observability));
+            let handler_observability = Arc::clone(&transport_observability);
+            let transport = LoopbackClientTransport::with_async_handler(
+                transport_observability,
+                move |request| {
+                    let router = Arc::clone(&router);
+                    let observability = Arc::clone(&handler_observability);
+                    Box::pin(async move {
+                        if let atm_core::api::ApiRequest::Doctor(query) = request {
+                            return atm_core::doctor::run_doctor(query, observability.as_ref())
+                                .map(|report| {
+                                    atm_core::api::ApiResponse::new(ResponseEnvelope::Doctor(
+                                        Box::new(report),
+                                    ))
+                                });
+                        }
+                        router
+                            .dispatch(
+                                request,
+                                atm_core::AuthenticatedIngress::Local,
+                                atm_core::RequestDeadline::after(std::time::Duration::from_secs(2)),
+                            )
+                            .await
+                    })
+                },
+            );
+            CliComposition::from_loopback_transport(Arc::new(transport), observability)
+        }
+
+        pub(crate) fn router(
+            &self,
+            observability: Arc<dyn atm_core::observability::ObservabilityPort + Send + Sync>,
+        ) -> Arc<atm_http_runtime::StorageAndNudgeRouter> {
+            let runtime = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite runtime");
+            Arc::new(
+                atm_http_runtime::StorageAndNudgeRouter::new(
+                    runtime.service_runtime,
+                    observability,
+                    Arc::new(atm_core::boundary::NoopMessageReceivedHookSelector),
+                    self.home_dir.clone(),
+                )
+                .with_async_mailbox_runtime(Arc::new(runtime.async_mailbox_runtime)),
+            )
+        }
+
+        pub(crate) fn task_store(&self) -> Arc<dyn atm_storage::TaskStore + Send + Sync> {
+            open_isolated_sqlite_boundary(&self.home_dir)
+                .expect("sqlite db")
+                .service_runtime
+                .task_store()
+                .expect("task store")
+        }
+
+        pub(crate) fn message_store(&self) -> Arc<dyn atm_storage::MessageStore + Send + Sync> {
+            open_isolated_sqlite_boundary(&self.home_dir)
+                .expect("sqlite db")
+                .message_store_arc()
         }
 
         fn team_dir(&self) -> std::path::PathBuf {
@@ -687,7 +781,7 @@ mod tests {
             self.seed_sqlite_mailbox(agent, &messages);
         }
 
-        fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
+        pub(crate) fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
             if self.home_dir.join("runtime").join("mail.sqlite3").exists() {
                 let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
                 let mail_store = assembly.mail_store_arc();
@@ -947,6 +1041,8 @@ mod tests {
                 parent_message_id: None,
                 thread_mode: None,
                 task_complete: None,
+                placement: None,
+                task_op: None,
                 expires_at: None,
                 task_id: None,
                 extra: serde_json::Map::new(),
@@ -1002,9 +1098,9 @@ mod tests {
         let composition = CliComposition::from_fake_transport(transport, &observability);
 
         composition
-            .reload_runtime_view()
+            .execute_request(RequestEnvelope::ReloadRuntimeView)
             .await
-            .expect("CLI runtime reload response");
+            .expect("CLI runtime reload request");
     }
 
     #[tokio::test]
@@ -1034,6 +1130,7 @@ mod tests {
             requires_ack: false,
             task_id: None,
             task_complete: None,
+            already_closed: None,
             summary: None,
             message: None,
             warnings: Vec::new(),
@@ -1222,7 +1319,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(env)]
-    async fn loopback_transport_send_preserves_ack_and_task_metadata_without_daemon() {
+    async fn loopback_transport_task_send_keeps_task_metadata_without_ack_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let composition_observability = CliObservability::fallback();
         let composition = CliComposition::from_loopback_transport(
@@ -1241,7 +1338,9 @@ mod tests {
             .await
             .expect("send outcome");
 
-        assert!(outcome.requires_ack);
+        // BB.5: a task-linked send never requires acknowledgement; readiness is
+        // signalled by the task pass, not by a pending-ack marker.
+        assert!(!outcome.requires_ack);
         assert_eq!(
             outcome.task_id.as_ref().map(|value| value.as_str()),
             Some("TASK-314")
@@ -1253,7 +1352,7 @@ mod tests {
             inbox[0].task_id.as_ref().map(|value| value.as_str()),
             Some("TASK-314")
         );
-        assert!(inbox[0].pending_ack_at.is_some());
+        assert!(inbox[0].pending_ack_at.is_none());
     }
 
     #[tokio::test]
@@ -1284,7 +1383,7 @@ mod tests {
         assert!(ack_required_outcome.requires_ack);
         let ack_required_message_id = ack_required_outcome.message_id;
 
-        // Task send also persists durable pending-ack state.
+        // Task send keeps its task link but never requires acknowledgement (BB.5).
         let task_outcome = composition
             .send(fixture.send_request_with_flags(
                 "task payload",
@@ -1293,7 +1392,7 @@ mod tests {
             ))
             .await
             .expect("task send outcome");
-        assert!(task_outcome.requires_ack);
+        assert!(!task_outcome.requires_ack);
         let task_message_id = task_outcome.message_id;
 
         // Peek is the explicit non-mutating inspection path.
@@ -1388,7 +1487,7 @@ mod tests {
             .iter()
             .find(|message| message.message_id == Some(task_message_id))
             .expect("task inbox message");
-        assert!(task_after_send.pending_ack_at.is_some());
+        assert!(task_after_send.pending_ack_at.is_none());
         assert_eq!(
             task_after_send.task_id.as_ref().map(|value| value.as_str()),
             Some("TASK-314")

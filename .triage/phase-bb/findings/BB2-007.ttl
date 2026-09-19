@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB2-007>
+  a triage:Finding ;
+  triage:findingId "BB2-007" ;
+  triage:title "The Required Message Sequence block -- the exact text BB2-002 fixed -- is copy-pasted byte-for-byte into both SKILL.md files with no shared source" ;
+  triage:description "quality-mgr BB2-QA2-1789248000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1444#issuecomment-5648627854, 2026-09-12T20:54:11Z; I2, ruthless-boundary-qa RBQA-F001), reviewed at ef7572fd0. The 'Required Message Sequence' block (the exact text BB2-002 fixed) is copy-pasted byte-for-byte into both graph-orchestration/SKILL.md and codex-orchestration/SKILL.md with no shared source. This round's own BB2-002 finding is direct proof of the failure mode: the stale text had to be located and hand-fixed in two places, and the same pattern just recurred a third time (see BB2-005) because nothing enforces a single source of truth." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "maintainability" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope ".claude/skills/graph-orchestration/SKILL.md,codex-orchestration/SKILL.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:deferredNote "Consider factoring the Required Message Sequence prose into a single owned source (e.g. a shared doc both SKILL.md files reference) while touching these files for BB2-004/BB2-005. Routing pending fenix's dispatch ruling." ;
+  triage:relatedFinding "BB2-002" ;
+  triage:foundIn triage:BB2 ;
+  triage:foundAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-007/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB2-007/1> ;
+  triage:closedAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BB2-007/1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/graph-orchestration/SKILL.md" ;
+  triage:line 544 ;
+  triage:snippet "Required Message Sequence block copy-pasted byte-for-byte into both graph-orchestration/SKILL.md and codex-orchestration/SKILL.md, no shared source" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-007/1> .
+
+<urn:atm:triage:worktree/BB2-007/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1447, fix/bb2-qa2-r2" ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB2-007/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:fixCommit "d2a9b6cc57eee25d5dd3bf417616ae0be7a8a300" ;
+  triage:fixBranch "fix/bb2-qa2-r2" ;
+  triage:verifiedInRound "BB2-QA3" ;
+  triage:resolutionNote "Both orchestration SKILL.md's Required Message Sequence sections now defer to docs/team-protocol.md's Required Flow; no restated sequence, no assigner ack." .

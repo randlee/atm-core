@@ -32,7 +32,8 @@ except ImportError:  # pragma: no cover - Windows has no POSIX passwd database
     pwd = None  # type: ignore[assignment]
 
 from scripts.smoke.benchmark_baselines import BenchmarkBaselineError, load_baselines
-from scripts.smoke.benchmark_report import BenchmarkReportError, compose, regenerate_index, render_envelope
+from scripts.smoke.benchmark_report import BenchmarkReportError, regenerate_index, render_envelope
+from scripts.report_runtime import compose as _compose, source_revision as _git_source_revision
 from scripts.smoke.benchmark_policy import classify_status
 from scripts.smoke.benchmark_schema import (
     BaselineEntry,
@@ -814,8 +815,11 @@ def build_payload(
 
 
 def _source_revision() -> str:
-    result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False)
-    return result.stdout.strip() if result.returncode == 0 else "unknown"
+    return _git_source_revision(ROOT) or "unknown"
+
+
+def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
+    _compose(template, variables, output, root=ROOT, error_type=ReadBenchmarkError)
 
 
 def require_av1b_cutover() -> None:
@@ -902,7 +906,7 @@ def execute(family_ids: Sequence[str], *, diagnostic_only: bool = False) -> int:
         for result in results:
             family_id = result["family"]
             family_json = REPORT_DIR / f"{payload['campaign_id']}-{family_id}.json"
-            family_html = REPORT_DIR / f"{payload['campaign_id']}-{family_id}.xhtml"
+            family_html = REPORT_DIR / f"{payload['campaign_id']}-{family_id}.html"
             family_payload = {**payload, "campaign_id": f"{payload['campaign_id']}-{family_id}", "families": [result]}
             family_json.write_text(
                 json.dumps(family_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"

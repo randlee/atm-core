@@ -1,11 +1,11 @@
 use super::ops_envelope::StorageEnvelope;
 use super::stmt_cache::WriterStatementCache;
-use super::task_ops::{apply_task_acknowledgement, apply_task_message};
 use crate::search_schema::{
     InsertedMessageProjection, sync_inserted_message_projection, sync_message_projection_by_key,
     sync_template_projection,
 };
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_error, sqlite_thread_mode};
+use atm_storage::TaskCloseOutcome;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, MailboxScope,
     Message, MessageKey,
@@ -18,6 +18,7 @@ use atm_storage::{
     MessageWriteOrigin, TemplateMessageAdmission, TemplateRegistration,
     TemplateRegistrationOutcome,
 };
+use atm_storage::{MoveTarget, QueuePosition, TaskId};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
 use std::sync::Arc;
@@ -56,6 +57,13 @@ pub(crate) enum WriteOp {
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
     },
+    TaskMove {
+        team: TeamName,
+        task_id: TaskId,
+        actor: AgentName,
+        target: MoveTarget,
+        at: IsoTimestamp,
+    },
     RegisterTemplate(Box<TemplateRegistration>),
     AdmitDecomposedMessage(Box<DecomposedMessageAdmission>),
     AdmitTemplateMessage(Box<TemplateMessageAdmission>),
@@ -86,6 +94,19 @@ impl std::fmt::Debug for WriteOp {
                 .debug_struct("Acknowledge")
                 .field("source", source)
                 .finish_non_exhaustive(),
+            Self::TaskMove {
+                team,
+                task_id,
+                actor,
+                target,
+                ..
+            } => formatter
+                .debug_struct("TaskMove")
+                .field("team", team)
+                .field("task_id", task_id)
+                .field("actor", actor)
+                .field("target", target)
+                .finish(),
             Self::RegisterTemplate(request) => formatter
                 .debug_tuple("RegisterTemplate")
                 .field(&request.sha)
@@ -119,14 +140,28 @@ pub(crate) enum WriteOpResult {
         /// race. Loading it on the writer connection keeps async callers from
         /// opening a synchronous reader connection after awaiting the queue.
         existing: Option<Box<Message>>,
+        /// Populated when a newly inserted local close report targeted a task
+        /// that was already complete.
+        already_closed: Option<TaskCloseOutcome>,
+        task_assignee: Option<AgentName>,
+        queued_position: Option<u32>,
+        reassign_notice: Option<Box<Message>>,
+        /// Populated when task governance rejected the operation after
+        /// retaining its report as ordinary mail.
+        task_rejection: Option<AtmError>,
     },
     UpsertMessages,
     Acknowledged(Box<AcknowledgementCommit>),
+    TaskMoved((AgentName, QueuePosition, QueuePosition)),
     TemplateRegistration(TemplateRegistrationOutcome),
     DecomposedMessageAdmission(DecomposedMessageAdmissionOutcome),
     TemplateMessageAdmission {
         inserted: bool,
         existing: Option<Box<Message>>,
+        task_assignee: Option<AgentName>,
+        queued_position: Option<u32>,
+        reassign_notice: Option<Box<Message>>,
+        task_rejection: Option<AtmError>,
     },
     DiagnosticsRecorded,
     DiagnosticsPruned(u64),
@@ -143,7 +178,7 @@ pub(crate) fn execute(
             mailbox,
             message_ids,
             seen_watermark,
-        } => execute_read_display_state(
+        } => super::read_display_state::execute_read_display_state(
             mailbox,
             message_ids,
             *seen_watermark,
@@ -152,11 +187,17 @@ pub(crate) fn execute(
             target,
         ),
         WriteOp::UpsertMessage { record, provenance } => {
-            execute_upsert_message(record, *provenance, connection, cache, target)
+            super::message_admission::execute_upsert_message(
+                record,
+                *provenance,
+                connection,
+                cache,
+                target,
+            )
         }
         WriteOp::UpsertMessages(records) => {
             for record in records {
-                let _ = execute_upsert_message(
+                let _ = super::message_admission::execute_upsert_message(
                     record,
                     MessageWriteOrigin::Local,
                     connection,
@@ -169,6 +210,16 @@ pub(crate) fn execute(
         WriteOp::Acknowledge { source, builder } => {
             execute_acknowledgement(source, builder, connection, cache, target)
         }
+        WriteOp::TaskMove {
+            team,
+            task_id,
+            actor,
+            target: target_pos,
+            at,
+        } => super::task_ops::apply_task_move(
+            team, task_id, actor, target_pos, *at, connection, target,
+        )
+        .map(WriteOpResult::TaskMoved),
         WriteOp::RegisterTemplate(request) => {
             execute_template_registration(request, connection, target)
         }
@@ -197,7 +248,7 @@ fn execute_admit_template_message(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     admission.validate()?;
-    match execute_upsert_message(
+    match super::message_admission::execute_upsert_message(
         &admission.record,
         admission.provenance,
         connection,
@@ -207,16 +258,32 @@ fn execute_admit_template_message(
         WriteOpResult::UpsertMessage {
             inserted: false,
             existing,
+            ..
         } => Ok(WriteOpResult::TemplateMessageAdmission {
             inserted: false,
             existing,
+            task_assignee: None,
+            queued_position: None,
+            reassign_notice: None,
+            task_rejection: None,
         }),
-        WriteOpResult::UpsertMessage { inserted: true, .. } => {
+        WriteOpResult::UpsertMessage {
+            inserted: true,
+            task_assignee,
+            queued_position,
+            reassign_notice,
+            task_rejection,
+            ..
+        } => {
             let _ =
                 execute_decomposed_message_admission(&admission.decomposition, connection, target)?;
             Ok(WriteOpResult::TemplateMessageAdmission {
                 inserted: true,
                 existing: None,
+                task_assignee,
+                queued_position,
+                reassign_notice,
+                task_rejection,
             })
         }
         other => Err(AtmError::daemon_unavailable(format!(
@@ -259,55 +326,6 @@ fn execute_diagnostic_prune(
         params![crate::DIAGNOSTIC_PRUNE_BATCH, crate::DIAGNOSTIC_MAX_ROWS],
     ).map_err(|error| sqlite_error(target, "failed to prune excess diagnostic events", error))?;
     Ok(WriteOpResult::DiagnosticsPruned(excess_rows as u64))
-}
-
-fn execute_read_display_state(
-    mailbox: &MailboxScope,
-    message_ids: &[MessageKey],
-    seen_watermark: Option<IsoTimestamp>,
-    connection: &Connection,
-    cache: &mut WriterStatementCache,
-    target: &SharedDbTarget,
-) -> Result<WriteOpResult, AtmError> {
-    let updated_at = IsoTimestamp::now().into_inner().to_rfc3339();
-    for message_key in message_ids {
-        let updated = cache
-            .mark_message_read(
-                connection,
-                params![
-                    mailbox.team.as_str(),
-                    mailbox.agent.as_str(),
-                    message_key.as_str(),
-                    updated_at,
-                ],
-            )
-            .map_err(|error| sqlite_error(target, "failed to mark mailbox message read", error))?;
-        if updated != 1 {
-            return Err(AtmError::mailbox_read(format!(
-                "message {} was not found for {}@{} while applying read display state",
-                message_key.as_str(),
-                mailbox.agent.as_str(),
-                mailbox.team.as_str(),
-            )));
-        }
-    }
-    if let Some(watermark) = seen_watermark {
-        connection
-            .execute(
-                "INSERT INTO mail_seen_watermarks(team, agent, watermark)
-                 VALUES (?1, ?2, ?3)
-                 ON CONFLICT(team, agent) DO UPDATE SET watermark = excluded.watermark",
-                params![
-                    mailbox.team.as_str(),
-                    mailbox.agent.as_str(),
-                    watermark.into_inner().to_rfc3339(),
-                ],
-            )
-            .map_err(|error| {
-                sqlite_error(target, "failed to persist mailbox seen watermark", error)
-            })?;
-    }
-    Ok(WriteOpResult::ReadDisplayStateApplied)
 }
 
 fn execute_template_registration(
@@ -505,15 +523,20 @@ fn execute_acknowledgement(
     let reply = builder.build_reply(&source)?;
     let mut acknowledged_source = source.clone();
     mark_source_acknowledged(&mut acknowledged_source, IsoTimestamp::now());
-    let _ = execute_upsert_message(&reply, MessageWriteOrigin::Local, connection, cache, target)?;
-    let _ = execute_upsert_message(
+    let _ = super::message_admission::execute_upsert_message(
+        &reply,
+        MessageWriteOrigin::Local,
+        connection,
+        cache,
+        target,
+    )?;
+    let _ = super::message_admission::execute_upsert_message(
         &acknowledged_source,
         MessageWriteOrigin::Local,
         connection,
         cache,
         target,
     )?;
-    apply_task_acknowledgement(&source, &reply.envelope.from, connection, target)?;
     Ok(WriteOpResult::Acknowledged(Box::new(
         AcknowledgementCommit {
             reply,
@@ -673,26 +696,12 @@ fn parse_timestamp(value: Option<String>, field: &str) -> Result<Option<IsoTimes
         .map_err(|_| AtmError::mailbox_read(format!("acknowledgement source {field} is invalid")))
 }
 
-pub(crate) fn validate_upsert_message_request(record: &Message) -> Result<(), AtmError> {
-    let envelope_json = serialize_json(
-        &StorageEnvelope::new(&record.envelope),
-        "mail-store envelope",
-    )?;
-    if envelope_json.len() > MAX_ENVELOPE_JSON_BYTES {
-        return Err(AtmError::validation(format!(
-            "mail-store envelope JSON exceeded the writer lane limit of {MAX_ENVELOPE_JSON_BYTES} bytes"
-        )));
-    }
-    Ok(())
-}
-
-pub(super) fn execute_upsert_message(
+pub(super) fn insert_message_canonical(
     record: &Message,
-    provenance: MessageWriteOrigin,
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
-) -> Result<WriteOpResult, AtmError> {
+) -> Result<bool, AtmError> {
     let values = prepare_message_insert_values(record)?;
     let inserted = cache
         .insert_message_row(
@@ -743,15 +752,7 @@ pub(super) fn execute_upsert_message(
         values.recorded_at,
     );
     insert_initial_message_state(connection, cache, target, record, timestamps)?;
-    let existing = if inserted {
-        None
-    } else {
-        Some(Box::new(load_existing_message(record, connection, target)?))
-    };
-    if inserted && provenance == MessageWriteOrigin::Local {
-        apply_task_message(record, connection, cache, target)?;
-    }
-    Ok(WriteOpResult::UpsertMessage { inserted, existing })
+    Ok(inserted)
 }
 
 struct MessageInsertValues {

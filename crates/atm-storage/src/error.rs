@@ -95,6 +95,12 @@ impl AtmError {
         matches!(
             self.code,
             AtmErrorCode::MessageValidationFailed
+                | AtmErrorCode::TaskNotFound
+                | AtmErrorCode::TaskAlreadyActive
+                | AtmErrorCode::TaskAlreadyClosed
+                | AtmErrorCode::TaskNotCounterparty
+                | AtmErrorCode::TaskStaleCounterparty
+                | AtmErrorCode::TaskMoveInvalid
                 | AtmErrorCode::PeerWireModeInvalid
                 | AtmErrorCode::PeerWireModeSourceForbidden
                 | AtmErrorCode::PeerWirePlaintextAuthenticationRequired

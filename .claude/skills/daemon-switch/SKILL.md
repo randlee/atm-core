@@ -63,6 +63,14 @@ python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --release 1
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --prerelease 1.5.11 --yes \
   --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 
+# Manifest-driven prerelease installation may request managed-service
+# discovery. Discovery accepts exactly one current-user service whose action
+# is the selected atm-daemon link; zero, ambiguous, foreign, and direct-binary
+# services are refused before selectors change. Explicit selectors remain the
+# operator override and cannot be combined with discovery.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch \
+  --prerelease 1.5.11 --yes --discover-managed-service
+
 # Dogfood an exact prerelease-tagged worktree build. HEAD must carry
 # `prerelease/vX.Y.Z`, the workspace version must be X.Y.Z, and both release
 # binaries must report X.Y.Z. Use --bump to run prerelease_tag.py and build the

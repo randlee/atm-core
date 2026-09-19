@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB2-012>
+  a triage:Finding ;
+  triage:findingId "BB2-012" ;
+  triage:title "AGENTS.md's MUST-READ Quick Rule still states the retired 4-step receiver-ACK sequence as an active numbered instruction" ;
+  triage:description "quality-mgr BB2-QA3-1789251000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1447#issuecomment-5648745882, 2026-09-12T21:17:10Z; BB2-QA3-B1), reviewed at d2a9b6cc5. AGENTS.md:18-21's MUST-READ 'Quick Rule' for Codex-driven agents (e.g. arch-ctm) still states the retired sequence verbatim as an active numbered instruction: '1. Immediate acknowledgement / 2. Do the work / 3. Completion summary / 4. Immediate completion acknowledgement by receiver.' This is exactly the receiver-side completion-ACK step this sprint retired everywhere else (docs/team-protocol.md, both orchestration SKILL.md files, triaging-findings/SKILL.md, all six dispatch templates). Confirmed via direct read: genuine and unmodified. .just/tests/test_dispatch_template_parity.py's SEQUENCE_DOCS tuple does not include AGENTS.md, and its test_no_receiver_completion_ack_survives regex (completion ack by (the )?receiver|acknowledges completion) also does not literally match AGENTS.md's phrasing ('completion acknowledgement by receiver'), so this instance is invisible to the guard on two independent counts." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "AGENTS.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: rewrite AGENTS.md's Quick Rule to the corrected 3-step terminal-close flow (ack, work, task-close; no further receiver ack), and add AGENTS.md to SEQUENCE_DOCS with a regex that actually matches its wording. Routed to fenix on fix/bb2-qa3-r3 (fenix, new top layer, cut from BB.5 @ f232a104c)." ;
+  triage:relatedFinding "BB2-002" ;
+  triage:foundIn triage:BB2 ;
+  triage:foundAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-012/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB2-012/1> ;
+  triage:closedAt "2026-09-13T03:04:08Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BB2-012/1>
+  a triage:Occurrence ;
+  triage:file "AGENTS.md" ;
+  triage:line 18 ;
+  triage:snippet "MUST-READ Quick Rule states the retired sequence verbatim as an active numbered instruction, ending in step 4 'Immediate completion acknowledgement by receiver' -- invisible to SEQUENCE_DOCS and its regex" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-012/1> .
+
+<urn:atm:triage:worktree/BB2-012/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1447, fix/bb2-qa2-r2" ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB2-012/2>
+  a triage:Occurrence ;
+  triage:file "AGENTS.md" ;
+  triage:line 18 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 1/3 (2026-09-13T03:04:08Z), verified against unified head fix/bb6-docs-qa1 @ 0b9b3e4f3. AGENTS.md:15-20 Quick Rule now reads \"ack, work, task close. A task close is terminal; the receiver never acknowledges it.\"; .just/tests/test_dispatch_template_parity.py:73 now includes AGENTS.md in the sequence-doc list." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0b9b3e4f3" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-012/2> .
+
+<urn:atm:triage:worktree/BB2-012/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1470, fix/bb6-docs-qa1" ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "0b9b3e4f3" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB2-012/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:04:08Z"^^xsd:dateTime ;
+  triage:fixCommit "0b9b3e4f3" ;
+  triage:fixBranch "fix/bb6-docs-qa1" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch1" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 1/3 (2026-09-13T03:04:08Z), verified against unified head fix/bb6-docs-qa1 @ 0b9b3e4f3. AGENTS.md:15-20 Quick Rule now reads \"ack, work, task close. A task close is terminal; the receiver never acknowledges it.\"; .just/tests/test_dispatch_template_parity.py:73 now includes AGENTS.md in the sequence-doc list." .

@@ -23,7 +23,7 @@ from typing import Any
 MANIFEST_NAME = "benchmark-account.json"
 MANIFEST_SCHEMA_VERSION = 1
 TOKEN_LENGTH = 43
-BENCHMARK_STATE_DIRECTORY_NAMES = ("db", "benchmark-snapshots")
+BENCHMARK_STATE_DIRECTORY_NAMES = ("db",)
 
 
 class BenchmarkAccountError(RuntimeError):

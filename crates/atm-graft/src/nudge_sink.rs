@@ -155,6 +155,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            task_transition: None,
             recipient_pane_id: None,
         }
     }
@@ -165,6 +166,15 @@ mod tests {
             agent: TEST_ARCH_CTM.parse().expect("agent"),
             state: GraftSessionState::Listening,
         }))
+    }
+
+    #[test]
+    fn graft_decodes_pre_1_8_event_without_task_transition() {
+        let fixture = serde_json::to_value(request_event()).expect("serialize 1.7-shaped event");
+        assert!(fixture.get("task_transition").is_none());
+        let decoded: PostSendHookEvent =
+            serde_json::from_value(fixture).expect("decode event without 1.8 field");
+        assert_eq!(decoded.task_transition, None);
     }
 
     #[test]

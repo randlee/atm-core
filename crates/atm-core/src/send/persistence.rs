@@ -13,6 +13,39 @@ use crate::types::{AgentName, HostName, TeamName};
 
 use super::{DeliveryPersistenceResult, DuplicateWriteDisposition, prepare_threaded_message};
 
+struct MessageAdmissionSnapshot {
+    duplicate: DuplicateWriteDisposition,
+    already_closed: Option<atm_storage::TaskCloseOutcome>,
+    task_assignee: Option<AgentName>,
+    queued_position: Option<u32>,
+    reassign_notice: Option<atm_storage::Message>,
+    task_rejection: Option<AtmError>,
+}
+
+impl MessageAdmissionSnapshot {
+    fn passive(duplicate: DuplicateWriteDisposition) -> Self {
+        Self {
+            duplicate,
+            already_closed: None,
+            task_assignee: None,
+            queued_position: None,
+            reassign_notice: None,
+            task_rejection: None,
+        }
+    }
+
+    fn admitted(admission: atm_storage::MessageAdmissionOutcome) -> Self {
+        Self {
+            duplicate: DuplicateWriteDisposition::NotDuplicate,
+            already_closed: admission.already_closed,
+            task_assignee: admission.task_assignee,
+            queued_position: admission.queued_position,
+            reassign_notice: admission.reassign_notice,
+            task_rejection: admission.task_rejection,
+        }
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn persist_message(
     runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
@@ -66,7 +99,14 @@ pub(crate) fn persist_message_with_ack_update(
     };
     prepare_threaded_message(&mut prepared, &inbox_messages)?;
 
-    match mirror_message_to_store(
+    let MessageAdmissionSnapshot {
+        duplicate,
+        already_closed,
+        task_assignee,
+        queued_position,
+        reassign_notice,
+        task_rejection,
+    } = mirror_message_to_store(
         runtime,
         home_dir,
         &recipient.team,
@@ -75,18 +115,21 @@ pub(crate) fn persist_message_with_ack_update(
         same_store_peer_receipt,
         acknowledgement_source_update,
         provenance,
-    ) {
-        Ok(DuplicateWriteDisposition::NotDuplicate) => {
-            Ok(DeliveryPersistenceResult::persisted(prepared))
+    )?;
+    let persistence = match duplicate {
+        DuplicateWriteDisposition::NotDuplicate => DeliveryPersistenceResult::persisted(prepared),
+        DuplicateWriteDisposition::AlreadyDeliveredRemote => {
+            DeliveryPersistenceResult::already_persisted(prepared)
         }
-        Ok(DuplicateWriteDisposition::AlreadyDeliveredRemote) => {
-            Ok(DeliveryPersistenceResult::already_persisted(prepared))
+        DuplicateWriteDisposition::SameStorePeerReceipt => {
+            DeliveryPersistenceResult::same_store_peer_receipt(prepared)
         }
-        Ok(DuplicateWriteDisposition::SameStorePeerReceipt) => {
-            Ok(DeliveryPersistenceResult::same_store_peer_receipt(prepared))
-        }
-        Err(error) => Err(error),
-    }
+    };
+    Ok(persistence
+        .with_already_closed(already_closed)
+        .with_task_assignee(task_assignee)
+        .with_assignment_metadata(queued_position, reassign_notice)
+        .with_task_rejection(task_rejection))
 }
 
 async fn load_store_backed_mailbox_projection_async(
@@ -151,7 +194,14 @@ pub(crate) async fn persist_message_with_async_admission(
     };
     prepare_threaded_message(&mut prepared, &inbox_messages)?;
 
-    match mirror_message_to_store_async(
+    let MessageAdmissionSnapshot {
+        duplicate,
+        already_closed,
+        task_assignee,
+        queued_position,
+        reassign_notice,
+        task_rejection,
+    } = mirror_message_to_store_async(
         runtime,
         &recipient.team,
         &recipient.agent,
@@ -159,19 +209,21 @@ pub(crate) async fn persist_message_with_async_admission(
         same_store_peer_receipt,
         provenance,
     )
-    .await
-    {
-        Ok(DuplicateWriteDisposition::NotDuplicate) => {
-            Ok(DeliveryPersistenceResult::persisted(prepared))
+    .await?;
+    let persistence = match duplicate {
+        DuplicateWriteDisposition::NotDuplicate => DeliveryPersistenceResult::persisted(prepared),
+        DuplicateWriteDisposition::AlreadyDeliveredRemote => {
+            DeliveryPersistenceResult::already_persisted(prepared)
         }
-        Ok(DuplicateWriteDisposition::AlreadyDeliveredRemote) => {
-            Ok(DeliveryPersistenceResult::already_persisted(prepared))
+        DuplicateWriteDisposition::SameStorePeerReceipt => {
+            DeliveryPersistenceResult::same_store_peer_receipt(prepared)
         }
-        Ok(DuplicateWriteDisposition::SameStorePeerReceipt) => {
-            Ok(DeliveryPersistenceResult::same_store_peer_receipt(prepared))
-        }
-        Err(error) => Err(error),
-    }
+    };
+    Ok(persistence
+        .with_already_closed(already_closed)
+        .with_task_assignee(task_assignee)
+        .with_assignment_metadata(queued_position, reassign_notice)
+        .with_task_rejection(task_rejection))
 }
 
 fn load_store_backed_mailbox_projection(
@@ -217,9 +269,11 @@ fn mirror_message_to_store(
     same_store_peer_receipt: Option<(&HostName, &HostName)>,
     acknowledgement_source_update: Option<boundary::Message>,
     provenance: atm_storage::MessageWriteOrigin,
-) -> Result<DuplicateWriteDisposition, AtmError> {
+) -> Result<MessageAdmissionSnapshot, AtmError> {
     let Some(message_id) = envelope.message_id else {
-        return Ok(DuplicateWriteDisposition::NotDuplicate);
+        return Ok(MessageAdmissionSnapshot::passive(
+            DuplicateWriteDisposition::NotDuplicate,
+        ));
     };
     let message_key = boundary::MessageKey::from(message_id);
     let record = boundary::Message {
@@ -237,13 +291,13 @@ fn mirror_message_to_store(
                 team,
                 agent,
                 same_store_peer_receipt,
-            );
+            )
+            .map(MessageAdmissionSnapshot::passive);
         }
         runtime.persist_message_records_atomically(vec![record, source_update])?;
     } else {
-        if let Some(existing) =
-            runtime.admit_message_record_with_provenance(home_dir, record, provenance)?
-        {
+        let admission = runtime.admit_message_record_with_outcome(home_dir, record, provenance)?;
+        if let Some(existing) = admission.existing {
             return classify_existing_message(
                 existing,
                 envelope,
@@ -251,10 +305,14 @@ fn mirror_message_to_store(
                 team,
                 agent,
                 same_store_peer_receipt,
-            );
+            )
+            .map(MessageAdmissionSnapshot::passive);
         }
+        return Ok(MessageAdmissionSnapshot::admitted(admission));
     }
-    Ok(DuplicateWriteDisposition::NotDuplicate)
+    Ok(MessageAdmissionSnapshot::passive(
+        DuplicateWriteDisposition::NotDuplicate,
+    ))
 }
 
 async fn mirror_message_to_store_async(
@@ -264,9 +322,11 @@ async fn mirror_message_to_store_async(
     envelope: &InboxMessage,
     same_store_peer_receipt: Option<(&HostName, &HostName)>,
     provenance: atm_storage::MessageWriteOrigin,
-) -> Result<DuplicateWriteDisposition, AtmError> {
+) -> Result<MessageAdmissionSnapshot, AtmError> {
     let Some(message_id) = envelope.message_id else {
-        return Ok(DuplicateWriteDisposition::NotDuplicate);
+        return Ok(MessageAdmissionSnapshot::passive(
+            DuplicateWriteDisposition::NotDuplicate,
+        ));
     };
     let message_key = boundary::MessageKey::from(message_id);
     let record = boundary::Message {
@@ -275,10 +335,10 @@ async fn mirror_message_to_store_async(
         message_key,
         envelope: envelope.clone(),
     };
-    if let Some(existing) = runtime
-        .save_message_if_absent_with_provenance_async(record, provenance)
-        .await?
-    {
+    let admission = runtime
+        .admit_message_with_provenance_async(record, provenance)
+        .await?;
+    if let Some(existing) = admission.existing {
         return classify_existing_message(
             existing,
             envelope,
@@ -286,9 +346,10 @@ async fn mirror_message_to_store_async(
             team,
             agent,
             same_store_peer_receipt,
-        );
+        )
+        .map(MessageAdmissionSnapshot::passive);
     }
-    Ok(DuplicateWriteDisposition::NotDuplicate)
+    Ok(MessageAdmissionSnapshot::admitted(admission))
 }
 
 fn classify_existing_message(

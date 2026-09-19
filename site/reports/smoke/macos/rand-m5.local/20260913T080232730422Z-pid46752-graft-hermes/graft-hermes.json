@@ -1,0 +1,25 @@
+{
+  "feature": "graft-hermes",
+  "host": "rand-m5.local",
+  "platform": "macos",
+  "run_id": "20260913T080232730422Z",
+  "status": "PASS",
+  "source_revision": "4cb8be1cee7b7f0d5b42a76aa83344128f861164",
+  "procedure": "graft-hermes",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.5.17",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    },
+    {
+      "name": "graft outbound durable write and receiver round trip",
+      "status": "PASS",
+      "detail": "installed atm-graft completed in-process send/read plus native atm ack through the selected runtime",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    }
+  ]
+}

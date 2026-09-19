@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-12T23:49:40.144295Z",
+  "source_revision": "f94125cf5f20fd2d187623746d70f8bb91104cbf",
+  "image": {
+    "tag": "loki/hermes-testbed:bb5-colima-f94125cf5",
+    "id": "sha256:332e9ea1e4502404756a3e3146b47dbceba63e111866729c92c3081e6b26a4b2",
+    "sha256": "sha256:332e9ea1e4502404756a3e3146b47dbceba63e111866729c92c3081e6b26a4b2",
+    "architecture": "arm64"
+  },
+  "container": "hermes-testbed-bb5-evidence4-f94125cf5",
+  "atm_version": null,
+  "procedure": "colima-assignment",
+  "procedure_revision": "0cbc4adc679d6eb334fd0233c546421fe098bbff",
+  "procedure_revision_inferred": true,
+  "status": "PASS",
+  "steps": [
+    {
+      "order": 1,
+      "name": "assignment",
+      "procedure": "colima-assignment",
+      "procedure_revision": "0cbc4adc679d6eb334fd0233c546421fe098bbff",
+      "procedure_revision_inferred": true,
+      "status": "PASS",
+      "generated_at": "2026-09-12T23:49:40.144295Z",
+      "container": "hermes-testbed-bb5-evidence4-f94125cf5",
+      "payload": "steps/01-assignment/step.json",
+      "panel": "steps/01-assignment/panel.xhtml"
+    }
+  ]
+}

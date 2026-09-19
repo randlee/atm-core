@@ -216,7 +216,7 @@ fn restore_decomposed_messages_view(
     transaction: &Transaction<'_>,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
-    crate::template_catalog_schema::ensure_schema(transaction, target)
+    crate::template_catalog_schema::ensure_schema_in_transaction(transaction, target)
 }
 
 #[cfg(test)]

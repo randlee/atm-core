@@ -1,0 +1,26 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT11-prompt-handoffs",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "prompted-task-events-only",
+      "status": "pass",
+      "detail": "Pre-case: `ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm teams clear-nudge-template --team fx-at11 --kind task_reminder --json` -> {\"action\":\"clear-nudge-template\",\"team\":\"fx-at11\",\"kind\":\"task_reminder\",\"cleared\":false}. Case 1: assigned 3 tasks to fx-at11-beta via `atm task assign fx-at11-beta \"...\" --task-id at11-c1-tN-20260915T043519Z --json` -> {\"task_id\":\"at11-c1-t1-20260915T043519Z\"} (and t2, t3). Polled `atm task events at11-c1-t1-20260915T043519Z --json` every 5s; task1 handoffs progressed task_queued(04:35:22.833Z) -> task_ready(04:35:23.960004405Z) -> task_reminder(04:36:28.962852528Z, attempt 1) while task2/task3 events showed only: events=[{\"event\":\"assigned\",...}], handoffs=[{\"kind\":\"task_queued\",...}] (no ready/reminder). Observed interval = 04:36:28.962852528Z - 04:35:23.960004405Z = 65.002848123s (documented default ~60s, matches within scheduler jitter). Started task1 as beta: `atm task start at11-c1-t1-20260915T043519Z \"starting case1 task1\" --json` -> {\"action\":\"send\",...,\"outcome\":\"sent\",\"task_id\":\"at11-c1-t1-20260915T043519Z\",...}. Final `atm task events at11-c1-t1-20260915T043519Z --json` events array in order: assigned(seq1), reminded(seq2, 04:35:23.960004405Z), reminded(seq3, 04:36:28.962852528Z), started(seq4, 04:36:40.522623251Z, to_state=active); handoffs array in order: task_queued, task_ready, task_reminder, task_started. Task1 shows queued+ready+reminder+started in order; task2/task3 remained queued-only throughout. PASS."
+    },
+    {
+      "name": "disabled-reminder-doctor-finding",
+      "status": "pass",
+      "detail": "`ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11 atm teams disable-nudge-template --team fx-at11 --kind task_reminder --json` -> {\"action\":\"disable-nudge-template\",\"team\":\"fx-at11\",\"kind\":\"task_reminder\",\"updated_at\":\"2026-09-15T04:36:52.610822534Z\"}. Assigned new task: `atm task assign fx-at11-beta \"AT11 case2 task1 20260915T043654Z\" --task-id at11-c2-t1-20260915T043654Z --json` -> {\"task_id\":\"at11-c2-t1-20260915T043654Z\"}; assigned event at 04:36:54.527608906Z. Waited via foreground Bash polling loops (sleep 5 x N, each call <=100s) until 2026-09-15T04:39:14.450556102Z, i.e. 139.92s elapsed since assign, exceeding required observed-interval*2 = 130.0057s. `atm task events at11-c2-t1-20260915T043654Z --json` at that point: events=[{\"event\":\"assigned\",\"at\":\"2026-09-15T04:36:54.527608906Z\",...},{\"event\":\"reminded\",\"actor\":\"daemon\",\"at\":\"2026-09-15T04:36:58.958834112Z\",...}], handoffs=[{\"kind\":\"task_queued\",\"at\":\"2026-09-15T04:36:54.527Z\",...},{\"kind\":\"task_ready\",\"at\":\"2026-09-15T04:36:58.958834112Z\",...}] -- only task_queued and task_ready present, no task_reminder handoff and only one 'reminded'-named event (the ready promotion), no second reminder. `atm doctor --json --team fx-at11` reported: {\"severity\":\"warning\",\"code\":\"ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED\",\"message\":\"disabled_task_nudge_template_override: team fx-at11 has disabled `task_reminder`\",\"remediation\":\"atm teams clear-nudge-template --team fx-at11 --kind task_reminder\"}. PASS."
+    },
+    {
+      "name": "cleanup",
+      "status": "pass",
+      "detail": "Case1 cleanup: `atm task close at11-c1-t1-20260915T043519Z completed \"case1 task1 done\" --json` -> {\"action\":\"send\",...,\"outcome\":\"sent\",\"task_id\":\"at11-c1-t1-20260915T043519Z\",...}; `atm task close at11-c1-t2-20260915T043519Z cancelled \"case1 cleanup\" --json` -> {\"action\":\"send\",...,\"task_id\":\"at11-c1-t2-20260915T043519Z\",...}; `atm task close at11-c1-t3-20260915T043519Z cancelled \"case1 cleanup\" --json` -> {\"action\":\"send\",...,\"task_id\":\"at11-c1-t3-20260915T043519Z\",...}. Verified `ATM_IDENTITY=fx-at11-beta ATM_TEAM=fx-at11 atm task list --json` -> [] before case2. Case2 cleanup: `atm task close at11-c2-t1-20260915T043654Z cancelled \"case2 cleanup\" --json` -> {\"action\":\"send\",...,\"task_id\":\"at11-c2-t1-20260915T043654Z\",...}. Final `atm teams clear-nudge-template --team fx-at11 --kind task_reminder --json` -> {\"action\":\"clear-nudge-template\",\"team\":\"fx-at11\",\"kind\":\"task_reminder\",\"cleared\":true}. Final `atm task list --json` (as fx-at11-beta) -> []. PASS."
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {"atm": "1.5.20", "hermes_atm": "", "atm_graft": ""},
+  "started_at": "2026-09-15T04:35:19Z",
+  "finished_at": "2026-09-15T04:39:33Z"
+}

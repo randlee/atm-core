@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+from contextlib import redirect_stderr
 import subprocess
 import sys
 import tempfile
@@ -37,6 +38,13 @@ def workflow_text(name: str) -> str:
     return (discover_repo_root() / ".github" / "workflows" / name).read_text(encoding="utf-8")
 
 
+def prerelease_script():
+    return load_script(
+        "atm_prerelease_wait_helper",
+        discover_repo_root() / ".claude" / "skills" / "prerelease" / "scripts" / "prerelease.py",
+    )
+
+
 def packaging_script(workflow: str, step_name: str) -> str:
     """Extract the Python heredoc used to package one release archive."""
     step = workflow.split(f"      - name: {step_name}\n", 1)[1].split("\n      - name:", 1)[0]
@@ -48,6 +56,83 @@ def packaging_script(workflow: str, step_name: str) -> str:
 
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
+    def test_wait_for_archive_returns_after_a_successful_run(self) -> None:
+        prerelease = prerelease_script()
+        clock = [0.0]
+        sleeps: list[float] = []
+
+        def monotonic() -> float:
+            return clock[0]
+
+        def sleep(seconds: float) -> None:
+            sleeps.append(seconds)
+            clock[0] += seconds
+
+        with (
+            mock.patch.object(prerelease, "gh_json", side_effect=[[], [{
+                "headSha": "source-sha",
+                "status": "completed",
+                "conclusion": "success",
+            }]]) as gh_json,
+            mock.patch.object(prerelease.time, "monotonic", side_effect=monotonic),
+            mock.patch.object(prerelease.time, "sleep", side_effect=sleep),
+            mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            prerelease.wait_for_archive("prerelease/v1.5.17", "source-sha")
+
+        self.assertEqual(gh_json.call_count, 2)
+        self.assertEqual(sleeps, [60])
+        self.assertEqual(
+            stdout.getvalue().splitlines(),
+            [
+                "waiting for prerelease-archive.yml (0.0 min elapsed)",
+                "waiting for prerelease-archive.yml (1.0 min elapsed)",
+            ],
+        )
+
+    def test_wait_for_archive_raises_for_a_failed_run(self) -> None:
+        prerelease = prerelease_script()
+
+        with (
+            mock.patch.object(prerelease, "gh_json", return_value=[{
+                "headSha": "source-sha",
+                "status": "completed",
+                "conclusion": "failure",
+            }]),
+            mock.patch.object(prerelease.time, "monotonic", return_value=0.0),
+            mock.patch.object(prerelease.time, "sleep") as sleep,
+        ):
+            with self.assertRaisesRegex(SystemExit, "prerelease-archive.yml failed for prerelease/v1.5.17"):
+                prerelease.wait_for_archive("prerelease/v1.5.17", "source-sha")
+
+        sleep.assert_not_called()
+
+    def test_wait_for_archive_raises_after_twenty_minutes_without_real_sleep(self) -> None:
+        prerelease = prerelease_script()
+        clock = [0.0]
+        sleeps: list[float] = []
+
+        def monotonic() -> float:
+            return clock[0]
+
+        def sleep(seconds: float) -> None:
+            sleeps.append(seconds)
+            clock[0] += seconds
+
+        with (
+            mock.patch.object(prerelease, "gh_json", return_value=[]),
+            mock.patch.object(prerelease.time, "monotonic", side_effect=monotonic),
+            mock.patch.object(prerelease.time, "sleep", side_effect=sleep),
+        ):
+            with self.assertRaisesRegex(
+                SystemExit,
+                "timed out waiting for prerelease-archive.yml for prerelease/v1.5.17 after 20.0 minutes",
+            ):
+                prerelease.wait_for_archive("prerelease/v1.5.17", "source-sha")
+
+        self.assertEqual(clock, [20 * 60])
+        self.assertEqual(sleeps, [60] * 20)
+
     def test_consumer_input_is_the_prerelease_manifest_source_of_truth(self) -> None:
         root = discover_repo_root()
         source = json.loads(
@@ -64,7 +149,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             (root / "release" / "publish-artifacts.toml").read_text(encoding="utf-8")
         )["prerelease"]
         self.assertEqual(prerelease["binaries"], ["atm", "atm-daemon"])
-        self.assertIn("daemon-switch.py switch --prerelease {version} --yes", prerelease["post_install"])
+        self.assertIn(
+            "daemon-switch.py switch --prerelease {version} --yes --discover-managed-service",
+            prerelease["post_install"],
+        )
         self.assertTrue(prerelease["selector_dir"]["darwin"].startswith(prerelease["install_root"]))
         self.assertTrue(prerelease["selector_dir"]["linux"].startswith(prerelease["install_root"]))
         self.assertNotIn("Programs\\\\ATM", prerelease["selector_dir"]["windows"])
@@ -126,7 +214,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 self.assertEqual(
                     command_text,
                     "python3 .claude/skills/daemon-switch/scripts/daemon-switch.py "
-                    "switch --prerelease 1.5.11 --yes",
+                    "switch --prerelease 1.5.11 --yes --discover-managed-service",
                 )
                 self.assertEqual(active_cli.resolve(), (old_bin / "atm").resolve())
                 self.assertEqual(active_daemon.resolve(), (old_bin / "atm-daemon").resolve())
@@ -144,8 +232,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                         "--prerelease",
                         "1.5.11",
                         "--yes",
-                        "--service",
-                        "fixture",
+                        "--discover-managed-service",
                     ],
                 ):
                     self.assertEqual(daemon_switch.main(), 0)
@@ -163,6 +250,11 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 ) as resolve,
                 mock.patch.object(daemon_switch, "sign_prerelease_pair") as sign,
                 mock.patch.object(daemon_switch, "require_no_active_temporary_launch_session"),
+                mock.patch.object(
+                    daemon_switch._service_control_module,
+                    "_linux_candidates",
+                    return_value=[("fixture", None)],
+                ),
                 mock.patch.object(daemon_switch, "save_default_pair"),
                 mock.patch.object(daemon_switch, "run_service") as service,
                 mock.patch.object(daemon_switch, "require_stopped_daemon") as stopped,
@@ -191,6 +283,82 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(calls, ["atm --version"])
             self.assertNotIn("already selected; service left running", stdout.getvalue())
+
+    @unittest.skipUnless(os.name == "posix", "selector rollback uses POSIX symlinks")
+    def test_zero_candidate_install_restores_selectors_and_leaves_live_pair_unchanged(self) -> None:
+        root = discover_repo_root()
+        prerelease = load_script(
+            "atm_prerelease_zero_candidate",
+            root / ".claude" / "skills" / "prerelease" / "scripts" / "prerelease.py",
+        )
+        daemon_switch = load_script(
+            "atm_daemon_switch_zero_candidate",
+            root / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory)
+            old_bin, candidate_bin = fixture / "old" / "bin", fixture / "builds" / "v1.5.18" / "bin"
+            active_bin, private_bin = fixture / "active", fixture / "private"
+            for folder in (old_bin, candidate_bin, active_bin, private_bin):
+                folder.mkdir(parents=True)
+            for folder in (old_bin, candidate_bin):
+                for name in ("atm", "atm-daemon"):
+                    binary = folder / name
+                    binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                    binary.chmod(0o755)
+            for name in ("atm", "atm-daemon"):
+                (active_bin / name).symlink_to(old_bin / name)
+                (private_bin / name).symlink_to(old_bin / name)
+            config = {
+                "install_root": str(fixture / "builds"),
+                "binaries": ["atm", "atm-daemon"],
+                "selector_dir": {
+                    "darwin": str(private_bin),
+                    "linux": str(private_bin),
+                    "windows": str(private_bin),
+                },
+                "post_install": (
+                    "python3 .claude/skills/daemon-switch/scripts/daemon-switch.py "
+                    "switch --prerelease {version} --yes --discover-managed-service"
+                ),
+                "verify": "atm --version",
+            }
+
+            def refuse_activation(command_text: str, *, capture: bool = False):
+                self.assertFalse(capture)
+                self.assertIn("--discover-managed-service", command_text)
+                argv = [
+                    "daemon-switch.py",
+                    "switch",
+                    "--prerelease",
+                    "1.5.18",
+                    "--yes",
+                    "--discover-managed-service",
+                ]
+                with (
+                    mock.patch.object(daemon_switch.sys, "argv", argv),
+                    mock.patch.object(
+                        daemon_switch._service_control_module,
+                        "_linux_candidates",
+                        return_value=[],
+                    ),
+                    redirect_stderr(io.StringIO()),
+                ):
+                    code = daemon_switch.main()
+                raise subprocess.CalledProcessError(code, command_text)
+
+            with (
+                mock.patch.object(prerelease, "select_release", return_value=("1.5.18", {})),
+                mock.patch.object(prerelease.platform, "system", return_value="Linux"),
+                mock.patch.object(prerelease, "shell", side_effect=refuse_activation),
+                mock.patch.dict(os.environ, {"PATH": f"{active_bin}{os.pathsep}{os.environ['PATH']}"}),
+            ):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    prerelease.install({"prerelease": config}, "1.5.18")
+
+            for name in ("atm", "atm-daemon"):
+                self.assertEqual((private_bin / name).resolve(), (old_bin / name).resolve())
+                self.assertEqual((active_bin / name).resolve(), (old_bin / name).resolve())
 
     def test_generic_workflow_preserves_manifest_build_and_plain_artifact_contracts(self) -> None:
         root = discover_repo_root()
@@ -258,6 +426,43 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         # Fixture-local values: this unit test exercises patch arithmetic, not the real workspace.
         self.assertEqual(patch_bump("1.4.5"), "1.4.6")
         self.assertEqual(patch_bump("9.99.0"), "9.99.1")
+
+    def test_prerelease_tag_dry_run_rejects_remote_tag_collision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            subprocess.run(["git", "init", "-q", "-b", "fixture"], cwd=repo, check=True)
+            with (
+                mock.patch.object(prerelease_tag, "current_branch", return_value="fixture"),
+                mock.patch.object(prerelease_tag, "require_clean_tree"),
+                mock.patch.object(prerelease_tag, "workspace_version", return_value="1.5.14"),
+                mock.patch.object(prerelease_tag, "remote_tag_exists", return_value=True),
+                mock.patch.object(prerelease_tag, "verify_lockstep") as verify_lockstep,
+            ):
+                with self.assertRaisesRegex(SystemExit, "tag already exists on origin"):
+                    prerelease_tag.execute(repo, dry_run=True)
+            verify_lockstep.assert_not_called()
+
+    def test_publish_and_dry_run_share_tag_availability_preflight(self) -> None:
+        root = discover_repo_root()
+        for dry_run in (True, False):
+            with (
+                self.subTest(dry_run=dry_run),
+                mock.patch.object(prerelease_tag, "current_branch", return_value="fixture"),
+                mock.patch.object(prerelease_tag, "require_clean_tree"),
+                mock.patch.object(prerelease_tag, "workspace_version", return_value="1.5.14"),
+                mock.patch.object(
+                    prerelease_tag,
+                    "require_available_tag",
+                    side_effect=SystemExit("collision"),
+                ) as require_available_tag,
+                mock.patch.object(prerelease_tag, "verify_lockstep") as verify_lockstep,
+                mock.patch.object(prerelease_tag, "candidate_changes") as candidate_changes,
+            ):
+                with self.assertRaisesRegex(SystemExit, "collision"):
+                    prerelease_tag.execute(root, dry_run=dry_run)
+            require_available_tag.assert_called_once_with(root, "prerelease/v1.5.15")
+            verify_lockstep.assert_not_called()
+            candidate_changes.assert_not_called()
 
     def test_candidate_bump_updates_actual_lockfile_collision_safely(self) -> None:
         root = discover_repo_root()

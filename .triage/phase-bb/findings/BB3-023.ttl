@@ -1,0 +1,53 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-023>
+  a triage:Finding ;
+  triage:findingId "BB3-023" ;
+  triage:title "test_graft_report_and_envelope_carry_source_revision_and_procedure fails on every BB layer, turning just lint and just test red" ;
+  triage:description "fenix, 2026-09-12T22:40:58Z, root-caused from CI failures on PR #1452 (feature/bb-collapsed @ b74f0d6ef) and independently corroborated by team-lead from the same run's job logs (Just lint job 103631070870: 'pytests failed', FileNotFoundError on site/reports/procedures/manifest.json inside report_runtime.resolve_procedure_page; Test (ubuntu-latest) job 103631559165 separately red on the known BB.5 ack-contract nudge_mode failures, unrelated to this finding). scripts/phase-ai/test_run_hermes_graft_live.py::test_graft_report_and_envelope_carry_source_revision_and_procedure fails on the clean BB base b74f0d6ef and passes on develop. Root cause: BB.3 (53381f11e..4f03d49bc) made write_report in scripts/smoke/run_feature_smoke.py resolve a procedure page through report_runtime.resolve_procedure_page, which raises when site/reports/procedures/manifest.json is absent; the graft-live unit test patches ROOT to an empty temp dir and mocks the whole os module, so it can never pass. This is the single failure that turns both just lint (run_pytests) and just test red on every BB layer -- confirmed as the actual cause of CI red on #1452's frozen bottom layer, which per feedback_ci_only_on_top_layer would otherwise not gate any merge, but since #1453 (fix/bb5-closure-r1, the current top layer) branches from #1452 it inherits the same failure and needs it fixed to land. Note for the sprint record: BB.3's QA rounds could not have run a green just test." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:source "fenix root-cause analysis" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/phase-ai/test_run_hermes_graft_live.py; scripts/smoke/report_runtime.py" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T22:40:58Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix (test-only, mirrors scripts/smoke/test_run_feature_smoke.py::test_report_and_envelope_carry_source_revision): supply the selected page and patch _resolve_procedure_page; patch os.environ via patch.dict, getpid only. Implemented by fenix on fix/bb5-contract-tests @ d1969185f (PR #1456, stack: #1452 feature/bb-collapsed (frozen) -> #1456 fix/bb5-contract-tests -> #1453 fix/bb5-closure-r1 -> #1455 fix/bb3-qa3-r4); just lint 36/36, just test green. Verified fixed at d1969185f by req-qa/arch-qa/rust-qa-agent under BB5-QA-CT1-1789259000 (PASS, PR #1456 comment 2026-09-12T23:01:51Z); closed." ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T22:40:58Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-023/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB3-023/1> ;
+  triage:closedAt "2026-09-12T23:01:51Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:resolution/BB3-023/1>
+  a triage:Resolution ;
+  triage:resolutionNote "Fixed on fix/bb5-contract-tests @ d1969185f; verified PASS by BB5-QA-CT1-1789259000 (req-qa/arch-qa/rust-qa-agent), PR #1456." ;
+  triage:resolvedAt "2026-09-12T23:01:51Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .
+
+<urn:atm:triage:occurrence/BB3-023/1>
+  a triage:Occurrence ;
+  triage:file "scripts/phase-ai/test_run_hermes_graft_live.py" ;
+  triage:line 28 ;
+  triage:snippet "test_graft_report_and_envelope_carry_source_revision_and_procedure patches ROOT to an empty temp dir and mocks the whole os module, so report_runtime.resolve_procedure_page's manifest.json read always raises; turns just lint and just test red on every BB layer" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb5-contract-tests" ;
+  triage:headSha "d1969185f" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-023/1> .
+
+<urn:atm:triage:worktree/BB3-023/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1456, fix/bb5-contract-tests" ;
+  triage:branch "fix/bb5-contract-tests" ;
+  triage:headSha "d1969185f" ;
+  triage:orderIndex 1 .

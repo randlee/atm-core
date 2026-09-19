@@ -8,9 +8,13 @@ live service manager.
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import os
 from pathlib import Path
 import platform
+import plistlib
+import re
 import subprocess
 import time
 from typing import Callable
@@ -22,6 +26,155 @@ from release_resolution import SwitchError, executable_name, require_executable,
 def systemd_user_config_directory() -> Path:
     root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
     return root / "systemd" / "user"
+
+
+def _normalized_executable(value: str | Path) -> str:
+    return os.path.normcase(os.path.abspath(os.path.expandvars(os.path.expanduser(str(value)))))
+
+
+def _is_owned_file(path: Path) -> bool:
+    try:
+        return path.is_file() and (os.name == "nt" or path.stat().st_uid == os.getuid())
+    except OSError:
+        return False
+
+
+def _unique_service(candidates: list[tuple[str, Path | None]], daemon: Path) -> tuple[str, Path | None]:
+    if not candidates:
+        raise SwitchError(
+            f"no current-user managed service launches the ATM daemon selector {daemon}; "
+            "provision the native singleton service or pass its explicit selector"
+        )
+    if len(candidates) != 1:
+        names = ", ".join(sorted(name for name, _path in candidates))
+        raise SwitchError(
+            f"multiple current-user managed services launch the ATM daemon selector {daemon}: {names}; "
+            "pass --service explicitly"
+        )
+    return candidates[0]
+
+
+def _macos_candidates(
+    daemon: Path,
+    loaded_launch_agent_plist: Callable[[str], Path | None],
+    launch_agents_root: Path | None = None,
+) -> list[tuple[str, Path | None]]:
+    candidates: list[tuple[str, Path | None]] = []
+    root = launch_agents_root or Path.home() / "Library" / "LaunchAgents"
+    for plist in sorted(root.glob("*.plist")):
+        if not _is_owned_file(plist):
+            continue
+        try:
+            payload = plistlib.loads(plist.read_bytes())
+        except (OSError, plistlib.InvalidFileException):
+            continue
+        label = payload.get("Label")
+        arguments = payload.get("ProgramArguments")
+        executable = arguments[0] if isinstance(arguments, list) and arguments else payload.get("Program")
+        if not isinstance(label, str) or not isinstance(executable, str):
+            continue
+        loaded = loaded_launch_agent_plist(f"gui/{os.getuid()}/{label}")
+        if _normalized_executable(executable) == _normalized_executable(daemon) and loaded == plist.resolve():
+            candidates.append((label, plist.resolve()))
+    return candidates
+
+
+def _systemd_property(unit: str, name: str) -> str | None:
+    result = run(
+        ["systemctl", "--user", "show", unit, f"--property={name}", "--value"],
+        timeout=5.0,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _linux_candidates(daemon: Path) -> list[tuple[str, Path | None]]:
+    listed = run(
+        ["systemctl", "--user", "list-unit-files", "--type=service", "--no-legend", "--no-pager"],
+        timeout=10.0,
+    )
+    if listed.returncode != 0:
+        raise SwitchError(f"cannot enumerate current-user systemd services: {(listed.stderr or listed.stdout).strip()}")
+    candidates: list[tuple[str, Path | None]] = []
+    for line in listed.stdout.splitlines():
+        unit = line.split(maxsplit=1)[0] if line.split() else ""
+        if not unit.endswith(".service"):
+            continue
+        fragment_value = _systemd_property(unit, "FragmentPath")
+        execution = _systemd_property(unit, "ExecStart")
+        fragment = Path(fragment_value).expanduser() if fragment_value else None
+        match = re.search(r"(?:^|[ {;])path=([^ ;}]+)", execution or "")
+        if fragment is None or not _is_owned_file(fragment) or match is None:
+            continue
+        if _normalized_executable(match.group(1)) == _normalized_executable(daemon):
+            candidates.append((unit, None))
+    return candidates
+
+
+def _windows_task_names() -> list[str]:
+    result = run(["schtasks.exe", "/Query", "/FO", "CSV", "/NH"], timeout=10.0)
+    if result.returncode != 0:
+        raise SwitchError(f"cannot enumerate current-user scheduled tasks: {(result.stderr or result.stdout).strip()}")
+    return [row[0] for row in csv.reader(io.StringIO(result.stdout)) if row]
+
+
+def _windows_current_identities() -> set[str]:
+    domain, username = os.environ.get("USERDOMAIN", ""), os.environ.get("USERNAME", "")
+    identities = {value.casefold() for value in (username, f"{domain}\\{username}") if value.strip("\\")}
+    result = run(["whoami.exe", "/user", "/fo", "csv", "/nh"], timeout=5.0)
+    if result.returncode == 0:
+        for row in csv.reader(io.StringIO(result.stdout)):
+            identities.update(value.casefold() for value in row[:2] if value)
+    if not identities:
+        raise SwitchError("cannot identify the current Windows account for managed-service discovery")
+    return identities
+
+
+def _windows_candidates(
+    daemon: Path,
+    task_status: Callable[[str], dict[str, object]],
+    current_identities: set[str] | None = None,
+) -> list[tuple[str, Path | None]]:
+    identities = current_identities or _windows_current_identities()
+    candidates: list[tuple[str, Path | None]] = []
+    for name in _windows_task_names():
+        task = task_status(name)
+        command, owner = task.get("command"), task.get("user_id")
+        if (
+            task.get("registered")
+            and isinstance(command, str)
+            and isinstance(owner, str)
+            and owner.casefold() in identities
+            and _normalized_executable(command) == _normalized_executable(daemon)
+        ):
+            candidates.append((name, None))
+    return candidates
+
+
+def resolve_managed_service(
+    args: argparse.Namespace,
+    selected_links: Callable[[argparse.Namespace], tuple[Path, Path]],
+    loaded_launch_agent_plist: Callable[[str], Path | None],
+    task_status: Callable[[str], dict[str, object]],
+) -> None:
+    """Resolve an explicitly requested, uniquely owned managed-service selector."""
+    if not getattr(args, "discover_managed_service", False):
+        return
+    if args.service or args.launch_agent_plist:
+        raise SwitchError(
+            "--discover-managed-service cannot be combined with --service or --launch-agent-plist"
+        )
+    daemon = selected_links(args)[1]
+    system = platform.system()
+    if system == "Darwin":
+        candidates = _macos_candidates(daemon, loaded_launch_agent_plist)
+    elif system == "Linux":
+        candidates = _linux_candidates(daemon)
+    elif system == "Windows":
+        candidates = _windows_candidates(daemon, task_status)
+    else:
+        raise SwitchError(f"managed-service discovery is unsupported on {system}")
+    args.service, plist = _unique_service(candidates, daemon)
+    args.launch_agent_plist = str(plist) if plist is not None else None
 
 
 def service_commands(args: argparse.Namespace, action: str) -> list[str]:
@@ -62,7 +215,19 @@ def windows_task_status(task: str) -> dict[str, object]:
             if line.lower().startswith("status:"):
                 state = line.split(":", 1)[1].strip().lower()
                 break
-    return {"registered": True, "state": state, "command": commands[0]}
+    owners = [
+        user.text.strip()
+        for user in root.findall(".//{*}Principals/{*}Principal/{*}UserId")
+        if user.text and user.text.strip()
+    ]
+    status: dict[str, object] = {
+        "registered": True,
+        "state": state,
+        "command": commands[0],
+    }
+    if len(owners) == 1:
+        status["user_id"] = owners[0]
+    return status
 
 
 def require_windows_task_selector(args: argparse.Namespace, selected_links: Callable[[argparse.Namespace], tuple[Path, Path]]) -> None:

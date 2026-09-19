@@ -41,6 +41,8 @@ class BootstrapManifest:
     just: str
     cargo_tools: tuple[tuple[str, str], ...]
     cargo_allowed_strategies: tuple[tuple[str, tuple[str, ...]], ...]
+    cargo_binstall: str
+    cargo_binstall_checksums: tuple[tuple[str, str], ...]
     sc_compose: str
     sc_compose_checksums: tuple[tuple[str, str], ...]
     wyvern: str
@@ -54,6 +56,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
     toolchain = raw["toolchain"]
     cargo = raw["cargo"]
     cargo_allowed = raw["cargo-allowed-strategies"]
+    cargo_binstall = raw["cargo-binstall"]
     sc_compose = raw["sc-compose"]
     wyvern = raw["wyvern"]
     python = raw["python"]
@@ -80,6 +83,8 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
         cargo_allowed_strategies=tuple(
             sorted((name, tuple(strategies)) for name, strategies in cargo_allowed.items())
         ),
+        cargo_binstall=cargo_binstall["version"],
+        cargo_binstall_checksums=tuple(sorted(cargo_binstall["checksums"].items())),
         sc_compose=sc_compose["version"],
         sc_compose_checksums=tuple(sorted(sc_compose["checksums"].items())),
         wyvern=wyvern["version"],
@@ -177,14 +182,6 @@ def verify_seed_tools(manifest: BootstrapManifest) -> None:
     require_version("just", command_output(["just", "--version"]), manifest.just)
 
 
-def cargo_install_command(name: str, version: str, *, force: bool) -> list[str]:
-    """Return the deterministic cargo-install command for one registry tool."""
-    command = ["cargo", "install", "--locked"]
-    if force:
-        command.append("--force")
-    return [*command, "--version", version, name]
-
-
 SC_COMPOSE_RELEASE_REPOSITORY = "randlee/sc-compose"
 
 
@@ -237,8 +234,7 @@ def cargo_binstall_command(
     """
     disabled_strategies = "compile" if "quick-install" in allowed_strategies else "quick-install,compile"
     command = [
-        "cargo",
-        "binstall",
+        str(cargo_bin_path("cargo-binstall")),
         "--no-confirm",
         "--disable-telemetry",
         "--disable-strategies",
@@ -308,6 +304,106 @@ def _download_release(url: str, *, label: str = "release asset") -> bytes:
         raise BootstrapError(f"unable to download pinned {label} {url}: {error}") from error
 
 
+CARGO_BINSTALL_RELEASE_REPOSITORY = "cargo-bins/cargo-binstall"
+
+
+def cargo_binstall_asset_name(version: str, target: str) -> str:
+    """Return the exact cargo-binstall release asset for one target."""
+    suffix = ".tgz" if target == "x86_64-unknown-linux-gnu" else ".zip"
+    return f"cargo-binstall-{target}{suffix}"
+
+
+def cargo_binstall_release_url(version: str, asset: str) -> str:
+    """Return the immutable GitHub URL for one pinned cargo-binstall asset."""
+    return f"https://github.com/{CARGO_BINSTALL_RELEASE_REPOSITORY}/releases/download/v{version}/{asset}"
+
+
+def cargo_binstall_install_command(version: str, target: str) -> tuple[str, str]:
+    """Describe the pinned cargo-binstall release install for dry-run/tests."""
+    asset = cargo_binstall_asset_name(version, target)
+    return asset, cargo_binstall_release_url(version, asset)
+
+
+def _cargo_binstall_release_checksum(manifest: BootstrapManifest, target: str) -> str:
+    checksums = dict(manifest.cargo_binstall_checksums)
+    try:
+        return checksums[target]
+    except KeyError as error:
+        raise BootstrapError(f"cargo-binstall manifest has no checksum for release target {target}.") from error
+
+
+def _extract_cargo_binstall(archive: bytes, asset: str, destination: Path) -> None:
+    """Extract cargo-binstall from a verified ZIP or tgz release archive."""
+    executable_name = "cargo-binstall.exe" if asset.endswith(".zip") and "windows" in asset else "cargo-binstall"
+    with tempfile.TemporaryDirectory(prefix="atm-cargo-binstall-") as temp_dir:
+        archive_path = Path(temp_dir) / asset
+        archive_path.write_bytes(archive)
+        if asset.endswith(".zip"):
+            with zipfile.ZipFile(archive_path) as package:
+                members = {_safe_member_name(name): name for name in package.namelist()}
+                member = next(
+                    (original for safe, original in members.items() if Path(safe).name == executable_name),
+                    None,
+                )
+                if member is None:
+                    raise BootstrapError(f"verified cargo-binstall archive does not contain {executable_name}.")
+                binary = package.read(member)
+        else:
+            with tarfile.open(archive_path, mode="r:gz") as package:
+                member = next(
+                    (item for item in package.getmembers() if Path(_safe_member_name(item.name)).name == executable_name),
+                    None,
+                )
+                if member is None or not member.isfile():
+                    raise BootstrapError(f"verified cargo-binstall archive does not contain {executable_name}.")
+                extracted = package.extractfile(member)
+                if extracted is None:
+                    raise BootstrapError("verified cargo-binstall executable could not be read from the archive.")
+                binary = extracted.read()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.tmp-{os.getpid()}")
+    temporary.write_bytes(binary)
+    if sys.platform != "win32":
+        temporary.chmod(0o755)
+    os.replace(temporary, destination)
+
+
+def install_cargo_binstall_release(manifest: BootstrapManifest, *, dry_run: bool) -> None:
+    """Install pinned cargo-binstall from its verified release archive."""
+    target = sc_compose_target()
+    asset, url = cargo_binstall_install_command(manifest.cargo_binstall, target)
+    expected = _cargo_binstall_release_checksum(manifest, target)
+    destination = cargo_bin_path("cargo-binstall")
+    print(f"+ download {url} -> {destination}")
+    if dry_run:
+        return
+    archive = _download_release(url, label="cargo-binstall release asset")
+    actual = hashlib.sha256(archive).hexdigest()
+    if actual != expected:
+        raise BootstrapError(
+            f"cargo-binstall release checksum mismatch for {asset}: expected {expected}, found {actual}."
+        )
+    print(
+        "warning: upstream ships minisign signatures, not checksums.txt; "
+        "verified cargo-binstall against pinned SHA256 only",
+        file=sys.stderr,
+    )
+    _extract_cargo_binstall(archive, asset, destination)
+
+
+def cargo_binstall_matches(manifest: BootstrapManifest) -> bool:
+    """Prove the installed cargo-binstall reports the exact pinned version."""
+    try:
+        require_version(
+            "cargo-binstall",
+            command_output([str(cargo_bin_path("cargo-binstall")), "-V"]),
+            manifest.cargo_binstall,
+        )
+    except (BootstrapError, OSError):
+        return False
+    return True
+
+
 def _safe_member_name(name: str) -> str:
     path = Path(name)
     if path.is_absolute() or ".." in path.parts:
@@ -371,19 +467,6 @@ def install_sc_compose_release(manifest: BootstrapManifest, *, dry_run: bool) ->
     _extract_sc_compose(archive, asset, destination)
 
 
-def cargo_receipts() -> dict[str, object]:
-    """Load Cargo's installation receipt for exact registry verification."""
-    receipt = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo")) / ".crates2.json"
-    try:
-        raw = json.loads(receipt.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError) as error:
-        raise BootstrapError(f"Cargo installation receipt is unavailable: {receipt}") from error
-    installs = raw.get("installs")
-    if not isinstance(installs, dict):
-        raise BootstrapError(f"Cargo installation receipt has no installs map: {receipt}")
-    return installs
-
-
 def binstall_receipts() -> list[dict[str, object]]:
     """Load Binstall's concatenated JSON installation receipt records."""
     path = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo")) / "binstall" / "crates-v1.json"
@@ -428,34 +511,11 @@ def binstall_tool_matches(name: str, version: str) -> bool:
         # the nested shape too so older locally retained receipts remain usable.
         nested = record.get("crate_info")
         info = nested if isinstance(nested, dict) else record
+        # cargo-shear's upstream prebuilt reports "Version: dev", so the
+        # Binstall receipt is the version authority for that executable.
         if info.get("name") == name and _version_text(info.get("current_version")) == version:
             return True
     return False
-
-
-def receipt_matches(key_prefix: str, *, required_fragments: Sequence[str]) -> bool:
-    """Return whether one Cargo receipt proves this exact installation contract."""
-    try:
-        receipts = cargo_receipts()
-    except BootstrapError:
-        return False
-    for key, value in receipts.items():
-        if not key.startswith(key_prefix) or not isinstance(value, dict):
-            continue
-        rustc = value.get("rustc")
-        if not isinstance(rustc, str):
-            continue
-        if all(fragment in key or fragment in rustc for fragment in required_fragments):
-            return True
-    return False
-
-
-def registry_tool_matches(name: str, version: str, rust: str) -> bool:
-    """Prove the registry tool is both the required version and Rust build."""
-    return receipt_matches(
-        f"{name} {version} (registry+",
-        required_fragments=(f"release: {rust}",),
-    )
 
 
 def sc_compose_matches(manifest: BootstrapManifest) -> bool:
@@ -593,28 +653,14 @@ def wyvern_matches(manifest: BootstrapManifest) -> bool:
     return True
 
 
-def cargo_binstall_available() -> bool:
-    """Return whether the CI/local environment has the prebuilt installer."""
-    return shutil.which("cargo-binstall") is not None
-
-
-def running_in_ci() -> bool:
-    """Return whether bootstrap is running in a CI environment."""
-    return os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}
-
-
-def run(command: Sequence[str], *, dry_run: bool, allow_failure: bool = False) -> bool:
+def run(command: Sequence[str], *, dry_run: bool) -> None:
     """Execute one deterministic installation step or render it for review."""
     print("+", " ".join(command))
     if dry_run:
-        return True
+        return
     result = subprocess.run(command, check=False, cwd=ROOT)
     if result.returncode != 0:
-        if allow_failure:
-            print(f"bootstrap: {' '.join(command)} unavailable; using registry fallback", file=sys.stderr)
-            return False
         raise BootstrapError(f"bootstrap install command failed with exit {result.returncode}: {' '.join(command)}")
-    return True
 
 
 def python_package_version(python: Path, package: str) -> str:
@@ -625,11 +671,11 @@ def python_package_version(python: Path, package: str) -> str:
 
 def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
     """Prove every installed external tool reports the exact manifest version."""
+    if not cargo_binstall_matches(manifest):
+        raise BootstrapError(f"cargo-binstall is not the exact pinned prebuilt release {manifest.cargo_binstall}.")
     for name, version in manifest.cargo_tools:
-        binary = cargo_bin_path(name)
-        command_output([str(binary), "--version"])
-        if not (registry_tool_matches(name, version, manifest.rust) or binstall_tool_matches(name, version)):
-            raise BootstrapError(f"{name} is not the exact pinned registry/prebuilt version {version}.")
+        if not binstall_tool_matches(name, version):
+            raise BootstrapError(f"{name} is not the exact pinned prebuilt version {version}.")
     sc_compose = cargo_bin_path("sc-compose")
     command_output([str(sc_compose), "--version"])
     if not sc_compose_matches(manifest):
@@ -676,27 +722,21 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     if not dry_run:
         verify_seed_tools(manifest)
     python = ensure_bootstrap_venv(manifest, dry_run=dry_run)
-    ci = running_in_ci()
+    if not cargo_binstall_matches(manifest):
+        install_cargo_binstall_release(manifest, dry_run=dry_run)
     allowed_strategies = dict(manifest.cargo_allowed_strategies)
     for name, version in manifest.cargo_tools:
-        if registry_tool_matches(name, version, manifest.rust) or binstall_tool_matches(name, version):
+        if binstall_tool_matches(name, version):
             continue
-        installed = False
-        if cargo_binstall_available():
-            installed = run(
-                cargo_binstall_command(
-                    name,
-                    version,
-                    force=True,
-                    allowed_strategies=allowed_strategies[name],
-                ),
-                dry_run=dry_run,
-                allow_failure=not ci,
-            )
-        if not installed:
-            if ci:
-                raise BootstrapError(f"cargo-binstall could not install the exact prebuilt {name} {version} in CI.")
-            run(cargo_install_command(name, version, force=True), dry_run=dry_run)
+        run(
+            cargo_binstall_command(
+                name,
+                version,
+                force=True,
+                allowed_strategies=allowed_strategies[name],
+            ),
+            dry_run=dry_run,
+        )
     if not sc_compose_matches(manifest):
         install_sc_compose_release(manifest, dry_run=dry_run)
     if not wyvern_matches(manifest):

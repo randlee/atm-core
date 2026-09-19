@@ -1382,7 +1382,11 @@ mod replacement_runtime_tests {
         runtime
             .pending_nudge_store()
             .expect("pending store")
-            .clear_pending_on_handoff(&recipient_key, &task_message_id)
+            .rearm_pending_after_handoff(
+                &recipient_key,
+                &task_message_id,
+                atm_core::types::IsoTimestamp::now(),
+            )
             .expect("simulate the already-drained task marker");
         let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
         fake.queue_list_result(Ok(atm_herdr::HerdrListOutcome {

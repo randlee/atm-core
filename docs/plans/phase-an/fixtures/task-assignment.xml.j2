@@ -51,8 +51,8 @@ defaults:
   </references>
 
   <workflow>
-    <step id="a">ACK this message immediately. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
-    <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
+    <step id="a">Start the task immediately with `atm task start {{ task_id }} "&lt;one line&gt;"`.</step>
+    <step id="b">Immediately after task start, begin executing the task in the same work session.</step>
     <step id="c">Read `{{ sprint_doc }}` before coding. Treat it as the authoritative source for scope, deliverables, deletion targets, validation, and acceptance criteria. If this assignment summary and the sprint doc differ, the sprint doc wins and the mismatch must be reported.</step>
     <step id="d">Before coding, update the worktree from the sprint target branch and include prior fixes already merged to that target.</step>
     <step id="d1">Honor `<dependency-relations>`: must-follow merge-forward trigger is parent dev push, not QA; merge parent → child before every round. PR-completion trigger is parent PR merge first. Stop if a parallel-safe relation intersects.</step>

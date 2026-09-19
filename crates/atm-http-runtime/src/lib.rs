@@ -55,12 +55,12 @@ mod client;
 mod diagnostics_route;
 mod doctor_observability;
 mod health_route;
-mod herdr_breaker_escalation;
 mod herdr_escalation;
 mod herdr_queue_wake;
 mod herdr_queue_wake_escalation;
 #[cfg(test)]
 mod herdr_queue_wake_test_gates;
+mod herdr_task_disposition;
 mod http1_server;
 mod loopback_read;
 mod loopback_tcp;
@@ -69,6 +69,7 @@ mod peer_connection_pool;
 mod peer_dial;
 mod peer_stream;
 mod private_staging;
+mod prompt_handoff_record;
 mod router_support;
 mod runtime_health;
 mod runtime_listener;
@@ -118,6 +119,7 @@ pub use peer_stream::{
     AcceptedPeerStream, AuthenticatedPeerStream, EstablishedPeerStream, PeerStreamAdapter,
     PeerStreamFuture,
 };
+pub use router_support::BoundedBlockingBridge;
 pub use runtime_health::{MemberStateTransitionSink, RuntimeHealth};
 pub use runtime_maintenance::{Draining, Running, RuntimeMaintenance, Stopped};
 use runtime_maintenance::{abort_and_join, finish_maintenance};

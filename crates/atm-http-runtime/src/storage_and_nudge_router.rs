@@ -24,7 +24,7 @@ use atm_core::observability::ObservabilityPort;
 use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
 use atm_core::protocol::{
     CompatibilityVerdict, GraftReceiverRegistration, GraftReceiverUnregistration, ReleaseVersion,
-    RequestEnvelope, RequestId, ResponseEnvelope, SendResponseEnvelope,
+    RequestEnvelope, RequestId, ResponseEnvelope, SendResponseEnvelope, TaskMoveOutcome,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
@@ -75,6 +75,20 @@ pub struct StorageAndNudgeRouter {
 }
 
 impl StorageAndNudgeRouter {
+    pub(crate) fn dispatch(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.dispatch_with_request_id(
+            request,
+            ingress,
+            deadline,
+            atm_core::protocol::next_request_id(),
+        )
+    }
+
     pub(super) async fn list_messages(
         &self,
         query: ListQuery,
@@ -290,6 +304,7 @@ impl StorageAndNudgeRouter {
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
         let persisted_timestamp = prepared.persisted_timestamp();
+        let task_rejection = prepared.task_rejection();
         let received_hook_dispatches = if newly_persisted {
             prepared.build_received_hook_dispatches(&self.service_runtime)
         } else {
@@ -332,6 +347,7 @@ impl StorageAndNudgeRouter {
             persisted_timestamp,
             newly_persisted,
             received_hook_dispatches,
+            task_rejection,
         })
     }
 
@@ -468,10 +484,23 @@ impl StorageAndNudgeRouter {
                 )));
                 break;
             };
-            match tokio::time::timeout(remaining, emitter.emit_received_message(dispatch, deadline))
-                .await
+            match tokio::time::timeout(
+                remaining,
+                emitter.emit_received_message(dispatch.clone(), deadline),
+            )
+            .await
             {
-                Ok(Ok(_)) => {}
+                Ok(Ok(_)) => {
+                    crate::prompt_handoff_record::record_prompt_handoff(
+                        self.control_path_sync_bridge.blocking_bridge(),
+                        deadline,
+                        self.service_runtime.task_store(),
+                        &dispatch,
+                        atm_core::boundary::PromptTrigger::Steer,
+                        dispatch.event.message_id.timestamp(),
+                    )
+                    .await;
+                }
                 Ok(Err(error)) => warnings.push(hook_warning(error)),
                 Err(_) => warnings.push(hook_warning(AtmError::daemon_unavailable(
                     "received-message hook timed out after durable message persistence",
@@ -515,6 +544,7 @@ impl StorageAndNudgeRouter {
             ApiRequest::QueueGetNext(request) => {
                 self.queue_get_next(request, ingress, deadline).await
             }
+            ApiRequest::TaskMove(request) => self.task_move(request, ingress, deadline).await,
             ApiRequest::GraftReceiverRegister(request) => {
                 self.graft_receiver_register(request, ingress, deadline)
                     .await
@@ -552,6 +582,39 @@ impl StorageAndNudgeRouter {
                 )
                 .map(ResponseEnvelope::Clear)
                 .map(ApiResponse::new)
+            })
+            .await
+    }
+
+    async fn task_move(
+        &self,
+        request: atm_core::protocol::TaskMoveRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if ingress != AuthenticatedIngress::Local {
+            return Err(AtmError::validation(
+                "task move is available only through authenticated local HTTP adapters",
+            ));
+        }
+        let runtime = self.service_runtime.clone();
+        self.control_path_sync_bridge
+            .run(deadline, move || {
+                let (assignee, from, to) = runtime.task_store()?.move_task(
+                    &request.caller_team,
+                    &request.task_id,
+                    &request.caller_identity,
+                    &request.target,
+                    atm_core::types::IsoTimestamp::now(),
+                )?;
+                Ok(ApiResponse::new(ResponseEnvelope::TaskMove(
+                    TaskMoveOutcome {
+                        task_id: request.task_id,
+                        assignee,
+                        from,
+                        to,
+                    },
+                )))
             })
             .await
     }
@@ -858,6 +921,7 @@ struct CommittedWrite {
     persisted_timestamp: atm_core::types::IsoTimestamp,
     newly_persisted: bool,
     received_hook_dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
+    task_rejection: Option<AtmError>,
 }
 
 impl atm_core::boundary::sealed::Sealed for StorageAndNudgeRouter {}
@@ -948,6 +1012,9 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                     append_warnings(&mut committed.outcome, warnings);
                 }
             }
+            if let Some(error) = committed.task_rejection {
+                return Err(error);
+            }
             Ok(ApiResponse::new(write_response(committed.outcome)))
         })
     }
@@ -958,12 +1025,7 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        self.dispatch_with_request_id(
-            request,
-            ingress,
-            deadline,
-            atm_core::protocol::next_request_id(),
-        )
+        StorageAndNudgeRouter::dispatch(self, request, ingress, deadline)
     }
 
     fn dispatch_with_request_id(
@@ -1033,7 +1095,7 @@ pub(crate) fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Resu
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::fs;
     use std::future::Future;
     use std::num::{NonZeroU16, NonZeroUsize};
@@ -1047,9 +1109,9 @@ mod tests {
     use atm_core::LocalServiceRuntime;
     use atm_core::boundary::{
         AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, GraftNudgeTarget,
-        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeClaim,
-        NudgeKind, PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath,
-        PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+        LocalSteerTarget, LocalTmuxNudgeTarget, MemberKey, MessageReceivedHookSelector, NudgeKind,
+        PendingNudgeStore, PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
+        PromptHandoff, PromptTrigger, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use atm_core::observability::NullObservability;
     use atm_core::observability_counters::{
@@ -1058,14 +1120,14 @@ mod tests {
     use atm_core::protocol::{
         GraftReceiverRegistration, GraftReceiverUnregistration, HeartbeatActivity, OwnerGeneration,
         QueueGetNextRequest, QueuedNudgeMessage, RequestEnvelope, ResponseEnvelope,
-        RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+        RuntimeReadinessState, SendResponseEnvelope, TaskMoveRequest, TeamMemberHeartbeatRequest,
     };
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{
         MessageClassification, NudgeMode, SendMessageSource, TemplateSendSource, WriteRequest,
     };
     use atm_core::test_support as atm_storage;
-    use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TeamName};
+    use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime::{
         DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, HandoffConfig,
@@ -1076,8 +1138,9 @@ mod tests {
         inspect_template_admission_for_test, install_sqlite_message_write_failure,
         open_graft_receiver_endpoint_store, open_sqlite_boundary,
     };
+    use atm_storage::testing::DummyPendingNudgeStore;
     use atm_storage::{
-        AsyncTaskLedgerReader, MessageKey, MessageQuery, MessageStore, RosterSnapshot,
+        AsyncTaskLedgerReader, MessageKey, MessageQuery, MessageStore, MoveTarget, RosterSnapshot,
         RosterStore as StorageRosterStore, TaskStore, TemplateFrontmatter, TemplateSha,
     };
     use axum::body::{Body, to_bytes};
@@ -1085,6 +1148,7 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use tempfile::TempDir;
     use tower::ServiceExt;
+    use tracing_subscriber::prelude::*;
 
     use super::{ControlPathSyncBridge, StorageAndNudgeRouter, retry_deferred_marker};
     use crate::{
@@ -1110,6 +1174,88 @@ mod tests {
     }
 
     struct CounterFixture(DiagnosticCounters);
+
+    #[derive(Clone, Default)]
+    struct PromptHandoffErrorLayer {
+        events: Arc<Mutex<Vec<PromptHandoffErrorEvent>>>,
+    }
+
+    struct PromptHandoffErrorEvent {
+        subsystem: String,
+        action: String,
+        outcome: String,
+        reason: String,
+        message_id: String,
+        kind: String,
+        trigger: String,
+        error_code: String,
+        error: String,
+    }
+
+    #[derive(Default)]
+    struct PromptHandoffErrorFields {
+        subsystem: String,
+        action: String,
+        outcome: String,
+        reason: String,
+        message_id: String,
+        kind: String,
+        trigger: String,
+        error_code: String,
+        error: String,
+    }
+
+    impl tracing::field::Visit for PromptHandoffErrorFields {
+        fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+            match field.name() {
+                "subsystem" => self.subsystem = value.to_owned(),
+                "action" => self.action = value.to_owned(),
+                "outcome" => self.outcome = value.to_owned(),
+                "reason" => self.reason = value.to_owned(),
+                "message_id" => self.message_id = value.to_owned(),
+                "kind" => self.kind = value.to_owned(),
+                "trigger" => self.trigger = value.to_owned(),
+                "error_code" => self.error_code = value.to_owned(),
+                "error" => self.error = value.to_owned(),
+                _ => {}
+            }
+        }
+
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            self.record_str(field, format!("{value:?}").trim_matches('"'));
+        }
+    }
+
+    impl<S> tracing_subscriber::Layer<S> for PromptHandoffErrorLayer
+    where
+        S: tracing::Subscriber,
+    {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _context: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            if *event.metadata().level() != tracing::Level::ERROR {
+                return;
+            }
+            let mut fields = PromptHandoffErrorFields::default();
+            event.record(&mut fields);
+            self.events
+                .lock()
+                .expect("handoff error events")
+                .push(PromptHandoffErrorEvent {
+                    subsystem: fields.subsystem,
+                    action: fields.action,
+                    outcome: fields.outcome,
+                    reason: fields.reason,
+                    message_id: fields.message_id,
+                    kind: fields.kind,
+                    trigger: fields.trigger,
+                    error_code: fields.error_code,
+                    error: fields.error,
+                });
+        }
+    }
 
     impl DiagnosticCountersSource for CounterFixture {
         fn snapshot(&self) -> DiagnosticCounters {
@@ -1186,67 +1332,6 @@ mod tests {
             _dispatch: &BuiltInPostSendDispatch,
         ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
             None
-        }
-    }
-
-    struct FailingMarkPendingStore {
-        inner: Arc<dyn PendingNudgeStore + Send + Sync>,
-        remaining_failures: AtomicUsize,
-    }
-
-    impl atm_storage::contract::sealed::Sealed for FailingMarkPendingStore {}
-
-    impl PendingNudgeStore for FailingMarkPendingStore {
-        fn mark_pending(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-            at: IsoTimestamp,
-        ) -> Result<bool, AtmError> {
-            let previous = self
-                .remaining_failures
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
-                    remaining.checked_sub(1)
-                })
-                .unwrap_or(0);
-            if previous > 0 {
-                return Err(AtmError::daemon_unavailable(
-                    "test pending-marker store failure",
-                ));
-            }
-            self.inner.mark_pending(member, msg, at)
-        }
-
-        fn claim_next_pending(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
-            self.inner.claim_next_pending(member)
-        }
-
-        fn requeue_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
-            self.inner.requeue_pending(member, claim)
-        }
-
-        fn release_pending(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
-            self.inner.release_pending(member, claim)
-        }
-
-        fn clear_pending_on_read(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            self.inner.clear_pending_on_read(member, msg)
-        }
-
-        fn clear_pending_on_handoff(
-            &self,
-            member: &MemberKey,
-            msg: &AtmMessageId,
-        ) -> Result<(), AtmError> {
-            self.inner.clear_pending_on_handoff(member, msg)
-        }
-
-        fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
-            self.inner.list_pending_members()
         }
     }
 
@@ -1469,6 +1554,38 @@ mod tests {
         )
     }
 
+    #[tokio::test]
+    async fn router_peer_ingress_rejects_task_move() {
+        let fixture = fixture(true, None, None);
+        let team: TeamName = "test-team".parse().expect("team");
+        let task_id = "T1".parse().expect("task id");
+        let before = fixture
+            .task_store
+            .list_task_events(&team, &task_id, None)
+            .expect("events before");
+        let error = fixture
+            .router
+            .clone()
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::TaskMove(TaskMoveRequest {
+                    caller_identity: "sender-a".parse().expect("agent"),
+                    caller_team: team.clone(),
+                    task_id: task_id.clone(),
+                    target: MoveTarget::Head,
+                })),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect_err("peer ingress must reject task move");
+        assert!(error.message().contains("authenticated local HTTP"));
+        let after = fixture
+            .task_store
+            .list_task_events(&team, &task_id, None)
+            .expect("events after");
+        assert_eq!(after, before, "rejection must occur before the writer lane");
+    }
+
     fn fixture_with_selector<F>(
         with_recipient: bool,
         hook_failure: Option<AtmError>,
@@ -1608,10 +1725,12 @@ mod tests {
         failures: Option<usize>,
     ) -> Arc<dyn PendingNudgeStore + Send + Sync> {
         match failures {
-            Some(failures) => Arc::new(FailingMarkPendingStore {
-                inner: Arc::clone(store),
-                remaining_failures: AtomicUsize::new(failures),
-            }),
+            Some(failures) => Arc::new(
+                DummyPendingNudgeStore::delegating(Arc::clone(store)).with_mark_failure(
+                    AtmError::daemon_unavailable("test pending-marker store failure"),
+                    failures,
+                ),
+            ),
             None => Arc::clone(store),
         }
     }
@@ -1623,7 +1742,7 @@ mod tests {
         roster_store
             .save_roster(&RosterSnapshot {
                 team_name: team.clone(),
-                members: ["recipient", "sender"]
+                members: ["recipient", "sender", "third"]
                     .into_iter()
                     .map(|agent_name| RosterEntry {
                         team_name: team.clone(),
@@ -1681,6 +1800,29 @@ mod tests {
             false,
         )
         .expect("write request")
+    }
+
+    fn task_write_request(fixture: &Fixture, task_id: &str) -> WriteRequest {
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+        request.task_id = Some(task_id.parse().expect("task id"));
+        request.requires_ack = true;
+        request
+    }
+
+    async fn prompt_handoffs(fixture: &Fixture, task_id: &str) -> Vec<PromptHandoff> {
+        let reader = open_sqlite_boundary(&fixture.database_path)
+            .expect("reopen SQLite boundary")
+            .service_runtime
+            .async_task_ledger_reader()
+            .expect("async task-ledger reader");
+        reader
+            .list_prompt_handoffs(
+                "test-team".parse().expect("team"),
+                task_id.parse::<TaskId>().expect("task id"),
+                atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("read deadline"),
+            )
+            .await
+            .expect("list prompt handoffs")
     }
 
     fn template_write_request(fixture: &Fixture, body: &str) -> WriteRequest {
@@ -1746,6 +1888,243 @@ mod tests {
                 NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero shutdown timeout"),
             ),
         )
+    }
+
+    async fn start_task_lifecycle_daemon(
+        fixture: &Fixture,
+    ) -> (
+        crate::HttpRuntime<crate::Running>,
+        Arc<dyn atm_core::api::DaemonApiClient>,
+    ) {
+        let assembly = open_sqlite_boundary(&fixture.database_path)
+            .expect("reopen durable runtime for daemon lifecycle test");
+        let mailbox_runtime = assembly
+            .async_mailbox_runtime
+            .with_state_handoff(HandoffConfig::default())
+            .expect("configure daemon mailbox runtime");
+        let handler = StorageAndNudgeRouter::new(
+            assembly.service_runtime,
+            Arc::new(NullObservability),
+            Arc::new(FixedReceivedHookSelector {
+                emitter: fixture.received_hook.clone(),
+            }),
+            fixture.home_dir.clone(),
+        )
+        .with_async_mailbox_runtime(Arc::new(mailbox_runtime));
+        let endpoint_record = fixture
+            ._temporary_root
+            .path()
+            .join("task-lifecycle-http.json");
+        let daemon_instance_id = ulid::Ulid::new();
+        std::fs::write(
+            fixture
+                ._temporary_root
+                .path()
+                .join(atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE),
+            format!("1:task-lifecycle-test:{daemon_instance_id}\n"),
+        )
+        .expect("write task lifecycle daemon owner record");
+        let config = HttpRuntimeConfig::new(
+            LoopbackTcpConfig::new(
+                "127.0.0.1:0".parse().expect("ephemeral loopback address"),
+                endpoint_record.clone(),
+                daemon_instance_id,
+            ),
+            None,
+            RuntimeLimits::new(
+                NonZeroUsize::new(4096).expect("body limit"),
+                NonZeroUsize::new(4).expect("connection limit"),
+            ),
+            RuntimeTimeouts::new(
+                NonZeroDuration::new(Duration::from_secs(5)).expect("request timeout"),
+                NonZeroDuration::new(Duration::from_secs(1)).expect("shutdown timeout"),
+            ),
+        );
+        let running = HttpRuntimeBuilder::new(config, Arc::new(handler))
+            .build()
+            .expect("configure task lifecycle daemon")
+            .start()
+            .await
+            .expect("start task lifecycle daemon");
+        let client = crate::loopback_tcp_client(endpoint_record, Duration::from_secs(5))
+            .expect("task lifecycle daemon client");
+        (running, client)
+    }
+
+    fn assignment_request(fixture: &Fixture, from: &str, to: &str, task_id: &str) -> WriteRequest {
+        WriteRequest::new(
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+            from.parse().expect("assignment caller"),
+            &format!("{to}@test-team"),
+            "test-team".parse().expect("team"),
+            SendMessageSource::Inline(format!("assign {task_id}")),
+            None,
+            false,
+            Some(task_id.parse().expect("task id")),
+            false,
+        )
+        .expect("assignment request")
+    }
+
+    fn lifecycle_list_query(
+        fixture: &Fixture,
+        caller: &str,
+        target: Option<&str>,
+    ) -> atm_core::list::ListQuery {
+        atm_core::list::ListQuery::new(
+            fixture.home_dir.clone(),
+            fixture.current_dir.clone(),
+            caller.parse().expect("list caller"),
+            target,
+            "test-team".parse().expect("team"),
+            atm_core::types::ReadSelection::All,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("lifecycle list query")
+    }
+
+    async fn daemon_request(
+        client: &Arc<dyn atm_core::api::DaemonApiClient>,
+        request: ApiRequest,
+    ) -> ResponseEnvelope {
+        client
+            .execute(request)
+            .await
+            .expect("daemon API exchange")
+            .into_inner()
+    }
+
+    async fn task_events_via_daemon(
+        fixture: &Fixture,
+        client: &Arc<dyn atm_core::api::DaemonApiClient>,
+        task_id: &str,
+    ) -> serde_json::Value {
+        let query = lifecycle_list_query(fixture, "sender", None).with_task_ledger(
+            atm_core::list::TaskLedgerQuery::Events {
+                task_id: task_id.parse().expect("task id"),
+                member: None,
+            },
+        );
+        serde_json::to_value(
+            daemon_request(
+                client,
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    query,
+                ))),
+            )
+            .await,
+        )
+        .expect("serialize task events")
+    }
+
+    async fn mailbox_via_daemon(
+        fixture: &Fixture,
+        client: &Arc<dyn atm_core::api::DaemonApiClient>,
+        member: &str,
+    ) -> serde_json::Value {
+        let query = lifecycle_list_query(fixture, member, Some(member));
+        serde_json::to_value(
+            daemon_request(
+                client,
+                ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                    query,
+                ))),
+            )
+            .await,
+        )
+        .expect("serialize mailbox")
+    }
+
+    #[tokio::test]
+    async fn non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon() {
+        let fixture = fixture(true, None, None);
+        let (running, client) = start_task_lifecycle_daemon(&fixture).await;
+        let assigned = daemon_request(
+            &client,
+            ApiRequest::new(RequestEnvelope::Write(Box::new(assignment_request(
+                &fixture,
+                "sender",
+                "recipient",
+                "EQ008-T1",
+            )))),
+        )
+        .await;
+        assert!(matches!(assigned, ResponseEnvelope::Send(_)));
+        let events_before = task_events_via_daemon(&fixture, &client, "EQ008-T1").await;
+        let mail_before = mailbox_via_daemon(&fixture, &client, "third").await;
+
+        let refused = daemon_request(
+            &client,
+            ApiRequest::new(RequestEnvelope::Write(Box::new(assignment_request(
+                &fixture,
+                "recipient",
+                "third",
+                "EQ008-T1",
+            )))),
+        )
+        .await;
+        let ResponseEnvelope::Error(error) = refused else {
+            panic!("non-assigner reassignment must return a structured refusal");
+        };
+        assert_eq!(error.code(), atm_storage::AtmErrorCode::TaskNotCounterparty);
+        assert!(error.detail().contains("task EQ008-T1"));
+        assert!(error.detail().contains("assigned by sender"));
+        assert!(error.detail().contains("caller recipient"));
+        assert_eq!(
+            task_events_via_daemon(&fixture, &client, "EQ008-T1").await,
+            events_before
+        );
+        assert_eq!(
+            mailbox_via_daemon(&fixture, &client, "third").await,
+            mail_before
+        );
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("task lifecycle daemon shuts down");
+    }
+
+    #[tokio::test]
+    async fn recorded_assigner_reassign_still_succeeds_through_daemon() {
+        let fixture = fixture(true, None, None);
+        let (running, client) = start_task_lifecycle_daemon(&fixture).await;
+        for recipient in ["recipient", "third"] {
+            let response = daemon_request(
+                &client,
+                ApiRequest::new(RequestEnvelope::Write(Box::new(assignment_request(
+                    &fixture, "sender", recipient, "EQ008-T2",
+                )))),
+            )
+            .await;
+            assert!(matches!(response, ResponseEnvelope::Send(_)));
+        }
+
+        let events = task_events_via_daemon(&fixture, &client, "EQ008-T2").await;
+        let rows = events["List"]["task_event_rows"]
+            .as_array()
+            .unwrap_or_else(|| panic!("task event rows in {events}"));
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["event"], "assigned");
+        assert_eq!(rows[1]["event"], "reassigned");
+        assert_eq!(rows[1]["assignee"], "third");
+        assert_eq!(
+            mailbox_via_daemon(&fixture, &client, "third").await["List"]["count"],
+            1
+        );
+
+        running
+            .begin_shutdown()
+            .finish()
+            .await
+            .expect("task lifecycle daemon shuts down");
     }
 
     /// Hang detector for two-runtime router tests that dispatch a canonical
@@ -1977,8 +2356,77 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            task_transition: None,
             recipient_pane_id: None,
         }
+    }
+
+    fn task_handoff_dispatch(task_id: Option<&str>) -> BuiltInPostSendDispatch {
+        let mut event = hook_event();
+        event.task_id = task_id.map(|value| value.parse().expect("task id"));
+        event.task_transition = Some(atm_core::boundary::TaskTransition::Ready);
+        BuiltInPostSendDispatch {
+            event,
+            target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                recipient: "recipient".parse().expect("recipient"),
+                recipient_team: "test-team".parse().expect("team"),
+                rendered_nudge: "task prompt".to_owned(),
+            }),
+            kind: NudgeKind::Steer,
+        }
+    }
+
+    fn assert_prompt_handoff_error(
+        layer: &PromptHandoffErrorLayer,
+        dispatch: &BuiltInPostSendDispatch,
+        reason: crate::router_support::PromptHandoffFailureReason,
+    ) {
+        let events = layer.events.lock().expect("handoff error events");
+        assert_eq!(events.len(), 1, "one structured handoff error is logged");
+        assert_eq!(events[0].subsystem, "prompt_handoff");
+        assert_eq!(events[0].action, "prompt_handoff_record_failed");
+        assert_eq!(events[0].outcome, "failed");
+        assert_eq!(events[0].reason, reason.as_str());
+        assert_eq!(events[0].message_id, dispatch.event.message_id.to_string());
+        assert_eq!(events[0].kind, "task_ready");
+        assert_eq!(events[0].trigger, "steer");
+    }
+
+    #[tokio::test]
+    async fn task_store_acquisition_failure_logs_the_real_error() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let dispatch = task_handoff_dispatch(Some("BB6-STORE-ACQUIRE"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_secs(1)),
+            Err(AtmError::daemon_unavailable(
+                "injected task-store acquisition failure",
+            )),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Storage,
+        );
+        let events = layer.events.lock().expect("handoff error events");
+        assert_eq!(events[0].error_code, "ATM_DAEMON_UNAVAILABLE");
+        assert!(
+            events[0]
+                .error
+                .contains("injected task-store acquisition failure")
+        );
     }
 
     #[test]
@@ -2295,6 +2743,71 @@ mod tests {
             response.messages[0].body,
             "<atm><action>queue</action></atm>"
         );
+    }
+
+    pub(crate) struct BareCliPullFixture {
+        pub(crate) _temporary_root: TempDir,
+        pub(crate) router: StorageAndNudgeRouter,
+        pub(crate) runtime: LocalServiceRuntime,
+        pub(crate) pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+        pub(crate) home_dir: PathBuf,
+        pub(crate) current_dir: PathBuf,
+        pub(crate) member: MemberKey,
+        pub(crate) message_id: AtmMessageId,
+    }
+
+    pub(crate) fn bare_cli_pull_fixture() -> BareCliPullFixture {
+        let fixture = fixture(true, None, None);
+        let member = MemberKey::new(
+            "test-team".parse().expect("team"),
+            "recipient".parse().expect("agent"),
+        );
+        let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone())
+            .with_nudge_mode(NudgeMode::Deferred);
+        request.to = Some("recipient@test-team".parse().expect("recipient"));
+        let message_id = atm_core::send::write_mail_with_runtime(
+            request,
+            &NullObservability,
+            &fixture.router.service_runtime,
+        )
+        .expect("deferred queue write")
+        .persisted_message_id();
+        fixture
+            .pending_nudge_store
+            .mark_pending(&member, &message_id, IsoTimestamp::now())
+            .expect("mark queue item pending");
+        let claim = fixture
+            .pending_nudge_store
+            .claim_next_pending(&member)
+            .expect("claim queue item")
+            .expect("queue item claim");
+        assert_eq!(claim.msg, message_id);
+
+        let fifo: BareCliFifo = Default::default();
+        let drops: BareCliQueueFullDrops = Default::default();
+        append_bare_cli_message(
+            &fifo,
+            &drops,
+            member.clone(),
+            QueuedNudgeMessage {
+                kind: NudgeKind::Queue,
+                msg_id: message_id,
+                body: "queued".to_owned(),
+            },
+        )
+        .expect("seed FIFO");
+        let runtime = fixture.router.service_runtime.clone();
+        let router = fixture.router.with_bare_cli_fifo(fifo, drops);
+        BareCliPullFixture {
+            _temporary_root: fixture._temporary_root,
+            router,
+            runtime,
+            pending_nudge_store: fixture.pending_nudge_store,
+            home_dir: fixture.home_dir,
+            current_dir: fixture.current_dir,
+            member,
+            message_id,
+        }
     }
 
     /// AC6 migration case: a stale FIFO entry from an earlier bare-CLI
@@ -3911,6 +4424,243 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn steer_emit_records_handoff_with_trigger_steer() {
+        let fixture = fixture(true, None, None);
+        let write = task_write_request(&fixture, "BB6-STEER");
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let handoffs = prompt_handoffs(&fixture, "BB6-STEER").await;
+        assert_eq!(handoffs.len(), 1, "one successful steer writes one handoff");
+        assert_eq!(handoffs[0].trigger, PromptTrigger::Steer);
+        assert_eq!(handoffs[0].attempt, 0);
+        assert_eq!(handoffs[0].kind.as_str(), "task_queued");
+    }
+
+    #[tokio::test]
+    async fn steer_of_non_task_message_records_no_handoff() {
+        let fixture = fixture(true, None, None);
+        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert!(
+            prompt_handoffs(&fixture, "BB6-NOT-A-TASK").await.is_empty(),
+            "a dispatch without task_transition writes no handoff"
+        );
+    }
+
+    #[test]
+    fn queue_claim_records_no_handoff() {
+        let queue_claim = include_str!("herdr_queue_wake.rs");
+        assert!(
+            !queue_claim.contains("record_prompt_handoff"),
+            "queue claim remains outside the task-linked handoff writer"
+        );
+    }
+
+    #[test]
+    fn deferred_task_linked_message_is_impossible_after_bb5() {
+        let send_source = include_str!("../../atm-core/src/send/mod.rs");
+        let start = send_source
+            .find("pub(crate) fn send_mode_for_task_request")
+            .expect("task send-mode selector");
+        let body = &send_source[start..];
+        let end = body
+            .find("pub(crate) fn finalize_send_outcome")
+            .expect("following send function");
+        let body = &body[..end];
+        assert!(body.contains("if task_id.is_some()"));
+        assert!(body.contains("NudgeMode::Immediate"));
+        assert!(body.contains("request.nudge_mode"));
+        assert!(
+            !body.contains("NudgeMode::Deferred"),
+            "task-linked requests cannot enter the deferred claim path"
+        );
+    }
+
+    #[tokio::test]
+    async fn record_failure_logs_prompt_handoff_record_failed_and_emission_succeeds() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let store = Arc::new(atm_storage::DummyTaskStore::default());
+        store.set_fail_prompt_handoffs(true);
+        let dispatch = task_handoff_dispatch(Some("BB6-STORAGE-FAILURE"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+        let sink_result = PostSendEmissionPath::GraftPort;
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_secs(1)),
+            Ok(store),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+
+        assert_eq!(sink_result, PostSendEmissionPath::GraftPort);
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Storage,
+        );
+    }
+
+    #[tokio::test]
+    async fn steer_with_exhausted_deadline_skips_record_with_failure_log() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let store = Arc::new(atm_storage::DummyTaskStore::default());
+        let dispatch = task_handoff_dispatch(Some("BB6-EXPIRED"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::ZERO),
+            Ok(store.clone()),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Timeout,
+        );
+        let rows = AsyncTaskLedgerReader::list_prompt_handoffs(
+            store.as_ref(),
+            "test-team".parse().expect("team"),
+            "BB6-EXPIRED".parse().expect("task id"),
+            atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("read deadline"),
+        )
+        .await
+        .expect("list handoffs");
+        assert!(rows.is_empty(), "expired recording writes no row");
+    }
+
+    #[tokio::test]
+    async fn record_bridge_saturated_logs_and_emission_succeeds() {
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let release = Arc::new(AtomicBool::new(false));
+        let worker_release = Arc::clone(&release);
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let occupying_bridge = bridge.clone();
+        let occupying = tokio::spawn(async move {
+            occupying_bridge
+                .run(RequestDeadline::after(Duration::from_secs(2)), move || {
+                    started_tx.send(()).expect("signal occupied bridge");
+                    while !worker_release.load(Ordering::Acquire) {
+                        std::thread::yield_now();
+                    }
+                    Ok(())
+                })
+                .await
+        });
+        started_rx.await.expect("bridge job starts");
+        let dispatch = task_handoff_dispatch(Some("BB6-SATURATED"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_millis(20)),
+            Ok(Arc::new(atm_storage::DummyTaskStore::default())),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+        release.store(true, Ordering::Release);
+        occupying
+            .await
+            .expect("occupying task joins")
+            .expect("job exits");
+
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Saturated,
+        );
+    }
+
+    #[tokio::test]
+    async fn record_bridge_timeout_logs_and_emission_succeeds() {
+        let dispatch = task_handoff_dispatch(Some("BB6-TIMEOUT"));
+        let layer = PromptHandoffErrorLayer::default();
+        let _subscriber =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
+        let bridge = crate::BoundedBlockingBridge::new(
+            NonZeroUsize::new(1).expect("bridge capacity"),
+            RuntimeHealth::default(),
+        );
+        let store = Arc::new(atm_storage::DummyTaskStore::default());
+        store.set_prompt_handoff_delay(Duration::from_millis(100));
+        let timer_fired = Arc::new(AtomicBool::new(false));
+        let timer_observed = Arc::clone(&timer_fired);
+        let timer = tokio::spawn(async move {
+            tokio::task::yield_now().await;
+            timer_observed.store(true, Ordering::Release);
+        });
+        crate::prompt_handoff_record::record_prompt_handoff(
+            &bridge,
+            RequestDeadline::after(Duration::from_millis(20)),
+            Ok(store),
+            &dispatch,
+            PromptTrigger::Steer,
+            IsoTimestamp::now(),
+        )
+        .await;
+        timer.await.expect("independent timer joins");
+
+        assert!(
+            timer_fired.load(Ordering::Acquire),
+            "Tokio worker remains live"
+        );
+        assert_prompt_handoff_error(
+            &layer,
+            &dispatch,
+            crate::router_support::PromptHandoffFailureReason::Timeout,
+        );
+    }
+
+    #[test]
+    fn prompt_handoff_failure_classification_uses_codes_not_wording() {
+        for (code, expected) in [
+            (
+                atm_core::error::AtmErrorCode::BlockingBridgeDeadlineBeforeStart,
+                crate::router_support::PromptHandoffFailureReason::Saturated,
+            ),
+            (
+                atm_core::error::AtmErrorCode::BlockingBridgeDeadlineAfterStart,
+                crate::router_support::PromptHandoffFailureReason::Timeout,
+            ),
+        ] {
+            let error = AtmError::new(code, "deliberately unrelated wording");
+            assert_eq!(
+                crate::prompt_handoff_record::failure_reason(&error),
+                expected
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn deferred_write_through_async_router_marks_once_without_tokio_sqlite_access() {
         let fixture = fixture(true, None, None);
         let message_id = AtmMessageId::new();
@@ -5518,6 +6268,28 @@ mod tests {
                 .expect("load committed message")
                 .is_some(),
             "hook failure cannot roll back a durable receive"
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_steer_sink_records_no_handoff() {
+        let fixture = fixture(
+            true,
+            Some(AtmError::daemon_unavailable(
+                "intentional steer sink failure",
+            )),
+            None,
+        );
+        let write = task_write_request(&fixture, "BB6-FAILED-STEER");
+
+        let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert!(
+            prompt_handoffs(&fixture, "BB6-FAILED-STEER")
+                .await
+                .is_empty(),
+            "a failed steer sink writes no handoff"
         );
     }
 

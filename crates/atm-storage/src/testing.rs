@@ -1,4 +1,4 @@
-//! Shared no-op test doubles for storage contract traits.
+//! Shared configurable test doubles for storage contract traits.
 //!
 //! RBQA-F002/F003: `GraftReceiverEndpointStore` no-op test doubles were
 //! independently duplicated in `atm-storage`'s own test module and in
@@ -8,15 +8,21 @@
 //! cross-crate test-only surfaces are shared in this workspace.
 
 use chrono::{DateTime, Utc};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::contract::{
     AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncTaskLedgerReader,
     GraftEndpointStoreError, GraftReceiverEndpointStore, GraftReceiverLease,
-    GraftReceiverRegistration, MailboxScope, Message, MessageKey, MessageQuery, ReadDeadline,
-    ReadLaneError, sealed,
+    GraftReceiverRegistration, MailboxListQuery, MailboxScope, Message, MessageKey, MessageQuery,
+    NudgeClaim, PendingNudgeStore, ReadDeadline, ReadLaneError, sealed,
 };
-use crate::task_state::{TaskEventRow, TaskRow};
-use crate::types::{AgentName, IsoTimestamp, OwnerGeneration, TaskId, TeamName};
+use crate::error::AtmError;
+use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::task_state::{PromptHandoff, TaskEventRow, TaskRow};
+use crate::types::{AgentName, IsoTimestamp, MemberKey, OwnerGeneration, TaskId, TeamName};
+
+pub use crate::contract::DummyPendingNudgeStore;
 
 /// A `GraftReceiverEndpointStore` that accepts every write and reports no
 /// lease. Used by callers that need a wired store to compile against but
@@ -78,11 +84,23 @@ impl AsyncGraftReceiverEndpointStore for NoopGraftReceiverEndpointStore {}
 
 /// Deterministic in-memory double for the sealed async mailbox-read contract.
 /// It is intentionally available only through the `test-utils` feature.
-#[derive(Debug, Default)]
 pub struct InMemoryMailboxReader {
     messages: std::sync::Mutex<Vec<Message>>,
     seen_watermarks:
         std::sync::Mutex<std::collections::BTreeMap<(TeamName, AgentName), IsoTimestamp>>,
+    delegate: Option<Arc<dyn AsyncMailboxReader + Send + Sync>>,
+    list_calls: AtomicUsize,
+}
+
+impl Default for InMemoryMailboxReader {
+    fn default() -> Self {
+        Self {
+            messages: std::sync::Mutex::new(Vec::new()),
+            seen_watermarks: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            delegate: None,
+            list_calls: AtomicUsize::new(0),
+        }
+    }
 }
 
 impl InMemoryMailboxReader {
@@ -91,7 +109,212 @@ impl InMemoryMailboxReader {
         Self {
             messages: std::sync::Mutex::new(messages),
             seen_watermarks: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            delegate: None,
+            list_calls: AtomicUsize::new(0),
         }
+    }
+
+    #[must_use]
+    pub fn delegating(inner: Arc<dyn AsyncMailboxReader + Send + Sync>) -> Self {
+        Self {
+            delegate: Some(inner),
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn list_call_count(&self) -> usize {
+        self.list_calls.load(Ordering::SeqCst)
+    }
+}
+
+fn select_matching_in_memory(
+    messages: &[Message],
+    scope: &MailboxScope,
+    query: &MailboxListQuery,
+) -> Vec<Message> {
+    let successors = messages
+        .iter()
+        .filter(|message| message.team == scope.team && message.agent == scope.agent)
+        .filter_map(|message| message.envelope.parent_message_id)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut selected = messages
+        .iter()
+        .filter(|message| message.team == scope.team && message.agent == scope.agent)
+        .filter(|message| matches_mailbox_query(message, query, &successors))
+        .cloned()
+        .collect::<Vec<_>>();
+    selected.sort_by(|left, right| {
+        right
+            .envelope
+            .timestamp
+            .cmp(&left.envelope.timestamp)
+            .then_with(|| right.message_key.cmp(&left.message_key))
+    });
+    if let Some(limit) = query.limit {
+        selected.truncate(limit);
+    }
+    selected
+}
+
+fn matches_mailbox_query(
+    message: &Message,
+    query: &MailboxListQuery,
+    successors: &std::collections::BTreeSet<AtmMessageId>,
+) -> bool {
+    let filters = &query.filters;
+    (!filters.current_only
+        || message
+            .envelope
+            .message_id
+            .is_none_or(|id| !successors.contains(&id)))
+        && filters
+            .from_agent
+            .as_ref()
+            .is_none_or(|agent| &message.envelope.from == agent)
+        && filters
+            .message_id
+            .is_none_or(|id| message.envelope.message_id == Some(id))
+        && filters
+            .task_id
+            .as_ref()
+            .is_none_or(|id| message.envelope.task_id.as_ref() == Some(id))
+        && matches_time_and_text(message, filters)
+        && mailbox_filter_matches(&message.envelope, filters)
+}
+
+fn matches_time_and_text(message: &Message, filters: &crate::search::SearchFilters) -> bool {
+    let time_matches = filters.time_range.as_ref().is_none_or(|range| {
+        range
+            .since
+            .is_none_or(|since| message.envelope.timestamp >= since)
+            && range
+                .until
+                .is_none_or(|until| message.envelope.timestamp <= until)
+    });
+    time_matches
+        && filters.contains.as_ref().is_none_or(|needle| {
+            let needle = needle.to_ascii_lowercase();
+            message.envelope.text.to_ascii_lowercase().contains(&needle)
+                || message
+                    .envelope
+                    .summary
+                    .as_ref()
+                    .is_some_and(|text| text.to_ascii_lowercase().contains(&needle))
+        })
+}
+
+fn in_memory_counts(
+    messages: &[Message],
+    scope: &MailboxScope,
+    filters: &crate::search::SearchFilters,
+    group_by: Option<crate::search::SearchCountGroupBy>,
+) -> Result<Vec<crate::search::SearchCount>, ReadLaneError> {
+    if matches!(
+        group_by,
+        Some(crate::search::SearchCountGroupBy::FromAgent | crate::search::SearchCountGroupBy::Tag)
+    ) {
+        return Err(ReadLaneError::Unavailable {
+            message: "in-memory mailbox reader does not emulate grouped sender/tag SQL counts"
+                .to_owned(),
+        });
+    }
+    let buckets = messages
+        .iter()
+        .filter(|message| message.team == scope.team && message.agent == scope.agent)
+        .filter(|message| {
+            filters
+                .from_agent
+                .as_ref()
+                .is_none_or(|from| message.envelope.from == *from)
+        })
+        .filter_map(|message| counted_bucket(message, filters))
+        .fold([0; 3], |mut counts, bucket| {
+            counts[bucket] += 1;
+            counts
+        });
+    Ok(in_memory_count_result(buckets, group_by))
+}
+
+fn counted_bucket(message: &Message, filters: &crate::search::SearchFilters) -> Option<usize> {
+    let requirement = crate::derive_ack_requirement(&message.envelope);
+    let pending = matches!(requirement, crate::AckRequirementState::RequiredPending);
+    if matches!(filters.read_state, Some(crate::search::SearchReadState::Unread) if message.envelope.read)
+        || matches!(filters.read_state, Some(crate::search::SearchReadState::Read) if !message.envelope.read)
+        || matches!(filters.ack_state, Some(crate::search::SearchAckState::Pending) if !pending)
+        || matches!(filters.ack_state, Some(crate::search::SearchAckState::Acknowledged) if !matches!(requirement, crate::AckRequirementState::RequiredAcknowledged))
+        || matches!(filters.ack_state, Some(crate::search::SearchAckState::NotRequired) if !matches!(requirement, crate::AckRequirementState::NotRequired))
+    {
+        return None;
+    }
+    Some(if pending {
+        1
+    } else if message.envelope.read {
+        2
+    } else {
+        0
+    })
+}
+
+fn in_memory_count_result(
+    buckets: [usize; 3],
+    group_by: Option<crate::search::SearchCountGroupBy>,
+) -> Vec<crate::search::SearchCount> {
+    let bucket = |index, key| crate::search::SearchCount {
+        key: Some(crate::search::SearchCountKey::Bucket(key)),
+        count: buckets[index],
+    };
+    match group_by {
+        Some(crate::search::SearchCountGroupBy::Bucket) => vec![
+            bucket(0, crate::search::MailboxBucket::Unread),
+            bucket(1, crate::search::MailboxBucket::PendingAck),
+            bucket(2, crate::search::MailboxBucket::History),
+        ],
+        _ => vec![crate::search::SearchCount {
+            key: None,
+            count: buckets.iter().sum(),
+        }],
+    }
+}
+
+fn mailbox_filter_matches(
+    envelope: &MessageEnvelope,
+    filters: &crate::search::SearchFilters,
+) -> bool {
+    let pending = matches!(
+        crate::derive_ack_requirement(envelope),
+        crate::AckRequirementState::RequiredPending
+    );
+    match filters.read_state {
+        Some(crate::search::SearchReadState::Unread) if envelope.read => return false,
+        Some(crate::search::SearchReadState::Read) if !envelope.read => return false,
+        _ => {}
+    }
+    match filters.ack_state {
+        Some(crate::search::SearchAckState::Pending) if !pending => return false,
+        Some(crate::search::SearchAckState::Acknowledged)
+            if !matches!(
+                crate::derive_ack_requirement(envelope),
+                crate::AckRequirementState::RequiredAcknowledged
+            ) =>
+        {
+            return false;
+        }
+        Some(crate::search::SearchAckState::NotRequired)
+            if !matches!(
+                crate::derive_ack_requirement(envelope),
+                crate::AckRequirementState::NotRequired
+            ) =>
+        {
+            return false;
+        }
+        _ => {}
+    }
+    match filters.mailbox_selection {
+        Some(crate::search::SearchMailboxSelection::Actionable) => pending || !envelope.read,
+        Some(crate::search::SearchMailboxSelection::Unread) => !pending && !envelope.read,
+        Some(crate::search::SearchMailboxSelection::PendingAck) => pending,
+        Some(crate::search::SearchMailboxSelection::All) | None => true,
     }
 }
 
@@ -103,8 +326,12 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
         &self,
         scope: MailboxScope,
         query: MessageQuery,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<Vec<Message>, ReadLaneError> {
+        self.list_calls.fetch_add(1, Ordering::SeqCst);
+        if let Some(delegate) = &self.delegate {
+            return delegate.list_messages(scope, query, deadline).await;
+        }
         if !scope.permits(&query) {
             return Err(ReadLaneError::UnauthorizedScope);
         }
@@ -125,12 +352,75 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
         Ok(selected)
     }
 
+    async fn list_matching_messages(
+        &self,
+        scope: MailboxScope,
+        query: MailboxListQuery,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<Message>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate
+                .list_matching_messages(scope, query, _deadline)
+                .await;
+        }
+        if query
+            .filters
+            .team
+            .as_ref()
+            .is_some_and(|team| team != &scope.team)
+            || query
+                .filters
+                .agent
+                .as_ref()
+                .is_some_and(|agent| agent != &scope.agent)
+        {
+            return Err(ReadLaneError::UnauthorizedScope);
+        }
+        let messages = self
+            .messages
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory mailbox reader lock poisoned".to_owned(),
+            })?;
+        Ok(select_matching_in_memory(&messages, &scope, &query))
+    }
+
+    async fn count_messages(
+        &self,
+        scope: MailboxScope,
+        filters: crate::search::SearchFilters,
+        group_by: Option<crate::search::SearchCountGroupBy>,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<crate::search::SearchCount>, ReadLaneError> {
+        if filters
+            .team
+            .as_ref()
+            .is_some_and(|team| team != &scope.team)
+            || filters
+                .agent
+                .as_ref()
+                .is_some_and(|agent| agent != &scope.agent)
+        {
+            return Err(ReadLaneError::UnauthorizedScope);
+        }
+        let messages = self
+            .messages
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory mailbox reader lock poisoned".to_owned(),
+            })?;
+        in_memory_counts(&messages, &scope, &filters, group_by)
+    }
+
     async fn load_message(
         &self,
         scope: MailboxScope,
         key: MessageKey,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<Option<Message>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.load_message(scope, key, deadline).await;
+        }
         let messages = self
             .messages
             .lock()
@@ -149,8 +439,11 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
     async fn mailbox_member_exists(
         &self,
         scope: MailboxScope,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<bool, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.mailbox_member_exists(scope, deadline).await;
+        }
         let messages = self
             .messages
             .lock()
@@ -165,8 +458,11 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
     async fn load_seen_watermark(
         &self,
         scope: MailboxScope,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<Option<IsoTimestamp>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.load_seen_watermark(scope, deadline).await;
+        }
         self.seen_watermarks
             .lock()
             .map_err(|_| ReadLaneError::Unavailable {
@@ -178,10 +474,26 @@ impl AsyncMailboxReader for InMemoryMailboxReader {
 
 /// Deterministic in-memory double for the sealed async task-ledger read
 /// contract. It is intentionally available only through `test-utils`.
-#[derive(Debug, Default)]
 pub struct InMemoryTaskLedgerReader {
     tasks: std::sync::Mutex<Vec<TaskRow>>,
     events: std::sync::Mutex<Vec<TaskEventRow>>,
+    prompt_handoffs: std::sync::Mutex<Vec<PromptHandoff>>,
+    delegate: Option<Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
+    open_tasks_hook: std::sync::Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+    refusal_error: std::sync::Mutex<Option<ReadLaneError>>,
+}
+
+impl Default for InMemoryTaskLedgerReader {
+    fn default() -> Self {
+        Self {
+            tasks: std::sync::Mutex::new(Vec::new()),
+            events: std::sync::Mutex::new(Vec::new()),
+            prompt_handoffs: std::sync::Mutex::new(Vec::new()),
+            delegate: None,
+            open_tasks_hook: std::sync::Mutex::new(None),
+            refusal_error: std::sync::Mutex::new(None),
+        }
+    }
 }
 
 impl InMemoryTaskLedgerReader {
@@ -190,6 +502,22 @@ impl InMemoryTaskLedgerReader {
         Self {
             tasks: std::sync::Mutex::new(tasks),
             events: std::sync::Mutex::new(events),
+            prompt_handoffs: std::sync::Mutex::new(Vec::new()),
+            delegate: None,
+            open_tasks_hook: std::sync::Mutex::new(None),
+            refusal_error: std::sync::Mutex::new(None),
+        }
+    }
+
+    #[must_use]
+    pub fn delegating_with_open_tasks_hook(
+        inner: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+        hook: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            delegate: Some(inner),
+            open_tasks_hook: std::sync::Mutex::new(Some(Box::new(hook))),
+            ..Self::default()
         }
     }
 
@@ -197,18 +525,162 @@ impl InMemoryTaskLedgerReader {
         *self.tasks.lock().expect("in-memory task rows lock") = tasks;
         *self.events.lock().expect("in-memory task events lock") = events;
     }
+
+    /// Seeds prompt handoffs while preserving the existing task/event row
+    /// constructor used by runtime fixtures.
+    #[must_use]
+    pub fn with_prompt_handoffs(mut self, prompt_handoffs: Vec<PromptHandoff>) -> Self {
+        self.prompt_handoffs = std::sync::Mutex::new(prompt_handoffs);
+        self
+    }
+
+    pub fn replace_prompt_handoffs(&self, prompt_handoffs: Vec<PromptHandoff>) {
+        *self
+            .prompt_handoffs
+            .lock()
+            .expect("in-memory prompt handoff rows lock") = prompt_handoffs;
+    }
+
+    /// Injects a refusal-history read outcome without affecting the other
+    /// task-ledger reads exercised by a runtime invariant test.
+    #[must_use]
+    pub fn with_refusal_error(self, error: ReadLaneError) -> Self {
+        *self
+            .refusal_error
+            .lock()
+            .expect("in-memory refusal error lock") = Some(error);
+        self
+    }
 }
 
 impl sealed::Sealed for InMemoryTaskLedgerReader {}
 
 #[async_trait::async_trait]
 impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
+    async fn load_task(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Option<TaskRow>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.load_task(team, task_id, deadline).await;
+        }
+        Ok(self
+            .tasks
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger reader task lock poisoned".to_owned(),
+            })?
+            .iter()
+            .find(|task| task.team == team && task.task_id == task_id)
+            .cloned())
+    }
+
+    async fn open_tasks_for_team(
+        &self,
+        team: TeamName,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        let hook = self
+            .open_tasks_hook
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger hook lock poisoned".to_owned(),
+            })?
+            .take();
+        if let Some(hook) = hook {
+            hook();
+        }
+        if let Some(delegate) = &self.delegate {
+            return delegate.open_tasks_for_team(team, deadline).await;
+        }
+        let mut rows = self
+            .tasks
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger reader task lock poisoned".to_owned(),
+            })?
+            .iter()
+            .filter(|task| task.team == team && task.state.is_open())
+            .cloned()
+            .collect::<Vec<_>>();
+        rows.sort_by(|left, right| {
+            (
+                &left.assignee,
+                left.position,
+                left.assigned_at,
+                &left.task_id,
+            )
+                .cmp(&(
+                    &right.assignee,
+                    right.position,
+                    right.assigned_at,
+                    &right.task_id,
+                ))
+        });
+        Ok(rows)
+    }
+
+    async fn refusal_run(
+        &self,
+        team: TeamName,
+        assignee: AgentName,
+        deadline: ReadDeadline,
+    ) -> Result<crate::RefusalRun, ReadLaneError> {
+        if let Some(error) = self
+            .refusal_error
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory refusal error lock poisoned".to_owned(),
+            })?
+            .clone()
+        {
+            return Err(error);
+        }
+        if let Some(delegate) = &self.delegate {
+            return delegate.refusal_run(team, assignee, deadline).await;
+        }
+        let events = self.events.lock().map_err(|_| ReadLaneError::Unavailable {
+            message: "in-memory task-ledger reader event lock poisoned".to_owned(),
+        })?;
+        let mut relevant = events
+            .iter()
+            .filter(|event| event.team == team && event.assignee == assignee)
+            .filter(|event| {
+                matches!(
+                    event.event,
+                    crate::TaskEventKind::Assigned
+                        | crate::TaskEventKind::Reassigned
+                        | crate::TaskEventKind::Reopened
+                        | crate::TaskEventKind::Completed
+                        | crate::TaskEventKind::Refused
+                        | crate::TaskEventKind::Cancelled
+                )
+            })
+            .collect::<Vec<_>>();
+        relevant.sort_by_key(|event| (event.at, event.seq));
+        let refused = relevant
+            .iter()
+            .rev()
+            .take_while(|event| event.event == crate::TaskEventKind::Refused)
+            .copied()
+            .collect::<Vec<_>>();
+        Ok(crate::RefusalRun {
+            count: u32::try_from(refused.len()).unwrap_or(u32::MAX),
+            started_at: refused.last().map(|event| event.at),
+        })
+    }
+
     async fn list_tasks(
         &self,
         team: TeamName,
         member: Option<AgentName>,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.list_tasks(team, member, deadline).await;
+        }
         self.tasks
             .lock()
             .map_err(|_| ReadLaneError::Unavailable {
@@ -231,8 +703,13 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
         team: TeamName,
         task_id: TaskId,
         member: Option<AgentName>,
-        _deadline: ReadDeadline,
+        deadline: ReadDeadline,
     ) -> Result<Vec<TaskEventRow>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate
+                .list_task_events(team, task_id, member, deadline)
+                .await;
+        }
         self.events
             .lock()
             .map_err(|_| ReadLaneError::Unavailable {
@@ -249,5 +726,207 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
                     .cloned()
                     .collect()
             })
+    }
+
+    async fn list_prompt_handoffs(
+        &self,
+        team: TeamName,
+        task_id: TaskId,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<PromptHandoff>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate.list_prompt_handoffs(team, task_id, deadline).await;
+        }
+        self.prompt_handoffs
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger reader prompt handoff lock poisoned".to_owned(),
+            })
+            .map(|handoffs| {
+                handoffs
+                    .iter()
+                    .filter(|handoff| handoff.team == team && handoff.task_id == task_id)
+                    .cloned()
+                    .collect()
+            })
+    }
+}
+
+pub(crate) struct PendingStoreState {
+    inner: Option<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>>,
+    mark_failure: Option<AtmError>,
+    mark_failures_remaining: std::sync::atomic::AtomicUsize,
+    rearm_failure: Option<AtmError>,
+    release_started: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    release_blocker: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    operation_calls: std::sync::atomic::AtomicUsize,
+    rearm_calls: std::sync::atomic::AtomicUsize,
+    mark_pending_calls: std::sync::Mutex<Vec<(MemberKey, AtmMessageId)>>,
+}
+
+impl Default for DummyPendingNudgeStore {
+    fn default() -> Self {
+        Self(PendingStoreState {
+            inner: None,
+            mark_failure: None,
+            mark_failures_remaining: std::sync::atomic::AtomicUsize::new(0),
+            rearm_failure: None,
+            release_started: None,
+            release_blocker: None,
+            operation_calls: std::sync::atomic::AtomicUsize::new(0),
+            rearm_calls: std::sync::atomic::AtomicUsize::new(0),
+            mark_pending_calls: std::sync::Mutex::new(Vec::new()),
+        })
+    }
+}
+
+impl DummyPendingNudgeStore {
+    #[must_use]
+    pub fn delegating(inner: std::sync::Arc<dyn PendingNudgeStore + Send + Sync>) -> Self {
+        Self(PendingStoreState {
+            inner: Some(inner),
+            ..Self::default().0
+        })
+    }
+
+    #[must_use]
+    pub fn with_mark_failure(mut self, failure: AtmError, count: usize) -> Self {
+        self.0.mark_failure = Some(failure);
+        self.0.mark_failures_remaining = std::sync::atomic::AtomicUsize::new(count);
+        self
+    }
+
+    #[must_use]
+    pub fn with_rearm_failure(mut self, failure: AtmError) -> Self {
+        self.0.rearm_failure = Some(failure);
+        self
+    }
+
+    /// Blocks release operations until `blocker` becomes false, exposing the
+    /// synchronous-store stall needed by bounded-shutdown tests.
+    #[must_use]
+    pub fn with_release_blocker(
+        mut self,
+        started: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        blocker: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> Self {
+        self.0.release_started = Some(started);
+        self.0.release_blocker = Some(blocker);
+        self
+    }
+
+    #[must_use]
+    pub fn mark_pending_call_count(&self) -> usize {
+        self.0
+            .mark_pending_calls
+            .lock()
+            .expect("pending-nudge mark call lock")
+            .len()
+    }
+
+    #[must_use]
+    pub fn operation_call_count(&self) -> usize {
+        self.0
+            .operation_calls
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    #[must_use]
+    pub fn rearm_call_count(&self) -> usize {
+        self.0.rearm_calls.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn record_operation(&self) {
+        self.0
+            .operation_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn next_mark_failure(&self) -> Option<AtmError> {
+        let previous = self
+            .0
+            .mark_failures_remaining
+            .fetch_update(
+                std::sync::atomic::Ordering::SeqCst,
+                std::sync::atomic::Ordering::SeqCst,
+                |remaining| remaining.checked_sub(1),
+            )
+            .unwrap_or(0);
+        (previous > 0)
+            .then(|| self.0.mark_failure.clone())
+            .flatten()
+    }
+
+    pub(crate) fn mark(
+        &self,
+        member: &MemberKey,
+        msg: &AtmMessageId,
+        at: IsoTimestamp,
+    ) -> Result<bool, AtmError> {
+        self.record_operation();
+        self.0
+            .mark_pending_calls
+            .lock()
+            .expect("pending-nudge mark call lock")
+            .push((member.clone(), *msg));
+        if let Some(failure) = self.next_mark_failure() {
+            return Err(failure);
+        }
+        self.0
+            .inner
+            .as_ref()
+            .map_or(Ok(true), |inner| inner.mark_pending(member, msg, at))
+    }
+
+    pub(crate) fn claim(&self, member: &MemberKey) -> Result<Option<NudgeClaim>, AtmError> {
+        self.record_operation();
+        self.0
+            .inner
+            .as_ref()
+            .map_or(Ok(None), |inner| inner.claim_next_pending(member))
+    }
+
+    pub(crate) fn requeue(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+        self.record_operation();
+        self.0
+            .inner
+            .as_ref()
+            .map_or(Ok(()), |inner| inner.requeue_pending(member, claim))
+    }
+
+    pub(crate) fn release(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
+        self.record_operation();
+        if let Some(started) = &self.0.release_started {
+            started.store(true, std::sync::atomic::Ordering::Release);
+        }
+        if let Some(blocker) = &self.0.release_blocker {
+            while blocker.load(std::sync::atomic::Ordering::Acquire) {
+                std::thread::yield_now();
+            }
+        }
+        self.0
+            .inner
+            .as_ref()
+            .map_or(Ok(()), |inner| inner.release_pending(member, claim))
+    }
+
+    pub(crate) fn rearm_failure(&self) -> Option<AtmError> {
+        self.record_operation();
+        self.0
+            .rearm_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.0.rearm_failure.clone()
+    }
+
+    pub(crate) fn inner(&self) -> Option<&std::sync::Arc<dyn PendingNudgeStore + Send + Sync>> {
+        self.0.inner.as_ref()
+    }
+
+    pub(crate) fn list(&self) -> Result<Vec<MemberKey>, AtmError> {
+        self.record_operation();
+        self.0
+            .inner
+            .as_ref()
+            .map_or_else(|| Ok(Vec::new()), |inner| inner.list_pending_members())
     }
 }

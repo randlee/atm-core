@@ -114,7 +114,8 @@ class BuildRowsShapeTests(unittest.TestCase):
         stack, prs = self.coherent_stack()
         stack["branches"][2] = layer("docs/top", 3, head=None, base=None)
         rows, problems, notes = gsv.build_rows(stack, prs, fetched=True)
-        text = gsv.render_table(stack, rows, problems, notes, trunk_origin=T0)
+        landing = {"landable": None, "reason": "no open layer or trunk not fetched"}
+        text = gsv.render_table(stack, rows, problems, notes, landing, trunk_origin=T0)
         self.assertIn("VERDICT: ✅ COHERENT", text)
         self.assertIn("note: L3 docs/top: gh stack reported no local head", text)
 

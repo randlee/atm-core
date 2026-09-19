@@ -73,3 +73,74 @@ pub fn inspect_template_admission_for_test(
         messages,
     })
 }
+
+/// Reads the durable pending marker used by black-box queue tests.
+#[doc(hidden)]
+pub fn inspect_pending_marker_state_for_test(
+    path: impl AsRef<Path>,
+    team: &str,
+    agent: &str,
+    message_key: &str,
+) -> Result<(Option<String>, u32), AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
+        AtmError::mailbox_read(format!("failed to inspect pending nudge fixture: {error}"))
+    })?;
+    connection
+        .query_row(
+            "SELECT nudge_pending_at, nudge_attempts FROM mail_message_states
+             WHERE team = ?1 AND agent = ?2 AND message_key = ?3",
+            params![team, agent, message_key],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|error| {
+            AtmError::mailbox_read(format!("failed to inspect pending nudge state: {error}"))
+        })
+}
+
+/// Returns the durable mailbox-state columns for schema black-box tests.
+#[doc(hidden)]
+pub fn inspect_mail_message_state_columns_for_test(
+    path: impl AsRef<Path>,
+) -> Result<Vec<String>, AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
+        AtmError::mailbox_read(format!("failed to inspect mailbox schema fixture: {error}"))
+    })?;
+    let mut statement = connection
+        .prepare("PRAGMA table_info(mail_message_states)")
+        .map_err(|error| {
+            AtmError::mailbox_read(format!("failed to inspect mailbox schema: {error}"))
+        })?;
+    statement
+        .query_map([], |row| row.get(1))
+        .map_err(|error| AtmError::mailbox_read(format!("failed to read mailbox schema: {error}")))?
+        .collect::<Result<Vec<String>, _>>()
+        .map_err(|error| {
+            AtmError::mailbox_read(format!("failed to collect mailbox schema: {error}"))
+        })
+}
+
+/// Reads the acknowledgement marker used by black-box mailbox tests.
+#[doc(hidden)]
+pub fn inspect_message_ack_state_for_test(
+    path: impl AsRef<Path>,
+    team: &str,
+    agent: &str,
+    message_key: &str,
+) -> Result<bool, AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
+        AtmError::mailbox_read(format!(
+            "failed to inspect acknowledgement fixture: {error}"
+        ))
+    })?;
+    connection
+        .query_row(
+            "SELECT pending_ack_at IS NOT NULL AND acknowledged_at IS NULL
+             FROM mail_message_states
+             WHERE team = ?1 AND agent = ?2 AND message_key = ?3",
+            params![team, agent, message_key],
+            |row| row.get(0),
+        )
+        .map_err(|error| {
+            AtmError::mailbox_read(format!("failed to inspect acknowledgement state: {error}"))
+        })
+}

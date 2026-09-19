@@ -44,8 +44,8 @@ shape-only completion fails the sprint.
   flag through the flattened `SendCommand` in
   `crates/atm/src/commands/queue.rs`; no separate change. `--json`
   output shows `task_complete` (AX.3 C8).
-- [x] D2 — `atm list --tasks [--member <name>]` and
-  `atm list --task-events <TASK_ID> [--member <name>]`
+- [x] D2 — Historical surface; use `atm task list [--all]` and
+  `atm task events <TASK_ID>` (Phase BA)
   (`crates/atm/src/commands/list.rs`, which owns parsing and rendering),
   reading through `LocalServiceRuntime::task_store()` and importing
   `TaskRow` / `TaskEventRow` from `atm_storage::contract` (the CLI is an
@@ -74,8 +74,8 @@ None.
 
 ### C1 — list output
 
-`atm list --tasks --json`: JSON array of `TaskRow`.
-`atm list --task-events <id> --json`: JSON array of `TaskEventRow`.
+`atm task list --json`: JSON array of `TaskRow`.
+`atm task events <id> --json`: JSON array of `TaskEventRow`.
 
 Human output, `--tasks` (header then one line per row, newest first;
 `--member` keeps only that assignee):
@@ -106,16 +106,17 @@ every existing `atm list` filter.
 
 ## Acceptance criteria
 
-1. After AX.3 AC 1's scenario, `atm list --tasks --json` returns two
-   rows with states `active` and `assigned`, and `atm list --task-events
+1. After AX.3 AC 1's scenario, `atm task list --json` returns two
+   rows with states `active` and `assigned`, and `atm task events
    <first> --json` returns the `assigned`, `acked` rows in `seq` order;
    `atm list --task-events <second>` shows the `rejected` row with the
    G1 detail.
 2. `atm send cipher --task-complete t-42 --stdin` from the assigner
-   exits 0 and `atm list --tasks` shows `complete`; the same with an
+   exits 0 and `atm task list` shows `complete`; the same with an
    unknown id exits 3 and writes no message; `--task-complete` together
    with `--task-id` exits 2.
-3. `atm list --tasks --task t-1` and `--task-events t-1 --unread` exit 2.
+3. The historical conflicting-filter checks are superseded by `atm task list`
+   and `atm task events t-1`.
 4. Requirements §6.5/§7.3/§7.12/§15.4, team-protocol, and `tasks.md` merged;
    `just validate` green.
 

@@ -469,8 +469,8 @@ fn commit_savepoint(
 ) -> Result<WriteOpResult, AtmError> {
     savepoint
         .commit()
-        .map(|()| op_result)
-        .map_err(|error| sqlite_error(target, "failed to commit sqlite writer savepoint", error))
+        .map_err(|error| sqlite_error(target, "failed to commit sqlite writer savepoint", error))?;
+    Ok(op_result)
 }
 
 fn copy_error(target: &SharedDbTarget, error: &AtmError) -> AtmError {

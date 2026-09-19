@@ -4,7 +4,7 @@ use super::{ResolvedRecipient, nudge_template};
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, HerdrNudgeTarget, LocalSteerTarget,
     LocalTmuxNudgeTarget, NudgeKind, PostSendBuiltInTarget, PostSendHookEvent, QueuePullTarget,
-    built_in_nudge_template_kind_from_post_send_event,
+    TaskClosedOutcome, TaskTransition, built_in_nudge_template_kind_from_post_send_event,
 };
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -191,6 +191,113 @@ pub(crate) fn post_send_event_from_message(
         requires_ack: message.requires_ack,
         is_ack: message.is_ack,
         task_id: message.envelope.task_id.clone(),
+        task_transition: message
+            .task_transition
+            .or_else(|| task_transition_from_message(message)),
         recipient_pane_id: recipient_pane_id.cloned(),
     })
+}
+
+fn task_transition_from_message(
+    message: &crate::delivery_plan::LogicalMessage,
+) -> Option<TaskTransition> {
+    task_transition_from_task_op(
+        message.envelope.task_op.as_ref(),
+        &message.envelope.from,
+        message.task_assignee.as_ref(),
+    )
+}
+
+fn task_transition_from_task_op(
+    task_op: Option<&atm_storage::TaskOp>,
+    actor: &crate::types::AgentName,
+    task_assignee: Option<&crate::types::AgentName>,
+) -> Option<TaskTransition> {
+    match task_op? {
+        atm_storage::TaskOp::Start => Some(TaskTransition::Started),
+        atm_storage::TaskOp::Close { outcome, .. } => {
+            let task_assignee = task_assignee?;
+            if actor == task_assignee {
+                Some(TaskTransition::Complete { outcome: *outcome })
+            } else {
+                Some(TaskTransition::Closed {
+                    outcome: TaskClosedOutcome::Cancelled,
+                })
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::task_transition_from_task_op;
+    use crate::boundary::{
+        BuiltInNudgeTemplateKind, NudgeKind, PostSendHookEvent, TaskCloseOutcome,
+        TaskClosedOutcome, TaskTransition, built_in_nudge_template_kind_from_post_send_event,
+    };
+    use crate::schema::AtmMessageId;
+    use crate::types::{AgentName, TeamName};
+    use atm_storage::TaskOp;
+
+    #[test]
+    fn immediate_builder_sets_started_for_applied_start() {
+        let actor = "assignee".parse().expect("actor");
+        assert_eq!(
+            task_transition_from_task_op(Some(&TaskOp::Start), &actor, Some(&actor)),
+            Some(TaskTransition::Started)
+        );
+    }
+
+    #[test]
+    fn close_builder_sets_complete_for_assignee_and_closed_cancelled_for_assigner() {
+        let assignee = "assignee".parse().expect("assignee");
+        let assigner = "assigner".parse().expect("assigner");
+        for outcome in [
+            TaskCloseOutcome::Completed,
+            TaskCloseOutcome::Refused,
+            TaskCloseOutcome::Cancelled,
+        ] {
+            let close = TaskOp::Close {
+                outcome,
+                reason: None,
+            };
+            assert_eq!(
+                task_transition_from_task_op(Some(&close), &assignee, Some(&assignee)),
+                Some(TaskTransition::Complete { outcome })
+            );
+            assert_eq!(
+                task_transition_from_task_op(Some(&close), &assigner, Some(&assignee)),
+                Some(TaskTransition::Closed {
+                    outcome: TaskClosedOutcome::Cancelled,
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn immediate_assignment_without_position_renders_delivery() {
+        let event = PostSendHookEvent {
+            sender: AgentName::from_validated("sender"),
+            sender_chat_id: None,
+            sender_team: TeamName::from_validated("team"),
+            sender_host: None,
+            recipient: AgentName::from_validated("recipient"),
+            recipient_team: TeamName::from_validated("team"),
+            message_id: AtmMessageId::new(),
+            description: "assignment".to_owned(),
+            requires_ack: false,
+            is_ack: false,
+            task_id: Some("BB.1".parse().expect("task id")),
+            task_transition: task_transition_from_task_op(
+                None,
+                &AgentName::from_validated("sender"),
+                None,
+            ),
+            recipient_pane_id: None,
+        };
+        assert_eq!(
+            built_in_nudge_template_kind_from_post_send_event(&event, NudgeKind::Steer),
+            BuiltInNudgeTemplateKind::Delivery
+        );
+    }
 }

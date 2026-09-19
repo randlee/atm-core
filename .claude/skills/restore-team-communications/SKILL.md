@@ -4,7 +4,7 @@ version: 0.3.0
 description: >
   Repair native ATM teammate reachability when the SQLite-backed roster is
   healthy (per team-lead Step 1) but a specific teammate is unreachable —
-  typically a stale tmux pane id after compaction, resume, or a pane restart.
+  typically a stale Herdr agent alias after compaction, resume, or a pane restart.
 ---
 
 # Restore Team Communications
@@ -43,17 +43,18 @@ stop and use `.claude/skills/team-lead/backup-and-restore-team.md` instead.
 
 ## Step 2 — Repair The Stale Member Entry
 
-The most common cause is a stale `tmuxPaneId` after the pane was restarted or
-reassigned. Discover the current pane, then update the member in place —
-never remove and re-add:
+The most common cause is a stale roster alias after the agent's Herdr pane was
+restarted or renamed. The alias must equal the agent's name in Herdr.
+Discover the live agent, then update the member in place — never remove and
+re-add:
 
 ```bash
-tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_current_command}'
-atm teams update-member "$ATM_TEAM" <teammate> --pane-id <correct-pane-id>
+herdr agent list
+atm teams update-member "$ATM_TEAM" <teammate> --backend herdr --session default --alias <herdr-agent-name>
 ```
 
 `update-member` also accepts `--home-dir`, `--harness`, `--agent-type`, and
-`--model` if one of those drifted instead of the pane id.
+`--model` if one of those drifted instead of the alias.
 
 ## Step 3 — Verify Native ATM Communication
 
@@ -63,17 +64,17 @@ Repair is not complete until all checks pass:
    ATM acknowledgement.
 2. `atm send` to `quality-mgr` when that teammate is active, and verify ATM
    mailbox routing.
-3. `atm send` to `arch-ctm` (Codex) and verify the steer nudge fires. The
-   recipient's `.atm.toml` `post_send_hooks` fires this automatically
-   (steer-kind, immediate) on send — no manual `tmux send-keys` nudge is
-   needed. See `atm help hooks` if it doesn't fire.
+3. `atm send` to a Codex developer and verify the nudge fires. Nudges are
+   built into ATM: every send nudges its recipient, and an assigned task
+   queues and re-nudges an agent that stops working. There is no manual
+   nudge. If it doesn't fire, check `atm doctor` for that member's receiver.
 
 For Codex-directed ATM sends, the steer nudge must include a clear call to
 action, not just a passive unread-mail announcement. Preferred structured
 nudge payload:
 
 ```text
-<atm><action>atm read --message-id {{message_id}}</action><action>ack <TASK-ID></action><action>execute assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>
+<atm><action>atm read --message-id {{message_id}}</action><action>atm task start <TASK-ID> "<one line>"</action><action>execute assigned task</action><when idle="immediate" busy="after-current-task"/><console announce="concise" pause="false"/></atm>
 ```
 
 If the task is queued behind active work, use a nudge about the deferred task

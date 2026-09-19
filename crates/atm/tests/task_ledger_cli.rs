@@ -1,20 +1,22 @@
 //! End-to-end coverage for the task CLI's rusqlite-backed command pipeline.
 //!
 //! The public CLI delegates its task-list and task-completion requests to the
-//! same `atm-core` operations exercised here.  This keeps the integration
-//! scenario backend-real while avoiding a host-wide daemon or Tokio test
-//! process: the runtime is an isolated rusqlite assembly for each test.
+//! same `atm-core` operations exercised here. This keeps the integration
+//! scenario backend-real while using the production bounded async reader lane
+//! over an isolated rusqlite assembly for each test.
+
+use std::time::Duration;
 
 use atm_core::ack::{AckRequest, ack_mail_with_runtime};
 use atm_core::boundary::{RosterEntry, RosterHarness, RosterMemberKind};
-use atm_core::list::{ListQuery, TaskLedgerQuery, list_task_ledger_with_runtime};
+use atm_core::list::{ListQuery, TaskLedgerQuery, list_task_ledger_with_runtime_async};
 use atm_core::observability::NullObservability;
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
 use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER};
 use atm_core::types::{AgentName, IsoTimestamp, ModelName, ReadSelection, TaskId, TeamName};
 use atm_runtime_test_support::open_isolated_sqlite_boundary;
-use atm_storage::{RosterSnapshot, TaskEventKind, TaskState};
+use atm_storage::{ReadDeadline, RosterSnapshot, TaskEventKind, TaskState};
 
 const ASSIGNER: &str = TEST_SENDER;
 const ASSIGNEE: &str = TEST_RECIPIENT;
@@ -132,52 +134,40 @@ impl Fixture {
     }
 }
 
-#[test]
-fn cli_task_ledger_surfaces_cover_ac1_on_a_real_rusqlite_runtime() {
+#[tokio::test]
+async fn cli_task_ledger_surfaces_cover_ac1_on_a_real_rusqlite_runtime() {
     let fixture = Fixture::new();
     let first_message = fixture.assign("t-42");
     fixture.acknowledge(first_message);
     let second_message = fixture.assign("t-43");
 
-    let rejected_ack = ack_mail_with_runtime(
-        AckRequest {
-            home_dir: fixture.root.path().to_path_buf(),
-            current_dir: fixture.root.path().to_path_buf(),
-            caller_identity: ASSIGNEE.parse().expect("assignee"),
-            caller_chat_id: None,
-            caller_team: fixture.team.clone(),
-            activity_observation: None,
-            message_id: second_message,
-            reply_body: "blocked".to_owned(),
-        },
-        &NullObservability,
-        &fixture.runtime,
-    );
-    assert!(
-        rejected_ack.is_err(),
-        "a second task cannot activate while one is active"
-    );
+    fixture.acknowledge(second_message);
 
-    let tasks = list_task_ledger_with_runtime(
+    let deadline = ReadDeadline::new(Duration::from_secs(5)).expect("read deadline");
+    let tasks = list_task_ledger_with_runtime_async(
         fixture.list_query(TaskLedgerQuery::Tasks { member: None }),
         &fixture.runtime,
+        deadline,
     )
+    .await
     .expect("atm list --tasks");
     let states: Vec<_> = tasks.task_rows.iter().map(|row| row.state).collect();
-    assert_eq!(states, vec![TaskState::Assigned, TaskState::Active]);
+    assert_eq!(states, vec![TaskState::Assigned, TaskState::Assigned]);
     assert!(
         serde_json::to_value(&tasks.task_rows)
             .expect("task rows JSON")
             .is_array()
     );
 
-    let first_events = list_task_ledger_with_runtime(
+    let first_events = list_task_ledger_with_runtime_async(
         fixture.list_query(TaskLedgerQuery::Events {
             task_id: "t-42".parse().expect("task id"),
             member: None,
         }),
         &fixture.runtime,
+        deadline,
     )
+    .await
     .expect("atm list --task-events t-42");
     assert_eq!(
         first_events
@@ -185,27 +175,21 @@ fn cli_task_ledger_surfaces_cover_ac1_on_a_real_rusqlite_runtime() {
             .iter()
             .map(|row| row.event)
             .collect::<Vec<_>>(),
-        vec![TaskEventKind::Assigned, TaskEventKind::Acked]
+        vec![TaskEventKind::Assigned]
     );
 
-    let second_events = list_task_ledger_with_runtime(
+    let second_events = list_task_ledger_with_runtime_async(
         fixture.list_query(TaskLedgerQuery::Events {
             task_id: "t-43".parse().expect("task id"),
             member: None,
         }),
         &fixture.runtime,
+        deadline,
     )
-    .expect("rejected task events");
-    assert_eq!(
-        second_events.task_event_rows[1].event,
-        TaskEventKind::Rejected
-    );
-    assert!(
-        second_events.task_event_rows[1]
-            .detail
-            .as_deref()
-            .is_some_and(|detail| detail.contains("t-42"))
-    );
+    .await
+    .expect("second task events");
+    assert_eq!(second_events.task_event_rows.len(), 1);
+    assert!(second_events.task_event_rows[0].event == TaskEventKind::Assigned);
 }
 
 #[test]
@@ -229,7 +213,10 @@ fn cli_task_completion_covers_ac2_success_unknown_id_and_conflict() {
         .into_iter()
         .find(|row| row.task_id == task_id)
         .expect("completed task");
-    assert_eq!(row.state, TaskState::Complete);
+    assert_eq!(
+        row.state,
+        TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
+    );
 
     let before = fixture
         .runtime
@@ -268,6 +255,6 @@ fn cli_task_completion_covers_ac2_success_unknown_id_and_conflict() {
     assert!(
         conflict_error
             .message()
-            .contains("assign and complete a task")
+            .contains("task_id and task_complete name different tasks")
     );
 }

@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB2-008>
+  a triage:Finding ;
+  triage:findingId "BB2-008" ;
+  triage:title "CLAUDE.md's own Phase Integration Branch Strategy section still documents the superseded serial-merge model, contradicting the append-only-stack model this phase enforces everywhere else" ;
+  triage:description "quality-mgr BB2-QA2-1789248000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1444#issuecomment-5648627854, 2026-09-12T20:54:11Z; I3, ruthless-boundary-qa RBQA-F004, confirmed by quality-mgr via direct grep in both the worktree and the main repo checkout), reviewed at ef7572fd0. CLAUDE.md's 'Phase Integration Branch Strategy' section (read at the start of every session, ahead of any skill file) still documents the superseded serial model: 'After each sprint merges to the integration branch, subsequent sprints merge latest integrate/phase-N into their feature branch before creating their PR' (CLAUDE.md:137) -- the opposite of the append-only-stack model this fix layer reinforces everywhere else. This is the highest-authority document in the repo actively contradicting the model this PR exists to enforce. Out of this diff's 8 changed files, but squarely in scope per the assignment's instruction to search the whole workspace for surviving stale patterns." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "CLAUDE.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: rewrite CLAUDE.md's 'Phase Integration Branch Strategy' section to describe the append-only-stack model (feedback_append_only_stack, feedback_stack_all_phase_sprints, feedback_ci_only_on_top_layer conventions), replacing the serial per-sprint merge-latest-before-PR description. Suggested owner: arch-ctm (per QA report's next_action); routing pending fenix's dispatch ruling." ;
+  triage:foundIn triage:BB2 ;
+  triage:foundAt "2026-09-12T20:54:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB2-008/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB2-008/1> ;
+  triage:closedAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BB2-008/1>
+  a triage:Occurrence ;
+  triage:file "CLAUDE.md" ;
+  triage:line 137 ;
+  triage:snippet "Phase Integration Branch Strategy section: 'After each sprint merges to the integration branch, subsequent sprints merge latest integrate/phase-N into their feature branch before creating their PR' -- describes the superseded serial-merge model" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
+  triage:occursIn <urn:atm:triage:worktree/BB2-008/1> .
+
+<urn:atm:triage:worktree/BB2-008/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1447, fix/bb2-qa2-r2" ;
+  triage:branch "fix/bb2-qa2-r2" ;
+  triage:headSha "d2a9b6cc5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB2-008/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T21:17:10Z"^^xsd:dateTime ;
+  triage:fixCommit "d2a9b6cc57eee25d5dd3bf417616ae0be7a8a300" ;
+  triage:fixBranch "fix/bb2-qa2-r2" ;
+  triage:verifiedInRound "BB2-QA3" ;
+  triage:resolutionNote "CLAUDE.md's Phase Integration Branch Strategy now states the append-only-stack model; the old serial-merge wording is fully gone." .

@@ -68,6 +68,7 @@ pub(crate) enum ConsoleLogRoute {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    restore_default_sigpipe();
     let exit_code = match run().await {
         Ok(()) => 0,
         Err(error) => {
@@ -77,6 +78,20 @@ async fn main() {
     };
     std::process::exit(exit_code);
 }
+
+/// Let Unix deliver a closed-pipe termination instead of allowing Rust's
+/// `print!`/`println!` macros to panic after stdout returns `EPIPE`.
+#[cfg(unix)]
+fn restore_default_sigpipe() {
+    // SAFETY: installing the process's documented default disposition for
+    // SIGPIPE has no borrowed-pointer or lifetime requirements.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
+#[cfg(not(unix))]
+fn restore_default_sigpipe() {}
 
 #[cfg(test)]
 fn exit_code_for_error(error: &anyhow::Error) -> i32 {
@@ -120,6 +135,11 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::TeamNotFound
         | AtmErrorCode::AgentNotFound
         | MessageValidationFailed
+        | AtmErrorCode::TaskNotFound
+        | AtmErrorCode::TaskAlreadyClosed
+        | AtmErrorCode::TaskNotCounterparty
+        | AtmErrorCode::TaskStaleCounterparty
+        | AtmErrorCode::TaskMoveInvalid
         | MessageIdConflict
         | SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
@@ -663,7 +683,7 @@ fn map_command_event(
         service: service_name.clone(),
         target: target_category.clone(),
         action,
-        message: None,
+        message: event.error_message,
         identity: ProcessIdentity::default(),
         trace: None,
         request_id: None,
@@ -1073,6 +1093,22 @@ mod adapter_tests {
         assert_eq!(
             exit_code_for_atm_error(&AtmError::validation("bad input")),
             3
+        );
+        for code in [
+            AtmErrorCode::TaskNotFound,
+            AtmErrorCode::TaskAlreadyClosed,
+            AtmErrorCode::TaskNotCounterparty,
+            AtmErrorCode::TaskStaleCounterparty,
+            AtmErrorCode::TaskMoveInvalid,
+        ] {
+            assert_eq!(exit_code_for_atm_error(&AtmError::new(code, "rejected")), 3);
+        }
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::new(
+                AtmErrorCode::TaskAlreadyActive,
+                "already active"
+            )),
+            1
         );
         assert_eq!(
             exit_code_for_atm_error(&AtmError::new(

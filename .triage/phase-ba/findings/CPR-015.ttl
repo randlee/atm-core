@@ -1,0 +1,113 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-015>
+  a triage:Finding ;
+  triage:findingId "CPR-015" ;
+  triage:title "BA.5 claims the ack path is unchanged; upsert_message_state gained a new CASE branch (doc half: cipher, test half: solar)" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. BA.5 claims the ack path is unchanged; upsert_message_state gained a new CASE branch. Doc says: sprint-BA.5: the acknowledgement path is unchanged and clears the marker via the existing upsert. Code does: upsert_message_state gained a new CASE branch as part of the ephemeral-item work, altering the ack path's marker semantics. Recommendation: Amend the sprint doc to describe the new branch and add an ack test that actually acknowledges a message and observes the marker clear. Split: doc half (amend sprint-BA.5 to describe the new branch) owned by cipher on fix/phase-ba-review-1's docs bundle; test half (write an ack test that actually acknowledges a message and observes the marker clear) owned by solar review-3 item B3." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2A8G2KREP4HGFCA0MV5RWN7, 2026-09-12T07:32:18Z): doc half fixed by cipher at b41a26185; test half closes at solar's 2b599f12c (same commit as CPR-012) -- ack_clears_marker_via_existing_upsert now drives a real pending_ack_at->acknowledged_at upsert and observes the marker NULL, plus the existing runtime test herdr_queue_ephemeral::requires_ack_message_reminded_until_acked performs a real ack through the shipped CASE branch. No separate CPR-015 commit exists on review-3. Sha remap (fenix ATM 01M2A9NY2AEAKS6EAHY0V4ZDYB, 2026-09-12T07:52:59Z): review-3 rebased onto review-2 33754d69d (force-with-lease); test-half sha 2b599f12c -> c59d7c93b (same as CPR-012)." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-015/doc> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-015/doc2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-015/test> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-015/test2> ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/CPR-015/doc>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 1 ;
+  triage:snippet "sprint-BA.5 doc half: amend the doc to describe upsert_message_state's new CASE branch" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/doc2 (fix/phase-ba-review-1 @ b41a26185)." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "112f8f384" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-015/review1> .
+
+<urn:atm:triage:occurrence/CPR-015/doc2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 1 ;
+  triage:snippet "sprint-BA.5 amended to describe upsert_message_state's new CASE branch" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher fix/phase-ba-review-1 @ b41a26185 (bundled with RBQA-BA-END-F002)." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "b41a26185" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-015/doc2> .
+
+<urn:atm:triage:worktree/CPR-015/doc2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher), frozen at 5a00502ee" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "b41a26185" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:occurrence/CPR-015/test>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 1 ;
+  triage:snippet "test half: ack_clears_marker_via_existing_upsert acknowledges nothing (see CPR-012); write a real ack test" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:32:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded; fixed downstream, tracked at occurrence/test2 (fix/phase-ba-review-3 @ c59d7c93b)." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "112f8f384" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-015/review3> .
+
+<urn:atm:triage:occurrence/CPR-015/test2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/task_store.rs" ;
+  triage:line 1 ;
+  triage:snippet "ack_clears_marker_via_existing_upsert now drives a real pending_ack_at->acknowledged_at upsert and observes the marker NULL; herdr_queue_ephemeral::requires_ack_message_reminded_until_acked performs a real ack through the shipped CASE branch" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:32:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "solar fix/phase-ba-review-3 @ c59d7c93b (same commit as CPR-012; rebased onto review-2 33754d69d, was 2b599f12c pre-rebase); no separate CPR-015 commit exists on review-3." ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "c59d7c93b" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-015/test2> .
+
+<urn:atm:triage:worktree/CPR-015/test2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-3 (solar, B3 negation-proof items), rebased onto review-2 33754d69d" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "c59d7c93b" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/CPR-015/review1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher, docs+CPR bundle), above integrate/phase-ba" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "112f8f384" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/CPR-015/review3>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-3 (solar, B3 negation-proof items), above fix/phase-ba-review-2" ;
+  triage:branch "fix/phase-ba-review-3" ;
+  triage:headSha "112f8f384" ;
+  triage:orderIndex 9 .

@@ -1,7 +1,7 @@
 ---
 title: Doctor And Log
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.6.0
 ---
 
 # Doctor And Log
@@ -28,6 +28,24 @@ High-signal doctor output usually tells you one of three things:
 - the daemon/runtime path is healthy
 - ATM found a configuration, connectivity, or storage problem that needs a
   supported recovery step
+
+### JSON Sections
+
+`atm doctor --json` is the supported machine-readable diagnostic surface. In
+addition to caller and daemon context, current releases can include:
+
+- `reader_lanes` for the shared read pool's effective capacity and live queue,
+  saturation, and in-flight metrics
+- `graft_receivers.receivers` for registered graft receiver leases
+- `herdr` for whether a Herdr backend is configured, its breaker, and one
+  endpoint record per default or named Herdr session
+
+Each `herdr.endpoints[]` record includes its `session`, `provenance`,
+`transport`, `endpoint`, `state`, `remedy`, `capabilities.live_handoff`, and
+the configured roster `members`; unavailable details are represented by the
+documented nullable fields. Use the endpoint `state` and `remedy` rather than
+guessing from a daemon log. See [Herdr Integration](./herdr.md) for the
+endpoint and unique-name model.
 
 ## Log
 

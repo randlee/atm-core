@@ -1,5 +1,6 @@
 [package]
 name = "agent-team-mail"
+autotests = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -27,6 +28,34 @@ name = "cli_surface"
 path = "tests/cli_surface.rs"
 required-features = ["cli-surface-dump"]
 
+[[test]]
+name = "compose_passthrough"
+path = "tests/compose_passthrough.rs"
+
+[[test]]
+name = "escalation_cli"
+path = "tests/escalation_cli.rs"
+
+[[test]]
+name = "openapi_surface"
+path = "tests/openapi_surface.rs"
+
+[[test]]
+name = "peer_cli"
+path = "tests/peer_cli.rs"
+
+[[test]]
+name = "broken_pipe"
+path = "tests/broken_pipe.rs"
+
+[[test]]
+name = "command_error_log"
+path = "tests/command_error_log.rs"
+
+[[test]]
+name = "task_ledger_cli"
+path = "tests/task_ledger_cli.rs"
+
 [[example]]
 name = "gen_cli_docs"
 path = "examples/gen_cli_docs.rs"
@@ -52,6 +81,7 @@ toml = "0.8"
 tracing.workspace = true
 tracing-subscriber.workspace = true
 async-trait.workspace = true
+libc = "0.2"
 tokio.workspace = true
 ulid.workspace = true
 

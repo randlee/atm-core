@@ -78,9 +78,26 @@ enum BlockingStallCounter {
 }
 
 #[derive(Clone)]
-struct BoundedBlockingBridge {
+pub struct BoundedBlockingBridge {
     permits: Arc<tokio::sync::Semaphore>,
     runtime_health: RuntimeHealth,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PromptHandoffFailureReason {
+    Storage,
+    Timeout,
+    Saturated,
+}
+
+impl PromptHandoffFailureReason {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Storage => "storage",
+            Self::Timeout => "timeout",
+            Self::Saturated => "saturated",
+        }
+    }
 }
 
 enum BlockingBridgeError {
@@ -92,14 +109,36 @@ enum BlockingBridgeError {
 }
 
 impl BoundedBlockingBridge {
-    fn new(capacity: NonZeroUsize, runtime_health: RuntimeHealth) -> Self {
+    #[must_use]
+    pub fn new(capacity: NonZeroUsize, runtime_health: RuntimeHealth) -> Self {
         Self {
             permits: Arc::new(tokio::sync::Semaphore::new(capacity.get())),
             runtime_health,
         }
     }
 
-    async fn run<T, F>(
+    /// Runs synchronous work without allowing either permit admission or the
+    /// caller's response wait to outlive the supplied absolute deadline.
+    ///
+    /// A job which has already started remains alive with its permit held
+    /// until it exits. This bounds stalled work without pretending Tokio can
+    /// cancel a running blocking closure.
+    pub async fn run<T, F>(&self, deadline: RequestDeadline, job: F) -> Result<T, AtmError>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> Result<T, AtmError> + Send + 'static,
+    {
+        self.run_with_policy(
+            deadline,
+            BlockingCompletionPolicy::AbandonResponseAtDeadline,
+            BlockingStallCounter::CoreBridge,
+            job,
+        )
+        .await
+        .map_err(blocking_bridge_error)
+    }
+
+    async fn run_with_policy<T, F>(
         &self,
         deadline: RequestDeadline,
         policy: BlockingCompletionPolicy,
@@ -176,6 +215,28 @@ impl BoundedBlockingBridge {
     }
 }
 
+fn blocking_bridge_error(error: BlockingBridgeError) -> AtmError {
+    match error {
+        BlockingBridgeError::DeadlineBeforeStart => AtmError::new(
+            atm_core::error::AtmErrorCode::BlockingBridgeDeadlineBeforeStart,
+            "blocking work did not start before its request deadline",
+        ),
+        BlockingBridgeError::DeadlineAfterStart => AtmError::new(
+            atm_core::error::AtmErrorCode::BlockingBridgeDeadlineAfterStart,
+            "blocking work timed out before its request deadline",
+        ),
+        BlockingBridgeError::Closed => {
+            AtmError::daemon_unavailable("bounded blocking bridge is shutting down")
+        }
+        BlockingBridgeError::Join(source) => AtmError::new(
+            atm_core::error::AtmErrorCode::InternalError,
+            "blocking task ended unexpectedly",
+        )
+        .with_cause(source),
+        BlockingBridgeError::Operation(error) => error,
+    }
+}
+
 /// Bounded blocking admission for caller-owned write source preflight.
 ///
 /// Template verification and file-policy evaluation can re-open caller-owned
@@ -211,7 +272,7 @@ impl WriteSourcePreflightBridge {
         };
         let description = source_preflight_description(&request);
         self.bridge
-            .run(
+            .run_with_policy(
                 deadline,
                 BlockingCompletionPolicy::AbandonResponseAtDeadline,
                 BlockingStallCounter::WriteSourcePreflight,
@@ -269,13 +330,17 @@ impl ControlPathSyncBridge {
         }
     }
 
+    pub(crate) fn blocking_bridge(&self) -> &BoundedBlockingBridge {
+        &self.bridge
+    }
+
     pub(crate) async fn run<T, F>(&self, deadline: RequestDeadline, job: F) -> Result<T, AtmError>
     where
         T: Send + 'static,
         F: FnOnce() -> Result<T, AtmError> + Send + 'static,
     {
         self.bridge
-            .run(
+            .run_with_policy(
                 deadline,
                 BlockingCompletionPolicy::AwaitCompletion,
                 BlockingStallCounter::CoreBridge,

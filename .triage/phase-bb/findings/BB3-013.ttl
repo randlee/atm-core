@@ -1,0 +1,111 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB3-013>
+  a triage:Finding ;
+  triage:findingId "BB3-013" ;
+  triage:title "colima_skill_report write_report/render never wired to the ancestor-fallback rule -- live 404 in committed evidence" ;
+  triage:description "quality-mgr BB3-QA3-1789250000 (Final verdict FAIL, https://github.com/randlee/atm-core/pull/1445#issuecomment-5648698551, 2026-09-12T21:08:20Z; BB3-QA3-B1), reviewed at 66be1d012. write_report/colima_skill_report.render (scripts/smoke/run_feature_smoke.py:822-827, scripts/smoke/colima_skill_report.py:90-104) build procedure_href from the exact source_revision() short SHA with no ancestor fallback, unlike .just/generate_report_index.py's resolve_procedures/_revision_is_ancestor. Confirmed as a live 404 in currently-committed evidence: site/reports/smoke/macos/rand-m5.local/20260912T204119754750Z-pid87697-fast/index.html:18 links to procedures/smoke-fast/fe5dac5c.html, which does not exist (site/reports/procedures/smoke-fast/ has only 513b3374, 7475fed9, 8043ce64, 93458691, c355f382, index). Verified this file is tracked and committed in d938673e4, not stale/uncommitted output. Violates AC2 and D5's report-header contract. A regression adjacent to BB3-003's fix: the index-generator's own ancestor resolution is genuinely fixed and tested, but the per-run report's self-embedded link was never wired to the same rule." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "scripts/smoke/run_feature_smoke.py,scripts/smoke/colima_skill_report.py" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: resolve procedure_href via the same exact-then-ancestor rule (or a shared helper) in both write_report and colima_skill_report.render, with a regression test asserting the linked file exists on disk. Routed to solar's BB3-FIX-R3-1789253000 (fenix, promote_to_branch fix/bb3-qa3-r3, queued behind BB1-FIX-R1). cipher's BB3-FIX-R4-1789255000 (task event 2026-09-12T23:08:15Z) reported this not-reproducible at the current, already-satisfied path on fix/bb3-qa3-r4 @ f94125cf5 (PR #1455, includes merges of #1456 d1969185f and #1453 1c7e76da5); just lint 36/36, just test exit 0, just smoke fast 8/8. Fixed-pending-QA (verify-not-reproducible); QA dispatched as BB3-QA4-1789262000 on PR #1455 (queued behind BB5-QA-R1) to confirm against the record. STILL OPEN (BB3-QA4-1789262000, PR #1455 comment, 2026-09-12T23:24:52Z, blocking): the specific reported 404 is gone, but the fix wired both call sites to a NEW third implementation (scripts/report_runtime.py::resolve_procedure_page) that itself diverges from .just/generate_report_index.py's own resolver -- report_runtime.py takes the first ancestor match in manifest order and raises on any non-0/1 git exit code, while generate_report_index.py detects git-unavailability and falls back to the newest entry dated <= generated_at, otherwise picks the max-by-date ancestor. Two implementations of 'the same rule' still exist and can select different pages for the same envelope under the exact failure modes that produced the original 404. Next: cut a new layer above fix/bb3-qa3-r4 (top of stack #1457) making resolve_procedure_page share the exact same ancestor-resolution implementation as generate_report_index.py (one calls the other, or extract one shared function both call), including the missing git-unavailable dated-fallback branch. Corrected routing (fenix, 2026-09-12T23:32:13Z): the fix layer is fix/bb3-qa4-r5, cut from a7d4664d1 (feature/bb6-storage-prompt-handoffs, top of stack #1457) -- not directly above fix/bb3-qa3-r4. In the BB3-FIX-R5-1789264000 fence, closes on cipher's fix. cipher's BB3 R5 final push landed at fix/bb3-qa4-r5 @ 5da523f81 (parent merge-forward 16f2ab124), 2026-09-13T00:45:41Z, self-reported fresh just smoke fast 8/8, evidence archived outside tree, reports index unchanged. Fixed-pending-QA. Per cipher's task-close (relayed by fenix, 2026-09-13T00:52:35Z), the fix touched two commits: f6214af22 and 5da523f81 (final). QA-R5 dispatched (BB3-QA-R5-1789273000) on PR #1463 @ 5da523f81, frozen, base ref for the diff 40ccd403e." ;
+  triage:relatedFinding "BB3-003" ;
+  triage:foundIn triage:BB3 ;
+  triage:foundAt "2026-09-12T21:08:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-013/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-013/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-013/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB3-013/4> ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedBy "quality-mgr" ;
+  triage:closedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "6" .
+
+<urn:atm:triage:occurrence/BB3-013/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/colima_skill_report.py" ;
+  triage:line 90 ;
+  triage:snippet "procedure_href built from the exact source_revision() short SHA with no ancestor fallback; live 404 in committed evidence site/reports/smoke/macos/rand-m5.local/20260912T204119754750Z-pid87697-fast/index.html:18 -> procedures/smoke-fast/fe5dac5c.html (does not exist)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-013/1> .
+
+<urn:atm:triage:worktree/BB3-013/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1455, fix/bb3-qa3-r4" ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB3-013/2>
+  a triage:Occurrence ;
+  triage:file "scripts/report_runtime.py" ;
+  triage:line 65 ;
+  triage:snippet "resolve_procedure_page (lines 65-92) is a NEW third ancestor-resolution implementation diverging from .just/generate_report_index.py:204-261 -- first-match-in-manifest-order + raise-on-nonzero-git vs the other's git-unavailable dated fallback + max-by-date; two implementations of the same rule still exist" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-013/2> .
+
+<urn:atm:triage:worktree/BB3-013/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1455, fix/bb3-qa3-r4" ;
+  triage:branch "fix/bb3-qa3-r4" ;
+  triage:headSha "f94125cf5" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB3-013/3>
+  a triage:Occurrence ;
+  triage:file "scripts/report_runtime.py" ;
+  triage:line 65 ;
+  triage:snippet "routed to BB3-FIX-R5-1789264000 (cipher) on fix/bb3-qa4-r5, cut from a7d4664d1 (feature/bb6-storage-prompt-handoffs, top of stack #1457)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "a7d4664d1" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-013/3> .
+
+<urn:atm:triage:worktree/BB3-013/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb3-qa4-r5 (cut from a7d4664d1, feature/bb6-storage-prompt-handoffs, top of stack #1457)" ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "a7d4664d1" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:occurrence/BB3-013/4>
+  a triage:Occurrence ;
+  triage:file "scripts/report_runtime.py" ;
+  triage:line 65 ;
+  triage:snippet "cipher's BB3 R5 final push; fixed-pending-QA at fix/bb3-qa4-r5 @ 5da523f81" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "5da523f81" ;
+  triage:occursIn <urn:atm:triage:worktree/BB3-013/4> .
+
+<urn:atm:triage:worktree/BB3-013/4>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb3-qa4-r5" ;
+  triage:branch "fix/bb3-qa4-r5" ;
+  triage:headSha "5da523f81" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:resolution/BB3-013/1>
+  a triage:Resolution ;
+  triage:resolutionNote "quality-mgr BB3-QA-R5-1789273000 (PR #1463 comment, 'Verified fixed (no residual action)', 2026-09-13T01:11:21Z): confirmed fully fixed and independently verified this round. resolve_procedure_page and generate_report_index.py's resolver now share a single resolution implementation, including the git-unavailable dated-fallback branch and a disk-existence check on the selected candidate before it is linked -- the two-implementations-of-the-same-rule divergence and the live-404 risk are both eliminated." ;
+  triage:resolvedAt "2026-09-13T01:11:21Z"^^xsd:dateTime ;
+  triage:resolvedBy "quality-mgr" .

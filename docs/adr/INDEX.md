@@ -71,6 +71,15 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-062 — Task State Machine](./ADR-062-task-state-machine.md)
 - [ADR-063 — Phase AZ Task And Attention Storage Capabilities (superseded; Phase AZ retired unmerged 2026-09-11, replaced by Phase BA)](./ADR-063-phase-az-task-and-attention-capabilities.md)
 
+## Phase BB amendments
+
+| ADR | Amendment | Record |
+| --- | --- | --- |
+| ADR-054 | Phase-BB template taxonomy and task-transition nudge kinds (2026-09-12) | [ADR-054](./ADR-054-nudge-taxonomy-and-queue-mechanism.md#phase-bb-amendment-2026-09-12) |
+| ADR-061 | HTTP API 1.8.0 — task-transition metadata (2026-09-12) | [ADR-061](./ADR-061-governed-interface-schema-versioning.md#d5-http-api-version-record) |
+| ADR-061 | HTTP API 1.9.0 — prompt handoffs (2026-09-12) | [ADR-061](./ADR-061-governed-interface-schema-versioning.md#d5-http-api-version-record) |
+| ADR-062 | Phase BB task-start amendment (2026-09-12) | [ADR-062](./ADR-062-task-state-machine.md#prompt-handoffs-phase-bb) |
+
 ## Extracted Crate-Local ADRs
 
 - [ADR-ATM-RUNTIME-001 — `atm-runtime` As Concrete Composition Root](./ADR-ATM-RUNTIME-001.md)

@@ -237,11 +237,6 @@ fn encode_request(op: HerdrOp<'_>) -> Result<Vec<u8>, HerdrError> {
             "params": {},
         }),
         HerdrOp::StatusServer => unreachable!("socket server status uses the ping probe"),
-        HerdrOp::Notify { title, body } => json!({
-            "id": "atm:agent:notify",
-            "method": "notification.show",
-            "params": {"title": title, "body": body, "sound": "request"},
-        }),
     };
     let mut bytes = serde_json::to_vec(&value).map_err(|error| HerdrError::InternalError {
         message: format!("failed to encode Herdr socket request: {error}"),

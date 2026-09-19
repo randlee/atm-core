@@ -1176,6 +1176,7 @@ mod tests {
             requires_ack: false,
             task_id: None,
             task_complete: None,
+            already_closed: None,
             summary: None,
             message: None,
             warnings: Vec::new(),

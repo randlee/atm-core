@@ -3,8 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 import json
 import sys
+import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 
 JUST_DIR = Path(__file__).resolve().parents[1]
@@ -12,8 +14,25 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from generate_report_index import ReportIndexError
-from generate_report_index import build_index
+from generate_report_index import build_index as _build_index
+from generate_report_index import build_pages, stamp_nav, NAV_START, NAV_END
 from generate_report_index import write_or_check
+from scripts import report_runtime
+
+
+def build_index(reports: Path) -> str:
+    """Supply a minimal page manifest for legacy parser fixtures."""
+    manifest = reports / "procedures/manifest.json"
+    if not manifest.exists():
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        procedures = []
+        for procedure in ("benchmark", "benchmark-run-2", "campaign", "send-message-benchmark", "read-query-benchmark", "smoke-unknown", "smoke-localhost", "smoke-local-ip", "fuzz-unknown"):
+            html = reports / "procedures" / procedure / "00000000.html"
+            html.parent.mkdir(parents=True, exist_ok=True)
+            html.write_text(f"<html>{procedure}</html>\n", encoding="utf-8")
+            procedures.append({"procedure": procedure, "revisions": [{"rev": "0" * 40, "date": "2026-01-01", "html": f"procedures/{procedure}/00000000.html"}]})
+        manifest.write_text(json.dumps({"schema_version": 1, "procedures": procedures}), encoding="utf-8")
+    return _build_index(reports)
 
 
 def write_envelope(root: Path, name: str, report_type: str, generated_at: str, host: str) -> None:
@@ -50,6 +69,7 @@ def write_smoke_envelope(root: Path, platform: str, host: str, run: str) -> str:
                 "generated_at": "2026-08-08T04:00:00Z",
                 "host_label": host,
                 "report_html": report_html,
+                "procedure": "smoke-local-ip" if "local-ip" in run else "smoke-localhost",
                 "status": "PASS",
             }
         ),
@@ -59,15 +79,260 @@ def write_smoke_envelope(root: Path, platform: str, host: str, run: str) -> str:
 
 
 class GenerateReportIndexTests(unittest.TestCase):
-    def test_empty_input_has_every_report_group(self) -> None:
+    def test_index_and_runtime_share_git_unavailable_revision_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            reports = root / "site/reports"
+            write_envelope(root, "agreement", "benchmark", "2026-08-08T04:00:00Z", "host")
+            payload_path = reports / "agreement.json"
+            payload = json.loads(payload_path.read_text(encoding="utf-8"))
+            payload.update({"procedure": "benchmark", "source_revision": "a" * 40})
+            payload_path.write_text(json.dumps(payload), encoding="utf-8")
+            revisions = [
+                {"rev": "1" * 40, "date": "2026-08-01", "html": "procedures/benchmark/11111111.html"},
+                {"rev": "2" * 40, "date": "2026-08-05", "html": "procedures/benchmark/22222222.html"},
+            ]
+            for revision in revisions:
+                page = root / "site/reports" / revision["html"]
+                page.parent.mkdir(parents=True, exist_ok=True)
+                page.write_text("<html>procedure</html>\n", encoding="utf-8")
+            (reports / "procedures/manifest.json").write_text(
+                json.dumps({"schema_version": 1, "procedures": [{"procedure": "benchmark", "revisions": revisions}]}),
+                encoding="utf-8",
+            )
+            with mock.patch.object(
+                report_runtime.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess([], 1, "", "git unavailable"),
+            ):
+                runtime_page = report_runtime.resolve_procedure_page(
+                    "benchmark", "a" * 40, root=root, generated_at="2026-08-08T04:00:00Z"
+                )
+                index = _build_index(reports)
+            self.assertIsNotNone(runtime_page)
+            assert runtime_page is not None
+            self.assertEqual(runtime_page.html, "procedures/benchmark/22222222.html")
+            self.assertIn('href="procedures/benchmark/22222222.html"', index)
+            self.assertNotIn("inferred from run date", index)
+
+    def test_source_revision_resolves_to_newest_ancestor_without_inference(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            history = root / "history.txt"
+            history.write_text("a\n", encoding="utf-8")
+            subprocess.run(["git", "add", "history.txt"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "a"], cwd=root, check=True)
+            older = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            history.write_text("b\n", encoding="utf-8")
+            subprocess.run(["git", "commit", "-q", "-am", "b"], cwd=root, check=True)
+            newer = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            history.write_text("c\n", encoding="utf-8")
+            subprocess.run(["git", "commit", "-q", "-am", "c"], cwd=root, check=True)
+            source_revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            reports = root / "site/reports"
+            write_envelope(root, "ancestor", "benchmark", "2026-08-08T04:00:00Z", "host")
+            payload_path = reports / "ancestor.json"
+            payload = json.loads(payload_path.read_text(encoding="utf-8"))
+            payload.update({"procedure": "benchmark", "source_revision": source_revision})
+            payload_path.write_text(json.dumps(payload), encoding="utf-8")
+            manifest = {
+                "schema_version": 1,
+                "procedures": [{"procedure": "benchmark", "revisions": [
+                    {"rev": older, "date": "2026-08-01", "html": f"procedures/benchmark/{older[:8]}.html"},
+                    {"rev": newer, "date": "2026-08-05", "html": f"procedures/benchmark/{newer[:8]}.html"},
+                ]}],
+            }
+            for revision in (older, newer):
+                page = reports / "procedures/benchmark" / f"{revision[:8]}.html"
+                page.parent.mkdir(parents=True, exist_ok=True)
+                page.write_text("<html>procedure</html>\n", encoding="utf-8")
+            (reports / "procedures/manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            index = _build_index(reports)
+            self.assertIn(f'href="procedures/benchmark/{newer[:8]}.html"', index)
+            self.assertNotIn("inferred from run date", index)
+
+    def test_source_revision_absent_uses_inferred_date_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            write_smoke_envelope(root, "windows", "FastPC4", "20260808T032327Z-pid1-localhost")
+            index = build_index(root / "site/reports")
+            self.assertIn("inferred from run date", index)
+
+    def test_links_report_to_procedure_by_source_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            write_envelope(root, "source-revision", "benchmark", "2026-08-08T04:00:00Z", "host")
+            payload_path = root / "site/reports/source-revision.json"
+            payload = json.loads(payload_path.read_text(encoding="utf-8"))
+            payload.update({"procedure": "benchmark", "source_revision": "0" * 40})
+            payload_path.write_text(json.dumps(payload), encoding="utf-8")
+            index = build_index(root / "site/reports")
+            self.assertIn('href="procedures/benchmark/00000000.html"', index)
+            self.assertNotIn("inferred from run date", index)
+
+    def test_links_historical_smoke_result_by_run_date_and_marks_inferred(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            write_smoke_envelope(root, "windows", "FastPC4", "20260808T032327Z-pid1-localhost")
+            index = build_index(root / "site/reports")
+            self.assertIn("inferred from run date", index)
+
+    def test_dated_report_resolves_to_revision_in_effect_not_head(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            reports = root / "site/reports"
+            write_smoke_envelope(root, "windows", "FastPC4", "20260808T032327Z-pid1-localhost")
+            manifest = {
+                "schema_version": 1,
+                "procedures": [{
+                    "procedure": "smoke-localhost",
+                    "revisions": [
+                        {"rev": "1" * 40, "date": "2026-08-01", "html": "procedures/smoke-localhost/11111111.html"},
+                        {"rev": "2" * 40, "date": "2026-09-01", "html": "procedures/smoke-localhost/22222222.html"},
+                    ],
+                }],
+            }
+            for revision in ("11111111", "22222222"):
+                page = reports / "procedures/smoke-localhost" / f"{revision}.html"
+                page.parent.mkdir(parents=True, exist_ok=True)
+                page.write_text("<html>procedure</html>\n", encoding="utf-8")
+            (reports / "procedures/manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            index = _build_index(reports)
+            self.assertIn('href="procedures/smoke-localhost/11111111.html"', index)
+            self.assertNotIn('href="procedures/smoke-localhost/22222222.html"', index)
+
+    def test_every_committed_report_resolves_to_a_manifest_page(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        self.assertEqual(write_or_check(root, check=True), 0)
+
+    def test_rejects_report_whose_procedure_has_no_page(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir); reports = root / "site/reports"; reports.mkdir(parents=True)
+            write_envelope(root, "bad", "benchmark", "2026-08-01T00:00:00Z", "host")
+            (reports / "procedures").mkdir()
+            (reports / "procedures/manifest.json").write_text('{"schema_version": 1, "procedures": []}\n')
+            with self.assertRaises(ReportIndexError): write_or_check(root, check=False)
+
+    def test_rejects_report_whose_manifest_page_file_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir); reports = root / "site/reports"; reports.mkdir(parents=True)
+            write_envelope(root, "missing-page", "benchmark", "2026-08-01T00:00:00Z", "host")
+            manifest = {
+                "schema_version": 1,
+                "procedures": [{"procedure": "missing-page", "revisions": [{
+                    "rev": "0" * 40,
+                    "date": "2026-01-01",
+                    "html": "procedures/benchmark/missing.html",
+                }]}],
+            }
+            (reports / "procedures").mkdir()
+            (reports / "procedures/manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ReportIndexError, "page does not exist"):
+                write_or_check(root, check=False)
+
+    def test_rejects_site_without_procedure_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir); write_envelope(root, "bad", "benchmark", "2026-08-01T00:00:00Z", "host")
+            with self.assertRaises(ReportIndexError): write_or_check(root, check=False)
+
+    def test_accepts_source_revision_and_procedure_envelope_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            write_envelope(root, "explicit", "benchmark", "2026-08-08T04:00:00Z", "host")
+            payload_path = root / "site/reports/explicit.json"
+            payload = json.loads(payload_path.read_text(encoding="utf-8"))
+            payload.update({"procedure": "benchmark", "source_revision": "0" * 40})
+            payload_path.write_text(json.dumps(payload), encoding="utf-8")
+            index = build_index(root / "site/reports")
+            self.assertIn('href="procedures/benchmark/00000000.html"', index)
+    def test_empty_input_renders_an_empty_index_and_no_history(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
             (root / "site/reports").mkdir(parents=True)
-            index = build_index(root / "site/reports")
-            self.assertIn("<h2>Benchmark</h2>", index)
-            self.assertIn("<h2>Fuzz</h2>", index)
-            self.assertIn("<h2>Smoke</h2>", index)
-            self.assertEqual(index.count("No reports available."), 3)
+            pages = build_pages(root / "site/reports")
+            self.assertEqual(list(pages), ["index.html"])
+            self.assertEqual(pages["index.html"].count("No reports available."), 1)
+
+    def test_index_row_shows_latest_run_and_history_lists_every_run_newest_first(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            older = write_smoke_envelope(root, "windows", "FastPC4", "20260808T032327Z-pid1-localhost")
+            newer = write_smoke_envelope(root, "macos", "rand-m5", "20260809T050000Z-pid2-localhost")
+            envelope = root / "site/reports" / Path(newer).parent / "smoke.envelope.json"
+            payload = json.loads(envelope.read_text(encoding="utf-8"))
+            payload.update({"generated_at": "2026-08-09T05:00:00Z", "status": "FAIL"})
+            envelope.write_text(json.dumps(payload), encoding="utf-8")
+            build_index(root / "site/reports")  # seeds the fixture manifest
+            pages = build_pages(root / "site/reports")
+            index = pages["index.html"]
+            self.assertEqual(index.count('<td class="family"><strong>Smoke</strong></td>'), 1)
+            self.assertIn(" · localhost · rand-m5</span>", index)
+            self.assertIn(f'href="{newer}"', index)
+            self.assertNotIn(f'href="{older}"', index)
+            self.assertIn('<span class="result fail">FAIL</span>', index)
+            self.assertIn('href="history/smoke.html">2 runs<', index)
+            history = pages["history/smoke.html"]
+            self.assertIn('<a href="../">Reports</a>', history)
+            self.assertLess(history.index(newer), history.index(older))
+            self.assertIn('href="../procedures/smoke-localhost/00000000.html"', history)
+
+    def test_stamp_inserts_after_body_once_and_replaces_an_old_stamp(self) -> None:
+        nav = f"{NAV_START}<nav>one</nav>{NAV_END}\n"
+        page = "<html>\n<body class=\"x\">\n<h1>r</h1>\n</body>\n</html>\n"
+        stamped = stamp_nav(page, nav)
+        self.assertEqual(stamped, "<html>\n<body class=\"x\">\n" + nav + "<h1>r</h1>\n</body>\n</html>\n")
+        self.assertEqual(stamp_nav(stamped, nav), stamped)
+        replaced = stamp_nav(stamped, f"{NAV_START}<nav>two</nav>{NAV_END}\n")
+        self.assertEqual(replaced.count("<nav>"), 1)
+        self.assertIn("<nav>two</nav>", replaced)
+
+    def test_every_page_of_a_run_carries_result_and_test_plan_link(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            run = write_smoke_envelope(root, "macos", "rand-m5", "20260809T050000Z-pid2-localhost")
+            run_dir = root / "site/reports" / Path(run).parent
+            (run_dir / "localhost.html").write_text("<html><body><p>detail</p></body></html>\n", encoding="utf-8")
+            build_index(root / "site/reports")  # seeds the fixture manifest
+            pages = build_pages(root / "site/reports")
+            for relative in (run, run.replace("index.html", "localhost.html")):
+                page = pages[relative]
+                self.assertIn(NAV_START, page)
+                self.assertIn('href="../../../../history/smoke.html">Smoke history</a>', page)
+                self.assertIn("Result: <strong", page)
+                self.assertIn('Test plan: <a href="../../../../procedures/smoke-localhost/00000000.html">smoke-localhost @ 00000000</a>', page)
+            self.assertIn('<a href="../">ATM</a> › <span>Reports</span>', pages["index.html"])
+            self.assertIn('<a href="../">Reports</a> › <span>Smoke history</span>', pages["history/smoke.html"])
+
+    def test_check_rejects_a_report_page_without_the_current_navigation(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            run = write_smoke_envelope(root, "macos", "rand-m5", "20260809T050000Z-pid2-localhost")
+            build_index(root / "site/reports")
+            write_or_check(root, check=False)
+            self.assertEqual(write_or_check(root, check=True), 0)
+            page = root / "site/reports" / run
+            page.write_text("<html><body>regenerated without nav</body></html>\n", encoding="utf-8")
+            with self.assertRaisesRegex(ReportIndexError, "stale report page navigation"):
+                write_or_check(root, check=True)
+            write_or_check(root, check=False)
+            self.assertEqual(write_or_check(root, check=True), 0)
+
+    def test_check_rejects_a_history_page_whose_report_is_gone(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            write_smoke_envelope(root, "windows", "FastPC4", "20260808T032327Z-pid1-localhost")
+            build_index(root / "site/reports")
+            write_or_check(root, check=False)
+            self.assertEqual(write_or_check(root, check=True), 0)
+            orphan = root / "site/reports/history/smoke-retired.html"
+            orphan.write_text("<html>retired</html>\n", encoding="utf-8")
+            with self.assertRaisesRegex(ReportIndexError, "stale history pages"):
+                write_or_check(root, check=True)
+            write_or_check(root, check=False)
+            self.assertFalse(orphan.exists())
 
     def test_aggregates_benchmark_and_orders_entries_newest_first(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -90,6 +355,7 @@ class GenerateReportIndexTests(unittest.TestCase):
                             "generated_at": timestamp,
                             "host_label": host,
                             "report_html": "benchmark.html",
+                            "procedure": "benchmark",
                         }
                     ),
                     encoding="utf-8",
@@ -97,9 +363,11 @@ class GenerateReportIndexTests(unittest.TestCase):
             write_envelope(root, "campaign", "fuzz", "2026-07-02T00:00:00Z", "mac-arm64")
             index = build_index(reports)
             self.assertEqual(index.count('href="benchmark.html"'), 1)
-            self.assertIn("2 runs", index)
+            self.assertIn(">2 runs<", index)
             self.assertLess(index.index("benchmark.html"), index.index("campaign.html"))
-            self.assertIn("hosts: linux-x64, mac-arm64", index)
+            history = build_pages(reports)["history/benchmark.html"]
+            self.assertLess(history.index("linux-x64"), history.index("mac-arm64"))
+            self.assertEqual(history.count('href="../benchmark.html"'), 2)
 
     def test_rejects_unsafe_or_incomplete_envelope(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -120,6 +388,23 @@ class GenerateReportIndexTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ReportIndexError, "host_label"):
                 build_index(reports)
+
+    def test_integration_envelope_needs_procedure_and_verdict_benchmark_takes_no_status(self) -> None:
+        cases = (
+            ("integration", {"status": "PASS"}, "must name its procedure"),
+            ("integration", {"procedure": "benchmark", "status": "SKIP"}, "status must be one of FAIL, PASS"),
+            ("benchmark", {"status": "PASS"}, "unsupported public fields: status"),
+        )
+        for report_type, extra, message in cases:
+            with self.subTest(report_type=report_type, extra=extra), tempfile.TemporaryDirectory() as tempdir:
+                root = Path(tempdir)
+                write_envelope(root, "run", report_type, "2026-08-08T04:00:00Z", "hermes-testbed")
+                payload_path = root / "site/reports/run.json"
+                payload = json.loads(payload_path.read_text(encoding="utf-8"))
+                payload.update(extra)
+                payload_path.write_text(json.dumps(payload), encoding="utf-8")
+                with self.assertRaisesRegex(ReportIndexError, message):
+                    build_index(root / "site/reports")
 
     def test_rejects_missing_html_and_evidence_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -175,7 +460,7 @@ class GenerateReportIndexTests(unittest.TestCase):
             index = build_index(reports)
             self.assertTrue(old.exists())
         self.assertIn("send-message-benchmark/index.html", index)
-        self.assertNotIn("send-message-benchmark.html", index)
+        self.assertNotIn('href="send-message-benchmark.html"', index)
 
     def test_discovers_nested_run_envelope_without_treating_evidence_as_envelope(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -247,11 +532,14 @@ class GenerateReportIndexTests(unittest.TestCase):
 
             index = build_index(root / "site/reports")
 
-            self.assertIn("<h2>Smoke</h2>", index)
-            self.assertIn(f'href="{first}"', index)
-            self.assertIn(f'href="{second}"', index)
-            self.assertIn(first.removesuffix("/index.html"), index)
-            self.assertIn(second.removesuffix("/index.html"), index)
+            self.assertEqual(index.count('<td class="family"><strong>Smoke</strong></td>'), 1)
+            self.assertIn(f'href="{second}"', index)  # newest run of the family
+            self.assertNotIn(f'href="{first}"', index)
+            history = build_pages(root / "site/reports")["history/smoke.html"]
+            self.assertIn(f'href="../{first}"', history)
+            self.assertIn(f'href="../{second}"', history)
+            self.assertIn("<td>local ip</td>", history)
+            self.assertIn("<td>localhost</td>", history)
 
     def test_rejects_smoke_envelope_outside_its_run_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

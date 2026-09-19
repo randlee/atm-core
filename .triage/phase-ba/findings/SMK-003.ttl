@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/SMK-003>
+  a triage:Finding ;
+  triage:findingId "SMK-003" ;
+  triage:title "One unresolvable trusted-peer entry aborts unrelated literal-IP sends" ;
+  triage:description "fenix (ATM 01M2ANEESW1KSCS1J697J8E8MA, 2026-09-12T11:18:37Z), found during 1.5.16 local smoke (local-ip lane) on rand-m5. A stale `atm-hermes-testbed.local` trusted-peer entry (leftover of a run.sh PEER-mode start; no /etc/hosts mapping for it) made every literal-IP send fail with \"trusted peer ... could not be resolved\" -- one unresolvable trust entry aborted sends to unrelated, resolvable IP targets. fenix revoked the stale entry (test.sh does not use peer mode; run.sh re-adds it) and added `rand-m5.local` (own fingerprint, port 43101) so the local-ip lane has a peer that resolves to 192.168.1.155, unblocking the smoke run. Product question for a design ruling: should an unresolvable trusted peer be skipped (with a warning) at send time rather than aborting the send outright? Recorded as Important pending a ruling; workaround (revoke the stale entry) is in place and does not block 1.5.16 shipping." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hardening" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T11:18:37Z"^^xsd:dateTime ;
+  triage:deferredNote "Recorded as reversible host trust state, not a code defect in itself: the workaround (revoke the stale atm-hermes-testbed.local entry, add rand-m5.local) unblocked the smoke run. Open item is the product design question -- should resolve-failure on one trusted peer be a per-send warning-and-skip instead of an abort -- pending a design ruling before dispatch." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T11:18:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SMK-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/SMK-003/1>
+  a triage:Occurrence ;
+  triage:file "file_only" ;
+  triage:line 1 ;
+  triage:snippet "an unresolvable trusted-peer entry (atm-hermes-testbed.local, no /etc/hosts mapping) caused \"trusted peer ... could not be resolved\" to abort sends to unrelated, resolvable literal-IP targets" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "f8fe826b0" ;
+  triage:occursIn <urn:atm:triage:worktree/SMK-003/1> .
+
+<urn:atm:triage:worktree/SMK-003/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "post-landing backlog: rand-m5 host, prerelease 1.5.16, trust-resolution design question" ;
+  triage:branch "integrate/phase-ba" ;
+  triage:headSha "f8fe826b0" ;
+  triage:orderIndex 12 .

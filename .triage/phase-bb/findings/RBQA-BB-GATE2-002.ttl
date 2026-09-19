@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-BB-GATE2-002>
+  a triage:Finding ;
+  triage:findingId "RBQA-BB-GATE2-002" ;
+  triage:title "test_dispatch_template_parity.py's STALE_SEQUENCE lint has a gap that let AGENTS.md's stale ack/work/task-close text slip through" ;
+  triage:description "ruthless-boundary-qa, BB-GATE-RERUN-1789285688 (phase-ending gate re-run, PR #1477, report 2026-09-13T10:40:00Z), fenix-verified at integrate/phase-bb @ 4cb8be1ce. .just/tests/test_dispatch_template_parity.py:28-33's STALE_SEQUENCE regex does not match the 'ack, work, task close' wording, so the guard missed AGENTS.md even though SEQUENCE_DOC_ROOTS already lists it -- the automated guard meant to catch exactly this pattern (see BB7-TEMPLATE-CONTRADICTION-001 occurrence 30) has a gap in its own regex, not its file scope." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "phase_end" ;
+  triage:category "tooling" ;
+  triage:severity "minor" ;
+  triage:source "ruthless-boundary-qa, verified by quality-mgr, BB-GATE-RERUN-1789285688 phase-ending gate re-run" ;
+  triage:repeatable false ;
+  triage:sweepScope ".just/tests/test_dispatch_template_parity.py:28-33 (STALE_SEQUENCE lint)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-13T08:23:12Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): minor, companion fix to BB7-TEMPLATE-CONTRADICTION-001 occurrence 30 -- widening the STALE_SEQUENCE regex alongside the AGENTS.md text fix closes both the symptom and the detection gap in one fix round. CLOSED (2026-09-13T08:47:00Z): quality-mgr BB-GATE2-QA1-1789288411 (PR #1485, report 01M2CZ2MNJ14WHNB6FW75G1CS4) confirms fixed at fix/bb-gate2-findings @ 39850f06c -- STALE_SEQUENCE widened, 3/3 parity tests pass." ;
+  triage:foundIn triage:BB7 ;
+  triage:foundAt "2026-09-13T08:23:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-BB-GATE2-002/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-BB-GATE2-002/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/RBQA-BB-GATE2-002/1> ;
+  triage:closedAt "2026-09-13T08:47:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/RBQA-BB-GATE2-002/1>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_dispatch_template_parity.py" ;
+  triage:line 28 ;
+  triage:snippet "STALE_SEQUENCE regex (28-33) does not match the 'ack, work, task close' wording, so it missed AGENTS.md's occurrence even though SEQUENCE_DOC_ROOTS already lists it" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4cb8be1ce" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-BB-GATE2-002/1> .
+
+<urn:atm:triage:worktree/RBQA-BB-GATE2-002/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bb" ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4cb8be1ce" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/RBQA-BB-GATE2-002/2>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_dispatch_template_parity.py" ;
+  triage:line 28 ;
+  triage:snippet "fix verified by quality-mgr BB-GATE2-QA1-1789288411: STALE_SEQUENCE widened (28-35), 3/3 parity tests pass" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb-gate2-findings" ;
+  triage:headSha "39850f06c" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-BB-GATE2-002/2> .
+
+<urn:atm:triage:worktree/RBQA-BB-GATE2-002/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1485, fix/bb-gate2-findings" ;
+  triage:branch "fix/bb-gate2-findings" ;
+  triage:headSha "39850f06c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/RBQA-BB-GATE2-002/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T08:47:00Z"^^xsd:dateTime ;
+  triage:fixCommit "39850f06c" ;
+  triage:fixBranch "fix/bb-gate2-findings" ;
+  triage:verifiedInRound "BB-GATE2-QA1-1789288411" ;
+  triage:resolutionNote "quality-mgr BB-GATE2-QA1-1789288411 (PR #1485, report 01M2CZ2MNJ14WHNB6FW75G1CS4): STALE_SEQUENCE regex widened, 3/3 parity tests pass. req-qa + arch-qa both PASS, PR #1485 CI green." .

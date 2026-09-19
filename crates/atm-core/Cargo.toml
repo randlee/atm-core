@@ -17,7 +17,7 @@ categories = ["command-line-utilities", "development-tools"]
 name = "atm_core"
 
 [features]
-test-utils = []
+test-utils = ["atm-storage/test-utils"]
 
 [dependencies]
 atm-error.workspace = true

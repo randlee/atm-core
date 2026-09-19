@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-BA-F010>
+  a triage:Finding ;
+  triage:findingId "RBQA-BA-F010" ;
+  triage:title "Herdr run_blocking has no concurrency bound and duplicates BoundedBlockingBridge" ;
+  triage:description "ruthless-boundary-qa phase-ending critical review @ 9f5aef2fe. Finding: Herdr's run_blocking helper (18 call sites) has no concurrency bound and duplicates the existing BoundedBlockingBridge pattern (crates/atm-daemon-bootstrap/src/router_support.rs:80-177); two additional raw spawn_blocking calls exist at received_hook_selector.rs:601 and :679. VERIFIED pre-existing on develop (17 of the 18 run_blocking uses predate Phase BA; BA added only the RSH-001 timeout wrapper, not the sites themselves). fenix's ruling: important (architecture hardening, no regression introduced by Phase BA), not critical/blocking. Fix landed on fix/phase-ba-review-2 by arch-ctm: routed the Herdr pump through a BoundedBlockingBridge-backed bridge sized to the tick budget, migrated received_hook_selector's two raw sites, deleted run_blocking entirely; HERDR_REQUEST_DEADLINE became a RequestDeadline type as a side effect. NOTE: originally drafted as finding id RBQA-F010; renamed to RBQA-BA-F010 per fenix's ruling (ATM 01M2A821M48VWSZ0JGXMA4WWZ7, 2026-09-12T07:24:38Z) because RBQA-F010 collides with a closed Phase-AI record of the same id -- the specific Herdr-bridge fix commit is review-2 32ba10f45, within the review-2 rebased frozen head 984da6c6c. fenix (ATM 01M2AFXE4KCRFRNQ60NDKCD4BN, 2026-09-12T09:41:56Z): REVIEW-2 FINAL REMAP (frozen) -- 32ba10f45 -> 30148d759; branch FROZEN, all 13 gates green at review-2 tip 0b4911c5a." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hardening" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-BA-F010/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-BA-F010/2> ;
+  triage:triageRecordVersion "3" .
+
+<urn:atm:triage:occurrence/RBQA-BA-F010/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1 ;
+  triage:snippet "run_blocking (18 sites) unbounded; received_hook_selector.rs:601/679 raw spawn_blocking" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "superseded by rename to RBQA-BA-F010; drafted under the colliding id RBQA-F010 before the rename, never committed under that id." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-BA-F010/1> .
+
+<urn:atm:triage:worktree/RBQA-BA-F010/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), above fix/phase-ba-review-1 (pre-rebase snapshot)" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "4e621bb4a" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:occurrence/RBQA-BA-F010/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1 ;
+  triage:snippet "run_blocking deleted; Herdr pump + received_hook_selector's two sites now route through a BoundedBlockingBridge-backed bridge sized to the tick budget" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:24:38Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "arch-ctm review-2 32ba10f45 (now 30148d759), within the review-2 rebased frozen head 984da6c6c (gate-green); review-2 final remap onto frozen review-1 5a00502ee (tip 0b4911c5a), 13-gate-green." ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "30148d759" ;
+  triage:occursIn <urn:atm:triage:worktree/RBQA-BA-F010/2> .
+
+<urn:atm:triage:worktree/RBQA-BA-F010/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-2 (arch-ctm), rebased and frozen onto review-1 5a00502ee (13-gate-green)" ;
+  triage:branch "fix/phase-ba-review-2" ;
+  triage:headSha "30148d759" ;
+  triage:orderIndex 8 .

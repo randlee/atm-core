@@ -2,3 +2,6 @@
 # platform, including Git for Windows. A CRLF checkout (core.autocrlf=true)
 # breaks the shebang line, so pin LF regardless of the client's autocrlf.
 .githooks/* text eol=lf
+
+# Templates embedded with include_str! must retain LF across CRLF checkouts.
+crates/atm-core/templates/* text eol=lf

@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-023>
+  a triage:Finding ;
+  triage:findingId "BB1-023" ;
+  triage:title "Nudge-template-override placeholder validation deferred to live dispatch, fails silently" ;
+  triage:description "quality-mgr BB1-QA1-1789242600 (Final Quality Report, FAIL, https://github.com/randlee/atm-core/pull/1438#issuecomment-5648365789, 2026-09-12T20:06:37Z), reviewed at b06b3e262. QA1-I2: crates/atm-core/src/team_admin.rs:466 / crates/atm-core/src/send/nudge_template.rs:149-180: custom override bodies are validated only for non-emptiness at write time (atm teams set-nudge-template succeeds immediately even with malformed placeholder syntax). Placeholder errors surface only later, at actual message dispatch, as a bare warning (crates/atm-http-runtime/src/storage_and_nudge_router.rs:472-497) with no distinct error code or remediation hint -- the sender sees success, the message persists, and the recipient silently receives no nudge for every message of that kind until someone finds the warning log." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/team_admin.rs:466; crates/atm-core/src/send/nudge_template.rs:149-180; crates/atm-http-runtime/src/storage_and_nudge_router.rs:472-497" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
+  triage:deferredNote "Recommend validating placeholders against the known render-key set at write time, before the row is persisted. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:06:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-023/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB1-023/1> ;
+  triage:closedAt "2026-09-12T22:18:29Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BB1-023/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/team_admin.rs" ;
+  triage:line 466 ;
+  triage:snippet "malformed nudge-template-override placeholder syntax is accepted at write time and only surfaces as a bare dispatch-time warning log, with no error code or remediation hint" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb1-review-r1" ;
+  triage:headSha "73c0611e8" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-023/1> .
+
+<urn:atm:triage:worktree/BB1-023/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1449, fix/bb1-review-r1" ;
+  triage:branch "fix/bb1-review-r1" ;
+  triage:headSha "73c0611e8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:resolution/BB1-023/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-12T22:18:29Z"^^xsd:dateTime ;
+  triage:fixCommit "73c0611e85864d716eefb25980ecd691341f6483" ;
+  triage:fixBranch "fix/bb1-review-r1" ;
+  triage:verifiedInRound "BB1-QA2" ;
+  triage:resolutionNote "quality-mgr BB1-QA2-1789252000 Final Quality Report (PASS 0/0/1, https://github.com/randlee/atm-core/pull/1449#issuecomment-5649058041, 2026-09-12T22:18:29Z) independently re-verified fixed/accepted via direct code and git inspection. Reviewed pin 3b2fa2183eb0b799bb7ed93e0a547ed9c4b835b4; PR head 73c0611e85864d716eefb25980ecd691341f6483 confirmed a clean forward-merge-only ancestor with no content drift on reviewed files." .

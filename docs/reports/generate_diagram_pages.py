@@ -270,18 +270,17 @@ def pages_from_panels(panels: tuple[Panel, ...]) -> tuple[Page, ...]:
     return tuple(pages)
 
 
-def render_svg(panel: Panel) -> str:
+def render_mermaid_source(source: str, output_name: str = "procedure-flow") -> str:
     with tempfile.TemporaryDirectory() as tmp_dir:
-        svg_path = Path(tmp_dir) / f"{panel.key}.svg"
+        source_path = Path(tmp_dir) / f"{output_name}.mmd"
+        svg_path = Path(tmp_dir) / f"{output_name}.svg"
+        source_path.write_text(source, encoding="utf-8")
         subprocess.run(
             [
                 "npx",
                 "-y",
                 "@mermaid-js/mermaid-cli",
-                "-i",
-                str(ROOT / panel.ssot_path),
-                "-o",
-                str(svg_path),
+                "-i", str(source_path), "-o", str(svg_path),
             ],
             check=True,
             cwd=ROOT,
@@ -289,6 +288,10 @@ def render_svg(panel: Panel) -> str:
             stderr=subprocess.DEVNULL,
         )
         return svg_path.read_text()
+
+
+def render_svg(panel: Panel) -> str:
+    return render_mermaid_source(panel.source_text, panel.key)
 
 
 def build_copy_payload(report_title: str, panel: Panel) -> str:

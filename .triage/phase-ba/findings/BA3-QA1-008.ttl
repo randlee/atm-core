@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-QA1-008>
+  a triage:Finding ;
+  triage:findingId "BA3-QA1-008" ;
+  triage:title "tick_once runs queue-drain before owed-task-starts, the reverse of the sprint doc's documented tick order" ;
+  triage:description "quality-mgr QA-1 (req-qa), PR #1402 @ c13f9bddf, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643113496. Tick order in tick_once runs queue-drain before owed-task-starts, the reverse of the sprint doc's documented sequence (observations -> owed starts -> drain -> dispose). The two passes touch disjoint populations so this is likely benign, but doc and code should agree. fenix's ruling (https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050): STANDS, minor -- code must follow the doc's tick order; reorder in BA3-FIX-R3-1789183410, or state why the doc is wrong before touching it." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ordering-defect" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake.rs (tick_once)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix's cleanup ruling (ATM 2026-09-12T04:44:29Z) adds worktree layer 5, fix/phase-ba-cleanup (new gh-stack layer above docs/ba6, cipher single writer); this tick-order fix moves off feature/ba3-nudge-invariant onto the consolidated cleanup layer per the O(n^2) fix-multiplication avoidance rule." ;
+  triage:deferredNote "fenix (ATM 01M2A4DWXYME20KRNTBXHQS534, 2026-09-12T06:21:13Z): NON-BLOCKING ruling -- quality-mgr confirmed dispose() reads nothing a same-tick start mutates. Remediation = one-line doc note at docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md:190 (doc-only). Deferred to post-landing review-findings stack, alongside RBQA-F001, TOML-001, SIZE-001; promoteTo unset." ;
+  triage:deferredNote "PHASE BA CLOSEOUT (fenix, ATM 01M2A7443Z9R020ABEPJFJHAJC, 2026-09-12T07:08:18Z): FIXED by cipher, review-1 item 2 @ 83d99ca99 -- one-line doc note landed at docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md:190 per the earlier NON-BLOCKING ruling." ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-008/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-008/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-008/3> ;
+  triage:triageRecordVersion "4" .
+
+<urn:atm:triage:occurrence/BA3-QA1-008/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1 ;
+  triage:snippet "tick_once runs queue-drain before owed-task-starts, reverse of the doc's documented sequence" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T04:44:29Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "promoted to fix/phase-ba-cleanup; will not be separately fixed on feature/ba3-nudge-invariant" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-008/1> .
+
+<urn:atm:triage:worktree/BA3-QA1-008/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at c13f9bddf (quality-mgr QA-1 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:occurrence/BA3-QA1-008/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake.rs" ;
+  triage:line 1 ;
+  triage:snippet "tick_once runs queue-drain before owed-task-starts, reverse of the doc's documented sequence" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:resolutionNote "layer superseded by rebase to fix/phase-ba-cleanup-b @ a2da4a570; finding stays open, deferred to post-landing review-findings stack per fenix's NON-BLOCKING ruling (not fixed in place)." ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "dfd47edca" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-008/2> .
+
+<urn:atm:triage:worktree/BA3-QA1-008/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack layer 5, cipher single writer" ;
+  triage:branch "fix/phase-ba-cleanup" ;
+  triage:headSha "dfd47edca" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:occurrence/BA3-QA1-008/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ba/sprint-BA.3-nudge-invariant.md" ;
+  triage:line 190 ;
+  triage:snippet "one-line doc note landed reconciling tick_once's queue-drain-before-owed-starts order with the documented sequence" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher review-1 item 2 @ 83d99ca99; doc-only per fenix's earlier NON-BLOCKING ruling; accepted." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "83d99ca99" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-008/3> .
+
+<urn:atm:triage:worktree/BA3-QA1-008/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher), item 2" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "83d99ca99" ;
+  triage:orderIndex 7 .

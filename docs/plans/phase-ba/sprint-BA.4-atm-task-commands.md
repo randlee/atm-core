@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/ba4-atm-task-commands
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ba4-atm-task-commands
+---
+
 # BA.4 — `atm task` closed command set
 
 | Field | Value |
@@ -5,7 +11,7 @@
 | Design | [`nudge-task-design.md`](./nudge-task-design.md) §4, §5, §5.1, §5.2, §7, §7.1, §9 (commit `18db5acc3`) |
 | Recommended | arch-ctm / deep-reasoning — deliver-then-close and a new envelope variant |
 | Depends on | `must_follow` BA.3 (dev push) — this sprint adds the `TaskMove` arm to `storage_and_nudge_router.rs::dispatch_non_write` after BA.3 has landed its `reader tick` change |
-| `parallel_safe` | BA.5 — this sprint owns `crates/atm/src/commands/*`, `crates/atm-core/src/protocol.rs`, `crates/atm-core/src/task_close.rs` (new), `crates/atm-core/src/task_query.rs` (new), `crates/atm-core/src/send/*`, the `WriteOp::TaskMove` arm of `writer/ops.rs`, and the `TaskMove` arm of `dispatch_non_write` (`:484`). Shared files with BA.5 are disjoint regions (plan §4). |
+| `parallel_safe` | BA.5 — this sprint owns `crates/atm/src/commands/*`, `crates/atm-core/src/protocol.rs`, `crates/atm-core/src/api.rs`, `crates/atm-core/src/task_close.rs` (new), `crates/atm-core/src/task_query.rs` (new), `crates/atm-core/src/send/*`, the existing `WriteOp::TaskMove` arm of `writer/ops.rs`, and the `TaskMove` arms of `message_handler.rs` and `storage_and_nudge_router.rs`. Shared files with BA.5 are disjoint regions (plan §4). |
 | Worktree | `feature/ba4-atm-task-commands` off `integrate/phase-ba` (merge BA.3 forward) |
 | Governed interfaces | HTTP/peer API **MINOR**: `RequestEnvelope::TaskMove`, `ResponseEnvelope::TaskMove`; `HTTP_API_VERSION` `1.5.0` → `1.6.0` |
 
@@ -17,8 +23,12 @@
 4. Add `ClosePreflight`, `preflight_close`, `report_recipient` — `crates/atm-core/src/task_close.rs` (new) (see "Close").
 5. Copy `TaskListQuery`, `TaskEventQuery`, `TaskPage` from AZ — `crates/atm-core/src/task_query.rs` (new).
 6. Add `TaskMoveRequest`, `TaskMoveOutcome`, the envelope variants, `HTTP_API_VERSION = "1.6.0"` — `crates/atm-core/src/protocol.rs` (see "Move").
-7. Add `WriteOp::TaskMove` → `WriteOpResult::TaskMoved` calling BA.2's `apply_task_move` — `crates/atm-storage-rusqlite/src/writer/ops.rs:39,114`.
+7. Route `RequestEnvelope::TaskMove` to the existing `WriteOp::TaskMove`, which calls BA.2's `apply_task_move` — `crates/atm-storage-rusqlite/src/writer/ops.rs`.
 8. Add the `TaskMove` arm to `dispatch_non_write`; reject it on peer ingress — `storage_and_nudge_router.rs:484`.
+   The mechanical codec surface also adds `HttpRouteKind::TaskMove`,
+   `TASK_MOVE_PATH = "/v1/atm/tasks/move"`, and the envelope/encode/decode arms
+   in `crates/atm-core/src/api.rs` and
+   `crates/atm-http-runtime/src/message_handler.rs`.
 9. Render `list` / `events` (human and `--json`) — `commands/task.rs` (see "Output").
 10. Delete the paths under "Paths to delete"; write the tests under "Tests".
 
@@ -40,8 +50,8 @@ Not used: `Start`, `Block`, `Unblock`, `Reassign`, `Reopen`, `Fail`, `Abort`,
 Design §5, verbatim contract:
 
 ```
-atm task assign <agent> --template <j2> --vars <json> [--task-id <id>] [--before <other-task-id> | --head]
-atm task close  <task-id> <outcome> [reason]
+atm task assign <agent> [message | --template <j2> --vars <json>] [--task-id <id>] [--before <other-task-id> | --head]
+atm task close  <task-id> <outcome> [reason] [message]
 atm task move   <task-id> --before <other> | --head | --end
 atm task list [--all]
 atm task events <task-id>
@@ -192,7 +202,8 @@ pub enum ClosePreflight {
     Unknown,
 }
 
-pub async fn preflight_close(reader: &dyn AsyncTaskLedgerReader, team: TeamName, task_id: &TaskId, deadline: ReadDeadline) -> Result<ClosePreflight, AtmError>;
+pub fn preflight_close(rows: Vec<TaskRow>, task_id: &TaskId) -> ClosePreflight;
+// BA4-FIX-R1: CLI reads through daemon List; pure projection.
 
 /// Who receives the report: the other party. A self-addressed send is invalid
 /// (`send/recipient.rs:13-31`), and `assigner == assignee` cannot exist.
@@ -203,11 +214,13 @@ pub fn report_recipient(row: &TaskRow, caller: &AgentName) -> AgentName {
 
 | stage | `Proceed` | `Unknown` |
 | --- | --- | --- |
-| 1 preflight (reader lane, `list_tasks(team, None)` filtered) | continue | exit 1: `task <id> does not exist on team <t>`; nothing sent |
+| 1 preflight (reader lane, `list_tasks(team, None)` filtered) | continue; `ClosePreflight::Proceed { row }` supplies a complete row's outcome for `already_closed` rendering | exit 1: `task <id> does not exist on team <t>`; nothing sent |
 | 2 deliver | one guarded write to `report_recipient`; the writer applies the close, or (row already complete) delivers plain and returns `already_closed`, or rejects | — |
 | 3 result | `closed <id> (<outcome>)`, exit 0; or `task <id> was already closed (<outcome>); report delivered`, exit 0; or the writer's `AtmError` message, exit 1, nothing delivered, never retried | — |
 
-Stage 2's single transaction is what design §5.2 means by "deliver first":
+The preflight's complete-row observation is best-effort because the writer may
+close or reassign the row before stage 2. Stage 2's single transaction is what
+design §5.2 means by "deliver first":
 the report is never lost and never sent from the preflight read alone. The
 report body is the message source when given, else the `reason` text.
 
@@ -244,7 +257,11 @@ peer ingress rejects `TaskMove` explicitly (local-only, like every task op).
 Compatibility: the envelopes are externally tagged serde enums with no
 unknown-variant fallback, so a 1.5.0 daemon fails to decode `TaskMove`
 explicitly; a 1.6.0 CLI never sends it below 1.6.0 (`require_daemon_api`);
-`docs/http-api.md` says exactly this.
+`docs/atm-daemon/http-api.md` says exactly this.
+
+Phase BA closeout — shipped state (2026-09-12): the existing `MESSAGE`
+positional remains the report body when no `--stdin`, `--file`, or `--template`
+source is supplied. Validation-family rejections use CLI exit code 3.
 
 ## Output
 
@@ -312,7 +329,10 @@ List/events:
 
 ## Acceptance criteria
 
-1. `atm task --help` lists exactly five subcommands with the design §5 syntax; `__dump-cli-surface` diff shows no other new entries.
+1. `atm task --help` lists exactly five subcommands with the design §5 syntax,
+   including the optional `MESSAGE` report body; validation-family rejections
+   exit 3 according to the CLI error-code map; `__dump-cli-surface` diff shows
+   no other new entries.
 2. Every test above exists by name and passes under `just test`.
 3. `HTTP_API_VERSION == "1.6.0"`; ADR-061 version row added; `schema-reviewer` sign-off on the PR.
 4. `grep -rn "task_complete: Option" crates/atm/src` → nothing.
@@ -321,4 +341,4 @@ List/events:
 
 ## Required validation
 
-`just lint`, `just test`, `just lint-boundaries`, RULE-003.
+`just lint`, `just test`, `just lint boundaries`, RULE-003.

@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/CPR-017>
+  a triage:Finding ;
+  triage:findingId "CPR-017" ;
+  triage:title "The assign alias (atm send --task-id / atm queue --task-id) skips require_daemon_api" ;
+  triage:description "Hostile closure review (general-purpose opus, task af4edaf6699568f49) @ 9f5aef2fe. The assign alias (`atm send --task-id` / `atm queue --task-id`) skips require_daemon_api. Doc says: sprint-BA.4 task 3: 'Add the local-team guard and require_daemon_api to every verb and alias.' Code does: The alias path's only preflight is `if request.task_op.is_some() { preflight_task_op_compatibility(&composition).await?; }`. task_op is set only for --task-complete (send.rs:371-377), so an assignment carrying task_id with task_op == None does no version preflight at all. Recommendation: Gate on `request.task_id.is_some() || request.task_op.is_some()` and add the missing alias test." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practices" ;
+  triage:severity "important" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm/src/commands/send.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CPR-017/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/CPR-017/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/send.rs" ;
+  triage:line 276 ;
+  triage:snippet "the alias path's only preflight is task_op.is_some(); task_op is set only for --task-complete, so an assignment carrying task_id with task_op == None does no version preflight" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher fix/phase-ba-review-1 6f73ebc85, ACCEPTED by fenix" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "6f73ebc85" ;
+  triage:occursIn <urn:atm:triage:worktree/CPR-017/review1-fixed> .
+
+<urn:atm:triage:worktree/CPR-017/review1-fixed>
+  a triage:WorktreeSnapshot ;
+  triage:path "review-findings stack: fix/phase-ba-review-1 (cipher), CPR-017 fixed" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "6f73ebc85" ;
+  triage:orderIndex 7 .

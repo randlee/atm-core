@@ -61,10 +61,6 @@ impl EscalationCommand {
                 Action::List,
             ),
         };
-        let action = match action {
-            Action::Add(address) => Action::Add(escalation_admin::validate_address(&address)?),
-            action => action,
-        };
         Ok((target, json, action))
     }
 }
@@ -83,8 +79,7 @@ fn execute(
 ) -> Result<()> {
     match action {
         Action::Add(address) => {
-            let inserted =
-                store.add_escalation_recipient(&target, &address, IsoTimestamp::now())?;
+            let inserted = escalation_admin::add(store, &target, &address, IsoTimestamp::now())?;
             print_mutation("add", &target, &address, inserted, json)?;
         }
         Action::Remove(address) => {

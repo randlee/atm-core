@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-027>
+  a triage:Finding ;
+  triage:findingId "BB6-027" ;
+  triage:title "TaskStartCommand re-decides counterparty authorization client-side before the writer ever sees the request" ;
+  triage:description "ruthless-boundary-qa, verified by quality-mgr (2026-09-13T04:34:52Z), found during BB-POST-MORTEM-1789304000 phase-ending gate against integrate/phase-bb @ 4b1bf0e63. crates/atm/src/commands/task.rs:298-307 TaskStartCommand::execute re-decides 'is caller the assigned counterparty' itself from a client-side preflight `task list` read (line 283-296), and rejects locally with AtmErrorCode::TaskNotCounterparty (line 298-307) BEFORE the request is ever sent to the writer. The writer (crates/atm-storage-rusqlite/src/writer/task_start.rs::load_startable_task, lines 94-98) already owns and enforces this exact decision, matching the phase plan's state table (docs/plans/phase-bb/phase-bb-plan.md row 13: non-assignee atm task start -> ATM_TASK_NOT_COUNTERPARTY, one rejected audit row via append_rejected_task_event). Compare TaskCloseCommand::execute (task.rs:390-419): its preflight_close helper only resolves TaskNotFound locally (ClosePreflight::Unknown) -- it does NOT re-decide counterparty/non-party rejection client-side, leaving that entirely to the writer. TaskStartCommand is the only command with a second, client-side authorization decision-maker. Consequence: the writer-level test (start_by_non_assignee_is_rejected*) only exercises crates/atm-storage-rusqlite/tests directly against the writer, bypassing the CLI. Driven through the actual shipped atm binary, a stale/racy preflight list view means the request may never reach the writer at all -- so the row-13 guarantee (one rejected audit row for a non-assignee start attempt) is not actually exercised by the production entry point." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:source "ruthless-boundary-qa, verified by quality-mgr, BB-POST-MORTEM-1789304000 phase-ending gate" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm/src/commands/task.rs (TaskStartCommand::execute, lines 283-307); crates/atm-storage-rusqlite/src/writer/task_start.rs (load_startable_task, lines 94-98, unchanged reference authority); crates/atm-storage-rusqlite/tests (start_by_non_assignee_is_rejected*, add CLI-path coverage)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T04:34:52Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (2026-09-13, team-lead): blocking, confirmed. Recommendation (reviewer + quality-mgr, adopted): delete the client-side `if row.assignee != caller.caller_identity` branch at task.rs:298-307. Keep the preflight list lookup only to resolve TaskNotFound and the assigner's address for the outbound notification -- the same pattern TaskCloseCommand already uses. Let the write request travel to the writer in all cases and surface the writer's typed rejection. This removes a redundant/divergent client-side guard rather than adding capability, so no separate design ruling is required beyond this one. Dispatched to arch-ctm as a new top fix layer above the landing head, branch fix/bb6-taskstart-counterparty-authz cut from integrate/phase-bb @ d5058b27f." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T04:34:52Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-027/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-027/2> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB6-027/1> ;
+  triage:closedAt "2026-09-13T05:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BB6-027/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task.rs" ;
+  triage:line 298 ;
+  triage:snippet "TaskStartCommand::execute rejects locally with TaskNotCounterparty from a client-side preflight read before the writer (which already enforces the same decision) ever sees the request" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4b1bf0e63" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-027/1> .
+
+<urn:atm:triage:worktree/BB6-027/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bb" ;
+  triage:branch "integrate/phase-bb" ;
+  triage:headSha "4b1bf0e63" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-027/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/task.rs" ;
+  triage:line 298 ;
+  triage:snippet "quality-mgr BB6-GATE-FIX-QA-1789320000 (PR #1477, 2026-09-13T05:20:00Z), verified at fix/bb6-taskstart-counterparty-authz @ 1d86bd608, re-verified at 2cc19c18d. Client-side branch removed from TaskStartCommand; test_start_by_non_assignee_is_rejected_by_writer_and_audited drives the CLI path and asserts exactly one rejected audit row. arch-qa PASS, req-qa present/closed." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-taskstart-counterparty-authz" ;
+  triage:headSha "2cc19c18d" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-027/2> .
+
+<urn:atm:triage:worktree/BB6-027/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1477, fix/bb6-taskstart-counterparty-authz" ;
+  triage:branch "fix/bb6-taskstart-counterparty-authz" ;
+  triage:headSha "2cc19c18d" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB6-027/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T05:20:00Z"^^xsd:dateTime ;
+  triage:fixCommit "2cc19c18d" ;
+  triage:fixBranch "fix/bb6-taskstart-counterparty-authz" ;
+  triage:verifiedInRound "BB6-GATE-FIX-QA-1789320000" ;
+  triage:resolutionNote "quality-mgr BB6-GATE-FIX-QA-1789320000 (PR #1477, verdict comment 05:20Z), verified at fix/bb6-taskstart-counterparty-authz @ 1d86bd608, re-verified at 2cc19c18d. task.rs's client-side counterparty branch removed; test_start_by_non_assignee_is_rejected_by_writer_and_audited now drives the CLI path and asserts exactly one rejected audit row. Both reviewers PASS: arch-qa PASS, req-qa present/closed." .

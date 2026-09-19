@@ -48,6 +48,10 @@ pub(super) struct StorageEnvelope<'a> {
     expires_at: Option<IsoTimestamp>,
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     task_id: &'a Option<atm_storage::types::TaskId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    placement: &'a Option<atm_storage::MoveTarget>,
+    #[serde(rename = "taskOp", default, skip_serializing_if = "Option::is_none")]
+    task_op: &'a Option<atm_storage::TaskOp>,
     #[serde(flatten)]
     extra: &'a serde_json::Map<String, serde_json::Value>,
 }
@@ -74,6 +78,8 @@ impl<'a> StorageEnvelope<'a> {
             thread_mode: &envelope.thread_mode,
             expires_at: envelope.expires_at,
             task_id: &envelope.task_id,
+            placement: &envelope.placement,
+            task_op: &envelope.task_op,
             extra: &envelope.extra,
         }
     }

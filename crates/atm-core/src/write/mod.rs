@@ -55,6 +55,8 @@ pub struct AckRequest {
 impl AckRequest {
     pub fn into_write_request(self) -> SendRequest {
         SendRequest {
+            placement: None,
+            task_op: None,
             home_dir: self.home_dir,
             current_dir: self.current_dir,
             caller_identity: self.caller_identity,

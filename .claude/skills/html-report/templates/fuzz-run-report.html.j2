@@ -9,6 +9,9 @@ required_variables:
   - rows
   - sections
   - metadata_rows
+defaults:
+  procedure_label: ""
+  procedure_href: ""
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -82,6 +85,9 @@ required_variables:
     <p class="source-label">Source: {{ source_label | e }}</p>
 {% endif %}
     <div class="top-status"><span class="status status-{{ status | lower | e }}">{{ status | e }}</span></div>
+{% if procedure_label and procedure_href %}
+    <p class="source-label">Procedure: <a href="{{ procedure_href | e }}">{{ procedure_label | e }}</a></p>
+{% endif %}
   </header>
 
   <section class="summary-block">

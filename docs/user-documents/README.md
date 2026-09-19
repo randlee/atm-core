@@ -1,7 +1,7 @@
 ---
 title: ATM User Guide
 audience: end-user
-reviewed_for_release: 1.4.4
+reviewed_for_release: 1.6.0
 ---
 
 # ATM User Guide
@@ -18,7 +18,9 @@ They are not developer architecture notes.
 - [Quickstart](./quickstart.md)
 - [Identity And Team](./identity-and-team.md)
 - [Mailbox Workflows](./mailbox-workflows.md)
+- [Tasks](./tasks.md)
 - [Doctor And Log](./doctor-and-log.md)
+- [Herdr Integration](./herdr.md)
 - [Hooks](./hooks.md)
 - [Hermes Gateway Integration](./hermes-atm.md)
 - [Nudge Templates](./nudge-templates.md)
@@ -55,4 +57,5 @@ Repo-owned example files live under:
 - [`examples/identity/`](./examples/identity/)
 - [`examples/mailbox/`](./examples/mailbox/)
 - [`examples/diagnostics/`](./examples/diagnostics/)
+- [`examples/nudge-templates/`](./examples/nudge-templates/)
 - [`examples/troubleshooting/`](./examples/troubleshooting/)

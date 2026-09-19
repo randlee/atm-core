@@ -1,0 +1,66 @@
+{
+  "baseline": {
+    "p50_floor": 35000.0,
+    "revision": 1
+  },
+  "binary_hashes": {
+    "atm": "f1bc90955e51a4f300863bf21719ca035ae7ea7c45f87b58818eff14e1e2e2c3",
+    "atm-daemon": "afcf71bf2884a0e2db4a314426e6768c850ebb1f9fa6a41ededcdef7207e44d9"
+  },
+  "campaign_id": "20260914T200908Z-m5-atmbench",
+  "direct_sqlite_message_write": {
+    "accepted_count": 888000,
+    "admissions_per_second": 44390.76292812025,
+    "elapsed_seconds": 20.004161709,
+    "kind": "async_storage_admission",
+    "requested_count": 888000,
+    "worker_count": 512
+  },
+  "durability_after_restart": null,
+  "frames_per_connection": 0,
+  "generated_at": "2026-09-14T20:09:12.459176Z",
+  "host_label": "m5-atmbench",
+  "incomplete_reason": "benchmark durability phase failed: could not count durable benchmark mailbox through atm list: bounded mailbox reader lane request failed\n  Recovery: Repair mailbox access or wait for the competing operation, then retry.; recovery: keep the benchmark daemon stopped and inspect the disposable benchmark store",
+  "messages_admitted": 888000,
+  "messages_durable": 0,
+  "messages_requested": 888000,
+  "metrics": {
+    "accepted_count": 888000,
+    "admissions_per_second": {
+      "max": 54390.9368164419,
+      "min": 12468.108915165429,
+      "p50": 45254.96361296531,
+      "p95": 51198.57921894724,
+      "p99": 52916.12006519478
+    },
+    "application_wire_bytes": null,
+    "application_wire_bytes_per_second": null,
+    "connection_count": null,
+    "connections_per_second": null,
+    "first_failure": null,
+    "interval_count": 888,
+    "interval_latency_ms": {
+      "max": 0.0,
+      "min": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "passed_interval_count": 888,
+    "request_frames_per_second": null,
+    "requested_count": 888000,
+    "response_count": 888000,
+    "time_to_send_1k_s": {
+      "max": 0.080204625,
+      "min": 0.018385416,
+      "p50": 0.022097041499999998,
+      "p95": 0.025685375,
+      "p99": 0.034061583
+    }
+  },
+  "os": "macos",
+  "schema_version": 4,
+  "source_revision": "a527e8ded55f89db9f75ec70b049ab4c180aaff3",
+  "status": "INCOMPLETE",
+  "target": "sqlite"
+}

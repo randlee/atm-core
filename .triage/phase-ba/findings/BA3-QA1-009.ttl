@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BA3-QA1-009>
+  a triage:Finding ;
+  triage:findingId "BA3-QA1-009" ;
+  triage:title "TaskDisposition::Hold(&'static str) encodes nine hold reasons as string literals rather than a closed HoldReason enum" ;
+  triage:description "quality-mgr QA-1 (rust-best-practices-agent, RBP-004), PR #1402 @ c13f9bddf, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643113496. TaskDisposition::Hold(&'static str) encodes nine distinct hold reasons as bare string literals rather than a closed HoldReason enum (mirroring the adjacent EpisodeKind pattern); typo-prone, not exhaustiveness-checked. fenix's ruling (https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050): REJECTED by design -- AC3 forbids the HoldReason identifier; string hold reasons are the chosen shape. No fix scheduled." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practices" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_task_disposition.rs (TaskDisposition::Hold)" ;
+  triage:status "dismissed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-09-12T03:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "fenix's ruling (PR #1402, https://github.com/randlee/atm-core/pull/1402#issuecomment-5643134050): rejected by design -- AC3 forbids the HoldReason identifier; string hold reasons are the chosen shape." ;
+  triage:foundIn triage:BA3 ;
+  triage:foundAt "2026-09-12T03:23:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BA3-QA1-009/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BA3-QA1-009/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_task_disposition.rs" ;
+  triage:line 1 ;
+  triage:snippet "TaskDisposition::Hold(&'static str) -- nine hold reasons as string literals; rejected by design, AC3 forbids HoldReason identifier" ;
+  triage:status "dismissed" ;
+  triage:closed true ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:occursIn <urn:atm:triage:worktree/BA3-QA1-009/1> .
+
+<urn:atm:triage:worktree/BA3-QA1-009/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "clean export at c13f9bddf (quality-mgr QA-1 pinned head, per team-lead instruction)" ;
+  triage:branch "feature/ba3-nudge-invariant" ;
+  triage:headSha "c13f9bddf" ;
+  triage:orderIndex 0 .

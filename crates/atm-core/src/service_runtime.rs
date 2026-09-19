@@ -596,18 +596,20 @@ impl LocalServiceRuntime {
         store.save_message_if_absent_async(message).await
     }
 
-    pub async fn save_message_if_absent_with_provenance_async(
+    /// Awaits one provenance-aware admission and preserves any task-close
+    /// outcome produced by the ordered writer transaction.
+    pub async fn admit_message_with_provenance_async(
         &self,
         message: crate::boundary::Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<Option<crate::boundary::Message>, AtmError> {
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
         let store = self.async_message_store.as_ref().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "Tokio durable message admission was not installed in this runtime",
             )
         })?;
         store
-            .save_message_if_absent_with_provenance_async(message, provenance)
+            .admit_message_with_provenance_async(message, provenance)
             .await
     }
 
@@ -615,7 +617,7 @@ impl LocalServiceRuntime {
     pub async fn admit_template_message_async(
         &self,
         admission: atm_storage::TemplateMessageAdmission,
-    ) -> Result<Option<crate::boundary::Message>, AtmError> {
+    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
         let store = self.async_message_store.as_ref().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "Tokio template message admission was not installed in this runtime",
@@ -1115,6 +1117,22 @@ mod tests {
     }
 
     impl crate::boundary::NudgeTemplateOverrideStore for UnusedRuntimeStore {
+        fn list_stale_template_override_kinds(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<crate::boundary::StaleNudgeTemplateOverrideKind>, crate::error::AtmError>
+        {
+            Ok(Vec::new())
+        }
+
+        fn list_template_overrides(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<crate::boundary::TeamNudgeTemplateOverrideRow>, crate::error::AtmError>
+        {
+            Ok(Vec::new())
+        }
+
         fn load_template_override(
             &self,
             _team: &TeamName,
@@ -1144,7 +1162,7 @@ mod tests {
         fn clear_template_override(
             &self,
             _team: &TeamName,
-            _kind: crate::boundary::BuiltInNudgeTemplateKind,
+            _kind: &str,
         ) -> Result<bool, crate::error::AtmError> {
             unreachable!("task-store absence test does not write nudge templates")
         }
@@ -1169,6 +1187,8 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             task_id: None,
+            placement: None,
+            task_op: None,
             task_complete: None,
             extra: serde_json::Map::new(),
         }

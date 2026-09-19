@@ -13,16 +13,17 @@
   triage:triageMode "initial_pass" ;
   triage:category "performance" ;
   triage:severity "blocking" ;
-  triage:repeatable false ;
+  triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "deferred" ;
-  triage:dispatchReady false ;
   triage:triagedAt "2026-09-08T05:40:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AY15 ;
   triage:foundAt "2026-09-08T04:52:30Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AY-BENCH-TCP-001/AYBENCHTCP-1> ;
-  triage:deferredNote "WAIVER (Rand, 2026-09-08, verbatim): -- add a waiver for tcp this round.  we will run again once we are ready to publish --. Scope: this waiver covers the tcp FAIL in campaign 20260908T045049Z-m5-atmbench only. It does not block PR #1308 (integrate/phase-ay -> develop) on the tcp shortfall, and it does not revise the 17000.0 p50 floor or any other baseline. A fresh complete benchmark matrix run is required before publish/release; the tcp result must be re-measured then and this waiver does not carry forward to that run." ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AY-BENCH-TCP-001/AYBENCHTCP-1>, <urn:atm:triage:occurrence/AY-BENCH-TCP-001/AYBENCHTCP-2>, <urn:atm:triage:occurrence/AY-BENCH-TCP-001/AYBENCHTCP-3> ;
+  triage:deferredNote "WAIVER (Rand, 2026-09-08, verbatim): -- add a waiver for tcp this round.  we will run again once we are ready to publish --. Scope: this waiver covers the tcp FAIL in campaign 20260908T045049Z-m5-atmbench only. It does not block PR #1308 (integrate/phase-ay -> develop) on the tcp shortfall, and it does not revise the 17000.0 p50 floor or any other baseline. A fresh complete benchmark matrix run is required before publish/release; the tcp result must be re-measured then and this waiver does not carry forward to that run. WAIVER CONSUMED (team-lead, 2026-09-14): the required fresh complete matrix run (v1.5.19 official campaign 20260914T200908Z-m5-atmbench, source a527e8ded, evidence/benchmark-v1.5.19 @ 546daa420, relayed by fenix 2026-09-14 ATM message 01M2GRS1PQ8JX6GKM1JWJR77ZA) has now happened, per the waiver's own condition, and tcp still FAILs: p50 16227.39 vs floor 17000.0, durable this time (323000/323000, not aborted). This is not a new regression -- p50 history across three points (18694 on 09-06, 16564 FAIL on 09-08, 16227 FAIL on 09-14) shows a step-drop between 09-06 (d53715bd5) and 09-08 (2aea45d02) that has not recovered and has drifted slightly worse since. uds and tcp-tls show the same-step drop (21753->19077->18853 and 16144->14852->14440) but both remain above their floors, so this is TCP-transport-specific, not a global regression. Reopening: status reverts to open, this now needs the root-cause bisection the 09-08 waiver deferred, not another waiver, per Rand's own condition on the waiver. Rand decides whether this blocks the v1.5.19 release (per fenix's framing) -- team-lead is not making that call unilaterally, only recording that the waiver's stated condition has been met and failed again." ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triageRecordVersion "3" ;
+  triage:progressNote "team-lead, 2026-09-15: arch-ctm's v1.5.20 official campaign (evidence/benchmark-v1.5.20 @ 0b99e4ef3, source af09279ce, ATM message 01M2HFGVEN7FV9THZ72GGEJVGB, evidence PR #1521) confirms EQ-016's sqlite fix in full (sqlite now PASS: 44438 vs floor 35000, durability 887000/887000 -- was INCOMPLETE at v1.5.19). tcp is unchanged: still FAIL, p50 16331.34 vs floor 17000.0, complete and durable (325000/325000). Fourth data point, same unresolved regression -- 18694 (09-06) -> 16564 FAIL (09-08) -> 16227 FAIL (v1.5.19, 09-14) -> 16331 FAIL (v1.5.20, 09-15). Still needs root-cause bisection of the 09-06..09-08 step-drop; still Rand's call whether it blocks release." .
 
 <urn:atm:triage:occurrence/AY-BENCH-TCP-001/AYBENCHTCP-1>
   a triage:Occurrence ;
@@ -41,3 +42,39 @@
   triage:branch "evidence/ay-bench-r2-waiver" ;
   triage:headSha "389ddb0e57cbd5ff5828706006b944a57f86dab3" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/AY-BENCH-TCP-001/AYBENCHTCP-2>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260914T200908Z-m5-atmbench-tcp.json" ;
+  triage:line 1 ;
+  triage:snippet "status: FAIL (tcp target), p50 16227.389080719457 vs floor 17000.0; messages_admitted/durable/requested all 323000, incomplete_reason null -- complete and durable, not aborted. This is the fresh complete matrix run the 2026-09-08 waiver required before publish/release; it still fails." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "evidence/benchmark-v1.5.19" ;
+  triage:headSha "546daa420" ;
+  triage:occursIn <urn:atm:triage:worktree/AYBENCHTCP-2> .
+
+<urn:atm:triage:worktree/AYBENCHTCP-2>
+  a triage:WorktreeSnapshot ;
+  triage:path "evidence/benchmark-v1.5.19" ;
+  triage:branch "evidence/benchmark-v1.5.19" ;
+  triage:headSha "546daa420" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/AY-BENCH-TCP-001/AYBENCHTCP-3>
+  a triage:Occurrence ;
+  triage:file "site/reports/send-message-benchmark/20260915T024509Z-m5-atmbench-tcp.json" ;
+  triage:line 1 ;
+  triage:snippet "status: FAIL (tcp target), p50 16331.340966493552 vs floor 17000.0; messages_admitted/durable/requested all 325000, incomplete_reason null -- complete and durable. v1.5.20 official campaign, run after EQ-016's sqlite fix landed; sqlite/uds/tcp-tls all PASS in this same campaign, only tcp still fails." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "evidence/benchmark-v1.5.20" ;
+  triage:headSha "0b99e4ef3" ;
+  triage:occursIn <urn:atm:triage:worktree/AYBENCHTCP-3> .
+
+<urn:atm:triage:worktree/AYBENCHTCP-3>
+  a triage:WorktreeSnapshot ;
+  triage:path "evidence/benchmark-v1.5.20" ;
+  triage:branch "evidence/benchmark-v1.5.20" ;
+  triage:headSha "0b99e4ef3" ;
+  triage:orderIndex 3 .

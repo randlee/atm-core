@@ -1,0 +1,74 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB6-018>
+  a triage:Finding ;
+  triage:findingId "BB6-018" ;
+  triage:title "New ADR-061 D6 entry omits the approving party/channel that every other approved D6 row names" ;
+  triage:description "quality-mgr BB6-QA-L4-1789275000 (ARCH-002, arch-qa), PR #1464 comment, verdict FAIL, 2026-09-13T02:00:00Z. The new ADR-061 D6 entry ('2026-09-12 -- Phase BB.6 (approved)') breaks from the ledger's established convention -- every other '(approved)' D6 entry names the approving party/channel; this one names neither. Ruled genuine by fenix." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "quality-mgr BB6-QA-L4-1789275000 (ARCH-002), ruled genuine by fenix" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/adr/ADR-061 (D6 ledger)" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: add the approving party/channel to the '2026-09-12 -- Phase BB.6 (approved)' D6 row to match the format of the other D6 rows. Dispatched to solar as BB6-FIX-DOCS-QA1-1789280000, branch fix/bb6-docs-qa1 cut from adda7e3f9 (layer 16 above cipher's R6, PR #1468)." ;
+  triage:foundIn triage:BB6 ;
+  triage:foundAt "2026-09-13T02:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB6-018/1> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB6-018/1> ;
+  triage:closedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/BB6-018/1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-061.md" ;
+  triage:line 1 ;
+  triage:snippet "D6 entry '2026-09-12 -- Phase BB.6 (approved)' names neither approving party nor channel, unlike every other approved D6 row" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-018/1> .
+
+<urn:atm:triage:worktree/BB6-018/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1464, feature/bb6-docs-prompt-handoffs" ;
+  triage:branch "feature/bb6-docs-prompt-handoffs" ;
+  triage:headSha "3aa1954e8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB6-018/2>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-061.md" ;
+  triage:line 1 ;
+  triage:snippet "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at 11ff6e997 (unified head 0b9b3e4f3 descends from it). docs/adr/ADR-061...md:161-166 \"Fenix, as Phase BB lead, approved this additive schema change through ATM\". NOTE (req-qa and arch-qa, independently): task vars mapped this id to Group B (7bb8f4a49), where the row is still unattributed -- the ttl's own fix routing points to fix/bb6-docs-qa1 (Group E), an append-only-stack layer above Group B, which is where the fix actually landed. Task-input mapping issue, not a code defect; confirmed FIXED at the real landing head." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "11ff6e997" ;
+  triage:occursIn <urn:atm:triage:worktree/BB6-018/2> .
+
+<urn:atm:triage:worktree/BB6-018/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/bb6-docs-qa1 (2 commits above unified head 0b9b3e4f3)" ;
+  triage:branch "fix/bb6-docs-qa1" ;
+  triage:headSha "11ff6e997" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:resolution/BB6-018/1>
+  a triage:Resolution ;
+  triage:resolvedBy "quality-mgr" ;
+  triage:resolvedAt "2026-09-13T03:08:55Z"^^xsd:dateTime ;
+  triage:fixCommit "11ff6e997" ;
+  triage:fixBranch "fix/bb6-docs-qa1" ;
+  triage:verifiedInRound "BB-LANDING-QA-1789301000-batch2" ;
+  triage:resolutionNote "quality-mgr BB-LANDING-QA-1789301000 batch 2/3 (2026-09-13T03:08:55Z), verified at 11ff6e997 (unified head 0b9b3e4f3 descends from it). docs/adr/ADR-061...md:161-166 \"Fenix, as Phase BB lead, approved this additive schema change through ATM\". NOTE (req-qa and arch-qa, independently): task vars mapped this id to Group B (7bb8f4a49), where the row is still unattributed -- the ttl's own fix routing points to fix/bb6-docs-qa1 (Group E), an append-only-stack layer above Group B, which is where the fix actually landed. Task-input mapping issue, not a code defect; confirmed FIXED at the real landing head." .

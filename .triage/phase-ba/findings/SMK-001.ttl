@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/SMK-001>
+  a triage:Finding ;
+  triage:findingId "SMK-001" ;
+  triage:title "run-hermes-graft-smoke.py sends requires_ack=False then calls atm ack, rejected as not-pending" ;
+  triage:description "fenix (ATM 01M2ANEESW1KSCS1J697J8E8MA, 2026-09-12T11:18:37Z), found during 1.5.16 local smoke (graft-hermes lane). scripts/phase-ai/run-hermes-graft-smoke.py sent its marker with requires_ack=False and then ran `atm ack`, which failed with \"not pending acknowledgement\" -- enforced since d08647e92 (pre-Phase-BA), the script predates that enforcement change. Fixed in PR #1428 (fix/phase-ba-smoke-graft-ack) at 3bc6122b4, one-line fix. Minor; does not block 1.5.16." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "scripts/phase-ai/run-hermes-graft-smoke.py" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T11:18:37Z"^^xsd:dateTime ;
+  triage:deferredNote "fenix (ATM 01M2APKAD843RB8WK9EVQFHGH6, 2026-09-12T11:38:45Z): BA-SMOKE-EVIDENCE-QA-1789212303 on PR #1428 confirmed SMK-001 fixed by all three reviewers." ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T11:18:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SMK-001/1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/SMK-001/1>
+  a triage:Occurrence ;
+  triage:file "scripts/phase-ai/run-hermes-graft-smoke.py" ;
+  triage:line 1 ;
+  triage:snippet "marker sent with requires_ack=False, then `atm ack` called against it -- rejected \"not pending acknowledgement\" (enforced since d08647e92, pre-BA); script predates the enforcement change" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T11:18:37Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "fenix fix/phase-ba-smoke-graft-ack @ 3bc6122b4 (PR #1428), one-line fix." ;
+  triage:branch "fix/phase-ba-smoke-graft-ack" ;
+  triage:headSha "3bc6122b4" ;
+  triage:occursIn <urn:atm:triage:worktree/SMK-001/1> .
+
+<urn:atm:triage:worktree/SMK-001/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/phase-ba-smoke-graft-ack (fenix), PR #1428, above integrate/phase-ba" ;
+  triage:branch "fix/phase-ba-smoke-graft-ack" ;
+  triage:headSha "3bc6122b4" ;
+  triage:orderIndex 12 .

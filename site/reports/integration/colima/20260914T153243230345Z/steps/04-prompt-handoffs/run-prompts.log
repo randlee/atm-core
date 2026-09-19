@@ -1,0 +1,7 @@
+prompt: /opt/testbed/prompts/atm-team/AT11-prompt-handoffs.md (agent=claude-code model=sonnet timeout=900s)
+Valid JSON, report written.
+
+SMOKE-REPORT-WRITTEN /opt/testbed/results/prompt-AT11.json
+
+**Summary:** The `fx-at11` ATM daemon was unreachable for the entire run (`HTTP client could not connect to the configured daemon endpoint`), confirmed repeatedly via `atm doctor`, `atm task assign`, and `atm task list` over a ~230s polling window and several retries. As a non-root fixture agent I have no path to restart `atm-daemon` (the endpoint record directory `/root/.atm/daemon` is root-owned 755; my own attempts to start it aborted silently, consistent with the harness's documented "no-sudo" daemon-lifecycle model). Only local team-config commands (`atm teams clear-nudge-template` / `disable-nudge-template`) worked, since they don't require the daemon. Both task-lifecycle steps (case 1 reminder ordering, case 2 disabled-reminder doctor finding) are reported **fail** with exact CLI evidence; cleanup **pass** since no tasks were ever created and the nudge-template override was restored to cleared. Overall verdict: **fail**.
+VERDICT AT11: fail (/opt/testbed/results/prompt-AT11.json)

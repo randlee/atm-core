@@ -42,6 +42,7 @@ pub struct PreparedWrite {
     same_store_peer_receipt: bool,
     received_hook: Result<Option<PreparedReceivedHook>, AtmError>,
     acknowledgement: Option<ResolvedAcknowledgement>,
+    task_rejection: Option<AtmError>,
 }
 
 impl PreparedWrite {
@@ -73,6 +74,9 @@ impl PreparedWrite {
     /// `StorageAndNudgeRouter`) must schedule [`PreparedWrite::mark_pending_if_deferred`]
     /// on their own blocking task after this returns. Callers with no such
     /// boundary should use [`PreparedWrite::finish_and_mark`] instead.
+    /// A task rejection whose report was retained as plain mail is likewise
+    /// available through [`PreparedWrite::task_rejection`] only after the
+    /// caller completes ordinary post-write delivery.
     pub fn finish(
         &mut self,
         runtime: &LocalServiceRuntime,
@@ -97,7 +101,7 @@ impl PreparedWrite {
         runtime: &LocalServiceRuntime,
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError> {
-        let outcome = self.finish(runtime, observability)?;
+        let outcome = self.finish_with_runtime(runtime, observability)?;
         if let Err(error) = self.mark_pending_if_deferred(runtime) {
             tracing::warn!(
                 message_id = %self.persisted_message_id(),
@@ -105,7 +109,22 @@ impl PreparedWrite {
                 "synchronous deferred-write queue marker failed after durable write"
             );
         }
+        self.reject_task_operation_if_needed()?;
         Ok(outcome)
+    }
+
+    /// Returns the task rejection that must be surfaced only after ordinary
+    /// post-write delivery completes.
+    #[must_use]
+    pub fn task_rejection(&self) -> Option<AtmError> {
+        self.task_rejection.clone()
+    }
+
+    fn reject_task_operation_if_needed(&self) -> Result<(), AtmError> {
+        match &self.task_rejection {
+            Some(error) => Err(error.clone()),
+            None => Ok(()),
+        }
     }
 
     /// Sets the durable at-most-once queue marker for a newly persisted
@@ -246,10 +265,10 @@ impl PreparedWrite {
         // selector owns the channel-specific emitter; retain AQ1's
         // suppression for every other backend until its downstream trigger
         // sprint supplies that emitter.
-        if self.outbound_request.nudge_mode == NudgeMode::Deferred
+        let suppress_primary = self.outbound_request.nudge_mode == NudgeMode::Deferred
             && !post_write.delivery_snapshot.graft_post_send
-            && !post_write.delivery_snapshot.bare_cli_post_send
-        {
+            && !post_write.delivery_snapshot.bare_cli_post_send;
+        if suppress_primary {
             tracing::info!(
                 subsystem = "atm_core.queue",
                 action = "steer_suppressed",
@@ -257,10 +276,9 @@ impl PreparedWrite {
                 message_id = %self.persisted_message_id(),
                 "deferred write suppresses its immediate receiver steer"
             );
-            return Ok(Vec::new());
         }
         let mut dispatches = Vec::new();
-        for message in &post_write.messages {
+        for message in post_write.messages.iter().filter(|_| !suppress_primary) {
             let event = crate::send::hook::post_send_event_from_message(
                 &post_write.recipient,
                 message,
@@ -273,6 +291,21 @@ impl PreparedWrite {
                 self.outbound_request.nudge_mode,
             )?;
             if let Some(dispatch) = dispatch {
+                dispatches.push(dispatch);
+            }
+        }
+        if let Some(notice) = &post_write.reassign_notice {
+            let event = crate::send::hook::post_send_event_from_message(
+                &notice.recipient,
+                &notice.message,
+                notice.delivery_snapshot.recipient_pane_id.as_ref(),
+            )?;
+            if let Some(dispatch) = crate::send::hook::build_built_in_dispatch(
+                runtime,
+                &notice.delivery_snapshot,
+                &event,
+                NudgeMode::Immediate,
+            )? {
                 dispatches.push(dispatch);
             }
         }
@@ -499,6 +532,7 @@ fn prepare_atomic_acknowledgement_write<
         requires_ack: false,
         task_id: source_task_id.clone(),
         task_complete: None,
+        already_closed: None,
         summary: reply.envelope.summary.clone(),
         message: Some(reply.envelope.text.clone()),
         warnings: Vec::new(),
@@ -516,12 +550,14 @@ fn prepare_atomic_acknowledgement_write<
         &recipient.team,
         &recipient.agent,
     )?;
-    let logical = crate::delivery_plan::LogicalMessage::new(reply.envelope.clone(), false, true)
-        .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+    let logical =
+        crate::delivery_plan::LogicalMessage::new(reply.envelope.clone(), false, true, None)
+            .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
     let received_hook = Ok(Some(PreparedReceivedHook {
         recipient: recipient.clone(),
         delivery_snapshot: delivery_snapshot.clone(),
         messages: vec![logical.clone()],
+        reassign_notice: None,
     }));
     Ok(PreparedWrite {
         outcome,
@@ -531,6 +567,7 @@ fn prepare_atomic_acknowledgement_write<
         same_store_peer_receipt: false,
         received_hook,
         acknowledgement: Some(acknowledgement.acknowledgement),
+        task_rejection: None,
     })
 }
 
@@ -544,7 +581,7 @@ fn prepare_persisted_write<
     delivery_mode: DeliveryExecutionMode,
 ) -> Result<PreparedWrite, AtmError> {
     let mut context = prepare_send_context(runtime, &mut request)?;
-    crate::send::validate_task_request(&request)?;
+    crate::send::validate_task_request(&mut request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
     let requires_ack = request_requires_ack(&request, &task_id);
@@ -603,6 +640,7 @@ fn prepare_persisted_write<
             == DuplicateWriteDisposition::SameStorePeerReceipt,
         received_hook,
         acknowledgement,
+        task_rejection: persistence.task_rejection.clone(),
     })
 }
 
@@ -615,7 +653,7 @@ async fn prepare_persisted_write_async(
     source_preflight: WriteSourcePreflight,
 ) -> Result<PreparedWrite, AtmError> {
     let mut context = prepare_send_context(runtime, &mut request)?;
-    crate::send::validate_task_request(&request)?;
+    crate::send::validate_task_request(&mut request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
     let requires_ack = request_requires_ack(&request, &task_id);
@@ -667,6 +705,7 @@ async fn prepare_persisted_write_async(
             == DuplicateWriteDisposition::SameStorePeerReceipt,
         received_hook,
         acknowledgement,
+        task_rejection: persistence.task_rejection.clone(),
     })
 }
 

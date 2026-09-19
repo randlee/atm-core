@@ -19,7 +19,8 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{
     CompatibilityPreflight, GraftReceiverLookupRequest, GraftReceiverRefreshRequest,
     GraftReceiverRegistration, GraftReceiverUnregistration, HttpApiVersion, QueueGetNextRequest,
-    RequestId, ResponseEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest, next_request_id,
+    RequestId, ResponseEnvelope, SendResponseEnvelope, TaskMoveRequest, TeamMemberHeartbeatRequest,
+    next_request_id,
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::search::SearchRequest;
@@ -514,6 +515,9 @@ fn decode_framework_request(
         Some(HttpRouteKind::QueueGetNext) => serde_json::from_slice::<QueueGetNextRequest>(body)
             .map(ApiRequest::QueueGetNext)
             .map_err(|source| invalid_framework_body("queue get next", source)),
+        Some(HttpRouteKind::TaskMove) => serde_json::from_slice::<TaskMoveRequest>(body)
+            .map(ApiRequest::TaskMove)
+            .map_err(|source| invalid_framework_body("task move", source)),
         Some(
             kind @ (HttpRouteKind::GraftReceiverRegister
             | HttpRouteKind::GraftReceiverRefresh
@@ -717,6 +721,7 @@ fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
         }
         ResponseEnvelope::Heartbeat(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::QueueGetNext(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::TaskMove(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::GraftReceiverRegister => json_response(StatusCode::OK, &(), None),
         ResponseEnvelope::GraftReceiverRefresh => json_response(StatusCode::OK, &(), None),
         ResponseEnvelope::GraftReceiverUnregister => json_response(StatusCode::OK, &(), None),
@@ -778,6 +783,25 @@ pub(crate) fn error_response(error: AtmError) -> Response {
     } else {
         StatusCode::SERVICE_UNAVAILABLE
     };
+    if matches!(
+        error.code(),
+        AtmErrorCode::MailboxLockTimeout
+            | AtmErrorCode::MailboxReadFailed
+            | AtmErrorCode::DaemonConnectionSaturated
+            | AtmErrorCode::DaemonUnavailable
+    ) && error
+        .message()
+        .starts_with("bounded mailbox reader request failed:")
+    {
+        // `ReadLaneError` has already reduced this to a stable, safe detail.
+        // Record every reader-lane outcome before HTTP redacts its diagnostic
+        // cause so the owned daemon log and local CLI identify one failure.
+        tracing::error!(
+            error_code = %error.code(),
+            detail = %error.message(),
+            "mailbox reader request failed"
+        );
+    }
     // Preserve the public code/message contract while redacting diagnostic
     // causes before serializing through the untrusted HTTP boundary.
     let body = HttpErrorBody::from(&error);
@@ -1059,6 +1083,7 @@ mod tests {
                 requires_ack: false,
                 task_id: None,
                 task_complete: None,
+                already_closed: None,
                 summary: None,
                 message: Some("typed route fixture".to_owned()),
                 warnings: Vec::new(),

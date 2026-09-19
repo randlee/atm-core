@@ -35,6 +35,83 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, PaneId, TaskId, TeamName};
 
+#[test]
+fn writer_rejects_task_op_on_foreign_team_or_host_recipient() {
+    let temporary = std::env::temp_dir();
+    let mut request = SendRequest::new(
+        temporary.clone(),
+        temporary,
+        "sender".parse().unwrap(),
+        "recipient@other-team",
+        "local-team".parse().unwrap(),
+        SendMessageSource::Inline("task".to_owned()),
+        None,
+        false,
+        Some("T1".parse().unwrap()),
+        false,
+    )
+    .unwrap();
+    request.task_op = Some(atm_storage::TaskOp::Start);
+    let foreign = super::validate_task_request(&mut request).expect_err("foreign team");
+    assert!(
+        foreign
+            .message()
+            .contains("task commands are local-team only")
+    );
+
+    request.to = Some("recipient@local-team.example.test".parse().unwrap());
+    let hosted = super::validate_task_request(&mut request).expect_err("host target");
+    assert!(
+        hosted
+            .message()
+            .contains("task commands are local-team only")
+    );
+}
+
+#[test]
+fn legacy_task_complete_request_closes_the_task() {
+    let temporary = std::env::temp_dir();
+    let producer_1_4_json = serde_json::json!({
+        "home_dir": temporary,
+        "current_dir": std::env::temp_dir(),
+        "caller_identity": "sender",
+        "caller_team": "local-team",
+        "to": {"agent": "recipient"},
+        "message_source": {"Inline": "task"},
+        "summary_override": null,
+        "requires_ack": false,
+        "task_complete": "T1",
+        "dry_run": false
+    });
+    let mut request_1_4: SendRequest =
+        serde_json::from_value(producer_1_4_json).expect("1.4.0 request");
+    super::validate_task_request(&mut request_1_4).expect("legacy close normalizes");
+    assert_eq!(request_1_4.task_id.as_ref().map(TaskId::as_str), Some("T1"));
+    assert_eq!(
+        request_1_4.task_op,
+        Some(atm_storage::TaskOp::Close {
+            outcome: atm_storage::TaskCloseOutcome::Completed,
+            reason: None,
+        })
+    );
+    assert_eq!(request_1_4.task_complete, None);
+
+    let mut mismatch = request_1_4.clone();
+    mismatch.task_op = None;
+    mismatch.task_id = Some("T1".parse().expect("task id"));
+    mismatch.task_complete = Some("T2".parse().expect("task id"));
+    let error = super::validate_task_request(&mut mismatch).expect_err("mismatch rejected");
+    assert!(error.message().contains("name different tasks"));
+    assert!(error.message().contains("Recovery:"));
+
+    let mut explicit = mismatch;
+    explicit.task_op = Some(atm_storage::TaskOp::Start);
+    super::validate_task_request(&mut explicit).expect("typed operation wins");
+    assert_eq!(explicit.task_id.as_ref().map(TaskId::as_str), Some("T1"));
+    assert_eq!(explicit.task_op, Some(atm_storage::TaskOp::Start));
+    assert_eq!(explicit.task_complete, None);
+}
+
 pub(crate) fn message(
     from: &str,
     message_id: AtmMessageId,
@@ -60,6 +137,8 @@ pub(crate) fn message(
         thread_mode,
         expires_at: None,
         task_id: None,
+        placement: None,
+        task_op: None,
         task_complete: None,
         extra: Map::new(),
     }
@@ -564,6 +643,7 @@ fn tmux_and_herdr_dispatches_share_the_rendered_template() {
         requires_ack: false,
         is_ack: false,
         task_id: None,
+        task_transition: None,
         recipient_pane_id: Some(PaneId::from_cli("%1").expect("pane")),
     };
     let mut tmux_snapshot = delivery_snapshot(DeliveryHarnessPath::NonClaude);
@@ -635,6 +715,7 @@ fn post_send_herdr_skips_a_nonconforming_canonical_recipient_without_panicking()
         requires_ack: false,
         is_ack: false,
         task_id: None,
+        task_transition: None,
         recipient_pane_id: None,
     };
     let mut snapshot = delivery_snapshot(DeliveryHarnessPath::NonClaude);
@@ -671,6 +752,8 @@ pub(super) fn outbound_message() -> InboxMessage {
         thread_mode: None,
         expires_at: None,
         task_id: Some("task-123".parse().expect("task id")),
+        placement: None,
+        task_op: None,
         task_complete: None,
         extra: Map::new(),
     }
@@ -685,7 +768,7 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         SendMessageSource::Inline("hello".to_string()),
         Some("hello".to_string()),
         false,
-        Some("task-123".parse().expect("task id")),
+        None,
         false,
     )
     .expect("test send request")
@@ -744,6 +827,7 @@ fn path_body_detection_emits_structured_warning_event() {
         requires_ack: false,
         task_id: None,
         task_complete: None,
+        already_closed: None,
         summary: Some("path reference".to_owned()),
         message: None,
         warnings: Vec::new(),
@@ -966,6 +1050,26 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
 }
 
 #[test]
+fn rejected_task_report_uses_plain_message_post_write_snapshot() {
+    let mut message = outbound_message();
+    message.task_id = Some("T1".parse().expect("task id"));
+    message.task_op = Some(atm_storage::TaskOp::Close {
+        outcome: atm_storage::TaskCloseOutcome::Completed,
+        reason: Some("report".to_owned()),
+    });
+    let persistence = crate::send::DeliveryPersistenceResult::persisted(message)
+        .with_task_rejection(Some(AtmError::validation(
+            "task close rejected; report delivered",
+        )));
+
+    assert!(persistence.task_rejection.is_some());
+    assert_eq!(persistence.original_message.task_id, None);
+    assert_eq!(persistence.original_message.task_op, None);
+    assert_eq!(persistence.original_message.task_complete, None);
+    assert_eq!(persistence.original_message.placement, None);
+}
+
+#[test]
 fn send_sqlite_failure_is_an_error_without_outbound_delivery_or_hook() {
     let runtime = TestRuntime::new(Some("sqlite write failed"), DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
@@ -1025,6 +1129,7 @@ fn send_aliases_are_resolved_before_any_message_is_persisted() {
             .parse()
             .expect("alias recipient"),
     );
+    request.task_id = Some("task-123".parse().expect("task id"));
 
     let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect("alias send succeeds");
@@ -1217,7 +1322,7 @@ fn self_addressed_task_send_is_rejected_before_persistence() {
 
 #[test]
 #[serial_test::serial(env)]
-fn plain_file_task_envelope_requires_ack_without_explicit_task_id() {
+fn plain_file_task_envelope_does_not_infer_requires_ack() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
@@ -1238,7 +1343,7 @@ fn plain_file_task_envelope_requires_ack_without_explicit_task_id() {
     let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect("plain file task envelope send succeeds");
 
-    assert!(outcome.requires_ack);
+    assert!(!outcome.requires_ack);
     assert!(outcome.task_id.is_none());
     let records = runtime
         .persisted_records
@@ -1247,8 +1352,8 @@ fn plain_file_task_envelope_requires_ack_without_explicit_task_id() {
         .clone();
     assert_eq!(records.len(), 1);
     let record = &records[0];
-    assert!(record.envelope.requires_ack);
-    assert!(record.envelope.pending_ack_at.is_some());
+    assert!(!record.envelope.requires_ack);
+    assert!(record.envelope.pending_ack_at.is_none());
     assert!(record.envelope.task_id.is_none());
 }
 

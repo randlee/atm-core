@@ -220,7 +220,6 @@ pub(crate) fn build_replacement_handler(
         herdr_config,
         herdr_process,
     } = config;
-    let escalation_min_interval = herdr_config.escalation_min_interval;
     let herdr_process = resolve_herdr_process(&mut assembly, herdr_process, herdr_config.client);
     let queue_wake_process = Arc::clone(&herdr_process);
     let (selector, recovery_sweep) = compose_queue_workers(
@@ -241,7 +240,6 @@ pub(crate) fn build_replacement_handler(
         selector.clone(),
         runtime_health.clone(),
         queue_wake_process,
-        escalation_min_interval,
     )?;
     let handler = compose_storage_router(
         assembly,
@@ -310,7 +308,6 @@ fn build_queue_wake_pump(
     selector: Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     runtime_health: RuntimeHealth,
     herdr_process: Arc<dyn HerdrProcessAdapter>,
-    escalation_min_interval: std::time::Duration,
 ) -> Result<Arc<HerdrQueueWakePump>, AtmError> {
     Ok(Arc::new(
         HerdrQueueWakePump::new(
@@ -319,8 +316,7 @@ fn build_queue_wake_pump(
             runtime_health,
             herdr_process,
         )
-        .with_daemon_home(atm_core::home::atm_home()?)
-        .with_breaker_escalation_min_interval(escalation_min_interval),
+        .with_daemon_home(atm_core::home::atm_home()?),
     ))
 }
 

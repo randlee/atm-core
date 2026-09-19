@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB1-018>
+  a triage:Finding ;
+  triage:findingId "BB1-018" ;
+  triage:title "Unrequested manifest edits add MessageAdmissionOutcome (task_assignee) to response_types" ;
+  triage:description "fenix critical design review, PR #1438 comment https://github.com/randlee/atm-core/pull/1438#issuecomment-5648340494 (2026-09-12T20:01:44Z), reviewed at b06b3e262. boundaries/atm-storage/async-message-store.toml:32, message-store.toml:32, atm-storage-rusqlite/async-message-store-sqlite.toml:33 add MessageAdmissionOutcome (task_assignee...) to response_types; the type was already returned and unlisted at the parent, so this is harmless." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary" ;
+  triage:severity "minor" ;
+  triage:source "fenix critical review" ;
+  triage:repeatable false ;
+  triage:sweepScope "boundaries/atm-storage/async-message-store.toml:32; boundaries/atm-storage/message-store.toml:32; boundaries/atm-storage-rusqlite/async-message-store-sqlite.toml:33" ;
+  triage:status "accepted" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:deferredNote "Lead ruling (fenix): accepted as-is; record in the PR body. Fix round R1 goes to solar on a top-of-stack worktree above feature/bb1-transition-templates (BB.4 stacks on this branch, unchanged). QA-1 findings from quality-mgr fold into the same round." ;
+  triage:foundIn triage:BB1 ;
+  triage:foundAt "2026-09-12T20:01:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB1-018/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/BB1-018/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-storage/async-message-store.toml" ;
+  triage:line 32 ;
+  triage:snippet "response_types gains MessageAdmissionOutcome across three manifests, matching an already-returned but previously unlisted type" ;
+  triage:status "accepted" ;
+  triage:closed false ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:occursIn <urn:atm:triage:worktree/BB1-018/1> .
+
+<urn:atm:triage:worktree/BB1-018/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1438, feature/bb1-transition-templates" ;
+  triage:branch "feature/bb1-transition-templates" ;
+  triage:headSha "b06b3e262" ;
+  triage:orderIndex 1 .

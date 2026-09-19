@@ -138,7 +138,7 @@ class WindowsScheduledTaskTests(unittest.TestCase):
             yes=True,
         )
         self.selector = Path(self.args.daemon_link)
-        self.xml = """<?xml version=\"1.0\"?><Task xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\"><Actions><Exec><Command>C:\\atm-active\\atm-daemon.exe</Command></Exec></Actions></Task>"""
+        self.xml = """<?xml version=\"1.0\"?><Task xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\"><Principals><Principal><UserId>DOMAIN\\agent</UserId></Principal></Principals><Actions><Exec><Command>C:\\atm-active\\atm-daemon.exe</Command></Exec></Actions></Task>"""
 
     def test_task_status_reads_one_executable_action_and_running_state(self) -> None:
         with mock.patch.object(
@@ -155,6 +155,7 @@ class WindowsScheduledTaskTests(unittest.TestCase):
                     "registered": True,
                     "state": "running",
                     "command": r"C:\atm-active\atm-daemon.exe",
+                    "user_id": r"DOMAIN\agent",
                 },
             )
 
@@ -1963,12 +1964,14 @@ class HerdrRestartTests(unittest.TestCase):
 
     def test_restart_entry_argv_and_identifiers_are_platform_specific(self) -> None:
         cases = {
-            "Darwin": ("com.randlee.atm.herdr-server.blue", ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/com.randlee.atm.herdr-server.blue"]),
+            "Darwin": ("com.randlee.atm.herdr-server.blue", ["launchctl", "kickstart", "-k", "gui/501/com.randlee.atm.herdr-server.blue"]),
             "Linux": ("atm-herdr-server@blue.service", ["systemctl", "--user", "restart", "atm-herdr-server@blue.service"]),
             "Windows": ("ATM Herdr Server (blue)", ["schtasks.exe", "/Run", "/TN", "ATM Herdr Server (blue)"]),
         }
         for platform_name, (entry_id, expected) in cases.items():
-            with self.subTest(platform=platform_name):
+            # os.getuid does not exist on Windows; the Darwin case pins it so the
+            # launchctl domain is asserted identically on every CI runner.
+            with self.subTest(platform=platform_name), mock.patch.object(os, "getuid", return_value=501, create=True):
                 runner = mock.Mock(return_value=subprocess.CompletedProcess([], 0, "", ""))
                 adapter = DAEMON_SWITCH.NativeEntryPlatform(self.root / platform_name, runner)
                 adapter.name = platform_name

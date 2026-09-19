@@ -19,7 +19,7 @@ pub use transport::HerdrClientConfig;
 
 use transport::{
     HerdrIo, HerdrOp, get_from_envelope, list_from_envelope, prompt_from_envelope,
-    snapshot_from_envelope, unit_from_envelope,
+    snapshot_from_envelope,
 };
 
 /// Oldest Herdr release this daemon supports (ADR-061). Keyed on the Herdr
@@ -306,14 +306,6 @@ pub trait HerdrProcessAdapter: Send + Sync {
         session: Option<&'a HerdrSession>,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<HerdrListOutcome, HerdrError>> + Send + 'a>>;
-
-    /// Shows a desktop notification without targeting a Herdr pane.
-    fn notify<'a>(
-        &'a self,
-        title: &'a str,
-        body: &'a str,
-        deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Result<(), HerdrError>> + Send + 'a>>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -637,24 +629,6 @@ impl HerdrProcessAdapter for HerdrProcessInvoker {
             result
         })
     }
-
-    fn notify<'a>(
-        &'a self,
-        title: &'a str,
-        body: &'a str,
-        deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Result<(), HerdrError>> + Send + 'a>> {
-        Box::pin(async move {
-            self.call(
-                HerdrOp::Notify { title, body },
-                None,
-                deadline,
-                BreakerPolicy::Bypass,
-            )
-            .await
-            .and_then(unit_from_envelope)
-        })
-    }
 }
 
 fn record_result<T>(breaker: &HerdrSpawnBreaker, result: &Result<T, HerdrError>) {
@@ -718,10 +692,6 @@ pub mod testing {
         List {
             session: Option<HerdrSession>,
         },
-        Notify {
-            title: String,
-            body: String,
-        },
     }
 
     #[derive(Debug, Default)]
@@ -733,8 +703,6 @@ pub mod testing {
         get_results: VecDeque<Result<HerdrGetOutcome, HerdrError>>,
         list_results: VecDeque<Result<HerdrListOutcome, HerdrError>>,
         list_gate: Option<Arc<tokio::sync::Notify>>,
-        notify_results: VecDeque<Result<(), HerdrError>>,
-        notify_gate: Option<Arc<tokio::sync::Notify>>,
         breaker_retry_after: Option<Duration>,
     }
 
@@ -767,7 +735,7 @@ pub mod testing {
         let config = transport::HerdrClientConfig::with_socket_path(socket_path);
         HerdrProcessInvoker {
             breaker: Arc::new(HerdrSpawnBreaker::default()),
-            io: HerdrIo::Socket(crate::transport_socket::SocketIo::new(&config)),
+            io: HerdrIo::from_config(&config),
         }
     }
 
@@ -832,26 +800,10 @@ pub mod testing {
             }
         }
 
-        pub fn queue_notify_result(&self, result: Result<(), HerdrError>) {
-            if let Ok(mut state) = self.state.lock() {
-                state.notify_results.push_back(result);
-            }
-        }
-
         pub fn set_breaker_retry_after(&self, retry_after: Option<Duration>) {
             if let Ok(mut state) = self.state.lock() {
                 state.breaker_retry_after = retry_after;
             }
-        }
-
-        /// Blocks the next notification until it is released or its request
-        /// deadline expires.
-        pub fn block_next_notify(&self) -> Arc<tokio::sync::Notify> {
-            let gate = Arc::new(tokio::sync::Notify::new());
-            if let Ok(mut state) = self.state.lock() {
-                state.notify_gate = Some(Arc::clone(&gate));
-            }
-            gate
         }
 
         /// Blocks the next list call until the returned notifier is woken.
@@ -995,39 +947,6 @@ pub mod testing {
                     gate.notified().await;
                 }
                 result
-            })
-        }
-
-        fn notify<'a>(
-            &'a self,
-            title: &'a str,
-            body: &'a str,
-            deadline: RequestDeadline,
-        ) -> Pin<Box<dyn Future<Output = Result<(), HerdrError>> + Send + 'a>> {
-            let (gate, result) = self
-                .state
-                .lock()
-                .map(|mut state| {
-                    state.calls.push(FakeHerdrCall::Notify {
-                        title: title.to_owned(),
-                        body: body.to_owned(),
-                    });
-                    (state.notify_gate.take(), state.notify_results.pop_front())
-                })
-                .ok()
-                .unwrap_or((None, None));
-            let result = result.unwrap_or(Ok(()));
-            Box::pin(async move {
-                let Some(gate) = gate else {
-                    return result;
-                };
-                let Some(remaining) = deadline.remaining() else {
-                    return Err(HerdrError::TimedOut);
-                };
-                match tokio::time::timeout(remaining, gate.notified()).await {
-                    Ok(()) => result,
-                    Err(_) => Err(HerdrError::TimedOut),
-                }
             })
         }
     }
@@ -1213,21 +1132,6 @@ mod tests {
         assert_eq!(
             transport_cli::command_args(HerdrOp::List),
             vec!["agent", "list"]
-        );
-        assert_eq!(
-            transport_cli::command_args(HerdrOp::Notify {
-                title: "Task escalation",
-                body: "line one\nline two"
-            }),
-            vec![
-                "notification",
-                "show",
-                "Task escalation",
-                "--body",
-                "line one\nline two",
-                "--sound",
-                "request"
-            ]
         );
     }
 

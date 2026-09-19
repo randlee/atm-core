@@ -150,7 +150,6 @@ def test_cli_renders_graph_dev_template(tmp_path):
         "worktree_path": "/tmp/worktree",
         "branch": "feature/test",
         "pr_target": "integrate/phase-AI",
-        "assignee": "arch-ctm",
         "phase_local": "AICH",
         "ttl_dir": ".sprints/AICH",
         "finding_ids": "",

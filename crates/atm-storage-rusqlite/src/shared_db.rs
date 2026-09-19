@@ -4,6 +4,7 @@ use crate::writer::{WriteOp, WriteOpResult, validate_upsert_message_request};
 use atm_storage::TemplateMessageAdmission;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
+    MessageAdmissionOutcome,
 };
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
@@ -76,16 +77,7 @@ CREATE TABLE IF NOT EXISTS team_roster (
 
 CREATE TABLE IF NOT EXISTS team_nudge_template_overrides (
     team_name TEXT NOT NULL,
-    template_kind TEXT NOT NULL
-        CHECK(template_kind IN (
-            'delivery',
-            'delivery_ack',
-            'queue',
-            'queue_ack',
-            'task',
-            'acknowledge',
-            'acknowledge_task'
-        )),
+    template_kind TEXT NOT NULL,
     mode TEXT NOT NULL DEFAULT 'override'
         CHECK(mode IN ('override', 'disabled')),
     template_body TEXT NOT NULL,
@@ -314,19 +306,59 @@ impl SharedDb {
         record: Message,
         provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<bool, AtmError> {
+        let outcome = self.submit_message_admission(record, provenance)?;
+        match outcome.task_rejection {
+            Some(error) => Err(error),
+            None => Ok(outcome.existing.is_none()),
+        }
+    }
+
+    pub(crate) fn submit_message_admission(
+        &self,
+        record: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         validate_upsert_message_request(&record)?;
         let result = self.writer.submit(WriteOp::UpsertMessage {
             record: Box::new(record),
             provenance,
         })?;
         match result {
-            WriteOpResult::UpsertMessage { inserted, .. } => Ok(inserted),
+            WriteOpResult::UpsertMessage {
+                inserted: true,
+                already_closed,
+                task_assignee,
+                queued_position,
+                reassign_notice,
+                task_rejection,
+                ..
+            } => Ok(MessageAdmissionOutcome {
+                existing: None,
+                already_closed,
+                task_assignee,
+                queued_position,
+                reassign_notice: reassign_notice.map(|notice| *notice),
+                task_rejection,
+            }),
+            WriteOpResult::UpsertMessage {
+                inserted: false,
+                existing: Some(existing),
+                ..
+            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
+            WriteOpResult::UpsertMessage {
+                inserted: false,
+                existing: None,
+                ..
+            } => Err(AtmError::daemon_unavailable(
+                "sqlite writer reported a duplicate without its retained record",
+            )),
             WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessages
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
             | WriteOpResult::DiagnosticsRecorded
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for message upsert",
@@ -379,6 +411,16 @@ impl SharedDb {
         record: Message,
         provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<Option<Message>, AtmError> {
+        self.submit_message_admission_async(record, provenance)
+            .await
+            .map(|outcome| outcome.existing)
+    }
+
+    pub(crate) async fn submit_message_admission_async(
+        &self,
+        record: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         validate_upsert_message_request(&record)?;
         match self
             .writer
@@ -388,14 +430,31 @@ impl SharedDb {
             })
             .await?
         {
-            WriteOpResult::UpsertMessage { inserted: true, .. } => Ok(None),
+            WriteOpResult::UpsertMessage {
+                inserted: true,
+                already_closed,
+                task_assignee,
+                queued_position,
+                reassign_notice,
+                task_rejection,
+                ..
+            } => Ok(MessageAdmissionOutcome {
+                existing: None,
+                already_closed,
+                task_assignee,
+                queued_position,
+                reassign_notice: reassign_notice.map(|notice| *notice),
+                task_rejection,
+            }),
             WriteOpResult::UpsertMessage {
                 inserted: false,
                 existing: Some(existing),
-            } => Ok(Some(*existing)),
+                ..
+            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
             WriteOpResult::UpsertMessage {
                 inserted: false,
                 existing: None,
+                ..
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate without its retained record",
             )),
@@ -405,6 +464,7 @@ impl SharedDb {
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
             | WriteOpResult::DiagnosticsRecorded
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
@@ -437,21 +497,37 @@ impl SharedDb {
     pub(crate) async fn submit_template_message_admission_async(
         &self,
         admission: TemplateMessageAdmission,
-    ) -> Result<Option<Message>, AtmError> {
+    ) -> Result<MessageAdmissionOutcome, AtmError> {
         admission.validate()?;
         match self
             .writer
             .submit_async(WriteOp::AdmitTemplateMessage(Box::new(admission)))
             .await?
         {
-            WriteOpResult::TemplateMessageAdmission { inserted: true, .. } => Ok(None),
+            WriteOpResult::TemplateMessageAdmission {
+                inserted: true,
+                task_assignee,
+                queued_position,
+                reassign_notice,
+                task_rejection,
+                ..
+            } => Ok(MessageAdmissionOutcome {
+                existing: None,
+                already_closed: None,
+                task_assignee,
+                queued_position,
+                reassign_notice: reassign_notice.map(|message| *message),
+                task_rejection,
+            }),
             WriteOpResult::TemplateMessageAdmission {
                 inserted: false,
                 existing: Some(existing),
-            } => Ok(Some(*existing)),
+                ..
+            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
             WriteOpResult::TemplateMessageAdmission {
                 inserted: false,
                 existing: None,
+                ..
             } => Err(AtmError::daemon_unavailable(
                 "sqlite writer reported a duplicate template admission without its retained record",
             )),
@@ -480,6 +556,7 @@ impl SharedDb {
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
             | WriteOpResult::DiagnosticsRecorded
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for atomic message commit",
@@ -503,6 +580,7 @@ impl SharedDb {
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
             | WriteOpResult::DiagnosticsRecorded
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for acknowledgement admission",
@@ -527,6 +605,7 @@ impl SharedDb {
             | WriteOpResult::TemplateRegistration(_)
             | WriteOpResult::DecomposedMessageAdmission(_)
             | WriteOpResult::TemplateMessageAdmission { .. }
+            | WriteOpResult::TaskMoved(_)
             | WriteOpResult::DiagnosticsRecorded
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async acknowledgement admission",
@@ -693,12 +772,20 @@ pub(crate) fn ensure_schema(
     crate::template_override_migration::ensure_team_nudge_template_override_columns(
         connection, target,
     )?;
-    crate::template_override_migration::migrate_template_override_kinds_to_seven(
-        connection, target,
-    )?;
+    crate::template_override_migration::remove_template_override_kind_check(connection, target)?;
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
     crate::task_store::ensure_schema(connection, target)?;
+    let normalized = crate::writer::normalize_legacy_assignment_markers(connection, target)?;
+    if normalized > 0 {
+        tracing::info!(
+            subsystem = "atm_storage.task_assignment_migration",
+            action = "normalize_legacy_assignment_markers",
+            outcome = "ok",
+            affected_rows = normalized,
+            "normalized legacy assignment acknowledgement and nudge markers"
+        );
+    }
     ensure_column(
         connection,
         target,
@@ -1332,7 +1419,7 @@ mod tests {
     }
 
     #[test]
-    fn ensure_schema_rebuilds_six_kind_override_table_and_is_idempotent() {
+    fn ensure_schema_preserves_pre_seven_retired_kinds_as_stale_and_is_idempotent() {
         let target = SharedDbTarget::InMemory {
             uri: format!(
                 "file:atm-storage-rusqlite-shared-db-test-{}?mode=memory&cache=shared",
@@ -1369,15 +1456,27 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("count migrated rows");
-        assert_eq!(row_count, 1, "only the retired row should be dropped");
-        let retained_kind: String = connection
-            .query_row(
-                "SELECT template_kind FROM team_nudge_template_overrides WHERE team_name = 'test-team';",
-                [],
-                |row| row.get(0),
+        assert_eq!(
+            row_count, 2,
+            "retired rows must survive for doctor reporting"
+        );
+        let stale_kinds = connection
+            .prepare(
+                "SELECT template_kind FROM team_nudge_template_overrides
+                 WHERE team_name = 'test-team' ORDER BY template_kind;",
             )
-            .expect("read retained row");
-        assert_eq!(retained_kind, "delivery_ack");
+            .expect("prepare migrated kinds")
+            .query_map([], |row| row.get::<_, String>(0))
+            .expect("query migrated kinds")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("read migrated kinds")
+            .into_iter()
+            .filter(|kind| {
+                kind.parse::<atm_storage::BuiltInNudgeTemplateKind>()
+                    .is_err()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(stale_kinds, vec!["delivery_task"]);
         connection
             .execute(
                 "INSERT INTO team_nudge_template_overrides
@@ -1386,6 +1485,14 @@ mod tests {
                 [],
             )
             .expect("new queue kind should satisfy migrated check");
+        connection
+            .execute(
+                "INSERT INTO team_nudge_template_overrides
+                    (team_name, template_kind, mode, template_body, updated_at)
+                 VALUES ('test-team', 'task_ready', 'override', '<task-ready/>', '2026-09-05T00:00:00Z');",
+                [],
+            )
+            .expect("new task transition kind should satisfy migrated check");
         let schema_sql: String = connection
             .query_row(
                 "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'team_nudge_template_overrides';",
@@ -1393,7 +1500,11 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("read migrated schema");
-        assert!(schema_sql.contains("'queue'"));
+        assert!(
+            !schema_sql
+                .to_ascii_lowercase()
+                .contains("template_kind text not null check")
+        );
 
         let schema_before_second_open = schema_sql.clone();
         ensure_schema(&mut connection, &target).expect("second schema ensure");
@@ -1412,7 +1523,76 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("count rows after second open");
-        assert_eq!(row_count_after_second_open, 2);
+        assert_eq!(row_count_after_second_open, 4);
+    }
+
+    #[test]
+    fn ensure_schema_removes_seven_kind_check_without_changing_stale_rows() {
+        let target = SharedDbTarget::InMemory {
+            uri: format!(
+                "file:atm-storage-rusqlite-shared-db-test-{}?mode=memory&cache=shared",
+                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+            ),
+        };
+        let mut connection = open_connection_for_target(&target).expect("open connection");
+        connection
+            .execute_batch(
+                "CREATE TABLE team_nudge_template_overrides (
+                    team_name TEXT NOT NULL,
+                    template_kind TEXT NOT NULL CHECK(template_kind IN (
+                        'delivery', 'delivery_ack', 'queue', 'queue_ack', 'task',
+                        'acknowledge', 'acknowledge_task'
+                    )),
+                    mode TEXT NOT NULL DEFAULT 'override'
+                        CHECK(mode IN ('override', 'disabled')),
+                    template_body TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (team_name, template_kind)
+                );
+                INSERT INTO team_nudge_template_overrides
+                    (team_name, template_kind, mode, template_body, updated_at)
+                VALUES ('test-team', 'task', 'override', X'003C6F6C642D7461736B2F3E',
+                        '2026-09-05T00:00:00Z');",
+            )
+            .expect("create previous-consumer table");
+
+        let before: (String, String, Vec<u8>, String) = connection
+            .query_row(
+                "SELECT template_kind, mode, CAST(template_body AS BLOB), updated_at
+                 FROM team_nudge_template_overrides;",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("read stale row before migration");
+        ensure_schema(&mut connection, &target).expect("remove kind constraint");
+        let after: (String, String, Vec<u8>, String) = connection
+            .query_row(
+                "SELECT template_kind, mode, CAST(template_body AS BLOB), updated_at
+                 FROM team_nudge_template_overrides;",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("read stale row after migration");
+        assert_eq!(after, before, "the stale row must survive byte-for-byte");
+        connection
+            .execute(
+                "INSERT INTO team_nudge_template_overrides
+                    (team_name, template_kind, mode, template_body, updated_at)
+                 VALUES ('test-team', 'task_ready', 'override', '<ready/>',
+                         '2026-09-12T00:00:00Z');",
+                [],
+            )
+            .expect("new task transition kind");
+
+        ensure_schema(&mut connection, &target).expect("second schema ensure");
+        let rows: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM team_nudge_template_overrides;",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count rows after idempotent ensure");
+        assert_eq!(rows, 2);
     }
 
     #[test]

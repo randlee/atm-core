@@ -187,6 +187,35 @@ def is_ancestor(older: str, newer: str) -> bool:
     return run(["git", "merge-base", "--is-ancestor", older, newer], check=False).returncode == 0
 
 
+def landing_verdict(stack: dict, rows: list[dict], trunk_origin: str | None) -> dict:
+    """Judge the stack as one landing, independent of chain coherence.
+
+    The chain verdict answers "can gh stack merge walk this bottom-up?".  A
+    stack is also landable as a single merge of its top layer when (a) the
+    top layer's pushed head contains every open layer's pushed head and (b)
+    that head merges into the trunk without conflicts.  Both are checked
+    against origin refs only, never local tracking.
+    """
+    open_rows = [r for r in rows if not r.get("merged")]
+    if not open_rows or trunk_origin is None:
+        return {"landable": None, "top": None, "reason": "no open layer or trunk not fetched"}
+    top = open_rows[-1]
+    top_sha = top.get("origin")
+    if not top_sha:
+        return {"landable": None, "top": top["branch"], "reason": "top layer has no origin head"}
+    missing = [r["branch"] for r in open_rows[:-1] if not r.get("origin") or not is_ancestor(r["origin"], top_sha)]
+    if missing:
+        return {"landable": False, "top": top["branch"], "top_sha": top_sha,
+                "reason": "top head does not contain: " + ", ".join(missing)}
+    tree = run(["git", "merge-tree", "--write-tree", trunk_origin, top_sha], check=False)
+    if tree.returncode != 0:
+        conflicts = [line for line in tree.stdout.splitlines() if line.startswith("CONFLICT")]
+        return {"landable": False, "top": top["branch"], "top_sha": top_sha,
+                "reason": "merge into trunk conflicts: " + ("; ".join(conflicts[:3]) or "see git merge-tree")}
+    return {"landable": True, "top": top["branch"], "top_sha": top_sha,
+            "reason": f"top head contains all {len(open_rows)} open layer(s) and merges clean into {stack['trunk']}"}
+
+
 def build_rows(stack: dict, prs: dict[int, dict], *, fetched: bool) -> tuple[list[dict], list[str], list[str]]:
     trunk = stack["trunk"]
     trunk_origin = origin_sha(trunk) if fetched else None
@@ -310,7 +339,15 @@ def ci_icon(r: dict) -> str:
     return ICON_CI.get(r["ci"] or "NONE", ICON_CI["NONE"])
 
 
-def render_table(stack: dict, rows: list[dict], problems: list[str], notes: list[str], *, trunk_origin: str | None) -> str:
+def render_landing(landing: dict) -> str:
+    if landing["landable"] is None:
+        return f"LANDING: ❓ not judged - {landing['reason']}"
+    if landing["landable"]:
+        return f"LANDING: ✅ one merge of {landing['top']} @ {short(landing['top_sha'])} lands the stack - {landing['reason']}"
+    return f"LANDING: ❌ {landing['top']} @ {short(landing.get('top_sha'))} cannot land as one merge - {landing['reason']}"
+
+
+def render_table(stack: dict, rows: list[dict], problems: list[str], notes: list[str], landing: dict, *, trunk_origin: str | None) -> str:
     hdr = ["L", "PR", "rebase", "merge", "CI"]
     lines = [f"stack: {stack['branches'][-1]['name']} -> {stack['trunk']} @ {short(trunk_origin)}", ""]
     lines.append("| " + " | ".join(hdr) + " |")
@@ -326,6 +363,7 @@ def render_table(stack: dict, rows: list[dict], problems: list[str], notes: list
         lines.extend(f"- {p}" for p in problems)
     else:
         lines.append("VERDICT: ✅ COHERENT - every base == parent head, every head pushed and on its PR")
+    lines.append(render_landing(landing))
     lines.extend(f"- note: {n}" for n in notes)
     return "\n".join(lines)
 
@@ -393,9 +431,11 @@ def run_report(args: argparse.Namespace, trunk_filter: str | None) -> int:
         rows, problems, notes = build_rows(st, prs, fetched=fetched)
         trunk_origin = origin_sha(st["trunk"]) if fetched else None
         any_problem |= bool(problems)
+        landing = landing_verdict(st, rows, trunk_origin)
         report.append({"trunk": st["trunk"], "trunk_origin": trunk_origin, "worktree": st["worktree"],
-                       "rows": rows, "problems": problems, "notes": notes, "coherent": not problems})
-        blocks.append(render_table(st, rows, problems, notes, trunk_origin=trunk_origin))
+                       "rows": rows, "problems": problems, "notes": notes, "coherent": not problems,
+                       "landing": landing})
+        blocks.append(render_table(st, rows, problems, notes, landing, trunk_origin=trunk_origin))
     if args.json:
         print(json.dumps({"stacks": report, "hidden": hidden, "coherent": not any_problem}, indent=2))
     else:

@@ -24,9 +24,9 @@ feature/capability data.
 | `3a822e81` | master reference, 2026-09-05; untagged snapshot | 22 | Installer/release changes are recorded as drift; not a released floor | Reference-only drift target; additive changes must remain compatible | Compare against v0.8.2; add a recording only if an ATM operation changes |
 
 The v0.8.0-to-v0.8.2 review found identical argv, flags, JSON shapes, and exit
-codes for all six ATM operations. Its only ATM-path error-behaviour delta is
+codes for all five live ATM operations. Its only ATM-path error-behaviour delta is
 the v0.8.2 pre-write `agent_blocked` rejection. The v0.8.2-to-master review
-found the same six-operation surface and error-code set, with one material
+found the same five-operation surface and error-code set, with one material
 `agent prompt --wait` activity-gate outcome change: `timeout` may replace
 `agent_prompt_stalled`. ATM maps both by stable code and does not inspect
 message text.
@@ -46,11 +46,11 @@ shapes; additional fields are tolerated.
 | master `3a822e81` | `{"id":"atm:agent:ping","result":{"type":"pong","version":"<release>","protocol":22,"capabilities":{"live_handoff":true}}}` | `{"id":"atm:agent:get","method":"agent.get","params":{"target":"<agent>"}}` | `{"id":"atm:agent:get","result":{"type":"agent_info","agent":{"name":"<agent>","agent_status":"idle"}}}` | `agent_blocked`, `agent_not_found`, `agent_not_running`, `agent_target_ambiguous`, `server_not_running`, `timeout`, `agent_prompt_stalled`, `protocol_mismatch` |
 
 The same request-id and envelope rules apply to `agent.prompt`, `agent.wait`,
-`agent.list`, and `notification.show`; the operation-specific fields are
-listed in the six-operation manifest below. The v0.8.0 blocked-prompt delta
+and `agent.list`; the operation-specific fields are listed in the
+five-operation manifest below. The v0.8.0 blocked-prompt delta
 and the master wait-gate delta do not change the socket envelope shape.
 
-## Six-operation contract manifest
+## Five-operation contract manifest
 
 The following manifest is repeated for each supported release. The v0.8.2
 recording is the canonical shape; v0.8.0 uses it plus the documented
@@ -62,7 +62,6 @@ blocked-prompt delta; master uses it plus the documented wait-gate delta.
 | `agent wait` | `herdr agent wait <AgentName> --until idle --until done --until blocked --timeout <ms>` | `{"id":"cli:agent:wait","result":{"type":"agent_info","agent":{"agent_status":"...",...}}}`; `agent_status` is the contracted field | `agent_not_found`, `agent_not_running`, `timeout`, and transport codes as structured exit-1 errors; malformed status/timeout is exit 2 | Retained adapter contract; not invoked by Phase AQ |
 | `agent get` | `herdr agent get <AgentName>` | `{"id":"cli:agent:get","result":{"type":"agent_info","agent":{"agent_status":"...",...}}}`; doctor reads `agent_status` only | `agent_not_found` or `agent_target_ambiguous`, plus transport codes, as structured exit-1 errors; malformed arity is exit 2 | Doctor presence probe; `BreakerPolicy::Bypass` |
 | `agent list` | `herdr agent list` | `{"id":"cli:agent:list","result":{"type":"agent_list","agents":[...]}}`; ATM reads each entry's `name` and `agent_status` | A missing member is a normal exit-0 list absence; transport failures are structured exit-1 errors; extra argv is exit 2 | Queue-pump polling, once per distinct configured session |
-| `notification show` | `herdr notification show <title> --body <body> --sound request` | Exit 0; title/body are separate argv values. No response field is part of ATM's contract | Non-zero is a typed adapter failure; error code is parsed when provided | Lead escalation notification; independent of mail delivery |
 | `status server --json` | `herdr status server --json` | JSON includes `version` and `protocol`; the socket transport's equivalent is `ping` | Doctor-only transport failure; never used to gate daemon startup or messaging | Doctor server-status probe, not a nudge |
 
 Source and fixture anchors for the manifest are ADR-058 D2–D10, the Phase AY
@@ -76,8 +75,8 @@ placeholder names and omits mutable message text from the compatibility rules.
 ### v0.8.0
 
 - `PROTOCOL_VERSION` is 19.
-- `agent prompt`, `agent wait`, `agent get`, `agent list`, `notification
-  show`, and `status server --json` retain the manifest's argv and response
+- `agent prompt`, `agent wait`, `agent get`, `agent list`, and `status server
+  --json` retain the manifest's argv and response
   shapes.
 - `agent prompt` to an already blocked agent submitted and then waited. The
   fake-Herdr replay for v0.8.0 must model this delta; ATM's outcome remains
@@ -99,8 +98,13 @@ placeholder names and omits mutable message text from the compatibility rules.
 - `agent prompt --wait` has the activity-gate drift recorded in the Phase AY
   plan: `timeout` can replace `agent_prompt_stalled`, and the message text is
   not stable. Parsers must continue to key on codes.
-- Endpoint resolution, NDJSON framing, agent JSON fields, notification argv,
-  and exit-code surfaces remain compatible. Additive fields are ignored.
+- Endpoint resolution, NDJSON framing, agent JSON fields, and exit-code
+  surfaces remain compatible. Additive fields are ignored.
+
+Phase BA.3 removed ATM's only `notification show` caller and the
+`HerdrProcessAdapter::notify` method. It is therefore not part of ATM's live
+Herdr compatibility surface; escalation is durable ATM mail owned by
+`atm-http-runtime`, and the former AY.4 breaker-notification path is retired.
 - Windows installer PATH handling prepends the versioned release directory;
   ATM resolves the configured/binary alias per spawn and never persists the
   resolved path.
@@ -145,7 +149,6 @@ Client-facing paths scanned by the drift check:
 ```text
 src/api/
 src/cli/agent.rs
-src/cli/notification.rs
 src/cli/spec.rs
 src/cli.rs
 src/cli/protocol_guard.rs

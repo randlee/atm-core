@@ -1,0 +1,108 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/BB5-007>
+  a triage:Finding ;
+  triage:findingId "BB5-007" ;
+  triage:title "Sprint AC1's literal grep for record_queue_prompt_reminders is not clean: two test comments still name the deleted symbol verbatim" ;
+  triage:description "fenix, QA-1 on PR #1456 (fix/bb5-contract-tests @ d1969185f), 2026-09-12T23:02:24Z, filed as BB5-QA-CT1-001 [important]: crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs:1299 and :1729 each carry an explanatory comment naming the deleted record_queue_prompt_reminders symbol verbatim, so sprint-BB.5 AC1's literal grep check is not clean even though the deletion itself is confirmed complete (no code defect, comment text only). Routed to arch-ctm on the BB.6 runtime crate-boundary layer feature/bb6-runtime-prompt-handoffs." ;
+  triage:phaseId "phase-bb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:source "quality-mgr QA-1 (BB5-QA-CT1-1789259000)" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-09-12T23:02:24Z"^^xsd:dateTime ;
+  triage:deferredNote "Fix: reword the two comments at lines 1299 and 1729 to stop naming the deleted symbol verbatim; file fence is those two lines only. Routed to arch-ctm on feature/bb6-runtime-prompt-handoffs (BB.6 runtime layer). RECURRED at fix/bb5-closure-r1 @ 1c7e76da5, reported as BB5-QA-R1-002 by quality-mgr (BB5-QA-R1-1789261000, PR #1453 comment, 2026-09-12T23:24:35Z): same two lines (shifted to :1300 and :1730 by intervening edits) still name the deleted symbol. Correlated here by fenix's ruling (PR #1453 comment, 2026-09-12T23:25:29Z) rather than filed separately -- same fact. Fixed by arch-ctm as part of BB.6 L2 (comment cleanup + authorized facade re-export), first pushed to feature/bb6-runtime-prompt-handoffs @ c9d0d5012 (PR #1461, 2026-09-13T00:03:21Z). Per fenix's explicit pin instruction, recorded at c9d0d5012 (the commit that actually made the edit) rather than the later 0d2cc1142 colima-merge-forward commit. QA dispatched: BB6-QA-L2-1789268000 on PR #1461 @ 0d2cc1142 (queued behind BB6-QA-STORAGE-FIX). BB6-QA-L2-1789268000 closed FAIL overall (req-qa deliverable gate only, 0 blocking) at 2026-09-13T00:42:20Z, but fenix confirmed BB5-007 itself verified fixed on 0d2cc1142 by all five reviewers -- closed independent of the FAIL verdict, which concerns unrelated BB6-011..015 findings." ;
+  triage:foundIn triage:BB5 ;
+  triage:foundAt "2026-09-12T23:02:24Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB5-007/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB5-007/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB5-007/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BB5-007/4> ;
+  triage:hasResolution <urn:atm:triage:resolution/BB5-007/1> ;
+  triage:closedAt "2026-09-13T00:42:20Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:triageRecordVersion "4" .
+
+<urn:atm:triage:resolution/BB5-007/1>
+  a triage:Resolution ;
+  triage:resolutionNote "BB6-QA-L2-1789268000 (PR #1461 comment, 2026-09-13T00:42:20Z): fenix confirmed the two comments at herdr_queue_wake/tests/mod.rs are verified reworded on feature/bb6-runtime-prompt-handoffs @ 0d2cc1142 by all five reviewers; no residual mention of the deleted symbol." .
+
+<urn:atm:triage:occurrence/BB5-007/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs" ;
+  triage:line 1299 ;
+  triage:snippet "comments at :1299 and :1729 name the deleted record_queue_prompt_reminders symbol verbatim, tripping AC1's literal grep despite the deletion itself being complete" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb5-contract-tests" ;
+  triage:headSha "d1969185f" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-007/1> .
+
+<urn:atm:triage:worktree/BB5-007/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1456, fix/bb5-contract-tests" ;
+  triage:branch "fix/bb5-contract-tests" ;
+  triage:headSha "d1969185f" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:occurrence/BB5-007/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs" ;
+  triage:line 1300 ;
+  triage:snippet "comments at :1300 and :1730 (shifted from :1299/:1729 by intervening edits) still name the deleted record_queue_prompt_reminders symbol verbatim; recurred as BB5-QA-R1-002" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/bb5-closure-r1" ;
+  triage:headSha "1c7e76da5" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-007/2> .
+
+<urn:atm:triage:worktree/BB5-007/2>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1453, fix/bb5-closure-r1" ;
+  triage:branch "fix/bb5-closure-r1" ;
+  triage:headSha "1c7e76da5" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:occurrence/BB5-007/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs" ;
+  triage:line 1300 ;
+  triage:snippet "comments reworded by arch-ctm as part of BB.6 L2 D3; fixed-pending-QA, pinned per fenix at the commit that made the edit (not the later colima-merge-forward commit)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb6-runtime-prompt-handoffs" ;
+  triage:headSha "c9d0d5012" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-007/3> .
+
+<urn:atm:triage:worktree/BB5-007/3>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1461, feature/bb6-runtime-prompt-handoffs" ;
+  triage:branch "feature/bb6-runtime-prompt-handoffs" ;
+  triage:headSha "c9d0d5012" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:occurrence/BB5-007/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-http-runtime/src/herdr_queue_wake/tests/mod.rs" ;
+  triage:line 1300 ;
+  triage:snippet "closed: BB6-QA-L2-1789268000 confirms the reworded comments on feature/bb6-runtime-prompt-handoffs @ 0d2cc1142, verified by all five reviewers" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/bb6-runtime-prompt-handoffs" ;
+  triage:headSha "0d2cc1142" ;
+  triage:occursIn <urn:atm:triage:worktree/BB5-007/4> .
+
+<urn:atm:triage:worktree/BB5-007/4>
+  a triage:WorktreeSnapshot ;
+  triage:path "PR #1461, feature/bb6-runtime-prompt-handoffs" ;
+  triage:branch "feature/bb6-runtime-prompt-handoffs" ;
+  triage:headSha "0d2cc1142" ;
+  triage:orderIndex 4 .

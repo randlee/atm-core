@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RDY-004>
+  a triage:Finding ;
+  triage:findingId "RDY-004" ;
+  triage:title "doctor's ax6.rs references a retired command" ;
+  triage:description "solar BA-READINESS Part A @ 9f5aef2fe. Finding: crates/atm-core/src/doctor/ax6.rs still references a retired CLI command in its diagnostic output. Fixed by cipher on fix/phase-ba-review-1 @ 1ceb92d35 (item 8), ACCEPTED by fenix." ;
+  triage:phaseId "phase-ba" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "minor" ;
+  triage:source "qa" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:foundIn triage:BA6 ;
+  triage:foundAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RDY-004/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RDY-004/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/ax6.rs" ;
+  triage:line 1 ;
+  triage:snippet "ax6.rs references a retired command" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-09-12T07:08:18Z"^^xsd:dateTime ;
+  triage:closedBy "fenix" ;
+  triage:resolutionNote "cipher fix/phase-ba-review-1 1ceb92d35 (item 8), ACCEPTED by fenix." ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "1ceb92d35" ;
+  triage:occursIn <urn:atm:triage:worktree/RDY-004/1> .
+
+<urn:atm:triage:worktree/RDY-004/1>
+  a triage:WorktreeSnapshot ;
+  triage:path "gh-stack review-findings layer 1, cipher, item 8" ;
+  triage:branch "fix/phase-ba-review-1" ;
+  triage:headSha "1ceb92d35" ;
+  triage:orderIndex 7 .

@@ -1,0 +1,11 @@
+ATM TEST REPORT
+skill: atm-nudge-roundtrip
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.5.16 daemon 1.5.16
+result: PASS   (3/3 steps)
+steps:
+  0 PASS Start line — 01M2ANKJCBANV9HDARMQ0H5SBP
+  1 PASS Send — 01M2ANKNS8390W428K2TJAY9BA
+  2 PASS Ack arrives — 31s, id=01M2ANM80KP9BMP13W0S1V14KC
+elapsed: 40s

@@ -1,0 +1,31 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT9-task-start",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "started-line-at-write-time",
+      "status": "pass",
+      "detail": "atm task assign fx-at9-beta ... --task-id at9-case1-1789403530 --as fx-at9-alpha --team fx-at9 --json => {\"task_id\":\"at9-case1-1789403530\"}; atm task start at9-case1-1789403530 \"starting case1\" --as fx-at9-beta --team fx-at9 --json => {\"action\":\"send\",\"team\":\"fx-at9\",\"agent\":\"fx-at9-alpha\",\"sender\":\"fx-at9-beta\",\"outcome\":\"sent\",\"message_id\":\"01M2GC66121MMAHAKE3WJA4HKR\",\"requires_ack\":false,\"task_id\":\"at9-case1-1789403530\",\"summary\":\"starting case1\"} -- the start response already identifies task_id at9-case1-1789403530 before any read. atm list --unread --json --as fx-at9-alpha --team fx-at9 => {\"rows\":[{\"message_id\":\"01M2GC66121MMAHAKE3WJA4HKR\",\"summary\":\"starting case1\",\"from\":\"fx-at9-beta\",\"read\":false,\"pending_ack\":false,\"task_id\":\"at9-case1-1789403530\"}]} -- unread row also carries task_id before alpha reads it. atm read --message-id 01M2GC66121MMAHAKE3WJA4HKR --as fx-at9-alpha --team fx-at9 --json => {\"message\":{\"from\":\"fx-at9-beta\",\"text\":\"starting case1\",\"taskId\":\"at9-case1-1789403530\",\"taskOp\":{\"op\":\"start\"}}}"
+    },
+    {
+      "name": "out-of-order-start-reorders-queue",
+      "status": "pass",
+      "detail": "atm task assign fx-at9-beta ... --task-id at9-case2a-1789403549 --as fx-at9-alpha --team fx-at9 --json => {\"task_id\":\"at9-case2a-1789403549\"}; atm task assign fx-at9-beta ... --task-id at9-case2b-1789403549 --as fx-at9-alpha --team fx-at9 --json => {\"task_id\":\"at9-case2b-1789403549\"}; atm task start at9-case2b-1789403549 --as fx-at9-beta --team fx-at9 --json => {\"outcome\":\"sent\",\"task_id\":\"at9-case2b-1789403549\"}; atm task list --json --as fx-at9-beta --team fx-at9 => [{\"task_id\":\"at9-case2b-1789403549\",\"state\":\"active\",\"position\":1,\"reminder_count\":0},{\"task_id\":\"at9-case2a-1789403549\",\"state\":\"assigned\",\"position\":2,\"reminder_count\":1}] -- started task2b is active at position 1, ahead of still-assigned task2a at position 2."
+    },
+    {
+      "name": "unstarted-task-keeps-reminding",
+      "status": "pass",
+      "detail": "atm task assign fx-at9-beta ... --task-id at9-case3-1789403563 --as fx-at9-alpha --team fx-at9 --json => {\"task_id\":\"at9-case3-1789403563\"}; polled atm task events at9-case3-1789403563 --as fx-at9-alpha --team fx-at9 --json every 5s for 145s total. Final output handoffs[]: {\"kind\":\"task_queued\",...}, {\"kind\":\"task_ready\",\"attempt\":0,\"at\":\"2026-09-14T16:32:46.720974152Z\"}, {\"kind\":\"task_reminder\",\"attempt\":1,\"at\":\"2026-09-14T16:33:46.722219043Z\"}, {\"kind\":\"task_reminder\",\"attempt\":2,\"at\":\"2026-09-14T16:34:51.718159512Z\"} -- two task_reminder handoffs quoted, excluding the task_ready/reminded first notification. atm task list --json --as fx-at9-beta --team fx-at9 (taken just before close) => [{\"task_id\":\"at9-case3-1789403563\",\"state\":\"assigned\",\"reminder_count\":3}] -- task remained assigned (never started)."
+    },
+    {
+      "name": "cleanup",
+      "status": "pass",
+      "detail": "atm task close at9-case1-1789403530 completed \"case1 done\" --as fx-at9-beta --team fx-at9 --json => {\"outcome\":\"sent\",\"task_id\":\"at9-case1-1789403530\"}; atm task close at9-case2b-1789403549 completed \"case2 second done\" --json => {\"outcome\":\"sent\",\"task_id\":\"at9-case2b-1789403549\"}; atm task close at9-case2a-1789403549 completed \"case2 first done\" --json => {\"outcome\":\"sent\",\"task_id\":\"at9-case2a-1789403549\"}; atm task close at9-case3-1789403563 completed \"case3 done\" --json => {\"outcome\":\"sent\",\"task_id\":\"at9-case3-1789403563\"}. atm task list --json --as fx-at9-beta --team fx-at9 => [] confirmed after each case."
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {"atm": "1.5.18", "hermes_atm": "", "atm_graft": ""},
+  "started_at": "2026-09-14T16:31:52Z",
+  "finished_at": "2026-09-14T16:35:10Z"
+}
