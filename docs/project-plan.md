@@ -1840,6 +1840,48 @@ team-lead lands the final status when the phase PR merges.
 | `BB.7` | `merged (#1470, #1478)` | `feature/bb7-docs` | `docs/plans/phase-bb/sprint-BB.7-docs.md` |
 | `BB.8` | `complete (#1500, #1501)` | `feature/bb8-2-colima-driver` | `docs/plans/phase-bb/sprint-BB.8-colima-integration.md` |
 
+## 61. phase bc — immutable releases and observability consolidation [planning]
+
+phase bc qualifies the published `sc-observability` `1.4.0` family before
+adopting bounded typed and logging improvements, then consumes a separately
+qualified `sc-publish` revision before immutable releases are enabled for
+atm-core. The authoritative plan is
+[the phase-bc plan](./plans/phase-bc/phase-bc-plan.md). Its planning branch is
+`plan/phase-bc`, its implementation integration branch is
+`integrate/phase-bc`, and all new phase/sprint identifiers and document or
+branch names use lowercase.
+
+The implementation is one append-only `gh stack`, with the lowest-risk
+dependency qualification at the bottom. Repository-setting activation is a
+separate operational gate requiring explicit authorization. The current
+`sc-publish` PR #101 verdict is `accept-as-prerequisite-only`: it is not a
+qualified consumer pin and immutable releases remain disabled until every
+reachable release writer and the Administration(read) credential path are
+compatible.
+
+The sc-observability `1.4.1` republish is an independent priority lane:
+upstream preparation is tracked by sc-observability
+[PR #197](https://github.com/randlee/sc-observability/pull/197), with
+`cobs@sc-obs` owning version/manifests/validation and the existing installed
+shared workflow remaining the release base. PR #101 is not adopted for that
+publication. Once upstream reports the family published and verified, bc.6 is
+the next append-only ATM layer above the then-frozen top; it never waits for
+bc.4 or the immutable-release gates. User authority states `1.4.1` is
+code-compatible with `1.4.0` and exists solely to recover the npm publication
+that failed because the `1.4.0` release was not immutable. bc.6 is therefore
+limited to dependency metadata, lockfile, evidence, and current
+version-reference changes unless verification finds a semantic code delta and
+the plan is explicitly amended.
+
+| sprint | status | branch | authoritative sprint doc |
+| --- | --- | --- | --- |
+| `bc.1` | `planned` | `feature/bc1-sc-observability-1-4-0` | `docs/plans/phase-bc/sprint-bc.1-sc-observability-1.4.0.md` |
+| `bc.2` | `planned; must_follow bc.1` | `feature/bc2-typed-observability` | `docs/plans/phase-bc/sprint-bc.2-typed-observability.md` |
+| `bc.3` | `planned; must_follow bc.2` | `feature/bc3-log-macro-qualification` | `docs/plans/phase-bc/sprint-bc.3-log-macro-qualification.md` |
+| `bc.4` | `upstream-gated; must_follow bc.3` | `feature/bc4-sc-publish-immutable-consumer` | `docs/plans/phase-bc/sprint-bc.4-sc-publish-immutable-consumer.md` |
+| `bc.5` | `authorization-gated; after bc.4 deployment` | `evidence/bc5-immutable-release-activation` | `docs/plans/phase-bc/sprint-bc.5-immutable-release-activation.md` |
+| `bc.6` | `publication-gated; priority append-next after bc.1; independent of bc.4` | `feature/bc6-sc-observability-1-4-1` | `docs/plans/phase-bc/sprint-bc.6-sc-observability-1.4.1.md` |
+
 ## Daemon-Switch Scope Reduction
 
 Rand's 2026-09-05 scope ruling keeps `daemon-switch` to two operator modes:

@@ -570,6 +570,18 @@ Product requirement ID:
   project supports opt-in prerelease builds such as `1.3.2-beta.1` and
   `1.3.2-alpha.1`; prereleases are never the default customer channel.
 
+- `REQ-P-RELEASE-008` Once immutable releases are enabled, every future ATM
+  GitHub release must satisfy the fail-closed integrity contract in the
+  [phase-bc plan](./plans/phase-bc/phase-bc-plan.md): complete draft-first
+  assembly; exact equality among the gated source, build checkout, tag, and
+  release receipt; asset digest agreement with `checksums.txt`; immutable
+  tag/assets; verify-only same-tag retries; and production execution from the
+  trusted workflow ref and qualified `sc-publish` revision. An indeterminate
+  setting, permission, source, digest, or receipt result must stop before the
+  next tag, registry, or channel mutation. Post-publication receipt and
+  attestation verification gate downstream promotion, not initial release
+  publication.
+
 Required behavior:
 - the `1.0` release must publish the retained CLI and core crates under the
   legacy crates.io package names:
@@ -602,6 +614,11 @@ Required behavior:
 - the normal Homebrew `atm` formula tracks stable releases only; prereleases
   are published, when approved, through an explicit opt-in `atm-beta` formula
   in the project-owned tap
+- immutable-release enablement occurs only after every reachable stable,
+  manual, prerelease, and channel writer is compatible and the runtime has an
+  approved least-privilege credential that can read the repository setting
+- pre-enablement releases remain historical mutable records and must not be
+  rewritten to simulate the future invariant
 
 ### 2.4 HTTP Compatibility Scope
 
