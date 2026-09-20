@@ -55,6 +55,11 @@ This phase will:
   `1.4.0` release was not immutable. Therefore bc.6 is a dependency, lockfile,
   current version-reference, and evidence repin; it does not budget
   production-code adaptation.
+- Upstream reports that PR #197 targets `main` for this version-only recovery,
+  candidate provenance is established, and immutable releases are enabled in
+  the sc-observability repository. QA/readiness and metadata corrections remain
+  in progress; these facts do not close `u5` before registry verification and
+  the coordinated published/verified inventory arrive.
 - Upstream `1.4.0` adds `sc-observability-log`,
   `sc-observability-log-macros`, `sc-observability-dto`, and
   `sc-observability-binding-runtime`.

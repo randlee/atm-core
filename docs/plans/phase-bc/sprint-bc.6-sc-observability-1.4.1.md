@@ -21,6 +21,11 @@ sc-observability
 `cobs@sc-obs` owning version/manifests/validation; `aobs@sc-obs` supplies the
 published/verified completion notice.
 
+Preparation status at plan update: PR #197 targets `main`, candidate
+provenance is established, and the sc-observability repository has immutable
+releases enabled. QA/readiness and metadata corrections are still running;
+this preparation status alone does not satisfy the entry gate.
+
 The release uses sc-observability's existing installed shared workflow. This
 entry gate does not require sc-publish PR #101, bc.4, or any phase-bc
 immutable-release gate.
