@@ -48,18 +48,33 @@ def variables(template: Path) -> dict[str, object]:
     return values
 
 
-def render(template: Path, values: dict[str, object]) -> str:
+def render(template: Path, values: dict[str, object], *, strict: bool = False) -> str:
     with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8", delete=False) as handle:
         json.dump(values, handle)
+    command = [
+        "sc-compose", "render", "--root", str(REPO_ROOT), "--file", str(template),
+        "--var-file", handle.name,
+    ]
+    if strict:
+        command.extend(["--strict", "--check-render", "--json"])
     completed = subprocess.run(
-        ["sc-compose", "render", "--root", str(REPO_ROOT), "--file", str(template),
-         "--var-file", handle.name],
+        command,
         capture_output=True, text=True, check=False,
     )
     Path(handle.name).unlink()
     if completed.returncode != 0:
         raise AssertionError(f"sc-compose render failed: {completed.stderr.strip() or completed.stdout.strip()}")
-    return completed.stdout
+    if not strict:
+        return completed.stdout
+    envelope = json.loads(completed.stdout)
+    errors = [
+        diagnostic
+        for diagnostic in envelope["diagnostics"]
+        if diagnostic["severity"] == "error"
+    ]
+    if errors:
+        raise AssertionError(f"strict validation errors: {errors}")
+    return envelope["payload"]["body"]
 
 
 class TaskTemplateAutoescapeTests(unittest.TestCase):
@@ -73,7 +88,8 @@ class TaskTemplateAutoescapeTests(unittest.TestCase):
                 if template.name == "qa-template.xml.j2":
                     self.assertNotIn("{% autoescape false", body)
                     self.assertNotIn("endautoescape", body)
-                    self.assertIn("{% macro cdata_value(value) -%}", body)
+                    self.assertNotIn("{% macro", body)
+                    self.assertIn("| cdata_escape", body)
                     self.assertIn("<![CDATA[", body)
                 else:
                     self.assertTrue(body.startswith("{% autoescape false -%}\n"))
@@ -84,12 +100,43 @@ class TaskTemplateAutoescapeTests(unittest.TestCase):
         for template in task_templates():
             with self.subTest(template=template.name):
                 values = variables(template)
-                rendered = render(template, values)
+                rendered = render(
+                    template,
+                    values,
+                    strict=template.name == "qa-template.xml.j2",
+                )
                 self.assertNotIn("autoescape", rendered)
                 if template.name == "qa-template.xml.j2":
                     root = ElementTree.fromstring(rendered)
                     self.assertIn(PAYLOAD, root.attrib["id"])
                     self.assertIn(PAYLOAD, "".join(root.itertext()))
+                    typed_values = {
+                        **values,
+                        "pr_number": 187,
+                        "commits": [PAYLOAD, "def456"],
+                        "review_targets": [PAYLOAD],
+                        "changed_files": [PAYLOAD],
+                        "triage_records": [PAYLOAD],
+                        "references": [PAYLOAD],
+                    }
+                    typed_root = ElementTree.fromstring(
+                        render(template, typed_values, strict=True)
+                    )
+                    self.assertEqual(
+                        json.loads(typed_root.findtext("pr-number")),
+                        typed_values["pr_number"],
+                    )
+                    for field, variable in (
+                        ("commits", "commits"),
+                        ("review-targets", "review_targets"),
+                        ("changed-files", "changed_files"),
+                        ("triage-records", "triage_records"),
+                        ("references", "references"),
+                    ):
+                        self.assertEqual(
+                            json.loads(typed_root.findtext(field)),
+                            typed_values[variable],
+                        )
                 else:
                     self.assertIsNone(ENTITY.search(rendered))
                     self.assertIn(PAYLOAD, rendered)
