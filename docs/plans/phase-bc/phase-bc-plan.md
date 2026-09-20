@@ -37,8 +37,8 @@ This phase will:
 
 ## 3. facts established by discovery
 
-- atm-core currently pins `sc-observability` and
-  `sc-observability-types` at exact `=1.2.0` workspace versions.
+- atm-core now pins `sc-observability` and
+  `sc-observability-types` at exact `=1.4.0` workspace versions on bc.1.
 - `1.4.0` is published and cached locally. `1.4.1` is not published and no
   `v1.4.1` tag exists at plan time.
 - sc-observability

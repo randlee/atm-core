@@ -1,3 +1,9 @@
+---
+status: complete
+branch: feature/bc1-sc-observability-1-4-0
+worktree: /Users/randlee/github/atm-core-worktrees/feature/bc1-sc-observability-1-4-0
+---
+
 # sprint bc.1 — qualify published sc-observability 1.4.0
 
 Accountable owner: `arch-ctm@atm-dev`.

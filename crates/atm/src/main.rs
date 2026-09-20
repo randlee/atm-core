@@ -316,6 +316,7 @@ fn init_observability(stderr_logs: bool) -> Result<observability::CliObservabili
     )))
 }
 
+#[allow(deprecated)]
 pub(crate) fn build_logger(
     log_dir: &Path,
     console_log_route: ConsoleLogRoute,
@@ -444,6 +445,7 @@ impl RetainedSinkHealthOverride {
 }
 
 #[cfg(any(test, feature = "fault-injection"))]
+#[allow(deprecated)]
 impl LogSink for RetainedSinkHealthOverride {
     fn write(
         &self,
@@ -488,6 +490,7 @@ impl ScObservabilityAdapter {
 
 impl atm_core::boundary::sealed::Sealed for ScObservabilityAdapter {}
 
+#[allow(deprecated)]
 impl ObservabilityPort for ScObservabilityAdapter {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
         // The CLI is a short-lived synchronous caller, so per-command flush is
@@ -561,6 +564,7 @@ fn map_log_error(source: sc_observability::LogError) -> AtmError {
     ))
 }
 
+#[allow(deprecated)]
 fn map_flush_error(source: sc_observability_types::FlushError) -> AtmError {
     let code = source.diagnostic().code.as_str();
     AtmError::observability_emit(format!(

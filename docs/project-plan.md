@@ -1875,7 +1875,7 @@ the plan is explicitly amended.
 
 | sprint | status | branch | authoritative sprint doc |
 | --- | --- | --- | --- |
-| `bc.1` | `planned` | `feature/bc1-sc-observability-1-4-0` | `docs/plans/phase-bc/sprint-bc.1-sc-observability-1.4.0.md` |
+| `bc.1` | `complete` | `feature/bc1-sc-observability-1-4-0` | `docs/plans/phase-bc/sprint-bc.1-sc-observability-1.4.0.md` |
 | `bc.2` | `planned; must_follow bc.1` | `feature/bc2-typed-observability` | `docs/plans/phase-bc/sprint-bc.2-typed-observability.md` |
 | `bc.3` | `planned; must_follow bc.2` | `feature/bc3-log-macro-qualification` | `docs/plans/phase-bc/sprint-bc.3-log-macro-qualification.md` |
 | `bc.4` | `upstream-gated; must_follow bc.3` | `feature/bc4-sc-publish-immutable-consumer` | `docs/plans/phase-bc/sprint-bc.4-sc-publish-immutable-consumer.md` |

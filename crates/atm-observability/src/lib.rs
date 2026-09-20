@@ -68,6 +68,7 @@ pub struct RetainedCommandEvent<'a> {
     pub code: Option<&'a str>,
 }
 
+#[allow(deprecated)]
 impl RetainedLogger {
     /// Projects backend health onto ATM's public doctor contract.
     pub fn health_at(&self, active_log_path: PathBuf) -> Result<AtmObservabilityHealth, AtmError> {
@@ -200,6 +201,7 @@ fn backend_level(level: RetainedLogLevel) -> sc_observability_types::LevelFilter
 /// # Errors
 /// Returns [`AtmError::observability_bootstrap`] when the retained log
 /// directory cannot be prepared or the backing logger cannot be built.
+#[allow(deprecated)]
 pub fn build_retained_logger(
     service_name: &str,
     log_dir: &Path,
@@ -511,14 +513,20 @@ pub fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmEr
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use atm_core::test_support::FakeEnvSource;
     use tempfile::TempDir;
 
     use super::{
-        ATM_LOG_LEVEL_ENV, RetainedLogLevel, logger_level_override_from, parse_logger_level,
+        ATM_LOG_LEVEL_ENV, AtmObservabilityHealthState, CANONICAL_LOG_FILE_NAME,
+        RetainedCommandEvent, RetainedLogLevel, RetainedLogOffer, RetainedLogPolicy,
+        RetainedLogger, build_retained_logger, logger_level_override_from, parse_logger_level,
         prepare_retained_log,
     };
+    use sc_observability::{Logger, LoggerConfig};
+    use sc_observability_types::{LogQuery, ServiceName};
+    use std::time::Duration;
 
     #[test]
     fn prepares_the_active_log_file() {
@@ -576,5 +584,64 @@ mod tests {
             logger_level_override_from(&FakeEnvSource::empty()).expect("no override"),
             None
         );
+    }
+
+    #[test]
+    fn published_1_4_0_consumer_surface_preserves_logger_contract() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let log_dir = tempdir.path().join("logs");
+        let policy = RetainedLogPolicy {
+            rotation_max_bytes: 4096,
+            rotation_max_files: 2,
+            retention_max_age: Duration::from_secs(60),
+            maintenance_cadence: Duration::from_secs(60),
+            writer_shutdown_timeout: Duration::from_secs(2),
+            maintenance_max_work_per_pass: Some(4),
+        };
+        let logger = build_retained_logger("atm", &log_dir, policy, None)
+            .expect("published 1.4.0 logger configuration");
+
+        let health = logger
+            .health_at(log_dir.join(CANONICAL_LOG_FILE_NAME))
+            .expect("health projection");
+        assert!(matches!(
+            health.logging_state,
+            AtmObservabilityHealthState::Healthy
+        ));
+
+        let accepted = logger
+            .try_log_command(RetainedCommandEvent {
+                target: "atm.test",
+                action: "qualification",
+                outcome: "ok",
+                code: None,
+            })
+            .expect("log admission");
+        assert_eq!(accepted, RetainedLogOffer::Accepted);
+        logger.flush().expect("flush");
+
+        let queue_full = RetainedLogger::force_queue_full_for_test(|| {
+            logger.try_log_command(RetainedCommandEvent {
+                target: "atm.test",
+                action: "qualification",
+                outcome: "ok",
+                code: None,
+            })
+        })
+        .expect("queue-full admission");
+        assert_eq!(queue_full, RetainedLogOffer::QueueFull);
+        let shutdown = logger.shutdown();
+        assert!(shutdown.queue_capacity > 0);
+
+        let query_logger = Logger::builder(LoggerConfig::default_for(
+            ServiceName::new("atm-query").expect("service"),
+            tempdir.path().join("query"),
+        ))
+        .expect("published 1.4.0 builder")
+        .build();
+        query_logger
+            .query(&LogQuery::default())
+            .expect("query surface");
+        let _ = query_logger.shutdown();
     }
 }
