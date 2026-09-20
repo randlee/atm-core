@@ -1859,6 +1859,15 @@ qualified consumer pin and immutable releases remain disabled until every
 reachable release writer and the Administration(read) credential path are
 compatible.
 
+The sc-observability `1.4.1` republish is an independent priority lane:
+upstream preparation is tracked by sc-observability
+[PR #197](https://github.com/randlee/sc-observability/pull/197), with
+`cobs@sc-obs` owning version/manifests/validation and the existing installed
+shared workflow remaining the release base. PR #101 is not adopted for that
+publication. Once upstream reports the family published and verified, bc.6 is
+the next append-only ATM layer above the then-frozen top; it never waits for
+bc.4 or the immutable-release gates.
+
 | sprint | status | branch | authoritative sprint doc |
 | --- | --- | --- | --- |
 | `bc.1` | `planned` | `feature/bc1-sc-observability-1-4-0` | `docs/plans/phase-bc/sprint-bc.1-sc-observability-1.4.0.md` |
@@ -1866,7 +1875,7 @@ compatible.
 | `bc.3` | `planned; must_follow bc.2` | `feature/bc3-log-macro-qualification` | `docs/plans/phase-bc/sprint-bc.3-log-macro-qualification.md` |
 | `bc.4` | `upstream-gated; must_follow bc.3` | `feature/bc4-sc-publish-immutable-consumer` | `docs/plans/phase-bc/sprint-bc.4-sc-publish-immutable-consumer.md` |
 | `bc.5` | `authorization-gated; after bc.4 deployment` | `evidence/bc5-immutable-release-activation` | `docs/plans/phase-bc/sprint-bc.5-immutable-release-activation.md` |
-| `bc.6` | `publication-gated; append-only top` | `feature/bc6-sc-observability-1-4-1` | `docs/plans/phase-bc/sprint-bc.6-sc-observability-1.4.1.md` |
+| `bc.6` | `publication-gated; priority append-next after bc.1; independent of bc.4` | `feature/bc6-sc-observability-1-4-1` | `docs/plans/phase-bc/sprint-bc.6-sc-observability-1.4.1.md` |
 
 ## Daemon-Switch Scope Reduction
 

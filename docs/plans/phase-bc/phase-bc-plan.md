@@ -41,6 +41,15 @@ This phase will:
   `sc-observability-types` at exact `=1.2.0` workspace versions.
 - `1.4.0` is published and cached locally. `1.4.1` is not published and no
   `v1.4.1` tag exists at plan time.
+- sc-observability
+  [PR #197](https://github.com/randlee/sc-observability/pull/197) carries the
+  `1.4.1` execution checklist. `cobs@sc-obs` owns upstream version, manifest,
+  and validation
+  preparation; `aobs@sc-obs` will notify atm-dev only after the coordinated
+  release is actually published and verified.
+- The existing installed sc-observability shared workflow remains the `1.4.1`
+  release base. sc-publish PR #101 is not adopted for that publication, and
+  ATM's broader immutable-release work must not block upstream preparation.
 - Upstream `1.4.0` adds `sc-observability-log`,
   `sc-observability-log-macros`, `sc-observability-dto`, and
   `sc-observability-binding-runtime`.
@@ -90,7 +99,7 @@ This phase will:
 | `u2` | approved, provisioned, and independently reviewed least-privilege runtime credential for Administration(read); an ephemeral credential remains a proposal until that approval | bc.4, bc.5 |
 | `u3` | explicit upstream policy decision plus implementation/tests for draft-first stable and prerelease publication, replacement refusal, exact tag/build binding, per-tag concurrency, trusted dispatch refs, and digest/checksum verification | bc.4, bc.5 |
 | `u4` | qualified merged sc-publish commit and clean consumer installer dry-run | bc.4 |
-| `u5` | published and independently verified sc-observability `1.4.1` family | bc.6 |
+| `u5` | sc-observability `1.4.1` family is published and independently verified from the PR #197 checklist and existing installed release workflow; atm-dev has received the upstream completion notice | bc.6 |
 
 No missing upstream gate may be replaced by a local atm-core hotfix to a
 synced shared file.
@@ -105,7 +114,7 @@ synced shared file.
 | merged revision qualification | `solar@atm-dev` owns the consumer gate | sc-publish maintainer and independent QA hand off exact-commit and installed-consumer evidence |
 | atm-core pin and evidence | `solar@atm-dev` coordinates; assigned layer writer implements | gates `u1` through `u4` |
 | repository setting activation | `solar@atm-dev` owns the gate and evidence | a named atm-core repository administrator executes only with separate explicit authorization from Rand in bc.5 |
-| sc-observability `1.4.1` publication | `solar@atm-dev` owns dependency tracking | a separately authorized upstream publisher delivers; atm-dev consumes only after gate `u5` evidence |
+| sc-observability `1.4.1` publication | `solar@atm-dev` owns dependency tracking | `cobs@sc-obs` owns version/manifests/validation preparation under PR #197; `aobs@sc-obs` sends the published/verified notice; the existing installed workflow is the release base and PR #101 is not adopted |
 
 The expanded shared publication contract is not implicitly assigned to the
 sc-observability team. Each upstream owner must explicitly accept their item.
@@ -129,9 +138,9 @@ must stop bc.4 rather than infer either appointment.
 | `bc.3` | `arch-ctm@atm-dev` | `feature/bc3-log-macro-qualification` | medium | `must_follow bc.2` | [macro and bridge qualification](./sprint-bc.3-log-macro-qualification.md) |
 | `bc.4` | `cipher@atm-dev` | `feature/bc4-sc-publish-immutable-consumer` | medium/high | `must_follow bc.3` and gates `u1`–`u4` | [qualified consumer adoption](./sprint-bc.4-sc-publish-immutable-consumer.md) |
 | `bc.5` | `solar@atm-dev` | `evidence/bc5-immutable-release-activation` | operational/high | separate authorized evidence gate after bc.4 compatibility reaches every release writer | [setting activation and proof](./sprint-bc.5-immutable-release-activation.md) |
-| `bc.6` | `arch-ctm@atm-dev` | `feature/bc6-sc-observability-1-4-1` | low, availability-gated | `must_follow bc.4`; append-only top after gate `u5` | [1.4.1 final repin](./sprint-bc.6-sc-observability-1.4.1.md) |
+| `bc.6` | `arch-ctm@atm-dev` | `feature/bc6-sc-observability-1-4-1` | low, availability-gated | `must_follow bc.1`; priority append-next when `u5` closes; never gated by bc.4 or `u1`–`u4` | [1.4.1 final repin](./sprint-bc.6-sc-observability-1.4.1.md) |
 
-The initial implementation chain is:
+While `u5` remains open, the default implementation chain is:
 
 ```text
 integrate/phase-bc
@@ -144,8 +153,15 @@ integrate/phase-bc
 `bc.5` is a separately authorized operational evidence gate, not a layer in
 the implementation PR stack. It branches from the released compatible head
 and cannot execute until compatible code is present on every reachable
-release writer. `bc.6` is an append-only top layer when `1.4.1` becomes real;
-its low risk does not permit rewriting a frozen lower layer.
+release writer.
+
+`bc.6` is independent of the sc-publish/immutable-release lane. When `u5`
+closes, it becomes the next append-only layer above the current frozen top,
+before any not-yet-started higher-risk layer. Later layers branch from bc.6.
+For example, if publication completes before bc.2 starts, the chain is
+bc.1 → bc.6 → bc.2 → bc.3 → bc.4; if bc.2 is already frozen, the chain is
+bc.1 → bc.2 → bc.6 → bc.3 → bc.4. No frozen layer is reordered or rewritten,
+but bc.6 is never held for bc.4 or gates `u1` through `u4`.
 
 All branch creation uses `/sc-git-worktree` from the immediate parent. The
 primary checkout remains on `develop`. The lead owns non-interactive `gh stack`
