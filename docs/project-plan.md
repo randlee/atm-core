@@ -1840,6 +1840,34 @@ team-lead lands the final status when the phase PR merges.
 | `BB.7` | `merged (#1470, #1478)` | `feature/bb7-docs` | `docs/plans/phase-bb/sprint-BB.7-docs.md` |
 | `BB.8` | `complete (#1500, #1501)` | `feature/bb8-2-colima-driver` | `docs/plans/phase-bb/sprint-BB.8-colima-integration.md` |
 
+## 61. phase bc — immutable releases and observability consolidation [planning]
+
+phase bc qualifies the published `sc-observability` `1.4.0` family before
+adopting bounded typed and logging improvements, then consumes a separately
+qualified `sc-publish` revision before immutable releases are enabled for
+atm-core. The authoritative plan is
+[the phase-bc plan](./plans/phase-bc/phase-bc-plan.md). Its planning branch is
+`plan/phase-bc`, its implementation integration branch is
+`integrate/phase-bc`, and all new phase/sprint identifiers and document or
+branch names use lowercase.
+
+The implementation is one append-only `gh stack`, with the lowest-risk
+dependency qualification at the bottom. Repository-setting activation is a
+separate operational gate requiring explicit authorization. The current
+`sc-publish` PR #101 verdict is `accept-as-prerequisite-only`: it is not a
+qualified consumer pin and immutable releases remain disabled until every
+reachable release writer and the Administration(read) credential path are
+compatible.
+
+| sprint | status | branch | authoritative sprint doc |
+| --- | --- | --- | --- |
+| `bc.1` | `planned` | `feature/bc1-sc-observability-1-4-0` | `docs/plans/phase-bc/sprint-bc.1-sc-observability-1.4.0.md` |
+| `bc.2` | `planned; must_follow bc.1` | `feature/bc2-typed-observability` | `docs/plans/phase-bc/sprint-bc.2-typed-observability.md` |
+| `bc.3` | `planned; must_follow bc.2` | `feature/bc3-log-macro-qualification` | `docs/plans/phase-bc/sprint-bc.3-log-macro-qualification.md` |
+| `bc.4` | `upstream-gated; must_follow bc.3` | `feature/bc4-sc-publish-immutable-consumer` | `docs/plans/phase-bc/sprint-bc.4-sc-publish-immutable-consumer.md` |
+| `bc.5` | `authorization-gated; after bc.4 deployment` | `evidence/bc5-immutable-release-activation` | `docs/plans/phase-bc/sprint-bc.5-immutable-release-activation.md` |
+| `bc.6` | `publication-gated; append-only top` | `feature/bc6-sc-observability-1-4-1` | `docs/plans/phase-bc/sprint-bc.6-sc-observability-1.4.1.md` |
+
 ## Daemon-Switch Scope Reduction
 
 Rand's 2026-09-05 scope ruling keeps `daemon-switch` to two operator modes:
