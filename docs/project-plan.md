@@ -1866,7 +1866,12 @@ upstream preparation is tracked by sc-observability
 shared workflow remaining the release base. PR #101 is not adopted for that
 publication. Once upstream reports the family published and verified, bc.6 is
 the next append-only ATM layer above the then-frozen top; it never waits for
-bc.4 or the immutable-release gates.
+bc.4 or the immutable-release gates. User authority states `1.4.1` is
+code-compatible with `1.4.0` and exists solely to recover the npm publication
+that failed because the `1.4.0` release was not immutable. bc.6 is therefore
+limited to dependency metadata, lockfile, evidence, and current
+version-reference changes unless verification finds a semantic code delta and
+the plan is explicitly amended.
 
 | sprint | status | branch | authoritative sprint doc |
 | --- | --- | --- | --- |

@@ -50,6 +50,11 @@ This phase will:
 - The existing installed sc-observability shared workflow remains the `1.4.1`
   release base. sc-publish PR #101 is not adopted for that publication, and
   ATM's broader immutable-release work must not block upstream preparation.
+- User authority states that `1.4.1` is code-compatible with `1.4.0` and is
+  being republished only because the npm publication leg failed when the
+  `1.4.0` release was not immutable. Therefore bc.6 is a dependency, lockfile,
+  current version-reference, and evidence repin; it does not budget
+  production-code adaptation.
 - Upstream `1.4.0` adds `sc-observability-log`,
   `sc-observability-log-macros`, `sc-observability-dto`, and
   `sc-observability-binding-runtime`.
@@ -99,7 +104,7 @@ This phase will:
 | `u2` | approved, provisioned, and independently reviewed least-privilege runtime credential for Administration(read); an ephemeral credential remains a proposal until that approval | bc.4, bc.5 |
 | `u3` | explicit upstream policy decision plus implementation/tests for draft-first stable and prerelease publication, replacement refusal, exact tag/build binding, per-tag concurrency, trusted dispatch refs, and digest/checksum verification | bc.4, bc.5 |
 | `u4` | qualified merged sc-publish commit and clean consumer installer dry-run | bc.4 |
-| `u5` | sc-observability `1.4.1` family is published and independently verified from the PR #197 checklist and existing installed release workflow; atm-dev has received the upstream completion notice | bc.6 |
+| `u5` | the coordinated sc-observability `1.4.1` Rust/npm inventory is published and independently verified from the PR #197 checklist and existing installed release workflow; atm-dev has received the upstream completion notice | bc.6 |
 
 No missing upstream gate may be replaced by a local atm-core hotfix to a
 synced shared file.
