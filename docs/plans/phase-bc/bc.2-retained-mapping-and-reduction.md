@@ -6,12 +6,12 @@ The public ATM contracts remain unchanged.
 
 ## Removed production lines
 
-Compared with the authoritative immediate parent (`5d560f534c1ce96c381ba3ee8bd8c58d866abe26`):
+Compared with the authoritative immediate parent (`fe432fff14b659db4e12e5f0700244c2566eab43`):
 
 | Location | Removed/replaced production lines | Reason |
 | --- | ---: | --- |
-| `crates/atm-observability/src/lib.rs` | 8 removed, 24 added | Retain daemon initialization diagnostics through bounded telemetry while preserving the public error contract. |
-| `crates/atm/src/main.rs` | 53 removed, 50 added | Restore governed log/flush suffixes and route typed diagnostics through bounded telemetry. |
+| `crates/atm-observability/src/lib.rs` | 8 removed, 24 added | Extract typed diagnostics at the adapter boundary without changing the public error contract. |
+| `crates/atm/src/main.rs` | 53 removed, 50 added | Preserve historical public messages while discarding backend diagnostics after stable typed extraction. |
 | **Net** | **61 removed, 74 added (13 net lines)** | Public ATM error/message/remediation shape remains unchanged; test and telemetry plumbing are separated from the public contract. |
 
 ## Intentionally retained mappings
@@ -51,9 +51,12 @@ degraded/unavailable health seam or require an upstream API change.
   ShutdownTimedOut}`, and `FlushFailure` expose the same stable diagnostic
   codes consumed by the previous compatibility enums through
   `DiagnosticInfo::diagnostic()`.
-- Focused tests passed: `cargo test -p atm-observability -p agent-team-mail`
-  (`atm-observability`: 17 unit tests + 1 doctest; CLI: 313 unit tests and
-  all integration suites).
+- Historical public error goldens remain anchored to the pre-BC2 baseline
+  `df7a094e`; no live constructor output is used as the compatibility oracle.
+- Focused tests passed: `cargo test -p atm-observability` (17 unit tests,
+  2 macro tests, 1 doctest) and `cargo test -p agent-team-mail --bin atm`
+  (314 unit tests). No backend paths outside the injected SQLite fault matrix
+  are claimed as exercised.
 - The bc.6 published-consumer qualification still passes, including health,
   queue-full, flush, shutdown, and query probes. Public ATM JSON/error/doctor
   fixtures remain byte-for-byte unchanged.
