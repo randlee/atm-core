@@ -124,15 +124,13 @@ class EcosystemPinTests(unittest.TestCase):
                 destination = root / relative_path
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(REPO_ROOT / relative_path, destination)
-            # This test intentionally models the pre-BC.6 historical rollback
-            # baseline rather than the active 1.4.1 pin.
-            cargo_fixture = root / "Cargo.toml"
-            cargo_fixture.write_text(cargo_fixture.read_text().replace("=1.4.1", "=1.4.0"))
+            # Keep the copied workspace at the active 1.4.1 baseline; the
+            # known-good map below intentionally models the older recovery pin.
             evidence = root / "evidence.md"
             latest_registry.side_effect = lambda _root, dependency: {
                 "sc-composer": "1.6.1",
-                "sc-observability": "1.4.0",
-                "sc-observability-types": "1.4.0",
+                "sc-observability": "1.4.1",
+                "sc-observability-types": "1.4.1",
             }[dependency]
             findings: list[VALIDATE_RELEASE.Finding] = []
             with (
@@ -144,7 +142,8 @@ class EcosystemPinTests(unittest.TestCase):
                             {
                                 "wyvern": "0.5.0",
                                 "sc-composer": "1.4.1",
-                                # Historical rollback fixture: the live baseline is 1.4.0.
+                                # Historical rollback fixture: the known-good map intentionally
+                                # models the pre-1.4.1 recovery pin.
                                 "sc-observability": "1.1.0",
                             }
                         ),
@@ -189,8 +188,8 @@ class EcosystemPinTests(unittest.TestCase):
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
             "sc-composer": "1.6.1",
-            "sc-observability": "1.4.0",
-            "sc-observability-types": "1.4.0",
+            "sc-observability": "1.4.1",
+            "sc-observability-types": "1.4.1",
         }[dependency]
         before = {
             path: path.read_text(encoding="utf-8")
@@ -206,7 +205,8 @@ class EcosystemPinTests(unittest.TestCase):
             {
                 VALIDATE_RELEASE.ECOSYSTEM_FIX_FORWARD_ENV: "1",
                 VALIDATE_RELEASE.ECOSYSTEM_KNOWN_GOOD_ENV: json.dumps(
-                    # Historical rollback fixture: the live baseline is 1.4.0.
+                    # Historical rollback fixture: the known-good map intentionally
+                    # models the pre-1.4.1 recovery pin.
                     {"sc-composer": "1.4.1", "sc-observability": "1.1.0", "wyvern": "0.4.0"}
                 ),
             },
@@ -239,8 +239,8 @@ class EcosystemPinTests(unittest.TestCase):
             }
             latest_registry = {
                 "sc-composer": "1.6.1",
-                "sc-observability": "1.4.0",
-                "sc-observability-types": "1.4.0",
+                "sc-observability": "1.4.1",
+                "sc-observability-types": "1.4.1",
             }
             findings: list[VALIDATE_RELEASE.Finding] = []
             with (
@@ -338,7 +338,7 @@ class EcosystemPinTests(unittest.TestCase):
             )
             findings: list[VALIDATE_RELEASE.Finding] = []
             with (
-                mock.patch.object(VALIDATE_RELEASE, "latest_registry_version", return_value="1.4.0"),
+                mock.patch.object(VALIDATE_RELEASE, "latest_registry_version", return_value="1.4.1"),
                 mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0"),
                 mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/wyvern"),
             ):

@@ -1881,7 +1881,7 @@ the plan is explicitly amended.
 | `bc.3` | `planned; must_follow bc.2` | `feature/bc3-log-macro-qualification` | `docs/plans/phase-bc/sprint-bc.3-log-macro-qualification.md` |
 | `bc.4` | `upstream-gated; must_follow bc.3` | `feature/bc4-sc-publish-immutable-consumer` | `docs/plans/phase-bc/sprint-bc.4-sc-publish-immutable-consumer.md` |
 | `bc.5` | `authorization-gated; after bc.4 deployment` | `evidence/bc5-immutable-release-activation` | `docs/plans/phase-bc/sprint-bc.5-immutable-release-activation.md` |
-| `bc.6` | `publication-gated; priority append-next after bc.1; independent of bc.4` | `feature/bc6-sc-observability-1-4-1` | `docs/plans/phase-bc/sprint-bc.6-sc-observability-1.4.1.md` |
+| `bc.6` | `complete; u5 closed` | `feature/bc6-sc-observability-1-4-1` | `docs/plans/phase-bc/sprint-bc.6-sc-observability-1.4.1.md` |
 
 ## Daemon-Switch Scope Reduction
 
