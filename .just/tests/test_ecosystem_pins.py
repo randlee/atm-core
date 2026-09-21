@@ -124,6 +124,10 @@ class EcosystemPinTests(unittest.TestCase):
                 destination = root / relative_path
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(REPO_ROOT / relative_path, destination)
+            # This test intentionally models the pre-BC.6 historical rollback
+            # baseline rather than the active 1.4.1 pin.
+            cargo_fixture = root / "Cargo.toml"
+            cargo_fixture.write_text(cargo_fixture.read_text().replace("=1.4.1", "=1.4.0"))
             evidence = root / "evidence.md"
             latest_registry.side_effect = lambda _root, dependency: {
                 "sc-composer": "1.6.1",
