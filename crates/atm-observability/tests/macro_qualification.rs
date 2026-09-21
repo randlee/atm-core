@@ -2,9 +2,11 @@
 //! This integration binary owns one temporary global bridge and never touches
 //! ATM's production logger installation.
 
+use std::collections::HashSet;
 use std::future::pending;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::Duration;
+use tokio::sync::oneshot;
 
 use sc_observability_log::{ActionName, BridgeOptions, LoggerConfig, ServiceName};
 use serde_json::Value;
@@ -31,8 +33,20 @@ async fn async_ok() -> Result<u32, &'static str> {
     Ok(9)
 }
 
+#[sc_observability_log::instrument(name = "fixture.async_err", ret, err, skip_all)]
+async fn async_err() -> Result<(), &'static str> {
+    tokio::task::yield_now().await;
+    Err("expected async error")
+}
+
+#[sc_observability_log::instrument(name = "fixture.async_panic", skip_all)]
+async fn async_panic() {
+    panic!("expected async panic");
+}
+
 #[sc_observability_log::instrument(name = "fixture.async_cancelled", skip_all)]
-async fn async_cancelled() {
+async fn async_cancelled(started: oneshot::Sender<()>) {
+    let _ = started.send(());
     pending::<()>().await;
 }
 
@@ -67,13 +81,42 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
     assert_eq!(sync_err(), Err("expected"));
     assert!(catch_unwind(AssertUnwindSafe(sync_panic)).is_err());
     assert_eq!(async_ok().await, Ok(9));
-    let cancellation = tokio::spawn(async_cancelled());
-    tokio::time::sleep(Duration::from_millis(1)).await;
+    assert_eq!(async_err().await, Err("expected async error"));
+    let async_panic_join = tokio::spawn(async_panic()).await;
+    assert!(
+        async_panic_join
+            .expect_err("async panic must fail the task")
+            .is_panic()
+    );
+    let (started_tx, started_rx) = oneshot::channel();
+    let cancellation = tokio::spawn(async_cancelled(started_tx));
+    started_rx
+        .await
+        .expect("cancellation fixture reached handshake");
     cancellation.abort();
     let _ = cancellation.await;
 
     guard.flush(Duration::from_secs(5)).expect("bounded flush");
     let events = read_events(&path);
+    assert_eq!(events.len(), 8, "fixture event cardinality changed");
+    let actions: HashSet<_> = events
+        .iter()
+        .map(|event| event["action"].as_str().expect("action"))
+        .collect();
+    assert_eq!(actions.len(), 8, "duplicate action emission");
+    assert!(actions.contains("fixture.async_err"));
+    assert!(actions.contains("fixture.async_panic"));
+    assert!(events.iter().all(|event| event["version"] == "v1"));
+    assert!(events.iter().all(|event| event["correlation_id"].is_null()));
+    assert!(events.iter().all(|event| {
+        let target = event["target"].as_str().expect("target");
+        target == "fixture" || target == "macro_qualification"
+    }));
+    let encoded = serde_json::to_string(&events).expect("encoded events");
+    assert!(encoded.len() < 32 * 1024, "retained output oversized");
+    for secret in ["token", "password", "authorization", "secret"] {
+        assert!(!encoded.to_ascii_lowercase().contains(secret));
+    }
     assert!(
         events
             .iter()
@@ -97,11 +140,19 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
     assert!(events.iter().any(
         |event| event["action"] == "fixture.async_cancelled" && event["outcome"] == "cancelled"
     ));
+    assert!(events.iter().any(
+        |event| event["action"] == "fixture.async_panic" && event["outcome"] == "panicked"
+    ));
     assert!(events.iter().all(|event| {
         event["fields"]
             .as_object()
             .is_some_and(|fields| fields.len() < 16)
     }));
+    let timestamps: Vec<_> = events
+        .iter()
+        .map(|event| event["timestamp"].as_str().expect("timestamp"))
+        .collect();
+    assert!(timestamps.windows(2).all(|pair| pair[0] <= pair[1]));
     assert_eq!(guard.dropped_events().total(), 0);
     guard
         .shutdown(Duration::from_secs(5))

@@ -117,6 +117,29 @@ unrun local macro command is claimed here.
 - `cargo clippy --workspace --all-targets -- -D warnings`: passed.
 - `git diff --check`: passed.
 
+### bc.6 top-layer requalification receipt
+
+The corrective top layer was executed at the exact branch head recorded by
+the stack owner. The isolated macro fixture and the ATM fault matrix both
+passed with the following reproducible commands:
+
+```text
+cargo test -p atm-observability --test macro_qualification
+python3 .just/lint_boundaries.py
+cargo test -p agent-team-mail -p atm-observability --all-features
+```
+
+The macro fixture passed its trybuild supported/rejected cases plus the
+runtime assertions for exact event cardinality, duplicate actions, async
+error and panic completion, deterministic cancellation handshake, target and
+correlation shape, bounded output, sensitive-string absence, retained JSONL
+timestamps, zero dropped events, flush, and shutdown. The all-features ATM
+run passed 313 CLI unit tests and the complete observability adapter matrix
+covering degraded, unavailable, queue-full, health/detail, query, flush, and
+shutdown paths. Boundary lint passed with the dev-only macro allowlist
+(`sc-observability-log`, `tokio`, and `trybuild`) documented separately from
+the production tracing bridge dependencies.
+
 The focused observability tests cover the local fault/queue, health, query,
 flush, and shutdown behavior. The complete cross-platform consumer gate is
 the exact lower-branch CI run below.
