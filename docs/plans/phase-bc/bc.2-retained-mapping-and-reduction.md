@@ -4,7 +4,7 @@ This layer migrates ATM's two observability adapters from the deprecated
 `sc-observability` 1.4.0 compatibility errors to the stable 1.4.1 typed APIs.
 The public ATM contracts remain unchanged.
 
-## Removed production lines
+## Cumulative removed production lines
 
 The cumulative reduction is compared with the historical baseline
 `fe432fff14b659db4e12e5f0700244c2566eab43`:
@@ -12,8 +12,8 @@ The cumulative reduction is compared with the historical baseline
 | Location | Removed | Added | Net | Reason |
 | --- | ---: | ---: | ---: | --- |
 | `crates/atm-observability/src/lib.rs` | 22 | 9 | -13 | Extract typed diagnostics at the adapter boundary without changing the public error contract. |
-| `crates/atm/src/main.rs` | 40 | 21 | -19 | Preserve historical public messages while discarding backend diagnostics after stable typed extraction. |
-| **Total** | **62** | **30** | **-32** | Public ATM error/message/remediation shape remains unchanged; test and telemetry plumbing are separated from the public contract. |
+| `crates/atm/src/main.rs` | 22 | 14 | -8 | Preserve historical public messages while discarding backend diagnostics after stable typed extraction. |
+| **Total** | **44** | **23** | **-21** | Public ATM error/message/remediation shape remains unchanged; test and telemetry plumbing are separated from the public contract. |
 
 ## Intentionally retained mappings
 
