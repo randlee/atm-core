@@ -74,7 +74,8 @@ The preceding PR1562 layer has immediate parent
 additions and 17 deletions, split as production +18/-10 and tests +13/-7.
 This correction branch has parent
 `25794021a1b8a116cc73edaf751b485a7563b48f`; its correction implementation
-commit exact head is recorded below after commit. The historical baseline is
+commit exact head is `1ad222ba8b1ea984821eade64336abec8c70607a`. The
+historical baseline is
 `fe432fff14b659db4e12e5f0700244c2566eab43`.
 
 The correction implementation changes `crates/atm/src/main.rs` by 84
