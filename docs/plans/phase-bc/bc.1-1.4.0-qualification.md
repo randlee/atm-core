@@ -42,12 +42,18 @@ global log bridge.
 
 The cached `sc-observability-1.4.0.crate` and
 `sc-observability-types-1.4.0.crate` archives are extracted into an isolated
-temporary consumer. A fresh reviewer must create these two files exactly before
-running the offline commands; no repository production code is involved.
+temporary consumer. From any shell with both archives in the stated Cargo
+cache location, copy/paste this complete sequence; it creates the fresh root,
+all required directories, both files, and the vendored package tree without
+network access:
 
-`Cargo.toml`:
+```sh
+set -eu
+consumer_root="$(mktemp -d)"
+cd "$consumer_root"
+mkdir -p src vendor
 
-```toml
+cat > Cargo.toml <<'EOF'
 [package]
 name = "bc1-offline-consumer"
 version = "0.1.0"
@@ -59,11 +65,9 @@ sc-observability-types = { path = "vendor/sc-observability-types-1.4.0" }
 
 [patch.crates-io]
 sc-observability-types = { path = "vendor/sc-observability-types-1.4.0" }
-```
+EOF
 
-`src/main.rs`:
-
-```rust
+cat > src/main.rs <<'EOF'
 use std::path::PathBuf;
 
 use sc_observability::{Logger, LoggerConfig};
@@ -76,12 +80,8 @@ fn main() {
     let logger = builder.build_typed().expect("published 1.4.0 logger");
     let _stopped = logger.shutdown();
 }
-```
+EOF
 
-From the temporary consumer root, extract both cached archives into `vendor/`,
-then run these commands without network access:
-
-```text
 tar -xzf ~/.cargo/registry/cache/index.crates.io-1949cf8c6b5b557f/sc-observability-1.4.0.crate -C vendor
 tar -xzf ~/.cargo/registry/cache/index.crates.io-1949cf8c6b5b557f/sc-observability-types-1.4.0.crate -C vendor
 cargo generate-lockfile --offline
@@ -89,8 +89,10 @@ cargo check --offline --locked
 cargo run --offline --locked --quiet
 ```
 
-Result: the complete recipe was re-run in a fresh temporary directory on this
-layer; the extracted-package consumer compiled and ran successfully.
+Result: the literal sequence above was executed from a fresh `mktemp -d` root
+on this layer; `cargo generate-lockfile --offline`,
+`cargo check --offline --locked`, and `cargo run --offline --locked --quiet`
+all passed, and the extracted-package consumer compiled and ran successfully.
 
 ## Compatibility edit inventory
 
