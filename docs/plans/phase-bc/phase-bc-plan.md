@@ -28,8 +28,8 @@ This phase will:
    typed APIs preserve the ATM contract;
 3. qualify the new log macros and `#[instrument]` attribute without changing
    global logging ownership prematurely;
-4. consume a qualified `sc-publish` revision that is compatible with GitHub
-   immutable releases;
+4. pin and locally qualify the ATM consumer against the accepted `sc-publish`
+   revision while recording any inherited or deferred lifecycle boundary;
 5. enable immutable releases for `randlee/atm-core` only after compatible
    release code and credentials are live on the release branch; and
 6. retain machine-readable proof that the setting, future release, tag, asset
@@ -107,8 +107,8 @@ This phase will:
 | --- | --- | --- |
 | `u1` | [sc-publish PR #106 combined-stack acceptance](./bc.4-upstream-owner-acceptance.md); PR #101 is historical evidence | bc.4 |
 | `u2` | separately authorized bc.5 setting/credential activation evidence; not a bc.4 entry gate | bc.5 |
-| `u3` | explicit upstream policy decision plus implementation/tests for draft-first stable and prerelease publication, replacement refusal, exact tag/build binding, per-tag concurrency, trusted dispatch refs, and digest/checksum verification | bc.4, bc.5 |
-| `u4` | qualified merged sc-publish commit and clean consumer installer dry-run | bc.4 |
+| `u3` | inherited/deferred upstream lifecycle work: draft-first publication, replacement refusal, exact tag/build binding, per-tag concurrency, trusted dispatch refs, and digest/checksum verification; not claimed by bc.4 | upstream follow-up; not a bc.4 completion gate |
+| `u4` | exact consumer pin at accepted open sc-publish head `22137c2da13bf4638b4267b69c6c2f021617da73`, canonical installer/generated parity, and local consumer qualification; no merge or live-release claim | bc.4 |
 | `u5` | the coordinated sc-observability `1.4.1` Rust/npm inventory is published and independently verified from the PR #197 checklist and existing installed release workflow; atm-dev has received the upstream completion notice | bc.6 |
 
 No missing upstream gate may be replaced by a local atm-core hotfix to a
@@ -120,9 +120,9 @@ synced shared file.
 | --- | --- | --- |
 | PR #106 combined-stack acceptance | `solar@atm-dev` owns gate evidence | sc-publish maintainer delivers; atm-dev supplies exact-head acceptance review |
 | repository setting and credential activation | `solar@atm-dev` owns the separately authorized bc.5 gate | no appointment or activation is required to enter bc.4 |
-| publication and recovery contract follow-ups | `solar@atm-dev` owns appointment and dependency tracking | a named sc-publish maintainer must explicitly accept the expanded scope and tests before bc.4 starts |
-| merged revision qualification | `solar@atm-dev` owns the consumer gate | sc-publish maintainer and independent QA hand off exact-commit and installed-consumer evidence |
-| atm-core pin and evidence | `solar@atm-dev` coordinates; assigned layer writer implements | gates `u1` through `u4` |
+| publication and recovery contract follow-ups | inherited/deferred upstream work; not claimed by bc.4 | sc-publish owns any future implementation and qualification; bc.4 records the boundary only |
+| accepted revision and consumer qualification | `solar@atm-dev` owns the consumer gate | sc-publish maintainer hands off the accepted open head; bc.4 records exact-pin, installer-parity, and local consumer evidence without claiming merge or live qualification |
+| atm-core pin and evidence | `solar@atm-dev` coordinates; assigned layer writer implements | consumes the `u1`/`u4` evidence and records the `u2`/`u3` boundary |
 | repository setting activation | `solar@atm-dev` owns the gate and evidence | a named atm-core repository administrator executes only with separate explicit authorization from Rand in bc.5 |
 | sc-observability `1.4.1` publication | `solar@atm-dev` owns dependency tracking | `cobs@sc-obs` owns version/manifests/validation preparation under PR #197; `aobs@sc-obs` sends the published/verified notice; the existing installed workflow is the release base and PR #101 is not adopted |
 
@@ -142,7 +142,7 @@ credential activation remain a separately authorized bc.5 activity.
 | `bc.1` | `arch-ctm@atm-dev` | `feature/bc1-sc-observability-1-4-0` | low | stack bottom | [published 1.4.0 qualification](./sprint-bc.1-sc-observability-1.4.0.md) |
 | `bc.2` | `arch-ctm@atm-dev` | `feature/bc2-typed-observability` | low/medium | `must_follow bc.1` | [typed consolidation](./sprint-bc.2-typed-observability.md) |
 | `bc.3` | `arch-ctm@atm-dev` | `feature/bc3-log-macro-qualification` | medium | `must_follow bc.2` | [macro and bridge qualification](./sprint-bc.3-log-macro-qualification.md) |
-| `bc.4` | `cipher@atm-dev` | `feature/bc4-sc-publish-immutable-consumer` | medium/high | `must_follow bc.3` and gates `u1`–`u4` | [qualified consumer adoption](./sprint-bc.4-sc-publish-immutable-consumer.md) |
+| `bc.4` | `cipher@atm-dev` | `feature/bc4-sc-publish-immutable-consumer` | medium/high | `must_follow bc.3`; consumes `u1`/`u4` evidence and records the `u2`/`u3` boundary | [qualified consumer adoption](./sprint-bc.4-sc-publish-immutable-consumer.md) |
 | `bc.5` | `solar@atm-dev` | `evidence/bc5-immutable-release-activation` | operational/high | separate authorized evidence gate after bc.4 compatibility reaches every release writer | [setting activation and proof](./sprint-bc.5-immutable-release-activation.md) |
 | `bc.6` | `arch-ctm@atm-dev` | `feature/bc6-sc-observability-1-4-1` | low, availability-gated | `must_follow bc.1`; priority append-next when `u5` closes; never gated by bc.4 or `u1`–`u4` | [1.4.1 final repin](./sprint-bc.6-sc-observability-1.4.1.md) |
 
@@ -178,11 +178,12 @@ their task closes.
 
 | gate or sprint | authoritative artifact |
 | --- | --- |
-| `u1` | `docs/plans/phase-bc/sc-publish-pr-101-acceptance.md` |
+| `u1` | `docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md` (PR #101 remains historical only) |
 | `bc.1` | `docs/plans/phase-bc/bc.1-1.4.0-qualification.md` |
 | `bc.2` | `docs/plans/phase-bc/bc.2-retained-mapping-and-reduction.md` |
 | `bc.3` | `docs/plans/phase-bc/bc.3-log-surface-decision.md` |
-| `u2`, `u3` | `docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md` |
+| `u2` | `docs/plans/phase-bc/bc.5-credential-preflight.md` |
+| `u3` | inherited/deferred upstream lifecycle record in `docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md`; not claimed by bc.4 |
 | `u4`, `bc.4` | `docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md` |
 | `bc.5` credential | `docs/plans/phase-bc/bc.5-credential-preflight.md` |
 | `bc.5` setting/release | `docs/plans/phase-bc/bc.5-immutable-release-evidence.md` |

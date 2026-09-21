@@ -16,13 +16,14 @@ fixed upstream under ADR-050, never locally patched here.
   PR #106 scope and evidence handoff from the sc-publish maintainer.
 - Credential appointment and repository-setting activation are not bc.4 entry
   gates; they are separately authorized in bc.5.
-- Required follow-ups implement and test explicit draft-first stable and
-  prerelease assembly, replacement refusal, exact tag/build binding, root
-  per-tag concurrency, trusted production refs, and digest/checksum comparison.
-  Post-publication receipt and attestation verification gates downstream
-  promotion separately.
-- A merged upstream commit has completed source, installed-consumer, hosted CI,
-  and independent QA qualification.
+- FIX03–FIX10 are inherited or deferred upstream lifecycle items. They are
+  recorded for boundary clarity and are not claimed as bc.4 work or entry
+  gates. Post-publication receipt and attestation verification remain separate
+  downstream work.
+- The accepted source is the open sc-publish head
+  `22137c2da13bf4638b4267b69c6c2f021617da73`; bc.4 qualifies the exact pin,
+  canonical installer/generated parity, and local consumer behavior. It does
+  not claim that the source is merged or live-release qualified.
 
 ## deliverables
 
@@ -38,30 +39,32 @@ fixed upstream under ADR-050, never locally patched here.
 6. Add ATM-specific preflight checks for the exact tag/source/build/receipt
    without duplicating shared logic. Do not block or ask about tokens unless
    preflight or publish fails.
-7. Record the exact merged revision, upstream QA, installed-consumer/package
-   parity, canonical installer dry-run, and ATM validation in
+7. Record the exact accepted open revision, recorded upstream evidence,
+   installed-consumer/package parity, canonical installer dry-run, and ATM
+   validation in
    `docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md`.
 
 ## acceptance
 
 - No synced shared file has a consumer-only edit.
-- Disabled, forbidden, timed-out, malformed, or indeterminate immutability API
-  responses fail before any tag/registry/release/channel mutation.
-- Stable and prerelease paths assemble drafts completely, verify assets and
-  digests, then publish once.
-- Exact tag, gated source, build checkout, and receipt SHAs agree under an
-  approved migration that replaces ancestor-tag recovery without rewriting
-  historical tags or releases.
-- Same-tag retry verifies immutable state and cannot rebuild or replace bytes.
-- Production post-release workflows reject untrusted dispatch refs.
-- The bc.4 qualification artifact closes `u4` at the exact consumed revision.
+- The local negative suite verifies fail-closed handling for disabled,
+  forbidden, timed-out, malformed, and indeterminate immutability/preflight
+  results without performing a release or channel mutation.
+- The consumer pin, generated output, package contract, and local installer
+  qualification agree at the accepted open source head.
+- BC4 does not assert implementation or live qualification of the inherited or
+  deferred FIX03–FIX10 lifecycle items.
+- The bc.4 qualification artifact closes the local-consumer portion of `u4` at
+  the exact consumed revision; merge, hosted-QA, credentials, and live
+  release/channel qualification remain outside this correction.
 
 ## required validation
 
-Run upstream qualification evidence checks, installer parity/dry-run checks,
-ATM release-manifest and release-gate suites, mocked policy/permission/API
-failures, duplicate dispatch, stale tag, partial draft, changed checksum, and
-existing immutable release cases, followed by all phase gates.
+Run the recorded upstream evidence check, the canonical installer parity and
+repeat dry-run, the ATM release-manifest/release-gate suites, and the focused
+mocked immutable/preflight negative suite. These are local evidence checks;
+they do not perform live publication, channel promotion, or repository-setting
+mutation.
 
 ## out of scope
 
