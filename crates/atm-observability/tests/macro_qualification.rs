@@ -50,6 +50,13 @@ async fn async_cancelled(started: oneshot::Sender<()>) {
     pending::<()>().await;
 }
 
+fn reexported_event_levels() {
+    sc_observability_log::debug!(target: "fixture", "[fixture.debug] debug body");
+    sc_observability_log::warn!(target: "fixture", "[fixture.warn] warn body");
+    sc_observability_log::error!(target: "fixture", "[fixture.error] error body");
+    sc_observability_log::trace!(target: "fixture", "[fixture.trace] trace body");
+}
+
 fn read_events(path: &std::path::Path) -> Vec<Value> {
     std::fs::read_to_string(path)
         .expect("retained output")
@@ -71,7 +78,7 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
         config,
         BridgeOptions {
             default_action: ActionName::new("fixture.default").expect("action"),
-            parse_bracket_action: false,
+            parse_bracket_action: true,
         },
     )
     .expect("one isolated bridge installation");
@@ -82,6 +89,7 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
     assert!(catch_unwind(AssertUnwindSafe(sync_panic)).is_err());
     assert_eq!(async_ok().await, Ok(9));
     assert_eq!(async_err().await, Err("expected async error"));
+    reexported_event_levels();
     let async_panic_join = tokio::spawn(async_panic()).await;
     assert!(
         async_panic_join
@@ -98,7 +106,7 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
 
     guard.flush(Duration::from_secs(5)).expect("bounded flush");
     let events = read_events(&path);
-    assert_eq!(events.len(), 8, "fixture event cardinality changed");
+    assert_eq!(events.len(), 12, "fixture event cardinality changed");
     let actions: HashSet<_> = events
         .iter()
         .map(|event| event["action"].as_str().expect("action"))
@@ -106,6 +114,22 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
     assert_eq!(actions.len(), 8, "duplicate action emission");
     assert!(actions.contains("fixture.async_err"));
     assert!(actions.contains("fixture.async_panic"));
+    for (message, level) in [
+        ("debug body", "Debug"),
+        ("warn body", "Warn"),
+        ("error body", "Error"),
+        ("trace body", "Trace"),
+    ] {
+        assert!(
+            events.iter().any(|event| {
+                event["level"] == level
+                    && event["message"]
+                        .as_str()
+                        .is_some_and(|value| value.contains(message))
+            }),
+            "missing re-exported macro level {level} for {message}"
+        );
+    }
     assert!(events.iter().all(|event| event["version"] == "v1"));
     assert!(events.iter().all(|event| event["correlation_id"].is_null()));
     assert!(events.iter().all(|event| {
