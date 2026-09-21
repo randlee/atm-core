@@ -27,6 +27,22 @@ use serde_json::Map;
 /// confined to this facade.
 pub struct RetainedLogger(sc_observability::Logger);
 
+/// Emits a bounded, redacted diagnostic projection through tracing without
+/// adding fields to ATM's serialized/public error contract.
+pub fn retain_internal_diagnostic(diagnostic: &sc_observability_types::Diagnostic) {
+    let code = diagnostic.code.as_str();
+    let remediation_kind = match diagnostic.remediation {
+        sc_observability_types::Remediation::Recoverable { .. } => "recoverable",
+        sc_observability_types::Remediation::NotRecoverable { .. } => "not_recoverable",
+    };
+    tracing::debug!(
+        target: "atm.observability.internal",
+        upstream_code = %code.chars().take(128).collect::<String>(),
+        remediation_kind,
+        "upstream observability diagnostic retained for adapter telemetry"
+    );
+}
+
 /// ATM-owned logging level for the retained logger bootstrap boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RetainedLogLevel {
@@ -234,14 +250,14 @@ pub fn build_retained_logger(
         maintenance_max_work_per_pass: retained_log_policy.maintenance_max_work_per_pass,
     };
     config.enable_console_sink = false;
-    sc_observability::Logger::builder_typed(config)
-        .and_then(|builder| builder.build_typed())
-        .map(RetainedLogger)
-        .map_err(|_| {
-            AtmError::observability_bootstrap(
-                "failed to initialize shared daemon observability logger",
-            )
-        })
+    let builder = sc_observability::Logger::builder_typed(config).map_err(|source| {
+        retain_internal_diagnostic(source.diagnostic());
+        AtmError::observability_bootstrap("failed to initialize shared daemon observability logger")
+    })?;
+    builder.build_typed().map(RetainedLogger).map_err(|source| {
+        retain_internal_diagnostic(source.diagnostic());
+        AtmError::observability_bootstrap("failed to initialize shared daemon observability logger")
+    })
 }
 
 /// Builds the retained JSONL logger, resolving `ATM_LOG` from the process

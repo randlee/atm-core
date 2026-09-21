@@ -117,12 +117,12 @@ unrun local macro command is claimed here.
 - `cargo clippy --workspace --all-targets -- -D warnings`: passed.
 - `git diff --check`: passed.
 
-### BC3 corrective top-layer receipt
+### bc.3 corrective top-layer receipt
 
-This corrective review layer was evaluated against frozen parent
-`db7fab658728dd121b0cfca757cd89372bf0ffd6` at implementation head
+This corrective review layer was evaluated against frozen lower PR1559 final
+head `5d560f534c1ce96c381ba3ee8bd8c58d866abe26`; its content receipt remains
 `e4089bc2c457243674b0e0056bc789159f89621c`. It does not modify or rebase the
-lower BC2/BC6 branches.
+lower bc.2/bc.6 branches.
 
 The exact locked commands and results were:
 

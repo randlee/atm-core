@@ -6,13 +6,13 @@ The public ATM contracts remain unchanged.
 
 ## Removed production lines
 
-Compared with the authoritative frozen parent (`0702bc285e1578e859754278ebb6dda2c87b0542`):
+Compared with the authoritative immediate parent (`5d560f534c1ce96c381ba3ee8bd8c58d866abe26`):
 
 | Location | Removed/replaced production lines | Reason |
 | --- | ---: | --- |
-| `crates/atm-observability/src/lib.rs` | 0 removed, 0 added | Lower typed migration is inherited unchanged from the frozen parent. |
-| `crates/atm/src/main.rs` | 27 removed, 108 added | Preserve governed ATM message/remediation byte shape while retaining upstream diagnostics in the internal `cause` channel and expanding golden mappings. |
-| **Net** | **27 removed, 108 added (81 net lines)** | Public ATM error/message/remediation shape remains unchanged; only internal cause and tests expand. |
+| `crates/atm-observability/src/lib.rs` | 8 removed, 24 added | Retain daemon initialization diagnostics through bounded telemetry while preserving the public error contract. |
+| `crates/atm/src/main.rs` | 53 removed, 50 added | Restore governed log/flush suffixes and route typed diagnostics through bounded telemetry. |
+| **Net** | **61 removed, 74 added (13 net lines)** | Public ATM error/message/remediation shape remains unchanged; test and telemetry plumbing are separated from the public contract. |
 
 ## Intentionally retained mappings
 
