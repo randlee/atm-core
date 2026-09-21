@@ -1,6 +1,6 @@
 # bc.1 sc-observability 1.4.0 qualification
 
-status: in-review
+status: complete
 branch: fix/bc1-review-2
 worktree: /Users/randlee/github/atm-core-worktrees/fix/bc1-review-2
 
@@ -136,15 +136,20 @@ PR1548 is the exact-head CI source for the lower review layer:
 | item | value |
 |---|---|
 | PR | `1548` |
-| head SHA | `f8d0778efb5e449eff1a1de82d2f705d3f3d2e8a` |
-| CI run | `35547460903` |
+| head SHA | `3f60f1bffc03019b3870d3e2086f95b440190088` |
+| CI run | `35548802599` |
 
-The run includes the required actual `Test (ubuntu-latest)`,
-`Test (macos-latest)`, and `Test (windows-latest)` jobs for this runtime change.
-Their final conclusions are intentionally recorded only after the run
-completes; packaging jobs are not substituted for those tests. bc.1 remains
-`in-review` until all three test jobs pass at this exact head and establish the
-sprint's cross-platform acceptance.
+The required actual platform test jobs completed successfully at this exact
+head; packaging jobs are not substituted for these results:
+
+| platform test job | job ID | conclusion |
+|---|---:|---|
+| `Test (ubuntu-latest)` | `106180210764` | `success` |
+| `Test (macos-latest)` | `106180210753` | `success` |
+| `Test (windows-latest)` | `106180210748` | `success` |
+
+These results establish bc.1's cross-platform acceptance for the published
+1.4.0 consumer qualification.
 
 ## Historical preservation
 
