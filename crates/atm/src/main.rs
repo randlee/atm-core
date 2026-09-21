@@ -501,17 +501,13 @@ impl ScObservabilityAdapter {
 impl atm_core::boundary::sealed::Sealed for ScObservabilityAdapter {}
 
 impl ObservabilityPort for ScObservabilityAdapter {
-    #[allow(
-        deprecated,
-        reason = "BC.1 retains the CLI ObservabilityPort bridge until the bc.2 typed migration"
-    )]
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
         // The CLI is a short-lived synchronous caller, so per-command flush is
         // the explicit durability barrier here. Do not reuse this adapter as a
         // daemon or async runtime logger without revisiting that contract.
         let event = map_command_event(&self.service_name, &self.target_category, event)?;
-        self.logger.log(event).map_err(map_log_error)?;
-        self.logger.flush().map_err(map_flush_error)
+        self.logger.log_typed(event).map_err(map_log_error)?;
+        self.logger.flush_typed().map_err(map_flush_error)
     }
 
     fn query(&self, req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
@@ -564,24 +560,22 @@ impl ObservabilityPort for ScObservabilityAdapter {
     }
 }
 
-fn map_log_error(source: sc_observability::LogError) -> AtmError {
+fn map_log_error(source: sc_observability::LogFailure) -> AtmError {
     let code = match &source {
-        sc_observability::LogError::InvalidEvent(error) => error.diagnostic().code.as_str(),
-        sc_observability::LogError::WriterDegraded(context)
-        | sc_observability::LogError::ShutdownTimedOut(context) => {
+        sc_observability::LogFailure::InvalidEvent(error) => error.diagnostic().code.as_str(),
+        sc_observability::LogFailure::WriterDegraded(context)
+        | sc_observability::LogFailure::ShutdownTimedOut(context) => {
             context.diagnostic().code.as_str()
         }
+        #[allow(unreachable_patterns)]
+        _ => "SC_OBSERVABILITY_LOGGER_UNKNOWN_FAILURE",
     };
     AtmError::observability_emit(format!(
         "shared observability log admission failed ({code})"
     ))
 }
 
-#[allow(
-    deprecated,
-    reason = "BC.1 maps the published flush error until the bc.2 typed migration"
-)]
-fn map_flush_error(source: sc_observability_types::FlushError) -> AtmError {
+fn map_flush_error(source: sc_observability_types::typed::FlushFailure) -> AtmError {
     let code = source.diagnostic().code.as_str();
     AtmError::observability_emit(format!(
         "shared observability durability flush failed ({code})"

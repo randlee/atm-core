@@ -92,12 +92,8 @@ impl RetainedLogger {
     }
 
     /// Flushes all events admitted before this call to the configured sinks.
-    #[allow(
-        deprecated,
-        reason = "BC.1 retains the legacy flush facade until the bc.2 typed migration"
-    )]
-    pub fn flush(&self) -> Result<(), sc_observability_types::FlushError> {
-        self.0.flush()
+    pub fn flush(&self) -> Result<(), sc_observability_types::typed::FlushFailure> {
+        self.0.flush_typed()
     }
 
     /// Drains the retained-log writer and returns its final health snapshot.
@@ -105,18 +101,14 @@ impl RetainedLogger {
         self.0.shutdown().health()
     }
 
-    #[allow(
-        deprecated,
-        reason = "BC.1 retains the legacy admission facade until the bc.2 typed migration"
-    )]
     pub(crate) fn try_log(&self, event: LogEvent) -> RetainedLogOffer {
         #[cfg(test)]
         if queue_full_for_test() {
             return RetainedLogOffer::QueueFull;
         }
-        match self.0.try_log(event) {
+        match self.0.try_log_typed(event) {
             Ok(()) => RetainedLogOffer::Accepted,
-            Err(sc_observability::TryLogError::QueueFull(_)) => RetainedLogOffer::QueueFull,
+            Err(sc_observability::TryLogFailure::QueueFull(_)) => RetainedLogOffer::QueueFull,
             Err(error) => RetainedLogOffer::Rejected {
                 diagnostic_code: try_log_error_code(&error).to_string(),
             },
@@ -208,10 +200,6 @@ fn backend_level(level: RetainedLogLevel) -> sc_observability_types::LevelFilter
 /// # Errors
 /// Returns [`AtmError::observability_bootstrap`] when the retained log
 /// directory cannot be prepared or the backing logger cannot be built.
-#[allow(
-    deprecated,
-    reason = "BC.1 retains the published logger builder contract until the bc.2 typed migration"
-)]
 pub fn build_retained_logger(
     service_name: &str,
     log_dir: &Path,
@@ -246,8 +234,9 @@ pub fn build_retained_logger(
         maintenance_max_work_per_pass: retained_log_policy.maintenance_max_work_per_pass,
     };
     config.enable_console_sink = false;
-    sc_observability::Logger::builder(config)
-        .map(|builder| RetainedLogger(builder.build()))
+    sc_observability::Logger::builder_typed(config)
+        .and_then(|builder| builder.build_typed())
+        .map(RetainedLogger)
         .map_err(|_| {
             AtmError::observability_bootstrap(
                 "failed to initialize shared daemon observability logger",
@@ -284,14 +273,16 @@ fn queue_full_for_test() -> bool {
     QUEUE_FULL_FOR_TEST.with(std::cell::Cell::get)
 }
 
-fn try_log_error_code(error: &sc_observability::TryLogError) -> &str {
+fn try_log_error_code(error: &sc_observability::TryLogFailure) -> &str {
     match error {
-        sc_observability::TryLogError::InvalidEvent(error) => error.diagnostic().code.as_str(),
-        sc_observability::TryLogError::QueueFull(context)
-        | sc_observability::TryLogError::WriterDegraded(context)
-        | sc_observability::TryLogError::ShutdownTimedOut(context) => {
+        sc_observability::TryLogFailure::InvalidEvent(error) => error.diagnostic().code.as_str(),
+        sc_observability::TryLogFailure::QueueFull(context)
+        | sc_observability::TryLogFailure::WriterDegraded(context)
+        | sc_observability::TryLogFailure::ShutdownTimedOut(context) => {
             context.diagnostic().code.as_str()
         }
+        #[allow(unreachable_patterns)]
+        _ => "SC_OBSERVABILITY_LOGGER_UNKNOWN_FAILURE",
     }
 }
 
