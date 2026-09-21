@@ -316,7 +316,10 @@ fn init_observability(stderr_logs: bool) -> Result<observability::CliObservabili
     )))
 }
 
-#[allow(deprecated)]
+#[allow(
+    deprecated,
+    reason = "BC.1 retains the CLI logger builder contract until the bc.2 typed migration"
+)]
 pub(crate) fn build_logger(
     log_dir: &Path,
     console_log_route: ConsoleLogRoute,
@@ -445,8 +448,11 @@ impl RetainedSinkHealthOverride {
 }
 
 #[cfg(any(test, feature = "fault-injection"))]
-#[allow(deprecated)]
 impl LogSink for RetainedSinkHealthOverride {
+    #[allow(
+        deprecated,
+        reason = "BC.1 keeps the compatibility sink adapter until the bc.2 typed migration"
+    )]
     fn write(
         &self,
         event: &sc_observability_types::LogEvent,
@@ -454,6 +460,10 @@ impl LogSink for RetainedSinkHealthOverride {
         self.inner.write(event)
     }
 
+    #[allow(
+        deprecated,
+        reason = "BC.1 keeps the compatibility sink adapter until the bc.2 typed migration"
+    )]
     fn flush(&self) -> Result<(), sc_observability_types::LogSinkError> {
         self.inner.flush()
     }
@@ -490,8 +500,11 @@ impl ScObservabilityAdapter {
 
 impl atm_core::boundary::sealed::Sealed for ScObservabilityAdapter {}
 
-#[allow(deprecated)]
 impl ObservabilityPort for ScObservabilityAdapter {
+    #[allow(
+        deprecated,
+        reason = "BC.1 retains the CLI ObservabilityPort bridge until the bc.2 typed migration"
+    )]
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
         // The CLI is a short-lived synchronous caller, so per-command flush is
         // the explicit durability barrier here. Do not reuse this adapter as a
@@ -564,7 +577,10 @@ fn map_log_error(source: sc_observability::LogError) -> AtmError {
     ))
 }
 
-#[allow(deprecated)]
+#[allow(
+    deprecated,
+    reason = "BC.1 maps the published flush error until the bc.2 typed migration"
+)]
 fn map_flush_error(source: sc_observability_types::FlushError) -> AtmError {
     let code = source.diagnostic().code.as_str();
     AtmError::observability_emit(format!(

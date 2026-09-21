@@ -68,7 +68,6 @@ pub struct RetainedCommandEvent<'a> {
     pub code: Option<&'a str>,
 }
 
-#[allow(deprecated)]
 impl RetainedLogger {
     /// Projects backend health onto ATM's public doctor contract.
     pub fn health_at(&self, active_log_path: PathBuf) -> Result<AtmObservabilityHealth, AtmError> {
@@ -93,6 +92,10 @@ impl RetainedLogger {
     }
 
     /// Flushes all events admitted before this call to the configured sinks.
+    #[allow(
+        deprecated,
+        reason = "BC.1 retains the legacy flush facade until the bc.2 typed migration"
+    )]
     pub fn flush(&self) -> Result<(), sc_observability_types::FlushError> {
         self.0.flush()
     }
@@ -102,6 +105,10 @@ impl RetainedLogger {
         self.0.shutdown().health()
     }
 
+    #[allow(
+        deprecated,
+        reason = "BC.1 retains the legacy admission facade until the bc.2 typed migration"
+    )]
     pub(crate) fn try_log(&self, event: LogEvent) -> RetainedLogOffer {
         #[cfg(test)]
         if queue_full_for_test() {
@@ -201,7 +208,10 @@ fn backend_level(level: RetainedLogLevel) -> sc_observability_types::LevelFilter
 /// # Errors
 /// Returns [`AtmError::observability_bootstrap`] when the retained log
 /// directory cannot be prepared or the backing logger cannot be built.
-#[allow(deprecated)]
+#[allow(
+    deprecated,
+    reason = "BC.1 retains the published logger builder contract until the bc.2 typed migration"
+)]
 pub fn build_retained_logger(
     service_name: &str,
     log_dir: &Path,
@@ -513,7 +523,6 @@ pub fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmEr
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use atm_core::test_support::FakeEnvSource;
     use tempfile::TempDir;
@@ -587,6 +596,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        deprecated,
+        reason = "BC.1 qualification probes the published builder surface; bc.2 owns typed migration"
+    )]
     fn published_1_4_0_consumer_surface_preserves_logger_contract() {
         let tempdir = TempDir::new().expect("tempdir");
         let log_dir = tempdir.path().join("logs");
