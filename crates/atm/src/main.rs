@@ -573,14 +573,19 @@ impl ObservabilityPort for ScObservabilityAdapter {
 
 fn map_log_error(source: sc_observability::LogFailure) -> AtmError {
     let code = match &source {
-        sc_observability::LogFailure::InvalidEvent(error) => error.diagnostic().code.as_str(),
+        sc_observability::LogFailure::InvalidEvent(error) => Some(error.diagnostic().code.as_str()),
         sc_observability::LogFailure::WriterDegraded(_context)
         | sc_observability::LogFailure::ShutdownTimedOut(_context) => {
-            _context.diagnostic().code.as_str()
+            Some(_context.diagnostic().code.as_str())
         }
         #[allow(unreachable_patterns)]
-        _ => "SC_OBSERVABILITY_LOGGER_UNKNOWN_FAILURE",
+        _ => None,
     };
+    map_log_error_with_code(code)
+}
+
+fn map_log_error_with_code(code: Option<&str>) -> AtmError {
+    let code = code.unwrap_or("SC_OBSERVABILITY_LOGGER_UNKNOWN_FAILURE");
     AtmError::observability_emit(format!(
         "shared observability log admission failed ({code})"
     ))
@@ -982,7 +987,7 @@ mod adapter_tests {
         ATM_LOG_LEVEL_ENV, ATM_RETAINED_SINK_FAULT_ENV, ConsoleLogRoute, ScObservabilityAdapter,
         build_logger, ensure_retained_log_ready, exit_code_for_atm_error, exit_code_for_error,
         init_observability, level_for_outcome, map_flush_error, map_follow_error, map_init_error,
-        map_log_error, map_query_error, tracing_level_filter,
+        map_log_error, map_log_error_with_code, map_query_error, tracing_level_filter,
     };
 
     fn command_event() -> atm_core::observability::CommandEvent {
@@ -1072,90 +1077,108 @@ mod adapter_tests {
     }
 
     #[test]
-    fn typed_failure_mappings_preserve_upstream_codes_before_atm_fallback() {
+    fn typed_failure_mappings_match_literal_historical_matrix() {
+        fn assert_contract(
+            error: &AtmError,
+            code: AtmErrorCode,
+            message: &str,
+            remediation: &str,
+            serialized: &str,
+        ) {
+            assert_eq!(error.code(), code);
+            assert_eq!(error.message(), message);
+            assert_eq!(error.remediation(), remediation);
+            assert!(error.cause().is_none());
+            assert_eq!(error.to_string(), message);
+            assert_eq!(
+                serde_json::to_string(error).expect("stable error JSON"),
+                serialized
+            );
+        }
+
         let init = map_init_error(sc_observability_types::typed::InitFailure::from_context(
             context("SC_TEST_INIT_FAILURE"),
         ));
-        assert_eq!(
-            init.message(),
-            AtmError::observability_bootstrap("failed to initialize shared observability logger")
-                .message()
+        assert_contract(
+            &init,
+            AtmErrorCode::ObservabilityBootstrapFailed,
+            "failed to initialize shared observability logger\n  Recovery: Check the retained-log directory and file permissions, then restart the daemon.",
+            "Check the retained-log directory and file permissions, then restart the daemon.",
+            r#"{"code":"ATM_OBSERVABILITY_BOOTSTRAP_FAILED","message":"failed to initialize shared observability logger\n  Recovery: Check the retained-log directory and file permissions, then restart the daemon."}"#,
         );
-        assert_eq!(
-            init.remediation(),
-            AtmError::observability_bootstrap("failed to initialize shared observability logger")
-                .remediation()
-        );
-        assert!(init.cause().is_none());
+
         let log = map_log_error(sc_observability::LogFailure::WriterDegraded(context(
             "SC_TEST_WRITER_DEGRADED",
         )));
-        assert_eq!(log.code(), AtmErrorCode::ObservabilityEmitFailed);
-        assert_eq!(
-            log.message(),
-            "shared observability log admission failed (SC_TEST_WRITER_DEGRADED)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."
+        assert_contract(
+            &log,
+            AtmErrorCode::ObservabilityEmitFailed,
+            "shared observability log admission failed (SC_TEST_WRITER_DEGRADED)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure.",
+            "Retry the operation; if it persists, inspect daemon health for a logger or lock failure.",
+            r#"{"code":"ATM_OBSERVABILITY_EMIT_FAILED","message":"shared observability log admission failed (SC_TEST_WRITER_DEGRADED)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."}"#,
         );
-        assert_eq!(
-            log.remediation(),
-            "Retry the operation; if it persists, inspect daemon health for a logger or lock failure."
-        );
-        assert!(log.cause().is_none());
-        assert_eq!(log.to_string(), log.message());
-        assert_eq!(
-            serde_json::to_string(&log).expect("stable error JSON"),
-            r#"{"code":"ATM_OBSERVABILITY_EMIT_FAILED","message":"shared observability log admission failed (SC_TEST_WRITER_DEGRADED)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."}"#
-        );
+
         let invalid = map_log_error(sc_observability::LogFailure::InvalidEvent(
             sc_observability_types::typed::EventFailure::from_context(context(
                 "SC_TEST_INVALID_EVENT",
             )),
         ));
-        assert_eq!(
-            invalid.message(),
-            "shared observability log admission failed (SC_TEST_INVALID_EVENT)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."
+        assert_contract(
+            &invalid,
+            AtmErrorCode::ObservabilityEmitFailed,
+            "shared observability log admission failed (SC_TEST_INVALID_EVENT)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure.",
+            "Retry the operation; if it persists, inspect daemon health for a logger or lock failure.",
+            r#"{"code":"ATM_OBSERVABILITY_EMIT_FAILED","message":"shared observability log admission failed (SC_TEST_INVALID_EVENT)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."}"#,
         );
-        assert!(invalid.cause().is_none());
+
         let stopped = map_log_error(sc_observability::LogFailure::ShutdownTimedOut(context(
             "SC_TEST_SHUTDOWN_TIMEOUT",
         )));
-        assert_eq!(
-            stopped.message(),
-            "shared observability log admission failed (SC_TEST_SHUTDOWN_TIMEOUT)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."
+        assert_contract(
+            &stopped,
+            AtmErrorCode::ObservabilityEmitFailed,
+            "shared observability log admission failed (SC_TEST_SHUTDOWN_TIMEOUT)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure.",
+            "Retry the operation; if it persists, inspect daemon health for a logger or lock failure.",
+            r#"{"code":"ATM_OBSERVABILITY_EMIT_FAILED","message":"shared observability log admission failed (SC_TEST_SHUTDOWN_TIMEOUT)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."}"#,
         );
-        assert!(stopped.cause().is_none());
+
         let flush = map_flush_error(sc_observability_types::typed::FlushFailure::from_context(
             context("SC_TEST_FLUSH_FAILURE"),
         ));
-        assert_eq!(flush.code(), AtmErrorCode::ObservabilityEmitFailed);
-        assert_eq!(
-            flush.message(),
-            "shared observability durability flush failed (SC_TEST_FLUSH_FAILURE)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."
+        assert_contract(
+            &flush,
+            AtmErrorCode::ObservabilityEmitFailed,
+            "shared observability durability flush failed (SC_TEST_FLUSH_FAILURE)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure.",
+            "Retry the operation; if it persists, inspect daemon health for a logger or lock failure.",
+            r#"{"code":"ATM_OBSERVABILITY_EMIT_FAILED","message":"shared observability durability flush failed (SC_TEST_FLUSH_FAILURE)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."}"#,
         );
-        assert_eq!(
-            flush.remediation(),
-            "Retry the operation; if it persists, inspect daemon health for a logger or lock failure."
-        );
-        assert!(flush.cause().is_none());
+
         let query = map_query_error(sc_observability_types::QueryError::Shutdown);
-        assert_eq!(
-            query.message(),
-            AtmError::observability_query("shared observability query failed").message()
+        assert_contract(
+            &query,
+            AtmErrorCode::ObservabilityQueryFailed,
+            "shared observability query failed\n  Recovery: Check the retained-log path and permissions before retrying the log operation.",
+            "Check the retained-log path and permissions before retrying the log operation.",
+            r#"{"code":"ATM_OBSERVABILITY_QUERY_FAILED","message":"shared observability query failed\n  Recovery: Check the retained-log path and permissions before retrying the log operation."}"#,
         );
-        assert_eq!(
-            query.remediation(),
-            AtmError::observability_query("shared observability query failed").remediation()
-        );
-        assert!(query.cause().is_none());
+
         let follow = map_follow_error("poll", sc_observability_types::QueryError::Shutdown);
-        assert_eq!(
-            follow.message(),
-            AtmError::observability_follow("shared observability follow poll failed").message()
+        assert_contract(
+            &follow,
+            AtmErrorCode::ObservabilityFollowFailed,
+            "shared observability follow poll failed\n  Recovery: Check the retained-log path and permissions before retrying the log operation.",
+            "Check the retained-log path and permissions before retrying the log operation.",
+            r#"{"code":"ATM_OBSERVABILITY_FOLLOW_FAILED","message":"shared observability follow poll failed\n  Recovery: Check the retained-log path and permissions before retrying the log operation."}"#,
         );
-        assert_eq!(
-            follow.remediation(),
-            AtmError::observability_follow("shared observability follow poll failed").remediation()
+
+        let unknown = map_log_error_with_code(None);
+        assert_contract(
+            &unknown,
+            AtmErrorCode::ObservabilityEmitFailed,
+            "shared observability log admission failed (SC_OBSERVABILITY_LOGGER_UNKNOWN_FAILURE)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure.",
+            "Retry the operation; if it persists, inspect daemon health for a logger or lock failure.",
+            r#"{"code":"ATM_OBSERVABILITY_EMIT_FAILED","message":"shared observability log admission failed (SC_OBSERVABILITY_LOGGER_UNKNOWN_FAILURE)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."}"#,
         );
-        assert!(follow.cause().is_none());
     }
 
     #[test]
