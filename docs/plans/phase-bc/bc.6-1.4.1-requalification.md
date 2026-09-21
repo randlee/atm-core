@@ -123,15 +123,14 @@ the exact lower-branch CI run below.
 
 ### Exact lower-branch CI receipt
 
-PR1552 run `35551718741` is running against the frozen head
+PR1552 run `35551718741` completed successfully against the frozen head
 `1a7c50a1a59afc3ff28edbc8acf5b4391440dd14`. The format,
 lint/classification, source-distribution, macOS/musl/manylinux/Windows wheel,
-Clippy, ABI3, and Ubuntu/macOS Test jobs have passed; the Windows Test job was
-still in progress when this artifact was first published:
+Clippy, ABI3, and all three Test jobs passed:
 
 - Test Ubuntu job `106188365576`: success.
 - Test macOS job `106188365635`: success.
-- Test Windows job `106188365629`: in progress at publication.
+- Test Windows job `106188365629`: success.
 
 This receipt is for the lower implementation branch only; this review layer
 does not modify that branch. No ATM production Rust change is included here:
