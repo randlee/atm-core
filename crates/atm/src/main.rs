@@ -27,7 +27,9 @@ use atm_core::observability::{
     standard_level_for_outcome,
 };
 #[cfg(any(test, feature = "fault-injection"))]
-use atm_observability::retained_sink_fault_mode as shared_retained_sink_fault_mode;
+use atm_observability::{
+    ATM_RETAINED_SINK_FAULT_ENV, retained_sink_fault_mode as shared_retained_sink_fault_mode,
+};
 use atm_observability::{
     RetainedLogLevel, logger_level_override as shared_logger_level_override,
     logger_root_for_log_dir as shared_logger_root_for_log_dir, prepare_retained_log,
@@ -497,6 +499,16 @@ impl ScObservabilityAdapter {
             target_category,
         }
     }
+
+    #[cfg(test)]
+    fn shutdown(self) -> sc_observability_types::LoggingHealthReport {
+        self.logger.shutdown().health()
+    }
+
+    #[cfg(test)]
+    fn flush(&self) -> Result<(), AtmError> {
+        self.logger.flush_typed().map_err(map_flush_error)
+    }
 }
 
 impl atm_core::boundary::sealed::Sealed for ScObservabilityAdapter {}
@@ -965,6 +977,7 @@ fn resolve_adapter_log_dir(_home_dir: &Path) -> Result<PathBuf, AtmError> {
 mod adapter_tests {
     use anyhow::anyhow;
     use atm_core::error::{AtmError, AtmErrorCode};
+    use atm_core::observability::{LogMode, ObservabilityPort};
     use atm_core::test_support::{EnvGuard, FakeEnvSource};
     use sc_observability_types::{
         ErrorCode, ErrorContext, LevelFilter as SharedLevelFilter, Remediation,
@@ -974,10 +987,89 @@ mod adapter_tests {
     use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
     use super::{
-        ATM_LOG_LEVEL_ENV, ensure_retained_log_ready, exit_code_for_atm_error, exit_code_for_error,
+        ATM_LOG_LEVEL_ENV, ATM_RETAINED_SINK_FAULT_ENV, ConsoleLogRoute, ScObservabilityAdapter,
+        build_logger, ensure_retained_log_ready, exit_code_for_atm_error, exit_code_for_error,
         init_observability, level_for_outcome, map_flush_error, map_follow_error, map_init_error,
         map_log_error, map_query_error, tracing_level_filter,
     };
+
+    fn command_event() -> atm_core::observability::CommandEvent {
+        atm_core::observability::CommandEvent {
+            command: "bc3",
+            action: atm_core::observability::action_name("bc3.matrix"),
+            outcome: atm_core::observability::outcome_label("sent"),
+            team: "test-team".parse().expect("team"),
+            agent: "sender-a".parse().expect("agent"),
+            sender: "sender-a".parse().expect("agent"),
+            message_id: None,
+            requires_ack: false,
+            dry_run: false,
+            task_id: None,
+            error_code: None,
+            error_message: None,
+        }
+    }
+
+    #[test]
+    #[serial(env)]
+    fn retained_sink_fault_matrix_exercises_health_query_flush_and_shutdown() {
+        for (mode, expected_state) in [
+            (
+                "degraded",
+                atm_core::observability::AtmObservabilityHealthState::Degraded,
+            ),
+            (
+                "unavailable",
+                atm_core::observability::AtmObservabilityHealthState::Unavailable,
+            ),
+        ] {
+            let tempdir = TempDir::new().expect("tempdir");
+            let log_dir = tempdir.path().join("logs");
+            let service_name = sc_observability_types::ServiceName::new("atm").expect("service");
+            let target =
+                sc_observability_types::TargetCategory::new("atm.command").expect("target");
+            let _env = EnvGuard::set_many([
+                (ATM_LOG_LEVEL_ENV, Some("trace")),
+                (ATM_RETAINED_SINK_FAULT_ENV, Some(mode)),
+            ]);
+            let (logger, active_log_path) =
+                build_logger(&log_dir, ConsoleLogRoute::Disabled, &service_name)
+                    .expect("fault-injection logger");
+            let adapter =
+                ScObservabilityAdapter::new(logger, active_log_path, service_name, target);
+
+            let health = adapter.health().expect("health projection");
+            assert_eq!(health.logging_state, expected_state, "mode={mode}");
+            assert!(
+                health
+                    .detail
+                    .as_deref()
+                    .is_some_and(|detail| detail.contains("writer_state=running")),
+                "mode={mode} health detail={:?}",
+                health.detail
+            );
+            adapter.emit(command_event()).expect("fault matrix emit");
+            adapter.flush().expect("fault matrix flush");
+            let snapshot = adapter
+                .query(atm_core::observability::AtmLogQuery {
+                    mode: LogMode::Snapshot,
+                    levels: Vec::new(),
+                    field_matches: Vec::new(),
+                    since: None,
+                    until: None,
+                    limit: Some(10),
+                    order: atm_core::observability::LogOrder::NewestFirst,
+                })
+                .expect("fault matrix query");
+            assert_eq!(snapshot.records.len(), 1, "mode={mode}");
+            let stopped = adapter.shutdown();
+            assert_eq!(
+                stopped.state,
+                sc_observability_types::LoggingHealthState::Unavailable,
+                "mode={mode} shutdown state"
+            );
+        }
+    }
 
     fn context(code: &'static str) -> Box<ErrorContext> {
         Box::new(ErrorContext::new(
