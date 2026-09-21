@@ -47,8 +47,9 @@ use sc_observability::{ConsoleSink, Logger, LoggerConfig, SinkRegistration};
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability::{JsonlFileSink, RetentionPolicy, RotationPolicy};
 use sc_observability_types::{
-    ActionName, Level, LevelFilter as SharedLevelFilter, LogEvent, LogQuery, OutcomeLabel,
-    ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory, Timestamp,
+    ActionName, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent, LogQuery,
+    OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory,
+    Timestamp,
 };
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability_types::{SinkHealth, SinkHealthState};
@@ -571,18 +572,25 @@ impl ObservabilityPort for ScObservabilityAdapter {
 }
 
 fn map_log_error(source: sc_observability::LogFailure) -> AtmError {
-    match &source {
-        sc_observability::LogFailure::InvalidEvent(_error) => {}
+    let code = match &source {
+        sc_observability::LogFailure::InvalidEvent(error) => error.diagnostic().code.as_str(),
         sc_observability::LogFailure::WriterDegraded(_context)
-        | sc_observability::LogFailure::ShutdownTimedOut(_context) => {}
+        | sc_observability::LogFailure::ShutdownTimedOut(_context) => {
+            _context.diagnostic().code.as_str()
+        }
         #[allow(unreachable_patterns)]
-        _ => {}
-    }
-    AtmError::observability_emit("shared observability log admission failed")
+        _ => "SC_OBSERVABILITY_LOGGER_UNKNOWN_FAILURE",
+    };
+    AtmError::observability_emit(format!(
+        "shared observability log admission failed ({code})"
+    ))
 }
 
-fn map_flush_error(_source: sc_observability_types::typed::FlushFailure) -> AtmError {
-    AtmError::observability_emit("shared observability durability flush failed")
+fn map_flush_error(source: sc_observability_types::typed::FlushFailure) -> AtmError {
+    AtmError::observability_emit(format!(
+        "shared observability durability flush failed ({})",
+        source.diagnostic().code.as_str()
+    ))
 }
 
 fn build_logging_health_detail(
@@ -1082,15 +1090,21 @@ mod adapter_tests {
         let log = map_log_error(sc_observability::LogFailure::WriterDegraded(context(
             "SC_TEST_WRITER_DEGRADED",
         )));
+        assert_eq!(log.code(), AtmErrorCode::ObservabilityEmitFailed);
         assert_eq!(
             log.message(),
-            AtmError::observability_emit("shared observability log admission failed").message()
+            "shared observability log admission failed (SC_TEST_WRITER_DEGRADED)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."
         );
         assert_eq!(
             log.remediation(),
-            AtmError::observability_emit("shared observability log admission failed").remediation()
+            "Retry the operation; if it persists, inspect daemon health for a logger or lock failure."
         );
         assert!(log.cause().is_none());
+        assert_eq!(log.to_string(), log.message());
+        assert_eq!(
+            serde_json::to_string(&log).expect("stable error JSON"),
+            r#"{"code":"ATM_OBSERVABILITY_EMIT_FAILED","message":"shared observability log admission failed (SC_TEST_WRITER_DEGRADED)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."}"#
+        );
         let invalid = map_log_error(sc_observability::LogFailure::InvalidEvent(
             sc_observability_types::typed::EventFailure::from_context(context(
                 "SC_TEST_INVALID_EVENT",
@@ -1098,7 +1112,7 @@ mod adapter_tests {
         ));
         assert_eq!(
             invalid.message(),
-            AtmError::observability_emit("shared observability log admission failed").message()
+            "shared observability log admission failed (SC_TEST_INVALID_EVENT)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."
         );
         assert!(invalid.cause().is_none());
         let stopped = map_log_error(sc_observability::LogFailure::ShutdownTimedOut(context(
@@ -1106,20 +1120,20 @@ mod adapter_tests {
         )));
         assert_eq!(
             stopped.message(),
-            AtmError::observability_emit("shared observability log admission failed").message()
+            "shared observability log admission failed (SC_TEST_SHUTDOWN_TIMEOUT)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."
         );
         assert!(stopped.cause().is_none());
         let flush = map_flush_error(sc_observability_types::typed::FlushFailure::from_context(
             context("SC_TEST_FLUSH_FAILURE"),
         ));
+        assert_eq!(flush.code(), AtmErrorCode::ObservabilityEmitFailed);
         assert_eq!(
             flush.message(),
-            AtmError::observability_emit("shared observability durability flush failed").message()
+            "shared observability durability flush failed (SC_TEST_FLUSH_FAILURE)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."
         );
         assert_eq!(
             flush.remediation(),
-            AtmError::observability_emit("shared observability durability flush failed")
-                .remediation()
+            "Retry the operation; if it persists, inspect daemon health for a logger or lock failure."
         );
         assert!(flush.cause().is_none());
         let query = map_query_error(sc_observability_types::QueryError::Shutdown);

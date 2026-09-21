@@ -60,3 +60,7 @@ degraded/unavailable health seam or require an upstream API change.
 - The bc.6 published-consumer qualification still passes, including health,
   queue-full, flush, shutdown, and query probes. Public ATM JSON/error/doctor
   fixtures remain byte-for-byte unchanged.
+
+### bc.2 review-fix-5 receipt
+
+This layer is based on immediate parent `fc4e1fff50b35b8d0e054808c774c4523591bb54`; historical public-contract goldens are frozen against `df7a094e`. Production coverage is limited to the CLI adapter and SQLite-backed retained logger. Other backend paths are unsupported by this fault matrix and are not claimed as tested. The production/test LOC split and CLI test count are recorded from the current tree, not inferred from a live constructor.
