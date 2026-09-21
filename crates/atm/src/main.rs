@@ -316,10 +316,6 @@ fn init_observability(stderr_logs: bool) -> Result<observability::CliObservabili
     )))
 }
 
-#[allow(
-    deprecated,
-    reason = "BC.1 retains the CLI logger builder contract until the bc.2 typed migration"
-)]
 pub(crate) fn build_logger(
     log_dir: &Path,
     console_log_route: ConsoleLogRoute,
@@ -336,9 +332,7 @@ pub(crate) fn build_logger(
     // ATM CLI owns stdout/stderr UX by default; only opt into a shared
     // console sink when the CLI routing rule explicitly selects one.
     config.enable_console_sink = false;
-    let mut builder = Logger::builder(config).map_err(|_source| {
-        AtmError::observability_bootstrap("failed to initialize shared observability logger")
-    })?;
+    let mut builder = Logger::builder_typed(config).map_err(map_init_error)?;
     if console_log_route == ConsoleLogRoute::Stderr {
         builder.register_sink(SinkRegistration::new(Arc::new(ConsoleSink::stderr())));
     }
@@ -346,7 +340,16 @@ pub(crate) fn build_logger(
     if let Some(mode) = retained_sink_fault_mode()? {
         register_retained_sink_fault(&mut builder, log_dir, mode);
     }
-    Ok((builder.build(), active_log_path))
+    let logger = builder.build_typed().map_err(map_init_error)?;
+    Ok((logger, active_log_path))
+}
+
+fn map_init_error(source: sc_observability_types::typed::InitFailure) -> AtmError {
+    let diagnostic = source.diagnostic();
+    AtmError::observability_bootstrap(format!(
+        "failed to initialize shared observability logger ({})",
+        diagnostic.code.as_str()
+    ))
 }
 
 #[cfg(test)]
@@ -451,7 +454,7 @@ impl RetainedSinkHealthOverride {
 impl LogSink for RetainedSinkHealthOverride {
     #[allow(
         deprecated,
-        reason = "BC.1 keeps the compatibility sink adapter until the bc.2 typed migration"
+        reason = "sc-observability 1.4.1 retains the LogSinkError trait boundary; the typed sink trait is not contract-equivalent"
     )]
     fn write(
         &self,
@@ -462,7 +465,7 @@ impl LogSink for RetainedSinkHealthOverride {
 
     #[allow(
         deprecated,
-        reason = "BC.1 keeps the compatibility sink adapter until the bc.2 typed migration"
+        reason = "sc-observability 1.4.1 retains the LogSinkError trait boundary; the typed sink trait is not contract-equivalent"
     )]
     fn flush(&self) -> Result<(), sc_observability_types::LogSinkError> {
         self.inner.flush()
@@ -891,11 +894,15 @@ fn level_for_outcome(outcome: &str) -> Level {
 }
 
 fn map_query_error(_source: QueryError) -> AtmError {
-    AtmError::observability_query("shared observability query failed")
+    let code = _source.code().as_str().to_owned();
+    AtmError::observability_query(format!("shared observability query failed ({code})"))
 }
 
-fn map_follow_error(phase: &str, _source: QueryError) -> AtmError {
-    AtmError::observability_follow(format!("shared observability follow {phase} failed"))
+fn map_follow_error(phase: &str, source: QueryError) -> AtmError {
+    let code = source.code().as_str().to_owned();
+    AtmError::observability_follow(format!(
+        "shared observability follow {phase} failed ({code})"
+    ))
 }
 
 fn map_diagnostic_summary(
@@ -959,15 +966,46 @@ mod adapter_tests {
     use anyhow::anyhow;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::test_support::{EnvGuard, FakeEnvSource};
-    use sc_observability_types::LevelFilter as SharedLevelFilter;
+    use sc_observability_types::{
+        ErrorCode, ErrorContext, LevelFilter as SharedLevelFilter, Remediation,
+    };
     use serial_test::serial;
     use tempfile::TempDir;
     use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
     use super::{
         ATM_LOG_LEVEL_ENV, ensure_retained_log_ready, exit_code_for_atm_error, exit_code_for_error,
-        init_observability, level_for_outcome, tracing_level_filter,
+        init_observability, level_for_outcome, map_flush_error, map_follow_error, map_init_error,
+        map_log_error, map_query_error, tracing_level_filter,
     };
+
+    fn context(code: &'static str) -> Box<ErrorContext> {
+        Box::new(ErrorContext::new(
+            ErrorCode::new_static(code),
+            "synthetic failure",
+            Remediation::recoverable("retry", ["inspect health"]),
+        ))
+    }
+
+    #[test]
+    fn typed_failure_mappings_preserve_upstream_codes_before_atm_fallback() {
+        let init = map_init_error(sc_observability_types::typed::InitFailure::from_context(
+            context("SC_TEST_INIT_FAILURE"),
+        ));
+        assert!(init.message().contains("SC_TEST_INIT_FAILURE"));
+        let log = map_log_error(sc_observability::LogFailure::WriterDegraded(context(
+            "SC_TEST_WRITER_DEGRADED",
+        )));
+        assert!(log.message().contains("SC_TEST_WRITER_DEGRADED"));
+        let flush = map_flush_error(sc_observability_types::typed::FlushFailure::from_context(
+            context("SC_TEST_FLUSH_FAILURE"),
+        ));
+        assert!(flush.message().contains("SC_TEST_FLUSH_FAILURE"));
+        let query = map_query_error(sc_observability_types::QueryError::Shutdown);
+        assert!(query.message().contains("SC_LOG_QUERY_SHUTDOWN"));
+        let follow = map_follow_error("poll", sc_observability_types::QueryError::Shutdown);
+        assert!(follow.message().contains("SC_LOG_QUERY_SHUTDOWN"));
+    }
 
     #[test]
     fn unknown_outcome_maps_to_warn() {

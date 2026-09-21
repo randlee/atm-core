@@ -587,10 +587,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        deprecated,
-        reason = "BC.1 qualification probes the published builder surface; bc.2 owns typed migration"
-    )]
     fn published_1_4_0_consumer_surface_preserves_logger_contract() {
         let tempdir = TempDir::new().expect("tempdir");
         let log_dir = tempdir.path().join("logs");
@@ -612,6 +608,12 @@ mod tests {
             health.logging_state,
             AtmObservabilityHealthState::Healthy
         ));
+        assert!(
+            health
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains("writer_state=running"))
+        );
 
         let accepted = logger
             .try_log_command(RetainedCommandEvent {
@@ -637,15 +639,53 @@ mod tests {
         let shutdown = logger.shutdown();
         assert!(shutdown.queue_capacity > 0);
 
-        let query_logger = Logger::builder(LoggerConfig::default_for(
+        let query_logger = Logger::builder_typed(LoggerConfig::default_for(
             ServiceName::new("atm-query").expect("service"),
             tempdir.path().join("query"),
         ))
         .expect("published 1.4.0 builder")
-        .build();
+        .build_typed()
+        .expect("typed query logger");
         query_logger
             .query(&LogQuery::default())
             .expect("query surface");
         let _ = query_logger.shutdown();
+    }
+
+    #[test]
+    fn typed_facade_rejects_invalid_admission_and_keeps_queue_full_distinct() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let policy = RetainedLogPolicy {
+            rotation_max_bytes: 4096,
+            rotation_max_files: 2,
+            retention_max_age: Duration::from_secs(60),
+            maintenance_cadence: Duration::from_secs(60),
+            writer_shutdown_timeout: Duration::from_secs(2),
+            maintenance_max_work_per_pass: Some(4),
+        };
+        let logger = build_retained_logger("atm", tempdir.path(), policy, None).expect("logger");
+        let invalid = logger
+            .try_log_command(RetainedCommandEvent {
+                target: "atm.test",
+                action: "",
+                outcome: "ok",
+                code: None,
+            })
+            .expect_err("invalid action must be rejected");
+        assert_eq!(
+            invalid.code(),
+            atm_core::error::AtmErrorCode::ObservabilityEmitFailed
+        );
+        let queue_full = RetainedLogger::force_queue_full_for_test(|| {
+            logger.try_log_command(RetainedCommandEvent {
+                target: "atm.test",
+                action: "qualification",
+                outcome: "ok",
+                code: None,
+            })
+        })
+        .expect("queue-full admission");
+        assert_eq!(queue_full, RetainedLogOffer::QueueFull);
+        let _ = logger.shutdown();
     }
 }
