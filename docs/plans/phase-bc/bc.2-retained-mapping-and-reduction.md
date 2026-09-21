@@ -6,15 +6,26 @@ The public ATM contracts remain unchanged.
 
 ## Removed production lines
 
-Compared with the frozen bc.6 parent (`1c9de8f45b52ac250e3e40d24c8e15d442a4a119`):
+Compared with the authoritative frozen parent (`0702bc285e1578e859754278ebb6dda2c87b0542`):
 
 | Location | Removed/replaced production lines | Reason |
 | --- | ---: | --- |
-| `crates/atm-observability/src/lib.rs` | 23 removed, 16 added | Remove deprecated `Logger::builder`, `Logger::try_log`, and `Logger::flush` calls and their allowances; use `builder_typed/build_typed`, `try_log_typed`, and `flush_typed`. |
-| `crates/atm/src/main.rs` | 15 removed, 7 added | Map typed `LogFailure`/`FlushFailure` while preserving the existing ATM error code/message contract. |
-| **Net** | **38 removed, 23 added (15 fewer production lines)** | No public facade or JSON fixture change. |
+| `crates/atm-observability/src/lib.rs` | 0 removed, 0 added | Lower typed migration is inherited unchanged from the frozen parent. |
+| `crates/atm/src/main.rs` | 27 removed, 108 added | Preserve governed ATM message/remediation byte shape while retaining upstream diagnostics in the internal `cause` channel and expanding golden mappings. |
+| **Net** | **27 removed, 108 added (81 net lines)** | Public ATM error/message/remediation shape remains unchanged; only internal cause and tests expand. |
 
 ## Intentionally retained mappings
+
+### Deprecated sink boundary inventory
+
+The two `LogSink::{write,flush}` implementations in the CLI fault-injection
+adapter deliberately retain upstream `LogSinkError` because sc-observability
+1.4.1 exposes that compatibility trait as the only contract-compatible way to
+wrap a sink and override health state. They are compiled only for `test` or
+`fault-injection`; production admission and durability use the typed logger
+facade (`log_typed`/`flush_typed`). The typed sink trait is not
+contract-equivalent, so removing these allowances would either remove the
+degraded/unavailable health seam or require an upstream API change.
 
 - `RetainedLogOffer::{Accepted, QueueFull, Rejected}` remains ATM-owned. The
   non-blocking daemon admission contract must distinguish queue-full from other
@@ -41,7 +52,7 @@ Compared with the frozen bc.6 parent (`1c9de8f45b52ac250e3e40d24c8e15d442a4a119`
   codes consumed by the previous compatibility enums through
   `DiagnosticInfo::diagnostic()`.
 - Focused tests passed: `cargo test -p atm-observability -p agent-team-mail`
-  (`atm-observability`: 16 unit tests + 1 doctest; CLI: 312 unit tests and
+  (`atm-observability`: 17 unit tests + 1 doctest; CLI: 313 unit tests and
   all integration suites).
 - The bc.6 published-consumer qualification still passes, including health,
   queue-full, flush, shutdown, and query probes. Public ATM JSON/error/doctor

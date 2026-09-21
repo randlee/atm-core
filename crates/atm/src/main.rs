@@ -346,10 +346,8 @@ pub(crate) fn build_logger(
 
 fn map_init_error(source: sc_observability_types::typed::InitFailure) -> AtmError {
     let diagnostic = source.diagnostic();
-    AtmError::observability_bootstrap(format!(
-        "failed to initialize shared observability logger ({})",
-        diagnostic.code.as_str()
-    ))
+    AtmError::observability_bootstrap("failed to initialize shared observability logger")
+        .with_cause(diagnostic_cause(diagnostic))
 }
 
 #[cfg(test)]
@@ -564,25 +562,22 @@ impl ObservabilityPort for ScObservabilityAdapter {
 }
 
 fn map_log_error(source: sc_observability::LogFailure) -> AtmError {
-    let code = match &source {
-        sc_observability::LogFailure::InvalidEvent(error) => error.diagnostic().code.as_str(),
+    let cause = match &source {
+        sc_observability::LogFailure::InvalidEvent(error) => diagnostic_cause(error.diagnostic()),
         sc_observability::LogFailure::WriterDegraded(context)
         | sc_observability::LogFailure::ShutdownTimedOut(context) => {
-            context.diagnostic().code.as_str()
+            diagnostic_cause(context.diagnostic())
         }
         #[allow(unreachable_patterns)]
-        _ => "SC_OBSERVABILITY_LOGGER_UNKNOWN_FAILURE",
+        _ => format!("upstream log failure: {source:?}"),
     };
-    AtmError::observability_emit(format!(
-        "shared observability log admission failed ({code})"
-    ))
+    AtmError::observability_emit("shared observability log admission failed").with_cause(cause)
 }
 
 fn map_flush_error(source: sc_observability_types::typed::FlushFailure) -> AtmError {
-    let code = source.diagnostic().code.as_str();
-    AtmError::observability_emit(format!(
-        "shared observability durability flush failed ({code})"
-    ))
+    let diagnostic = source.diagnostic();
+    AtmError::observability_emit("shared observability durability flush failed")
+        .with_cause(diagnostic_cause(diagnostic))
 }
 
 fn build_logging_health_detail(
@@ -893,16 +888,21 @@ fn level_for_outcome(outcome: &str) -> Level {
     }
 }
 
-fn map_query_error(_source: QueryError) -> AtmError {
-    let code = _source.code().as_str().to_owned();
-    AtmError::observability_query(format!("shared observability query failed ({code})"))
+fn map_query_error(source: QueryError) -> AtmError {
+    let diagnostic = source.diagnostic();
+    AtmError::observability_query("shared observability query failed")
+        .with_cause(diagnostic_cause(diagnostic))
 }
 
 fn map_follow_error(phase: &str, source: QueryError) -> AtmError {
-    let code = source.code().as_str().to_owned();
-    AtmError::observability_follow(format!(
-        "shared observability follow {phase} failed ({code})"
-    ))
+    let diagnostic = source.diagnostic();
+    AtmError::observability_follow(format!("shared observability follow {phase} failed"))
+        .with_cause(diagnostic_cause(diagnostic))
+}
+
+fn diagnostic_cause(diagnostic: &sc_observability_types::Diagnostic) -> String {
+    serde_json::to_string(diagnostic)
+        .unwrap_or_else(|_| format!("upstream diagnostic code={}", diagnostic.code.as_str()))
 }
 
 fn map_diagnostic_summary(
@@ -992,19 +992,100 @@ mod adapter_tests {
         let init = map_init_error(sc_observability_types::typed::InitFailure::from_context(
             context("SC_TEST_INIT_FAILURE"),
         ));
-        assert!(init.message().contains("SC_TEST_INIT_FAILURE"));
+        assert_eq!(
+            init.message(),
+            AtmError::observability_bootstrap("failed to initialize shared observability logger")
+                .message()
+        );
+        assert_eq!(
+            init.remediation(),
+            AtmError::observability_bootstrap("failed to initialize shared observability logger")
+                .remediation()
+        );
+        assert!(
+            init.cause()
+                .is_some_and(|cause| cause.contains("SC_TEST_INIT_FAILURE"))
+        );
         let log = map_log_error(sc_observability::LogFailure::WriterDegraded(context(
             "SC_TEST_WRITER_DEGRADED",
         )));
-        assert!(log.message().contains("SC_TEST_WRITER_DEGRADED"));
+        assert_eq!(
+            log.message(),
+            AtmError::observability_emit("shared observability log admission failed").message()
+        );
+        assert_eq!(
+            log.remediation(),
+            AtmError::observability_emit("shared observability log admission failed").remediation()
+        );
+        assert!(
+            log.cause()
+                .is_some_and(|cause| cause.contains("SC_TEST_WRITER_DEGRADED"))
+        );
+        let invalid = map_log_error(sc_observability::LogFailure::InvalidEvent(
+            sc_observability_types::typed::EventFailure::from_context(context(
+                "SC_TEST_INVALID_EVENT",
+            )),
+        ));
+        assert_eq!(invalid.message(), log.message());
+        assert!(
+            invalid
+                .cause()
+                .is_some_and(|cause| cause.contains("SC_TEST_INVALID_EVENT"))
+        );
+        let stopped = map_log_error(sc_observability::LogFailure::ShutdownTimedOut(context(
+            "SC_TEST_SHUTDOWN_TIMEOUT",
+        )));
+        assert_eq!(stopped.message(), log.message());
+        assert!(
+            stopped
+                .cause()
+                .is_some_and(|cause| cause.contains("SC_TEST_SHUTDOWN_TIMEOUT"))
+        );
         let flush = map_flush_error(sc_observability_types::typed::FlushFailure::from_context(
             context("SC_TEST_FLUSH_FAILURE"),
         ));
-        assert!(flush.message().contains("SC_TEST_FLUSH_FAILURE"));
+        assert_eq!(
+            flush.message(),
+            AtmError::observability_emit("shared observability durability flush failed").message()
+        );
+        assert_eq!(
+            flush.remediation(),
+            AtmError::observability_emit("shared observability durability flush failed")
+                .remediation()
+        );
+        assert!(
+            flush
+                .cause()
+                .is_some_and(|cause| cause.contains("SC_TEST_FLUSH_FAILURE"))
+        );
         let query = map_query_error(sc_observability_types::QueryError::Shutdown);
-        assert!(query.message().contains("SC_LOG_QUERY_SHUTDOWN"));
+        assert_eq!(
+            query.message(),
+            AtmError::observability_query("shared observability query failed").message()
+        );
+        assert_eq!(
+            query.remediation(),
+            AtmError::observability_query("shared observability query failed").remediation()
+        );
+        assert!(
+            query
+                .cause()
+                .is_some_and(|cause| cause.contains("SC_LOG_QUERY_SHUTDOWN"))
+        );
         let follow = map_follow_error("poll", sc_observability_types::QueryError::Shutdown);
-        assert!(follow.message().contains("SC_LOG_QUERY_SHUTDOWN"));
+        assert_eq!(
+            follow.message(),
+            AtmError::observability_follow("shared observability follow poll failed").message()
+        );
+        assert_eq!(
+            follow.remediation(),
+            AtmError::observability_follow("shared observability follow poll failed").remediation()
+        );
+        assert!(
+            follow
+                .cause()
+                .is_some_and(|cause| cause.contains("SC_LOG_QUERY_SHUTDOWN"))
+        );
     }
 
     #[test]
