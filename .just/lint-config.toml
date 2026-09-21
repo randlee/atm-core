@@ -143,7 +143,6 @@ allowed_dependencies = ["async-trait", "atm-error", "atm-runtime-test-support", 
 owner_manifest_path = "crates/atm-observability/Cargo.toml"
 boundary_record_path = "boundaries/atm-observability/tracing-bridge.toml"
 allowed_dependencies = ["atm-core", "sc-observability", "sc-observability-log", "sc-observability-types", "serde_json", "serial_test", "tempfile", "tokio", "tracing", "tracing-subscriber", "trybuild"]
-allowed_dev_dependencies = ["atm-core", "sc-observability-log", "serial_test", "tempfile", "tokio", "trybuild"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-error/Cargo.toml"
