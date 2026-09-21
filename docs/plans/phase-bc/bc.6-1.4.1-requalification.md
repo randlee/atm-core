@@ -117,32 +117,37 @@ unrun local macro command is claimed here.
 - `cargo clippy --workspace --all-targets -- -D warnings`: passed.
 - `git diff --check`: passed.
 
-### bc.6 top-layer requalification receipt
+### BC3 corrective top-layer receipt
 
-The corrective top layer was executed at the exact branch head recorded by
-the stack owner. The isolated macro fixture and the ATM fault matrix both
-passed with the following reproducible commands:
+This corrective review layer was evaluated against frozen parent
+`db7fab658728dd121b0cfca757cd89372bf0ffd6` at implementation head
+`e4089bc2c457243674b0e0056bc789159f89621c`. It does not modify or rebase the
+lower BC2/BC6 branches.
+
+The exact locked commands and results were:
 
 ```text
-cargo test -p atm-observability --test macro_qualification
+cargo test --locked -p atm-observability --all-features
+# 17 unit tests, 2 macro qualification tests, and 1 doctest passed
+cargo test --locked -p agent-team-mail --all-features --bin atm adapter_tests::retained_sink_fault_matrix_exercises_health_query_flush_and_shutdown -- --exact --nocapture
+# 1 retained-sink fault-matrix test passed; 313 other ATM unit tests filtered
 python3 .just/lint_boundaries.py
-cargo test -p agent-team-mail -p atm-observability --all-features
+# boundaries passed
+cargo fmt --all --check
+# passed
+cargo clippy --workspace --all-targets -- -D warnings
+# passed
 ```
 
-The macro fixture passed its trybuild supported/rejected cases plus the
-runtime assertions for exact event cardinality, duplicate actions, async
-error and panic completion, deterministic cancellation handshake, target and
-correlation shape, bounded output, sensitive-string absence, retained JSONL
-timestamps, zero dropped events, flush, and shutdown. The all-features ATM
-run passed 313 CLI unit tests and the complete observability adapter matrix
-covering degraded, unavailable, queue-full, health/detail, query, flush, and
-shutdown paths. Boundary lint passed with the dev-only macro allowlist
-(`sc-observability-log`, `tokio`, and `trybuild`) documented separately from
-the production tracing bridge dependencies.
-
-The focused observability tests cover the local fault/queue, health, query,
-flush, and shutdown behavior. The complete cross-platform consumer gate is
-the exact lower-branch CI run below.
+The macro fixture now has positive evidence for a denylisted value being
+redacted and explicitly records the upstream retained outcomes for a 40 KiB
+value and 16 excess fields. It bounds only the normal events and documents
+that ATM rejection/allowlist parity remains unsupported. The focused ATM
+matrix executes both injected `degraded` and `unavailable` modes and asserts
+health state/detail, emit, explicit flush, isolated query, and terminal
+shutdown. Queue-full classification remains covered by the locked
+`atm-observability` typed-facade and tracing-bridge tests; it is not claimed
+as an outcome of the sink-health override itself.
 
 ### Exact lower-branch CI receipt
 
