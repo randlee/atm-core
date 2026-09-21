@@ -1,8 +1,8 @@
 # bc.1 sc-observability 1.4.0 qualification
 
 status: in-review
-branch: fix/bc1-review-1
-worktree: /Users/randlee/github/atm-core-worktrees/fix/bc1-review-1
+branch: fix/bc1-review-2
+worktree: /Users/randlee/github/atm-core-worktrees/fix/bc1-review-2
 
 ## Scope
 
@@ -41,10 +41,45 @@ global log bridge.
 ## Independent offline extracted-package qualification
 
 The cached `sc-observability-1.4.0.crate` and
-`sc-observability-types-1.4.0.crate` archives were extracted into an isolated
-temporary consumer, with the types archive supplied through `[patch.crates-io]`.
-The consumer uses `Logger::builder_typed`, `build_typed`, and `shutdown`.
-These commands passed without network access:
+`sc-observability-types-1.4.0.crate` archives are extracted into an isolated
+temporary consumer. A fresh reviewer must create these two files exactly before
+running the offline commands; no repository production code is involved.
+
+`Cargo.toml`:
+
+```toml
+[package]
+name = "bc1-offline-consumer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sc-observability = { path = "vendor/sc-observability-1.4.0" }
+sc-observability-types = { path = "vendor/sc-observability-types-1.4.0" }
+
+[patch.crates-io]
+sc-observability-types = { path = "vendor/sc-observability-types-1.4.0" }
+```
+
+`src/main.rs`:
+
+```rust
+use std::path::PathBuf;
+
+use sc_observability::{Logger, LoggerConfig};
+use sc_observability_types::ServiceName;
+
+fn main() {
+    let service = ServiceName::new("bc1-offline-consumer").expect("valid service name");
+    let config = LoggerConfig::default_for(service, PathBuf::from("target/logs"));
+    let builder = Logger::builder_typed(config).expect("published 1.4.0 builder");
+    let logger = builder.build_typed().expect("published 1.4.0 logger");
+    let _stopped = logger.shutdown();
+}
+```
+
+From the temporary consumer root, extract both cached archives into `vendor/`,
+then run these commands without network access:
 
 ```text
 tar -xzf ~/.cargo/registry/cache/index.crates.io-1949cf8c6b5b557f/sc-observability-1.4.0.crate -C vendor
@@ -54,7 +89,8 @@ cargo check --offline --locked
 cargo run --offline --locked --quiet
 ```
 
-Result: the extracted-package consumer compiled and ran successfully.
+Result: the complete recipe was re-run in a fresh temporary directory on this
+layer; the extracted-package consumer compiled and ran successfully.
 
 ## Compatibility edit inventory
 
@@ -93,8 +129,22 @@ The three `just lint ...` wrappers were unavailable in this worktree because
 targets passed with the system Python. This is recorded rather than claiming
 the missing wrapper environment ran.
 
-Linux and Windows results are not claimed from this macOS worktree; no CI run
-is attributed to this artifact.
+## Exact-head cross-platform CI
+
+PR1548 is the exact-head CI source for the lower review layer:
+
+| item | value |
+|---|---|
+| PR | `1548` |
+| head SHA | `f8d0778efb5e449eff1a1de82d2f705d3f3d2e8a` |
+| CI run | `35547460903` |
+
+The run includes the required actual `Test (ubuntu-latest)`,
+`Test (macos-latest)`, and `Test (windows-latest)` jobs for this runtime change.
+Their final conclusions are intentionally recorded only after the run
+completes; packaging jobs are not substituted for those tests. bc.1 remains
+`in-review` until all three test jobs pass at this exact head and establish the
+sprint's cross-platform acceptance.
 
 ## Historical preservation
 
