@@ -40,13 +40,13 @@ class EcosystemPinTests(unittest.TestCase):
         self.assertNotEqual(unknown_output["schema_version"], 1)
 
     def test_exact_cargo_versions_compare_with_bare_registry_versions(self) -> None:
-        self.assertEqual(VALIDATE_RELEASE.normalized_dependency_version("=1.2.0"), "1.2.0")
-        self.assertEqual(VALIDATE_RELEASE.normalized_dependency_version("  1.2.0  "), "1.2.0")
+        self.assertEqual(VALIDATE_RELEASE.normalized_dependency_version("=1.4.0"), "1.4.0")
+        self.assertEqual(VALIDATE_RELEASE.normalized_dependency_version("  1.4.0  "), "1.4.0")
 
     def test_workspace_dependencies_are_visible_to_currency_inventory(self) -> None:
         dependencies = VALIDATE_RELEASE.direct_registry_dependencies(REPO_ROOT)
-        self.assertEqual(dependencies["sc-observability"], "=1.2.0")
-        self.assertEqual(dependencies["sc-observability-types"], "=1.2.0")
+        self.assertEqual(dependencies["sc-observability"], "=1.4.0")
+        self.assertEqual(dependencies["sc-observability-types"], "=1.4.0")
 
     @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0")
     @mock.patch.object(VALIDATE_RELEASE, "latest_registry_version")
@@ -59,8 +59,8 @@ class EcosystemPinTests(unittest.TestCase):
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
             "sc-composer": "1.6.1",
-            "sc-observability": "1.2.0",
-            "sc-observability-types": "1.2.0",
+            "sc-observability": "1.4.0",
+            "sc-observability-types": "1.4.0",
         }[dependency]
         findings: list[VALIDATE_RELEASE.Finding] = []
 
@@ -95,8 +95,8 @@ class EcosystemPinTests(unittest.TestCase):
         file_issue.assert_any_call(
             REPO_ROOT,
             [
-                ("sc-observability", "=1.2.0", "1.5.0"),
-                ("sc-observability-types", "=1.2.0", "1.5.0"),
+                ("sc-observability", "=1.4.0", "1.5.0"),
+                ("sc-observability-types", "=1.4.0", "1.5.0"),
             ],
         )
 
@@ -127,8 +127,8 @@ class EcosystemPinTests(unittest.TestCase):
             evidence = root / "evidence.md"
             latest_registry.side_effect = lambda _root, dependency: {
                 "sc-composer": "1.6.1",
-                "sc-observability": "1.2.0",
-                "sc-observability-types": "1.2.0",
+                "sc-observability": "1.4.0",
+                "sc-observability-types": "1.4.0",
             }[dependency]
             findings: list[VALIDATE_RELEASE.Finding] = []
             with (
@@ -140,6 +140,7 @@ class EcosystemPinTests(unittest.TestCase):
                             {
                                 "wyvern": "0.5.0",
                                 "sc-composer": "1.4.1",
+                                # Historical rollback fixture: the live baseline is 1.4.0.
                                 "sc-observability": "1.1.0",
                             }
                         ),
@@ -184,8 +185,8 @@ class EcosystemPinTests(unittest.TestCase):
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
             "sc-composer": "1.6.1",
-            "sc-observability": "1.2.0",
-            "sc-observability-types": "1.2.0",
+            "sc-observability": "1.4.0",
+            "sc-observability-types": "1.4.0",
         }[dependency]
         before = {
             path: path.read_text(encoding="utf-8")
@@ -201,6 +202,7 @@ class EcosystemPinTests(unittest.TestCase):
             {
                 VALIDATE_RELEASE.ECOSYSTEM_FIX_FORWARD_ENV: "1",
                 VALIDATE_RELEASE.ECOSYSTEM_KNOWN_GOOD_ENV: json.dumps(
+                    # Historical rollback fixture: the live baseline is 1.4.0.
                     {"sc-composer": "1.4.1", "sc-observability": "1.1.0", "wyvern": "0.4.0"}
                 ),
             },
@@ -233,8 +235,8 @@ class EcosystemPinTests(unittest.TestCase):
             }
             latest_registry = {
                 "sc-composer": "1.6.1",
-                "sc-observability": "1.2.0",
-                "sc-observability-types": "1.2.0",
+                "sc-observability": "1.4.0",
+                "sc-observability-types": "1.4.0",
             }
             findings: list[VALIDATE_RELEASE.Finding] = []
             with (
@@ -306,9 +308,9 @@ class EcosystemPinTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             cargo = root / "Cargo.toml"
-            cargo.write_text('sc-observability = "=1.2.0"\nsc-observability = "=1.2.0"\n', encoding="utf-8")
+            cargo.write_text('sc-observability = "=1.4.0"\nsc-observability = "=1.4.0"\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "exactly one"):
-                VALIDATE_RELEASE.replace_cargo_exact_pin(cargo, "sc-observability", "1.1.0")
+                VALIDATE_RELEASE.replace_cargo_exact_pin(cargo, "sc-observability", "1.3.0")
             wyvern = root / "send-to.sh"
             wyvern.write_text('WYVERN_PIN="0.5.0"\nWYVERN_PIN="0.5.0"\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "exactly one"):
@@ -332,7 +334,7 @@ class EcosystemPinTests(unittest.TestCase):
             )
             findings: list[VALIDATE_RELEASE.Finding] = []
             with (
-                mock.patch.object(VALIDATE_RELEASE, "latest_registry_version", return_value="1.2.0"),
+                mock.patch.object(VALIDATE_RELEASE, "latest_registry_version", return_value="1.4.0"),
                 mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0"),
                 mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/wyvern"),
             ):
