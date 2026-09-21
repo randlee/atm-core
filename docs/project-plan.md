@@ -1842,7 +1842,8 @@ team-lead lands the final status when the phase PR merges.
 
 ## 61. phase bc — immutable releases and observability consolidation [planning]
 
-phase bc qualifies the published `sc-observability` `1.4.0` family before
+phase bc qualifies the published `sc-observability` `1.4.1` family (with the
+frozen 1.4.0 qualification retained as history) before
 adopting bounded typed and logging improvements, then consumes a separately
 qualified `sc-publish` revision before immutable releases are enabled for
 atm-core. The authoritative plan is

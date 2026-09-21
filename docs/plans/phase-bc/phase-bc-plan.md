@@ -38,9 +38,10 @@ This phase will:
 ## 3. facts established by discovery
 
 - atm-core now pins `sc-observability` and
-  `sc-observability-types` at exact `=1.4.0` workspace versions on bc.1.
-- `1.4.0` is published and cached locally. `1.4.1` is not published and no
-  `v1.4.1` tag exists at plan time.
+  `sc-observability-types` at exact `=1.4.1` workspace versions on bc.6.
+- `1.4.1` is published and independently verified, including npm
+  `@synaptic-canvas/sc-observability@1.4.1`; the consumed lockfile is the
+  authoritative package inventory.
 - sc-observability
   [PR #197](https://github.com/randlee/sc-observability/pull/197) carries the
   `1.4.1` execution checklist. `cobs@sc-obs` owns upstream version, manifest,

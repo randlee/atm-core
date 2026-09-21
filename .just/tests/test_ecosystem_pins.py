@@ -40,13 +40,13 @@ class EcosystemPinTests(unittest.TestCase):
         self.assertNotEqual(unknown_output["schema_version"], 1)
 
     def test_exact_cargo_versions_compare_with_bare_registry_versions(self) -> None:
-        self.assertEqual(VALIDATE_RELEASE.normalized_dependency_version("=1.4.0"), "1.4.0")
-        self.assertEqual(VALIDATE_RELEASE.normalized_dependency_version("  1.4.0  "), "1.4.0")
+        self.assertEqual(VALIDATE_RELEASE.normalized_dependency_version("=1.4.1"), "1.4.1")
+        self.assertEqual(VALIDATE_RELEASE.normalized_dependency_version("  1.4.1  "), "1.4.1")
 
     def test_workspace_dependencies_are_visible_to_currency_inventory(self) -> None:
         dependencies = VALIDATE_RELEASE.direct_registry_dependencies(REPO_ROOT)
-        self.assertEqual(dependencies["sc-observability"], "=1.4.0")
-        self.assertEqual(dependencies["sc-observability-types"], "=1.4.0")
+        self.assertEqual(dependencies["sc-observability"], "=1.4.1")
+        self.assertEqual(dependencies["sc-observability-types"], "=1.4.1")
 
     @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0")
     @mock.patch.object(VALIDATE_RELEASE, "latest_registry_version")
@@ -59,8 +59,8 @@ class EcosystemPinTests(unittest.TestCase):
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
             "sc-composer": "1.6.1",
-            "sc-observability": "1.4.0",
-            "sc-observability-types": "1.4.0",
+            "sc-observability": "1.4.1",
+            "sc-observability-types": "1.4.1",
         }[dependency]
         findings: list[VALIDATE_RELEASE.Finding] = []
 
@@ -95,8 +95,8 @@ class EcosystemPinTests(unittest.TestCase):
         file_issue.assert_any_call(
             REPO_ROOT,
             [
-                ("sc-observability", "=1.4.0", "1.5.0"),
-                ("sc-observability-types", "=1.4.0", "1.5.0"),
+                ("sc-observability", "=1.4.1", "1.5.0"),
+                ("sc-observability-types", "=1.4.1", "1.5.0"),
             ],
         )
 

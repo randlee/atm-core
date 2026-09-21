@@ -1998,9 +1998,9 @@ dependencies = [
 
 [[package]]
 name = "sc-observability"
-version = "1.4.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0df8a40ea976a52ea46d21f1dbf97395ff5b18c4183e8565d412f1111e53e46e"
+checksum = "4bc4d2a70f2c76cae4c02ed4c497baf658e1db5c13edb40f1d00b9a624f0056a"
 dependencies = [
  "sc-observability-types",
  "serde",
@@ -2011,9 +2011,9 @@ dependencies = [
 
 [[package]]
 name = "sc-observability-types"
-version = "1.4.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ebdaf90fe1ae45cf04ff5e45ac7f78a2aa7374a8090c420a6da61ac039d0612"
+checksum = "19c1b65c4415266aa9f70319cc70f06686b3b173377f8a12edec5c9f283d087b"
 dependencies = [
  "serde",
  "serde_json",
