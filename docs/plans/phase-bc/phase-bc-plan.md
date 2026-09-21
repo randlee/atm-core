@@ -79,11 +79,10 @@ This phase will:
   and permits an existing tag at an ancestor while building newer `main`.
 - ADR-050 assigns shared workflows, actions, helpers, prompts, and tests to
   `sc-publish`. atm-core must not locally patch synced shared files.
-- atm-dev's exact-head verdict for `sc-publish` PR #101 at
-  `34feb1a4e158a2b8eebbeed59791e39f610e6796` is a draft prerequisite, not a
-  qualified consumer pin (`accept-as-prerequisite-only`). Its ordinary
-  workflow token cannot read the repository immutable-release setting because
-  that endpoint requires repository Administration(read).
+- The combined-stack `sc-publish` PR #106 at
+  `22137c2da13bf4638b4267b69c6c2f021617da73` is the accepted consumer
+  qualification source. PR #101 remains historical evidence only; its
+  Administration(read) observation does not create a bc.4 entry gate.
 
 ## 4. non-goals and retained ownership
 
@@ -106,8 +105,8 @@ This phase will:
 
 | gate | required evidence | blocks |
 | --- | --- | --- |
-| `u1` | [sc-publish PR #101 exact-head atm-dev verdict](./sc-publish-pr-101-acceptance.md) | bc.4 |
-| `u2` | approved, provisioned, and independently reviewed least-privilege runtime credential for Administration(read); an ephemeral credential remains a proposal until that approval | bc.4, bc.5 |
+| `u1` | [sc-publish PR #106 combined-stack acceptance](./bc.4-upstream-owner-acceptance.md); PR #101 is historical evidence | bc.4 |
+| `u2` | separately authorized bc.5 setting/credential activation evidence; not a bc.4 entry gate | bc.5 |
 | `u3` | explicit upstream policy decision plus implementation/tests for draft-first stable and prerelease publication, replacement refusal, exact tag/build binding, per-tag concurrency, trusted dispatch refs, and digest/checksum verification | bc.4, bc.5 |
 | `u4` | qualified merged sc-publish commit and clean consumer installer dry-run | bc.4 |
 | `u5` | the coordinated sc-observability `1.4.1` Rust/npm inventory is published and independently verified from the PR #197 checklist and existing installed release workflow; atm-dev has received the upstream completion notice | bc.6 |
@@ -119,8 +118,8 @@ synced shared file.
 
 | work | phase accountability | external delivery authority and handoff |
 | --- | --- | --- |
-| PR #101 prerequisite | `solar@atm-dev` owns gate evidence | sc-publish maintainer delivers; atm-dev supplies exact-head acceptance review |
-| Administration(read) credential | `solar@atm-dev` owns appointment and evidence | a named repository/security administrator must accept, approve, provision, and hand off for independent review before bc.4 starts |
+| PR #106 combined-stack acceptance | `solar@atm-dev` owns gate evidence | sc-publish maintainer delivers; atm-dev supplies exact-head acceptance review |
+| repository setting and credential activation | `solar@atm-dev` owns the separately authorized bc.5 gate | no appointment or activation is required to enter bc.4 |
 | publication and recovery contract follow-ups | `solar@atm-dev` owns appointment and dependency tracking | a named sc-publish maintainer must explicitly accept the expanded scope and tests before bc.4 starts |
 | merged revision qualification | `solar@atm-dev` owns the consumer gate | sc-publish maintainer and independent QA hand off exact-commit and installed-consumer evidence |
 | atm-core pin and evidence | `solar@atm-dev` coordinates; assigned layer writer implements | gates `u1` through `u4` |
@@ -132,13 +131,9 @@ sc-observability team. Each upstream owner must explicitly accept their item.
 Other consumers retain their own adoption authority: sc-compose and wyvern own
 their rollout, while the sc-lint team owns sc-lint rollout.
 
-The currently unnamed external authorities are an explicitly accepted
-pre-execution gate, not implicit authority and not a planning omission. bc.1
-through bc.3 may proceed after this plan lands, but bc.4 may not start until
-`docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md` records the actual
-repository/security administrator and sc-publish maintainer, their acceptance,
-scope, and evidence handoff. `solar@atm-dev` owns obtaining that record and
-must stop bc.4 rather than infer either appointment.
+The sc-publish maintainer's PR #106 acceptance and evidence handoff are recorded
+in `docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md`. Setting and
+credential activation remain a separately authorized bc.5 activity.
 
 ## 6. sprint sequence and linear stack
 

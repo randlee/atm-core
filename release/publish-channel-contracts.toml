@@ -61,3 +61,16 @@ stage = "post_release"
 agent = "scoop-publisher"
 repository_secrets = ["SCOOP_BUCKET_TOKEN"]
 liveness_checks = [{ name = "SCOOP_BUCKET_TOKEN", kind = "github" }]
+
+[channels.npm]
+stage = "post_release"
+agent = "npm-publisher"
+public_registry_checks = true
+environments = ["npm"]
+environment_secrets = [{ environment = "npm", name = "NPM_TOKEN" }]
+
+[[channels.npm.registries]]
+name = "npm"
+project_lookup_url = "https://registry.npmjs.org/{name}"
+version_lookup_url = "https://registry.npmjs.org/{name}/{version}"
+version_policy = "must_be_absent"

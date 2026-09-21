@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import tomllib
+import urllib.parse
 from pathlib import Path, PurePosixPath
 
 
@@ -60,6 +61,7 @@ def load_manifest(path: Path, *, with_channel_contracts: bool = False) -> dict:
         "release_targets": data.get("release_targets", []),
         "python_packages": python_packages,
         "python_distributions": python_distributions,
+        "npm_packages": data.get("npm_packages", []),
         "channels": data.get("channels", {}),
     }
     if with_channel_contracts:
@@ -180,6 +182,49 @@ def validate_publish_order(args: object) -> int:
     return 0
 
 
+def cargo_package_check_plan(workspace_toml: Path, manifest: dict) -> list[dict[str, object]]:
+    """Return the registry-aware Cargo package validation plan.
+
+    ``cargo package`` verifies a crate against the public registry.  During a
+    new multi-crate release, a dependent crate can legitimately require an
+    earlier manifest crate at the target version before that earlier crate has
+    been published.  Package the dependent crate without Cargo's registry
+    verification in that one case; the ordered crates.io workflow will publish
+    the dependency first and performs the final registry-backed verification.
+    """
+    publishable = {
+        crate["package"]: crate
+        for crate in manifest["crates"]
+        if crate.get("publish", True) is True
+    }
+    plan: list[dict[str, object]] = []
+    for crate in manifest["crates"]:
+        package = crate["package"]
+        crate_toml = workspace_toml.parent / crate["cargo_toml"]
+        earlier_release_dependencies = sorted(
+            dependency
+            for dependency in workspace_dependency_names(crate_toml, workspace_toml)
+            if dependency in publishable
+            and publishable[dependency]["publish_order"] < crate["publish_order"]
+        )
+        plan.append(
+            {
+                "package": package,
+                "cargo_toml": crate["cargo_toml"],
+                "mode": "no_verify" if earlier_release_dependencies else "verify",
+                "earlier_release_dependencies": earlier_release_dependencies,
+            }
+        )
+    return plan
+
+
+def cmd_package_check_plan(args: object) -> int:
+    manifest = load_manifest(Path(args.manifest))
+    for entry in cargo_package_check_plan(Path(args.workspace_toml), manifest):
+        print(f"{entry['package']}|{entry['mode']}|{','.join(entry['earlier_release_dependencies'])}" + (f"|{entry['cargo_toml']}" if args.include_manifest else ""))
+    return 0
+
+
 def workspace_version(workspace_toml: Path) -> str:
     """Resolve the release version from the manifest-declared version source.
 
@@ -209,6 +254,11 @@ def _assert_workspace_inherited_version(workspace_toml: Path, relative_path: str
     path = _resolve_workspace_path(workspace_toml, relative_path)
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     value = data.get("package", {}).get("version")
+    if "workspace" in data and path.resolve() != workspace_toml.resolve():
+        actual = data["workspace"].get("package", {}).get("version") if isinstance(value, dict) else value
+        if actual != workspace_version(workspace_toml):
+            raise SystemExit(f"{relative_path}: standalone version must match release workspace version")
+        return
     if isinstance(value, dict) and value.get("workspace") is True:
         return
     if allow_literal_base and value == workspace_version(workspace_toml).split("-", 1)[0]:
@@ -445,7 +495,7 @@ def _normalize_pypi_name(name: str) -> str:
 
 
 def _url_from_contract(template: str, name: str, version: str) -> str:
-    return template.format(name=name, version=version)
+    return template.format(name=urllib.parse.quote(name, safe=""), version=urllib.parse.quote(version, safe=""))
 
 
 def _public_registry_checks(
@@ -594,6 +644,7 @@ def _channel_preflight_result(
     for requirement, outcome_key in (
         ("publisher ownership", "ownership"),
         ("normalized release tag", "release_metadata"),
+        ("immutable repository and release state", "immutable_releases"),
     ):
         checks.append({
             "kind": "release_authorization",

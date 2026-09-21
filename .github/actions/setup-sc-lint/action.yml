@@ -1,11 +1,14 @@
 name: Setup sc-lint
 description: >-
-  Install and verify the pinned sc-lint release and sibling analyzers. The
-  default repository and version are the deliberate shared ecosystem pin for
-  every kit consumer; the source archive's .just/*.py utilities are copied
-  into the workspace's .just/ directory (the layout sc-lint's Python helpers
-  require).
+  Install and verify the pinned sc-lint release and sibling analyzers, or an
+  explicitly selected immutable source revision. Release defaults retain the
+  shared ecosystem pin and .just utilities; source mode builds the same-commit
+  Python wheel into the consumer .sc-lint/venv.
 inputs:
+  source-revision:
+    description: Optional full immutable commit SHA; alternatively project.sc_lint_source_revision in the rendered release manifest
+    required: false
+    default: ""
   version:
     description: Released sc-lint version to install (deliberate ecosystem pin)
     required: false
@@ -17,8 +20,48 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Install sc-lint release (Unix)
+    - name: Resolve immutable sc-lint source (Unix)
       if: runner.os != 'Windows'
+      shell: bash
+      env:
+        SC_LINT_SOURCE_REVISION_INPUT: ${{ inputs.source-revision }}
+        SC_LINT_REPOSITORY: ${{ inputs.repository }}
+      run: |
+        if [ -n "$SC_LINT_SOURCE_REVISION_INPUT" ] || grep -q sc_lint_source_revision release/publish-artifacts.toml 2>/dev/null || [ -f .sc-lint/source-install.json ]; then
+          python3 .github/scripts/setup_sc_lint_source.py resolve
+        else
+          echo 'SC_LINT_SOURCE_REVISION=' >> "$GITHUB_ENV"
+        fi
+    - name: Resolve immutable sc-lint source (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        SC_LINT_SOURCE_REVISION_INPUT: ${{ inputs.source-revision }}
+        SC_LINT_REPOSITORY: ${{ inputs.repository }}
+      run: |
+        $manifest = 'release/publish-artifacts.toml'
+        $declared = (Test-Path $manifest) -and (Select-String -Quiet -Pattern sc_lint_source_revision -Path $manifest)
+        if ($env:SC_LINT_SOURCE_REVISION_INPUT -or $declared -or (Test-Path '.sc-lint/source-install.json')) {
+          python .github/scripts/setup_sc_lint_source.py resolve
+        } else {
+          Add-Content -Path $env:GITHUB_ENV -Value 'SC_LINT_SOURCE_REVISION='
+        }
+    - name: Install immutable sc-lint source (Unix)
+      if: runner.os != 'Windows' && env.SC_LINT_SOURCE_REVISION != ''
+      shell: bash
+      env:
+        SC_LINT_SOURCE_REVISION_INPUT: ${{ inputs.source-revision }}
+        SC_LINT_REPOSITORY: ${{ inputs.repository }}
+      run: python3 .github/scripts/setup_sc_lint_source.py install
+    - name: Install immutable sc-lint source (Windows)
+      if: runner.os == 'Windows' && env.SC_LINT_SOURCE_REVISION != ''
+      shell: pwsh
+      env:
+        SC_LINT_SOURCE_REVISION_INPUT: ${{ inputs.source-revision }}
+        SC_LINT_REPOSITORY: ${{ inputs.repository }}
+      run: python .github/scripts/setup_sc_lint_source.py install
+    - name: Install sc-lint release (Unix)
+      if: runner.os != 'Windows' && env.SC_LINT_SOURCE_REVISION == ''
       shell: bash
       env:
         SC_LINT_VERSION: ${{ inputs.version }}
@@ -56,7 +99,7 @@ runs:
         done
         echo "${install_dir}" >> "${GITHUB_PATH}"
     - name: Install sc-lint release (Windows)
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && env.SC_LINT_SOURCE_REVISION == ''
       shell: pwsh
       env:
         SC_LINT_VERSION: ${{ inputs.version }}
@@ -85,7 +128,7 @@ runs:
         }
         Add-Content -Path $env:GITHUB_PATH -Value $installDir
     - name: Verify sc-lint version contract
-      if: runner.os != 'Windows'
+      if: runner.os != 'Windows' && env.SC_LINT_SOURCE_REVISION == ''
       shell: bash
       env:
         SC_LINT_VERSION: ${{ inputs.version }}
@@ -100,7 +143,7 @@ runs:
           exit 1
         }
     - name: Verify sc-lint version contract (Windows)
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && env.SC_LINT_SOURCE_REVISION == ''
       shell: pwsh
       env:
         SC_LINT_VERSION: ${{ inputs.version }}
@@ -111,7 +154,7 @@ runs:
           throw "sc-lint setup: expected version $env:SC_LINT_VERSION, got $($value.data.crate_version)"
         }
     - name: Materialize pinned sc-lint Python utilities (Unix)
-      if: runner.os != 'Windows'
+      if: runner.os != 'Windows' && env.SC_LINT_SOURCE_REVISION == ''
       shell: bash
       env:
         SC_LINT_VERSION: ${{ inputs.version }}
@@ -130,7 +173,7 @@ runs:
         printf '%s\n' "${SC_LINT_VERSION}" > "${GITHUB_WORKSPACE}/.just/.sc-lint-runtime-version"
         test -f "${GITHUB_WORKSPACE}/.just/run_lint.py"
     - name: Materialize pinned sc-lint Python utilities (Windows)
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && env.SC_LINT_SOURCE_REVISION == ''
       shell: pwsh
       env:
         SC_LINT_VERSION: ${{ inputs.version }}
@@ -150,7 +193,7 @@ runs:
           throw 'sc-lint setup: source archive is missing .just/run_lint.py'
         }
     - name: Smoke-test repository root discovery (Unix)
-      if: runner.os != 'Windows'
+      if: runner.os != 'Windows' && env.SC_LINT_SOURCE_REVISION == ''
       shell: bash
       run: |
         set -euo pipefail
@@ -162,7 +205,7 @@ runs:
           exit 1
         }
     - name: Smoke-test repository root discovery (Windows)
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && env.SC_LINT_SOURCE_REVISION == ''
       shell: pwsh
       run: |
         $root = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { (Get-Location).Path }
@@ -170,3 +213,15 @@ runs:
         if (-not $value.ok -or $value.error.code -eq 'CLI.CONFIG_ERROR') {
           throw "sc-lint root discovery failed: $($value | ConvertTo-Json -Compress)"
         }
+    - name: Verify source sc-lint consumer semantics (Unix)
+      if: runner.os != 'Windows' && env.SC_LINT_SOURCE_REVISION != ''
+      shell: bash
+      env:
+        SC_LINT_SOURCE_REVISION_INPUT: ${{ inputs.source-revision }}
+      run: python3 .github/scripts/setup_sc_lint_source.py smoke
+    - name: Verify source sc-lint consumer semantics (Windows)
+      if: runner.os == 'Windows' && env.SC_LINT_SOURCE_REVISION != ''
+      shell: pwsh
+      env:
+        SC_LINT_SOURCE_REVISION_INPUT: ${{ inputs.source-revision }}
+      run: python .github/scripts/setup_sc_lint_source.py smoke

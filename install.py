@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -18,6 +19,9 @@ if TYPE_CHECKING:
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(PACKAGE_ROOT / ".github" / "scripts"))
+from release_python import wheel_targets
+
 SOURCE_ROOT_MARKER = ".sc-publish-source-root"
 TEMPLATES = {
     Path("release/publish-channel-contracts.toml.j2"): Path(
@@ -26,7 +30,7 @@ TEMPLATES = {
     Path("release/publish-artifacts.toml.j2"): Path("release/publish-artifacts.toml"),
 }
 
-CHANNEL_NAMES = ("pypi", "homebrew", "scoop", "winget")
+CHANNEL_NAMES = ("pypi", "npm", "homebrew", "scoop", "winget")
 
 # Copied byte-for-byte, but installed under a different consumer path so the
 # kit never overwrites a consumer-owned file of the same name.
@@ -37,6 +41,7 @@ RENAMED_FILES = {
 # Empty sentinels keep every channel variable defined under
 # strict-undeclared-variable rendering; undeclared channels render no table.
 CHANNEL_TEMPLATE_SENTINELS: dict[str, dict[str, Any]] = {
+    "npm": {"workflow": "", "dispatch_inputs": {}},
     "pypi": {
         "workflow": "",
         "dispatch_inputs": {},
@@ -146,6 +151,11 @@ def load_install_values(path: Path) -> dict[str, object]:
         if field in project:
             _require_string(project[field], f"project.{field}")
 
+    if "sc_lint_source_revision" in project:
+        revision = _require_string(project["sc_lint_source_revision"], "project.sc_lint_source_revision")
+        if not re.fullmatch(r"[0-9a-f]{40}", revision):
+            raise argparse.ArgumentTypeError("project.sc_lint_source_revision must be a full lowercase 40-character commit SHA")
+
     release_targets = _require_entries(
         values.get("release_targets"), "release_targets", ("target", "os", "archive")
     )
@@ -201,18 +211,6 @@ def load_install_values(path: Path) -> dict[str, object]:
                 "bundled_paths.homebrew_destination_components",
             )
 
-    if "prerelease" in values:
-        prerelease = _require_mapping(values["prerelease"], "prerelease")
-        for field in ("tag_prefix", "tag_script", "install_root", "post_install", "verify"):
-            _require_string(prerelease.get(field), f"prerelease.{field}")
-        _require_string_array(prerelease.get("binaries"), "prerelease.binaries")
-        _require_string_array(
-            prerelease.get("protected_branches"), "prerelease.protected_branches"
-        )
-        selectors = _require_string_mapping(prerelease.get("selector_dir"), "prerelease.selector_dir")
-        if set(selectors) != {"darwin", "linux", "windows"}:
-            raise argparse.ArgumentTypeError("prerelease.selector_dir must declare darwin, linux, and windows")
-
     _require_entries(
         values.get("python_packages"),
         "python_packages",
@@ -225,7 +223,10 @@ def load_install_values(path: Path) -> dict[str, object]:
     )
     for position, distribution in enumerate(distributions, start=1):
         _require_boolean(distribution.get("sdist"), f"python_distributions[{position}].sdist")
-        _require_string_array(distribution.get("wheels"), f"python_distributions[{position}].wheels")
+        try:
+            wheel_targets(distribution)
+        except (ValueError, KeyError) as error:
+            raise argparse.ArgumentTypeError(f"python_distributions[{position}]: {error}") from error
         cargo_manifest = distribution.get("cargo_manifest")
         build_system = distribution.get("build_system")
         if cargo_manifest is None and build_system is None:
@@ -244,9 +245,25 @@ def load_install_values(path: Path) -> dict[str, object]:
                     f"python_distributions[{position}].build_system must be setuptools"
                 )
 
+    npm_packages = _require_entries(values.get("npm_packages", []), "npm_packages", ("name", "source"))
+    names = [entry["name"] for entry in npm_packages]
+    if len(names) != len(set(names)):
+        raise argparse.ArgumentTypeError("npm_packages names must be unique")
+    asset_names = [entry["name"].replace("@", "").replace("/", "-") for entry in npm_packages]
+    if len(asset_names) != len(set(asset_names)):
+        raise argparse.ArgumentTypeError("npm_packages archive names must be unique")
+    for entry in npm_packages:
+        if not re.fullmatch(r"(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*", entry["name"]):
+            raise argparse.ArgumentTypeError("invalid npm package name")
+        source = Path(entry["source"])
+        if source.is_absolute() or ".." in source.parts:
+            raise argparse.ArgumentTypeError("npm_packages source must stay within the repository")
+
     # Channels are opt-in: a consumer declares only the post-release channels
     # it actually publishes to, and only declared channels render a table.
     channels = _require_mapping(values.get("channels"), "channels")
+    if bool(npm_packages) != ("npm" in channels):
+        raise argparse.ArgumentTypeError("npm_packages and channels.npm must be declared together")
     unknown_channels = sorted(set(channels) - set(CHANNEL_NAMES))
     if unknown_channels:
         raise argparse.ArgumentTypeError(
@@ -398,15 +415,7 @@ def template_values(values: dict[str, object]) -> dict[str, object]:
     template_project.setdefault("renderer_archive_path", "")
     template_project.setdefault("workspace_toml", "")
     template_project.setdefault("rust_toolchain", "")
-    prerelease = values.get("prerelease")
-    template_prerelease = (
-        _toml_scalars(
-            _require_mapping(prerelease, "prerelease"),
-            ("binaries", "protected_branches", "selector_dir"),
-        )
-        if prerelease
-        else {"tag_prefix": "", "tag_script": "", "install_root": "", "binaries": "[]", "protected_branches": "[]", "selector_dir": "{}", "post_install": "", "verify": ""}
-    )
+    template_project.setdefault("sc_lint_source_revision", "")
 
     return {
         "schema_version": _toml_literal(values["schema_version"]),
@@ -425,13 +434,13 @@ def template_values(values: dict[str, object]) -> dict[str, object]:
             for package in _require_array(values["python_packages"], "python_packages")
         ],
         "python_distributions": distributions,
+        "npm_packages": [_toml_scalars(entry) for entry in values.get("npm_packages", [])],
         "channels": converted_channels,
-        "prerelease": template_prerelease,
         "has_readme_dependency_crate": "readme_dependency_crate" in project,
         "has_renderer_archive_path": "renderer_archive_path" in project,
         "has_workspace_toml": "workspace_toml" in project,
         "has_rust_toolchain": "rust_toolchain" in project,
-        "has_prerelease": "prerelease" in values,
+        "has_sc_lint_source_revision": "sc_lint_source_revision" in project,
         **{f"has_channel_{name}": name in channels for name in CHANNEL_NAMES},
     }
 

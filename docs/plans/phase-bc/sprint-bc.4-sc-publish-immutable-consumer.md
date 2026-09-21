@@ -10,12 +10,12 @@ fixed upstream under ADR-050, never locally patched here.
 
 ## entry gates
 
-- `sc-publish` PR #101 has an exact-head atm-dev verdict.
-- `docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md` names the actual
-  repository/security administrator and sc-publish maintainer and records their
-  accepted scope and evidence handoff.
-- The Administration(read) runtime credential is approved, provisioned,
-  deployable with least privilege, and independently reviewed.
+- The combined-stack `sc-publish` PR #106 has an exact-head acceptance verdict;
+  PR #101 remains historical evidence only.
+- `docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md` records the accepted
+  PR #106 scope and evidence handoff from the sc-publish maintainer.
+- Credential appointment and repository-setting activation are not bc.4 entry
+  gates; they are separately authorized in bc.5.
 - Required follow-ups implement and test explicit draft-first stable and
   prerelease assembly, replacement refusal, exact tag/build binding, root
   per-tag concurrency, trusted production refs, and digest/checksum comparison.
@@ -35,8 +35,9 @@ fixed upstream under ADR-050, never locally patched here.
 4. Update ATM-owned manifest/evidence/docs for the immutable-release contract.
 5. Remove the functional `replace_release_assets` surface through the upstream
    generated result; retries become verify-only.
-6. Add ATM-specific preflight checks for the exact tag/source/build/receipt and
-   repository setting without duplicating shared logic.
+6. Add ATM-specific preflight checks for the exact tag/source/build/receipt
+   without duplicating shared logic. Do not block or ask about tokens unless
+   preflight or publish fails.
 7. Record the exact merged revision, upstream QA, installed-consumer/package
    parity, canonical installer dry-run, and ATM validation in
    `docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md`.
@@ -67,3 +68,6 @@ existing immutable release cases, followed by all phase gates.
 Locally patching a synced shared file, enabling the repository setting,
 publishing a release, provisioning credentials, mutating historical releases,
 or promoting a registry/channel artifact.
+
+Inherited or deferred FIX03–FIX10 work is not claimed by bc.4; its status is
+recorded as upstream/deferred evidence in the qualification receipt.

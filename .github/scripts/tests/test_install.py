@@ -165,8 +165,54 @@ class InstallValuesTests(unittest.TestCase):
             path.write_text(json.dumps(values), encoding="utf-8")
             loaded = INSTALL.load_install_values(path)
         self.assertEqual(loaded, values)
-        self.assertEqual(set(loaded["channels"]), set(INSTALL.CHANNEL_NAMES))
+        self.assertEqual(set(loaded["channels"]), set(INSTALL.CHANNEL_NAMES) - {"npm"})
         self.assertEqual(loaded["python_distributions"][1]["build_system"], "setuptools")
+
+    def test_source_revision_rejects_floating_or_malformed_refs(self) -> None:
+        for revision in ("main", "v0.6.0", "abc123", "a" * 39, "g" * 40, "a" * 40 + "\n", ""):
+            with self.subTest(revision=revision), tempfile.TemporaryDirectory() as directory:
+                values = self.valid_values()
+                values["project"]["sc_lint_source_revision"] = revision
+                path = Path(directory) / "input.json"
+                path.write_text(json.dumps(values))
+                with self.assertRaisesRegex(Exception, "sc_lint_source_revision"):
+                    INSTALL.load_install_values(path)
+
+    def test_optional_source_revision_round_trips_without_changing_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for revision in (None, "a" * 40):
+                values = self.valid_values()
+                if revision:
+                    values["project"]["sc_lint_source_revision"] = revision
+                source = root / "install.json"
+                source.write_text(json.dumps(values))
+                loaded = INSTALL.load_install_values(source)
+                rendered = root / "artifacts.toml"
+                INSTALL.render_template(Path("release/publish-artifacts.toml.j2"), loaded, rendered)
+                project = tomllib.loads(rendered.read_text())["project"]
+                self.assertEqual(project.get("sc_lint_source_revision"), revision)
+
+    def test_installed_consumer_resolves_its_rendered_immutable_source(self) -> None:
+        if not (INSTALLER.parent / ".sc-publish-source-root").is_file():
+            self.skipTest("source installer integration")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            consumer = root / "consumer"
+            consumer.mkdir()
+            values = self.valid_values()
+            values["project"]["sc_lint_source_revision"] = "a" * 40
+            contract = root / "install.json"
+            contract.write_text(json.dumps(values))
+            subprocess.run([sys.executable, INSTALLER, "--input", contract, consumer], check=True, capture_output=True)
+            result = subprocess.run([sys.executable, INSTALLER, "--dry-run", "--input", contract, consumer], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            import os
+            env = dict(os.environ, GITHUB_WORKSPACE=str(consumer), GITHUB_ENV=str(root / "env"), SC_LINT_SOURCE_REVISION_INPUT="")
+            helper = consumer / ".github/scripts/setup_sc_lint_source.py"
+            result = subprocess.run([sys.executable, helper, "resolve"], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((root / "env").read_text(), "SC_LINT_SOURCE_REVISION=" + "a" * 40 + "\n")
 
     def test_load_install_values_rejects_invalid_publish_orders(self) -> None:
         cases = {
@@ -218,7 +264,7 @@ class InstallValuesTests(unittest.TestCase):
 
     def test_load_install_values_rejects_unknown_channel_names(self) -> None:
         values = self.valid_values()
-        values["channels"]["npm"] = {"workflow": "npm.yml", "dispatch_inputs": {}}
+        values["channels"]["unsupported"] = {"workflow": "unsupported.yml", "dispatch_inputs": {}}
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "input.json"
             path.write_text(json.dumps(values), encoding="utf-8")

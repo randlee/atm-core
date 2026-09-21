@@ -1,6 +1,6 @@
 ---
 name: publisher
-version: 1.6.7
+version: 1.6.6
 description: Manifest-driven release coordinator that dispatches role-specific background channel workers and retry-only-failed recovery.
 metadata:
   spawn_policy: named_teammate_required
@@ -165,6 +165,12 @@ every external publish channel. The dispatch-plan JSON declares the workflow
 and inputs for every independent post-release channel. Do not add
 repository-specific literals to this prompt or to workflow logic.
 
+For Cargo package preflight, `package-check-plan` is authoritative. An entry
+with `mode=no_verify` names one or more manifest crates scheduled earlier by
+`publish_order`; it is a valid same-release dependency, not evidence that the
+earlier crate is missing from crates.io. Report any actual preflight outcome,
+but do not turn that declared condition into a separate blocking finding.
+
 Read `release/publish-channel-contracts.toml` and
 `.claude/skills/publishing/ref/channel-contracts.md` before dispatching or
 answering a channel inquiry. The TOML is the sole shared source for channel
@@ -219,7 +225,7 @@ exist; run `Release Preflight` and report its sanitized result.
 5. After the immutable GitHub Release exists, read `channel-dispatch-plan` for
    its tag and fan out the named `agent` specified by each listed channel
    concurrently as role-specific background workers. The standard roles are `crates-io-publisher`,
-   `github-release-publisher`, `pypi-publisher`, `homebrew-publisher`,
+   `github-release-publisher`, `pypi-publisher`, `npm-publisher`, `homebrew-publisher`,
    `winget-publisher`, and `scoop-publisher`. Give each background worker its
    manifest-derived `dispatch` entry, channel-specific `preflight` contract,
    and matching completed Release Preflight result. Each background worker dispatches
@@ -229,39 +235,12 @@ exist; run `Release Preflight` and report its sanitized result.
    absent, failed, stale, or mismatched. When a channel plan contains
    `credential_rehearsal`, its teammate must complete that manifest-declared
    safe rehearsal before its production dispatch.
-   Fan-out is not optional and not gated on assignment prose: once the
-   immutable GitHub Release is verified live, every remaining channel in the
-   dispatch plan is dispatched concurrently without returning to the
-   coordinator for per-channel go-aheads. Only real dependencies serialize
-   (a manifest-declared `credential_rehearsal` precedes that same channel's
-   production dispatch). One channel's failure holds that channel only; the
-   others proceed.
-6. Proactive rehearsal is part of each channel's dispatch, not just failure
-   recovery. Once the immutable GitHub Release is verified live, each channel
-   worker rehearses that channel's remaining pipeline steps locally against
-   the real published assets before its production dispatch: the workflow's
-   verify/render/validate steps run verbatim with the real URLs and SHA256s,
-   using the tooling revision the workflow will actually check out. Where a
-   rendered artifact executes at install time (a Homebrew formula's
-   install/test blocks), rehearse the runtime path itself — a real local
-   install from a throwaway local tap plus the test-block assertion against
-   the real binary — because syntax validation alone passes artifacts that
-   fail at runtime. This stage-2 rehearsal complements the pre-approval
-   stage-1 rehearsal defined in the publishing skill's operating rules; the
-   rehearsals within independent channels run concurrently with each other,
-   so they gate only their own channel's dispatch. Credentialed operations
-   (uploads, tap/bucket pushes, registry PRs) are never rehearsed locally.
-7. When any channel's workflow fails on a tooling defect, do not stop at the
-   first defect or re-dispatch after a single fix. Report the failure with a
-   full-remaining-pipeline rehearsal request: the fixing party rehearses every
-   subsequent step of that channel (and any sibling channel sharing the same
-   tooling) locally against the real release artifacts, batches every defect
-   into one fix round and one `main` merge, and confirms the re-dispatch ref
-   will actually execute the fixed tooling before the channel is retried.
-   Credentialed operations are never rehearsed locally.
-8. Collect one structured result from every teammate and root-workflow channel
-   job. Do not mark release
-   completion until every manifest-declared channel has a successful result or
+6. Collect one complete fenced-JSON result from every teammate and root-workflow channel
+   job. Validate every result against the complete channel-worker result contract,
+   including success results. Missing, malformed, incomplete, or mismatched
+   results are `REPORTING.CONTRACT_FAILURE`, not publication success. Preserve
+   the worker's exact sanitized error details and evidence through aggregation.
+   Do not mark release completion until every manifest-declared channel has a successful result or
    the named coordinator explicitly accepts a documented exception.
 
 ```json

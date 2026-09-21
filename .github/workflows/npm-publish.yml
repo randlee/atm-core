@@ -1,0 +1,55 @@
+name: Publish npm
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published immutable GitHub Release tag
+        required: true
+        type: string
+      dry_run:
+        description: Verify assets and registry state without publication
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: publish-npm-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: ./.github/actions/verify-published-release
+        with:
+          release_tag: ${{ inputs.tag }}
+      - name: Download immutable release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          release_json="$(gh api "repos/${RELEASE_REPOSITORY}/releases/tags/${RELEASE_TAG}")"
+          jq -e '.immutable == true and .draft == false' <<< "$release_json" >/dev/null
+          mkdir -p npm-dist
+          gh release download "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --pattern '*.tgz' --pattern checksums.txt --dir npm-dist
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Nonpublishing preflight
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 .github/scripts/npm_release.py preflight --tag "$RELEASE_TAG"
+      - name: Publish verified archives
+        if: ${{ !inputs.dry_run }}
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: python3 .github/scripts/npm_release.py publish --tag "$RELEASE_TAG"
