@@ -11,6 +11,16 @@ renderer_archive_path = "bin/atm"
 workspace_toml = "Cargo.toml"
 rust_toolchain = "1.94.1"
 
+[prerelease]
+tag_prefix = "prerelease/v"
+tag_script = ".just/prerelease_tag.py"
+install_root = "~/.atm-builds"
+binaries = ["atm", "atm-daemon"]
+protected_branches = ["develop", "main", "master"]
+selector_dir = { darwin = "~/.atm-builds/selectors/darwin", linux = "~/.atm-builds/selectors/linux", windows = "%LOCALAPPDATA%\\ATM\\prerelease-selectors" }
+post_install = "python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch --prerelease {version} --yes --discover-managed-service"
+verify = "atm --version"
+
 [[release_targets]]
 target = "x86_64-unknown-linux-gnu"
 os = "ubuntu-latest"
