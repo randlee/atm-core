@@ -20,12 +20,16 @@ global logger.
 
 ## Parity limits
 
-The fixture establishes macro syntax, structured output, bounded admission,
-target/cardinality/redaction checks, explicit correlation absence,
-error/panic/cancellation completion, and compile-fail grammar. It
-does not prove parity with ATM's retained target allowlist, redaction policy,
-diagnostic timeline, or global install/shutdown ownership. Therefore no
-production bridge replacement or call-site migration is justified in bc.3.
+The fixture establishes macro syntax, structured output, explicit
+denylisted-value redaction, and the upstream retained outcomes for an
+oversized value and an event with excess fields. Those oversized/excess
+values are intentionally retained by the upstream fixture; that is evidence
+of upstream behavior, not ATM parity. Unsupported parity gaps remain ATM's
+retained target allowlist, bounded-size and excess-field rejection, diagnostic
+timeline, and global install/shutdown ownership. The fixture also establishes
+explicit correlation absence, error/panic/cancellation completion, and
+compile-fail grammar. Therefore no production bridge replacement or call-site
+migration is justified in bc.3.
 
 Validation includes the supported/rejected trybuild cases, async error and
 cancellation, panic completion, JSONL cardinality/target/redaction comparison,

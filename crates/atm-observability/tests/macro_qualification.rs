@@ -57,6 +57,36 @@ fn reexported_event_levels() {
     sc_observability_log::trace!(target: "fixture", "[fixture.trace] trace body");
 }
 
+fn adversarial_fields() {
+    let oversized = "x".repeat(40 * 1024);
+    sc_observability_log::event!(
+        name: "fixture.adversarial",
+        target: "fixture",
+        sc_observability_log::Level::INFO,
+        {
+            token = "sensitive-token",
+            oversized = oversized.as_str(),
+            excess_00 = 0,
+            excess_01 = 1,
+            excess_02 = 2,
+            excess_03 = 3,
+            excess_04 = 4,
+            excess_05 = 5,
+            excess_06 = 6,
+            excess_07 = 7,
+            excess_08 = 8,
+            excess_09 = 9,
+            excess_10 = 10,
+            excess_11 = 11,
+            excess_12 = 12,
+            excess_13 = 13,
+            excess_14 = 14,
+            excess_15 = 15,
+        },
+        "adversarial fields"
+    );
+}
+
 fn read_events(path: &std::path::Path) -> Vec<Value> {
     std::fs::read_to_string(path)
         .expect("retained output")
@@ -74,6 +104,7 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
         root.path().into(),
     );
     config.level = sc_observability_log::LevelFilter::Trace;
+    config.redaction.denylist_keys.push("token".to_owned());
     let guard = sc_observability_log::init(
         config,
         BridgeOptions {
@@ -90,6 +121,7 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
     assert_eq!(async_ok().await, Ok(9));
     assert_eq!(async_err().await, Err("expected async error"));
     reexported_event_levels();
+    adversarial_fields();
     let async_panic_join = tokio::spawn(async_panic()).await;
     assert!(
         async_panic_join
@@ -106,12 +138,12 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
 
     guard.flush(Duration::from_secs(5)).expect("bounded flush");
     let events = read_events(&path);
-    assert_eq!(events.len(), 12, "fixture event cardinality changed");
+    assert_eq!(events.len(), 13, "fixture event cardinality changed");
     let actions: HashSet<_> = events
         .iter()
         .map(|event| event["action"].as_str().expect("action"))
         .collect();
-    assert_eq!(actions.len(), 8, "duplicate action emission");
+    assert_eq!(actions.len(), 9, "duplicate action emission");
     assert!(actions.contains("fixture.async_err"));
     assert!(actions.contains("fixture.async_panic"));
     for (message, level) in [
@@ -136,10 +168,37 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
         let target = event["target"].as_str().expect("target");
         target == "fixture" || target == "macro_qualification"
     }));
-    let encoded = serde_json::to_string(&events).expect("encoded events");
-    assert!(encoded.len() < 32 * 1024, "retained output oversized");
-    for secret in ["token", "password", "authorization", "secret"] {
-        assert!(!encoded.to_ascii_lowercase().contains(secret));
+    let adversarial = events
+        .iter()
+        .find(|event| event["action"] == "fixture.adversarial")
+        .expect("adversarial event");
+    let adversarial_fields = adversarial["fields"]
+        .as_object()
+        .expect("adversarial fields");
+    assert_eq!(adversarial_fields["token"], "[REDACTED]");
+    assert_eq!(
+        adversarial_fields["oversized"]
+            .as_str()
+            .expect("oversized value")
+            .len(),
+        40 * 1024
+    );
+    assert_eq!(adversarial_fields["excess_15"], 15);
+    let adversarial_encoded =
+        serde_json::to_string(adversarial).expect("encoded adversarial event");
+    assert!(adversarial_encoded.len() > 40 * 1024);
+    assert!(!adversarial_encoded.contains("sensitive-token"));
+    let normal_encoded = events
+        .iter()
+        .filter(|event| event["action"] != "fixture.adversarial")
+        .map(|event| serde_json::to_string(event).expect("encoded normal event"))
+        .collect::<String>();
+    assert!(
+        normal_encoded.len() < 32 * 1024,
+        "normal retained output oversized"
+    );
+    for secret in ["password", "authorization", "secret"] {
+        assert!(!normal_encoded.to_ascii_lowercase().contains(secret));
     }
     assert!(
         events
@@ -172,11 +231,16 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
             .iter()
             .any(|event| event["action"] == "fixture.async_err" && event["outcome"] == "error")
     );
-    assert!(events.iter().all(|event| {
-        event["fields"]
-            .as_object()
-            .is_some_and(|fields| fields.len() < 16)
-    }));
+    assert!(
+        events
+            .iter()
+            .filter(|event| event["action"] != "fixture.adversarial")
+            .all(|event| {
+                event["fields"]
+                    .as_object()
+                    .is_some_and(|fields| fields.len() < 16)
+            })
+    );
     // JSONL completion order is intentionally not a wall-clock ordering
     // contract: async completion and writer scheduling may interleave. Verify
     // the timeline field semantically instead of coupling the fixture to list
