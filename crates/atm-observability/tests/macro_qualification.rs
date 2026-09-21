@@ -143,6 +143,11 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
     assert!(events.iter().any(
         |event| event["action"] == "fixture.async_panic" && event["outcome"] == "panicked"
     ));
+    assert!(
+        events
+            .iter()
+            .any(|event| event["action"] == "fixture.async_err" && event["outcome"] == "error")
+    );
     assert!(events.iter().all(|event| {
         event["fields"]
             .as_object()
