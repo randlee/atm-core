@@ -6,7 +6,7 @@
   triage:description "The phase receipt identifies the unconditional retained_logger_bootstrap_error_preserves_historical_json_without_cause test and keeps SC_* values internal to diagnostic/timeline data. QA must determine final closure." ;
   triage:phaseId "phase-bc" ; triage:triageMode "followup_pass" ; triage:category "QA" ;
   triage:severity "important" ; triage:repeatable false ; triage:sweepScope "file_only" ;
-  triage:status "open" ; triage:dispatchReady true ; triage:triagedAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
+  triage:status "closed" ; triage:dispatchReady false ; triage:triagedAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BC2 ; triage:foundAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/1> .
 
@@ -14,5 +14,5 @@
   a triage:Occurrence ;
   triage:file "docs/plans/phase-bc/bc.2-retained-mapping-and-reduction.md" ; triage:line 70 ;
   triage:snippet "unconditional golden test" ;
-  triage:status "open" ; triage:closed false ;
+  triage:status "closed" ; triage:closed true ;
   triage:branch "integrate/phase-bc" ; triage:headSha "c79b50701" ; triage:occursIn <urn:atm:triage:worktree/bc/c79b50701> .

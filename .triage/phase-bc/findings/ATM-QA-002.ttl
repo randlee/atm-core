@@ -12,8 +12,11 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-09-23T15:51:25Z"^^xsd:dateTime ;
+  triage:resolutionNote "Closed by fenix (stack writer / team-lead disposition) on integrate/phase-bc @ 3464fb7b1d82ec092804e6ccae147bbb833e9ecf: the phase stack (#1575, 20 PRs) and the critical-remediation stack (#1579: #1577 code @269643c06, #1578 docs @eb5e788fa) landed; QA evidence master docs/plans/phase-bc/.audit/qa-evidence-master.json records QA-1..QA-6 (F,F,F,P,P,F) by assignment id; QA-4/QA-5 PASS closed every QA-1..3 finding, QA-6 blocking items were closed in #1578 and verified line-by-line by fenix; landing head lint (38 checks) and canonical sc-publish f178b69 dry-run in sync recorded on PR #1576." ;
+  triage:rationale "Occurrence re-verified closed on the same branch (integrate/phase-bc) at the later head 3464fb7; original first-observed snapshot c79b50701 retained as history." ;
   triage:triagedAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BC4 ;
   triage:foundAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
@@ -26,8 +29,8 @@
   triage:file "docs/plans/phase-bc/phase-bc-plan.md" ;
   triage:line 272 ;
   triage:snippet "phase not complete pending QA" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-bc" ;
   triage:headSha "c79b50701" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-bc/c79b50701> .

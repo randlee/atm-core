@@ -6,7 +6,7 @@
   triage:description "ATM cfg(test) fault injection exercises the retained JSONL sink health override; upstream true queue saturation and unrelated backend failures are not claimed. QA owns final disposition." ;
   triage:phaseId "phase-bc" ; triage:triageMode "followup_pass" ; triage:category "QA" ;
   triage:severity "important" ; triage:repeatable false ; triage:sweepScope "file_only" ;
-  triage:status "open" ; triage:dispatchReady true ; triage:triagedAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
+  triage:status "closed" ; triage:dispatchReady false ; triage:triagedAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:BC2 ; triage:foundAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/1> .
 
@@ -14,5 +14,5 @@
   a triage:Occurrence ;
   triage:file "docs/plans/phase-bc/bc.2-retained-mapping-and-reduction.md" ; triage:line 113 ;
   triage:snippet "retained JSONL sink health override" ;
-  triage:status "open" ; triage:closed false ;
+  triage:status "closed" ; triage:closed true ;
   triage:branch "integrate/phase-bc" ; triage:headSha "c79b50701" ; triage:occursIn <urn:atm:triage:worktree/bc/c79b50701> .
