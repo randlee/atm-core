@@ -31,7 +31,7 @@ jobs:
     env:
       RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -46,6 +46,15 @@ jobs:
             echo "Preflight must be executed by publisher agent. Got run_by_agent='$runner'" >&2
             exit 1
           fi
+
+      - id: immutable_releases
+        name: Verify immutable release prerequisite (read-only)
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: python3 .github/scripts/release_immutability.py --tag "$RELEASE_VERSION"
 
       - id: secret_plan
         name: Read non-disclosing credential plan from release manifest
@@ -162,41 +171,21 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
           SECRET_PLAN: ${{ steps.secret_plan.outputs.plan }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
           WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           set -euo pipefail
           failures=()
           channel_outcomes='{}'
           while IFS=$'\t' read -r channel secret_name check_kind; do
-            token="${!secret_name:-}"
             channel_status=success
-            case "${check_kind}" in
-              github)
-                command=(curl --fail --silent --show-error --header "Authorization: Bearer ${token}" --header "Accept: application/vnd.github+json" https://api.github.com/user)
-                ;;
-              crates_io)
-                # Release-branch fix (v1.4.4, upstream sc-publish#68): crates.io
-                # API tokens are scope-restricted (RFC 2947) and no read-only
-                # endpoint accepts them (GET /api/v1/me is session-only), so an
-                # authenticated probe returns 403 for a correctly scoped publish
-                # token. Presence is already verified by the required-secrets
-                # step; token authorization is proven at publish time.
-                echo "crates.io exposes no read-only token-validation endpoint; recording presence-only liveness for ${secret_name}."
-                channel_outcomes="$(jq -c --arg channel "${channel}" --arg status "${channel_status}" '.[$channel]=$status' <<<"${channel_outcomes}")"
-                continue
-                ;;
-              *)
-                failures+=("Unsupported credential liveness check kind: ${check_kind}")
-                channel_status=failure
-                continue
-                ;;
-            esac
-            if ! "${command[@]}" >/dev/null; then
-              failures+=("GitHub Actions secret ${secret_name} is present but rejected by its publish service.")
+            if ! python3 .github/scripts/release_credentials.py \
+              --manifest "${RELEASE_ARTIFACT_MANIFEST}" --channel "${channel}" \
+              --kind "${check_kind}" --secret-name "${secret_name}"; then
+              failures+=("Credential authentication not established for channel ${channel} (${secret_name}).")
               channel_status=failure
             fi
             channel_outcomes="$(jq -c --arg channel "${channel}" --arg status "${channel_status}" '.[$channel]=$status' <<<"${channel_outcomes}")"
@@ -206,10 +195,10 @@ jobs:
             printf '%s\n' "${failures[@]}" >&2
             exit 1
           fi
-          echo "All manifest-required repository credentials are accepted by their publish services."
+          echo "All manifest-required repository credentials authenticated; publish permissions require channel verification."
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.x"
 
@@ -227,33 +216,6 @@ jobs:
       - name: Install Linux native build deps
         if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
         uses: ./.github/actions/install-linux-native-deps
-
-      # Release-branch fix (v1.4.4, upstream sc-publish#70): mirror sprint CI's
-      # tool bootstrap so the workspace test surface is identical — the
-      # passthrough tests require the pinned sc-compose CLI that `just
-      # bootstrap` provisions. The publish pipeline must run the SAME
-      # lint/build/test as sprint CI; a preflight-only environment is banned.
-      - name: Expose Cargo binaries on PATH
-        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
-        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
-
-      - name: Install just
-        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
-        uses: taiki-e/install-action@v2
-        with:
-          tool: just@1.58.0
-
-      - name: Pre-seed pinned cargo-binstall (bootstrap also verifies)
-        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
-        uses: cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c # v1.22.0
-        with:
-          version: "1.22.0"
-
-      - id: bootstrap_tools
-        name: Bootstrap exact repository tools
-        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
-        continue-on-error: true
-        run: just bootstrap
 
       - name: Normalize version input
         id: meta
@@ -287,18 +249,10 @@ jobs:
         name: Run workspace tests
         if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
         continue-on-error: true
-        env:
-          ATM_TEST_RECV_TIMEOUT_SECS: "60"
-        # Release-branch fix (v1.4.4, upstream sc-publish#70): run the exact
-        # sprint-CI test surface (legacy atm-daemon excluded, CLI surface
-        # contract included), not a preflight-specific variant.
-        run: |
-          cargo test --workspace --exclude atm-daemon
-          cargo test -p agent-team-mail --features cli-surface-dump --test cli_surface
+        run: cargo test --workspace
 
       - id: manifest
         name: Validate manifest completeness
-        if: ${{ always() }}
         continue-on-error: true
         run: |
           python3 .github/scripts/release_artifacts.py validate-manifest \
@@ -307,7 +261,6 @@ jobs:
 
       - id: publish_order
         name: Validate publish_order dependency graph
-        if: ${{ always() }}
         continue-on-error: true
         run: |
           python3 .github/scripts/release_artifacts.py validate-publish-order \
@@ -316,7 +269,6 @@ jobs:
 
       - id: helpers
         name: Verify release helper files exist
-        if: ${{ always() }}
         continue-on-error: true
         run: |
           test -f .github/scripts/release_gate.sh
@@ -333,7 +285,6 @@ jobs:
 
       - id: version_lockstep
         name: Verify release version lockstep
-        if: ${{ always() }}
         continue-on-error: true
         run: |
           python3 .github/scripts/release_artifacts.py verify-version-lockstep \
@@ -376,6 +327,7 @@ jobs:
           failures=()
           channel_is_preserved() {
             local expected="$1" channel
+            [[ -n "${ALREADY_PUBLISHED_CHANNELS:-}" ]] || return 1
             IFS=',' read -r -a channels <<<"${ALREADY_PUBLISHED_CHANNELS:-}"
             for channel in "${channels[@]}"; do
               channel="$(tr -d '[:space:]' <<<"${channel}")"
@@ -428,19 +380,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Release-branch fix (v1.4.4, upstream sc-publish#71): one
-          # multi-package invocation lets cargo verify-build against its local
-          # overlay registry, so crates depending on release siblings that are
-          # not yet live on crates.io still package (requires cargo >= 1.90).
-          packages=()
-          while IFS='|' read -r package _; do
-            packages+=(-p "$package")
-          done < <(python3 .github/scripts/release_artifacts.py list-publish-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")
-          cargo package "${packages[@]}" --locked --allow-dirty
+          plan="$(python3 .github/scripts/release_artifacts.py package-check-plan --include-manifest \
+            --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
+            --workspace-toml '${{ steps.build_plan.outputs.workspace_toml }}')"
+          while IFS='|' read -r package mode earlier_release_dependencies cargo_manifest; do
+            case "${mode}" in
+              verify)
+                cargo package --manifest-path "$cargo_manifest" --locked --allow-dirty
+                ;;
+              no_verify)
+                printf 'Validating %s without registry verification; waiting for earlier release crate(s): %s\n' \
+                  "$package" "$earlier_release_dependencies"
+                # Check the real local dependency graph, including standalone crates.
+                cargo check --manifest-path "$cargo_manifest" --locked
+                # --no-verify alone still resolves registry versions for Cargo.lock.
+                # This preflight-only archive is never uploaded; publication retains
+                # normal lockfile generation and registry-backed verification.
+                cargo package --manifest-path "$cargo_manifest" --locked --allow-dirty --no-verify --exclude-lockfile
+                ;;
+              *)
+                printf 'Unknown package-check mode for %s: %s\n' "$package" "$mode" >&2
+                exit 1
+                ;;
+            esac
+          done <<<"${plan}"
 
       - id: github_release_permissions
         name: Verify GitHub Release workflow permissions
-        if: ${{ always() }}
         continue-on-error: true
         shell: bash
         run: |
@@ -459,6 +425,7 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
+          IMMUTABLE_RELEASES: ${{ steps.immutable_releases.outcome }}
           OWNERSHIP: ${{ steps.ownership.outcome }}
           RELEASE_METADATA: ${{ steps.meta.outcome }}
           RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
@@ -480,6 +447,7 @@ jobs:
           jq -e 'type == "object"' <<<"${credential_liveness_channels_json}" >/dev/null \
             || { echo 'CREDENTIAL_LIVENESS_CHANNELS must be a JSON object.' >&2; exit 1; }
           outcomes="$(jq -nc \
+            --arg immutable_releases "${IMMUTABLE_RELEASES}" \
             --arg ownership "${OWNERSHIP}" \
             --arg release_metadata "${RELEASE_METADATA}" \
             --arg repository_secrets "${REPOSITORY_SECRETS}" \
@@ -489,7 +457,7 @@ jobs:
             --argjson credential_liveness_channels "${credential_liveness_channels_json}" \
             --arg registry_state "${REGISTRY_STATE}" \
             --arg github_release_permissions "${GITHUB_RELEASE_PERMISSIONS}" \
-            '{ownership: $ownership, release_metadata: $release_metadata, repository_secrets: $repository_secrets, repository_secret_channels: $repository_secret_channels, environment_secrets: $environment_secrets, credential_liveness: $credential_liveness, credential_liveness_channels: $credential_liveness_channels, registry_state: $registry_state, github_release_permissions: $github_release_permissions}')"
+            '{immutable_releases: $immutable_releases, ownership: $ownership, release_metadata: $release_metadata, repository_secrets: $repository_secrets, repository_secret_channels: $repository_secret_channels, environment_secrets: $environment_secrets, credential_liveness: $credential_liveness, credential_liveness_channels: $credential_liveness_channels, registry_state: $registry_state, github_release_permissions: $github_release_permissions}')"
           results="$(python3 .github/scripts/release_artifacts.py channel-preflight-results \
             --manifest "${RELEASE_ARTIFACT_MANIFEST}" \
             --outcomes "${outcomes}" \
@@ -505,6 +473,7 @@ jobs:
         if: ${{ always() }}
         shell: bash
         env:
+          IMMUTABLE_RELEASES: ${{ steps.immutable_releases.outcome }}
           OWNERSHIP: ${{ steps.ownership.outcome }}
           SECRET_PLAN: ${{ steps.secret_plan.outcome }}
           BUILD_PLAN: ${{ steps.build_plan.outcome }}
@@ -540,6 +509,7 @@ jobs:
               *) failed+=("${name}") ;;
             esac
           }
+          record immutable-releases "${IMMUTABLE_RELEASES}"
           record ownership "${OWNERSHIP}"
           record secret-plan "${SECRET_PLAN}"
           record build-plan "${BUILD_PLAN}"

@@ -26,7 +26,7 @@ jobs:
   verify-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.tag }}
       - uses: ./.github/actions/verify-published-release
@@ -40,7 +40,7 @@ jobs:
     env:
       RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.tag }}
 
@@ -61,7 +61,7 @@ jobs:
         uses: ./.github/actions/install-linux-native-deps
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.x"
 
@@ -98,16 +98,17 @@ jobs:
           publish_if_missing() {
             local crate="$1"
             local wait_seconds="${2:-0}"
+            local cargo_manifest="$3"
             if crate_exists "$crate" "$version"; then
               echo "${crate} ${version} already published; skipping"
               return 0
             fi
-            cargo publish -p "$crate" --locked
+            cargo publish --manifest-path "$cargo_manifest" --locked
             if [[ "$wait_seconds" != "0" ]]; then
               sleep "$wait_seconds"
             fi
           }
 
-          while IFS='|' read -r package wait_secs; do
-            publish_if_missing "$package" "${wait_secs:-0}"
-          done < <(python3 .github/scripts/release_artifacts.py list-publish-plan --manifest "${RELEASE_ARTIFACT_MANIFEST}")
+          while IFS='|' read -r package wait_secs cargo_manifest; do
+            publish_if_missing "$package" "${wait_secs:-0}" "$cargo_manifest"
+          done < <(python3 .github/scripts/release_artifacts.py list-publish-plan --include-manifest --manifest "${RELEASE_ARTIFACT_MANIFEST}")

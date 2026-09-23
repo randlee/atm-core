@@ -3,8 +3,9 @@ name = "atm-graft-python"
 # Published to PyPI by Maturin as `atm-graft`; never cargo-publish this bridge
 # crate as a separate crates.io artifact.
 publish = false
-# Maturin consumes this crate's Cargo version as Python package metadata; keep
-# it equivalent to the workspace release while using PEP 440-compatible form.
+# The static Python project version owns the wheel metadata; this Cargo version
+# remains workspace-aligned for the native bridge. See sc-observability#203 for
+# the corresponding release-metadata ownership contract.
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

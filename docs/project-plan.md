@@ -1840,12 +1840,12 @@ team-lead lands the final status when the phase PR merges.
 | `BB.7` | `merged (#1470, #1478)` | `feature/bb7-docs` | `docs/plans/phase-bb/sprint-BB.7-docs.md` |
 | `BB.8` | `complete (#1500, #1501)` | `feature/bb8-2-colima-driver` | `docs/plans/phase-bb/sprint-BB.8-colima-integration.md` |
 
-## 61. phase bc — immutable releases and observability consolidation [planning]
+## 61. phase bc — immutable releases and observability consolidation [CRITICAL-REMEDIATION REVIEW ACTIVE — NOT COMPLETE]
 
-phase bc qualifies the published `sc-observability` `1.4.0` family before
-adopting bounded typed and logging improvements, then consumes a separately
-qualified `sc-publish` revision before immutable releases are enabled for
-atm-core. The authoritative plan is
+phase bc has implementation evidence for the published `sc-observability`
+`1.4.1` family and the bounded typed/logging work. Critical-remediation review
+is active and the phase is not complete pending QA and the separately
+authorized bc.5 evidence. The authoritative plan is
 [the phase-bc plan](./plans/phase-bc/phase-bc-plan.md). Its planning branch is
 `plan/phase-bc`, its implementation integration branch is
 `integrate/phase-bc`, and all new phase/sprint identifiers and document or
@@ -1853,11 +1853,20 @@ branch names use lowercase.
 
 The implementation is one append-only `gh stack`, with the lowest-risk
 dependency qualification at the bottom. Repository-setting activation is a
-separate operational gate requiring explicit authorization. The current
-`sc-publish` PR #101 verdict is `accept-as-prerequisite-only`: it is not a
-qualified consumer pin and immutable releases remain disabled until every
-reachable release writer and the Administration(read) credential path are
-compatible.
+separate operational gate requiring explicit authorization. The old
+sc-publish PR106-derived pin at `22137c2da13bf4638b4267b69c6c2f021617da73`
+is frozen historical evidence and is not a valid current u4 qualification.
+The reconciled main revision `f178b6919881c5a3d030d6343fcbb509f04806cc` is
+installed and qualified by PR #1571, so u4 is closed. The repository setting
+is reported enabled by API, but bc.5 preflight and first-release evidence
+remain pending.
+
+The owner-approved sequencing amendment dated 2026-09-23 records that bc.4
+local adoption proceeded before u2 and u3. u2 credential/setting activation
+was not passed as a bc.4 gate and belongs to separately authorized bc.5; u3's
+broad draft-first/tag-binding/concurrency/digest expansion was removed from
+the accepted sc-publish scope and is not claimed. This amendment does not
+close u2 or u3; u4 is closed by the current consumer qualification.
 
 The sc-observability `1.4.1` republish is an independent priority lane:
 upstream preparation is tracked by sc-observability
@@ -1875,12 +1884,20 @@ the plan is explicitly amended.
 
 | sprint | status | branch | authoritative sprint doc |
 | --- | --- | --- | --- |
-| `bc.1` | `planned` | `feature/bc1-sc-observability-1-4-0` | `docs/plans/phase-bc/sprint-bc.1-sc-observability-1.4.0.md` |
-| `bc.2` | `planned; must_follow bc.1` | `feature/bc2-typed-observability` | `docs/plans/phase-bc/sprint-bc.2-typed-observability.md` |
-| `bc.3` | `planned; must_follow bc.2` | `feature/bc3-log-macro-qualification` | `docs/plans/phase-bc/sprint-bc.3-log-macro-qualification.md` |
-| `bc.4` | `upstream-gated; must_follow bc.3` | `feature/bc4-sc-publish-immutable-consumer` | `docs/plans/phase-bc/sprint-bc.4-sc-publish-immutable-consumer.md` |
-| `bc.5` | `authorization-gated; after bc.4 deployment` | `evidence/bc5-immutable-release-activation` | `docs/plans/phase-bc/sprint-bc.5-immutable-release-activation.md` |
-| `bc.6` | `publication-gated; priority append-next after bc.1; independent of bc.4` | `feature/bc6-sc-observability-1-4-1` | `docs/plans/phase-bc/sprint-bc.6-sc-observability-1.4.1.md` |
+| `bc.1` | `implemented; critical-remediation review active` | `feature/bc1-sc-observability-1-4-0` | `docs/plans/phase-bc/sprint-bc.1-sc-observability-1.4.0.md` |
+| `bc.2` | `implemented; critical-remediation review active` | `feature/bc2-typed-observability` | `docs/plans/phase-bc/sprint-bc.2-typed-observability.md` |
+| `bc.3` | `implemented; critical-remediation review active` | `feature/bc3-log-macro-qualification` | `docs/plans/phase-bc/sprint-bc.3-log-macro-qualification.md` |
+| `bc.4` | `implemented; u4 closed; critical-remediation review active` | `feature/bc4-sc-publish-immutable-consumer` | `docs/plans/phase-bc/sprint-bc.4-sc-publish-immutable-consumer.md` |
+| `bc.5` | `not started; authorization-gated; preflight/evidence pending` | `evidence/bc5-immutable-release-activation` | `docs/plans/phase-bc/sprint-bc.5-immutable-release-activation.md`; pending artifacts: `docs/plans/phase-bc/bc.5-credential-preflight.md`, `docs/plans/phase-bc/bc.5-immutable-release-evidence.md` |
+| `bc.6` | `implemented; critical-remediation review active` | `feature/bc6-sc-observability-1-4-1` | `docs/plans/phase-bc/sprint-bc.6-sc-observability-1.4.1.md` |
+
+The [bc.2](./plans/phase-bc/bc.2-retained-mapping-and-reduction.md),
+[bc.3](./plans/phase-bc/bc.3-log-surface-decision.md), and
+[bc.6](./plans/phase-bc/bc.6-1.4.1-requalification.md) closure records remain
+implementation evidence with critical-remediation review active. The [bc.4
+qualification receipt](./plans/phase-bc/bc.4-sc-publish-consumer-qualification.md)
+contains the current u4 qualification at `f178b6919`; the bc.5 artifacts are
+pending records, not closure evidence.
 
 ## Daemon-Switch Scope Reduction
 

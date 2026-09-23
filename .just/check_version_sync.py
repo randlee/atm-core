@@ -275,13 +275,37 @@ def specifier_admits(version: str, specifier: str) -> bool:
 PYTHON_DEPENDENCY_ENTRY = re.compile(r"^([A-Za-z0-9_.-]+)\s*(.*)$")
 
 
-def workspace_dynamic_python_packages(repo_root: Path, workspace_version: str) -> dict[str, str]:
-    """Map Python package name -> version for every workspace pyproject.toml whose
-    version is derived from the Cargo workspace version (``dynamic = ["version"]``),
-    e.g. the atm-graft wheel. These are the packages other in-workspace pyproject.toml
-    dependency pins must track when the workspace version bumps.
+def workspace_python_distribution_names(repo_root: Path) -> set[str]:
+    """Names of the Python packages built from the Cargo workspace, as declared under
+    ``[[python_distributions]]`` in ``release/publish-artifacts.toml``. Their static
+    ``[project].version`` is rewritten by the publish kit on every bump, so they
+    track the workspace version exactly.
     """
 
+    manifest_path = repo_root / "release" / "publish-artifacts.toml"
+    if not manifest_path.is_file():
+        return set()
+    distributions = tomllib.loads(read_text(manifest_path)).get("python_distributions", [])
+    if not isinstance(distributions, list):
+        return set()
+    return {
+        entry["name"]
+        for entry in distributions
+        if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+    }
+
+
+def workspace_tracked_python_packages(repo_root: Path, workspace_version: str) -> dict[str, str]:
+    """Map Python package name -> version for every workspace pyproject.toml whose
+    version tracks the Cargo workspace version: the workspace-built distributions
+    (e.g. the atm-graft wheel, static ``[project].version`` kept in lockstep by the
+    publish kit) and any package still declaring ``dynamic = ["version"]``. These are
+    the packages other in-workspace pyproject.toml dependency pins must track when
+    the workspace version bumps. A tracked static version that has drifted from the
+    workspace version fails outright.
+    """
+
+    tracked_names = workspace_python_distribution_names(repo_root)
     packages: dict[str, str] = {}
     for pyproject in sorted((repo_root / "crates").glob("*/pyproject.toml")):
         manifest = tomllib.loads(read_text(pyproject))
@@ -289,9 +313,19 @@ def workspace_dynamic_python_packages(repo_root: Path, workspace_version: str) -
         if not isinstance(project, dict):
             continue
         name = project.get("name")
+        if not isinstance(name, str):
+            continue
         dynamic = project.get("dynamic", [])
-        if isinstance(name, str) and isinstance(dynamic, list) and "version" in dynamic:
-            packages[name] = workspace_version
+        is_dynamic = isinstance(dynamic, list) and "version" in dynamic
+        if not is_dynamic and name not in tracked_names:
+            continue
+        if not is_dynamic and project.get("version") != workspace_version:
+            fail(
+                f"{pyproject.relative_to(repo_root).as_posix()} [project].version "
+                f"{project.get('version')!r} does not match the workspace version "
+                f'"{workspace_version}" -- run the publish kit sync-python-version step'
+            )
+        packages[name] = workspace_version
     return packages
 
 
@@ -304,8 +338,8 @@ def validate_python_dependency_pins(repo_root: Path, workspace_version: str) -> 
     itself moved to 1.5.x).
     """
 
-    dynamic_packages = workspace_dynamic_python_packages(repo_root, workspace_version)
-    if not dynamic_packages:
+    tracked_packages = workspace_tracked_python_packages(repo_root, workspace_version)
+    if not tracked_packages:
         return False
 
     checked_any = False
@@ -325,7 +359,7 @@ def validate_python_dependency_pins(repo_root: Path, workspace_version: str) -> 
             if match is None:
                 continue
             dependency_name, specifier = match.group(1), match.group(2).strip()
-            target_version = dynamic_packages.get(dependency_name)
+            target_version = tracked_packages.get(dependency_name)
             if target_version is None or not specifier:
                 continue
             checked_any = True

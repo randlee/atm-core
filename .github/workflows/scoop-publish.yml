@@ -27,15 +27,9 @@ jobs:
       asset_patterns: ${{ steps.config.outputs.asset_patterns }}
       release_version: ${{ steps.meta.outputs.release_version }}
     steps:
-      # Release-branch fix (v1.4.4, upstream sc-publish#76): check out the
-      # dispatch ref, not the immutable tag. This workflow never builds from
-      # source — release assets stay tag-pinned via their download URLs and
-      # verify-published-release validates via the API — so the checkout
-      # exists solely to supply the verify tooling, manifest, and manifest
-      # template. Pinning it to the tag freezes any tooling or template
-      # defect into the release forever (the tag is immutable). Same model
-      # as release.yml: immutable tag for artifacts, dispatch ref for tooling.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
       - id: config
         name: Read Scoop configuration from release manifest
         shell: bash
@@ -73,11 +67,16 @@ jobs:
             exit 1
           fi
       - name: Checkout workflow support
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Bootstrap renderer
         uses: ./.github/actions/setup-renderer
+      - name: Checkout immutable release source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+          path: release-source
       - name: Checkout configured Scoop bucket
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ fromJSON(needs.verify-release.outputs.channel_config).channel.bucket_repository }}
           token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
@@ -134,7 +133,7 @@ jobs:
           set -euo pipefail
           workspace_root="$(pwd)"
           mkdir -p "$(dirname "scoop-bucket/${MANIFEST_PATH}")"
-          "${PUBLISHED_RENDERER}" render --mode file --root . \
+          "${PUBLISHED_RENDERER}" render --mode file --root release-source \
             --file "${MANIFEST_TEMPLATE}" \
             --var-file "${workspace_root}/scoop-vars.json" \
             --output "${workspace_root}/scoop-bucket/${MANIFEST_PATH}"

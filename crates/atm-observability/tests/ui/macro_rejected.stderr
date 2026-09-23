@@ -1,0 +1,5 @@
+error: unknown `#[instrument]` argument `unsupported_option`
+ --> tests/ui/macro_rejected.rs:3:14
+  |
+3 | #[instrument(unsupported_option = true)]
+  |              ^^^^^^^^^^^^^^^^^^

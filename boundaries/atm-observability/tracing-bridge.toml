@@ -21,7 +21,8 @@ io_forbidden = ["daemon_lifecycle", "database_io"]
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm"]
-allowed_dependencies = ["atm-core", "sc-observability", "sc-observability-types", "serde_json", "serial_test", "tempfile", "tracing", "tracing-subscriber"]
+allowed_dependencies = ["atm-core", "sc-observability", "sc-observability-types", "serde_json", "tracing", "tracing-subscriber"]
+allowed_dev_dependencies = ["atm-core", "sc-observability-log", "serial_test", "tempfile", "tokio", "trybuild"]
 forbidden_edges = [
   "atm-daemon -> atm-observability",
   "atm-observability -> atm-daemon-bootstrap",
@@ -48,4 +49,4 @@ review_gates = ["allowlist_redaction", "single_global_install", "non_blocking_qu
 
 [status]
 state = "active"
-notes = ["Only atm-daemon-bootstrap installs the process-global tracing bridge; atm-observability is the sole sanctioned library owner of sc-observability backend types."]
+notes = ["Only atm-daemon-bootstrap installs the process-global tracing bridge; atm-observability is the sole sanctioned library owner of sc-observability backend types.", "sc-observability-log, tokio, and trybuild are dev-only qualification dependencies for the isolated macro fixture; they authorize no production dependency or second global logger."]

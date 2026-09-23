@@ -1,3 +1,15 @@
+---
+status: complete
+branch: feature/bc1-sc-observability-1-4-0
+worktree: /Users/randlee/github/atm-core-worktrees/feature/bc1-sc-observability-1-4-0
+---
+
+> **Superseded by bc.6 for current release qualification.** The frozen
+> 1.4.0 record remains historical evidence. ATM cfg(test) fault injection
+> exercised the retained sink health seam, but did not exercise upstream true
+> queue saturation. The CI receipt boundary for this record is
+> `1a7c50a1a59afc3ff28edbc8acf5b4391440dd14`.
+
 # sprint bc.1 — qualify published sc-observability 1.4.0
 
 Accountable owner: `arch-ctm@atm-dev`.

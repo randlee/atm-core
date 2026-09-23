@@ -1,5 +1,12 @@
 # sc-publish qualification receipt — revision 25668ecc164261be676c9414c4f603b18ab74c91
 
+> **SUPERSEDED RECEIPT.** This historical qualification is retained for
+> provenance only. It is superseded by the current sc-publish main
+> qualification at `f178b6919881c5a3d030d6343fcbb509f04806cc`, recorded in
+> `docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md`. The
+> 2026-09-22 naming exception and historical branch names are intentionally
+> retained; they are not grounds for renaming prior records.
+
 - **Candidate revision**: `25668ecc164261be676c9414c4f603b18ab74c91` (sc-publish `main`, merge of PR #64
   `develop → main`; develop is an ancestor of main; content = reconciliation PR #63:
   main 43552e4 + develop 6ee8d88 + release-candidate git-identity fix, plus B1–B4
@@ -17,7 +24,7 @@
 | Clean install | `install.py --input release/sc-publish-consumer-input.json` completed clean (last copy: `release/sc-publish-pin.toml.example`) |
 | Repeat dry-run | exit 0 — "Publish-kit assets are in sync." (no drift) |
 | Byte-parity sweep | byte-identical: **54**, mismatched/missing: **0** (kit grew 49 → 54 files vs pin 42e0fce) |
-| Manifest validation | `release_artifacts.py validate-manifest` — "manifest validation passed" |
+| Manifest validation | `.github/scripts/release_artifacts.py validate-manifest` — "manifest validation passed" |
 | Kit test suite (pinned renderer) | `pytest .github/scripts/tests/` — **101 passed, 8 skipped, 3 subtests passed, 1 failed** (exception recorded below) |
 | Live release-candidate tag cut | pending — satisfied by the atm-core v1.4.4 candidate cut with the fixed `release-candidate.yml` |
 | Post-release leg retry | pending — satisfied by a v1.4.4 post-release channel leg retry |
@@ -226,7 +233,7 @@ artifact builds:
     workflow never builds from source — the checkout exists only to supply
     the verify tooling and manifest. Tag `v1.4.4` (e8a5b1c1b) predates
     every round-3 script fix, so a re-dispatch after merging fixes 11–12 to
-    `main` would have run the tag's frozen `release_artifacts.py` and
+    `main` would have run the tag's frozen `.github/scripts/release_artifacts.py` and
     failed identically — the immutable tag permanently bricks PyPI
     publication on any verify-tooling defect. Fix: drop the `ref:` pins so
     both jobs check out the dispatch ref (main), mirroring `release.yml`'s

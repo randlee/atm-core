@@ -93,3 +93,18 @@ installer target.
 Use the contract-declared GitHub token liveness check before dispatching the
 manifest-declared workflow. The manifest owns the bucket, manifest path,
 template, and installer target.
+
+## npm — `npm-publisher`
+
+The shared contract declares `NPM_TOKEN` in the `npm` GitHub environment.
+Public inquiries use `public-registry-inquiry-plan --channel npm`; scoped names
+are URL encoded. A registry outage, authentication error, or malformed response
+is indeterminate and must not be treated as an available name/version.
+
+The consumer declares `npm_packages` plus `channels.npm`. Read the installed
+README's npm contract. Build once in `release.yml`; use only immutable GitHub
+Release `.tgz` files with checksums for `npm-publish.yml`. Dispatch `dry_run=true`
+for nonpublishing preflight and `dry_run=false` only with publication authority.
+The read-only check proves artifact and registry state, not token validity.
+Retry by tag; exact existing SHA512 integrity skips, differing content blocks.
+The source package version must already match the tag, including prerelease.

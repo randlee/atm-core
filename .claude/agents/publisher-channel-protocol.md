@@ -35,15 +35,33 @@ renderer contract.
 
 ## Result
 
-Return a fenced JSON object to the parent `publisher` task:
+Return exactly one fenced JSON object to the parent `publisher` task on both
+success and failure. Missing, malformed, or incomplete JSON is a reporting
+contract failure and must never be treated as task completion. Preserve full
+sanitized diagnostics; redact credentials and sensitive values only.
+Failed or blocked results must contain an error object with meaningful
+`message`/`details`, or a non-empty sanitized diagnostic. An error code or bare
+error string alone is insufficient. The parent
+publisher validates the complete raw responses with `.github/scripts/worker_result.py`
+before accepting channel completion.
 
 ```json
 {
   "channel": "<channel>",
+  "tag": "v<VERSION>",
+  "commit": "<exact commit or unavailable>",
+  "command": ["<exact command argv>"],
+  "exit_status": 0,
+  "error": null,
+  "attempts": 1,
+  "workflow_url": "<url or unavailable>",
+  "job_url": "<url or unavailable>",
+  "evidence": ["<location or fact>"],
+  "registry_outcome": "<published/already-live/absent/unavailable>",
+  "verification": ["<check outcome or unavailable>"],
   "status": "passed|failed|blocked|apparently_available|taken|indeterminate",
   "checks": [{"kind": "<check>", "status": "passed|failed|blocked"}],
   "required_checks": [{"kind": "<contract check not run>", "reason": "<sanitized reason>"}],
-  "verification": ["<non-secret fact>"],
-  "sanitized_diagnostic": "<empty on success>"
+  "sanitized_diagnostic": "<empty on success; complete redacted diagnostic on failure>"
 }
 ```
