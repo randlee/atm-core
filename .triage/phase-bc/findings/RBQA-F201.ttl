@@ -1,0 +1,13 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+<urn:atm:triage:finding/RBQA-F201> a triage:Finding ; triage:findingId "RBQA-F201" ;
+  triage:title "Upstream boundary finding is rebutted without local allowlist expansion" ;
+  triage:description "The owner amendment records RBQA-F201 as rebutted and states that no boundary record or dependency allowlist change belongs in this docs-only layer. QA retains closure authority." ;
+  triage:phaseId "phase-bc" ; triage:triageMode "followup_pass" ; triage:category "RBQA" ; triage:severity "important" ;
+  triage:repeatable false ; triage:sweepScope "workspace" ; triage:status "open" ; triage:dispatchReady true ;
+  triage:triagedAt "2026-09-23T00:00:00Z"^^xsd:dateTime ; triage:foundIn triage:BC4 ; triage:foundAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F201/1> .
+
+<urn:atm:triage:occurrence/RBQA-F201/1> a triage:Occurrence ; triage:file "docs/plans/phase-bc/phase-bc-plan.md" ; triage:line 139 ;
+  triage:snippet "RBQA-F201 is rebutted as false" ; triage:status "open" ; triage:closed false ; triage:branch "integrate/phase-bc" ; triage:headSha "c79b50701" ;
+  triage:occursIn <urn:atm:triage:worktree/bc/c79b50701> .

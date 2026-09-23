@@ -1,0 +1,23 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+<urn:atm:triage:finding/ATM-QA-004>
+  a triage:Finding ; triage:findingId "ATM-QA-004" ;
+  triage:title "Publish-kit boundary requires current exact-pin evidence" ;
+  triage:description "PR1577 audit evidence records the canonical sc-publish f178b69 dry-run as the current boundary; historical kit drift is retained as evidence only. The finding remains open for QA disposition." ;
+  triage:phaseId "phase-bc" ; triage:triageMode "followup_pass" ;
+  triage:category "QA" ; triage:severity "important" ; triage:repeatable false ;
+  triage:sweepScope "file_only" ; triage:status "open" ; triage:dispatchReady true ;
+  triage:triagedAt "2026-09-23T00:00:00Z"^^xsd:dateTime ; triage:foundIn triage:BC4 ;
+  triage:foundAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/1> .
+
+<urn:atm:triage:occurrence/ATM-QA-004/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md" ;
+  triage:line 1 ; triage:snippet "current qualification at f178b6919" ;
+  triage:status "open" ;
+  triage:closed false ; triage:branch "integrate/phase-bc" ;
+  triage:headSha "c79b50701" ; triage:occursIn <urn:atm:triage:worktree/bc/c79b50701> .
+<urn:atm:triage:worktree/bc/c79b50701> a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-bc" ; triage:branch "integrate/phase-bc" ;
+  triage:headSha "c79b50701" ; triage:orderIndex 1 .

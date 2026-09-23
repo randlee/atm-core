@@ -27,7 +27,7 @@ upstream policy differs.
   second global logger in ATM production processes.
 - `#[instrument]` is described as executor-agnostic; no Tokio-specific crate or
   runtime ownership is asserted.
-- No duplicate event, timeline bypass, unbounded payload, lost correlation, or
+- No duplicate event, timeline bypass, lost correlation, or
   changed shutdown authority is accepted.
 - Any future global bridge migration has explicit prerequisites and is not
   hidden in this sprint.

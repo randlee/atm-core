@@ -1,5 +1,12 @@
 # sc-publish qualification receipt — revision 25668ecc164261be676c9414c4f603b18ab74c91
 
+> **SUPERSEDED RECEIPT.** This historical qualification is retained for
+> provenance only. It is superseded by the current sc-publish main
+> qualification at `f178b6919881c5a3d030d6343fcbb509f04806cc`, recorded in
+> `docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md`. The
+> 2026-09-22 naming exception and historical branch names are intentionally
+> retained; they are not grounds for renaming prior records.
+
 - **Candidate revision**: `25668ecc164261be676c9414c4f603b18ab74c91` (sc-publish `main`, merge of PR #64
   `develop → main`; develop is an ancestor of main; content = reconciliation PR #63:
   main 43552e4 + develop 6ee8d88 + release-candidate git-identity fix, plus B1–B4

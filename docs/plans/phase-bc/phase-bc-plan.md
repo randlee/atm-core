@@ -18,6 +18,10 @@ lowercase. This is a new user-directed standard, not a claim about historical
 repository naming. This plan therefore uses `phase-bc`, `bc.1`, and branch
 names such as `feature/bc1-sc-observability-1-4-0`.
 
+Rand's 2026-09-22 naming exception permits historical uppercase or legacy
+branch/worktree names to remain in evidence records; this plan does not rename
+those records retroactively.
+
 ## 2. outcomes
 
 This phase will:
@@ -39,6 +43,9 @@ This phase will:
 
 - atm-core now pins `sc-observability` and
   `sc-observability-types` at exact `=1.4.1` workspace versions on bc.6.
+- `REQ-ATM-OBS-001` has a published `sc-observability = "=1.4.1"` baseline;
+  any pre-publish dependency reference is historical evidence only and must be
+  labeled as such.
 - `1.4.1` is published and independently verified, including npm
   `@synaptic-canvas/sc-observability@1.4.1`; the consumed lockfile is the
   authoritative package inventory.
@@ -108,7 +115,7 @@ This phase will:
 
 | gate | required evidence | blocks |
 | --- | --- | --- |
-| `u1` | [sc-publish PR #106 combined-stack acceptance](./bc.4-upstream-owner-acceptance.md); PR #101 is historical evidence | bc.4 |
+| `u1` | **SUPERSEDED-BY-u4**: PR #106 combined-stack acceptance is historical discovery evidence; the reconciled main revision and consumer receipt are now authoritative | u4 / bc.4 |
 | `u2` | separately authorized bc.5 setting/credential activation evidence; not passed before bc.4 and still incomplete | bc.5 |
 | `u3` | inherited/deferred upstream lifecycle work: draft-first publication, replacement refusal, exact tag/build binding, per-tag concurrency, trusted dispatch refs, and digest/checksum verification; not claimed by bc.4 | upstream follow-up; not a bc.4 completion gate |
 | `u4` | sc-publish main `f178b6919881c5a3d030d6343fcbb509f04806cc` (develop `98a75ba3e` reconciled and promoted via #98/#111/#110) pinned and canonically reinstalled by PR #1571 `b381e0981`; **CLOSED**, evidence in `bc.4-sc-publish-consumer-qualification.md` | bc.4 |
@@ -125,13 +132,22 @@ belongs to separately authorized bc.5; no administrator appointment or
 execution evidence is asserted here. u3's broad draft-first, tag-binding,
 concurrency, and digest/checksum expansion was explicitly removed from the
 accepted sc-publish scope and is not claimed. The amendment documents the
-sequencing decision; it does not close u2, u3, or u4.
+sequencing decision; it does not close u2 or u3. It supersedes u1 as the
+consumer-gate reference because u4 is now the authoritative exact-main
+qualification. u4 is closed by the current consumer receipt; phase closure
+still requires the remaining QA and bc.5 evidence.
 
 The docs lane records QA-004 as pre-existing/upstream-kit-owned and does not
 modify it; the upstream tracking issue is
 <https://github.com/randlee/sc-publish/issues/92>. RBQA-F201 is rebutted as
 false; no boundary record or dependency allowlist change belongs in this
 documentation layer.
+
+The deferred upstream behaviour follow-ups are sc-observability issues
+[#203](https://github.com/randlee/sc-observability/issues/203) and
+[#204](https://github.com/randlee/sc-observability/issues/204); bc.2/bc.3
+record the `17+2+1` fixture receipt and this ledger records them as upstream
+deferred items, not ATM fixes.
 
 ### upstream ownership and dependencies
 
@@ -197,13 +213,13 @@ their task closes.
 
 | gate or sprint | authoritative artifact |
 | --- | --- |
-| `u1` | `docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md` (PR #101 remains historical only) |
+| `u1` | `docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md` (historical; **SUPERSEDED-BY-u4**) |
 | `bc.1` | `docs/plans/phase-bc/bc.1-1.4.0-qualification.md` |
 | `bc.2` | `docs/plans/phase-bc/bc.2-retained-mapping-and-reduction.md` |
 | `bc.3` | `docs/plans/phase-bc/bc.3-log-surface-decision.md` |
 | `u2` | `docs/plans/phase-bc/bc.5-credential-preflight.md` |
 | `u3` | inherited/deferred upstream lifecycle record in `docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md`; not claimed by bc.4 |
-| `u4`, `bc.4` | `docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md` ("current qualification" table; 22137c2da receipt historical) |
+| `u4`, `bc.4` | `docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md` (current qualification at `f178b6919`; 22137c2da receipt historical) |
 | `bc.5` credential | `docs/plans/phase-bc/bc.5-credential-preflight.md` |
 | `bc.5` setting/release | `docs/plans/phase-bc/bc.5-immutable-release-evidence.md` |
 | `u5`, `bc.6` | `docs/plans/phase-bc/bc.6-1.4.1-requalification.md` |
@@ -266,8 +282,13 @@ this plan authorizes none.
   operator authorization.
 - phase closure requires proof for the setting and the first future immutable
   release; enabling alone is not closure.
-- just validate publish dry-run failures caused solely by the workspace version still equalling the published 1.6.0 are deferred to the prerelease patch bump (Rand, 2026-09-23 UTC).
+- `just validate` package/publish-dry-run failures caused by the already
+  published `1.6.0` release state are deferred to the prerelease patch bump
+  (Rand, 2026-09-23 UTC). This waiver covers landing the layer into
+  `integrate/phase-bc` and merging it to `develop`; it authorizes no version
+  bump, tag, publish, or release-from-main operation.
 - bc.5 remains enabled but open: the first immutable-release proof is deferred to the release from main and is not open phase work or a blocker to landing into integrate/phase-bc (Rand, 2026-09-23 UTC: "we are not publishing until code lands on main").
 - Rand's 2026-09-23 UTC waiver permits this critical-remediation layer to
-  land into `integrate/phase-bc` before release-from-main validation; it does
-  not authorize phase closure, a version bump, a tag, or publication.
+  land into `integrate/phase-bc` and subsequently merge to `develop` before
+  release-from-main validation; landing is distinct from phase closure and
+  does not authorize a version bump, a tag, or publication.

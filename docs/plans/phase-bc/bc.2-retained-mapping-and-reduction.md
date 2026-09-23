@@ -1,7 +1,5 @@
 ---
-status: implemented; QA-1 remediation active
-branch: feature/bc2-typed-observability
-worktree: /Users/randlee/github/atm-core-worktrees/feature/bc2-typed-observability
+status: implemented; critical-remediation review active
 ---
 
 # bc.2 retained mappings and reduction
@@ -12,7 +10,7 @@ The public ATM contracts remain unchanged.
 
 ## Cumulative removed production lines
 
-The cumulative reduction is compared with the historical baseline
+The historical mid-remediation comparison remains anchored to
 `fe432fff14b659db4e12e5f0700244c2566eab43`:
 
 | Location | Removed | Added | Net | Reason |
@@ -20,6 +18,18 @@ The cumulative reduction is compared with the historical baseline
 | `crates/atm-observability/src/lib.rs` | 22 | 9 | -13 | Extract typed diagnostics at the adapter boundary without changing the public error contract. |
 | `crates/atm/src/main.rs` | 22 | 14 | -8 | Preserve historical public messages while discarding backend diagnostics after stable typed extraction. |
 | **Total** | **44** | **23** | **-21** | Public ATM error/message/remediation shape remains unchanged; test and telemetry plumbing are separated from the public contract. |
+
+The recomputed production/test split for the final code head
+`ce6b38d4919e05f22e502e5ad8e4145dc3c128d5`, compared with develop
+`904673995c529017ce673c7957efa77176df61e4`, is **+36 lines**: `crates/atm/src/main.rs`
+944 -> 975 (**+31**) and `crates/atm-observability/src/lib.rs` 514 -> 519
+(**+5**). Test-only literal-matrix, query, and fault-injection additions are
+separately covered by the focused test receipts below and are not included in
+this production-line figure. The `fe432fff1` table is a mid-remediation comparison, not the
+production delta from develop. The earlier `df7a094e0` receipt is likewise a
+historical **+4-line** intermediate observation. Deliverable 5 is therefore
+closed as a documented retained-mapping review, not as a claim of net source
+line reduction against develop.
 
 ## Intentionally retained mappings
 
@@ -59,8 +69,11 @@ degraded/unavailable health seam or require an upstream API change.
   codes consumed by the previous compatibility enums through
   `DiagnosticInfo::diagnostic()`.
 - Historical public error goldens remain anchored to the pre-bc.2 baseline
-  `df7a094e07686f2a12878a548acecd7a4eea50e4`; no live constructor output is
-  used as the compatibility oracle.
+  `df7a094e07686f2a12878a548acecd7a4eea50e4`; the unconditional
+  `retained_logger_bootstrap_error_preserves_historical_json_without_cause`
+  golden test compares serialized `AtmError` output directly. Stable `SC_*`
+  diagnostic codes are internal diagnostic/timeline data; they are not a
+  replacement public JSON contract.
 - Focused tests passed: `cargo test -p atm-observability` (17 unit tests,
   2 macro tests, 1 doctest) and `cargo test -p agent-team-mail --bin atm`
   (314 unit tests). No backend paths outside the retained JSONL sink health
@@ -70,7 +83,8 @@ degraded/unavailable health seam or require an upstream API change.
   (1 passed, 313 filtered).
 - The bc.6 published-consumer qualification still passes, including health,
   queue-full, flush, shutdown, and query probes. Public ATM JSON/error/doctor
-  fixtures remain byte-for-byte unchanged.
+  fixtures remain byte-for-byte unchanged after `ce6b38d`; no selective caveat
+  is intended.
 
 ### bc.2 review-fix-6 receipt
 
@@ -89,10 +103,28 @@ additions and 61 deletions, split as production +8/-3 and tests +76/-58.
 The production portion is the adapter mapping and unknown-code fallback; the
 remaining portion is test-only literal coverage. The CLI test count is 314.
 
+The final receipt is pinned to code head `ce6b38d4919e05f22e502e5ad8e4145dc3c128d5`;
+the draft-PR narrative above is historical and is not a current delivery
+claim. `RetainedLogger::flush -> typed::FlushFailure` is a public API change
+present at the already-published workspace version `1.6.0`. The release-from-
+main decision (major bump or `publish = false`) remains explicitly open for
+the release owner; this documentation layer neither decides nor releases it.
+
 The exercised seam is a retained JSONL sink health override with successful
 emit, flush, query, and terminal shutdown. It is not SQLite-backed and does
 not inject real `InvalidEvent`, `WriterDegraded`, `ShutdownTimedOut`, query, or
 follow backend failures; those paths are explicitly unsupported by this fault
 matrix. This correction branch will be registered as the new draft top layer
-of gh-stack #1550; PR1562 and PR1561 remain draft while these corrections
-continue.
+of the earlier stack; that draft-stack status is historical and is not a
+current delivery claim.
+
+The intentional retained-field privacy boundary remains: `CommandEvent` may
+carry team, agent, sender, message-id, and task-id context, but retained JSON
+is restricted to `RETAINED_FIELD_ALLOWLIST`; this phase adds no identity field
+or synthesized correlation id. `prepare_retained_log` remains synchronous
+because current CLI startup is single-task and no behaviour-preserving bounded
+`spawn_blocking` reuse exists; future multi-task reuse requires review.
+
+The sc-observability follow-ups [#203](https://github.com/randlee/sc-observability/issues/203)
+and [#204](https://github.com/randlee/sc-observability/issues/204) remain
+deferred upstream items.
