@@ -234,17 +234,17 @@ pub fn build_retained_logger(
         maintenance_max_work_per_pass: retained_log_policy.maintenance_max_work_per_pass,
     };
     config.enable_console_sink = false;
-    let builder = sc_observability::Logger::builder_typed(config).map_err(|_source| {
-        AtmError::observability_bootstrap("failed to initialize shared daemon observability logger")
-    })?;
+    let builder =
+        sc_observability::Logger::builder_typed(config).map_err(map_retained_logger_error)?;
     builder
         .build_typed()
         .map(RetainedLogger)
-        .map_err(|_source| {
-            AtmError::observability_bootstrap(
-                "failed to initialize shared daemon observability logger",
-            )
-        })
+        .map_err(map_retained_logger_error)
+}
+
+fn map_retained_logger_error(source: impl std::fmt::Display) -> AtmError {
+    AtmError::observability_bootstrap("failed to initialize shared daemon observability logger")
+        .with_cause(source)
 }
 
 /// Builds the retained JSONL logger, resolving `ATM_LOG` from the process
@@ -284,7 +284,6 @@ fn try_log_error_code(error: &sc_observability::TryLogFailure) -> &str {
         | sc_observability::TryLogFailure::ShutdownTimedOut(context) => {
             context.diagnostic().code.as_str()
         }
-        #[allow(unreachable_patterns)]
         _ => "SC_OBSERVABILITY_LOGGER_UNKNOWN_FAILURE",
     }
 }

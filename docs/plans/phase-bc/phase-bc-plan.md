@@ -127,8 +127,10 @@ accepted sc-publish scope and is not claimed. The amendment documents the
 sequencing decision; it does not close u2, u3, or u4.
 
 The docs lane records QA-004 as pre-existing/upstream-kit-owned and does not
-modify it. RBQA-F201 is rebutted as false; no boundary record or dependency
-allowlist change belongs in this documentation layer.
+modify it; the upstream tracking issue is
+<https://github.com/randlee/sc-publish/issues/92>. RBQA-F201 is rebutted as
+false; no boundary record or dependency allowlist change belongs in this
+documentation layer.
 
 ### upstream ownership and dependencies
 
@@ -263,3 +265,5 @@ this plan authorizes none.
   operator authorization.
 - phase closure requires proof for the setting and the first future immutable
   release; enabling alone is not closure.
+- just validate publish dry-run failures caused solely by the workspace version still equalling the published 1.6.0 are deferred to the prerelease patch bump (Rand, 2026-09-23).
+- bc.5 remains enabled but open: the first immutable-release proof is deferred to the release from main and is not open phase work or a blocker to landing into integrate/phase-bc.
