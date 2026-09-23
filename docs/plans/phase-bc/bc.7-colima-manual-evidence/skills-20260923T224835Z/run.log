@@ -1,0 +1,34 @@
+0a17e3680ec8672bc9fd78c1f291b832174e51edfa86b983bd38c9fb4eacb23c
+started: hermes-testbed (platform: linux/arm64)
+saved local certificate fingerprint E524A8FF5D36C5C97008174B5045C42575A055AA45B75AEABA8B362DB73150AC
+mTLS identity configured (fingerprint E524A8FF5D36C5C9...)
+/package/admin/s6-overlay/libexec/preinit: info: container permissions: uid=0 (root), euid=0, gid=0 (root), egid=0
+/package/admin/s6-overlay/libexec/preinit: info: /run permissions: uid=0 (root), gid=0 (root), perms=oxorgxgruxuwur
+s6-rc: info: service s6rc-oneshot-runner: starting
+s6-rc: info: service s6rc-oneshot-runner successfully started
+s6-rc: info: service fix-attrs: starting
+s6-rc: info: service fix-attrs successfully started
+s6-rc: info: service legacy-cont-init: starting
+cont-init: info: running /etc/cont-init.d/01-hermes-setup
+[stage2] Generated API_SERVER_KEY for the loopback gateway api_server
+[config-migrate] WARNING: This config predates version 12 (~2 years old) and can no longer be auto-migrated. Back up /opt/data/config.yaml and run `hermes setup` to regenerate, or manually set _config_version: 12 after reviewing the changelog.
+Syncing bundled skills into ~/.hermes/skills/ ...
+  + atm-troubleshoot
+  + atm-nudge-roundtrip
+  + atm-hermes-ready
+  + atm-smoke
+  + atm-setup-environment
+  + meeting-action-items
+  + notion
+  + teams-meeting-pipeline
+  + docx
+---
+Hermes Agent v0.21.4 (2026.9.21) · upstream 7bda5f21
+Python: 3.13.5
+OpenAI SDK: 2.24.0
+atm-daemon 1.6.1
+bringup: provider probe ok (inbound turn, no model-resolution failure)
+bringup: done
+bringup: gateway up (1 hook load(s) logged)
+bringup: doctor {"status": "healthy", "message": "ATM doctor completed with healthy findings only", "info_count": 2, "warning_count": 0, "error_count": 0}
+bringup: herdr [('tester', 'idle'), ('fx-at7-beta', 'idle'), ('fx-at9-beta', 'idle'), ('fx-at10-beta', 'idle'), ('fx-at10-gamma', 'idle'), ('fx-at11-beta', 'idle')]

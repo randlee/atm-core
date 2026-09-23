@@ -82,3 +82,32 @@ first Hermes-skills step recorded one setup PASS but no provider-backed skill
 reports; the emitted run log records that Hermes had no configured AI provider.
 The task-start and assignment prompt steps completed PASS before the fixture
 was terminated at the harness boundary; no evidence files were edited.
+
+### Colima after the harness fix (2026-09-23, manual addendum)
+
+The `FAIL` above was a harness defect, not a product one. Hermes
+`v2026.9.21-atm` is multiplex-only and reads a profile's API keys from
+`$HERMES_HOME/.env`, never from the process environment, so the gateway had
+no AI provider and logged `Model resolution failed` on every turn.
+atm-hermes-testbed #16 (merged, `c753aad`) writes the allowlisted key into the
+profile env at bringup and adds a provider probe that quotes the gateway's own
+line and stops the run. Rand's ruling the same evening ended further runs of
+the timer-driven harness (redesign brief: PR #1584); the remaining evidence
+was gathered by talking to the fixture agents over `atm send` and is kept raw
+under `docs/plans/phase-bc/bc.7-colima-manual-evidence/`:
+
+- `skills-20260923T224835Z/`: the testbed `test.sh` run on the fixed bringup
+  (`result.txt`: `FAIL  skills reported 5/7, PASS 5/7`). The two unfilled
+  slots were `atm-nudge-roundtrip` (tester, hermes); that phase was cut off
+  fourteen seconds in when a second `run.sh` replaced the container.
+- `nudge-roundtrip-transcript.md`: the same two sentences sent by hand to the
+  live fixture; both agents announced START within 25 s and reported
+  `atm-nudge-roundtrip` PASS (tester 3/3, hermes 5/5 native) within 65 s;
+  the ack id the tester received is the id hermes reports sending.
+- `AT11-run-prompts.log` + `prompt-AT11.json`: the prompt-handoffs step,
+  absent from the driver run because that run was interrupted during it,
+  run by hand on the same fixture: `VERDICT AT11: pass` (3/3 cases).
+
+Result on ATM 1.6.1: all seven skill slots PASS, AT9 PASS, AT10 PASS, AT11
+PASS. There is no single driver-recorded `colima integration: PASS` envelope
+for 1.6.1; the redesigned harness produces the next one.
