@@ -56,6 +56,8 @@ def packaging_script(workflow: str, step_name: str) -> str:
 
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
+    SUBPROCESS_TIMEOUT_SECONDS = 30
+
     def test_wait_for_archive_returns_after_a_successful_run(self) -> None:
         prerelease = prerelease_script()
         clock = [0.0]
@@ -210,6 +212,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                         check=True,
                         text=True,
                         capture_output=True,
+                        timeout=self.SUBPROCESS_TIMEOUT_SECONDS,
                     )
                 self.assertEqual(
                     command_text,
@@ -283,6 +286,38 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(calls, ["atm --version"])
             self.assertNotIn("already selected; service left running", stdout.getvalue())
+
+    @unittest.skipUnless(os.name == "posix", "selector composition uses POSIX symlinks")
+    def test_failed_activation_keeps_non_transactional_selector_repoint(self) -> None:
+        """Consumer contract for sc-publish#112: failed activation keeps repoints."""
+        prerelease = prerelease_script()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stage = root / "builds" / "v1.5.11" / "bin"
+            selector = root / "selectors"
+            stage.mkdir(parents=True)
+            for name in ("atm", "atm-daemon"):
+                binary = stage / name
+                binary.write_text("#!/bin/sh\n", encoding="utf-8")
+                binary.chmod(0o755)
+            config = {
+                "binaries": ["atm", "atm-daemon"],
+                "install_root": str(root / "builds"),
+                "selector_dir": {"darwin": str(selector), "linux": str(selector), "windows": str(selector)},
+                "post_install": "activate {version}",
+                "verify": "verify {version}",
+            }
+            with (
+                mock.patch.object(prerelease, "select_release", return_value=("1.5.11", {})),
+                mock.patch.object(prerelease.platform, "system", return_value="Linux"),
+                mock.patch.object(
+                    prerelease, "shell", side_effect=subprocess.CalledProcessError(1, "activate")
+                ),
+            ):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    prerelease.install({"prerelease": config}, "1.5.11")
+            self.assertTrue((selector / "atm").is_symlink())
+            self.assertTrue(os.path.samefile(selector / "atm", stage / "atm"))
 
     def test_generic_workflow_preserves_manifest_build_and_plain_artifact_contracts(self) -> None:
         root = discover_repo_root()

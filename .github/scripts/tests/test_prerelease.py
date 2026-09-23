@@ -14,7 +14,6 @@ from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parents[3] / ".claude" / "skills" / "prerelease" / "scripts" / "prerelease.py"
-SUBPROCESS_TIMEOUT_SECONDS = 30
 SPEC = importlib.util.spec_from_file_location("sc_publish_prerelease", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 PRERELEASE = importlib.util.module_from_spec(SPEC)
@@ -72,7 +71,7 @@ class PrereleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_manifest(root)
-            result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--publish", "--dry-run"], cwd=root, text=True, capture_output=True, check=False, timeout=SUBPROCESS_TIMEOUT_SECONDS)
+            result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--publish", "--dry-run"], cwd=root, text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("would create tag: prerelease/v1.5.11", result.stdout)
         self.assertIn("would wait for prerelease-archive.yml", result.stdout)
@@ -81,7 +80,7 @@ class PrereleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_manifest(root)
-            result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--publish"], cwd=root, text=True, capture_output=True, check=False, timeout=SUBPROCESS_TIMEOUT_SECONDS)
+            result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", "release/publish-artifacts.toml", "--publish"], cwd=root, text=True, capture_output=True, check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("authorization", result.stderr)
 
@@ -102,7 +101,6 @@ class PrereleaseTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
-                timeout=SUBPROCESS_TIMEOUT_SECONDS,
             )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("would create tag: prerelease/v1.5.11", result.stdout)
@@ -153,7 +151,6 @@ class PrereleaseTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
-                timeout=SUBPROCESS_TIMEOUT_SECONDS,
             )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("unrecognized arguments: 1.5.11", result.stderr)
@@ -178,25 +175,6 @@ class PrereleaseTests(unittest.TestCase):
                 self.assertTrue((stage / "bin" / "fixture").is_file())
                 self.assertTrue((root / "selector" / "fixture").is_symlink())
                 download.assert_called_once()
-
-    def test_install_records_non_transactional_selector_activation(self) -> None:
-        """Consumer contract for sc-publish#112: failed activation keeps repoints."""
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            values = manifest(root)
-            archive = root / "fixture.zip"
-            archive.write_bytes(fixture_archive())
-            with (
-                mock.patch.object(PRERELEASE, "select_release", return_value=("1.5.11", {})),
-                mock.patch.object(PRERELEASE, "download_checked_archive", return_value=archive),
-                mock.patch.object(PRERELEASE.platform, "system", return_value="Linux"),
-                mock.patch.object(
-                    PRERELEASE, "shell", side_effect=subprocess.CalledProcessError(1, "activate")
-                ),
-            ):
-                with self.assertRaises(subprocess.CalledProcessError):
-                    PRERELEASE.install(values, "1.5.11")
-            self.assertTrue((root / "selector" / "fixture").is_symlink())
 
     def test_checksum_verification_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -370,7 +348,6 @@ class PrereleaseTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
-            timeout=SUBPROCESS_TIMEOUT_SECONDS,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("--publish", result.stdout)

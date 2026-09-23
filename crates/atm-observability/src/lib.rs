@@ -256,8 +256,16 @@ pub fn build_retained_logger(
 }
 
 fn map_retained_logger_error(source: impl std::fmt::Display) -> AtmError {
-    AtmError::observability_bootstrap("failed to initialize shared daemon observability logger")
-        .with_cause(source)
+    let error = AtmError::observability_bootstrap(
+        "failed to initialize shared daemon observability logger",
+    );
+    tracing::debug!(
+        target: "atm.observability",
+        diagnostic_code = %error.code(),
+        source = %source,
+        "shared daemon observability logger initialization failed"
+    );
+    error
 }
 
 /// Builds the retained JSONL logger, resolving `ATM_LOG` from the process
@@ -531,6 +539,7 @@ pub fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmEr
 
 #[cfg(test)]
 mod tests {
+    use atm_core::error::AtmError;
     use atm_core::test_support::FakeEnvSource;
     use tempfile::TempDir;
 
@@ -553,6 +562,20 @@ mod tests {
 
         assert_eq!(active_log_path, log_dir.join("atm.log.jsonl"));
         assert!(active_log_path.is_file());
+    }
+
+    #[test]
+    fn retained_logger_bootstrap_error_preserves_historical_json_without_cause() {
+        let daemon_error = super::map_retained_logger_error("synthetic initialization failure");
+        let historical = AtmError::observability_bootstrap(
+            "failed to initialize shared daemon observability logger",
+        );
+
+        assert_eq!(daemon_error.cause(), None);
+        assert_eq!(
+            serde_json::to_string(&daemon_error).expect("daemon error JSON"),
+            serde_json::to_string(&historical).expect("historical error JSON")
+        );
     }
 
     #[test]
