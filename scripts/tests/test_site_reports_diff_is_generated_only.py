@@ -15,11 +15,19 @@ GENERATED_FILES = {
     "site/reports/procedures/manifest.json",
     "site/reports/send-message-benchmark.json",
 }
+# Reviewed inputs, not runner-written evidence: a baseline revision is edited by
+# hand and gated by scripts/smoke/benchmark_schema.py (revision must increase,
+# a lowered floor needs the reviewed D3 exception approver plus a rationale).
+REVIEWED_INPUTS = {
+    "site/reports/send-message-benchmark/baselines.json",
+}
 
 
 def is_allowed_report_change(status: str, path: str) -> bool:
     """Evidence under site/reports is add-only; pages are regenerable; exact renames keep evidence intact."""
     if status == "A" or path in GENERATED_FILES:
+        return True
+    if status == "M" and path in REVIEWED_INPUTS:
         return True
     if status.startswith("R"):
         # A moved payload must stay byte-identical (BB.8 moved the colima runs into
@@ -56,6 +64,8 @@ class SiteReportsDiffTests(unittest.TestCase):
         self.assertTrue(is_allowed_report_change("A", payload))
         self.assertTrue(is_allowed_report_change("M", "site/reports/procedures/manifest.json"))
         self.assertTrue(is_allowed_report_change("M", "site/reports/send-message-benchmark.json"))
+        self.assertTrue(is_allowed_report_change("M", "site/reports/send-message-benchmark/baselines.json"))
+        self.assertFalse(is_allowed_report_change("D", "site/reports/send-message-benchmark/baselines.json"))
         self.assertFalse(is_allowed_report_change("M", "site/reports/send-message-benchmark/20260914T200908Z-m5-atmbench-tcp.json"))
 
 
