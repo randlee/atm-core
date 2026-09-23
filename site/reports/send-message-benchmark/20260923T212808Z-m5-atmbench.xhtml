@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>ATM benchmark campaign — 20260923T212808Z-m5-atmbench</title>
+  <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
+  <style type="text/css">
+    body { font-family: sans-serif; color: #1f2937; margin: 2rem auto; max-width: 75rem; padding: 0 1rem; }
+    table { border-collapse: collapse; margin: 1rem 0; width: 100%; } th, td { border: 1px solid #cbd5e1; padding: .55rem; text-align: left; }
+    th { background: #f1f5f9; } .PASS { color: #065f46; font-weight: bold; } .FAIL { color: #991b1b; font-weight: bold; } .INCOMPLETE { color: #92400e; font-weight: bold; }
+    .meta { color: #475569; } code { font-family: ui-monospace, monospace; } .incomplete { margin-top: 2rem; border: 2px solid #f59e0b; padding: 1rem; background: #fffbeb; }
+  </style>
+</head>
+<body>
+  <h1>ATM benchmark campaign — 20260923T212808Z-m5-atmbench</h1>
+  <p class="meta"><code>20260923T212808Z-m5-atmbench</code> · m5-atmbench · phase ao2 · source <code>23162f0ef23d8a12bfd0dc408d5374c4a236e809</code></p>
+  <p>Status: <strong class="FAIL">FAIL</strong> · started <time datetime="2026-09-23T21:28:08.263541Z">Sep 23, 2026 · 14:28 PDT</time> · completed <time datetime="2026-09-23T21:29:47.838053Z">Sep 23, 2026 · 14:29 PDT</time></p>
+  <table>
+    <thead><tr><th>Test</th><th>p50 msg/sec</th><th>p95</th><th>p99</th><th>Durable write proof</th><th>Baseline floor</th><th>Margin</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr data-target="tcp"><td>TCP</td><td>16587.75</td><td>17238.57</td><td>17782.82</td><td>330000 / 330000 after restart</td><td>17000.00</td><td>-412.25</td><td class="FAIL">FAIL</td></tr>
+      <tr data-target="tcp-tls"><td>TCP + TLS</td><td>14988.44</td><td>15564.34</td><td>15837.72</td><td>298000 / 298000 after restart</td><td>13500.00</td><td>+1488.44</td><td class="PASS">PASS</td></tr>
+      <tr data-target="uds"><td>UDS</td><td>19133.51</td><td>19930.23</td><td>20229.96</td><td>380000 / 380000 after restart</td><td>18000.00</td><td>+1133.51</td><td class="PASS">PASS</td></tr>
+      <tr data-target="sqlite"><td>SQLite</td><td>47200.67</td><td>52866.58</td><td>54728.42</td><td>918000 / 918000 after restart</td><td>35000.00</td><td>+12200.67</td><td class="PASS">PASS</td></tr>
+    </tbody>
+  </table>
+  <script type="application/ecmascript"><![CDATA[
+(() => { const f = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", hourCycle: "h23", timeZoneName: "short" }); document.querySelectorAll("time[datetime]").forEach((node) => { node.textContent = f.format(new Date(node.dateTime)); }); })();
+  ]]></script>
+</body>
+</html>
