@@ -1,0 +1,46 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT10-assignment",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "three-queued-then-one-ready",
+      "status": "pass",
+      "detail": "atm task list --json (as fx-at10-beta) after assigning at10-c1-1790200708-{1,2,3} to beta: positions 1,2,3 all state 'assigned'. atm task events at10-c1-1790200708-1 --json showed handoffs [{\"kind\":\"task_queued\"},{\"kind\":\"task_ready\",\"trigger\":\"task_pass\"}]; tasks -2 and -3 events showed only {\"kind\":\"task_queued\"} (no task_ready) -- exactly one ready task. atm list --pending-ack --json (as beta) run after each of the three assignments all returned {\"count\":0,\"rows\":[],\"bucket_counts\":{\"unread\":N,\"pending_ack\":0,...}} with pending_ack:0 in all three runs (unread climbing 1,2,3)."
+    },
+    {
+      "name": "close-releases-next",
+      "status": "pass",
+      "detail": "atm task start at10-c1-1790200708-1 then atm task close at10-c1-1790200708-1 completed (as beta) both returned {\"outcome\":\"sent\",...}. Polling atm task events at10-c1-1790200708-2 --json at 1s/30s bound found handoffs [{\"kind\":\"task_queued\"},{\"kind\":\"task_ready\",\"at\":\"2026-09-23T21:58:40.689051720Z\",\"trigger\":\"task_pass\"}] and events[] entry {\"event\":\"reminded\",\"outcome\":\"emitted\"}; atm task list --json (beta) then showed at10-c1-1790200708-2 at position 1 with reminder_count:1 -- next task became ready within the bounded poll."
+    },
+    {
+      "name": "reassign-notifies-both",
+      "status": "pass",
+      "detail": "As alpha: atm task assign fx-at10-gamma \"reassigning task three\" --task-id at10-c1-1790200708-3 --json returned {\"task_id\":\"at10-c1-1790200708-3\"}. atm task events at10-c1-1790200708-3 --json then showed events[] entry {\"event\":\"reassigned\",\"assignee\":\"fx-at10-gamma\",\"from_state\":\"assigned\",\"to_state\":\"assigned\"} and handoffs [{\"agent\":\"fx-at10-beta\",\"kind\":\"task_closed\"},{\"agent\":\"fx-at10-gamma\",\"kind\":\"task_queued\"}]. atm read --message-id 01M384FS6AKQX3BSWBWTGWTQMW --json (as beta) showed {\"text\":\"task at10-c1-1790200708-3 was reassigned to fx-at10-gamma\",\"summary\":\"task_closed:at10-c1-1790200708-3\"}. atm task list --json (gamma) showed the task assigned/queued to gamma."
+    },
+    {
+      "name": "move-head-readies-once",
+      "status": "pass",
+      "detail": "Assigned at10-c4-1790200788-A then -B to idle beta. Polled A's events until task_ready appeared (handoffs: task_queued, task_ready). Then atm task move at10-c4-1790200788-B --head --json (as alpha) returned {\"from\":2,\"to\":1}. atm task events at10-c4-1790200788-A --json still showed exactly one {\"kind\":\"task_ready\"} handoff (unchanged from before the move). atm task events at10-c4-1790200788-B --json showed events[] {\"event\":\"moved\",\"detail\":\"2\\u21921\"} followed by exactly one handoffs {\"kind\":\"task_ready\",\"trigger\":\"task_pass\"} -- no duplicate ready event on either task."
+    },
+    {
+      "name": "cancel-notifies-assignee",
+      "status": "pass",
+      "detail": "As alpha: atm task assign fx-at10-beta \"case5 cancel me\" --task-id at10-c5-1790200808 --json then immediately atm task close at10-c5-1790200808 cancelled \"cancelling before start\" --json returned {\"outcome\":\"sent\",...}. atm task events at10-c5-1790200808 --json (as beta) showed events[] {\"event\":\"cancelled\",\"close_outcome\":\"cancelled\",\"to_state\":\"complete\"} while task_ready never appeared (handoffs only task_queued then task_closed). atm read --message-id 01M384H156EQ36S0GH897Z4KGC --json (as beta) showed {\"taskOp\":{\"op\":\"close\",\"outcome\":\"cancelled\",\"reason\":\"cancelling before start\"}} delivered to beta."
+    },
+    {
+      "name": "busy-assigner-sees-terminal-lines",
+      "status": "pass",
+      "detail": "Assigned at10-c6-1790200830-D to alpha (as gamma); atm task start at10-c6-1790200830-D (as alpha) then atm task list --json (as alpha) showed [{\"task_id\":\"at10-c6-1790200830-D\",\"state\":\"active\",...}] -- quoted 'active' before beta's task ran. As alpha, assigned at10-c6-1790200830-E to beta; beta ran atm task start then atm task close ... completed. atm list --unread --json (as alpha) then contained both rows in chronological order: {\"summary\":\"beta starting E\",\"timestamp\":\"2026-09-23T22:00:37.344501704Z\"} followed by {\"summary\":\"beta completed E\",\"timestamp\":\"2026-09-23T22:00:37.357801756Z\"}, and atm task events at10-c6-1790200830-E --json (as alpha) showed events[] in order {\"event\":\"started\",\"to_state\":\"active\"} then {\"event\":\"completed\",\"close_outcome\":\"completed\",\"to_state\":\"complete\"}, with D's task list entry unaffected and still active throughout."
+    },
+    {
+      "name": "cleanup",
+      "status": "pass",
+      "detail": "Closed every task created during the run with atm task close (all --json {\"outcome\":\"sent\"}): at10-c1-1790200708-1 completed, -2 completed, -3 (reassigned then closed by gamma) completed, at10-c4-1790200788-B completed, -A completed, at10-c5-1790200808 was closed via its own cancellation, at10-c6-1790200830-E completed, -D completed. Final atm task list --json for fx-at10-alpha, fx-at10-beta, fx-at10-gamma all returned [] confirming empty queues."
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {"atm": "1.6.1", "hermes_atm": "", "atm_graft": ""},
+  "started_at": "2026-09-23T21:58:28Z",
+  "finished_at": "2026-09-23T22:00:49Z"
+}

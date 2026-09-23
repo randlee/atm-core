@@ -1,6 +1,7 @@
 ---
-status: in-progress
+status: complete
 branch: evidence/bc-7-release-validation
+worktree: /Users/randlee/github/atm-core-worktrees/evidence/bc-7-release-validation
 pr_target: develop
 owner: arch-ctm
 ---
@@ -46,3 +47,38 @@ colima integration sequence against that prerelease. Evidence only; no code.
 ## evidence
 
 (filled by arch-ctm)
+
+## Evidence
+
+Official campaign `20260923T212808Z-m5-atmbench` ran on host `m5-atmbench`
+from source revision `23162f0ef23d8a12bfd0dc408d5374c4a236e809` (the branch
+parent). The runner produced and published the immutable campaign artifacts in
+`ae2b79207`; the generated report page was refreshed in `6bca4e11f` and the
+combined evidence is on this branch at `6bca4e11fd571e95f1c97169f2d73a98561c7498`.
+The official verdict lines were:
+
+```text
+PASS required f8 target sqlite: p50=47200.67 msg/s accepted=918000/918000
+PASS required f8 target uds: p50=19133.51 msg/s accepted=380000/380000
+FAIL required f8 target tcp: p50=16587.75 msg/s accepted=330000/330000
+PASS required f8 target tcp-tls: p50=14988.44 msg/s accepted=298000/298000
+```
+
+The campaign status is a measured `FAIL` because TCP was below its then-current
+17000 floor; the result is retained as publishable evidence.
+
+Colima used prerelease `v1.6.1` (ATM 1.6.1) after all five archive assets and
+`checksums.txt` were visible. The canonical renderer emitted:
+
+```text
+colima integration: FAIL
+```
+
+The byte-preserved evidence is under
+`site/reports/integration/colima/20260923T215040310333Z/`, with
+`integration.json` source revision
+`6bca4e11fd571e95f1c97169f2d73a98561c7498` and status `FAIL`. The fixture's
+first Hermes-skills step recorded one setup PASS but no provider-backed skill
+reports; the emitted run log records that Hermes had no configured AI provider.
+The task-start and assignment prompt steps completed PASS before the fixture
+was terminated at the harness boundary; no evidence files were edited.
