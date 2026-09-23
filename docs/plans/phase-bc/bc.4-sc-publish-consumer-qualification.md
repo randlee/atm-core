@@ -1,5 +1,5 @@
 ---
-status: u4 CLOSED at PR #1571 `b381e0981` (pin `f178b6919881c5a3d030d6343fcbb509f04806cc`); the 22137c2da receipt below is historical
+status: implemented; u4 CLOSED; critical-remediation review active (PR #1571 `b381e0981`, pin `f178b6919881c5a3d030d6343fcbb509f04806cc`)
 ---
 
 # bc.4 sc-publish consumer qualification
@@ -18,7 +18,46 @@ closed by the canonical install recorded under "current qualification".
 | `[prerelease]` table | byte-identical to the pre-install table |
 | `publish_order` | atm-herdr=6, atm-observability=7, atm-runtime=8, atm-http-runtime=9, atm-daemon-client=10; `just validate` manifest step: `ok: publish_order matches the workspace dependency graph.` |
 | kit line ceiling | `.github/scripts/release_artifacts.py` 999 lines (kit-owned; sc-publish #92) |
-| local gates | `just lint` 38 checks green on `b381e0981`; `just validate` fails only on the waived 1.6.0 version-equality pattern (plan section 9) |
+| local gates | `just lint` 38 checks green on this layer; `just validate` is recorded below as exit 1 with the explicit published-1.6.0 waiver and eight package/publish dry-run blockers |
+
+Exact Layer B validation receipt:
+
+The validation run covered the clean stack-link base `7116f2c4d` plus the
+final docs-only working diff; the immutable final commit SHA is reported in
+the task close because the receipt itself cannot self-reference its commit.
+
+```text
+just lint -> exit 0; lint passed: 38 check(s) succeeded
+just validate -> exit 1
+release validation blockers:
+- cargo-package-atm-http-runtime
+- cargo-publish-dry-run-atm-http-runtime
+- cargo-package-atm-daemon-bootstrap
+- cargo-publish-dry-run-atm-daemon-bootstrap
+- cargo-package-atm-daemon
+- cargo-publish-dry-run-atm-daemon
+- cargo-package-agent-team-mail
+- cargo-publish-dry-run-agent-team-mail
+```
+
+The package failures reproduce the published-1.6.0 release-from-main
+condition: package dry-runs resolve the existing published dependency/version
+state rather than the coordinated workspace lock. Per the phase-bc plan's
+2026-09-23 UTC waiver, these failures are deferred to the prerelease patch
+bump and this layer performs no version bump, tag, publish, or release-from-main
+operation. The output above is the complete command result; it is not a claim
+that the release-from-main gate has passed.
+
+The exact manifest inventory command was:
+
+```text
+python3 .github/scripts/release_artifacts.py list-publish-plan --manifest release/publish-artifacts.toml --include-manifest
+```
+
+It returned 17 entries: 15 published entries and two required build inputs
+with `publish = false` (`atm-graft-python` and `atm-query-python`). The
+publish-order result is `atm-herdr=6, atm-observability=7, atm-runtime=8,
+atm-http-runtime=9, atm-daemon-client=10`.
 
 Rulings applied (Rand, 2026-09-23 UTC): use the sc-publish develop kit,
 promoted to main via #110; no sc-publish change for atm-core-specific behavior
@@ -61,7 +100,7 @@ CONSUMER=/Users/randlee/github/atm-core-worktrees/fix/bc4-review-1
 
 The prior receipt recorded bootstrap exit 0, installer exit 0, and a repeat
 dry-run exit 0 with `Publish-kit assets are in sync.` Those results are
-superseded. QA-1 reran the canonical installer against the restored consumer
+superseded. The follow-up audit reran the canonical installer against the restored consumer
 layer and the dry-run exited 1 because source `22137c2` would overwrite the
 restored prerelease and dynamic-version hunks. The drift is the expected
 frozen-layer behavior independently resolved as ATM-QA-008/QA-004; it is not
@@ -92,7 +131,7 @@ exit 0`. That is upstream source evidence, not the ATM consumer result above.
 
 ## package and release contract inventory
 
-The input declares 16 crate entries in publish order. Orders 0–15 are:
+The input declares 17 crate entries in publish order. Orders 0–15 are:
 
 ```text
 0 atm-graft-python (not published), atm-query-python (not published)
@@ -101,11 +140,11 @@ The input declares 16 crate entries in publish order. Orders 0–15 are:
 3 peer-tls
 4 agent-team-mail-core
 5 atm-storage-rusqlite
-6 atm-http-runtime
-7 atm-daemon-client
-8 atm-herdr
-9 atm-observability
-10 atm-runtime
+6 atm-herdr
+7 atm-observability
+8 atm-runtime
+9 atm-http-runtime
+10 atm-daemon-client
 11 atm-template-sc-compose
 12 atm-daemon-bootstrap
 13 atm-daemon
@@ -113,7 +152,7 @@ The input declares 16 crate entries in publish order. Orders 0–15 are:
 15 agent-team-mail
 ```
 
-The two order-0 Python crates are required build inputs; the remaining 14
+The two order-0 Python crates are required build inputs; the remaining 15
 entries are published, with `atm-graft` optional and the other published
 entries required. The release binary inventory is `atm` (bundles
 `docs/user-documents` at `share/doc/atm`) and `atm-daemon` (no bundled paths).
@@ -129,12 +168,15 @@ Python distributions and wheel runner targets are:
 The expected consumer channel inventory is `pypi` →
 `pypi-publish.yml` with production target, `homebrew` →
 `homebrew-publish.yml`, `winget` → `winget-publish.yml`, and `scoop` →
-`scoop-publish.yml`. The nine kit workflow files are
+`scoop-publish.yml`. The ten current consumer workflow files are
 `crates-publish.yml`, `homebrew-publish.yml`, `npm-publish.yml`,
 `pypi-publish.yml`, `release-candidate.yml`, `release-preflight.yml`,
-`release.yml`, `scoop-publish.yml`, and `winget-publish.yml`. Existing
-consumer-owned `hermes-atm-pypi-publish.yml` and `prerelease-archive.yml` are
-not part of the kit inventory.
+`release.yml`, `scoop-publish.yml`, `winget-publish.yml`, and
+`prerelease-archive.yml`. `hermes-atm-pypi-publish.yml` remains consumer-owned
+and outside the kit inventory; its publish-path owner is the hermes-atm
+release owner. At the pinned kit revision, `required`, `preflight_check`, and
+`verify_install` metadata are inert for this consumer and are not claimed as
+executed gates.
 
 ## inherited and deferred lifecycle boundary
 

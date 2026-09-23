@@ -1,7 +1,5 @@
 ---
-status: complete
-branch: feature/bc6-sc-observability-1-4-1
-worktree: /Users/randlee/github/atm-core-worktrees/feature/bc6-sc-observability-1-4-1
+status: implemented; critical-remediation review active
 ---
 
 # bc.6 sc-observability 1.4.1 requalification

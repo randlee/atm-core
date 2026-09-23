@@ -1,5 +1,10 @@
 # sc-publish pr #101 atm-dev acceptance
 
+> **SUPERSEDED-BY-u4.** This is historical prerequisite-only evidence. The
+> 2026-09-23 sequencing amendment names the reconciled sc-publish main pin
+> `f178b6919` and PR #1571 as the current consumer gate; no u1/u2/u3 claim is
+> reopened by this record.
+
 ## reviewed revision
 
 - repository: `randlee/sc-publish`
@@ -48,8 +53,8 @@ must not rewrite any historical release.
 
 ## consumer gate
 
-atm-core may consume only a later merged exact revision that closes the items
-above, passes upstream and installed-consumer qualification, and satisfies
-gates `u2` through `u4` in the
-[phase-bc plan](./phase-bc-plan.md). This record does not authorize a setting
-write, credential change, tag, release, registry publish, or channel mutation.
+The historical consumer gate is superseded by u4. atm-core may consume only
+the exact u4 revision recorded in the phase-bc plan and current qualification
+receipt; u4 is the sole sc-publish consumer gate. This record does not
+authorize a setting write, credential change, tag, release, registry publish,
+or channel mutation.
