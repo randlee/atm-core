@@ -104,6 +104,7 @@ pub trait DiagnosticSink: Send + Sync {
 pub struct TracingBridgeStats {
     pub forwarded_total: AtomicU64,
     pub dropped_queue_full_total: AtomicU64,
+    pub dropped_rejected_total: AtomicU64,
     pub dropped_reentrant_total: AtomicU64,
     /// Invalid IDs are not silently discarded when a tracing field cannot
     /// satisfy the shared correlation-ID contract.
@@ -255,7 +256,13 @@ impl TracingBridgeLayer {
                     .fetch_add(1, Ordering::Relaxed);
                 return;
             }
-            RetainedLogOffer::Rejected { .. } => return,
+            RetainedLogOffer::Rejected { diagnostic_code } => {
+                self.stats
+                    .dropped_rejected_total
+                    .fetch_add(1, Ordering::Relaxed);
+                tracing::debug!(code = %diagnostic_code, "retained log offer rejected");
+                return;
+            }
         };
         if !retained.origin.skips_diagnostic_sink()
             && let Ok(slot) = self.sink.read()

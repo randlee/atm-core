@@ -46,6 +46,7 @@ class EcosystemPinTests(unittest.TestCase):
     def test_workspace_dependencies_are_visible_to_currency_inventory(self) -> None:
         dependencies = VALIDATE_RELEASE.direct_registry_dependencies(REPO_ROOT)
         self.assertEqual(dependencies["sc-observability"], "=1.4.1")
+        self.assertEqual(dependencies["sc-observability-log"], "=1.4.1")
         self.assertEqual(dependencies["sc-observability-types"], "=1.4.1")
 
     @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0")
@@ -60,6 +61,7 @@ class EcosystemPinTests(unittest.TestCase):
         latest_registry.side_effect = lambda _root, dependency: {
             "sc-composer": "1.6.1",
             "sc-observability": "1.4.1",
+            "sc-observability-log": "1.4.1",
             "sc-observability-types": "1.4.1",
         }[dependency]
         findings: list[VALIDATE_RELEASE.Finding] = []
@@ -85,6 +87,7 @@ class EcosystemPinTests(unittest.TestCase):
         latest_registry.side_effect = lambda _root, dependency: {
             "sc-composer": "1.6.1",
             "sc-observability": "1.5.0",
+            "sc-observability-log": "1.5.0",
             "sc-observability-types": "1.5.0",
         }[dependency]
         findings: list[VALIDATE_RELEASE.Finding] = []
@@ -96,6 +99,7 @@ class EcosystemPinTests(unittest.TestCase):
             REPO_ROOT,
             [
                 ("sc-observability", "=1.4.1", "1.5.0"),
+                ("sc-observability-log", "=1.4.1", "1.5.0"),
                 ("sc-observability-types", "=1.4.1", "1.5.0"),
             ],
         )
@@ -130,6 +134,7 @@ class EcosystemPinTests(unittest.TestCase):
             latest_registry.side_effect = lambda _root, dependency: {
                 "sc-composer": "1.6.1",
                 "sc-observability": "1.4.1",
+                "sc-observability-log": "1.4.1",
                 "sc-observability-types": "1.4.1",
             }[dependency]
             findings: list[VALIDATE_RELEASE.Finding] = []
@@ -190,6 +195,7 @@ class EcosystemPinTests(unittest.TestCase):
             "sc-composer": "1.6.1",
             "sc-observability": "1.4.1",
             "sc-observability-types": "1.4.1",
+            "sc-observability-log": "1.4.1",
         }[dependency]
         before = {
             path: path.read_text(encoding="utf-8")
@@ -240,6 +246,7 @@ class EcosystemPinTests(unittest.TestCase):
             latest_registry = {
                 "sc-composer": "1.6.1",
                 "sc-observability": "1.4.1",
+                "sc-observability-log": "1.4.1",
                 "sc-observability-types": "1.4.1",
             }
             findings: list[VALIDATE_RELEASE.Finding] = []
