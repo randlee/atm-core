@@ -1840,7 +1840,7 @@ team-lead lands the final status when the phase PR merges.
 | `BB.7` | `merged (#1470, #1478)` | `feature/bb7-docs` | `docs/plans/phase-bb/sprint-BB.7-docs.md` |
 | `BB.8` | `complete (#1500, #1501)` | `feature/bb8-2-colima-driver` | `docs/plans/phase-bb/sprint-BB.8-colima-integration.md` |
 
-## 61. phase bc — immutable releases and observability consolidation [QA-1 FAILED — REMEDIATION ACTIVE]
+## 61. phase bc — immutable releases and observability consolidation [CRITICAL-REMEDIATION REVIEW ACTIVE — NOT COMPLETE]
 
 phase bc has implementation evidence for the published `sc-observability`
 `1.4.1` family and the bounded typed/logging work, but QA-1 failed and

@@ -8,7 +8,7 @@
 | base | `develop` at `11a5ee8bb1acf577931ae3d5427db5208db3ab94` |
 | planning branch | `plan/phase-bc` |
 | implementation integration branch | `integrate/phase-bc` |
-| status | QA-1 failed; documentation/remediation active; phase not complete |
+| status | critical-remediation review active; phase not complete pending QA |
 | stack rule | one append-only linear `gh stack`; lowest-risk changes are lowest |
 
 ## 1. naming rule
@@ -268,3 +268,6 @@ this plan authorizes none.
   release; enabling alone is not closure.
 - just validate publish dry-run failures caused solely by the workspace version still equalling the published 1.6.0 are deferred to the prerelease patch bump (Rand, 2026-09-23 UTC).
 - bc.5 remains enabled but open: the first immutable-release proof is deferred to the release from main and is not open phase work or a blocker to landing into integrate/phase-bc (Rand, 2026-09-23 UTC: "we are not publishing until code lands on main").
+- Rand's 2026-09-23 UTC waiver permits this critical-remediation layer to
+  land into `integrate/phase-bc` before release-from-main validation; it does
+  not authorize phase closure, a version bump, a tag, or publication.
