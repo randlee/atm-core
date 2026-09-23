@@ -289,6 +289,6 @@ this plan authorizes none.
   bump, tag, publish, or release-from-main operation.
 - bc.5 remains enabled but open: the first immutable-release proof is deferred to the release from main and is not open phase work or a blocker to landing into integrate/phase-bc (Rand, 2026-09-23 UTC: "we are not publishing until code lands on main").
 - Rand's 2026-09-23 UTC waiver permits this critical-remediation layer to
-  land into `integrate/phase-bc` and subsequently merge to `develop` before
-  release-from-main validation; landing is distinct from phase closure and
-  does not authorize a version bump, a tag, or publication.
+ land into `integrate/phase-bc` and subsequently merge to `develop` before
+ release-from-main validation; landing is distinct from phase closure and
+ does not authorize a version bump, a tag, or publication.
