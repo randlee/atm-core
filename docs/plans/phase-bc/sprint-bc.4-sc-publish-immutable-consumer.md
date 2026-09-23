@@ -44,7 +44,7 @@ fixed upstream under ADR-050, never locally patched here.
    generated result; retries become verify-only.
 6. Add ATM-specific preflight checks for the exact tag/source/build/receipt
    without duplicating shared logic. Do not block or ask about tokens unless preflight or publish fails.
-7. Record the exact accepted open revision, recorded upstream evidence,
+7. Record the exact qualified pinned revision, recorded upstream evidence,
    installed-consumer/package parity, canonical installer dry-run, and ATM
    validation in
    `docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md`.
@@ -56,12 +56,14 @@ fixed upstream under ADR-050, never locally patched here.
   forbidden, timed-out, malformed, and indeterminate immutability/preflight
   results without performing a release or channel mutation.
 - The consumer pin, generated output, package contract, and local installer
-  qualification remain pending at the merged develop source head.
+  qualification are recorded at sc-publish main `f178b6919881c5a3d030d6343fcbb509f04806cc`
+  by PR #1571 (`b381e0981`); see the "current qualification" table in
+  `bc.4-sc-publish-consumer-qualification.md`.
 - BC4 does not assert implementation or live qualification of the inherited or
   deferred FIX03–FIX10 lifecycle items.
-- The bc.4 qualification artifact must remain open until the clean merged-
-  develop pin/install evidence exists; merge, hosted-QA, credentials, and live
-  release/channel qualification remain outside this correction.
+- The bc.4 qualification artifact records that clean pin/install evidence and
+  closes u4; stack merge, hosted-QA, credentials, and live release/channel
+  qualification remain outside this sprint.
 
 ## required validation
 

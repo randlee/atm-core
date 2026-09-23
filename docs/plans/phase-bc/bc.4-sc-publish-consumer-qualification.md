@@ -160,22 +160,24 @@ its pytests report that `release/publish-artifacts.toml` lacks the consumer
 parity diverges, and daemon-switch prerelease resolution fails. This correction
 does not edit generated/shared assets or claim that failure fixed.
 
-## consumer checks and open disposition
+## consumer checks and disposition
 
 - `release/sc-publish-pin.toml` contains the exact 40-character source SHA.
-- The historical receipt recorded byte-for-byte kit output; the QA-1 dry-run
-  now reports drift against the restored consumer layer.
+- The historical receipt recorded byte-for-byte kit output at the superseded
+  revision; the current canonical install at `f178b6919` reports
+  `Publish-kit assets are in sync.` on a repeat dry-run.
 - PR #101, PR #106, and the old `22137c2` receipt are retained only as
-  historical evidence; the active merged PR99/100/101/108 result is the
-  pending source for the next clean consumer layer.
+  historical evidence; the merged PR99/100/101/108 develop result was
+  reconciled with main and promoted by sc-publish #110, whose merge commit is
+  the pinned revision above.
 - No repository setting, credential, release, tag, registry, or channel was
   mutated by the historical consumer qualification; the separately reported
   2026-09-22 setting enablement is not bc.5 completion evidence.
-- The evidence above is historical local evidence plus recorded upstream source
-  evidence. It is not current merged-source, hosted-QA, credentialed, or live
-  publication qualification.
-- QA-005 branch coverage remains pending artifact-layer validation; no branch
-  coverage percentage is claimed.
+- The historical sections are local evidence plus recorded upstream source
+  evidence for the superseded revision; the "current qualification" table is
+  the u4 evidence. Hosted-QA, credentialed, and live publication qualification
+  remain outside this receipt.
+- No branch coverage percentage is claimed for QA-005.
 
 The three ATM-local behaviors removed in this qualification were forks of
 kit-owned files, rather than sc-publish regressions: commits
