@@ -30,9 +30,6 @@ renderer contract.
   authorization failure is evaluated negative evidence.
 - Never ask for, inspect, print, or substitute a token.
 - Dispatch only the assigned channel workflow. A passed channel is immutable.
-- For npm, preserve manifest package identity and scope/access checks through
-  artifact freeze and recovery; a successful channel retry must not rebuild or
-  rename an already-published package.
 - For an authorized retry, re-check current state and retry only the failed
   channel on the same tag/ref.
 
@@ -42,6 +39,11 @@ Return exactly one fenced JSON object to the parent `publisher` task on both
 success and failure. Missing, malformed, or incomplete JSON is a reporting
 contract failure and must never be treated as task completion. Preserve full
 sanitized diagnostics; redact credentials and sensitive values only.
+Failed or blocked results must contain an error object with meaningful
+`message`/`details`, or a non-empty sanitized diagnostic. An error code or bare
+error string alone is insufficient. The parent
+publisher validates the complete raw responses with `.github/scripts/worker_result.py`
+before accepting channel completion.
 
 ```json
 {

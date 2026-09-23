@@ -162,6 +162,13 @@ does not edit generated/shared assets or claim that failure fixed.
 - QA-005 branch coverage remains pending artifact-layer validation; no branch
   coverage percentage is claimed.
 
+The three ATM-local behaviors removed in this qualification were forks of
+kit-owned files, rather than sc-publish regressions: commits
+`3c01feac5`/`2d6a810a9`/`97b0323cd` and the hand-edited `release.yml`, plus
+`a5ff2bc77`/`b3738b89f`, are dropped to end the ADR-050 drift. Selector
+snapshot/restore on failed prerelease activation remains a candidate kit bug
+fix for a future sc-publish cycle and is not filed here.
+
 ## disposition
 
 `u4` remains **OPEN**. A clean consumer layer must pin merged develop

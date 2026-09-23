@@ -1027,6 +1027,7 @@ def test_no_single_repo_concerns_leak_into_kit_workflows_actions_or_scripts() ->
         "release.yml",
         "release-candidate.yml",
         "release-preflight.yml",
+        "prerelease-archive.yml",
         "crates-publish.yml",
         "pypi-publish.yml",
         "npm-publish.yml",
@@ -1396,6 +1397,61 @@ def test_validate_manifest_rejects_unknown_homebrew_formula_binary(tmp_path: Pat
 
     assert result.returncode != 0
     assert "references undeclared release binary(s)" in result.stderr
+
+
+PRERELEASE_TABLE = """
+[prerelease]
+tag_prefix = "prerelease/v"
+tag_script = ".just/prerelease_tag.py"
+install_root = "~/.fixture-builds"
+binaries = ["fixture"]
+protected_branches = ["develop", "main"]
+selector_dir = { darwin = "~/.fixture-builds/darwin", linux = "~/.fixture-builds/linux", windows = "C:/Fixture" }
+post_install = "python3 scripts/activate.py --version {version}"
+verify = "fixture --version"
+"""
+
+
+def run_validate_manifest_with_prerelease(tmp_path: Path, table: str) -> subprocess.CompletedProcess[str]:
+    workspace, manifest = write_repo_fixture(tmp_path, manifest_wheels=["ubuntu-latest"])
+    manifest.write_text(manifest.read_text(encoding="utf-8") + table, encoding="utf-8")
+    return subprocess.run(
+        [
+            sys.executable,
+            str(scripts_root() / "release_artifacts.py"),
+            "validate-manifest",
+            "--manifest",
+            str(manifest),
+            "--workspace-toml",
+            str(workspace),
+        ],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=TEST_COMMAND_TIMEOUT_SECONDS,
+    )
+
+
+def test_validate_manifest_accepts_complete_prerelease_table(tmp_path: Path) -> None:
+    result = run_validate_manifest_with_prerelease(tmp_path, PRERELEASE_TABLE)
+    assert result.returncode == 0, result.stderr
+    assert "manifest validation passed" in result.stdout
+
+
+def test_validate_manifest_rejects_prerelease_selector_dir_missing_a_platform(tmp_path: Path) -> None:
+    # load_manifest must carry [prerelease] through, or this validation never runs.
+    table = PRERELEASE_TABLE.replace(', windows = "C:/Fixture" }', " }", 1)
+    result = run_validate_manifest_with_prerelease(tmp_path, table)
+    assert result.returncode != 0
+    assert "[prerelease].selector_dir must declare non-empty darwin, linux, and windows paths" in result.stderr
+
+
+def test_validate_manifest_rejects_prerelease_table_missing_a_key(tmp_path: Path) -> None:
+    table = PRERELEASE_TABLE.replace('verify = "fixture --version"\n', "", 1)
+    result = run_validate_manifest_with_prerelease(tmp_path, table)
+    assert result.returncode != 0
+    assert "[prerelease] missing required keys: verify" in result.stderr
 
 
 def test_validate_manifest_rejects_unknown_channel_target(tmp_path: Path) -> None:

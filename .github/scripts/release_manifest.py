@@ -64,6 +64,9 @@ def load_manifest(path: Path, *, with_channel_contracts: bool = False) -> dict:
         "npm_packages": data.get("npm_packages", []),
         "channels": data.get("channels", {}),
     }
+    # Optional: the prerelease skill's table is validated only when declared.
+    if "prerelease" in data:
+        manifest["prerelease"] = data["prerelease"]
     if with_channel_contracts:
         manifest["channel_contracts"] = load_channel_contracts(
             path.parent / CHANNEL_CONTRACTS_FILE
@@ -380,6 +383,34 @@ def _require_project(manifest: dict) -> dict:
         "[project]",
     )
     return project
+
+
+def validate_prerelease(manifest: dict) -> None:
+    """Validate the optional [prerelease] table consumed by the prerelease skill."""
+    prerelease = manifest.get("prerelease")
+    if prerelease is None:
+        return
+    if not isinstance(prerelease, dict):
+        raise SystemExit("[prerelease] must be a table")
+    string_fields = ("tag_prefix", "tag_script", "install_root", "post_install", "verify")
+    _require_keys(
+        prerelease,
+        (*string_fields, "binaries", "protected_branches", "selector_dir"),
+        "[prerelease]",
+    )
+    if not all(isinstance(prerelease[key], str) and prerelease[key] for key in string_fields):
+        raise SystemExit("[prerelease] string fields must be non-empty")
+    for key in ("binaries", "protected_branches"):
+        values = prerelease[key]
+        if not isinstance(values, list) or not values or not all(isinstance(name, str) and name for name in values):
+            raise SystemExit(f"[prerelease].{key} must be a non-empty string list")
+    selector_dir = prerelease["selector_dir"]
+    if (
+        not isinstance(selector_dir, dict)
+        or set(selector_dir) != {"darwin", "linux", "windows"}
+        or not all(isinstance(value, str) and value for value in selector_dir.values())
+    ):
+        raise SystemExit("[prerelease].selector_dir must declare non-empty darwin, linux, and windows paths")
 
 
 def _renderer_archive_path(manifest: dict) -> str:

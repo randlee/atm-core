@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import json
 import re
+import argparse
+import sys
+from pathlib import Path
 from typing import Any
 
 REQUIRED_FIELDS = {
@@ -14,19 +17,22 @@ STATUSES = {"passed", "failed", "blocked", "apparently_available", "taken", "ind
 _FENCE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?```", re.DOTALL | re.IGNORECASE)
 
 
-_SECRET_KEY = re.compile(r"(?i)(?:authorization|(?:.*[_-])?(?:token|password|secret|api[_-]?key)|_auth)")
+_SECRET_NAME = r"(?:authorization|[\w-]*(?:token|password|secret|api[_-]?key)|_auth)"
+_SECRET_KEY = re.compile(_SECRET_NAME, re.IGNORECASE)
 _SECRET_JSON = re.compile(
-    r'''(?i)(["'](?:authorization|(?:[\w-]*[_-])?(?:token|password|secret|api[_-]?key)|_auth)["']\s*:\s*)["'](?:\\.|[^"'\\])*["']'''
+    rf'''(?i)(["']{_SECRET_NAME}["']\s*:\s*)["'](?:\\.|[^"'\\])*["']'''
 )
 _AUTH_HEADER = re.compile(r"(?i)authorization\s*[:=]\s*(?:(?:basic|bearer|token)\s+)?[^\s,;]+")
-_SECRET_ASSIGNMENT = re.compile(r"(?i)\b((?:[\w-]*[_-])?(?:token|password|secret|api[_-]?key)|_auth)\s*[:=]\s*[^\s,;]+")
+_SECRET_ASSIGNMENT = re.compile(rf"(?i)\b({_SECRET_NAME})\s*[:=]\s*[^\s,;]+")
 _BEARER = re.compile(r"(?i)\bbearer\s+[^\s,;]+")
-_SECRET_ARG = re.compile(r"(?i)(--(?:[\w-]*-)?(?:token|password|secret|api-key)\s+)[^\s,;]+")
+_SECRET_ARG = re.compile(rf"(?i)(--{_SECRET_NAME}\s+)[^\s,;]+")
+_URL_USERINFO = re.compile(r"(?i)(https?://)[^\s/@]+@")
 
 
 def redact_diagnostic(text: str) -> str:
     """Redact credential syntax while preserving useful non-secret diagnostics."""
     text = _SECRET_JSON.sub(r'\1"<redacted>"', text)
+    text = _URL_USERINFO.sub(r"\1<redacted>@", text)
     text = _AUTH_HEADER.sub("Authorization=<redacted>", text)
     text = _SECRET_ASSIGNMENT.sub(r"\1=<redacted>", text)
     text = _BEARER.sub("Bearer <redacted>", text)
@@ -121,9 +127,26 @@ def validate_result(result: dict[str, Any]) -> dict[str, Any]:
         raise WorkerResultError("worker result sanitized_diagnostic must be text")
     if result["status"] == "passed" and result["error"] not in (None, "", {}):
         raise WorkerResultError("successful worker result must have error=null or empty")
-    if result["status"] not in {"passed", "apparently_available", "taken"} and not result["error"]:
-        raise WorkerResultError("failed or blocked worker result must preserve error details")
+    if result["status"] not in {"passed", "apparently_available", "taken"}:
+        error = result["error"]
+        details = [error.get("message"), error.get("details")] if isinstance(error, dict) else None
+        if not error or not (_has_text(details) or result["sanitized_diagnostic"].strip()):
+            raise WorkerResultError("failed or blocked worker result must preserve a meaningful error message or diagnostic")
     return result
+
+
+def _has_text(value: Any) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, dict):
+        return any(_has_text(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_has_text(item) for item in value)
+    return False
+
+
+def format_fenced_result(result: dict[str, Any]) -> str:
+    return "```json\n" + json.dumps(validate_result(result), sort_keys=True) + "\n```"
 
 
 def aggregate_results(results: list[dict[str, Any] | None], expected_channels: list[str]) -> list[dict[str, Any]]:
@@ -144,6 +167,10 @@ def aggregate_results(results: list[dict[str, Any] | None], expected_channels: l
         validated.append(item)
     for channel in expected_channels[len(results):]:
         validated.append(_contract_failure(channel, "missing worker result"))
+    for result in results[len(expected_channels):]:
+        item = _contract_failure("unexpected", "unexpected surplus worker result")
+        item["evidence"] = {"unexpected_result": redact_result(result)}
+        validated.append(item)
     return validated
 
 
@@ -156,3 +183,24 @@ def _contract_failure(channel: str, detail: str) -> dict[str, Any]:
         "verification": [], "sanitized_diagnostic": detail,
         "checks": [{"kind": "worker_result_contract", "status": "failed"}], "required_checks": [],
     }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--expected-channels", nargs="+", required=True)
+    parser.add_argument("--result", type=Path, action="append", default=[])
+    args = parser.parse_args()
+    results = []
+    for index, path in enumerate(args.result):
+        channel = args.expected_channels[index] if index < len(args.expected_channels) else "unexpected"
+        try:
+            results.append(parse_fenced_result(path.read_text(encoding="utf-8")))
+        except (OSError, UnicodeError, WorkerResultError) as error:
+            results.append(_contract_failure(channel, redact_diagnostic(str(error))))
+    validated = aggregate_results(results, args.expected_channels)
+    print("```json\n" + json.dumps({"results": validated}, sort_keys=True) + "\n```")
+    return 0 if all(item["status"] == "passed" for item in validated) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

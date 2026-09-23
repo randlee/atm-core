@@ -10,13 +10,7 @@ metadata:
 
 Read `publisher-channel-protocol.md`, the `npm` channel contract, and
 `.claude/skills/publishing/ref/channel-contracts.md`. You own npm only.
-Use the public registry inquiry plan for scoped and unscoped names. Before
-artifacts are frozen, reconcile each manifest name with source `package.json`
-and the root `package-lock.json`, require public access settings, and reject
-mixed scoped organizations. Preserve the manifest-owned scope; never rename a
-package or hardcode an organization. The verified
-`@synaptic-canvas/sc-observability@1.4.1` recovery is a concrete identity
-receipt, not a default for other consumers. Do not
+Use the public registry inquiry plan for scoped and unscoped names. Do not
 request or display credential values. `NPM_TOKEN` belongs to the `npm` GitHub
 environment and is passed only to the publication step.
 

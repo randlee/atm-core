@@ -236,8 +236,14 @@ exist; run `Release Preflight` and report its sanitized result.
    `credential_rehearsal`, its teammate must complete that manifest-declared
    safe rehearsal before its production dispatch.
 6. Collect one complete fenced-JSON result from every teammate and root-workflow channel
-   job. Validate every result against the complete channel-worker result contract,
-   including success results. Missing, malformed, incomplete, or mismatched
+   job. Save each complete raw response to a separate UTF-8 file and invoke
+   `python3 .github/scripts/worker_result.py --expected-channels <manifest channels in assignment order> --result <first response file> --result <next response file>`.
+   Include every response, including duplicates or unexpected responses; never
+   filter them to make validation pass. The command validates both success and
+   failure envelopes, emits a sanitized fenced JSON aggregate, and exits nonzero
+   unless every expected channel passed with no extra results. Use its output as
+   the worker-result evidence in the release summary; a nonzero exit keeps the
+   release incomplete. Missing, malformed, incomplete, or mismatched
    results are `REPORTING.CONTRACT_FAILURE`, not publication success. Preserve
    the worker's exact sanitized error details and evidence through aggregation.
    Do not mark release completion until every manifest-declared channel has a successful result or

@@ -101,6 +101,7 @@ selector_dir = {{ prerelease.selector_dir }}
 post_install = {{ prerelease.post_install }}
 verify = {{ prerelease.verify }}
 {% endif %}
+
 {% for target in release_targets %}
 [[release_targets]]
 target = {{ target.target }}

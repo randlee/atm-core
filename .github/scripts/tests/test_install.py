@@ -296,6 +296,39 @@ class InstallValuesTests(unittest.TestCase):
         )
         self.assertNotIn("renderer_archive_path", manifest["project"])
 
+    def test_render_round_trips_declared_prerelease_manifest(self) -> None:
+        try:
+            import sc_compose  # noqa: F401
+        except ModuleNotFoundError:
+            self.skipTest("sc-compose bindings are not provisioned in this environment")
+        values = self.valid_values()
+        values["prerelease"] = {
+            "tag_prefix": "prerelease/v",
+            "tag_script": ".just/prerelease_tag.py",
+            "install_root": "~/.example-builds",
+            "binaries": ["example"],
+            "protected_branches": ["trunk", "release"],
+            "selector_dir": {
+                "darwin": "/opt/homebrew/bin",
+                "linux": "~/.local/bin",
+                "windows": r"%LOCALAPPDATA%\Programs\Example",
+            },
+            "post_install": "python3 scripts/activate.py --version {version} --stage {stage_dir}",
+            "verify": "example --version",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "input.json"
+            path.write_text(json.dumps(values), encoding="utf-8")
+            loaded = INSTALL.load_install_values(path)
+            template = INSTALL.template_values(loaded)
+            output = Path(directory) / "publish-artifacts.toml"
+            INSTALL.render_template(
+                Path("release/publish-artifacts.toml.j2"), loaded, output
+            )
+            manifest = tomllib.loads(output.read_text(encoding="utf-8"))
+        self.assertTrue(template["has_prerelease"])
+        self.assertEqual(manifest["prerelease"], values["prerelease"])
+
     def test_load_install_values_rejects_ambiguous_python_distribution(self) -> None:
         values = self.valid_values()
         values["python_distributions"][0]["build_system"] = "setuptools"
@@ -353,9 +386,21 @@ class InstallValuesTests(unittest.TestCase):
             self.assertIn(".cursor/", readme_text)
             self.assertIn("idempotent", readme_text)
 
+            claude_skill = consumer / ".claude" / "skills" / "prerelease"
+            codex_skill = consumer / ".codex" / "skills" / "prerelease" / "SKILL.md"
+            self.assertTrue((claude_skill / "SKILL.md").is_file())
+            self.assertTrue(codex_skill.is_file())
+            self.assertIn(
+                "../../../.claude/skills/prerelease/SKILL.md",
+                codex_skill.read_text(encoding="utf-8"),
+            )
+            for mode in ("list.md", "install.md", "publish.md"):
+                self.assertTrue((claude_skill / mode).is_file())
+
             workflows = (
                 "release.yml",
                 "release-preflight.yml",
+                "prerelease-archive.yml",
                 "pypi-publish.yml",
                 "homebrew-publish.yml",
                 "scoop-publish.yml",

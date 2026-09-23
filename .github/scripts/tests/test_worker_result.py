@@ -105,7 +105,7 @@ def test_inquiry_statuses_may_have_no_error(status):
 def test_nested_credentials_are_sanitized_without_mutating_input(field):
     from copy import deepcopy
     from worker_result import validate_result
-    value = result(status='failed', exit_status=1, error={'code': 'DENIED'})
+    value = result(status='failed', exit_status=1, error={'code': 'DENIED', 'message': 'upstream denied'})
     value[field] = {'details': [{'token': 'SYNTHETIC_SECRET', 'message': 'E403 denied'}]}
     original = deepcopy(value)
     checked = validate_result(value)
@@ -133,3 +133,75 @@ def test_aggregation_sanitizes_valid_reports_and_retains_other_contract_failures
     assert values[0]['status'] == 'passed'
     assert 'SYNTHETIC_SECRET' not in json.dumps(values)
     assert values[1]['status'] == 'failed'
+
+
+@pytest.mark.parametrize("detail", [
+    "//registry.npmjs.org/:_authToken=SYNTHETIC_SECRET",
+    "https://user:SYNTHETIC_SECRET@registry.npmjs.org/pkg",
+    '{"authToken":"SYNTHETIC_SECRET"}',
+    '{"accessToken":"SYNTHETIC_SECRET"}',
+])
+def test_common_npm_credentials_are_redacted(detail):
+    from worker_result import redact_diagnostic
+    sanitized = redact_diagnostic(detail + "\nE403 permission denied")
+    assert "SYNTHETIC_SECRET" not in sanitized
+    assert "E403 permission denied" in sanitized
+
+
+@pytest.mark.parametrize("key", ["authToken", "accessToken", "_authToken"])
+def test_nested_camelcase_credentials_are_redacted(key):
+    from worker_result import validate_result
+    checked = validate_result(result(evidence={key: "SYNTHETIC_SECRET", "message": "E403 denied"}))
+    assert checked["evidence"][key] == "<redacted>"
+    assert checked["evidence"]["message"] == "E403 denied"
+
+
+@pytest.mark.parametrize("error", [{"code": "X"}, "NPM.PUBLISH_FAILED"])
+def test_failure_code_without_diagnostics_is_rejected(error):
+    from worker_result import validate_result
+    value = result(status="failed", exit_status=1, error=error,
+                   evidence=[], registry_outcome="", verification=[], sanitized_diagnostic="")
+    with pytest.raises(WorkerResultError, match="meaningful"):
+        validate_result(value)
+    value["sanitized_diagnostic"] = "E403: registry denied publish permission"
+    assert validate_result(value)["status"] == "failed"
+
+
+def test_surplus_reports_are_retained_as_contract_failures():
+    extra = result(channel="pypi", evidence={"authToken": "SYNTHETIC_SECRET"})
+    values = aggregate_results([result(), extra], ["npm"])
+    assert len(values) == 2
+    assert values[0]["status"] == "passed"
+    assert values[1]["error"]["code"] == "REPORTING.CONTRACT_FAILURE"
+    assert values[1]["evidence"]["unexpected_result"]["channel"] == "pypi"
+    assert "SYNTHETIC_SECRET" not in json.dumps(values)
+
+
+@pytest.mark.parametrize("scenario", ["passed", "failed", "missing", "malformed", "surplus", "code_only"])
+def test_publisher_cli_validates_raw_responses_and_preserves_all_results(tmp_path, scenario):
+    import subprocess
+    first = tmp_path / "first.txt"
+    value = result()
+    if scenario == "failed":
+        value.update(status="failed", exit_status=1, error={"code": "DENIED", "message": "E403 denied"})
+    if scenario == "code_only":
+        value.update(status="failed", exit_status=1, error="NPM.PUBLISH_FAILED", sanitized_diagnostic="")
+    first.write_text("```json\n" + json.dumps(value) + "\n```")
+    command = [sys.executable, str(Path(__file__).resolve().parents[1] / "worker_result.py"), "--expected-channels", "npm"]
+    if scenario != "missing":
+        command += ["--result", str(first)]
+    if scenario == "malformed":
+        first.write_text("not JSON")
+    if scenario == "surplus":
+        extra = tmp_path / "extra.txt"
+        extra.write_text("```json\n" + json.dumps(result(channel="pypi")) + "\n```")
+        command += ["--result", str(extra)]
+    completed = subprocess.run(command, capture_output=True, text=True, timeout=30)
+    assert (completed.returncode == 0) is (scenario == "passed")
+    assert completed.stdout.startswith("```json\n")
+    values = json.loads(completed.stdout.removeprefix("```json\n").removesuffix("\n```\n"))["results"]
+    assert len(values) == (2 if scenario == "surplus" else 1)
+    if scenario == "failed":
+        assert values[0]["error"]["message"] == "E403 denied"
+    elif scenario != "passed":
+        assert values[-1]["error"]["code"] == "REPORTING.CONTRACT_FAILURE"

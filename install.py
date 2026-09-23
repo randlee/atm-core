@@ -221,7 +221,7 @@ def load_install_values(path: Path) -> dict[str, object]:
         )
         selectors = _require_string_mapping(prerelease.get("selector_dir"), "prerelease.selector_dir")
         if set(selectors) != {"darwin", "linux", "windows"}:
-            raise argparse.ArgumentTypeError("prerelease.selector_dir must declare non-empty darwin, linux, and windows paths")
+            raise argparse.ArgumentTypeError("prerelease.selector_dir must declare darwin, linux, and windows")
 
     _require_entries(
         values.get("python_packages"),
@@ -456,8 +456,8 @@ def template_values(values: dict[str, object]) -> dict[str, object]:
         ],
         "python_distributions": distributions,
         "npm_packages": [_toml_scalars(entry) for entry in values.get("npm_packages", [])],
-        "prerelease": template_prerelease,
         "channels": converted_channels,
+        "prerelease": template_prerelease,
         "has_readme_dependency_crate": "readme_dependency_crate" in project,
         "has_renderer_archive_path": "renderer_archive_path" in project,
         "has_workspace_toml": "workspace_toml" in project,

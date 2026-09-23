@@ -17,9 +17,15 @@ import urllib.parse
 import urllib.request
 
 from release_manifest import load_manifest
-from worker_result import redact_diagnostic
+from worker_result import redact_diagnostic, format_fenced_result
 
 REGISTRY = "https://registry.npmjs.org"
+
+
+class NpmPublicationError(RuntimeError):
+    """A complete sanitized publication failure for the channel worker."""
+
+
 def _safe_diagnostic(value: bytes | str | None) -> str:
     text = value.decode("utf-8", "replace") if isinstance(value, bytes) else (value or "")
     return redact_diagnostic(text) or "<no diagnostic output>"
@@ -29,7 +35,6 @@ def packages(manifest):
     entries = manifest.get("npm_packages", [])
     names = set()
     assets = set()
-    scopes = set()
     for entry in entries:
         name, source = entry["name"], Path(entry["source"])
         if not re.fullmatch(r"(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*", name):
@@ -39,10 +44,6 @@ def packages(manifest):
             raise ValueError("duplicate npm package or unsafe source path")
         names.add(name)
         assets.add(asset)
-        if name.startswith("@"):
-            scopes.add(name.split("/", 1)[0])
-    if len(scopes) > 1:
-        raise ValueError("npm packages must use one consistent scope")
     if bool(entries) != ("npm" in manifest.get("channels", {})):
         raise ValueError("npm_packages and channels.npm must be declared together")
     return entries
@@ -92,23 +93,12 @@ def validate_sources(manifest, release_version, source_ref=None):
         package_path = Path(entry["source"]) / "package.json"
         if source_ref:
             data = json.loads(subprocess.check_output(["git", "show", f"{source_ref}:{package_path.as_posix()}"], text=True))
-            lock_path = package_path.parent / "package-lock.json"
         else:
             source = package_path.resolve()
             if not source.is_relative_to(Path.cwd().resolve()):
                 raise ValueError("npm source escapes checkout")
             data = json.loads(source.read_text())
-            lock_path = package_path.parent / "package-lock.json"
         check_package_metadata(data, entry["name"], release_version, f"source npm package {package_path}")
-        if source_ref:
-            lock_data = json.loads(subprocess.check_output(["git", "show", f"{source_ref}:{lock_path.as_posix()}"], text=True))
-        else:
-            lock_data = json.loads(lock_path.read_text())
-        if lock_data.get("name") != entry["name"] or lock_data.get("version") != release_version:
-            raise ValueError(f"source npm lockfile {lock_path}: top-level identity/version mismatch")
-        root = lock_data.get("packages", {}).get("", {})
-        if root.get("name") != entry["name"] or root.get("version") != release_version:
-            raise ValueError(f"source npm lockfile {lock_path}: packages root identity/version mismatch")
 
 
 def check_release_source(manifest_path, tag, source_ref=None):
@@ -201,25 +191,27 @@ def publish(manifest, tag, asset_dir, dry_run=True):
             result = subprocess.run(command, cwd=temporary, capture_output=True, text=True)
         if result.returncode:
             # A race or a response lost after acceptance is recoverable only
-            # when the registry confirms the exact bytes. Never print npm output.
+            # when the registry confirms the exact bytes. Report only sanitized output.
             existing = registry_version(name, release_version)
             if existing is None:
                 diagnostic = {
                     "channel": "npm", "status": "failed", "tag": tag,
                     "commit": "unavailable", "command": command,
                     "exit_status": result.returncode,
-                    "error": {"code": "NPM.PUBLISH_FAILED", "message": _safe_diagnostic(
+                    "error": {"code": "NPM.PUBLISH_FAILED", "message": "npm publication failed; retry this channel by tag. " + _safe_diagnostic(
                         "stdout: " + (result.stdout or "") + "\nstderr: " + (result.stderr or "")
                     )},
                     "attempts": 1, "workflow_url": "unavailable", "job_url": "unavailable",
                     "evidence": "npm subprocess output",
                     "registry_outcome": "version absent after failed publication",
                     "verification": ["registry version lookup returned absent"],
+                    "checks": [{"kind": "npm_publish", "status": "failed"}],
+                    "required_checks": [],
                     "sanitized_diagnostic": _safe_diagnostic(
                         "stdout: " + (result.stdout or "") + "\nstderr: " + (result.stderr or "")
                     ),
                 }
-                raise RuntimeError("npm publication failed; retry this channel by tag: " + json.dumps(diagnostic, sort_keys=True))
+                raise NpmPublicationError(format_fenced_result(diagnostic))
             identical(existing, path)
 
 
@@ -246,4 +238,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except NpmPublicationError as error:
+        import sys
+        print(str(error), file=sys.stderr)
+        raise SystemExit(1) from None

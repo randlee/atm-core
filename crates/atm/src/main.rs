@@ -1097,19 +1097,18 @@ mod adapter_tests {
             };
             assert_eq!(error.cause(), expected_cause);
             assert_eq!(error.to_string(), message);
-            let expected_serialized = expected_cause.map_or_else(
-                || serialized.to_owned(),
-                |cause| {
-                    format!(
-                        "{},\"cause\":\"{cause}\"}}",
-                        serialized.trim_end_matches('}')
-                    )
-                },
-            );
-            assert_eq!(
-                serde_json::to_string(error).expect("stable error JSON"),
-                expected_serialized
-            );
+            let mut expected_value: serde_json::Value =
+                serde_json::from_str(serialized).expect("historical error JSON");
+            if let Some(cause) = expected_cause {
+                expected_value["cause"] = serde_json::Value::String(cause.to_owned());
+            }
+            let actual_serialized = serde_json::to_string(error).expect("stable error JSON");
+            let actual_value: serde_json::Value =
+                serde_json::from_str(&actual_serialized).expect("actual error JSON");
+            assert_eq!(actual_value, expected_value);
+            if expected_cause.is_none() {
+                assert_eq!(actual_serialized, serialized);
+            }
         }
 
         let init = map_init_error(sc_observability_types::typed::InitFailure::from_context(
