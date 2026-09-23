@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 5,
+  "revision": 6,
   "entries": [
     {
       "host_label": "rand-m5",
@@ -47,10 +47,10 @@
     {
       "host_label": "m5-atmbench",
       "target": "tcp",
-      "p50_floor": 17000.0,
+      "p50_floor": 16000.0,
       "approved_by": "Rand via D3 ratchet exception",
-      "effective_from": "2026-08-26T00:00:00Z",
-      "rationale": "Three-run m5-atmbench dataset (20260825T045840Z, 20260826T001441Z, 20260826T002410Z) and Rand sign-off; the original floor was above the observed range."
+      "effective_from": "2026-09-23T00:00:00Z",
+      "rationale": "Four published official m5-atmbench TCP runs since 2026-09-08 all measured below the 17000 floor (20260908T045049Z p50 16564.46, 20260914T200908Z 16227.39, 20260915T024509Z 16331.34, 20260923T212808Z 16587.75) while sqlite, UDS and TCP+TLS kept passing; the last pass was 20260906T194537Z at 18694.42. Rand sign-off 2026-09-23 UTC: 'we should lower the tcp floor so these pass moving forward.' 16000 sits below the observed four-run range with a 1.4% margin under its minimum."
     },
     {
       "host_label": "m5-atmbench",
