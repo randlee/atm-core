@@ -1,6 +1,6 @@
 # sprint bc.4 — consume a qualified immutable-release publish kit
 
-Status: implementation present; QA-1 remediation active; u4 open.
+Status: complete; u4 CLOSED at PR #1571 `b381e0981` (pin `f178b6919881c5a3d030d6343fcbb509f04806cc`).
 
 Accountable owner: `cipher@atm-dev`.
 
@@ -14,9 +14,10 @@ fixed upstream under ADR-050, never locally patched here.
 
 - The PR106-derived `sc-publish` head
   `22137c2da13bf4638b4267b69c6c2f021617da73` is frozen historical evidence;
-  it is not a valid current u4 pin. The active merged PR99/100/101/108 stack
-  reports accepted develop head `98a75ba3e`; a clean consumer layer must pin
-  and reinstall it before u4 closes.
+  it is not a valid current u4 pin. sc-publish develop (`98a75ba3e`) and main
+  were reconciled on 2026-09-23 UTC (sc-publish #98/#111 main->develop, #110
+  develop->main); the qualified pin is the #110 merge commit on sc-publish
+  main, `f178b6919881c5a3d030d6343fcbb509f04806cc`, adopted by PR #1571 (`b381e0981`).
 - `docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md` records the historical
   PR #106 scope and the superseding u4 boundary from the sc-publish maintainer.
 - Credential appointment and repository-setting activation are not bc.4 entry
@@ -25,14 +26,15 @@ fixed upstream under ADR-050, never locally patched here.
   recorded for boundary clarity and are not claimed as bc.4 work or entry
   gates. Post-publication receipt and attestation verification remain separate
   downstream work.
-- The current source is the merged sc-publish develop result at
-  `98a75ba3e`; this layer does not edit the pin or claim the clean consumer
-  install required to close u4.
+- The current source is sc-publish main `f178b6919881c5a3d030d6343fcbb509f04806cc`
+  (develop content plus the prerelease reconciliation). PR #1571 edited the pin
+  and performed the clean canonical install that closes u4; evidence is in
+  `bc.4-sc-publish-consumer-qualification.md`.
 
 ## deliverables
 
-1. A later clean consumer layer must advance `release/sc-publish-pin.toml` to
-   the exact merged develop commit; this QA remediation does not edit the pin.
+1. `release/sc-publish-pin.toml` advanced to the exact qualified commit
+   `f178b6919881c5a3d030d6343fcbb509f04806cc` (done, PR #1571).
 2. Regenerate shared files only through the canonical pinned installer using
    `release/sc-publish-consumer-input.json`.
 3. Prove package-byte parity, rendered manifest semantics, expected workflow

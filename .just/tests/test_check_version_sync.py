@@ -22,8 +22,10 @@ from check_version_sync import KIT_RELEASE_ARTIFACTS
 from check_version_sync import replace_version_occurrences
 from check_version_sync import specifier_admits
 from check_version_sync import validate_python_dependency_pins
+from lint_common import discover_repo_root
 from prerelease_tag import copy_tracked_files
 from prerelease_tag import sync_python_version
+from prerelease_tag import workspace_version
 
 
 ROOT_MANIFEST = """\
@@ -285,13 +287,21 @@ ManifestVersion: 1.3.2-beta-21-pre
         self.assertTrue(specifier_admits("1.5.3", "==1.5.3"))
         self.assertFalse(specifier_admits("1.5.3", "!=1.5.3"))
 
-    def _write_pyproject(self, path: Path, name: str, *, dynamic_version: bool, dependencies: list[str] | None = None) -> None:
+    def _write_pyproject(
+        self,
+        path: Path,
+        name: str,
+        *,
+        dynamic_version: bool,
+        dependencies: list[str] | None = None,
+        version: str = "0.1.0",
+    ) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         lines = ["[project]", f'name = "{name}"']
         if dynamic_version:
             lines.append('dynamic = ["version"]')
         else:
-            lines.append('version = "0.1.0"')
+            lines.append(f'version = "{version}"')
         if dependencies is not None:
             deps = ", ".join(f'"{dep}"' for dep in dependencies)
             lines.append(f"dependencies = [{deps}]")
@@ -335,6 +345,80 @@ ManifestVersion: 1.3.2-beta-21-pre
             )
 
             self.assertTrue(validate_python_dependency_pins(repo_root, "1.5.3"))
+
+    def _write_python_distributions(self, repo_root: Path, names: list[str]) -> None:
+        manifest = repo_root / "release/publish-artifacts.toml"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        blocks = [f'[[python_distributions]]\nname = "{name}"\nsource = "crates/{name}"' for name in names]
+        manifest.write_text("\n\n".join(blocks) + "\n", encoding="utf-8")
+
+    def test_validate_python_dependency_pins_tracks_static_workspace_distribution(self) -> None:
+        # The publish kit requires a static [project].version; the stale-pin gate
+        # must keep covering atm-graft through the manifest's python_distributions.
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self._write_python_distributions(repo_root, ["atm-graft"])
+            self._write_pyproject(
+                repo_root / "crates/atm-graft-python/pyproject.toml",
+                "atm-graft",
+                dynamic_version=False,
+                version="1.6.0",
+            )
+            self._write_pyproject(
+                repo_root / "crates/hermes-atm/pyproject.toml",
+                "hermes-atm",
+                dynamic_version=False,
+                dependencies=["atm-graft>=1.5,<1.6"],
+            )
+
+            with self.assertRaises(SystemExit) as error:
+                validate_python_dependency_pins(repo_root, "1.6.0")
+
+            message = str(error.exception)
+            self.assertIn("crates/hermes-atm/pyproject.toml", message)
+            self.assertIn("does not admit", message)
+
+    def test_validate_python_dependency_pins_accepts_static_tracking_specifier(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self._write_python_distributions(repo_root, ["atm-graft"])
+            self._write_pyproject(
+                repo_root / "crates/atm-graft-python/pyproject.toml",
+                "atm-graft",
+                dynamic_version=False,
+                version="1.6.0",
+            )
+            self._write_pyproject(
+                repo_root / "crates/hermes-atm/pyproject.toml",
+                "hermes-atm",
+                dynamic_version=False,
+                dependencies=["atm-graft>=1.6,<1.7"],
+            )
+
+            self.assertTrue(validate_python_dependency_pins(repo_root, "1.6.0"))
+
+    def test_validate_python_dependency_pins_rejects_static_distribution_version_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self._write_python_distributions(repo_root, ["atm-graft"])
+            self._write_pyproject(
+                repo_root / "crates/atm-graft-python/pyproject.toml",
+                "atm-graft",
+                dynamic_version=False,
+                version="1.5.9",
+            )
+
+            with self.assertRaises(SystemExit) as error:
+                validate_python_dependency_pins(repo_root, "1.6.0")
+
+            message = str(error.exception)
+            self.assertIn("crates/atm-graft-python/pyproject.toml", message)
+            self.assertIn("does not match the workspace version", message)
+
+    def test_validate_python_dependency_pins_covers_real_workspace_distributions(self) -> None:
+        # Non-synthetic: the real repository must still check hermes-atm's atm-graft pin.
+        repo_root = discover_repo_root()
+        self.assertTrue(validate_python_dependency_pins(repo_root, workspace_version(repo_root)))
 
 
 if __name__ == "__main__":

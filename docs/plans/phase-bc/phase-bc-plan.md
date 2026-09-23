@@ -82,9 +82,10 @@ This phase will:
   `sc-publish`. atm-core must not locally patch synced shared files.
 - The combined-stack `sc-publish` PR #106 source at
   `22137c2da13bf4638b4267b69c6c2f021617da73` is frozen historical evidence,
-  not the current u4 qualification source. The active merged PR99/100/101/108
-  stack has accepted develop head `98a75ba3e`; a clean consumer layer must
-  repin and reinstall that result before u4 closes.
+  not the current u4 qualification source. The merged PR99/100/101/108
+  develop head `98a75ba3e` was reconciled with main (sc-publish #98/#111) and
+  promoted by #110; the qualified pin is the #110 merge commit
+  `f178b6919881c5a3d030d6343fcbb509f04806cc`, adopted by PR #1571 (u4 closed).
 
 ## 4. non-goals and retained ownership
 
@@ -110,7 +111,7 @@ This phase will:
 | `u1` | [sc-publish PR #106 combined-stack acceptance](./bc.4-upstream-owner-acceptance.md); PR #101 is historical evidence | bc.4 |
 | `u2` | separately authorized bc.5 setting/credential activation evidence; not passed before bc.4 and still incomplete | bc.5 |
 | `u3` | inherited/deferred upstream lifecycle work: draft-first publication, replacement refusal, exact tag/build binding, per-tag concurrency, trusted dispatch refs, and digest/checksum verification; not claimed by bc.4 | upstream follow-up; not a bc.4 completion gate |
-| `u4` | merged sc-publish develop result at accepted head `98a75ba3e`, plus a clean consumer-layer pin/reinstall and local qualification; **OPEN** pending that evidence | bc.4 |
+| `u4` | sc-publish main `f178b6919881c5a3d030d6343fcbb509f04806cc` (develop `98a75ba3e` reconciled and promoted via #98/#111/#110) pinned and canonically reinstalled by PR #1571 `b381e0981`; **CLOSED**, evidence in `bc.4-sc-publish-consumer-qualification.md` | bc.4 |
 | `u5` | the coordinated sc-observability `1.4.1` Rust/npm inventory is published and independently verified from the PR #197 checklist and existing installed release workflow; atm-dev has received the upstream completion notice | bc.6 |
 
 No missing upstream gate may be replaced by a local atm-core hotfix to a
@@ -202,7 +203,7 @@ their task closes.
 | `bc.3` | `docs/plans/phase-bc/bc.3-log-surface-decision.md` |
 | `u2` | `docs/plans/phase-bc/bc.5-credential-preflight.md` |
 | `u3` | inherited/deferred upstream lifecycle record in `docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md`; not claimed by bc.4 |
-| `u4`, `bc.4` | `docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md` (historical receipt superseded; clean repin/reinstall pending) |
+| `u4`, `bc.4` | `docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md` ("current qualification" table; 22137c2da receipt historical) |
 | `bc.5` credential | `docs/plans/phase-bc/bc.5-credential-preflight.md` |
 | `bc.5` setting/release | `docs/plans/phase-bc/bc.5-immutable-release-evidence.md` |
 | `u5`, `bc.6` | `docs/plans/phase-bc/bc.6-1.4.1-requalification.md` |
@@ -265,5 +266,5 @@ this plan authorizes none.
   operator authorization.
 - phase closure requires proof for the setting and the first future immutable
   release; enabling alone is not closure.
-- just validate publish dry-run failures caused solely by the workspace version still equalling the published 1.6.0 are deferred to the prerelease patch bump (Rand, 2026-09-23).
-- bc.5 remains enabled but open: the first immutable-release proof is deferred to the release from main and is not open phase work or a blocker to landing into integrate/phase-bc.
+- just validate publish dry-run failures caused solely by the workspace version still equalling the published 1.6.0 are deferred to the prerelease patch bump (Rand, 2026-09-23 UTC).
+- bc.5 remains enabled but open: the first immutable-release proof is deferred to the release from main and is not open phase work or a blocker to landing into integrate/phase-bc (Rand, 2026-09-23 UTC: "we are not publishing until code lands on main").

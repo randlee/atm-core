@@ -1,7 +1,7 @@
 # bc.4 upstream owner acceptance
 
-Status: historical PR106 evidence; current u4 remains open pending clean
-consumer adoption of the merged sc-publish develop result.
+Status: historical PR106 evidence; u4 closed by PR #1571 (`b381e0981`) at
+sc-publish main `f178b6919881c5a3d030d6343fcbb509f04806cc`.
 
 ## historical source — superseded for u4
 
@@ -15,8 +15,8 @@ consumer adoption of the merged sc-publish develop result.
 PR #101 remains historical evidence for the earlier immutable-release review;
 the PR106-derived head above is frozen and is not the current bc.4 pin or u4
 qualification. The active merged sc-publish stack is PRs #99/#100/#101/#108;
-fenix reported accepted develop head `98a75ba3e`. A clean consumer layer must
-pin and reinstall that merged result before u4 closes.
+develop head `98a75ba3e` was reconciled with main (#98/#111) and promoted by
+#110; PR #1571 pinned and reinstalled the #110 merge commit, closing u4.
 
 The owner-approved sequencing amendment dated 2026-09-23 records that bc.4
 local adoption proceeded before u2 and u3. u2 credential/setting activation

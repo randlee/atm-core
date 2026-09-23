@@ -1,11 +1,28 @@
 ---
-status: historical/superseded; u4 OPEN; QA-1 remediation active
+status: u4 CLOSED at PR #1571 `b381e0981` (pin `f178b6919881c5a3d030d6343fcbb509f04806cc`); the 22137c2da receipt below is historical
 ---
 
 # bc.4 sc-publish consumer qualification
 
-The prior receipt below is retained as historical evidence only. It does not
-qualify the current consumer layer or close u4.
+The 22137c2da receipt below is retained as historical evidence only. u4 is
+closed by the canonical install recorded under "current qualification".
+
+## current qualification (closes u4)
+
+| item | result |
+| --- | --- |
+| pinned revision | sc-publish main `f178b6919881c5a3d030d6343fcbb509f04806cc` (#110 merge: develop `98a75ba3e` + prerelease reconciliation #98/#111) |
+| consumer head | PR #1571 `b381e0981512ca2434055cb89ef945333955a799`, layer 18 of stack #1570 on `integrate/phase-bc` |
+| installer | canonical `install.py --input release/sc-publish-consumer-input.json`, exit 0, no hand edits to any generated file |
+| repeat dry-run | `install.py --dry-run --input release/sc-publish-consumer-input.json` -> `Publish-kit assets are in sync.` exit 0 (re-run by fenix on the fix layer cut from `b381e0981`, same output) |
+| `[prerelease]` table | byte-identical to the pre-install table |
+| `publish_order` | atm-herdr=6, atm-observability=7, atm-runtime=8, atm-http-runtime=9, atm-daemon-client=10; `just validate` manifest step: `ok: publish_order matches the workspace dependency graph.` |
+| kit line ceiling | `.github/scripts/release_artifacts.py` 999 lines (kit-owned; sc-publish #92) |
+| local gates | `just lint` 38 checks green on `b381e0981`; `just validate` fails only on the waived 1.6.0 version-equality pattern (plan section 9) |
+
+Rulings applied (Rand, 2026-09-23 UTC): use the sc-publish develop kit,
+promoted to main via #110; no sc-publish change for atm-core-specific behavior
+(kit changes only when they simplify the kit or make it more extensible).
 
 ## provenance
 
@@ -19,9 +36,7 @@ qualify the current consumer layer or close u4.
 | pin | `release/sc-publish-pin.toml` records the full source SHA |
 
 The old source revision was an accepted open PR head, not a merged revision.
-The active merged sc-publish PR99/100/101/108 stack has accepted develop head
-`98a75ba3e`; a clean consumer layer must repin and reinstall that result before
-u4 closes.
+It was superseded by the qualified main revision recorded above.
 
 ## superseded installer evidence
 
@@ -167,12 +182,13 @@ kit-owned files, rather than sc-publish regressions: commits
 `3c01feac5`/`2d6a810a9`/`97b0323cd` and the hand-edited `release.yml`, plus
 `a5ff2bc77`/`b3738b89f`, are dropped to end the ADR-050 drift. Selector
 snapshot/restore on failed prerelease activation remains a candidate kit bug
-fix for a future sc-publish cycle and is not filed here.
+fix for a future sc-publish cycle and is not filed here (Rand, 2026-09-23 UTC:
+sc-publish changes only when they simplify the kit or make it more extensible).
 
 ## disposition
 
-`u4` remains **OPEN**. A clean consumer layer must pin merged develop
-`98a75ba3e`, reinstall without drift, and record the resulting local evidence.
+`u4` is **CLOSED** by PR #1571 (`b381e0981`): pin `f178b6919881c5a3d030d6343fcbb509f04806cc`,
+canonical reinstall without drift, evidence in "current qualification" above.
 Merge status, hosted-QA completion, credential activation, and live
 release/channel qualification remain outside this historical receipt; setting
 and credential activation belong to separately authorized bc.5 evidence.
