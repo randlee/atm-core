@@ -26,10 +26,10 @@ use atm_core::observability::{
     LogOrder, LogTailSession, ObservabilityPort, diagnostic_code, service_name,
     standard_level_for_outcome,
 };
-#[cfg(test)]
-use atm_observability::ATM_RETAINED_SINK_FAULT_ENV;
 #[cfg(any(test, feature = "fault-injection"))]
 use atm_observability::retained_sink_fault_mode as shared_retained_sink_fault_mode;
+#[cfg(test)]
+use atm_observability::{ATM_LOG_LEVEL_ENV, ATM_RETAINED_SINK_FAULT_ENV};
 use atm_observability::{
     RetainedLogLevel, logger_level_override as shared_logger_level_override,
     logger_root_for_log_dir as shared_logger_root_for_log_dir, prepare_retained_log,
@@ -58,8 +58,6 @@ use time::OffsetDateTime;
 use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
 const ATM_COMMAND_TARGET: &str = "atm.command";
-#[cfg(test)]
-const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
 const MAX_RETAINED_QUERY_RECORD_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -347,8 +345,8 @@ pub(crate) fn build_logger(
 }
 
 fn map_init_error(source: sc_observability_types::typed::InitFailure) -> AtmError {
+    retain_shared_diagnostic_code(source.diagnostic().code.as_str());
     AtmError::observability_bootstrap("failed to initialize shared observability logger")
-        .with_cause(source)
 }
 
 #[cfg(test)]
@@ -453,7 +451,7 @@ impl RetainedSinkHealthOverride {
 impl LogSink for RetainedSinkHealthOverride {
     #[expect(
         deprecated,
-        reason = "sc-observability 1.4.1 retains the LogSinkError trait boundary; this test fault sink must implement it"
+        reason = "sc-observability 1.4.1 retains the LogSinkError trait boundary; see sc-observability#203; this test fault sink must implement it"
     )]
     fn write(
         &self,
@@ -464,7 +462,7 @@ impl LogSink for RetainedSinkHealthOverride {
 
     #[expect(
         deprecated,
-        reason = "sc-observability 1.4.1 retains the LogSinkError trait boundary; this test fault sink must implement it"
+        reason = "sc-observability 1.4.1 retains the LogSinkError trait boundary; see sc-observability#203; this test fault sink must implement it"
     )]
     fn flush(&self) -> Result<(), sc_observability_types::LogSinkError> {
         self.inner.flush()
@@ -575,9 +573,9 @@ impl ObservabilityPort for ScObservabilityAdapter {
 fn map_log_error(source: sc_observability::LogFailure) -> AtmError {
     let code = match &source {
         sc_observability::LogFailure::InvalidEvent(error) => Some(error.diagnostic().code.as_str()),
-        sc_observability::LogFailure::WriterDegraded(_context)
-        | sc_observability::LogFailure::ShutdownTimedOut(_context) => {
-            Some(_context.diagnostic().code.as_str())
+        sc_observability::LogFailure::WriterDegraded(context)
+        | sc_observability::LogFailure::ShutdownTimedOut(context) => {
+            Some(context.diagnostic().code.as_str())
         }
         _ => None,
     };
@@ -907,12 +905,17 @@ fn level_for_outcome(outcome: &str) -> Level {
 }
 
 fn map_query_error(source: QueryError) -> AtmError {
-    AtmError::observability_query("shared observability query failed").with_cause(source)
+    retain_shared_diagnostic_code(source.diagnostic().code.as_str());
+    AtmError::observability_query("shared observability query failed")
 }
 
 fn map_follow_error(phase: &str, source: QueryError) -> AtmError {
+    retain_shared_diagnostic_code(source.diagnostic().code.as_str());
     AtmError::observability_follow(format!("shared observability follow {phase} failed"))
-        .with_cause(source)
+}
+
+fn retain_shared_diagnostic_code(code: &str) {
+    tracing::debug!(target: "atm.observability", diagnostic_code = code, "shared observability failure");
 }
 
 fn map_diagnostic_summary(
@@ -1089,26 +1092,15 @@ mod adapter_tests {
             assert_eq!(error.code(), code);
             assert_eq!(error.message(), message);
             assert_eq!(error.remediation(), remediation);
-            let expected_cause = match code {
-                AtmErrorCode::ObservabilityBootstrapFailed => Some("synthetic failure"),
-                AtmErrorCode::ObservabilityQueryFailed
-                | AtmErrorCode::ObservabilityFollowFailed => Some("query runtime shut down"),
-                _ => None,
-            };
-            assert_eq!(error.cause(), expected_cause);
+            assert_eq!(error.cause(), None);
             assert_eq!(error.to_string(), message);
-            let mut expected_value: serde_json::Value =
+            let expected_value: serde_json::Value =
                 serde_json::from_str(serialized).expect("historical error JSON");
-            if let Some(cause) = expected_cause {
-                expected_value["cause"] = serde_json::Value::String(cause.to_owned());
-            }
             let actual_serialized = serde_json::to_string(error).expect("stable error JSON");
             let actual_value: serde_json::Value =
                 serde_json::from_str(&actual_serialized).expect("actual error JSON");
             assert_eq!(actual_value, expected_value);
-            if expected_cause.is_none() {
-                assert_eq!(actual_serialized, serialized);
-            }
+            assert_eq!(actual_serialized, serialized);
         }
 
         let init = map_init_error(sc_observability_types::typed::InitFailure::from_context(

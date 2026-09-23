@@ -12,8 +12,8 @@ use std::{fs, fs::OpenOptions};
 use atm_core::error::AtmError;
 use atm_core::observability::{
     AtmMaintenanceHealthReport, AtmMaintenanceWorkerState, AtmObservabilityDiagnostic,
-    AtmObservabilityHealth, AtmObservabilityHealthState, RetainedSinkFaultMode, diagnostic_code,
-    sanitize_retained_fields,
+    AtmObservabilityHealth, AtmObservabilityHealthState, ErrorCode, RetainedSinkFaultMode,
+    diagnostic_code, sanitize_retained_fields,
 };
 use atm_core::types::IsoTimestamp;
 use atm_core::{EnvSource, ProcessEnvSource};
@@ -54,7 +54,7 @@ pub struct RetainedLogPolicy {
 pub enum RetainedLogOffer {
     Accepted,
     QueueFull,
-    Rejected { diagnostic_code: String },
+    Rejected { diagnostic_code: ErrorCode },
 }
 
 /// ATM-owned stable metadata for a direct retained command record.
@@ -96,6 +96,14 @@ impl RetainedLogger {
         self.0.flush_typed()
     }
 
+    #[cfg(test)]
+    pub(crate) fn query(
+        &self,
+        query: &sc_observability_types::LogQuery,
+    ) -> Result<sc_observability_types::LogSnapshot, sc_observability_types::QueryError> {
+        self.0.query(query)
+    }
+
     /// Drains the retained-log writer and returns its final health snapshot.
     pub fn shutdown(self) -> sc_observability_types::LoggingHealthReport {
         self.0.shutdown().health()
@@ -110,7 +118,7 @@ impl RetainedLogger {
             Ok(()) => RetainedLogOffer::Accepted,
             Err(sc_observability::TryLogFailure::QueueFull(_)) => RetainedLogOffer::QueueFull,
             Err(error) => RetainedLogOffer::Rejected {
-                diagnostic_code: try_log_error_code(&error).to_string(),
+                diagnostic_code: try_log_error_code(&error),
             },
         }
     }
@@ -160,11 +168,16 @@ impl RetainedLogger {
 
     #[cfg(test)]
     pub(crate) fn force_queue_full_for_test<T>(operation: impl FnOnce() -> T) -> T {
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                QUEUE_FULL_FOR_TEST.with(|forced| forced.set(false));
+            }
+        }
         QUEUE_FULL_FOR_TEST.with(|forced| {
             assert!(!forced.replace(true), "queue-full test mode must not nest");
-            let result = operation();
-            forced.set(false);
-            result
+            let _reset = Reset;
+            operation()
         })
     }
 }
@@ -243,8 +256,16 @@ pub fn build_retained_logger(
 }
 
 fn map_retained_logger_error(source: impl std::fmt::Display) -> AtmError {
-    AtmError::observability_bootstrap("failed to initialize shared daemon observability logger")
-        .with_cause(source)
+    let error = AtmError::observability_bootstrap(
+        "failed to initialize shared daemon observability logger",
+    );
+    tracing::debug!(
+        target: "atm.observability",
+        diagnostic_code = %error.code(),
+        source = %source,
+        "shared daemon observability logger initialization failed"
+    );
+    error
 }
 
 /// Builds the retained JSONL logger, resolving `ATM_LOG` from the process
@@ -276,8 +297,8 @@ fn queue_full_for_test() -> bool {
     QUEUE_FULL_FOR_TEST.with(std::cell::Cell::get)
 }
 
-fn try_log_error_code(error: &sc_observability::TryLogFailure) -> &str {
-    match error {
+fn try_log_error_code(error: &sc_observability::TryLogFailure) -> ErrorCode {
+    let code = match error {
         sc_observability::TryLogFailure::InvalidEvent(error) => error.diagnostic().code.as_str(),
         sc_observability::TryLogFailure::QueueFull(context)
         | sc_observability::TryLogFailure::WriterDegraded(context)
@@ -285,7 +306,8 @@ fn try_log_error_code(error: &sc_observability::TryLogFailure) -> &str {
             context.diagnostic().code.as_str()
         }
         _ => "SC_OBSERVABILITY_LOGGER_UNKNOWN_FAILURE",
-    }
+    };
+    ErrorCode::new_owned(code).expect("shared diagnostic codes must satisfy ATM validation")
 }
 
 pub mod tracing_bridge;
@@ -517,6 +539,7 @@ pub fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmEr
 
 #[cfg(test)]
 mod tests {
+    use atm_core::error::AtmError;
     use atm_core::test_support::FakeEnvSource;
     use tempfile::TempDir;
 
@@ -539,6 +562,20 @@ mod tests {
 
         assert_eq!(active_log_path, log_dir.join("atm.log.jsonl"));
         assert!(active_log_path.is_file());
+    }
+
+    #[test]
+    fn retained_logger_bootstrap_error_preserves_historical_json_without_cause() {
+        let daemon_error = super::map_retained_logger_error("synthetic initialization failure");
+        let historical = AtmError::observability_bootstrap(
+            "failed to initialize shared daemon observability logger",
+        );
+
+        assert_eq!(daemon_error.cause(), None);
+        assert_eq!(
+            serde_json::to_string(&daemon_error).expect("daemon error JSON"),
+            serde_json::to_string(&historical).expect("historical error JSON")
+        );
     }
 
     #[test]
@@ -589,7 +626,7 @@ mod tests {
     }
 
     #[test]
-    fn published_1_4_0_consumer_surface_preserves_logger_contract() {
+    fn atm_adapter_logger_contract_includes_query_records() {
         let tempdir = TempDir::new().expect("tempdir");
         let log_dir = tempdir.path().join("logs");
         let policy = RetainedLogPolicy {
@@ -638,19 +675,43 @@ mod tests {
         })
         .expect("queue-full admission");
         assert_eq!(queue_full, RetainedLogOffer::QueueFull);
-        let shutdown = logger.shutdown();
-        assert!(shutdown.queue_capacity > 0);
-
-        let query_logger = Logger::builder_typed(LoggerConfig::default_for(
-            ServiceName::new("atm-query").expect("service"),
-            tempdir.path().join("query"),
-        ))
-        .expect("published 1.4.0 builder")
-        .build_typed()
-        .expect("typed query logger");
+        let query_logger = RetainedLogger(
+            Logger::builder_typed(LoggerConfig::default_for(
+                ServiceName::new("atm").expect("service"),
+                tempdir.path().join("query"),
+            ))
+            .expect("published 1.4.0 builder")
+            .build_typed()
+            .expect("typed query logger"),
+        );
         query_logger
-            .query(&LogQuery::default())
-            .expect("query surface");
+            .try_log_command(RetainedCommandEvent {
+                target: "atm.query",
+                action: "qualification",
+                outcome: "ok",
+                code: Some("ATM_QUERY_CONTRACT"),
+            })
+            .expect("query record admission");
+        query_logger.flush().expect("query record flush");
+        let snapshot = (0..20)
+            .find_map(|_| {
+                let snapshot = query_logger.query(&LogQuery::default()).ok()?;
+                if snapshot.events.is_empty() {
+                    std::thread::yield_now();
+                    None
+                } else {
+                    Some(snapshot)
+                }
+            })
+            .expect("query record");
+        assert_eq!(snapshot.events.len(), 1);
+        assert_eq!(
+            snapshot.events[0]
+                .fields
+                .get("code")
+                .and_then(|value| value.as_str()),
+            Some("ATM_QUERY_CONTRACT")
+        );
         let _ = query_logger.shutdown();
     }
 
@@ -689,5 +750,16 @@ mod tests {
         .expect("queue-full admission");
         assert_eq!(queue_full, RetainedLogOffer::QueueFull);
         let _ = logger.shutdown();
+    }
+
+    #[test]
+    fn rejected_offer_surfaces_a_validated_diagnostic_code() {
+        let diagnostic_code =
+            atm_core::observability::diagnostic_code("SC_TEST_REJECTED").expect("valid code");
+        let offer = RetainedLogOffer::Rejected { diagnostic_code };
+        let RetainedLogOffer::Rejected { diagnostic_code } = offer else {
+            panic!("expected rejected offer");
+        };
+        assert_eq!(diagnostic_code.as_str(), "SC_TEST_REJECTED");
     }
 }

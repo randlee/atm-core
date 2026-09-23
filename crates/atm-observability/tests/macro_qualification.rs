@@ -97,7 +97,9 @@ fn read_events(path: &std::path::Path) -> Vec<Value> {
 }
 
 #[tokio::test(flavor = "current_thread")]
+#[serial_test::serial(global_observability_log_init)]
 async fn macros_and_instrument_preserve_bounded_retained_contracts() {
+    let before = sc_observability_types::Timestamp::now_utc();
     let root = tempfile::tempdir().expect("temporary logger root");
     let mut config = LoggerConfig::default_for(
         ServiceName::new("bc3-fixture").expect("service name"),
@@ -245,11 +247,12 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
     // contract: async completion and writer scheduling may interleave. Verify
     // the timeline field semantically instead of coupling the fixture to list
     // order.
+    let after = sc_observability_types::Timestamp::now_utc();
     for event in &events {
         let timestamp =
             serde_json::from_value::<sc_observability_types::Timestamp>(event["timestamp"].clone())
                 .expect("canonical retained timestamp");
-        assert!(timestamp >= sc_observability_types::Timestamp::UNIX_EPOCH);
+        assert!(timestamp >= before && timestamp <= after);
     }
     assert_eq!(guard.dropped_events().total(), 0);
     guard

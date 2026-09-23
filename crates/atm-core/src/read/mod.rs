@@ -2155,6 +2155,38 @@ mod tests {
     }
 
     #[test]
+    fn metadata_contains_uses_selection_snapshot_when_durable_row_vanishes() {
+        let tempdir = tempdir().expect("tempdir");
+        let (metadata_row, message_record) =
+            metadata_row("durable body", Some("summary miss"), TEST_SENDER);
+        let rows = vec![metadata_row.clone()];
+        let classified = metadata_selection::classify_mailbox_metadata_rows(&rows);
+        let runtime = ReadRuntime {
+            roster_present: true,
+            metadata_rows: rows.clone(),
+            metadata_row_batches: None,
+            message_records: HashMap::new(),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            save_seen_watermark_count: Arc::new(AtomicUsize::new(0)),
+            persist_message_state_count: Arc::new(AtomicUsize::new(0)),
+            fail_load_message_record: false,
+        };
+        let filtered = metadata_selection::filter_metadata_backed_contains_candidates(
+            &runtime,
+            tempdir.path(),
+            &TEST_TEAM.parse().expect("team"),
+            &TEST_SENDER.parse().expect("agent"),
+            &rows,
+            classified,
+            Some("needle"),
+        )
+        .expect("vanished durable row falls back to selected snapshot");
+        assert!(filtered.is_empty());
+        assert!(!message_record.envelope.text.contains("needle"));
+    }
+
+    #[test]
     fn peek_mail_with_runtime_does_not_persist_message_state_or_seen_watermark() {
         let tempdir = tempdir().expect("tempdir");
         let (metadata_row, message_record) =
