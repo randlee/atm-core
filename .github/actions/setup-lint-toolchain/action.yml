@@ -1,6 +1,14 @@
 name: Setup lint toolchain
-description: Install the cargo-deny/cargo-shear/codespell tools required by cargo test --workspace
+description: Install sc-lint plus the cargo-deny/cargo-shear/codespell tools required by cargo test --workspace
 inputs:
+  sc-lint-source-revision:
+    description: Optional immutable sc-lint source commit instead of the released binary
+    required: false
+    default: ""
+  sc-lint-version:
+    description: Released sc-lint version to install
+    required: false
+    default: "0.4.0"
   cargo-deny-version:
     description: Pinned cargo-deny version
     required: false
@@ -16,9 +24,12 @@ inputs:
 runs:
   using: composite
   steps:
-    # Release-branch fix (v1.4.4, upstream sc-publish#67): sc-lint is a lint
-    # tool owned by repo CI; the publish preflight must not install or gate on
-    # it. The setup-sc-lint step is removed here pending upstream deletion.
+    - name: Set up sc-lint
+      uses: ./.github/actions/setup-sc-lint
+      with:
+        version: ${{ inputs.sc-lint-version }}
+        source-revision: ${{ inputs.sc-lint-source-revision }}
+
     - name: Install cargo-deny
       uses: taiki-e/install-action@v2
       with:

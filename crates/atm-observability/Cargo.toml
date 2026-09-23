@@ -19,5 +19,8 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 atm-core = { workspace = true, features = ["test-utils"] }
+sc-observability-log = "=1.4.1"
 serial_test = "3"
 tempfile = "3"
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+trybuild = "1"

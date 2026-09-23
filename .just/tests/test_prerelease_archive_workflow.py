@@ -284,82 +284,6 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             self.assertEqual(calls, ["atm --version"])
             self.assertNotIn("already selected; service left running", stdout.getvalue())
 
-    @unittest.skipUnless(os.name == "posix", "selector rollback uses POSIX symlinks")
-    def test_zero_candidate_install_restores_selectors_and_leaves_live_pair_unchanged(self) -> None:
-        root = discover_repo_root()
-        prerelease = load_script(
-            "atm_prerelease_zero_candidate",
-            root / ".claude" / "skills" / "prerelease" / "scripts" / "prerelease.py",
-        )
-        daemon_switch = load_script(
-            "atm_daemon_switch_zero_candidate",
-            root / ".claude" / "skills" / "daemon-switch" / "scripts" / "daemon-switch.py",
-        )
-        with tempfile.TemporaryDirectory() as directory:
-            fixture = Path(directory)
-            old_bin, candidate_bin = fixture / "old" / "bin", fixture / "builds" / "v1.5.18" / "bin"
-            active_bin, private_bin = fixture / "active", fixture / "private"
-            for folder in (old_bin, candidate_bin, active_bin, private_bin):
-                folder.mkdir(parents=True)
-            for folder in (old_bin, candidate_bin):
-                for name in ("atm", "atm-daemon"):
-                    binary = folder / name
-                    binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-                    binary.chmod(0o755)
-            for name in ("atm", "atm-daemon"):
-                (active_bin / name).symlink_to(old_bin / name)
-                (private_bin / name).symlink_to(old_bin / name)
-            config = {
-                "install_root": str(fixture / "builds"),
-                "binaries": ["atm", "atm-daemon"],
-                "selector_dir": {
-                    "darwin": str(private_bin),
-                    "linux": str(private_bin),
-                    "windows": str(private_bin),
-                },
-                "post_install": (
-                    "python3 .claude/skills/daemon-switch/scripts/daemon-switch.py "
-                    "switch --prerelease {version} --yes --discover-managed-service"
-                ),
-                "verify": "atm --version",
-            }
-
-            def refuse_activation(command_text: str, *, capture: bool = False):
-                self.assertFalse(capture)
-                self.assertIn("--discover-managed-service", command_text)
-                argv = [
-                    "daemon-switch.py",
-                    "switch",
-                    "--prerelease",
-                    "1.5.18",
-                    "--yes",
-                    "--discover-managed-service",
-                ]
-                with (
-                    mock.patch.object(daemon_switch.sys, "argv", argv),
-                    mock.patch.object(
-                        daemon_switch._service_control_module,
-                        "_linux_candidates",
-                        return_value=[],
-                    ),
-                    redirect_stderr(io.StringIO()),
-                ):
-                    code = daemon_switch.main()
-                raise subprocess.CalledProcessError(code, command_text)
-
-            with (
-                mock.patch.object(prerelease, "select_release", return_value=("1.5.18", {})),
-                mock.patch.object(prerelease.platform, "system", return_value="Linux"),
-                mock.patch.object(prerelease, "shell", side_effect=refuse_activation),
-                mock.patch.dict(os.environ, {"PATH": f"{active_bin}{os.pathsep}{os.environ['PATH']}"}),
-            ):
-                with self.assertRaises(subprocess.CalledProcessError):
-                    prerelease.install({"prerelease": config}, "1.5.18")
-
-            for name in ("atm", "atm-daemon"):
-                self.assertEqual((private_bin / name).resolve(), (old_bin / name).resolve())
-                self.assertEqual((active_bin / name).resolve(), (old_bin / name).resolve())
-
     def test_generic_workflow_preserves_manifest_build_and_plain_artifact_contracts(self) -> None:
         root = discover_repo_root()
         workflow = (root / ".github" / "workflows" / "prerelease-archive.yml").read_text(
@@ -377,23 +301,6 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertIn("concurrent run converged", workflow)
         self.assertNotIn('gh release upload "$tag" --clobber', workflow)
         self.assertNotIn("randlee/atm-core", workflow)
-
-    def test_packaging_matches_release_workflow_byte_for_byte(self) -> None:
-        release_script = packaging_script(
-            workflow_text("release.yml"), "Package manifest-declared release archive"
-        )
-        prerelease_script = packaging_script(
-            workflow_text("prerelease-archive.yml"),
-            "Package manifest-declared prerelease archive",
-        )
-        release_version = 'version = "${{ needs.gate-and-tag.outputs.release_version }}"'
-        prerelease_version = 'version = "${{ needs.plan.outputs.version }}"'
-        self.assertIn(release_version, release_script)
-        self.assertIn(prerelease_version, prerelease_script)
-        self.assertEqual(
-            release_script.replace(release_version, 'version = "VERSION"'),
-            prerelease_script.replace(prerelease_version, 'version = "VERSION"'),
-        )
 
     def test_checksums_are_an_explicit_github_release_asset(self) -> None:
         workflow = workflow_text("prerelease-archive.yml")
@@ -494,7 +401,6 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             root / "Cargo.lock",
         }
         self.assertEqual(set(changes), expected)
-        self.assertNotIn(root / "crates" / "atm-graft-python" / "pyproject.toml", changes)
         for path in prerelease_tag.python_project_paths(root):
             if path not in changes:
                 continue

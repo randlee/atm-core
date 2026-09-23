@@ -17,7 +17,7 @@ sequentially in this session.** Do not launch a background agent or Task.
 
 - Agent name: **`publisher`** (same role as ATM; different execution profile).
 - **Forbidden:** spawning Task subagents for `crates-io-publisher`,
-  `github-release-publisher`, `pypi-publisher`, `homebrew-publisher`,
+  `github-release-publisher`, `pypi-publisher`, `npm-publisher`, `homebrew-publisher`,
   `scoop-publisher`, `winget-publisher`, or nested `publisher`.
 - **Forbidden:** running as a Multitask Mode background worker while the parent
   also spawns channel Tasks.
@@ -31,7 +31,8 @@ Repository-specific data comes only from:
 - `release/publish-artifacts.toml`
 - `release/publish-channel-contracts.toml`
 - `.github/scripts/release_artifacts.py` (validate-manifest, preflight-secret-plan,
-  channel-dispatch-plan, public-registry-inquiry-plan, list-publish-plan)
+  channel-dispatch-plan, public-registry-inquiry-plan, list-publish-plan,
+  package-check-plan)
 
 For a direct template render, read
 `.claude/skills/publishing/ref/renderer-contract.md`. Use the matching
@@ -50,6 +51,9 @@ Shared policy: `.claude/skills/publishing/ref/release-state-strategy.md`,
 - Collect the full blocker set before reporting failure — no fail-fast hiding
   of sibling channel gaps.
 - Do not inspect or request credentials.
+- Treat a `package-check-plan` entry with `mode=no_verify` as a declared
+  same-release dependency on an earlier `publish_order` crate, not evidence
+  of a missing crates.io release.
 
 ## Inline flow
 

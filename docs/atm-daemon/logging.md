@@ -160,7 +160,7 @@ ADR-011 forbids retained-log writes from blocking async executor threads.
 internal sink worker thread:
 
 - the daemon does not route retained-log writes through an async executor
-- `sc-observability =1.2.0` `JsonlFileSink` performs synchronous local-file
+- `sc-observability =1.4.1` `JsonlFileSink` performs synchronous local-file
   writes on the daemon's ordinary OS threads
 - shutdown flush runs on a dedicated bounded finalizer thread
 

@@ -116,7 +116,7 @@ pinned-back version, and issue URL to
 
 ```bash
 ATMD_ECOSYSTEM_FIX_FORWARD=1 \
-ATMD_ECOSYSTEM_KNOWN_GOOD='{"sc-composer":"1.4.1","sc-observability":"1.1.0","sc-observability-types":"1.1.0","wyvern":"0.4.0"}' \
+ATMD_ECOSYSTEM_KNOWN_GOOD='{"sc-composer":"1.4.1","sc-observability":"1.4.1","sc-observability-types":"1.4.1","wyvern":"0.4.0"}' \
 ATMD_GH_AUTOFIX_ISSUES=1 \
 python3 scripts/validate_release.py ecosystem-preflight \
   --findings target/aq6-ecosystem-preflight-findings.json

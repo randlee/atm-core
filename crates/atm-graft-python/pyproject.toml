@@ -4,9 +4,8 @@ build-backend = "maturin"
 
 [project]
 name = "atm-graft"
-# Maturin derives the wheel version from Cargo.toml, the canonical package
-# version for this mixed Rust/Python distribution.
-dynamic = ["version"]
+# Keep the wheel metadata aligned with the workspace release version.
+version = "1.6.0"
 requires-python = ">=3.11,<3.15"
 dependencies = ["pydantic>=2,<3"]
 
