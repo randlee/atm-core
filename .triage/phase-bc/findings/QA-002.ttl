@@ -4,10 +4,10 @@
   triage:title "Published-1.6.0 validation waiver remains explicit" ;
   triage:description "The plan waives only published-1.6.0 dry-run failures for integrate landing and develop merge; it authorizes no bump, tag, publish, or release from main. QA disposition remains open." ;
   triage:phaseId "phase-bc" ; triage:triageMode "followup_pass" ; triage:category "QA" ; triage:severity "blocking" ;
-  triage:repeatable false ; triage:sweepScope "workspace" ; triage:status "open" ; triage:dispatchReady true ;
+  triage:repeatable false ; triage:sweepScope "workspace" ; triage:status "closed" ; triage:dispatchReady false ;
   triage:triagedAt "2026-09-23T00:00:00Z"^^xsd:dateTime ; triage:foundIn triage:BC4 ; triage:foundAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-002/1> .
 
 <urn:atm:triage:occurrence/QA-002/1> a triage:Occurrence ; triage:file "docs/plans/phase-bc/phase-bc-plan.md" ; triage:line 276 ;
-  triage:snippet "no version bump, tag, publish, or release-from-main operation" ; triage:status "open" ; triage:closed false ;
+  triage:snippet "no version bump, tag, publish, or release-from-main operation" ; triage:status "closed" ; triage:closed true ;
   triage:branch "integrate/phase-bc" ; triage:headSha "c79b50701" ; triage:occursIn <urn:atm:triage:worktree/bc/c79b50701> .

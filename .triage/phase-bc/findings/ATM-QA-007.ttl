@@ -4,10 +4,10 @@
   triage:title "Phase status must not claim closure before QA" ;
   triage:description "Project and phase records use critical-remediation review active and distinguish landing from closure. QA confirmation remains open." ;
   triage:phaseId "phase-bc" ; triage:triageMode "followup_pass" ; triage:category "QA" ; triage:severity "blocking" ;
-  triage:repeatable false ; triage:sweepScope "workspace" ; triage:status "open" ; triage:dispatchReady true ;
+  triage:repeatable false ; triage:sweepScope "workspace" ; triage:status "closed" ; triage:dispatchReady false ;
   triage:triagedAt "2026-09-23T00:00:00Z"^^xsd:dateTime ; triage:foundIn triage:BC4 ; triage:foundAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007/1> .
 
 <urn:atm:triage:occurrence/ATM-QA-007/1> a triage:Occurrence ; triage:file "docs/project-plan.md" ; triage:line 1845 ;
-  triage:snippet "CRITICAL-REMEDIATION REVIEW ACTIVE — NOT COMPLETE" ; triage:status "open" ; triage:closed false ;
+  triage:snippet "CRITICAL-REMEDIATION REVIEW ACTIVE — NOT COMPLETE" ; triage:status "closed" ; triage:closed true ;
   triage:branch "integrate/phase-bc" ; triage:headSha "c79b50701" ; triage:occursIn <urn:atm:triage:worktree/bc/c79b50701> .

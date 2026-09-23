@@ -4,10 +4,10 @@
   triage:title "Current remediation head requires a fresh QA receipt" ;
   triage:description "The authoritative parent correction is 269643c06 and Layer B is draft PR1578. The audit message states QA runs once on the stack top; no closure is asserted here." ;
   triage:phaseId "phase-bc" ; triage:triageMode "followup_pass" ; triage:category "QA" ; triage:severity "blocking" ;
-  triage:repeatable false ; triage:sweepScope "workspace" ; triage:status "open" ; triage:dispatchReady true ;
+  triage:repeatable false ; triage:sweepScope "workspace" ; triage:status "closed" ; triage:dispatchReady false ;
   triage:triagedAt "2026-09-23T00:00:00Z"^^xsd:dateTime ; triage:foundIn triage:BC4 ; triage:foundAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007-NEW/1> .
 
 <urn:atm:triage:occurrence/ATM-QA-007-NEW/1> a triage:Occurrence ; triage:file "docs/plans/phase-bc/phase-bc-plan.md" ; triage:line 276 ;
-  triage:snippet "QA runs once on the top implementation layer" ; triage:status "open" ; triage:closed false ;
+  triage:snippet "QA runs once on the top implementation layer" ; triage:status "closed" ; triage:closed true ;
   triage:branch "integrate/phase-bc" ; triage:headSha "c79b50701" ; triage:occursIn <urn:atm:triage:worktree/bc/c79b50701> .
