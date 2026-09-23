@@ -1,21 +1,29 @@
+---
+status: historical/superseded; u4 OPEN; QA-1 remediation active
+---
+
 # bc.4 sc-publish consumer qualification
+
+The prior receipt below is retained as historical evidence only. It does not
+qualify the current consumer layer or close u4.
 
 ## provenance
 
 | item | result |
 | --- | --- |
 | upstream repository | `https://github.com/randlee/sc-publish` |
-| qualified source SHA | `22137c2da13bf4638b4267b69c6c2f021617da73` |
+| historical source SHA (superseded) | `22137c2da13bf4638b4267b69c6c2f021617da73` |
 | consumer branch | `feature/bc4-sc-publish-immutable-consumer` |
 | consumer base | `5b30535acb8714eea7563b3789ae46b9981c21e7` |
-| exact atm-core consumer head | `e6da63ad5c4e936de26fbfcfe3709ec1c9d37949` |
+| historical atm-core consumer head | `e6da63ad5c4e936de26fbfcfe3709ec1c9d37949` |
 | pin | `release/sc-publish-pin.toml` records the full source SHA |
 
-The source revision is an accepted open PR head, not a merged-revision or live
-release qualification claim. The ATM head above is the exact consumer tree
-qualified by this receipt.
+The old source revision was an accepted open PR head, not a merged revision.
+The active merged sc-publish PR99/100/101/108 stack has accepted develop head
+`98a75ba3e`; a clean consumer layer must repin and reinstall that result before
+u4 closes.
 
-## installer and generated parity
+## superseded installer evidence
 
 The kit was exported at the pinned SHA into the isolated checkout
 `/tmp/sc-publish-bc4-kit.ZzlAKY`. The canonical bootstrap and installer were
@@ -36,15 +44,17 @@ CONSUMER=/Users/randlee/github/atm-core-worktrees/fix/bc4-review-1
   --input "$CONSUMER/release/sc-publish-consumer-input.json" "$CONSUMER"
 ```
 
-Bootstrap exited 0 and printed the isolated Python path. The installer exited
-0, copied the 70 unchanged kit package files, and rendered the two consumer
-manifests. The repeat dry-run exited 0 with `Publish-kit assets are in sync.`
-This is local generated-parity evidence for the pinned source and consumer
-input.
+The prior receipt recorded bootstrap exit 0, installer exit 0, and a repeat
+dry-run exit 0 with `Publish-kit assets are in sync.` Those results are
+superseded. QA-1 reran the canonical installer against the restored consumer
+layer and the dry-run exited 1 because source `22137c2` would overwrite the
+restored prerelease and dynamic-version hunks. The drift is the expected
+frozen-layer behavior independently resolved as ATM-QA-008/QA-004; it is not
+current qualification evidence.
 
-## local consumer qualification
+## historical local consumer evidence
 
-From the exact ATM head, the commands and results were:
+The following results belong to the historical ATM head above:
 
 ```text
 pytest -q .github/scripts/tests
@@ -56,12 +66,12 @@ pytest -q .github/scripts/tests/test_fail_closed_probes.py \
 54 passed; exit 0
 ```
 
-The focused suite is the immutable/preflight negative suite: mocked disabled,
+The focused suite was the immutable/preflight negative suite: mocked disabled,
 forbidden, timeout, malformed, indeterminate, stale-state, and policy failure
 paths fail closed. It performed no release, registry, channel, tag, or setting
 mutation.
 
-The upstream source suite at the accepted open head independently reported
+The upstream source suite at the historical open head independently reported
 `pytest -q plugins/sc-publish/.github/scripts/tests`: `270 passed, 10 skipped;
 exit 0`. That is upstream source evidence, not the ATM consumer result above.
 
@@ -135,22 +145,27 @@ its pytests report that `release/publish-artifacts.toml` lacks the consumer
 parity diverges, and daemon-switch prerelease resolution fails. This correction
 does not edit generated/shared assets or claim that failure fixed.
 
-## consumer checks
+## consumer checks and open disposition
 
 - `release/sc-publish-pin.toml` contains the exact 40-character source SHA.
-- The installer output is byte-for-byte kit output; only the two documented
-  manifests are rendered from consumer input.
-- PR #101 is retained only as historical evidence; PR #106 is the combined
-  acceptance source.
+- The historical receipt recorded byte-for-byte kit output; the QA-1 dry-run
+  now reports drift against the restored consumer layer.
+- PR #101, PR #106, and the old `22137c2` receipt are retained only as
+  historical evidence; the active merged PR99/100/101/108 result is the
+  pending source for the next clean consumer layer.
 - No repository setting, credential, release, tag, registry, or channel was
-  mutated.
-- The evidence above is local consumer parity/qualification plus recorded
-  upstream source evidence. It is not merged-source, hosted-QA, credentialed,
-  or live publication qualification.
+  mutated by the historical consumer qualification; the separately reported
+  2026-09-22 setting enablement is not bc.5 completion evidence.
+- The evidence above is historical local evidence plus recorded upstream source
+  evidence. It is not current merged-source, hosted-QA, credentialed, or live
+  publication qualification.
+- QA-005 branch coverage remains pending artifact-layer validation; no branch
+  coverage percentage is claimed.
 
 ## disposition
 
-The local-consumer portion of `u4` is qualified at the exact source SHA and
-ATM head above. Merge status, hosted-QA completion, credential activation,
-and live release/channel qualification remain outside bc.4; setting and
-credential activation belong to separately authorized bc.5 evidence.
+`u4` remains **OPEN**. A clean consumer layer must pin merged develop
+`98a75ba3e`, reinstall without drift, and record the resulting local evidence.
+Merge status, hosted-QA completion, credential activation, and live
+release/channel qualification remain outside this historical receipt; setting
+and credential activation belong to separately authorized bc.5 evidence.

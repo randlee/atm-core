@@ -1,3 +1,9 @@
+---
+status: implemented; QA-1 remediation active
+branch: feature/bc3-log-macro-qualification
+worktree: /Users/randlee/github/atm-core-worktrees/feature/bc3-log-macro-qualification
+---
+
 # bc.3 log-surface decision
 
 Evaluated against `sc-observability-log = 1.4.1` and the frozen ATM retained

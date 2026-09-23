@@ -1,3 +1,9 @@
+---
+status: implemented; QA-1 remediation active
+branch: feature/bc2-typed-observability
+worktree: /Users/randlee/github/atm-core-worktrees/feature/bc2-typed-observability
+---
+
 # bc.2 retained mappings and reduction
 
 This layer migrates ATM's two observability adapters from the deprecated

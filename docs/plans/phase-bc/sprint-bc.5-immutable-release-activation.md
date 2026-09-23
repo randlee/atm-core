@@ -3,6 +3,10 @@
 Accountable owner: `solar@atm-dev`. The repository administrator who performs
 the setting write must be explicitly appointed before this sprint starts.
 
+Status: not started; authorization-gated; preflight and first-release evidence
+pending. The repository API reports the setting enabled on 2026-09-22, but that
+separate setting observation does not complete this sprint.
+
 ## goal
 
 Enable GitHub immutable releases for `randlee/atm-core` only after compatible

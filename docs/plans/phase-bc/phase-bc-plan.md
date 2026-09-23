@@ -8,7 +8,7 @@
 | base | `develop` at `11a5ee8bb1acf577931ae3d5427db5208db3ab94` |
 | planning branch | `plan/phase-bc` |
 | implementation integration branch | `integrate/phase-bc` |
-| status | discovery and upstream acceptance review complete; independent consistency review passed; ready for planning PR |
+| status | QA-1 failed; documentation/remediation active; phase not complete |
 | stack rule | one append-only linear `gh stack`; lowest-risk changes are lowest |
 
 ## 1. naming rule
@@ -71,18 +71,20 @@ This phase will:
   allowlisting/redaction, correlation IDs, diagnostic-timeline forwarding,
   counters, process-global subscriber installation, and shutdown behavior.
   `sc-observability-log` is not a drop-in replacement for that contract.
-- GitHub reports `randlee/atm-core` immutable releases disabled. Existing
-  releases, including `v1.6.0`, remain historical mutable releases even after
-  future enablement.
+- The GitHub API reports `randlee/atm-core` immutable releases enabled as of
+  2026-09-22. This setting observation does not close bc.5: preflight and
+  first-release evidence remain pending. Existing releases, including
+  `v1.6.0`, remain historical mutable releases.
 - Current stable release logic exposes `replace_release_assets`, publishes
   without an explicit draft-first protocol, lacks root per-tag concurrency,
   and permits an existing tag at an ancestor while building newer `main`.
 - ADR-050 assigns shared workflows, actions, helpers, prompts, and tests to
   `sc-publish`. atm-core must not locally patch synced shared files.
-- The combined-stack `sc-publish` PR #106 at
-  `22137c2da13bf4638b4267b69c6c2f021617da73` is the accepted consumer
-  qualification source. PR #101 remains historical evidence only; its
-  Administration(read) observation does not create a bc.4 entry gate.
+- The combined-stack `sc-publish` PR #106 source at
+  `22137c2da13bf4638b4267b69c6c2f021617da73` is frozen historical evidence,
+  not the current u4 qualification source. The active merged PR99/100/101/108
+  stack has accepted develop head `98a75ba3e`; a clean consumer layer must
+  repin and reinstall that result before u4 closes.
 
 ## 4. non-goals and retained ownership
 
@@ -94,8 +96,8 @@ This phase will:
 - Do not use Python binding runtime or asyncio APIs in the Rust daemon or CLI.
 - Do not install a second process-global logger beside the existing tracing
   subscriber without an accepted ownership decision and parity proof.
-- Do not enable immutable releases while the deployed release workflow or its
-  credential contract is incompatible.
+- Do not treat repository-setting enablement as bc.5 completion while the
+  deployed release workflow or its credential contract lacks recorded evidence.
 - Do not retrofit or mutate historical releases, tags, or assets.
 - External Homebrew/Scoop branch protection, full SLSA/reproducible builds,
   and organization-wide immutable-release policy are follow-up scope unless
@@ -106,13 +108,27 @@ This phase will:
 | gate | required evidence | blocks |
 | --- | --- | --- |
 | `u1` | [sc-publish PR #106 combined-stack acceptance](./bc.4-upstream-owner-acceptance.md); PR #101 is historical evidence | bc.4 |
-| `u2` | separately authorized bc.5 setting/credential activation evidence; not a bc.4 entry gate | bc.5 |
+| `u2` | separately authorized bc.5 setting/credential activation evidence; not passed before bc.4 and still incomplete | bc.5 |
 | `u3` | inherited/deferred upstream lifecycle work: draft-first publication, replacement refusal, exact tag/build binding, per-tag concurrency, trusted dispatch refs, and digest/checksum verification; not claimed by bc.4 | upstream follow-up; not a bc.4 completion gate |
-| `u4` | exact consumer pin at accepted open sc-publish head `22137c2da13bf4638b4267b69c6c2f021617da73`, canonical installer/generated parity, and local consumer qualification; no merge or live-release claim | bc.4 |
+| `u4` | merged sc-publish develop result at accepted head `98a75ba3e`, plus a clean consumer-layer pin/reinstall and local qualification; **OPEN** pending that evidence | bc.4 |
 | `u5` | the coordinated sc-observability `1.4.1` Rust/npm inventory is published and independently verified from the PR #197 checklist and existing installed release workflow; atm-dev has received the upstream completion notice | bc.6 |
 
 No missing upstream gate may be replaced by a local atm-core hotfix to a
 synced shared file.
+
+### owner-approved sequencing amendment — 2026-09-23
+
+The owner-approved amendment records that bc.4 local adoption proceeded before
+u2 and u3. u2 credential/setting activation was not passed as a bc.4 gate and
+belongs to separately authorized bc.5; no administrator appointment or
+execution evidence is asserted here. u3's broad draft-first, tag-binding,
+concurrency, and digest/checksum expansion was explicitly removed from the
+accepted sc-publish scope and is not claimed. The amendment documents the
+sequencing decision; it does not close u2, u3, or u4.
+
+The docs lane records QA-004 as pre-existing/upstream-kit-owned and does not
+modify it. RBQA-F201 is rebutted as false; no boundary record or dependency
+allowlist change belongs in this documentation layer.
 
 ### upstream ownership and dependencies
 
@@ -184,7 +200,7 @@ their task closes.
 | `bc.3` | `docs/plans/phase-bc/bc.3-log-surface-decision.md` |
 | `u2` | `docs/plans/phase-bc/bc.5-credential-preflight.md` |
 | `u3` | inherited/deferred upstream lifecycle record in `docs/plans/phase-bc/bc.4-upstream-owner-acceptance.md`; not claimed by bc.4 |
-| `u4`, `bc.4` | `docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md` |
+| `u4`, `bc.4` | `docs/plans/phase-bc/bc.4-sc-publish-consumer-qualification.md` (historical receipt superseded; clean repin/reinstall pending) |
 | `bc.5` credential | `docs/plans/phase-bc/bc.5-credential-preflight.md` |
 | `bc.5` setting/release | `docs/plans/phase-bc/bc.5-immutable-release-evidence.md` |
 | `u5`, `bc.6` | `docs/plans/phase-bc/bc.6-1.4.1-requalification.md` |
