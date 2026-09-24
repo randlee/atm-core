@@ -54,6 +54,7 @@ SEMVER_PATTERN = re.compile(r"(?<!\d)v?(\d+)\.(\d+)\.(\d+)(?!\d)")
 SC_ECOSYSTEM_CARGO_DEPENDENCIES = (
     "sc-composer",
     "sc-observability",
+    "sc-observability-log",
     "sc-observability-types",
 )
 ECOSYSTEM_FIX_FORWARD_ENV = "ATMD_ECOSYSTEM_FIX_FORWARD"
@@ -68,6 +69,12 @@ ECOSYSTEM_CARGO_PIN_FILES = {
     "sc-observability": (
         (Path("Cargo.toml"), "sc-observability"),
         (Path("Cargo.toml"), "sc-observability-types"),
+        (Path("Cargo.toml"), "sc-observability-log"),
+    ),
+    "sc-observability-log": (
+        (Path("Cargo.toml"), "sc-observability"),
+        (Path("Cargo.toml"), "sc-observability-types"),
+        (Path("Cargo.toml"), "sc-observability-log"),
     ),
     "sc-observability-types": (
         (Path("Cargo.toml"), "sc-observability"),

@@ -17,6 +17,7 @@ class PublishingAssetTests(unittest.TestCase):
             "crates-io-publisher",
             "github-release-publisher",
             "pypi-publisher",
+            "npm-publisher",
             "homebrew-publisher",
             "scoop-publisher",
             "winget-publisher",

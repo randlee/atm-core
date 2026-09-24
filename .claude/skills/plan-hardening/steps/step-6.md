@@ -2,15 +2,14 @@
 
 ## Execute
 
-**1. Render the message**
+**1. Preview the message**
 
 ```bash
-sc-compose render \
-  --root .claude/skills/codex-orchestration \
-  --file qa-template.xml.j2 \
-  --var-file /tmp/plan-hardening-qa-vars.json \
-  --output /tmp/step-6-message.xml
+atm compose --template .claude/skills/codex-orchestration/qa-template.xml.j2 \
+  --vars /tmp/plan-hardening-qa-vars.json
 ```
+
+This is a preview only; the rendered text is never what gets sent.
 
 The vars file or rendered task must include the QA assignment fields required
 by `qa-template.xml.j2`, and it must use `step-5` fenced JSON to populate the
@@ -20,19 +19,19 @@ Expected `/tmp/plan-hardening-qa-vars.json` shape:
 
 ```json
 {
-  "task_id": "phase-x-plan-qa",
-  "sprint": "phase-X",
-  "sprint_doc": "docs/plans/phase-X/plan-phase-X.md",
+  "task_id": "phase-bc-plan-qa",
+  "sprint": "phase-bc",
+  "sprint_doc": "docs/plans/phase-bc/phase-bc-plan.md",
   "review_mode": "plan",
-  "description": "Focused plan QA for phase-X after consistency hardening",
+  "description": "Focused plan QA for phase-bc after consistency hardening",
   "pr_number": "",
-  "branch": "feature/branch-name",
+  "branch": "plan/phase-bc",
   "worktree_path": "/absolute/path/to/worktree",
   "commits": "HEAD",
   "review_targets": [
-    "docs/plans/phase-X/plan-phase-X.md",
-    "docs/plans/phase-X/sprint-X1.md",
-    "docs/plans/phase-X/sprint-X2.md"
+    "docs/plans/phase-bc/phase-bc-plan.md",
+    "docs/plans/phase-bc/sprint-bc-1-<slug>.md",
+    "docs/plans/phase-bc/sprint-bc-2-<slug>.md"
   ],
   "references": [
     "docs/project-plan.md"
@@ -49,15 +48,18 @@ memory.
 
 **2. Send to `quality-mgr`**
 
-Use native ATM messaging to send the rendered task to the named teammate
-`quality-mgr`:
+Assign the task to `quality-mgr` with the template, so the assignment is
+queued, nudged and tracked:
 
 ```bash
-atm send quality-mgr --file /tmp/step-6-message.xml --team <team> --task-id <task_id>
+VARS=/tmp/plan-hardening-qa-vars.json
+atm task assign quality-mgr --task-id "$(jq -r .task_id "$VARS")" \
+  --template .claude/skills/codex-orchestration/qa-template.xml.j2 \
+  --vars "$VARS"
 ```
 
-Always use `--file` for this handoff. Do not use `--stdin`: its known input
-handling bug is tracked separately.
+Never send a rendered file with `--file` or `--stdin`: it drops the template's
+workflow metadata, so the QA round cannot be found or counted afterwards.
 
 **3. Handoff**
 

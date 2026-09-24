@@ -228,8 +228,11 @@ class BenchmarkSchemaV4Tests(unittest.TestCase):
         baselines = load_baselines(
             ROOT / "site/reports/send-message-benchmark/baselines.json"
         )
-        self.assertEqual(baselines.revision, 5)
-        self.assertEqual(baselines.entry_for("m5-atmbench", "tcp").p50_floor, 17_000)
+        self.assertEqual(baselines.revision, 6)
+        tcp = baselines.entry_for("m5-atmbench", "tcp")
+        self.assertEqual(tcp.p50_floor, 16_000)
+        self.assertEqual(tcp.approved_by, "Rand via D3 ratchet exception")
+        self.assertIn("20260923T212808Z", tcp.rationale or "")
         tls = baselines.entry_for("m5-atmbench", "tcp-tls")
         self.assertEqual(tls.p50_floor, 13_500)
         self.assertEqual(tls.approved_by, "Rand via D3 ratchet exception")

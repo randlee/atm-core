@@ -75,7 +75,7 @@ Use fenced JSON for machine-readable status payloads:
   },
   "blocking_ids": ["QA-001"],
   "next_action": "Fix lock acquisition rollback semantics",
-  "owner": "arch-ctm",
+  "owner": "<assignee>",
   "merge_readiness": "not ready",
   "merge_reason": "Blocking findings remain"
 }

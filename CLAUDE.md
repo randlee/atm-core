@@ -16,10 +16,10 @@
 **Worktree Creation Pattern**:
 ```bash
 # ✅ CORRECT: Create worktree from develop
-/sc-git-worktree --create feature/1-2a-work-bead develop
+/sc-git-worktree --create plan/phase-bc develop
 
 # ❌ WRONG: Creating from main
-/sc-git-worktree --create feature/1-2a-work-bead main
+/sc-git-worktree --create plan/phase-bc main
 ```
 
 ---
@@ -135,13 +135,21 @@ Each phase gets a dedicated integration branch off `develop`:
 ```
 main
   └── develop
-        └── integrate/phase-N              ← created at phase start
-              ├── feature/pN-s1-...        ← PR targets integrate/phase-N
-              ├── feature/pN-s2-...        ← PR targets integrate/phase-N
-              └── feature/pN-s3-...        ← PR targets integrate/phase-N
+        └── integrate/phase-bc             ← created at phase start
+              ├── sprint/bc-1-<slug>       ← PR targets integrate/phase-bc
+              ├── sprint/bc-2-<slug>       ← PR targets integrate/phase-bc
+              └── sprint/bc-3-<slug>       ← PR targets integrate/phase-bc
 
-        After all sprints merge → one PR: integrate/phase-N → develop
+        After all sprints merge → one PR: integrate/phase-bc → develop
 ```
+
+**Naming (always lower case):** phase id `bc`, sprint id `bc-4`. The plan
+lives in `docs/plans/phase-bc/` (`phase-bc-plan.md`,
+`sprint-bc-4-<slug>.md`) and is written on `plan/phase-bc`. All phase work
+happens on `integrate/phase-bc`. Sprint branches are `sprint/bc-4-<slug>`
+with the same slug as the sprint doc; fix layers are `fix/bc-4-<slug>`.
+`feature/` is not used for sprint work. The full table is "Naming" in
+[`.claude/skills/plan-hardening/sprint-planning-guidelines.md`](./.claude/skills/plan-hardening/sprint-planning-guidelines.md).
 
 **Rules:**
 - Always merge PRs with a merge commit (`gh pr merge --merge`); never squash
@@ -200,7 +208,7 @@ wording is [docs/agent-conventions.md](docs/agent-conventions.md).
 
 ATM CLI commands that require caller context must receive it explicitly from the invoking shell (`ATM_IDENTITY`, `ATM_TEAM`) or from supported command-line overrides such as `--as` / `--team`; `.atm.toml` must not be treated as a caller-identity fallback.
 
-**Note**: ARCH-CTM gets his identity from `ATM_IDENTITY=arch-ctm` set in his tmux session (via rmux or manually).
+**Note**: each agent gets its identity from `ATM_IDENTITY` set in its own session environment (for example `ATM_IDENTITY=arch-ctm`).
 
 ### Communicating with Team Agents
 
@@ -224,19 +232,26 @@ atm inbox
 
 **Re-dispatch ARCH-CTM** (when he hasn't replied):
 
-- Never `tmux send-keys`. Resend via `atm send`, including the current j2
-  template task assignment (same rendered content).
+- Nudges are built into ATM: every message nudges its recipient, and an
+  assigned task queues and re-nudges an agent that stops working. Never nudge
+  by hand. If an agent still has not picked up its work, re-issue the
+  assignment with
+  `atm task assign <agent> --task-id <same id> --template <j2> --vars <json>`
+  (same template and vars). Work is always assigned this way, to developers
+  and to `quality-mgr`: the template tracks state, the task assignment queues
+  the work and nudges the agent. Plain `atm send` is for questions and
+  notices only.
 - ⚠️ **A codex agent-idle nudge is not informational — it is a stop condition.**
   A codex agent (e.g. arch-ctm) WILL NOT resume or restart work on its own
   after going idle. Do not treat idle as "still working" or defer action —
   the ONLY way it does more work is if team-lead sends a task assignment via
-  `atm send`. Ignoring or deferring on an idle nudge stalls the agent
+  `atm task assign`. Ignoring or deferring on an idle nudge stalls the agent
   indefinitely.
 
 ### Communication Rules
 
 1. **No broadcast messages** — all communications are direct (team-lead ↔ specific agent)
-2. **Poll for replies** — after sending to arch-ctm, wait 30-60s then `atm read`. If no reply after 2 minutes, resend the task assignment via `atm send`
+2. **Poll for replies** — after sending to arch-ctm, wait 30-60s then `atm read`. If no reply after 2 minutes, re-issue the same `atm task assign`
 3. **arch-ctm is async** — he processes messages on his next turn. Do not block waiting; continue other work and check back
 
 ### ATM CLI Quick Reference
@@ -267,16 +282,16 @@ interrupt the current task.
 
 ## Initialization Process
 
-**If `ATM_IDENTITY=team-lead`**: Run the `/team-lead` skill.
-It confirms identity, detects whether a restore is needed, and either proceeds
-directly to project status (fast path) or invokes the full restore procedure.
-See `.claude/skills/team-lead/SKILL.md` for the startup steps and
-`.claude/skills/team-lead/backup-and-restore-team.md` for the restore procedure.
+**If `ATM_IDENTITY=team-lead`**: Run the `/team-lead` skill
+(`.claude/skills/team-lead/SKILL.md`). It confirms identity, verifies the ATM
+runtime, and checks that `.atm.toml` aliases, the ATM roster and the live
+agents agree, repairing the roster when they do not.
 
-**If `ATM_IDENTITY` is any other value**: Skip team restore — you are not the team lead.
+**If `ATM_IDENTITY` is any other value**: Skip the roster check — you are not the team lead.
 
-> ⚠️ Do NOT use `atm teams resume` — it archives the team directory. The startup skill
-> uses the correct restore procedure (backup → TeamDelete → TeamCreate → restore).
+> The daemon's store is the only roster. Repair a member with
+> `atm teams update-member`; never remove and re-add, and change `.atm.toml`
+> only through a PR to `develop`.
 
 After startup completes:
 1. Read project plan (`docs/project-plan.md`)

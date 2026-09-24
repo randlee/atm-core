@@ -1,0 +1,90 @@
+{
+  "feature": "colima-hermes-skills",
+  "host": "hermes-testbed",
+  "platform": "linux",
+  "run_id": "20260923T215040Z",
+  "status": "FAIL",
+  "source_revision": "6bca4e11fd571e95f1c97169f2d73a98561c7498",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "ATM 1.6.1",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "advertised host",
+      "status": "PASS",
+      "detail": "127.0.0.1 (sentences enter by docker exec; --no-peer)",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "herdr transport (atm doctor, fixture daemon)",
+      "status": "PASS",
+      "detail": "socket ({'kind': 'ok', 'version': '0.8.2', 'protocol': 20})",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "testbed ref",
+      "status": "PASS",
+      "detail": "553251655",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / tester: Start line",
+      "status": "PASS",
+      "detail": "01M3842C24BWXANPRWDZVR9RET",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / tester: Daemon answers",
+      "status": "PASS",
+      "detail": "status: healthy; client 1.6.1; daemon 1.6.1; error_count: 0",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / tester: Roster complete",
+      "status": "PASS",
+      "detail": "all 5 expected members present: stub-alpha@testbed stub-beta@testbed tester@testbed hermes@testbed oversight@testbed",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / tester: Doctor passes",
+      "status": "PASS",
+      "detail": "error_count: 0; no warnings on expected teams",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / tester: Self round trip",
+      "status": "PASS",
+      "detail": "message_id: 01M3842RXX4BHXE6WW2XEBXM07; mutation_applied: true; unread count after: 0",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    },
+    {
+      "name": "atm-setup-environment / tester: Cross-host peer",
+      "status": "PASS",
+      "detail": "localhost enabled: true; https_port: 43101; message_id: 01M3843652APDHZ9KAZFKRCV2Y",
+      "origin": "hermes-testbed",
+      "destination": "hermes-testbed",
+      "attempt": 1
+    }
+  ]
+}

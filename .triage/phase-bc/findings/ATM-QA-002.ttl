@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002" ;
+  triage:title "Phase-bc QA evidence remains owner-controlled" ;
+  triage:description "The phase-bc documentation lane records implementation and validation evidence but does not close QA findings. Current PR1577 audit comments state that QA runs once on the stack top; this record remains open until QA supplies canonical evidence." ;
+  triage:phaseId "phase-bc" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-09-23T15:51:25Z"^^xsd:dateTime ;
+  triage:resolutionNote "Closed by fenix (stack writer / team-lead disposition) on integrate/phase-bc @ 3464fb7b1d82ec092804e6ccae147bbb833e9ecf: the phase stack (#1575, 20 PRs) and the critical-remediation stack (#1579: #1577 code @269643c06, #1578 docs @eb5e788fa) landed; QA evidence master docs/plans/phase-bc/.audit/qa-evidence-master.json records QA-1..QA-6 (F,F,F,P,P,F) by assignment id; QA-4/QA-5 PASS closed every QA-1..3 finding, QA-6 blocking items were closed in #1578 and verified line-by-line by fenix; landing head lint (38 checks) and canonical sc-publish f178b69 dry-run in sync recorded on PR #1576." ;
+  triage:rationale "Occurrence re-verified closed on the same branch (integrate/phase-bc) at the later head 3464fb7; original first-observed snapshot c79b50701 retained as history." ;
+  triage:triagedAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:BC4 ;
+  triage:foundAt "2026-09-23T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/integrate-phase-bc/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-bc/c79b50701> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-bc/c79b50701> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/integrate-phase-bc/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-bc/phase-bc-plan.md" ;
+  triage:line 272 ;
+  triage:snippet "phase not complete pending QA" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-bc" ;
+  triage:headSha "c79b50701" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-bc/c79b50701> .
+
+<urn:atm:triage:worktree/integrate-phase-bc/c79b50701>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-bc" ;
+  triage:path "integrate/phase-bc" ;
+  triage:headSha "c79b50701" ;
+  triage:orderIndex 1 .

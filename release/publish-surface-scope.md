@@ -31,9 +31,9 @@ Five publishable crates were missing. Four internal crates lacked `publish = fal
 
 - All 7 publishable crates present in manifest with no `publish = false` in their Cargo.toml
 - All 4 internal crates have `publish = false` in their `[package]` section
-- `scripts/release_artifacts.py validate-manifest` exits 0
-- `scripts/release_artifacts.py validate-preflight-checks` exits 0
-- `scripts/release_artifacts.py validate-publish-order` exits 0
+- `.github/scripts/release_artifacts.py validate-manifest` exits 0
+- `.github/scripts/release_artifacts.py validate-preflight-checks` exits 0
+- `.github/scripts/release_artifacts.py validate-publish-order` exits 0
 - Publish order follows workspace dependency graph:
   agent-team-mail-core(1) → atm-rusqlite(2) → atm-daemon-client(3) →
   atm-daemon-bootstrap(4) → atm-daemon(5) → atm-graft(6) → agent-team-mail(7)

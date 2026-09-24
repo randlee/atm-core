@@ -13,6 +13,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 
+# Local fixture commands should finish quickly; bound hangs on every platform.
+TEST_COMMAND_TIMEOUT_SECONDS = 30
+
+
 PACKAGE_ROOT = next(path for path in Path(__file__).resolve().parents if (path / "install.py").is_file())
 SCRIPTS = PACKAGE_ROOT / ".github" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -27,7 +31,7 @@ BOOTSTRAP_SPEC.loader.exec_module(BOOTSTRAP)
 
 
 class ReleaseManifestTests(unittest.TestCase):
-    def test_channel_contracts_describe_all_six_workers(self) -> None:
+    def test_channel_contracts_describe_all_seven_workers(self) -> None:
         contracts = release_manifest.load_channel_contracts(
             PACKAGE_ROOT / "release" / "publish-channel-contracts.toml.j2"
         )
@@ -37,6 +41,7 @@ class ReleaseManifestTests(unittest.TestCase):
                 "crates-io-publisher",
                 "github-release-publisher",
                 "pypi-publisher",
+                "npm-publisher",
                 "homebrew-publisher",
                 "scoop-publisher",
                 "winget-publisher",
@@ -115,6 +120,7 @@ class ReleaseScriptTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=TEST_COMMAND_TIMEOUT_SECONDS,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -165,6 +171,7 @@ class ReleaseScriptTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=True,
+                timeout=TEST_COMMAND_TIMEOUT_SECONDS,
             ).stdout.strip()
             gate_output = root / "github-output"
 
@@ -184,6 +191,7 @@ class ReleaseScriptTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=TEST_COMMAND_TIMEOUT_SECONDS,
             )
             emitted_output = gate_output.read_text(encoding="utf-8")
 
@@ -237,6 +245,7 @@ class ReleaseScriptTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=TEST_COMMAND_TIMEOUT_SECONDS,
             )
 
         self.assertNotEqual(result.returncode, 0)
@@ -250,6 +259,7 @@ class ReleaseScriptTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=TEST_COMMAND_TIMEOUT_SECONDS,
         )
         if result.returncode:
             raise AssertionError(f"git {' '.join(args)} failed: {result.stderr}")
@@ -260,6 +270,7 @@ class ReleaseScriptTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=TEST_COMMAND_TIMEOUT_SECONDS,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("public-registry-inquiry-plan", result.stdout)
@@ -270,7 +281,7 @@ class ReleaseScriptTests(unittest.TestCase):
         script = SCRIPTS / "bootstrap_sc_compose.py"
         text = script.read_text(encoding="utf-8")
         probe = text[text.index("def installed_version"):text.index("def require_pinned_version")]
-        self.assertEqual(BOOTSTRAP.SC_COMPOSE_VERSION, "1.6.1")
+        self.assertEqual(BOOTSTRAP.SC_COMPOSE_VERSION, "1.5.0")
         self.assertIn('"venv"', text)
         self.assertIn('f"sc-compose=={SC_COMPOSE_VERSION}"', text)
         self.assertIn("from importlib.metadata import version", probe)
@@ -285,22 +296,22 @@ class ReleaseScriptTests(unittest.TestCase):
     def test_bootstrap_rejects_every_non_pinned_wheel(self) -> None:
         with self.assertRaisesRegex(
             SystemExit,
-            r"found '1\.4\.1'; required exactly 1\.6\.1",
+            r"found '1\.4\.1'; required exactly 1\.5\.0",
         ):
             BOOTSTRAP.require_pinned_version("1.4.1")
         with self.assertRaisesRegex(
             SystemExit,
-            r"found '1\.5\.1'; required exactly 1\.6\.1",
+            r"found '1\.5\.1'; required exactly 1\.5\.0",
         ):
             BOOTSTRAP.require_pinned_version("1.5.1")
 
     def test_bootstrap_accepts_only_the_pinned_wheel(self) -> None:
-        BOOTSTRAP.require_pinned_version("1.6.1")
+        BOOTSTRAP.require_pinned_version("1.5.0")
 
     def test_bootstrap_replaces_any_existing_non_pinned_wheel(self) -> None:
         python = Path("/tmp/sc-compose-python")
         with (
-            patch.object(BOOTSTRAP, "installed_version", side_effect=["1.4.1", "1.6.1"]),
+            patch.object(BOOTSTRAP, "installed_version", side_effect=["1.4.1", "1.5.0"]),
             patch.object(BOOTSTRAP, "install_pinned_wheel") as install,
         ):
             BOOTSTRAP.provision_pinned_wheel(python)
@@ -309,7 +320,7 @@ class ReleaseScriptTests(unittest.TestCase):
     def test_bootstrap_does_not_reinstall_the_exact_pinned_wheel(self) -> None:
         python = Path("/tmp/sc-compose-python")
         with (
-            patch.object(BOOTSTRAP, "installed_version", return_value="1.6.1"),
+            patch.object(BOOTSTRAP, "installed_version", return_value="1.5.0"),
             patch.object(BOOTSTRAP, "install_pinned_wheel") as install,
         ):
             BOOTSTRAP.provision_pinned_wheel(python)
@@ -329,25 +340,25 @@ class ReleaseScriptTests(unittest.TestCase):
 
     def test_runtime_renderer_paths_use_the_bootstrapped_exact_pin(self) -> None:
         """Guard every package Python-renderer path against independent pins."""
-        repository = PACKAGE_ROOT
+        if not (PACKAGE_ROOT / ".sc-publish-source-root").exists():
+            self.skipTest("source-repository CI pin check; consumer CI is caller-owned")
+        repository = PACKAGE_ROOT.parents[1]
         bootstrap = (SCRIPTS / "bootstrap_sc_compose.py").read_text(encoding="utf-8")
         ci = (repository / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        package_readme = (PACKAGE_ROOT / "README.sc-publish.md").read_text(encoding="utf-8")
+        root_readme = (repository / "README.md").read_text(encoding="utf-8")
+        package_readme = (PACKAGE_ROOT / "README.md").read_text(encoding="utf-8")
 
         self.assertEqual(bootstrap.count('SC_COMPOSE_VERSION = "'), 1)
-        self.assertIn('SC_COMPOSE_VERSION = "1.6.1"', bootstrap)
-        self.assertIn("run: just bootstrap", ci)
-        self.assertIn("sc-compose --version", ci)
+        self.assertIn('SC_COMPOSE_VERSION = "1.5.0"', bootstrap)
+        self.assertIn("bootstrap_sc_compose.py", ci)
         self.assertNotRegex(ci, r"sc-compose-[0-9]")
-        self.assertIn("exact pinned sc-compose 1.6.1 renderer wheel", package_readme)
+        self.assertIn('"$SC_COMPOSE_PYTHON"', ci)
+        self.assertIn("bootstrap_sc_compose.py", root_readme)
+        self.assertNotRegex(root_readme, r"sc-publish-[0-9]")
+        self.assertIn("exact pinned sc-compose 1.5.0 renderer wheel", package_readme)
 
         for path in repository.rglob("*"):
-            if (
-                not path.is_file()
-                or ".git" in path.parts
-                or "tests" in path.parts
-                or "docs" in path.parts
-            ):
+            if not path.is_file() or ".git" in path.parts or "tests" in path.parts:
                 continue
             text = path.read_text(encoding="utf-8", errors="ignore")
             for found in re.findall(r"sc-compose==([0-9][0-9.]*)", text):

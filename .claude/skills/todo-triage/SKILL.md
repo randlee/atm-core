@@ -17,7 +17,7 @@ be checked explicitly.
 
 ## Policy
 
-In `atm-core`, TODO comments are not an approved way to defer work.
+In this repository, TODO comments are not an approved way to defer work.
 
 Every discovered TODO is a policy violation until it is resolved through one of
 these outcomes:

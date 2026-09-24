@@ -26,6 +26,7 @@ scripts/__pycache__/
 # history/status, but never treat it as repository content.
 .sc/
 .sc-compose/logs/
+**/.sc-compose/logs/
 .just/logs/
 artifacts/view/
 artifacts/benchmark/

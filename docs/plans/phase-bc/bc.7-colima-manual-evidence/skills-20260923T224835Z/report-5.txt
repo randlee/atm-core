@@ -1,0 +1,13 @@
+ATM TEST REPORT
+skill: atm-hermes-ready
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.6.1 daemon 1.6.1
+result: PASS (5/5 steps)
+steps:
+  0 PASS Start line — 01M387G9GZ6MRPPNSJ57RB23PB
+  1 PASS Roster — hermes found
+  2 PASS Receivers registered — hermes:0
+  3 PASS Ping — 01M387GHTKVK0GRQZPWH0T3MKC
+  4 PASS Pong — 01M387GV2W8R50Q1DYKKEH2RMB
+elapsed: 120s

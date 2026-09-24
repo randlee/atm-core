@@ -1,0 +1,6 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Phase-bc event provenance is retained in the phase task/audit records and
+# must be appended by the lead when canonical sprint dispatch events are
+# available. This file intentionally adds no guessed assignment or completion.

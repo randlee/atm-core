@@ -88,7 +88,7 @@ name = "fenix"
 model = "fable"
 env = { ATM_IDENTITY = "fenix", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
-# Window 3: Publishing (publisher + spare)
+# Window 3: Publishing (publisher + solar)
 [[rmux.windows]]
 name = "publishing"
 layout = "even-horizontal"
@@ -101,5 +101,6 @@ color = "blue"
 env = { ATM_IDENTITY = "publisher", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows.panes]]
-name = "spare"
-env = { ATM_TEAM = "atm-dev" }
+name = "solar"
+command = "codex -c features.hooks=true --yolo"
+env = { ATM_IDENTITY = "solar", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }

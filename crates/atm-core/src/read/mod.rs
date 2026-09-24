@@ -557,14 +557,19 @@ fn build_mutated_read_display<R: RetainedMailboxRuntime>(
     summary: ReadSelectionSummary,
     mutation_applied: bool,
 ) -> Result<ReadDisplayState, AtmError> {
-    let metadata_rows = load_checked_read_metadata(
+    let refreshed_rows = load_checked_read_metadata(
         runtime,
         &query.mailbox.home_dir,
         &target.team,
         &target.agent,
     )?;
     let (updated_counts, _updated_selected) =
-        selection_state_for_mailbox_metadata_rows(&metadata_rows, query, seen_watermark);
+        selection_state_for_mailbox_metadata_rows(&refreshed_rows, query, seen_watermark);
+    // Reload against the snapshot the selection indices were computed from.
+    // The refreshed rows only feed the bucket counts: a concurrent `clear`
+    // can shrink them, which would make `source_index` point past the end
+    // (or at a different row). The durable record itself is always loaded
+    // fresh by key, and a vanished record falls back to the selected snapshot.
     let output_message = selection
         .selected
         .first()
@@ -575,7 +580,7 @@ fn build_mutated_read_display<R: RetainedMailboxRuntime>(
                 &query.mailbox.home_dir,
                 &target.team,
                 &target.agent,
-                &metadata_rows,
+                &selection.metadata_rows,
                 &[selected_message],
                 summary.selected_message_id,
             )
@@ -2150,6 +2155,38 @@ mod tests {
     }
 
     #[test]
+    fn metadata_contains_uses_selection_snapshot_when_durable_row_vanishes() {
+        let tempdir = tempdir().expect("tempdir");
+        let (metadata_row, message_record) =
+            metadata_row("durable body", Some("summary miss"), TEST_SENDER);
+        let rows = vec![metadata_row.clone()];
+        let classified = metadata_selection::classify_mailbox_metadata_rows(&rows);
+        let runtime = ReadRuntime {
+            roster_present: true,
+            metadata_rows: rows.clone(),
+            metadata_row_batches: None,
+            message_records: HashMap::new(),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            save_seen_watermark_count: Arc::new(AtomicUsize::new(0)),
+            persist_message_state_count: Arc::new(AtomicUsize::new(0)),
+            fail_load_message_record: false,
+        };
+        let filtered = metadata_selection::filter_metadata_backed_contains_candidates(
+            &runtime,
+            tempdir.path(),
+            &TEST_TEAM.parse().expect("team"),
+            &TEST_SENDER.parse().expect("agent"),
+            &rows,
+            classified,
+            Some("needle"),
+        )
+        .expect("vanished durable row falls back to selected snapshot");
+        assert!(filtered.is_empty());
+        assert!(!message_record.envelope.text.contains("needle"));
+    }
+
+    #[test]
     fn peek_mail_with_runtime_does_not_persist_message_state_or_seen_watermark() {
         let tempdir = tempdir().expect("tempdir");
         let (metadata_row, message_record) =
@@ -2356,5 +2393,58 @@ mod tests {
             "{error:?}"
         );
         assert!(error.message().contains("simulated durable reload failure"));
+    }
+
+    #[test]
+    fn mutating_read_reloads_from_the_selection_snapshot_when_rows_vanish_concurrently() {
+        let tempdir = tempdir().expect("tempdir");
+        let (metadata_row, message_record) =
+            metadata_row("unread body", Some("unread summary"), TEST_SENDER);
+        let expected_message_id = message_record.envelope.message_id;
+        let persist_count = Arc::new(AtomicUsize::new(0));
+        // The first query feeds selection; a concurrent `clear` then removes
+        // every row and the durable record before the post-mutation re-query
+        // runs, so the read must complete with the selected snapshot.
+        let runtime = ReadRuntime {
+            roster_present: true,
+            metadata_rows: Vec::new(),
+            metadata_row_batches: Some(vec![vec![metadata_row], Vec::new()]),
+            message_records: HashMap::new(),
+            query_mailbox_metadata_rows_count: Arc::new(AtomicUsize::new(0)),
+            load_message_record_count: Arc::new(AtomicUsize::new(0)),
+            save_seen_watermark_count: Arc::new(AtomicUsize::new(0)),
+            persist_message_state_count: persist_count.clone(),
+            fail_load_message_record: false,
+        };
+        let query = ReadQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            "recipient".parse().expect("caller"),
+            None,
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query");
+
+        let outcome = read_mail_with_runtime_impl(query, &NullObservability, &runtime)
+            .expect("read completes with the selected snapshot");
+
+        assert!(outcome.mutation_applied);
+        assert_eq!(persist_count.load(Ordering::SeqCst), 1);
+        assert_eq!(outcome.count, 1);
+        let message = outcome
+            .message
+            .as_ref()
+            .expect("selected snapshot is returned");
+        assert_eq!(message.envelope.message_id, expected_message_id);
+        assert_eq!(message.envelope.summary.as_deref(), Some("unread summary"));
     }
 }

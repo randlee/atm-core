@@ -210,10 +210,7 @@ fn load_durable_message_text<R: RetainedMailboxRuntime>(
     let Some(record) =
         runtime.load_message_record(home_dir, team, agent, &metadata_row.message_key)?
     else {
-        return Err(AtmError::validation(format!(
-            "sqlite mailbox metadata row {} could not be reloaded for contains filtering",
-            metadata_row.message_key
-        )));
+        return Ok(selected_message.envelope.text.clone());
     };
     let envelope = if record.envelope.thread_mode == Some(crate::schema::ThreadMode::AddDetails) {
         load_logical_current_record(
@@ -259,17 +256,11 @@ fn load_logical_current_record<R: RetainedMailboxRuntime>(
     let mut chain = Vec::new();
     for message_id in chain_ids {
         let Some(row) = row_by_id.get(&message_id) else {
-            return Err(AtmError::validation(format!(
-                "sqlite mailbox thread row for {} disappeared during logical-current reconstruction",
-                message_id
-            )));
+            return Ok(selected_message.envelope.clone());
         };
         let Some(record) = runtime.load_message_record(home_dir, team, agent, &row.message_key)?
         else {
-            return Err(AtmError::validation(format!(
-                "sqlite mailbox thread row {} could not be reloaded for logical-current reconstruction",
-                row.message_key
-            )));
+            return Ok(selected_message.envelope.clone());
         };
         chain.push(record.envelope);
     }

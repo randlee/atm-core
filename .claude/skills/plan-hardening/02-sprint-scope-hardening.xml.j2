@@ -35,7 +35,8 @@ metadata:
     transition: sprint-hardening
     iteration_variable: round_index
 ---
-<atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="arch-ctm" mode="plan-hardening-sprint-scope">
+{% autoescape false -%}
+<atm-task id="{{ task_id }}" sprint="{{ phase }}" mode="plan-hardening-sprint-scope">
   <description>{{ description }}</description>
 
   <worktree>{{ worktree_path }}</worktree>
@@ -112,10 +113,15 @@ metadata:
 
     This is the first required hardening pass. Your job is to attack the plan
     from the sprint-shape and deliverable side before any broader consistency
-    pass. The central question is: are the deliverables split across sprints
-    adequately so that every committed item can land at a production-ready
-    level with no silent drops, no shape-only completion, and no ambiguous
-    ownership?
+    pass. The central question is: are the deliverables split along crate
+    boundaries so that every sprint can close its one boundary against the
+    fixed contract at a production-ready level, in parallel with its siblings,
+    with no silent drops, no stubbed side of a contract, no ambiguous
+    ownership, and every end-to-end criterion owned by an integration sprint?
+    When a finding asks for a split, split into sibling sprints that can
+    share a wave. Never resolve a finding by adding a serial sprint, by
+    pulling end-to-end proof into a layer sprint, or by cutting a thin sprint
+    that creates no parallel work.
 
     Use `.claude/skills/plan-hardening/sprint-planning-guidelines.md` as a
     required reference for sprint splitting, authoritative checklist shape,
@@ -310,14 +316,15 @@ metadata:
   </plan-hardening>
 
   <workflow>
-    <step id="a">Start the task immediately with `atm task start {{ task_id }} "&lt;one line on what you will do first&gt;"`. If the required fenced JSON handoff from `plan-scope-reviewer` is missing or malformed, reject the task immediately. If the task includes questions or concerns, report them to the lead before proceeding; if it materially changes the discussed scope, state that hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="a">Start the task immediately with `atm task start {{ task_id }} "<one line on what you will do first>"`. If the required fenced JSON handoff from `plan-scope-reviewer` is missing or malformed, reject the task immediately. If the task includes questions or concerns, report them to the lead before proceeding; if it materially changes the discussed scope, state that hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="b">Immediately after task start, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
     <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away with a plain `atm send {{ lead }} --stdin` (never close the task on a push) so {{ lead }} can prepare the critical review step. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">After the current hardening pass converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only, delivered as the close: `atm task close {{ task_id }} completed --stdin &lt;&lt;'EOF' … EOF` with the PASS/FAIL line and the fenced JSON in the body. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. If `reviewer-findings-json` is present, treat it as the current correction target from `critical-plan-reviewer` and return updated fenced JSON to `{{ lead }}`. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
+    <step id="g">After the current hardening pass converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only, delivered as the close: `atm task close {{ task_id }} completed --stdin <<'EOF' … EOF` with the PASS/FAIL line and the fenced JSON in the body. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. If `reviewer-findings-json` is present, treat it as the current correction target from `critical-plan-reviewer` and return updated fenced JSON to `{{ lead }}`. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="h">Team-lead must not route the plan to QA or implementation from this pass alone. `critical-plan-reviewer` must run after this pass, and `03-consistency-hardening.xml.j2` must run after that.</step>
     <step id="i">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>
+{%- endautoescape %}

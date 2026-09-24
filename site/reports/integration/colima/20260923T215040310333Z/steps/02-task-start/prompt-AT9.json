@@ -1,0 +1,31 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT9-task-start",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "started-line-at-write-time",
+      "status": "pass",
+      "detail": "`ATM_IDENTITY=fx-at9-beta ATM_TEAM=fx-at9 atm task start at9-1790200466-case1 \"starting case1\" --json` -> {\"action\":\"send\",\"team\":\"fx-at9\",\"agent\":\"fx-at9-alpha\",\"sender\":\"fx-at9-beta\",\"outcome\":\"sent\",\"message_id\":\"01M3847CC229857FWFYCHYRGZV\",\"requires_ack\":false,\"task_id\":\"at9-1790200466-case1\",\"summary\":\"starting case1\"} identified task_id=at9-1790200466-case1 in the start response. Before alpha read it, `ATM_IDENTITY=fx-at9-alpha ATM_TEAM=fx-at9 atm list --unread --json` already showed the row {\"message_id\":\"01M3847CC229857FWFYCHYRGZV\",\"summary\":\"starting case1\",\"from\":\"fx-at9-beta\",...,\"task_id\":\"at9-1790200466-case1\"}. Only then did `atm read --message-id 01M3847CC229857FWFYCHYRGZV --json` (as alpha) return the message with \"taskId\":\"at9-1790200466-case1\",\"taskOp\":{\"op\":\"start\"}."
+    },
+    {
+      "name": "out-of-order-start-reorders-queue",
+      "status": "pass",
+      "detail": "Assigned at9-1790200466-case2a then at9-1790200466-case2b as alpha. Started case2b (the second task) as beta: `atm task start at9-1790200466-case2b ... --json` -> task_id=at9-1790200466-case2b. Then `ATM_IDENTITY=fx-at9-beta ATM_TEAM=fx-at9 atm task list --json` -> [{\"task_id\":\"at9-1790200466-case2b\",\"state\":\"active\",\"position\":1,...},{\"task_id\":\"at9-1790200466-case2a\",\"state\":\"assigned\",\"position\":2,...}], confirming the started task is active and ordered ahead of the still-assigned task."
+    },
+    {
+      "name": "unstarted-task-keeps-reminding",
+      "status": "pass",
+      "detail": "Assigned at9-1790200466-case3 as alpha and never started it. Polled `ATM_IDENTITY=fx-at9-beta ATM_TEAM=fx-at9 atm task events at9-1790200466-case3 --json` every 5s. At elapsed=120s the output contained handoffs[] entries {\"kind\":\"task_ready\",\"attempt\":0,\"at\":\"2026-09-23T21:55:15.698358792Z\",...} (the first ready notification, also logged as events[].event=\"reminded\" seq=2, excluded from the count per instructions) plus two distinct {\"kind\":\"task_reminder\"} handoffs: {\"agent\":\"fx-at9-beta\",\"at\":\"2026-09-23T21:56:20.690723995Z\",\"attempt\":1,\"kind\":\"task_reminder\",\"task_id\":\"at9-1790200466-case3\",\"trigger\":\"task_pass\"} and {\"agent\":\"fx-at9-beta\",\"at\":\"2026-09-23T21:57:20.696169275Z\",\"attempt\":2,\"kind\":\"task_reminder\",\"task_id\":\"at9-1790200466-case3\",\"trigger\":\"task_pass\"}. Afterward `atm task list --json` (as beta) showed the task still {\"task_id\":\"at9-1790200466-case3\",\"state\":\"assigned\",\"reminder_count\":3}, confirming it remained assigned (never started)."
+    },
+    {
+      "name": "cleanup",
+      "status": "pass",
+      "detail": "Closed all three created tasks via `atm task close <task-id> completed \"<reason>\" --json` as fx-at9-beta: at9-1790200466-case1 -> {\"outcome\":\"sent\",\"task_id\":\"at9-1790200466-case1\",...}; at9-1790200466-case2b -> {\"outcome\":\"sent\",\"task_id\":\"at9-1790200466-case2b\",...}; at9-1790200466-case2a -> {\"outcome\":\"sent\",\"task_id\":\"at9-1790200466-case2a\",...}; at9-1790200466-case3 -> {\"outcome\":\"sent\",\"task_id\":\"at9-1790200466-case3\",...}. After each close (and at start of the run), `ATM_IDENTITY=fx-at9-beta ATM_TEAM=fx-at9 atm task list --json` returned [] confirming an empty queue before the next case."
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {"atm": "1.6.1", "hermes_atm": "", "atm_graft": ""},
+  "started_at": "2026-09-23T21:54:26Z",
+  "finished_at": "2026-09-23T21:57:35Z"
+}
