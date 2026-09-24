@@ -201,7 +201,8 @@ def cargo_package_check_plan(workspace_toml: Path, manifest: dict) -> list[dict[
         if crate.get("publish", True) is True
     }
     plan: list[dict[str, object]] = []
-    for crate in manifest["crates"]:
+    # A crate that is never uploaded needs no archive verification.
+    for crate in publishable.values():
         package = crate["package"]
         crate_toml = workspace_toml.parent / crate["cargo_toml"]
         earlier_release_dependencies = sorted(
