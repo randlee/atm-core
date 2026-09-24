@@ -213,10 +213,14 @@ artifact IDs must remain distinct even when they share a source crate.
 
 ### Optional immutable sc-lint source installation
 
-The shared `setup-sc-lint` action retains its released `0.4.0` default. Consumers
-can opt into a reviewed source commit through `project.sc_lint_source_revision`
-in `install.json` (rendered into `release/publish-artifacts.toml`), or the action's
-`source-revision` input. `setup-lint-toolchain` forwards `sc-lint-source-revision`.
+The shared Release Preflight does not install or gate on sc-lint: lint is the
+consumer repository's CI concern, not publishing's (sc-publish#67).
+`setup-lint-toolchain` installs only the cargo-deny/cargo-shear/codespell tools
+that `cargo test --workspace` needs. The `setup-sc-lint` action remains
+available for consumer CI workflows and retains its released `0.4.0` default.
+Consumers can opt into a reviewed source commit through
+`project.sc_lint_source_revision` in `install.json` (rendered into
+`release/publish-artifacts.toml`), or the action's `source-revision` input.
 Use a full lowercase 40-character commit SHA; tags, branches, shortened hashes,
 and conflicting action/manifest pins fail. The release `version` input applies
 only when source mode is absent. Default release resolution adds no Python
@@ -257,16 +261,17 @@ Draft releases may resume asset upload. Complete immutable releases may be
 reused; missing assets require a new version, and `replace_release_assets=true`
 is rejected. No setting, release, asset, or tag is changed by the checker.
 
-**Credential limitation: adoption is pending credential design and QA.** GitHub's
-[immutable-releases endpoint](https://docs.github.com/en/rest/repos/repos#check-if-immutable-releases-are-enabled-for-a-repository)
-requires repository **Administration (read)**. Stock Actions `GITHUB_TOKEN`
-cannot request this permission in workflow YAML. The shared workflows currently
-use that existing token and therefore block when the endpoint is inaccessible;
-this PR does not provision a new secret or claim a stock-token rollout works.
-An existing immutable release proves only its own state, not today's repository
-setting. A local saved boolean or prior admin check cannot authorize a later
-workflow run. HTTP 404 is reported as disabled-or-inaccessible/indeterminate,
-because GitHub may mask permission failures. Explicit `enabled:false` is disabled.
+**No credential beyond `GITHUB_TOKEN`.** GitHub exposes the repository's
+immutable-releases setting only to Administration (read), which no workflow
+token carries, so the pipeline never reads the setting. It proves
+immutability on the release object instead: an existing release for the tag
+must report `immutable: true` (mutable or indeterminate ones are unsupported;
+use a new version), and after publication the `--finalized` check denies
+every downstream channel until the published release reports `immutable:
+true`. If an administrator has not enabled the setting, the release is
+created mutable, downstream publication is denied, and the remedy is to
+enable the setting and publish a new version. HTTP 404 and every non-200
+inventory answer are reported as indeterminate, never as absence.
 
 Publisher/admin bootstrap is a separate, authorized setup operation:
 
@@ -274,16 +279,7 @@ Publisher/admin bootstrap is a separate, authorized setup operation:
    General → Releases (or through GitHub's separately authorized administration
    API). Never disable it to retry a release. The installer and checker do not
    perform this operation.
-2. With an existing suitably authorized GitHub CLI session, run this read-only
-   check from the installed consumer: `python3 .github/scripts/release_immutability.py
-   --repository OWNER/REPO --tag v1.2.3`. Use the actual candidate
-   tag. It emits only sanitized state and exits nonzero on failure. No token
-   value should be included in commands, logs, reports, or manifests.
-3. Resolve the workflow credential design before adoption: the runtime must be
-   able to perform the same fresh administration-read check. Any separately
-   approved narrow GitHub App/credential integration belongs in a reviewed
-   follow-up, not a stale attestation or an exemption from this prerequisite.
-4. Publish future releases with all assets staged before finalization (the
+2. Publish future releases with all assets staged before finalization (the
    shared `softprops/action-gh-release@v3` path uploads before publishing).
    Run the checker with `--finalized` for recovery/downstream admission. Historical
    mutable releases remain historical; use a new version when immutability is
