@@ -13,25 +13,20 @@ from release_immutability import ImmutabilityError, api, check
 from test_install import INSTALL
 
 
-def query_for(settings=(200, {"enabled": True}), releases=None):
+def query_for(releases=None):
     def query(path):
-        if path.endswith("immutable-releases"):
-            return settings
+        assert "immutable-releases" not in path, "repository setting needs Administration:read; never read it"
         return 200, releases or []
     return query
 
 
-@pytest.mark.parametrize("status,body,reason", [
-    (200, {"enabled": False}, "disabled:"),
-    (200, {}, "indeterminate:"),
-    (200, {"enabled": "true"}, "indeterminate:"),
-    (401, None, "indeterminate:"), (403, None, "indeterminate:"),
-    (404, None, "indeterminate:"), (429, None, "indeterminate:"),
-    (500, None, "indeterminate:"),
-])
-def test_disabled_and_unreadable_settings_fail_closed(status, body, reason):
-    with pytest.raises(ImmutabilityError, match=reason):
-        check("owner/repo", "v1.2.3", query=query_for((status, body)))
+def test_repository_setting_is_never_read():
+    calls = []
+    def query(path):
+        calls.append(path)
+        return 200, []
+    assert check("owner/repo", "v1.2.3", query=query)["release_state"] == "absent"
+    assert calls == ["repos/owner/repo/releases?per_page=100&page=1"]
 
 
 @pytest.mark.parametrize("release,state", [
@@ -39,7 +34,7 @@ def test_disabled_and_unreadable_settings_fail_closed(status, body, reason):
     ({"tag_name": "v1.2.3", "draft": True, "immutable": False}, "draft"),
     ({"tag_name": "v1.2.3", "draft": False, "immutable": True}, "immutable"),
 ])
-def test_enabled_repository_new_draft_and_existing_immutable_release(release, state):
+def test_new_draft_and_existing_immutable_release(release, state):
     query = query_for(releases=[release] if release else [])
     assert check("owner/repo", "v1.2.3", query=query)["release_state"] == state
     if state == "immutable":
@@ -66,15 +61,13 @@ def test_inventory_error_not_absence_and_pagination_finds_existing_release():
     calls = []
     def query(path):
         calls.append(path)
-        if path.endswith("immutable-releases"):
-            return 200, {"enabled": True}
         if path.endswith("&page=1"):
             return 200, [{"tag_name": "v0.0.1"}] * 100
         return 200, [{"tag_name": "v1.2.3", "draft": False, "immutable": True}]
     assert check("owner/repo", "v1.2.3", query=query)["release_state"] == "immutable"
-    assert len(calls) == 3
+    assert len(calls) == 2
     with pytest.raises(ImmutabilityError, match="inventory unavailable"):
-        check("owner/repo", "v1.2.3", query=lambda p: (200, {"enabled": True}) if p.endswith("immutable-releases") else (403, None))
+        check("owner/repo", "v1.2.3", query=lambda _: (403, None))
 
 
 def test_api_transport_is_bounded_read_only_and_does_not_echo_failure_body():

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only, fail-closed GitHub immutable release prerequisite and receipt check."""
+"""Read-only, fail-closed GitHub immutable release state and receipt check."""
 import argparse
 import json
 import os
@@ -44,19 +44,10 @@ def check(repository, tag, *, finalized=False, replace_assets=False, query=api):
         raise ImmutabilityError("invalid release tag")
     if replace_assets:
         raise ImmutabilityError("immutable releases prohibit replace_release_assets; use a new version")
-    status, settings = query(f"repos/{repository}/immutable-releases")
-    if status != 200:
-        # GitHub also documents 404 for disabled, but inaccessible repositories
-        # can be masked as 404. Never infer either enabled or absent from it.
-        raise ImmutabilityError(
-            f"indeterminate: immutable-releases HTTP {status} (disabled or inaccessible); "
-            "an administrator must verify enablement; this read requires Administration:read"
-        )
-    if not isinstance(settings, dict) or type(settings.get("enabled")) is not bool:
-        raise ImmutabilityError("indeterminate: repository response lacks boolean enabled")
-    if not settings["enabled"]:
-        raise ImmutabilityError("disabled: repository immutable releases must be enabled by an administrator")
-
+    # The repository setting itself is readable only with Administration:read,
+    # which no workflow token carries. Immutability is proven on the release
+    # object instead: an existing release must report immutable == true, and
+    # --finalized denies downstream publication until the published one does.
     # Listing includes drafts visible to the credential, unlike lookup by tag.
     # Bound pagination; exhaustion is an error rather than guessed absence.
     for page in range(1, 101):
@@ -71,14 +62,14 @@ def check(repository, tag, *, finalized=False, replace_assets=False, query=api):
             if release.get("draft") is True:
                 if finalized:
                     raise ImmutabilityError("release is still draft; downstream publication denied")
-                return {"repository_enabled": True, "release_state": "draft"}
+                return {"release_state": "draft"}
             if release.get("draft") is not False or release.get("immutable") is not True:
                 raise ImmutabilityError("existing release is mutable or indeterminate; unsupported by this pipeline; use a new version")
-            return {"repository_enabled": True, "release_state": "immutable"}
+            return {"release_state": "immutable"}
         if len(releases) < 100:
             if finalized:
                 raise ImmutabilityError("published immutable release not found; downstream publication denied")
-            return {"repository_enabled": True, "release_state": "absent"}
+            return {"release_state": "absent"}
     raise ImmutabilityError("indeterminate: release inventory pagination limit reached")
 
 
