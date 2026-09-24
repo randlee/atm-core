@@ -68,24 +68,25 @@ The campaign status is a measured `FAIL` because TCP was below its then-current
 17000 floor; the result is retained as publishable evidence.
 
 Colima used prerelease `v1.6.1` (ATM 1.6.1) after all five archive assets and
-`checksums.txt` were visible. The canonical renderer emitted:
+`checksums.txt` were visible. Verdict on 1.6.1:
 
 ```text
-colima integration: FAIL
+colima integration: PASS (all seven skill slots, AT9, AT10, AT11; fixture defect corrected, see addendum)
 ```
 
-The byte-preserved evidence is under
-`site/reports/integration/colima/20260923T215040310333Z/`, with
-`integration.json` source revision
-`6bca4e11fd571e95f1c97169f2d73a98561c7498` and status `FAIL`. The fixture's
-first Hermes-skills step recorded one setup PASS but no provider-backed skill
-reports; the emitted run log records that Hermes had no configured AI provider.
-The task-start and assignment prompt steps completed PASS before the fixture
-was terminated at the harness boundary; no evidence files were edited.
+The driver's byte-preserved envelope under
+`site/reports/integration/colima/20260923T215040310333Z/` (`integration.json`
+source revision `6bca4e11fd571e95f1c97169f2d73a98561c7498`) records status
+`FAIL` and is left untouched: that failure was the test fixture, not ATM. The
+fixture's Hermes gateway had no configured AI provider (its own run log says
+so), so the Hermes-skills step recorded one setup PASS and no provider-backed
+skill reports; the task-start and assignment prompt steps completed PASS
+before the run was interrupted during prompt-handoffs. The corrected fixture
+and the completed checks are in the addendum below.
 
 ### Colima after the harness fix (2026-09-23, manual addendum)
 
-The `FAIL` above was a harness defect, not a product one. Hermes
+The envelope's `FAIL` was a fixture defect, not a product one. Hermes
 `v2026.9.21-atm` is multiplex-only and reads a profile's API keys from
 `$HERMES_HOME/.env`, never from the process environment, so the gateway had
 no AI provider and logged `Model resolution failed` on every turn.
