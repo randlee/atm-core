@@ -43,20 +43,6 @@ os = "windows-latest"
 archive = "zip"
 
 [[crates]]
-artifact = "atm-graft-python"
-package = "atm-graft-python"
-cargo_toml = "crates/atm-graft-python/Cargo.toml"
-publish = false
-publish_order = 0
-wait_after_publish_seconds = 0
-[[crates]]
-artifact = "atm-query-python"
-package = "atm-query-python"
-cargo_toml = "crates/atm-query-python/Cargo.toml"
-publish = false
-publish_order = 0
-wait_after_publish_seconds = 0
-[[crates]]
 artifact = "atm-error"
 package = "atm-error"
 cargo_toml = "crates/atm-error/Cargo.toml"
@@ -92,20 +78,6 @@ publish = true
 publish_order = 5
 wait_after_publish_seconds = 30
 [[crates]]
-artifact = "atm-http-runtime"
-package = "atm-http-runtime"
-cargo_toml = "crates/atm-http-runtime/Cargo.toml"
-publish = true
-publish_order = 9
-wait_after_publish_seconds = 30
-[[crates]]
-artifact = "atm-daemon-client"
-package = "atm-daemon-client"
-cargo_toml = "crates/atm-daemon-client/Cargo.toml"
-publish = true
-publish_order = 10
-wait_after_publish_seconds = 30
-[[crates]]
 artifact = "atm-herdr"
 package = "atm-herdr"
 cargo_toml = "crates/atm-herdr/Cargo.toml"
@@ -125,6 +97,20 @@ package = "atm-runtime"
 cargo_toml = "crates/atm-runtime/Cargo.toml"
 publish = true
 publish_order = 8
+wait_after_publish_seconds = 30
+[[crates]]
+artifact = "atm-http-runtime"
+package = "atm-http-runtime"
+cargo_toml = "crates/atm-http-runtime/Cargo.toml"
+publish = true
+publish_order = 9
+wait_after_publish_seconds = 30
+[[crates]]
+artifact = "atm-daemon-client"
+package = "atm-daemon-client"
+cargo_toml = "crates/atm-daemon-client/Cargo.toml"
+publish = true
+publish_order = 10
 wait_after_publish_seconds = 30
 [[crates]]
 artifact = "atm-template-sc-compose"
