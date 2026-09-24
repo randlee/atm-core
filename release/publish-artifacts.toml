@@ -193,7 +193,7 @@ source = "crates/hermes-atm"
 build_system = "setuptools"
 module_path = "crates/hermes-atm/src/hermes_atm"
 sdist = true
-wheels = ["ubuntu-latest", "macos-latest", "windows-latest"]
+wheels = ["ubuntu-latest"]
 
 [channels.pypi]
 workflow = "pypi-publish.yml"
