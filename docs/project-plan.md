@@ -1890,6 +1890,7 @@ the plan is explicitly amended.
 | `bc.4` | `implemented; u4 closed; critical-remediation review active` | `feature/bc4-sc-publish-immutable-consumer` | `docs/plans/phase-bc/sprint-bc.4-sc-publish-immutable-consumer.md` |
 | `bc.5` | `not started; authorization-gated; preflight/evidence pending` | `evidence/bc5-immutable-release-activation` | `docs/plans/phase-bc/sprint-bc.5-immutable-release-activation.md`; pending artifacts: `docs/plans/phase-bc/bc.5-credential-preflight.md`, `docs/plans/phase-bc/bc.5-immutable-release-evidence.md` |
 | `bc.6` | `implemented; critical-remediation review active` | `feature/bc6-sc-observability-1-4-1` | `docs/plans/phase-bc/sprint-bc.6-sc-observability-1.4.1.md` |
+| `bc.7` | `complete; benchmark + colima release validation evidence published` | `evidence/bc-7-release-validation` | `docs/plans/phase-bc/sprint-bc.7-release-validation.md` |
 
 The [bc.2](./plans/phase-bc/bc.2-retained-mapping-and-reduction.md),
 [bc.3](./plans/phase-bc/bc.3-log-surface-decision.md), and
