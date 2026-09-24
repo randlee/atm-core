@@ -213,11 +213,14 @@ artifact IDs must remain distinct even when they share a source crate.
 
 ### Optional immutable sc-lint source installation
 
-The shared Release Preflight does not install or gate on sc-lint: lint is the
-consumer repository's CI concern, not publishing's (sc-publish#67).
-`setup-lint-toolchain` installs only the cargo-deny/cargo-shear/codespell tools
-that `cargo test --workspace` needs. The `setup-sc-lint` action remains
-available for consumer CI workflows and retains its released `0.4.0` default.
+The shared Release Preflight verifies publish concerns only: version
+lockstep, manifest validity, publish order, credentials, provenance, registry
+state, permissions and archive packaging (sc-publish#67). It does not run
+formatting, clippy, workspace tests or sc-lint; those gate every merge in the
+consumer's own CI, with the consumer's own tool bootstrap, before a release
+commit exists. The `setup-lint-toolchain` and `setup-sc-lint` actions remain
+available for consumer CI workflows; `setup-sc-lint` retains its released
+`0.4.0` default.
 Consumers can opt into a reviewed source commit through
 `project.sc_lint_source_revision` in `install.json` (rendered into
 `release/publish-artifacts.toml`), or the action's `source-revision` input.

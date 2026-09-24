@@ -202,16 +202,11 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Set up lint toolchain
-        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
-        uses: ./.github/actions/setup-lint-toolchain
-
       - name: Install Rust toolchain
         if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ steps.build_plan.outputs.rust_toolchain }}
-          components: rustfmt, clippy
 
       - name: Install Linux native build deps
         if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
@@ -232,24 +227,6 @@ jobs:
           fi
           echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
           echo "release_version=${tag#v}" >> "$GITHUB_OUTPUT"
-
-      - id: formatting
-        name: Check formatting
-        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
-        continue-on-error: true
-        run: cargo fmt --all --check
-
-      - id: clippy
-        name: Run clippy
-        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
-        continue-on-error: true
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - id: workspace_tests
-        name: Run workspace tests
-        if: ${{ always() && steps.build_plan.outputs.has_crates == 'true' }}
-        continue-on-error: true
-        run: cargo test --workspace
 
       - id: manifest
         name: Validate manifest completeness
@@ -484,9 +461,6 @@ jobs:
           CREDENTIAL_LIVENESS: ${{ steps.credential_liveness.outcome }}
           REGISTRY_STATE: ${{ steps.registry_state.outcome }}
           META: ${{ steps.meta.outcome }}
-          FORMATTING: ${{ steps.formatting.outcome }}
-          CLIPPY: ${{ steps.clippy.outcome }}
-          WORKSPACE_TESTS: ${{ steps.workspace_tests.outcome }}
           MANIFEST: ${{ steps.manifest.outcome }}
           PUBLISH_ORDER: ${{ steps.publish_order.outcome }}
           HELPERS: ${{ steps.helpers.outcome }}
@@ -521,9 +495,6 @@ jobs:
           record version-input "${META}"
           # Cargo checks only apply when the manifest declares [[crates]].
           if [[ "${HAS_CRATES}" == "true" ]]; then
-            record formatting "${FORMATTING}"
-            record clippy "${CLIPPY}"
-            record workspace-tests "${WORKSPACE_TESTS}"
             record package-checks "${PACKAGE_CHECKS}"
           fi
           record manifest "${MANIFEST}"
