@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+## 1.6.1
+
+- Phase bc: consolidate atm-core observability onto the published
+  `sc-observability` / `sc-observability-types` `=1.4.1` family -- the
+  duplicated error and health mapping in `atm` and `atm-observability` is
+  replaced by the upstream typed APIs (`InitFailure`, `LogFailure`,
+  `FlushFailure`, `LoggingHealthReport`) with the ATM error contract retained
+  and matrix-tested, and the new log macros and `#[instrument]` attribute are
+  qualified (compile-pass and compile-fail UI tests) without changing logging
+  ownership (Phase bc, #1576)
+- Phase bc: conform the sc-publish release consumer byte-for-byte to the
+  canonical kit (release manifests, channel contracts, scoop/winget publish
+  workflows rendered from the kit templates; `check_version_sync` now tracks
+  `[[python_distributions]]`), and enable the immutable-releases repository
+  setting; the first immutable release proof is the release from `main`
+  (Phase bc, #1576)
+- fix(read): a mutating `atm read` re-queried mailbox metadata after
+  persisting read state and indexed the refreshed rows with a selection index
+  from the earlier snapshot, so a concurrent `clear` could make the read fail
+  or show a different row; the display now reloads from the selection
+  snapshot and the durable record is loaded fresh by key (Phase bc, #1574)
+- fix(templates): task templates rendered from `.xml.j2` deliver their
+  variables verbatim under sc-compose 1.6 autoescaping (#1538)
+- team-lead startup verifies that `.atm.toml` aliases, the ATM roster and
+  the live Herdr agents agree, repairing the roster with
+  `atm teams update-member` instead of backup-and-restore (#1540)
+- bench: lower the m5-atmbench TCP p50 floor to 16000 msg/s (baselines
+  revision 6) pending the TCP throughput root-cause task (#1582)
+- Python distributions (`atm-graft`, `atm-query`, `hermes-atm`) and the
+  workspace crates move to 1.6.1 together (#1581)
+
 ## 1.6.0
 
 - Phase AX: nudge templates on every backend (Herdr renders the built-in
