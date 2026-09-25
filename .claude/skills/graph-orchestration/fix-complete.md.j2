@@ -1,7 +1,7 @@
 ---
-name: dev-complete
+name: fix-complete
 version: 1.0.0
-description: Developer completion report for a dev-task; the body of `atm task close <task-id> completed`.
+description: Developer completion report for a graph-orchestration fix-task (sprint scope); the body of `atm task close <task-id> completed`.
 format: markdown
 required_variables:
   - generated_at
@@ -9,33 +9,32 @@ required_variables:
   - sprint
   - branch
   - commit
-  - deliverables_complete
-  - deliverables_total
-  - deliverables_md
+  - findings_fixed
+  - findings_not_reproducible
+  - findings_md
   - validation_md
 optional_variables:
   - node_id
   - pr_number
-  - inventory_md
   - notes_md
 defaults:
   node_id: ""
   pr_number: ""
-  inventory_md: ""
   notes_md: ""
 metadata:
-  type: dev-complete
+  type: fix-complete
   tags:
-    - stage:dev
+    - stage:fix
+    - orchestration:graph
   workflow:
     scope:
       kind: sprint
       variable: sprint
-    state: dev-complete
-    stage: dev
+    state: fix-complete
+    stage: fix
     transition: complete
 ---
-# Dev Complete
+# Fix Complete
 
 Generated: {{ generated_at }}
 Sprint/Task: {{ sprint }} / {{ task_id }}
@@ -43,33 +42,30 @@ Sprint/Task: {{ sprint }} / {{ task_id }}
 {% endif %}Branch: `{{ branch }}`
 Commit: `{{ commit }}`
 PR: {{ ('#' ~ pr_number) if pr_number else 'not opened' }}
-Deliverables: {{ deliverables_complete }}/{{ deliverables_total }}
+Findings: {{ findings_fixed }} fixed, {{ findings_not_reproducible }} not reproducible
 
 ## Machine Status (JSON)
 ```json
 {
   "sprint": {{ sprint | tojson }},
-  "task": {{ task_id | tojson }},
   "node": {{ (node_id or none) | tojson }},
+  "task": {{ task_id | tojson }},
   "branch": {{ branch | tojson }},
   "commit": {{ commit | tojson }},
   "pr": {{ pr_number if pr_number else "null" }},
-  "deliverables": {
-    "complete": {{ deliverables_complete }},
-    "total": {{ deliverables_total }}
+  "findings": {
+    "fixed": {{ findings_fixed }},
+    "not_reproducible": {{ findings_not_reproducible }}
   }
 }
 ```
 
-## Deliverables
-{{ deliverables_md }}
+## Findings
+{{ findings_md }}
 
 ## Validation
 {{ validation_md }}
-{% if inventory_md %}
-## Targeted Symbol / Code-Path Inventory
-{{ inventory_md }}
-{% endif %}{% if notes_md %}
+{% if notes_md %}
 ## Notes
 {{ notes_md }}
 {% endif %}

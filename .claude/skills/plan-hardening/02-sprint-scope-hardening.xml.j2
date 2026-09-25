@@ -1,6 +1,6 @@
 ---
 name: 02-sprint-scope-hardening-task
-version: 2.0.0
+version: 2.1.0
 description: lead assignment template for sprint-scope and deliverable hardening before implementation.
 format: xml
 required_variables:
@@ -322,7 +322,7 @@ metadata:
     <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away with a plain `atm send {{ lead }} --stdin` (never close the task on a push) so {{ lead }} can prepare the critical review step. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">After the current hardening pass converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only, delivered as the close: `atm task close {{ task_id }} completed --stdin <<'EOF' … EOF` with the PASS/FAIL line and the fenced JSON in the body. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. If `reviewer-findings-json` is present, treat it as the current correction target from `critical-plan-reviewer` and return updated fenced JSON to `{{ lead }}`. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
+    <step id="g">After the current hardening pass converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only, delivered as the close: `atm task close {{ task_id }} completed --template .claude/skills/plan-hardening/plan-sprint-hardening-complete.md.j2 --vars <scratch>/plan-sprint-hardening-complete-{{ task_id }}-vars.json`, with `status` the PASS/FAIL line, `result_json` the fenced JSON body verbatim, and `task_id`, `phase` and `round_index` unchanged from this assignment; write the vars file outside the repository. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. If `reviewer-findings-json` is present, treat it as the current correction target from `critical-plan-reviewer` and return updated fenced JSON to `{{ lead }}`. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="h">Team-lead must not route the plan to QA or implementation from this pass alone. `critical-plan-reviewer` must run after this pass, and `03-consistency-hardening.xml.j2` must run after that.</step>
     <step id="i">After the validation report, read ATM again for follow-up work.</step>
   </workflow>

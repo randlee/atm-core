@@ -1,6 +1,6 @@
 ---
 name: 01-plan-scope-review-task
-version: 2.0.0
+version: 2.1.0
 description: lead assignment template for the initial developer guidelines pass before background scope review.
 format: xml
 required_variables:
@@ -137,7 +137,7 @@ metadata:
     <step id="d">As soon as the guidelines pass is complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away with a plain `atm send {{ lead }} --stdin` so scope review can begin in parallel; never close the task on a push. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="e">After the push report, run the required validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">Return fenced JSON only after the current pass converges, delivered as the close: `atm task close {{ task_id }} completed --stdin <<'EOF' … EOF` with the PASS/FAIL line and the fenced JSON in the body. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. If `reviewer-findings-json` is present, treat it as the current correction target from `plan-scope-reviewer` and return updated fenced JSON to `{{ lead }}`. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
+    <step id="g">Return fenced JSON only after the current pass converges, delivered as the close: `atm task close {{ task_id }} completed --template .claude/skills/plan-hardening/plan-scope-review-complete.md.j2 --vars <scratch>/plan-scope-review-complete-{{ task_id }}-vars.json`, with `status` the PASS/FAIL line, `result_json` the fenced JSON body verbatim, and `task_id`, `phase` and `round_index` unchanged from this assignment; write the vars file outside the repository. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. If `reviewer-findings-json` is present, treat it as the current correction target from `plan-scope-reviewer` and return updated fenced JSON to `{{ lead }}`. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="h">After the close, read ATM again: the next queued task starts only now.</step>
   </workflow>
 </atm-task>

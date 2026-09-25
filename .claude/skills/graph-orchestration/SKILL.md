@@ -548,6 +548,7 @@ Output JSON (DONE):
 
 - `dev-task.xml.j2` — initial dev pass (no blocking findings)
 - `dev-fix.xml.j2` — fix pass (blocking findings identified by triaging-findings)
+- close templates: `dev-task` closes with `.claude/skills/codex-orchestration/dev-complete.md.j2` (with `node_id`), `dev-fix` with `graph-orchestration/fix-complete.md.j2` (see `docs/team-protocol.md`, Close Templates)
 
 QA assignment uses the existing `quality-mgr` prompt directly — no new template.
 

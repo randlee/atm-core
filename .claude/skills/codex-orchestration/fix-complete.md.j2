@@ -1,0 +1,69 @@
+---
+name: fix-complete
+version: 1.0.0
+description: Developer completion report for a fix-task; the body of `atm task close <task-id> completed`.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - phase
+  - branch
+  - commit
+  - findings_fixed
+  - findings_not_reproducible
+  - findings_md
+  - validation_md
+optional_variables:
+  - sprint_id
+  - pr_number
+  - notes_md
+defaults:
+  sprint_id: ""
+  pr_number: ""
+  notes_md: ""
+metadata:
+  type: fix-complete
+  tags:
+    - stage:fix
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: fix-complete
+    stage: fix
+    transition: complete
+---
+# Fix Complete
+
+Generated: {{ generated_at }}
+Phase/Task: {{ phase }} / {{ task_id }}
+Branch: `{{ branch }}`
+Commit: `{{ commit }}`
+PR: {{ ('#' ~ pr_number) if pr_number else 'not opened' }}
+Findings: {{ findings_fixed }} fixed, {{ findings_not_reproducible }} not reproducible
+
+## Machine Status (JSON)
+```json
+{
+  "phase": {{ phase | tojson }},
+  "sprint": {{ sprint_id | tojson }},
+  "task": {{ task_id | tojson }},
+  "branch": {{ branch | tojson }},
+  "commit": {{ commit | tojson }},
+  "pr": {{ pr_number if pr_number else "null" }},
+  "findings": {
+    "fixed": {{ findings_fixed }},
+    "not_reproducible": {{ findings_not_reproducible }}
+  }
+}
+```
+
+## Findings
+{{ findings_md }}
+
+## Validation
+{{ validation_md }}
+{% if notes_md %}
+## Notes
+{{ notes_md }}
+{% endif %}

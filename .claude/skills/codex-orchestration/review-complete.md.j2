@@ -1,0 +1,62 @@
+---
+name: review-complete
+version: 1.0.0
+description: Reviewer completion report for a review-task; the body of `atm task close <task-id> completed`.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - phase
+  - branch
+  - commit
+  - verdict
+  - findings_blocking
+  - findings_important
+  - findings_minor
+  - findings_md
+optional_variables:
+  - notes_md
+defaults:
+  notes_md: ""
+metadata:
+  type: review-complete
+  tags:
+    - stage:review
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: review-complete
+    stage: review
+    transition: complete
+---
+# Review Complete
+
+Generated: {{ generated_at }}
+Phase/Task: {{ phase }} / {{ task_id }}
+Branch: `{{ branch }}`
+Reviewed Commit: `{{ commit }}`
+Verdict: **{{ verdict }}**
+
+## Machine Status (JSON)
+```json
+{
+  "phase": {{ phase | tojson }},
+  "task": {{ task_id | tojson }},
+  "branch": {{ branch | tojson }},
+  "commit": {{ commit | tojson }},
+  "verdict": {{ verdict | tojson }},
+  "findings": {
+    "blocking": {{ findings_blocking }},
+    "important": {{ findings_important }},
+    "minor": {{ findings_minor }}
+  }
+}
+```
+
+## Findings
+{{ findings_md }}
+{% if notes_md %}
+## Notes
+{{ notes_md }}
+{% endif %}

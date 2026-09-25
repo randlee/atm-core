@@ -154,6 +154,13 @@ mkdir -p ~/.atm/templates/plan-hardening && cp .claude/skills/plan-hardening/*.j
 - `.claude/skills/plan-hardening/03-consistency-hardening.xml.j2`
 - `.claude/skills/plan-hardening/plan-critical-review.xml.j2`
 - `.claude/skills/plan-hardening/plan-review-notice.xml.j2`
+
+Each step's task closes with its complete template
+(`atm task close <task-id> completed --template <file> --vars <file>`):
+- `.claude/skills/plan-hardening/plan-scope-review-complete.md.j2`
+- `.claude/skills/plan-hardening/plan-sprint-hardening-complete.md.j2`
+- `.claude/skills/plan-hardening/plan-consistency-hardening-complete.md.j2`
+- `.claude/skills/plan-hardening/plan-critical-review-complete.md.j2`
 - `.claude/skills/plan-hardening/steps/step-1.md`
 - `.claude/skills/plan-hardening/steps/step-2.md`
 - `.claude/skills/plan-hardening/steps/step-3.md`
