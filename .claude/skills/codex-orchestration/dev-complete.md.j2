@@ -1,0 +1,71 @@
+---
+name: dev-complete
+version: 1.0.0
+description: Developer completion report for a dev-task; the body of `atm task close <task-id> completed`.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - sprint
+  - branch
+  - commit
+  - deliverables_complete
+  - deliverables_total
+  - deliverables_md
+  - validation_md
+optional_variables:
+  - pr_number
+  - inventory_md
+  - notes_md
+defaults:
+  pr_number: ""
+  inventory_md: ""
+  notes_md: ""
+metadata:
+  type: dev-complete
+  tags:
+    - stage:dev
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: dev-complete
+    stage: dev
+    transition: complete
+---
+# Dev Complete
+
+Generated: {{ generated_at }}
+Sprint/Task: {{ sprint }} / {{ task_id }}
+Branch: `{{ branch }}`
+Commit: `{{ commit }}`
+PR: {{ ('#' ~ pr_number) if pr_number else 'not opened' }}
+Deliverables: {{ deliverables_complete }}/{{ deliverables_total }}
+
+## Machine Status (JSON)
+```json
+{
+  "sprint": {{ sprint | tojson }},
+  "task": {{ task_id | tojson }},
+  "branch": {{ branch | tojson }},
+  "commit": {{ commit | tojson }},
+  "pr": {{ pr_number if pr_number else "null" }},
+  "deliverables": {
+    "complete": {{ deliverables_complete }},
+    "total": {{ deliverables_total }}
+  }
+}
+```
+
+## Deliverables
+{{ deliverables_md }}
+
+## Validation
+{{ validation_md }}
+{% if inventory_md %}
+## Targeted Symbol / Code-Path Inventory
+{{ inventory_md }}
+{% endif %}{% if notes_md %}
+## Notes
+{{ notes_md }}
+{% endif %}

@@ -276,6 +276,7 @@ next orchestration step.
 
 Use the templates in this skill directory:
 - `dev-template.xml.j2`
+- `dev-complete.md.j2` (dev-task close report)
 - `fix-assignment.xml.j2`
 - `qa-template.xml.j2`
 - `review-template.xml.j2`
