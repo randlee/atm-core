@@ -94,7 +94,7 @@ skills:
   atm-beads:
     version: 0.3.1
   atm-bd-orchestration:
-    version: 0.3.6
+    version: 0.3.7
     depends_on:
       atm-beads: 0.x
       quality-mgr: 0.x

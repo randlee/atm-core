@@ -337,4 +337,21 @@ if [ "$ttl_fail" -ne 0 ] || [ "$site_fail" -ne 0 ]; then
     exit 1
 fi
 
+# Beads: publish the shared Dolt database to its remote (sync.remote in
+# .beads/config.yaml) once the gates above have passed, so a git push also
+# pushes the beads state. `bd hooks run pre-push` does NOT do this (in hook
+# mode it only skips backup/export), so bd sync is called directly. Its
+# output is shown verbatim; a failed sync (exit 1 transport/auth, 2 merge
+# conflict, 3 push race, 4 dirty working set) is reported and does not
+# refuse the code push: the lead re-runs `bd sync` per the atm-bd-orchestration
+# skill's Sync section.
+if [ -f "$repo_root/.beads/metadata.json" ] && command -v bd >/dev/null 2>&1; then
+    echo "pre-push: running bd sync (beads -> $(cd "$repo_root" && bd config get sync.remote 2>/dev/null || echo 'configured remote'))" >&2
+    (cd "$repo_root" && bd sync </dev/null) >&2
+    bd_status=$?
+    if [ "$bd_status" -ne 0 ]; then
+        echo "pre-push: WARNING: bd sync exited $bd_status; beads state NOT published. Code push continues; run 'bd sync' again (see .claude/skills/atm-bd-orchestration/SKILL.md, Sync)." >&2
+    fi
+fi
+
 exit 0
