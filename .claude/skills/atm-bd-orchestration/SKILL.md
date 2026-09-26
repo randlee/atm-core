@@ -145,9 +145,10 @@ on every restack and show up as out-of-scope work in that sprint's PR.
    When every roster agent is mid-task, the lead runs a background
    `rust-developer` subagent for this step instead of waiting; the branch,
    scope and test rule are the same.
-4. The lead reads the diff and merges it at once; there is no QA round,
-   because the diff is the change and what it forces and the lead has read
-   it. The lead then rebases the stack layers above the base and pushes each
+4. The lead dispatches one QA round on the fix PR (`qa-template.xml.j2`,
+   `checked_bead` = the finder's bead, `layer` = the base) and merges when
+   it passes; no PR into the integration branch or a stack layer merges
+   without QA. The lead then rebases the stack layers above the base and pushes each
    with `--force-with-lease`. A live sprint branch rebases onto its new top
    at its next push; the lead sends its owner the new top.
 5. The lead records the fix branch and PR in the finder's bead notes and in
