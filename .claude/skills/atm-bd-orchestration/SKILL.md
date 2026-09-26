@@ -120,6 +120,40 @@ can follow. What this skill changes:
   `bd update <bead> --set-metadata layer=<n> --set-metadata pr_target=<branch>`.
 - Landing is one `gh stack merge <stack#> --yes --merge` after the last
   finding closes (the landing procedure in `stack.mechanics`).
+- A shared type or a critical bug that several live branches need goes on
+  its own `fix/<thing>` branch off the base and merges first (Parallel Quick
+  Fix, below); it never rides inside one sprint's layer.
+
+### Parallel Quick Fix
+
+A running sprint sometimes finds a change that other live branches need at
+the same time: a shared type or trait signature that parallel sprints all
+implement or consume, or a critical bug in code every branch carries. That
+change does not go into the finder's layer. Landed there, every other branch
+fails until that layer merges, and the cross-fence edits it forces conflict
+on every restack and show up as out-of-scope work in that sprint's PR.
+
+1. The finder stops the edit in the sprint worktree and tells the lead the
+   exact change and the branches it breaks.
+2. The lead picks the base: the lowest branch that already holds what the
+   change needs. That is the integration branch for a bug in merged code, or
+   the stack layer whose types the change uses.
+3. The finder cuts `fix/<thing>` from `origin/<base>` in its own worktree,
+   with only the change, the implementors and call sites the compiler
+   forces, and one test when it is a bug. The test command passes; push; PR
+   into `<base>`.
+4. The lead reads the diff and merges it at once; there is no QA round,
+   because the diff is the change and what it forces and the lead has read
+   it. The lead then rebases the stack layers above the base and pushes each
+   with `--force-with-lease`. A live sprint branch rebases onto its new top
+   at its next push; the lead sends its owner the new top.
+5. The lead records the fix branch and PR in the finder's bead notes and in
+   the notes of every bead whose fence it touched. The finder's sprint task
+   stays open and continues on the rebased layer.
+
+Once the fix is in the base, it leaves every rebased branch's PR diff, so CI
+and QA on those PRs never see it, and no sprint carries another sprint's
+edits.
 
 ## Plan Gate
 
