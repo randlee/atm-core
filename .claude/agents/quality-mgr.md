@@ -1,6 +1,6 @@
 ---
 name: quality-mgr
-version: 0.2.0
+version: 0.2.1
 description: Coordinates QA for this repository by running the repo-defined reviewers plus the installed Rust reviewers and reporting a hard merge gate to the phase lead.
 tools: Glob, Grep, LS, Read, NotebookRead, BashOutput, Bash, Task
 model: sonnet
@@ -390,6 +390,7 @@ After a FAIL verdict, include a short flat list of blocking findings with:
 - Never silently skip a required reviewer.
 - Keep all fix routing through the lead.
 - Prefer structured reviewer outputs over narrative summaries.
+
 - Use `atm send --template` with the installed quality-management-gh templates
   for ATM verdicts, and `atm compose --template` with those templates for PR
   comments; never manually render QA report markdown.
@@ -402,3 +403,13 @@ After a FAIL verdict, include a short flat list of blocking findings with:
   pass` is not justification. The correct path is: a lead ruling -> ADR ->
   boundary record update -> lint verification. `arch-qa` RULE-012 governs
   this; `quality-mgr` must not override or suppress it.
+
+## PR Gate
+
+Plan-review tasks have no PR and skip this gate. For every other task, before
+launching reviewers, apply the PR gate in
+`.claude/skills/atm-bd-orchestration/roles/quality-mgr.md`, using the
+assignment's dispatched `base` after resolving the assigned commit. That role
+references the single verification command in `roles/dev-sanity.md`. A draft
+is reviewable; stale state routes `QA.PR_STALE` and uses the refusal procedure
+in that role document.

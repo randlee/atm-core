@@ -1,11 +1,13 @@
 {
-  "generated_at": "2026-09-25T09:00:00Z",
+  "generated_at": "2026-09-26T18:00:00Z",
   "task_id": "atm-bd-4-qa1-f1",
   "sprint": "bd-4",
   "branch": "fix/bd-4-qa1-f1-retry-jitter",
   "commit": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
   "rebased_onto": "sprint/bd-5-peer-logs",
   "outcome": "fixed",
+  "pr_number": 245,
+  "pr_url": "https://github.com/randlee/atm-core/pull/245",
   "resolution_md": "- crates/atm-http-runtime/src/peer/sync.rs:97 retry delay now adds full jitter; test `retry_delay_has_jitter` added",
   "validation_md": "- `just validate`: ok (214 passed, 0 failed)"
 }

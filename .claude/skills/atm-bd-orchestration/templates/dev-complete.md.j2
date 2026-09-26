@@ -1,6 +1,6 @@
 ---
 name: dev-complete
-version: 2.0.0
+version: 2.1.0
 description: Dev completion report for a dev bead (dev-task or dev-fix); the body of `atm task close <task-id> completed`. The lead reads `commit` and `rebased_onto` from it for the sanity check and the link.
 format: markdown
 required_variables:
@@ -10,6 +10,8 @@ required_variables:
   - branch
   - commit
   - rebased_onto
+  - pr_number
+  - pr_url
   - deliverables_complete
   - deliverables_total
   - deliverables_md
@@ -40,6 +42,7 @@ Bead: {{ task_id }} (sprint {{ sprint }})
 Branch: `{{ branch }}`
 Commit: `{{ commit }}`
 Rebased onto: `{{ rebased_onto }}`
+PR: #{{ pr_number }} ({{ pr_url }})
 Deliverables: {{ deliverables_complete }}/{{ deliverables_total }}
 
 ## Machine Status (JSON)
@@ -50,6 +53,8 @@ Deliverables: {{ deliverables_complete }}/{{ deliverables_total }}
   "branch": {{ branch | tojson }},
   "commit": {{ commit | tojson }},
   "rebased_onto": {{ rebased_onto | tojson }},
+  "pr_number": {{ pr_number | tojson }},
+  "pr_url": {{ pr_url | tojson }},
   "deliverables": {"complete": {{ deliverables_complete }}, "total": {{ deliverables_total }} }
 }
 ```

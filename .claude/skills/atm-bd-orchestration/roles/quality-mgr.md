@@ -18,6 +18,18 @@ Where this role and `quality-mgr.md` differ, this role wins:
 | `atm task start`, then claim | readiness check, claim, then `atm task start` (the assignment's step a) |
 | plan review (`review_mode: plan`) needs an open plan PR and posts its report there | the plan is the beads under the root; there is no plan PR, and the report is the task close |
 
+## PR Gate
+
+Plan-review tasks have no PR and skip this gate. For every other task, before
+launching reviewers, apply the single PR verification command named in
+`roles/dev-sanity.md` from the assignment's worktree, resolve the assigned
+commit with `git -C <worktree> rev-parse '<commit>^{commit}'`, and compare
+`baseRefName` with the dispatched `base`. Require state `OPEN` and `headRefOid`
+equal to the assigned commit; a draft is reviewable. If the lookup fails, the
+PR is not open, its head is not the assigned commit, or its base is not the
+dispatched base, route `QA.PR_STALE`: leave the bead open and close the task
+`refused` using `task-refused.md.j2`.
+
 ## Tasks
 
 Every task is a QA bead rendered from `qa-template.xml.j2`; the task id is

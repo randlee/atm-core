@@ -1,6 +1,6 @@
 ---
 name: dev-sanity-task
-version: 1.5.1
+version: 1.5.4
 description: lead sanity check assignment for the member that fills the dev-sanity role (resolve-role dev-sanity). task_id is the sanity check bead. The member splits the checked bead per numbered deliverable (sanity-split), runs one check subagent per deliverable with lint alongside, merges (sanity-merge) and reports PASS or FAIL. Not QA.
 format: xml
 required_variables:
@@ -11,6 +11,8 @@ required_variables:
   - branch
   - commit
   - base
+  - pr_number
+  - pr_url
 optional_variables:
   - lead
   - cc
@@ -40,9 +42,11 @@ metadata:
   <branch><![CDATA[{{ branch | string | cdata_escape }}]]></branch>
   <commit><![CDATA[{{ commit | string | cdata_escape }}]]></commit>
   <base><![CDATA[{{ base | string | cdata_escape }}]]></base>
+  <pr number="{{ pr_number | string }}"><![CDATA[{{ pr_url | string | cdata_escape }}]]></pr>
   <lint-command><![CDATA[{{ lint_command | string | cdata_escape }}]]></lint-command>
 
   <workflow>
+    <step id="a0"><![CDATA[Before claiming or splitting, apply the PR gate in `.claude/skills/atm-bd-orchestration/roles/dev-sanity.md`. It names the single verification command and the definition of a reviewable PR: state `OPEN`, `headRefOid` equal to the dispatched full commit SHA, `baseRefName` equal to `{{ base | string | cdata_escape }}`, and drafts allowed. If the assignment has no PR, the lookup fails, the PR is closed, its head does not match the dispatched commit, or its base differs, leave the bead open and close the task refused with `SANITY.PR_REQUIRED` via `task-refused.md.j2`.]]></step>
     <step id="a"><![CDATA[Start the task and claim the bead. `BEADS_ACTOR` must equal your `ATM_IDENTITY` (claims and closes are recorded as that actor); if it is empty, pass `--actor "$ATM_IDENTITY"` to every `bd` write. Check that the bead is ready: `bd ready -n 0 --json | jq -e --arg b {{ task_id | string | cdata_escape }} 'any(.[]; .id == $b)'`. When it prints `true`, run `atm task start {{ task_id | string | cdata_escape }} "sanity check {{ checked_bead | string | cdata_escape }}"` if this task is your active one; otherwise claim and start the check anyway, closing it without a start. Then `bd update {{ task_id | string | cdata_escape }} --claim` and start the check (step b) at once; your other open tasks run alongside and never wait on this one.]]></step>
     <step id="a1"><![CDATA[When it prints `false` the bead is not ready: do not claim it and do not start the task. Find the root cause: `bd show {{ task_id | string | cdata_escape }}` (status, assignee), `bd blocked --json | jq --arg b {{ task_id | string | cdata_escape }} '.[] | select(.id == $b)'` (normally `{{ checked_bead | string | cdata_escape }}` still open), and `bd show <blocker>` for each. Report it with `atm send {{ lead | string | cdata_escape }} --stdin`: the bead, why it is not ready, and which bead or agent has to move. Then wait.]]></step>
     <step id="b"><![CDATA[Run the check as your agent prompt's Execution Steps say: `.claude/skills/atm-bd-orchestration/scripts/sanity-split --task {{ task_id | string | cdata_escape }} --bead {{ checked_bead | string | cdata_escape }} --worktree {{ worktree_path | string | cdata_escape }} --branch {{ branch | string | cdata_escape }} --commit {{ commit | string | cdata_escape }} --base {{ base | string | cdata_escape }} --lint-command '{{ lint_command | string | cdata_escape }}' --scratch <scratch>`, one check subagent per assignment it prints, then `.claude/skills/atm-bd-orchestration/scripts/sanity-merge <manifest> {{ task_id | string | cdata_escape }} {{ checked_bead | string | cdata_escape }} {{ sprint | string | cdata_escape }}` on the replies. The manifest's `sha` is `<sha>` below; the merge writes the vars for step e or e1. Route every non-zero exit of sanity-split or sanity-merge by your agent prompt's Error Handling; only when it says cannot run, go to step e2 with that code. `SANITY.PLAN_INVALID` means the bead has no numbered `## Deliverables` list, so also tell {{ lead | string | cdata_escape }} that planning failed for `{{ checked_bead | string | cdata_escape }}`.]]></step>

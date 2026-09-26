@@ -66,6 +66,19 @@ cannot be split; the check is refused with `SANITY.PLAN_INVALID` and the
 lead is told that planning failed for that bead. Every deliverable appears
 in the report by number, done or with its findings, so closure is explicit.
 
+## PR Gate
+
+The single verification command for every sanity PR gate is:
+`cd <worktree> && gh pr view <pr_number> --json state,isDraft,headRefOid,baseRefName`.
+Resolve the assigned full commit SHA with
+`git -C <worktree> rev-parse '<commit>^{commit}'`. A PR is reviewable when its
+state is `OPEN` and `headRefOid` equals that dispatched SHA; a draft is
+reviewable. Require `baseRefName` to equal the assignment's `base`. Refuse the
+task with `SANITY.PR_REQUIRED` when the assignment has no PR, the lookup fails,
+the PR is closed, its head does not match the checked commit, or its base does
+not match the assigned base. Leave the bead open with the reason and close the
+task as `refused` using `task-refused.md.j2`; send the refusal to the lead.
+
 ## Verdicts
 
 | Verdict | Sanity check bead | Task |
