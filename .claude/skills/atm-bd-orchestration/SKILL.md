@@ -136,9 +136,10 @@ No dev bead is dispatched until the plan passes review.
    new dev beads, including any that already have sanity check blockers:
 
    ```bash
-   bd create --id <root>-plan-qa --type task --parent <root> \
+   bd create --id <root>-plan-qa --type task \
      -l phase-<x>,stage:plan-review --assignee quality-mgr \
-     --title "phase-<x>: plan review" --deps blocks:<root sprint>,blocks:<root sprint>
+     --title "phase-<x>: plan review" \
+     --deps parent-child:<root>,blocks:<root sprint>,blocks:<root sprint>
    ```
 
 3. Dispatch it with
@@ -207,9 +208,9 @@ close the phase root, and run `bd sync`.
 Create the review bead, then dispatch it with `review-template.xml.j2`:
 
 ```bash
-bd create --id <root>-review --type task --parent <root> \
+bd create --id <root>-review --type task \
   -l phase-<x>,stage:review --assignee <reviewer> \
-  --title "phase-<x>: phase-end review"
+  --title "phase-<x>: phase-end review" --deps parent-child:<root>
 ```
 
 On review-complete, file each finding with `finding-bead.json.j2`, using:
