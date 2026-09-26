@@ -1180,3 +1180,66 @@ async fn refusal_run_reads_the_trailing_run() {
     assert_eq!(run.count, 1);
     assert_eq!(run.started_at, h.events("T1").last().map(|event| event.at));
 }
+
+#[test]
+fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    let member = MemberKey::new(h.team.clone(), "alice".parse().unwrap());
+    let task_id: TaskId = "T1".parse().unwrap();
+    let task_store = h.backend.task_store();
+
+    task_store
+        .record_reminder(
+            &member,
+            &task_id,
+            IsoTimestamp::now(),
+            ReminderOutcome::Emitted,
+        )
+        .expect("record reminder");
+    task_store
+        .record_reminder(
+            &member,
+            &task_id,
+            IsoTimestamp::now(),
+            ReminderOutcome::Emitted,
+        )
+        .expect("record second reminder");
+    task_store
+        .record_lead_notified(
+            &member,
+            &task_id,
+            IsoTimestamp::now(),
+            &"lead".parse().unwrap(),
+            &AtmMessageId::new(),
+        )
+        .expect("record lead notified");
+    let reminded = h.row("T1");
+    assert_eq!(reminded.reminder_count, 2);
+    assert_eq!(reminded.lead_notified_count, 1);
+    assert!(reminded.last_reminded_at.is_some());
+
+    let reset_at = IsoTimestamp::now();
+    let reset = task_store
+        .reset_reminders(&member, &task_id, reset_at)
+        .expect("reset reminders");
+    assert_eq!(reset.reminder_count, 0);
+    assert_eq!(reset.lead_notified_count, 0);
+    assert!(reset.last_reminded_at.is_none());
+    assert_eq!(reset.updated_at, reset_at);
+    assert_eq!(
+        h.events("T1").last().map(|event| event.event),
+        Some(TaskEventKind::RemindersReset)
+    );
+
+    // A reminder recorded after the reset starts the budget over from one.
+    let after_reset = task_store
+        .record_reminder(
+            &member,
+            &task_id,
+            IsoTimestamp::now(),
+            ReminderOutcome::Emitted,
+        )
+        .expect("record reminder after reset");
+    assert_eq!(after_reset.reminder_count, 1);
+}

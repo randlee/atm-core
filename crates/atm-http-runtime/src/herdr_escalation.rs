@@ -359,7 +359,13 @@ async fn write_escalation_mail_with_summary(
                 None,
                 false,
             )?
-            .with_nudge_mode(NudgeMode::Immediate);
+            // Immediate delivery only runs the Inline plan, which never
+            // emits the herdr received hook (that hook is emitted only by
+            // `StorageAndNudgeRouter::emit_received_hook` and by the
+            // queue-wake pump). Deferred sets the durable pending-queue
+            // marker instead, so the pump nudges the recipient's pane on its
+            // next idle pass.
+            .with_nudge_mode(NudgeMode::Deferred);
             write_mail_with_runtime(request, &NullObservability, &runtime)
                 .map(|outcome| outcome.persisted_message_id())
         })

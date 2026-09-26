@@ -3,8 +3,8 @@
   "backend": "dolt",
   "dolt_mode": "server",
   "dolt_server_user": "skillrx",
-  "dolt_database": "atm",
-  "project_id": "ad63825d-2f50-4e62-a79d-4f9926181e8f",
+  "dolt_database": "atm-dev",
+  "project_id": "18aaf8cf-8df2-4aaf-9647-695ac67ecdf0",
   "global_dolt_database": "beads_global",
   "global_project_id": "00000000-0000-0000-0000-000000000000"
 }
