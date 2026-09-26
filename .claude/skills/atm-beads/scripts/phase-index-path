@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=""
+phase=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --root) root=$2; shift 2 ;;
+    --phase) phase=$2; shift 2 ;;
+    *) echo "phase-index-path: unknown argument $1" >&2; exit 2 ;;
+  esac
+done
+[ -n "$root" ] || [ -n "$phase" ] || { echo "phase-index-path: pass --root or --phase" >&2; exit 2; }
+repo_root=$(git rev-parse --show-toplevel)
+if [ -n "$root" ]; then
+  phase=$(bd show "$root" --json 2>/dev/null | jq -r '.[0].metadata.phase // empty')
+  [ -n "$phase" ] || phase=$(sed -nE 's/^.*-phase-([a-z0-9]+)$/\1/p' <<< "$root")
+fi
+[ -n "$phase" ] || { echo "phase-index-path: could not determine phase" >&2; exit 2; }
+printf '%s/docs/plans/phase-%s/sprints.json\n' "$repo_root" "$phase"

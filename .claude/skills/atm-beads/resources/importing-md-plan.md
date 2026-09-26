@@ -87,6 +87,7 @@ goes back to the plan's author to supply, with the exact list of gaps.
    - one plan into a running phase: `<root>-plan-qa` is already closed, so
      create `<root>-plan-qa-<n>` (the next free number), blocking every new
      dev bead.
+   Export the sprint index and commit it with the plan: `.claude/skills/atm-beads/scripts/export-sprint-index --root <root> --out docs/plans/phase-<x>/sprints.json`, then `git add docs/plans/phase-<x>/sprints.json && git commit`.
 10. **Verify** with `.claude/skills/atm-beads/scripts/validate-plan --root
     <root>`, then check the graph:
     - `bd ready -l phase-<x> -n 0` lists the plan-review bead and no dev bead

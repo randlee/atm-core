@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""Export the plan-only sprint index for a phase root bead."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+
+DELIVERABLES = re.compile(
+    r"^##\s+Deliverables\s*$" r"(?P<body>.*?)" r"(?=^##\s+|\Z)",
+    re.MULTILINE | re.DOTALL | re.IGNORECASE,
+)
+NUMBERED_ITEM = re.compile(r"^\s*[0-9]+\.\s+", re.MULTILINE)
+FOLDED_INTO = re.compile(r"^folded into\s+(\S+)", re.IGNORECASE)
+
+
+def run_json(repo: Path, *args: str) -> Any:
+    result = subprocess.run(
+        list(args), cwd=repo, check=False, stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, text=True,
+    )
+    if result.returncode:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(f"{' '.join(args)} failed: {detail}")
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"{' '.join(args)} returned invalid JSON: {exc}") from exc
+
+
+def metadata(bead: dict[str, Any]) -> dict[str, Any]:
+    value = bead.get("metadata")
+    return value if isinstance(value, dict) else {}
+
+
+def list_value(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+
+def dependency_id(edge: dict[str, Any]) -> str:
+    return str(edge.get("depends_on_id") or edge.get("id") or "")
+
+
+def dependency_type(edge: dict[str, Any]) -> str:
+    return str(edge.get("type") or edge.get("dependency_type") or "")
+
+
+def deliverable_count(description: str) -> int:
+    match = DELIVERABLES.search(description or "")
+    return len(NUMBERED_ITEM.findall(match.group("body"))) if match else 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", required=True, help="phase root bead id")
+    parser.add_argument("--out", required=True, type=Path, help="JSON output path")
+    args = parser.parse_args()
+    try:
+        repo = Path(subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"], text=True
+        ).strip())
+        root_records = run_json(repo, "bd", "show", args.root, "--json")
+        if not root_records:
+            raise RuntimeError(f"root bead not found: {args.root}")
+        root_record = root_records[0]
+        phase = str(metadata(root_record).get("phase") or "")
+        if not phase:
+            match = re.search(r"-phase-([a-z0-9]+)$", args.root)
+            if not match:
+                raise RuntimeError(f"root bead {args.root} has no metadata.phase")
+            phase = match.group(1)
+        children = run_json(
+            repo, "bd", "list", "--parent", args.root, "--all", "-n", "0", "--json"
+        )
+    except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
+        print(f"export-sprint-index: {exc}", file=sys.stderr)
+        return 2
+
+    prefix = args.root.split("-phase-", 1)[0]
+    dev_pattern = re.compile(rf"^{re.escape(prefix)}-{re.escape(phase)}-[0-9]+$")
+    devs = [bead for bead in children if dev_pattern.fullmatch(str(bead.get("id", "")))]
+
+    def sprint_key(bead: dict[str, Any]) -> tuple[int, int, str]:
+        try:
+            layer = int(metadata(bead).get("layer"))
+        except (TypeError, ValueError):
+            layer = 2**31 - 1
+        match = re.search(r"(\d+)$", str(bead.get("id", "")))
+        number = int(match.group(1)) if match else 2**31 - 1
+        return layer, number, str(bead.get("id", ""))
+
+    sprints = []
+    for bead in sorted(devs, key=sprint_key):
+        bead_meta = metadata(bead)
+        depends_on = sorted({
+            dependency_id(edge)
+            for edge in bead.get("dependencies") or []
+            if dependency_type(edge) != "parent-child" and dependency_id(edge)
+        })
+        row = {
+            "id": bead["id"],
+            "sprint": bead_meta.get("sprint") or str(bead["id"]).removeprefix(f"{prefix}-"),
+            "title": bead.get("title", ""),
+            "layer": bead_meta.get("layer"),
+            "pr_target": bead_meta.get("pr_target"),
+            "stack": bead_meta.get("stack"),
+            "depends_on": depends_on,
+            "deliverable_count": deliverable_count(bead.get("description", "")),
+            "owned_paths": list_value(bead_meta.get("owned_paths")),
+            "requirements": list_value(bead_meta.get("requirements")),
+            "adrs": list_value(bead_meta.get("adrs")),
+        }
+        folded = FOLDED_INTO.match(str(bead.get("close_reason") or ""))
+        if folded:
+            row["folded_into"] = folded.group(1)
+        sprints.append(row)
+
+    output = {
+        "phase_id": phase,
+        "root_bead_id": args.root,
+        "integration_branch": metadata(root_record).get("integration_branch") or "",
+        "sprints": sprints,
+    }
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
