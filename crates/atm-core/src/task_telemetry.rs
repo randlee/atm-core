@@ -47,7 +47,7 @@ pub struct TaskTelemetryRecord {
 pub struct TaskHandoffFacts {
     pub attempt: u32,
     pub trigger: PromptTrigger,
-    pub nudge_kind: BuiltInNudgeTemplateKind,
+    pub template_kind: BuiltInNudgeTemplateKind,
 }
 
 /// Stable task telemetry event classification.
@@ -189,7 +189,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::test_support::FakeEnvSource;
+    use crate::test_support::{FakeEnvSource, TEST_TEAM};
 
     #[test]
     fn boundary_is_object_safe() {
@@ -251,7 +251,7 @@ mod tests {
     fn record_round_trips_every_typed_field() {
         let record = TaskTelemetryRecord {
             kind: TaskTelemetryKind::PromptHandoff,
-            team: "atm-dev".parse().unwrap(),
+            team: TEST_TEAM.parse().unwrap(),
             task_id: "atm-bd-1".parse().unwrap(),
             assignee: "solar".parse().unwrap(),
             actor: TaskActor::Member("solar".parse().unwrap()),
@@ -266,7 +266,7 @@ mod tests {
             handoff: Some(TaskHandoffFacts {
                 attempt: 2,
                 trigger: PromptTrigger::TaskPass,
-                nudge_kind: BuiltInNudgeTemplateKind::TaskReminder,
+                template_kind: BuiltInNudgeTemplateKind::TaskReminder,
             }),
         };
         let encoded = serde_json::to_string(&record).unwrap();
