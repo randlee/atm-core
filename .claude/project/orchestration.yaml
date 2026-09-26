@@ -1,0 +1,51 @@
+# Repository facts the atm-beads and atm-bd-orchestration skills read.
+# The skills are repository-agnostic; every repo-specific value lives here.
+# Read a key with `.claude/skills/atm-beads/scripts/manifest-get <dotted.key> [--json]`.
+
+# Prefix of every bead id: <bead_prefix>-phase-<x>, <bead_prefix>-<x>-<n>, ...
+bead_prefix: atm
+
+# Branch every phase integration branch is cut from and the final phase PR targets.
+trunk: develop
+
+# Integration branch of a phase; `{phase}` is the lower-case phase id.
+integration_branch: integrate/phase-{phase}
+
+# Governing documents (globs, repository-relative). A requirement or ADR id is
+# known when it appears in a matching file's content or in its file name.
+docs:
+  requirements:
+    - docs/requirements.md
+  architecture:
+    - docs/architecture.md
+    - docs/adr/ADR-*.md
+
+# Repository QA policy read by quality-mgr and the reviewer assignments.
+policy: .claude/project/quality-policy.md
+
+# Role -> ATM member. Skills name the role; the member's startup prompt in
+# .atm.toml names the directive it runs. Member names are team-unique
+# because Herdr agent names are global on the host.
+roles:
+  dev-sanity: atm-sanity
+  quality-mgr: quality-mgr
+  lead: team-lead
+
+# Validation commands. `lint` runs beside every sanity check, `test` before
+# every dev or fix push, `validate` at phase end.
+commands:
+  lint: just lint
+  test: just test
+  validate: just validate
+
+# Stack mechanics the lead and the devs follow (docs or skills, in reading order).
+stack:
+  mechanics:
+    - docs/development/gh-stack-guidelines.md
+    - .claude/skills/gh-stack-view/SKILL.md
+
+# Model of the per-deliverable check child a Codex dev-sanity member launches
+# (dev-sanity-llm.md, step 3). Under Claude the child model is the
+# sc-sanity-llm frontmatter.
+sanity:
+  child_model: gpt-5.6-luna

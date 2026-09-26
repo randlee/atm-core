@@ -57,3 +57,4 @@ tmp/
 
 # sc-publish kit bootstrap cache (pinned clone, see release/sc-publish-pin.toml)
 .sc-publish-kit/
+**/.sc-compose/

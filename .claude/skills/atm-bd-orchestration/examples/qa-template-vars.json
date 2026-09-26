@@ -1,0 +1,18 @@
+{
+  "task_id": "atm-bd-4-qa1",
+  "checked_bead": "atm-bd-4",
+  "phase": "bd",
+  "phase_feature": "atm-phase-bd",
+  "sprint": "bd-4",
+  "stack": "phase-bd",
+  "layer": 4,
+  "round": 1,
+  "branch": "sprint/bd-4-peer-retry-jitter",
+  "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
+  "base": "sprint/bd-3-peer-config",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/sprint/bd-4-peer-retry-jitter",
+  "pr_number": 231,
+  "lead": "team-lead",
+  "cc": "",
+  "policy_path": ".claude/project/quality-policy.md"
+}

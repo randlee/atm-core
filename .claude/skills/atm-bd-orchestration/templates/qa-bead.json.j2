@@ -1,0 +1,48 @@
+---
+name: qa-bead
+version: 0.1.0
+description: The QA bead the lead creates when a sanity check passes. It validates the dev or finding bead it reviews and blocks nothing. Render strictly, then `jq -c .` into the import JSONL.
+format: json
+required_variables:
+  - id
+  - parent
+  - checked_bead
+  - phase
+  - sprint
+  - stack
+  - layer
+  - branch
+  - commit
+  - round
+optional_variables:
+  - assignee
+  - priority
+defaults:
+  assignee: quality-mgr
+  priority: 2
+---
+{
+  "id": {{ id | tojson }},
+  "title": {{ (sprint ~ ": QA round " ~ round ~ " of " ~ checked_bead) | tojson }},
+  "issue_type": "task",
+  "status": "open",
+  "priority": {{ priority }},
+  "assignee": {{ assignee | tojson }},
+  "description": {{ ("QA round " ~ round ~ " of " ~ checked_bead ~ ", layer " ~ layer ~ " of stack " ~ stack ~ ", pinned at " ~ commit ~ " on " ~ branch ~ ".") | tojson }},
+  "acceptance_criteria": {{ ("- [ ] every reviewer ran at " ~ commit ~ "\n- [ ] every finding filed as a finding bead (discovered-from this bead)\n- [ ] report posted and task closed") | tojson }},
+  "labels": {{ ["phase-" ~ phase, "stage:qa", "stack:" ~ stack] | tojson }},
+  "dependencies": [
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ parent | tojson }}, "type": "parent-child"},
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ checked_bead | tojson }}, "type": "validates"}
+  ],
+  "metadata": {
+    "phase": {{ phase | tojson }},
+    "sprint": {{ sprint | tojson }},
+    "stack": {{ stack | tojson }},
+    "layer": {{ layer | tojson }},
+    "branch": {{ branch | tojson }},
+    "commit": {{ commit | tojson }},
+    "round": {{ round | tojson }},
+    "checked_bead": {{ checked_bead | tojson }}
+  }
+}

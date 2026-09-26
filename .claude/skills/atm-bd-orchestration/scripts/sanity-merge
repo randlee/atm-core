@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+"""Merge the per-deliverable sanity results and the lint result into a verdict.
+
+Usage:
+  sanity-merge <manifest.json> <sanity bead> <dev bead> <sprint> < results.json
+
+`manifest.json` is what `sanity-split` printed. stdin is a JSON array holding
+the fenced JSON reply of every `sc-sanity-llm` subagent, one per deliverable.
+On success stdout is the vars object for `dev-sanity-complete.md.j2`
+(generated_at, task_id, checked_bead, sprint, branch, commit, verdict,
+findings_count, findings_md, lint_md).
+
+Before any verdict the worktree named in the manifest must still be at the
+pinned SHA, on the pinned branch, with a clean tree, so lint and the checkers
+saw the same tree.
+
+Exit codes (the message is printed on stderr):
+  0  usable verdict printed
+  1  malformed or mismatched result set; the message names the deliverable
+     (or the result index when the result carries no deliverable number)
+  3  stdout is `<code> recoverable|fatal <deliverable>`; deliverable 0 is the
+     task itself: SANITY.COMMIT_MISMATCH / SANITY.TARGET_UNREADABLE (worktree
+     moved or unreadable) or SANITY.LINT_UNAVAILABLE (lint timed out,
+     was cancelled or could not run). A number >= 1 is one checker's own
+     complete failure envelope, echoed
+  4  lint still running (no exit file yet)
+"""
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+KINDS = {"skipped", "error"}
+RUSTC = re.compile(r"^\s*-->\s+(?P<file>[^:\s]+):(?P<line>\d+):\d+", re.M)
+RUSTFMT = re.compile(r"^Diff in (?P<file>[^:\s]+)(?: at line |:)(?P<line>\d+)", re.M)
+
+
+class Reject(Exception):
+    def __init__(self, message, code=1):
+        super().__init__(message)
+        self.code = code
+
+
+def load_manifest(path):
+    try:
+        manifest = json.loads(Path(path).read_text())
+    except (OSError, ValueError) as exc:
+        raise Reject(f"cannot read manifest: {exc}")
+    for key in ("sha", "deliverables_total", "branch", "lint"):
+        if key not in manifest:
+            raise Reject(f"manifest lacks {key}")
+    if not isinstance(manifest["lint"], dict):
+        raise Reject("manifest has no lint entry; sanity-split ran with --split-only")
+    return manifest
+
+
+def read_results():
+    try:
+        results = json.load(sys.stdin)
+    except ValueError as exc:
+        raise Reject(f"stdin is not JSON: {exc}")
+    if not isinstance(results, list):
+        raise Reject("stdin must be a JSON array of results")
+    return results
+
+
+def failure_envelope(result, index, total):
+    """A complete failure envelope, or Reject (exit 1) when `success` is false but the envelope is not."""
+    error = result.get("error")
+    if result.get("data") is not None or not isinstance(error, dict):
+        raise Reject(f"result {index}: failure envelope must have data null and an error object")
+    number = error.get("deliverable")
+    if (not isinstance(error.get("code"), str) or not error["code"] or not isinstance(error.get("message"), str)
+            or not isinstance(error.get("recoverable"), bool) or not isinstance(error.get("suggested_action"), str)):
+        raise Reject(f"result {index}: failure envelope must have code, message, recoverable, suggested_action")
+    if not isinstance(number, int) or isinstance(number, bool) or not 1 <= number <= total:
+        raise Reject(f"result {index}: failure envelope must name its deliverable (1..{total}), got {number!r}")
+    return error
+
+
+def validate(result, index, manifest, sanity_bead, dev_bead):
+    total = manifest["deliverables_total"]
+    where = f"result {index}"
+    if not isinstance(result.get("data"), dict):
+        raise Reject(f"{where}: a success envelope needs a data object")
+    data = result["data"]
+    number = data.get("deliverable")
+    if not isinstance(number, int) or isinstance(number, bool) or not 1 <= number <= total:
+        raise Reject(f"{where}: deliverable must be an integer in 1..{total}, got {number!r}")
+    where = f"deliverable {number}"
+    if result.get("error") is not None:
+        raise Reject(f"{where}: a success envelope must have error null")
+    if data.get("sanity_bead") != sanity_bead:
+        raise Reject(f"{where}: sanity_bead {data.get('sanity_bead')!r} is not {sanity_bead}")
+    if data.get("dev_bead") != dev_bead:
+        raise Reject(f"{where}: dev_bead {data.get('dev_bead')!r} is not {dev_bead}")
+    if data.get("commit_checked") != manifest["sha"]:
+        raise Reject(f"{where}: commit_checked {data.get('commit_checked')!r} is not {manifest['sha']}")
+    findings = data.get("findings")
+    if not isinstance(findings, list):
+        raise Reject(f"{where}: findings must be a list")
+    for finding in findings:
+        if (not isinstance(finding, dict) or finding.get("kind") not in KINDS
+                or not isinstance(finding.get("file"), str) or not finding["file"]
+                or not isinstance(finding.get("line"), int) or isinstance(finding.get("line"), bool)
+                or finding["line"] < 1 or not isinstance(finding.get("issue"), str) or not finding["issue"]):
+            raise Reject(f"{where}: finding must be {{kind: skipped|error, file, line >= 1, issue}}: {finding!r}")
+    return number, findings
+
+
+class TaskFailure(Exception):
+    """A task-level failure: printed as `<code> fatal 0`, exit 3."""
+
+
+def verify_worktree(manifest):
+    worktree = manifest.get("worktree_path") or ""
+    if not Path(worktree).is_dir():
+        raise TaskFailure("SANITY.TARGET_UNREADABLE fatal 0", f"worktree {worktree!r} is not a directory")
+    def git(*argv):
+        run = subprocess.run(["git", "-C", worktree, *argv], capture_output=True, text=True)
+        if run.returncode != 0:
+            raise TaskFailure("SANITY.TARGET_UNREADABLE fatal 0", f"git {' '.join(argv)} failed in {worktree}")
+        return run.stdout.strip()
+    head, branch, status = git("rev-parse", "HEAD"), git("rev-parse", "--abbrev-ref", "HEAD"), git("status", "--porcelain")
+    if head != manifest["sha"]:
+        raise TaskFailure("SANITY.COMMIT_MISMATCH fatal 0", f"HEAD is {head}, not {manifest['sha']}")
+    if branch != manifest["branch"]:
+        raise TaskFailure("SANITY.COMMIT_MISMATCH fatal 0", f"checked-out branch is {branch}, not {manifest['branch']}")
+    if status:
+        raise TaskFailure("SANITY.COMMIT_MISMATCH fatal 0", "worktree has uncommitted or untracked changes")
+
+
+def lint_result(manifest):
+    lint = manifest["lint"]
+    exit_file = Path(lint["exit_file"])
+    if not exit_file.exists():
+        raise Reject("lint still running", code=4)
+    state = exit_file.read_text().strip()
+    if state in ("timeout", "cancelled", "error"):
+        raise TaskFailure("SANITY.LINT_UNAVAILABLE fatal 0", f"lint {state}; see {lint['log']}")
+    try:
+        exit_code = int(state)
+    except ValueError:
+        raise Reject(f"lint exit file {exit_file} is not an integer or timeout/cancelled/error")
+    try:
+        log = Path(lint["log"]).read_text(errors="replace")
+    except OSError:
+        log = ""
+    findings = []
+    if exit_code != 0:
+        worktree = (manifest.get("worktree_path") or "").rstrip("/") + "/"
+        seen = set()
+        for match in list(RUSTC.finditer(log)) + list(RUSTFMT.finditer(log)):
+            path = match.group("file")
+            if worktree != "/" and path.startswith(worktree):
+                path = path[len(worktree):]
+            key = (path, int(match.group("line")))
+            if key not in seen:
+                seen.add(key)
+                findings.append({"kind": "lint", "file": path, "line": key[1],
+                                 "issue": f"`{lint['command']}` reported a diagnostic here"})
+        if not findings:
+            findings.append({"kind": "lint", "file": "(lint)", "line": 0,
+                             "issue": f"`{lint['command']}` exited {exit_code} without locatable diagnostics; see {lint['log']}"})
+    return exit_code, findings, log
+
+
+def fmt(finding):
+    return f"- `{finding['file']}:{finding['line']}` {finding['kind']}: {finding['issue']}"
+
+
+def main(argv):
+    if len(argv) != 5:
+        print(__doc__, file=sys.stderr)
+        return 1
+    _, manifest_path, sanity_bead, dev_bead, sprint = argv
+    try:
+        manifest = load_manifest(manifest_path)
+        results = read_results()
+        by_number = {}
+        for index, result in enumerate(results):
+            if (not isinstance(result, dict) or not isinstance(result.get("success"), bool)
+                    or any(key not in result for key in ("success", "data", "error"))):
+                raise Reject(f"result {index}: not a success or failure envelope "
+                             "(success must be true or false; success, data and error must all be present)")
+            if result["success"] is False:
+                envelope = failure_envelope(result, index, manifest["deliverables_total"])
+                print(f"{envelope['code']} {'recoverable' if envelope['recoverable'] else 'fatal'} {envelope['deliverable']}")
+                print(f"deliverable {envelope['deliverable']}: {envelope['message']}", file=sys.stderr)
+                return 3
+            number, findings = validate(result, index, manifest, sanity_bead, dev_bead)
+            if number in by_number:
+                raise Reject(f"deliverable {number}: more than one result")
+            by_number[number] = findings
+        missing = [n for n in range(1, manifest["deliverables_total"] + 1) if n not in by_number]
+        if missing:
+            raise Reject(f"deliverable {missing[0]}: no result" + (f" (also {missing[1:]})" if missing[1:] else ""))
+        lint_exit, lint_findings, _ = lint_result(manifest)
+        verify_worktree(manifest)
+    except Reject as exc:
+        print(str(exc), file=sys.stderr)
+        return exc.code
+    except TaskFailure as exc:
+        print(exc.args[0])
+        print(exc.args[1], file=sys.stderr)
+        return 3
+
+    blocks = []
+    for number in sorted(by_number):
+        findings = by_number[number]
+        blocks.append(f"D{number}: done" if not findings else f"D{number}:\n" + "\n".join(fmt(f) for f in findings))
+    count = sum(len(f) for f in by_number.values()) + len(lint_findings)
+    lint_md = f"`{manifest['lint']['command']}` exit {lint_exit}"
+    if lint_findings:
+        lint_md += "\n" + "\n".join(fmt(f) for f in lint_findings)
+    json.dump({
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "task_id": sanity_bead, "checked_bead": dev_bead, "sprint": sprint,
+        "branch": manifest["branch"], "commit": manifest["sha"],
+        "verdict": "PASS" if count == 0 and lint_exit == 0 else "FAIL",
+        "findings_count": count, "findings_md": "\n".join(blocks), "lint_md": lint_md,
+    }, sys.stdout, indent=2)
+    print()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

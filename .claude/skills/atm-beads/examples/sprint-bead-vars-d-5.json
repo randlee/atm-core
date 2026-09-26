@@ -1,0 +1,34 @@
+{
+  "id": "atm-bd-5",
+  "phase": "bd",
+  "sprint": "bd-5",
+  "title": "Peer signal model",
+  "assignee": "cipher",
+  "stack": "phase-bd",
+  "layer": 2,
+  "branch": "sprint/bd-5-ipc-signal-model",
+  "pr_target": "sprint/bd-4-error-enums",
+  "worktree": "/Users/randlee/github/atm-core-worktrees/sprint/bd-5-ipc-signal-model",
+  "relation": "must_follow",
+  "closure_type": "boundary",
+  "target_boundary": "atm-http-runtime signal model",
+  "owned_paths": [
+    "crates/atm-http-runtime/src/signal/"
+  ],
+  "description": "## Goal\nNeutral peer signal model.\n\n## Deliverables\n- D5-1 signal types\n\n## Does Not Close\n- transport",
+  "design": "## Public Contract\n`pub enum Signal { .. }`",
+  "acceptance_criteria": "## Acceptance Criteria\n- [ ] signal types round-trip\n\n## Validation\n- `cargo test -p atm-http-runtime`",
+  "blocked_by": [
+    "atm-bd-4-sanity"
+  ],
+  "model_class": "fable",
+  "requirements": [
+    "REQ-P-RUNTIME-001",
+    "REQ-P-RUNTIME-002"
+  ],
+  "release_train": "1.7",
+  "parent": "atm-phase-bd",
+  "adrs": [
+    "NONE"
+  ]
+}

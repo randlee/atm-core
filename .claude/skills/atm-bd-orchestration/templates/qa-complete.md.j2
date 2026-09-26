@@ -1,0 +1,81 @@
+---
+name: qa-complete
+version: 1.0.0
+description: QA report for one layer; the body of `atm task close <task-id> completed` and of the PR comment. Lists the finding beads filed this round.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - checked_bead
+  - sprint
+  - round
+  - branch
+  - commit
+  - verdict
+  - deliverables_complete
+  - deliverables_total
+  - findings_blocking
+  - findings_important
+  - findings_minor
+  - findings_ceremony
+  - findings_md
+  - reviewers_md
+optional_variables:
+  - pr_number
+  - carried_md
+  - notes_md
+defaults:
+  pr_number: ""
+  carried_md: ""
+  notes_md: ""
+metadata:
+  type: qa-complete
+  tags:
+    - stage:qa
+    - orchestration:beads
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: qa-complete
+    stage: qa
+    transition: complete
+---
+{% if verdict not in ["PASS", "FAIL"] %}{{ verdict | verdict_must_be_PASS_or_FAIL }}ERROR: verdict must be PASS or FAIL, got {{ verdict }}
+{% endif %}# QA {{ verdict }}: {{ checked_bead }} round {{ round }}
+
+Generated: {{ generated_at }}
+QA bead: {{ task_id }} (sprint {{ sprint }})
+Branch: `{{ branch }}`
+Reviewed commit: `{{ commit }}`
+PR: {{ ('#' ~ pr_number) if pr_number else 'none' }}
+Deliverables: {{ deliverables_complete }}/{{ deliverables_total }}
+Findings filed: {{ findings_blocking }} blocking, {{ findings_important }} important, {{ findings_minor }} minor; {{ findings_ceremony }} closed as ceremony
+
+## Machine Status (JSON)
+```json
+{
+  "task": {{ task_id | tojson }},
+  "checked_bead": {{ checked_bead | tojson }},
+  "sprint": {{ sprint | tojson }},
+  "round": {{ round }},
+  "branch": {{ branch | tojson }},
+  "commit": {{ commit | tojson }},
+  "verdict": {{ verdict | tojson }},
+  "deliverables": {"complete": {{ deliverables_complete }}, "total": {{ deliverables_total }} },
+  "findings": {"blocking": {{ findings_blocking }}, "important": {{ findings_important }}, "minor": {{ findings_minor }}, "ceremony": {{ findings_ceremony }} }
+}
+```
+
+## Findings
+{{ findings_md }}
+{% if carried_md %}
+## Carried Findings
+{{ carried_md }}
+{% endif %}
+## Reviewers
+{{ reviewers_md }}
+{% if notes_md %}
+## Notes
+{{ notes_md }}
+{% endif %}

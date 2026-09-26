@@ -1,0 +1,59 @@
+---
+name: task-refused
+version: 1.0.0
+description: Refusal report for any atm-bd-orchestration assignment that cannot be done at all; the body of `atm task close <task-id> refused`. States what happened to the bead so the lead can act.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - stage
+  - bead_state
+  - reason_md
+optional_variables:
+  - sprint
+  - branch
+  - commit
+  - notes_md
+defaults:
+  sprint: ""
+  branch: ""
+  commit: ""
+  notes_md: ""
+metadata:
+  type: task-refused
+  tags:
+    - orchestration:beads
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: refused
+    stage: refused
+    transition: complete
+---
+{% if bead_state not in ["open", "blocked-failed"] %}{{ bead_state | bead_state_must_be_open_or_blocked_failed }}ERROR: bead_state must be open or blocked-failed, got {{ bead_state }}
+{% endif %}# Task Refused
+
+Generated: {{ generated_at }}
+Task/Bead: {{ task_id }} ({% if sprint %}sprint {{ sprint }}, {% endif %}stage {{ stage }})
+Bead left: **{{ bead_state }}**
+{% if branch %}Branch: `{{ branch }}`{% if commit %} at `{{ commit }}`{% endif %}
+{% endif %}
+## Machine Status (JSON)
+```json
+{
+  "task": {{ task_id | tojson }},
+  "sprint": {{ sprint | tojson }},
+  "stage": {{ stage | tojson }},
+  "bead_state": {{ bead_state | tojson }},
+  "branch": {{ branch | tojson }},
+  "commit": {{ commit | tojson }}
+}
+```
+
+## Reason
+{{ reason_md }}
+{% if notes_md %}
+## Notes
+{{ notes_md }}
+{% endif %}

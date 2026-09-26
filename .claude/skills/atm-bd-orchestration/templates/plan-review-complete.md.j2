@@ -1,0 +1,71 @@
+---
+name: plan-review-complete
+version: 1.0.0
+description: Plan review report; the body of `atm task close <task-id> completed`. PASS closes the plan-review bead and releases the root sprints; FAIL leaves it open for the next round.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - root
+  - phase
+  - round
+  - verdict
+  - validate_plan_md
+  - findings_blocking
+  - findings_important
+  - findings_minor
+  - findings_md
+  - reviewers_md
+optional_variables:
+  - carried_md
+  - notes_md
+defaults:
+  carried_md: ""
+  notes_md: ""
+metadata:
+  type: plan-review-complete
+  tags:
+    - stage:plan-review
+    - orchestration:beads
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: plan-review-complete
+    stage: plan-review
+    transition: complete
+---
+{% if verdict not in ["PASS", "FAIL"] %}{{ verdict | verdict_must_be_PASS_or_FAIL }}ERROR: verdict must be PASS or FAIL, got {{ verdict }}
+{% endif %}# Plan Review {{ verdict }}
+
+Generated: {{ generated_at }}
+Bead: {{ task_id }} (plan {{ root }}, phase {{ phase }}, round {{ round }})
+Verdict: **{{ verdict }}** ({{ findings_blocking }} blocking, {{ findings_important }} important, {{ findings_minor }} minor)
+
+## Machine Status (JSON)
+```json
+{
+  "task": {{ task_id | tojson }},
+  "root": {{ root | tojson }},
+  "phase": {{ phase | tojson }},
+  "round": {{ round | tojson }},
+  "verdict": {{ verdict | tojson }},
+  "findings": {"blocking": {{ findings_blocking }}, "important": {{ findings_important }}, "minor": {{ findings_minor }}}
+}
+```
+
+## validate-plan
+{{ validate_plan_md }}
+
+## Findings
+{{ findings_md }}
+{% if carried_md %}
+## Carried Findings
+{{ carried_md }}
+{% endif %}
+## Reviewers
+{{ reviewers_md }}
+{% if notes_md %}
+## Notes
+{{ notes_md }}
+{% endif %}

@@ -1,0 +1,14 @@
+{
+  "reference_docs": [
+    "docs/requirements.md"
+  ],
+  "sprint_doc": "/private/tmp/scratch/atm-bd-4-qa1-sprint.md",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/sprint/bd-4-peer-retry-jitter",
+  "branch": "sprint/bd-4-peer-retry-jitter",
+  "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
+  "phase": "bd",
+  "sprint": "bd-4",
+  "review_targets": [
+    "crates/atm-http-runtime"
+  ]
+}

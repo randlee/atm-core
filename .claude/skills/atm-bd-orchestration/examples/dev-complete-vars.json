@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-09-25T07:30:00Z",
+  "task_id": "atm-bd-4",
+  "sprint": "bd-4",
+  "branch": "sprint/bd-4-peer-retry-jitter",
+  "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
+  "rebased_onto": "sprint/bd-3-peer-config",
+  "deliverables_complete": 3,
+  "deliverables_total": 3,
+  "deliverables_md": "- D.4-1 sync exporter: done\n- BD.4-2 retry policy: done\n- D.4-3 tests: done",
+  "validation_md": "- `just validate`: ok (212 passed, 0 failed)"
+}

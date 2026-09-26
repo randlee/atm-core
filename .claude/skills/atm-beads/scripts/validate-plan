@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# Validate a plan written to beads. Mandatory before import and before dispatch.
+#
+#   validate-plan --file <plan.jsonl> [--root <id> --phase <p>]   rendered plan, before `bd import`
+#   validate-plan --root <id>                                     live beads under a phase root
+#
+# Run from the repository root. Checks, in order:
+#   1. `bd doctor` has no error (warnings are printed);
+#   2. scripts/check-plan.jq (fields, labels, graph, stack, REQ/ADR presence),
+#      and every blocker exists in the plan or in beads;
+#   3. every requirement id is in a docs.requirements file and every ADR id in a
+#      docs.architecture file of .claude/project/orchestration.yaml (globs; the
+#      id may be in the file's content or its file name); an id missing from a
+#      doc the sprint owns is a warning (resources/planning.md "New Ids": plan
+#      review checks the deliverable that adds it);
+#   4. every assignee is an ATM member of this team, and every sanity check
+#      bead is assigned to the dev-sanity role's member (scripts/resolve-role);
+#   5. the integration branch exists on origin (warning only).
+# Exit 0 = valid, 5 = problems listed, 2 = could not run.
+set -uo pipefail
+
+here=$(cd "$(dirname "$0")" && pwd)
+mg="$here/manifest-get"
+file="" root="" phase=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --file) file=$2; shift 2 ;;
+    --root) root=$2; shift 2 ;;
+    --phase) phase=$2; shift 2 ;;
+    *) echo "validate-plan: unknown argument $1" >&2; exit 2 ;;
+  esac
+done
+[ -n "$file" ] || [ -n "$root" ] || { echo "validate-plan: pass --file or --root" >&2; exit 2; }
+for c in bd jq atm git; do
+  command -v "$c" >/dev/null || { echo "validate-plan: $c not on PATH; see .claude/skills/atm-beads/references/installation-and-troubleshooting.md" >&2; exit 2; }
+done
+bdv=$(bd version 2>/dev/null | sed -nE 's/^bd version ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)
+[ -n "$bdv" ] && [ "$(printf '%s\n1.3.0\n' "$bdv" | sort -V | head -1)" = "1.3.0" ] \
+  || { echo "validate-plan: bd ${bdv:-unknown} is older than 1.3.0; see .claude/skills/atm-beads/references/installation-and-troubleshooting.md" >&2; exit 2; }
+
+problems=()
+warn() { echo "warning: $*"; }
+
+# 1. bd doctor
+doctor=$(bd doctor --json 2>/dev/null) || true
+if ! echo "$doctor" | jq -e . >/dev/null 2>&1; then
+  echo "validate-plan: bd doctor produced no JSON" >&2; exit 2
+fi
+while IFS=$'\t' read -r status name msg; do
+  case "$status" in
+    error) problems+=("bd doctor: $name: $msg") ;;
+    warning) warn "bd doctor: $name: $msg" ;;
+  esac
+done < <(echo "$doctor" | jq -r '.checks[] | select(.status != "ok") | [.status, .name, (.message // "")] | @tsv')
+
+# 2. the plan as import-shaped JSONL
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT
+plan="$scratch/plan.jsonl"
+if [ -n "$file" ]; then
+  cp "$file" "$plan"
+else
+  # the root, its dev beads, and their sanity checks (not the sanity checks of finding fixes)
+  ids=$( { echo "$root"; bd list --parent "$root" --all -n 0 --json 2>/dev/null \
+    | jq -r '[.[] | select((.labels // []) | index("stage:dev"))] as $d | ($d | map(.id)) as $dids
+      | ($d[].id), (.[] | select(((.labels // []) | index("stage:dev-sanity")) and ((.metadata.dev_bead // "") as $x | $dids | index($x))) | .id)'; } )
+  # bd show lists dependencies as {id, dependency_type}; check-plan.jq reads the import shape.
+  # shellcheck disable=SC2086
+  bd show $ids --json 2>/dev/null | jq -c '.[] | . as $b
+    | .dependencies = [(.dependencies // [])[] | {issue_id: $b.id, depends_on_id: .id, type: .dependency_type}]' > "$plan" \
+    || { echo "validate-plan: bd show failed for $root" >&2; exit 2; }
+fi
+branch_pattern=$("$mg" integration_branch) || exit 2
+jqargs=(--arg integration_branch "$branch_pattern")
+if [ -n "$root" ] && [ -n "$file" ]; then jqargs+=(--arg root "$root" --arg phase "$phase"); fi
+out=$(jq -rs "${jqargs[@]}" -f "$here/check-plan.jq" "$plan" 2>"$scratch/check.err"); rc=$?
+case $rc in
+  0) ;;
+  5) while IFS= read -r l; do [ -n "$l" ] && problems+=("$l"); done <<< "$out" ;;
+  *) echo "validate-plan: check-plan.jq failed: $(cat "$scratch/check.err")" >&2; exit 2 ;;
+esac
+
+# 2b. every blocker exists, in the plan or in the database
+while IFS= read -r dep; do
+  labels=$(bd show "$dep" --json 2>/dev/null | jq -r '.[0].labels // [] | join(" ")') \
+    || { problems+=("blocker $dep is neither in the plan nor in beads"); continue; }
+  case "$dep" in
+    *-sanity) want=stage:dev-sanity ;;
+    *-plan-qa*) want=stage:plan-review ;;
+    *) want="" ;;
+  esac
+  [ -n "$want" ] && ! grep -qw -- "$want" <<< "$labels" && problems+=("blocker $dep in beads is not labelled $want")
+done < <(jq -rs '(map(.id)) as $ids | [.[] | (.dependencies // [])[] | select(.type == "blocks") | .depends_on_id]
+  | unique | map(select(. as $d | $ids | index($d) | not)) | .[]' "$plan")
+
+# 3. REQ/ADR ids exist in the governing docs (manifest globs; content or file name)
+# shellcheck disable=SC2046
+reqdocs=$(ls $("$mg" docs.requirements) 2>/dev/null)
+# shellcheck disable=SC2046
+adrdocs=$(ls $("$mg" docs.architecture) 2>/dev/null)
+# An id the sprint itself adds is allowed only when the sprint owns that doc.
+while IFS=$'\t' read -r id kind ref owned; do
+  [ "$ref" = "NONE" ] && continue
+  # malformed ids are already reported by check-plan.jq
+  case "$kind:$ref" in adrs:ADR-[0-9]*|requirements:[A-Z]*-[0-9]*) ;; *) continue ;; esac
+  docs=$reqdocs; [ "$kind" = "adrs" ] && docs=$adrdocs
+  # shellcheck disable=SC2086
+  grep -qw -- "$ref" $docs 2>/dev/null && continue
+  # shellcheck disable=SC2086
+  printf '%s\n' $docs | grep -q -- "/$ref[^/]*$" && continue
+  where=$(echo $docs | tr '\n' ' ')
+  if printf '%s\n' $docs | grep -qxF -f <(tr ' ' '\n' <<< "$owned") 2>/dev/null; then
+    warn "$id: $kind id $ref is not in $where yet; the sprint owns that doc and must add it"
+  else
+    problems+=("$id: $kind id $ref is not in $where")
+  fi
+done < <(jq -r 'select((.labels // []) | index("stage:dev")) | .id as $id | ((.metadata.owned_paths // []) | join(" ")) as $o
+  | ("requirements", "adrs") as $k | (.metadata[$k] // [])[] | [$id, $k, ., $o] | @tsv' "$plan")
+
+# 4. assignees are ATM members
+if ! members=$(atm members --json 2>/dev/null | jq -er '.members | if type == "array" and all(.[]; type == "object" and (.name | type) == "string") then .[].name else error("bad roster") end' 2>/dev/null) \
+  || [ -z "$members" ]; then
+  echo "validate-plan: atm members failed or returned no members; assignees cannot be checked (run atm doctor)" >&2
+  exit 2
+fi
+while IFS=$'\t' read -r id who; do
+  echo "$members" | grep -qx -- "$who" || problems+=("$id: assignee $who is not an ATM member of this team")
+done < <(jq -r 'select(.issue_type != "epic" and .issue_type != "feature") | [.id, (.assignee // "")] | @tsv' "$plan")
+if ! sanity=$("$here/resolve-role" dev-sanity); then
+  echo "validate-plan: the dev-sanity role is not mapped (.claude/project/orchestration.yaml roles:)" >&2
+  exit 2
+fi
+while IFS=$'\t' read -r id who; do
+  [ "$who" = "$sanity" ] || problems+=("$id: sanity check assignee $who is not the dev-sanity member $sanity")
+done < <(jq -r 'select((.labels // []) | index("stage:dev-sanity")) | [.id, (.assignee // "")] | @tsv' "$plan")
+
+# 5. integration branch
+trunk=$(jq -r 'select(.issue_type == "epic" or .issue_type == "feature") | .metadata.integration_branch // empty' "$plan" | head -1)
+[ -z "$trunk" ] && [ -n "$root" ] && trunk=$(bd show "$root" --json 2>/dev/null | jq -r '.[0].metadata.integration_branch // empty')
+if [ -n "$trunk" ] && ! git ls-remote --exit-code --heads origin "$trunk" >/dev/null 2>&1; then
+  warn "integration branch $trunk does not exist on origin yet"
+fi
+
+if [ ${#problems[@]} -eq 0 ]; then
+  echo "plan valid: $(jq -s '[.[] | select((.labels // []) | index("stage:dev"))] | length' "$plan") dev beads checked"
+  exit 0
+fi
+printf '%s\n' "${problems[@]}"
+echo "${#problems[@]} problem(s)" >&2
+exit 5

@@ -1,0 +1,12 @@
+{
+  "task_id": "atm-bd-4",
+  "sprint": "bd-4",
+  "stack": "phase-bd",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/sprint/bd-4-peer-retry-jitter",
+  "branch": "sprint/bd-4-peer-retry-jitter",
+  "sanity_bead": "atm-bd-4-sanity",
+  "findings": "- crates/atm-http-runtime/src/peer/sync.rs:88 retry policy deliverable BD.4-2 is not implemented (todo!())\n- `just lint`: clippy::needless_return at crates/atm-http-runtime/src/peer/sync.rs:141",
+  "lead": "team-lead",
+  "cc": "",
+  "test_command": "just test"
+}

@@ -1,0 +1,41 @@
+---
+name: plan-scope-reviewer-assignment
+version: 1.0.0
+description: Render a fenced-JSON assignment for plan-scope-reviewer over a plan in beads. `plan_docs` are the files quality-mgr writes by piping `bd show <dev bead> --json` for every dev bead under the root; `phase_root_doc` is the same for the root. `carry_forward_findings_json` is a JSON array of the reviewer's own finding ids from the previous round; the reviewer still recomputes the plan's shape in full.
+format: json
+required_variables:
+  - root
+  - phase_root_doc
+  - plan_docs
+  - reference_docs
+  - worktree_path
+  - branch
+  - commit
+optional_variables:
+  - phase
+  - round_index
+  - carry_forward_findings_json
+  - notes
+defaults:
+  phase: ""
+  round_index: 1
+  carry_forward_findings_json: "[]"
+  notes: ""
+---
+{
+  "scope": {
+    "phase": {% if phase %}{{ phase }}{% else %}null{% endif %},
+    "sprint": null
+  },
+  "plan": "beads",
+  "root": {{ root }},
+  "phase_root_doc": {{ phase_root_doc }},
+  "plan_docs": [{% for doc in plan_docs %}{{ doc }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "reference_docs": [{% for doc in reference_docs %}{{ doc }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "worktree_path": {{ worktree_path }},
+  "branch": {{ branch }},
+  "commit": {{ commit }},
+  "round_index": {{ round_index }},
+  "carry_forward_findings": {{ carry_forward_findings_json | safe }},
+  "notes": {{ notes }}
+}

@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-09-25T07:40:00Z",
+  "task_id": "atm-bd-4-sanity",
+  "checked_bead": "atm-bd-4",
+  "sprint": "bd-4",
+  "branch": "sprint/bd-4-peer-retry-jitter",
+  "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
+  "verdict": "FAIL",
+  "findings_count": 1,
+  "findings_md": "- crates/atm-http-runtime/src/peer/sync.rs:88 BD.4-2 retry policy is `todo!()`",
+  "lint_md": "- `just lint`: ok"
+}

@@ -1,0 +1,37 @@
+---
+name: dev-sanity-assignment
+version: 1.0.0
+description: Render the fenced-JSON assignment for one sc-sanity-llm subagent in atm-bd-orchestration. `sanity-split` renders one per numbered deliverable of the checked bead; the subagent judges only `deliverable_number`. `changed_files` is the base..commit file list, `files_outside_owned_paths` the subset outside the bead's `owned_paths` fence.
+format: json
+required_variables:
+  - sanity_bead
+  - dev_bead_id
+  - dev_bead_title
+  - deliverable_number
+  - deliverable_text
+  - deliverables_total
+  - acceptance_criteria
+  - design
+  - owned_paths
+  - changed_files
+  - files_outside_owned_paths
+  - worktree_path
+  - branch
+  - commit
+  - base_sha
+---
+{
+  "sanity_bead": {{ sanity_bead }},
+  "dev_bead": {"id": {{ dev_bead_id }}, "title": {{ dev_bead_title }}},
+  "deliverable": {"number": {{ deliverable_number }}, "text": {{ deliverable_text }}},
+  "deliverables_total": {{ deliverables_total }},
+  "acceptance_criteria": {{ acceptance_criteria }},
+  "design": {{ design }},
+  "owned_paths": [{% for p in owned_paths %}{{ p }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "changed_files": [{% for f in changed_files %}{{ f }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "files_outside_owned_paths": [{% for f in files_outside_owned_paths %}{{ f }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "worktree_path": {{ worktree_path }},
+  "branch": {{ branch }},
+  "commit": {{ commit }},
+  "base_sha": {{ base_sha }}
+}

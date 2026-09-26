@@ -1,0 +1,13 @@
+{
+  "phase": "bd",
+  "root": "atm-phase-bd",
+  "phase_root_doc": "/scratch/plan-qa/atm-phase-bd-plan.md",
+  "plan_docs": ["/scratch/plan-qa/atm-bd-1-plan.md", "/scratch/plan-qa/atm-bd-2-plan.md"],
+  "reference_docs": [".claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md", ".claude/skills/atm-beads/resources/planning.md", "docs/architecture.md"],
+  "worktree_path": "/Users/randlee/github/atm-core",
+  "branch": "develop",
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "round_index": 1,
+  "carry_forward_findings_json": "[\"PLAN-SCOPE-003\"]",
+  "notes": "round 2: fix verification"
+}
