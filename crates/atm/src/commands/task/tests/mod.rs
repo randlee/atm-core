@@ -17,7 +17,7 @@ use crate::commands::send::require_daemon_api;
 use crate::commands::{Cli, Command};
 
 #[test]
-fn task_has_exactly_six_subcommands() {
+fn task_has_exactly_seven_subcommands() {
     let command = Cli::command();
     let task = command.find_subcommand("task").expect("task command");
     let names: std::collections::BTreeSet<_> = task
@@ -26,7 +26,10 @@ fn task_has_exactly_six_subcommands() {
         .collect();
     assert_eq!(
         names,
-        ["assign", "close", "events", "list", "move", "start"].into()
+        [
+            "assign", "close", "events", "history", "list", "move", "start"
+        ]
+        .into()
     );
 }
 

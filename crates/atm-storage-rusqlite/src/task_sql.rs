@@ -17,6 +17,15 @@ pub(crate) fn select_tasks_for_team_sql() -> String {
     )
 }
 
+/// The team task list, open and completed, newest first, bounded by `LIMIT`.
+/// This backs `atm task history`, distinct from [`select_tasks_for_team_sql`]
+/// which the daemon further filters to open rows only for `atm task list`.
+pub(crate) fn select_task_history_sql() -> String {
+    format!(
+        "SELECT {TASK_COLUMNS} FROM tasks WHERE team = ?1 AND (?2 IS NULL OR assignee = ?2) ORDER BY assigned_at DESC, task_id DESC LIMIT ?3"
+    )
+}
+
 pub(crate) fn select_task_events_sql() -> String {
     format!(
         "SELECT {TASK_EVENT_COLUMNS} FROM task_events WHERE team = ?1 AND task_id = ?2 AND (?3 IS NULL OR assignee = ?3) ORDER BY seq ASC"
@@ -111,6 +120,24 @@ pub(crate) fn select_tasks_for_team(
     statement
         .query_map(
             params![team.as_str(), member.map(AgentName::as_str)],
+            SqliteTaskStore::decode_row,
+        )?
+        .collect()
+}
+
+pub(crate) fn select_task_history(
+    connection: &Connection,
+    team: &TeamName,
+    member: Option<&AgentName>,
+    limit: usize,
+) -> rusqlite::Result<Vec<TaskRow>> {
+    let mut statement = connection.prepare(&select_task_history_sql())?;
+    // SQLite binds LIMIT as i64; a `usize` beyond that range is not a
+    // realistic history page size, so clamp rather than error.
+    let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+    statement
+        .query_map(
+            params![team.as_str(), member.map(AgentName::as_str), limit],
             SqliteTaskStore::decode_row,
         )?
         .collect()
