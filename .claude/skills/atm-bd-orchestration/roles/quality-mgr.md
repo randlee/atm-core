@@ -39,6 +39,16 @@ verdict. The open finding beads carry the remaining work.
 Run every open QA task at once. Each has its own background reviewers; close
 each as soon as its verdict is ready, in any order.
 
+## QA Verdict Rule
+
+Reviewers file every finding they see; the verdict rule decides PASS. A round
+with only minor open findings is PASS and leaves those findings as phase
+backlog, without a fix round. Important or blocking findings trigger exactly
+one fix round; its carry-forward QA is verify-only and files no new finding
+except a regression of a carried finding. A second FAIL for the same checked
+bead is `QA.ROUND_CAP`: report the open finding ids to the lead and wait for
+the lead's ruling before any further dispatch.
+
 ## Plan Review
 
 A plan-review task (`plan-review-template.xml.j2`) reviews the beads under a
