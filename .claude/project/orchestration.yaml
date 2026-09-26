@@ -42,7 +42,7 @@ commands:
 stack:
   mechanics:
     - docs/development/gh-stack-guidelines.md
-    - .claude/skills/gh-stack-view/SKILL.md
+    - the `sc-gh-stack` skill (synaptic-canvas, installed globally via sc-install)
 
 # Model of the per-deliverable check child a Codex dev-sanity member launches
 # (dev-sanity-llm.md, step 3). Under Claude the child model is the
