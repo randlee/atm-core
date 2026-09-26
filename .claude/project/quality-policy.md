@@ -104,8 +104,8 @@ template variables is lower case. Prose may write "Phase BC" and "BC.4".
 
 The full rule set is "Naming" in
 `.claude/skills/plan-hardening/sprint-planning-guidelines.md`. Stack
-mechanics: `docs/development/gh-stack-guidelines.md` and the `gh-stack-view`
-skill.
+mechanics: `docs/development/gh-stack-guidelines.md` and the `sc-gh-stack`
+skill (synaptic-canvas).
 
 ## Governed Interfaces
 

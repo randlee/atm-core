@@ -50,7 +50,7 @@ Every repository-specific fact the skill needs is in one file,
 | `policy` | the repository QA policy | `.claude/project/quality-policy.md` |
 | `roles` | role → team-unique ATM member (`resolve-role`) | `dev-sanity: atm-sanity`, `quality-mgr`, `lead: team-lead` |
 | `commands.lint`, `commands.test`, `commands.validate` | the sanity-check lint, the dev/fix test run, the phase-end validation | `just lint`, `just test`, `just validate` |
-| `stack.mechanics` | the stack documents and skills, in reading order | `docs/development/gh-stack-guidelines.md`, `gh-stack-view` |
+| `stack.mechanics` | the stack documents and skills, in reading order | `docs/development/gh-stack-guidelines.md`, `sc-gh-stack` |
 | `sanity.child_model` | the check child model of a Codex dev-sanity member | see the file |
 
 The scripts read it themselves; the lead copies its values into template
