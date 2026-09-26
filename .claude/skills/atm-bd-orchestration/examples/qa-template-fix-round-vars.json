@@ -11,6 +11,8 @@
   "commit": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
   "base": "sprint/bd-5-peer-logs",
   "worktree_path": "/Users/randlee/github/atm-core-worktrees/fix/bd-4-qa1-f1-retry-jitter",
+  "pr_number": 245,
+  "pr_url": "https://github.com/randlee/atm-core/pull/245",
   "carry_forward": "atm-bd-4-qa1-f1",
   "lead": "team-lead",
   "cc": "",

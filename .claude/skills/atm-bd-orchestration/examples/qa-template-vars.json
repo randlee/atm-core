@@ -12,6 +12,7 @@
   "base": "sprint/bd-3-peer-config",
   "worktree_path": "/Users/randlee/github/atm-core-worktrees/sprint/bd-4-peer-retry-jitter",
   "pr_number": 231,
+  "pr_url": "https://github.com/randlee/atm-core/pull/231",
   "lead": "team-lead",
   "cc": "",
   "policy_path": ".claude/project/quality-policy.md"

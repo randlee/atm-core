@@ -1,6 +1,6 @@
 ---
 name: dev-sanity-task
-version: 1.5.2
+version: 1.5.3
 description: lead sanity check assignment for the member that fills the dev-sanity role (resolve-role dev-sanity). task_id is the sanity check bead. The member splits the checked bead per numbered deliverable (sanity-split), runs one check subagent per deliverable with lint alongside, merges (sanity-merge) and reports PASS or FAIL. Not QA.
 format: xml
 required_variables:
@@ -18,8 +18,8 @@ optional_variables:
   - cc
   - lint_command
 defaults:
-  lead: lead
-  cc: lead
+  lead: team-lead
+  cc: team-lead
   lint_command: "just lint"
 metadata:
   type: dev-sanity-task
@@ -42,12 +42,13 @@ metadata:
   <branch><![CDATA[{{ branch | string | cdata_escape }}]]></branch>
   <commit><![CDATA[{{ commit | string | cdata_escape }}]]></commit>
   <base><![CDATA[{{ base | string | cdata_escape }}]]></base>
-  <pr number="{{ pr_number | string | cdata_escape }}"><![CDATA[{{ pr_url | string | cdata_escape }}]]></pr>
+  <pr number="{{ pr_number | string }}"><![CDATA[{{ pr_url | string | cdata_escape }}]]></pr>
   <lint-command><![CDATA[{{ lint_command | string | cdata_escape }}]]></lint-command>
 
   <workflow>
     <step id="a"><![CDATA[Start the task and claim the bead. `BEADS_ACTOR` must equal your `ATM_IDENTITY` (claims and closes are recorded as that actor); if it is empty, pass `--actor "$ATM_IDENTITY"` to every `bd` write. Check that the bead is ready: `bd ready -n 0 --json | jq -e --arg b {{ task_id | string | cdata_escape }} 'any(.[]; .id == $b)'`. When it prints `true`, run `atm task start {{ task_id | string | cdata_escape }} "sanity check {{ checked_bead | string | cdata_escape }}"` if this task is your active one; otherwise claim and start the check anyway, closing it without a start. Then `bd update {{ task_id | string | cdata_escape }} --claim` and start the check (step b) at once; your other open tasks run alongside and never wait on this one.]]></step>
     <step id="a1"><![CDATA[When it prints `false` the bead is not ready: do not claim it and do not start the task. Find the root cause: `bd show {{ task_id | string | cdata_escape }}` (status, assignee), `bd blocked --json | jq --arg b {{ task_id | string | cdata_escape }} '.[] | select(.id == $b)'` (normally `{{ checked_bead | string | cdata_escape }}` still open), and `bd show <blocker>` for each. Report it with `atm send {{ lead | string | cdata_escape }} --stdin`: the bead, why it is not ready, and which bead or agent has to move. Then wait.]]></step>
+    <step id="a2"><![CDATA[Before claiming or splitting, verify the reviewable PR from the target worktree with `cd {{ worktree_path | string | cdata_escape }} && gh pr view {{ pr_number | string }} --json state,headRefName,headRefOid,baseRefName`. Resolve the expected SHA with `git rev-parse '{{ commit | string | cdata_escape }}^{commit}'` and require state `OPEN`, head ref `{{ branch | string | cdata_escape }}`, head SHA equal to that resolved SHA, and base ref `{{ base | string | cdata_escape }}`. If the PR is missing, closed, has another head, or has another base, leave the bead open and close the task refused with `SANITY.PR_REQUIRED` via `task-refused.md.j2`.]]></step>
     <step id="b"><![CDATA[Run the check as your agent prompt's Execution Steps say: `.claude/skills/atm-bd-orchestration/scripts/sanity-split --task {{ task_id | string | cdata_escape }} --bead {{ checked_bead | string | cdata_escape }} --worktree {{ worktree_path | string | cdata_escape }} --branch {{ branch | string | cdata_escape }} --commit {{ commit | string | cdata_escape }} --base {{ base | string | cdata_escape }} --lint-command '{{ lint_command | string | cdata_escape }}' --scratch <scratch>`, one check subagent per assignment it prints, then `.claude/skills/atm-bd-orchestration/scripts/sanity-merge <manifest> {{ task_id | string | cdata_escape }} {{ checked_bead | string | cdata_escape }} {{ sprint | string | cdata_escape }}` on the replies. The manifest's `sha` is `<sha>` below; the merge writes the vars for step e or e1. Route every non-zero exit of sanity-split or sanity-merge by your agent prompt's Error Handling; only when it says cannot run, go to step e2 with that code. `SANITY.PLAN_INVALID` means the bead has no numbered `## Deliverables` list, so also tell {{ lead | string | cdata_escape }} that planning failed for `{{ checked_bead | string | cdata_escape }}`.]]></step>
     <step id="e"><![CDATA[PASS: close the bead and the task together: `bd close {{ task_id | string | cdata_escape }} --reason "PASS at <sha>"` and `atm task close {{ task_id | string | cdata_escape }} completed --template .claude/skills/atm-bd-orchestration/templates/dev-sanity-complete.md.j2 --vars <scratch>/sanity-{{ task_id | string | cdata_escape }}-vars.json` with `verdict` PASS. Closing the bead releases every dev bead that required `{{ checked_bead | string | cdata_escape }}`.]]></step>
     <step id="e1"><![CDATA[FAIL: the bead must stay **open**, because closing it would release the dependent dev beads. Return it to the queue with `bd update {{ task_id | string | cdata_escape }} --status open --assignee "" --append-notes "FAIL at <sha>: <n> findings"` and close the task with the same `atm task close … completed` command, `verdict` FAIL and the findings. {{ lead | string | cdata_escape }} reopens `{{ checked_bead | string | cdata_escape }}` and assigns the dev-fix; when it closes again this bead is ready for the next round.{% if cc and cc != lead %} Copy the verdict line to `{{ cc | string | cdata_escape }}` with a plain `atm send {{ cc | string | cdata_escape }} --stdin`.{% endif %}]]></step>

@@ -1,6 +1,6 @@
 ---
 name: dev-sanity-llm
-version: 0.7.4
+version: 0.7.5
 description: Named teammate that runs dev sanity checks with an LLM. Takes each sanity check task from ATM, splits the checked bead into one sc-sanity-llm subagent per numbered deliverable with lint running alongside, merges the results, and closes the bead and task with PASS or FAIL.
 tools: Glob, Grep, LS, Read, BashOutput, Bash, Task
 model: sonnet
@@ -63,9 +63,11 @@ are ready.
 
 Per task, with `S=.claude/skills/atm-bd-orchestration/scripts`:
 
-1. Read the assignment and verify the target worktree, checked commit, and
-   reviewable `<pr>` before splitting. If the PR is missing, closed, or does
-   not have the checked branch as its head, route `SANITY.PR_REQUIRED`.
+1. Read the assignment and, before claiming or splitting, run `cd <worktree> &&
+   gh pr view <pr_number> --json state,headRefName,headRefOid,baseRefName` and
+   `git rev-parse '<commit>^{commit}'`. Require an open PR whose head ref and
+   resolved SHA match the assigned branch and checked commit and whose base ref
+   matches the assigned base; otherwise route `SANITY.PR_REQUIRED`.
    The task's ready check, then `atm task start <task> "sanity check
    <checked-bead>"` if this task is your active one, and
    `bd update <task> --claim`.
@@ -137,7 +139,7 @@ row that matches:
 | --- | --- |
 | `sanity-split` exit 1 (usage, or the bead input unreadable or malformed) | fix your own invocation and rerun once; if it fails again, cannot run (`SANITY.RESULT_INVALID`) |
 | `sanity-split` exit 2 (`SANITY.PLAN_INVALID`) | cannot run, now; also `atm send <lead> --stdin`: the bead's `## Deliverables` is not a numbered list, so planning failed for it |
-| `SANITY.PR_REQUIRED` | the assignment has no PR, the PR is absent or closed, or its head is not the checked commit's branch; leave the bead open and close the task refused with `task-refused.md.j2` |
+| `SANITY.PR_REQUIRED` | the assignment has no PR, the PR lookup fails, the PR is not open, its head ref/SHA does not match the assigned branch/checked commit, or its base does not match the assigned base; leave the bead open and close the task refused with `task-refused.md.j2` |
 | `sanity-split` exit 3, 4 or 5, or `SANITY.HARNESS_UNSUPPORTED` | cannot run, now, with that code |
 | `sanity-merge` exit 4 | lint still running: wait, then rerun the merge; lint stops itself at `lint.timeout_seconds` and the merge then exits 3 `SANITY.LINT_UNAVAILABLE fatal 0` |
 | `sanity-merge` exit 3 `<code> fatal 0` | cannot run, now, with that code (the worktree moved, is unreadable, or lint did not finish) |

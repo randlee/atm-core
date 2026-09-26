@@ -5,6 +5,8 @@
   "branch": "sprint/bd-4-peer-retry-jitter",
   "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
   "rebased_onto": "sprint/bd-3-peer-config",
+  "pr_number": 231,
+  "pr_url": "https://github.com/randlee/atm-core/pull/231",
   "deliverables_complete": 3,
   "deliverables_total": 3,
   "deliverables_md": "- D.4-1 sync exporter: done\n- BD.4-2 retry policy: done\n- D.4-3 tests: done",

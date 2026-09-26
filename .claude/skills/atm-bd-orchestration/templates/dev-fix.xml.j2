@@ -1,6 +1,6 @@
 ---
 name: dev-fix
-version: 1.1.0
+version: 1.2.0
 description: lead dev-fix assignment for a dev bead reopened after a failed sanity check. Same bead (task_id), same branch; the sanity check findings are the work.
 format: xml
 required_variables:
@@ -38,7 +38,7 @@ metadata:
   <worktree><![CDATA[{{ worktree_path | string | cdata_escape }}]]></worktree>
   <branch><![CDATA[{{ branch | string | cdata_escape }}]]></branch>
   <stack><![CDATA[{{ stack | string | cdata_escape }}]]></stack>
-  <stack-discipline><![CDATA[`{{ branch | string | cdata_escape }}` is not linked: a layer is linked only after its sanity check passes, so nothing is stacked on it and you still own it. Commit the fixes on `{{ branch | string | cdata_escape }}`. Never edit another branch and never run `gh stack link`, `sync`, `rebase` or `merge`.]]></stack-discipline>
+  <stack-discipline><![CDATA[`{{ branch | string | cdata_escape }}` is not linked: a layer is linked only after its sanity check passes, so nothing is stacked on it and you still own it. Commit the fixes on `{{ branch | string | cdata_escape }}`. Before closing, the developer opens or locates the draft PR for this branch with base from the bead's `metadata.pr_target` and records its number and URL in the close vars. Never edit another branch and never run `gh stack link`, `sync`, `rebase` or `merge`.]]></stack-discipline>
 
   <dev-sanity-findings><![CDATA[
 {{ findings | string | cdata_escape }}
@@ -50,7 +50,7 @@ metadata:
     <step id="b"><![CDATA[Read `bd show {{ task_id | string | cdata_escape }}` and the findings above. Fix every finding, then re-check the whole bead: the sanity check reports what it saw, not everything that is missing. Do not weaken a test or criterion to make a finding go away. The bead's `metadata.requirements` and `metadata.adrs` still govern the fix: re-read each one it names.]]></step>
     <step id="c"><![CDATA[Run `{{ test_command | string | cdata_escape }}` and the bead's validation commands until they pass with zero failures.]]></step>
     <step id="d"><![CDATA[Rebase once onto the current pushed top of stack `{{ stack | string | cdata_escape }}` (`git fetch origin && git rebase origin/<current top>`), re-run `{{ test_command | string | cdata_escape }}`, then `git push --force-with-lease origin {{ branch | string | cdata_escape }}`. Record the full head SHA and the branch you rebased onto.]]></step>
-    <step id="e"><![CDATA[Close the bead and the task together: `bd close {{ task_id | string | cdata_escape }} --reason "dev complete at <short sha>"` and `atm task close {{ task_id | string | cdata_escape }} completed --template .claude/skills/atm-bd-orchestration/templates/dev-complete.md.j2 --vars <scratch>/dev-complete-{{ task_id | string | cdata_escape }}-vars.json`. In the vars, `deliverables_md` lists each finding and what fixed it. The sanity check then runs again on the new head. Only this close frees your queue.{% if cc and cc != lead %} Copy a one-line summary to `{{ cc | string | cdata_escape }}` with a plain `atm send {{ cc | string | cdata_escape }} --stdin`.{% endif %}]]></step>
+    <step id="e"><![CDATA[As the last work step before closing, open or locate the branch PR with `gh api -X POST repos/<owner>/<repo>/pulls` (head = `{{ branch | string | cdata_escape }}`, base = `bd show {{ task_id | string | cdata_escape }} --json | jq -r '.[0].metadata.pr_target'`; a draft is allowed), then record its number and URL. Close the bead and the task together: `bd close {{ task_id | string | cdata_escape }} --reason "dev complete at <short sha>"` and `atm task close {{ task_id | string | cdata_escape }} completed --template .claude/skills/atm-bd-orchestration/templates/dev-complete.md.j2 --vars <scratch>/dev-complete-{{ task_id | string | cdata_escape }}-vars.json`. Include `pr_number` and `pr_url` in the vars; `deliverables_md` lists each finding and what fixed it. The sanity check then runs again on the new head. Only this close frees your queue.{% if cc and cc != lead %} Copy a one-line summary to `{{ cc | string | cdata_escape }}` with a plain `atm send {{ cc | string | cdata_escape }} --stdin`.{% endif %}]]></step>
     <step id="e1"><![CDATA[If the bead cannot be completed at all, declare failure: `bd update {{ task_id | string | cdata_escape }} --status blocked --assignee "" --append-notes "failed: <reason>"` (never `bd close`: a closed dev bead releases its sanity check) and `atm task close {{ task_id | string | cdata_escape }} refused --template .claude/skills/atm-bd-orchestration/templates/task-refused.md.j2 --vars <scratch>/refused-{{ task_id | string | cdata_escape }}-vars.json`.]]></step>
     <step id="f"><![CDATA[After the close, read ATM again: the next queued task starts only now.]]></step>
   </workflow>

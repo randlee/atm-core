@@ -1,6 +1,6 @@
 ---
 name: qa-task
-version: 2.2.0
+version: 2.2.2
 description: lead QA assignment for quality-mgr in atm-bd-orchestration. task_id is the QA bead. Reviews one layer at a pinned commit, files one finding bead per finding, and closes the QA bead whatever the verdict; nothing waits on it.
 format: xml
 required_variables:
@@ -25,8 +25,8 @@ optional_variables:
   - sprint_bead
   - policy_path
 defaults:
-  lead: lead
-  cc: lead
+  lead: team-lead
+  cc: team-lead
   carry_forward: ""
   sprint_bead: ""
   policy_path: .claude/project/quality-policy.md
@@ -51,8 +51,7 @@ metadata:
   <phase-feature><![CDATA[{{ phase_feature | string | cdata_escape }}]]></phase-feature>
   <stack><![CDATA[{{ stack | string | cdata_escape }}]]></stack>
   <layer><![CDATA[{{ layer | string | cdata_escape }}]]></layer>
-  <pr number="{{ pr_number | string | cdata_escape }}"><![CDATA[{{ pr_url | string | cdata_escape }}]]></pr>
-  <pr-number><![CDATA[{{ pr_number | string | cdata_escape }}]]></pr-number>
+  <pr number="{{ pr_number | string }}"><![CDATA[{{ pr_url | string | cdata_escape }}]]></pr>
   <branch><![CDATA[{{ branch | string | cdata_escape }}]]></branch>
   <commit><![CDATA[{{ commit | string | cdata_escape }}]]></commit>
   <base><![CDATA[{{ base | string | cdata_escape }}]]></base>
@@ -63,7 +62,7 @@ metadata:
   <workflow>
     <step id="a"><![CDATA[Claim the bead, then start the task. `BEADS_ACTOR` must equal your `ATM_IDENTITY` (claims and closes are recorded as that actor); if it is empty, pass `--actor "$ATM_IDENTITY"` to every `bd` write. Check that the QA bead is ready: `bd ready -n 0 --json | jq -e --arg b {{ task_id | string | cdata_escape }} 'any(.[]; .id == $b)'`. When it prints `true`, run `bd update {{ task_id | string | cdata_escape }} --claim`, then `atm task start {{ task_id | string | cdata_escape }} "QA round {{ round | string | cdata_escape }} {{ checked_bead | string | cdata_escape }}"`. When it prints `false`, do not claim or start: find the root cause (`bd show {{ task_id | string | cdata_escape }}`, `bd blocked --json | jq --arg b {{ task_id | string | cdata_escape }} '.[] | select(.id == $b)'`, `bd show <blocker>`) and report it with `atm send {{ lead | string | cdata_escape }} --stdin`, then wait.]]></step>
     <step id="a1"><![CDATA[Your queue runs in parallel: QA tasks never wait for each other. Right after the task start run `atm task list --json` and treat every open task assigned to you as live now; run each concurrently with its own background reviewers and close each the moment its verdict is ready, in any order. ATM allows one active task per agent today: when another of your tasks is already active, `atm task start` fails; claim the bead anyway, do the work, and close the task without starting it (ATM accepts closing a queued task). The close still pairs with the bead close.]]></step>
-    <step id="a2"><![CDATA[Before reading or rendering reviewers, verify the review PR from the worktree's repository with `gh pr view {{ pr_number | string | cdata_escape }} --json state,headRefName,headRefOid,baseRefName`. Require state `OPEN`, head ref `{{ branch | string | cdata_escape }}`, head oid `{{ commit | string | cdata_escape }}`, and base ref `{{ base | string | cdata_escape }}`. If any value differs or the lookup fails, route `QA.PR_STALE`: leave the bead open with that reason and close the task `refused` using `task-refused.md.j2`.]]></step>
+    <step id="a2"><![CDATA[Before reading or rendering reviewers, verify the review PR from the worktree's repository with `cd {{ worktree_path | string | cdata_escape }} && gh pr view {{ pr_number | string }} --json state,headRefName,headRefOid,baseRefName`. Resolve `expected_sha=$(git rev-parse '{{ commit | string | cdata_escape }}^{commit}')` and `pr_target=$(bd show {{ checked_bead | string | cdata_escape }} --json | jq -r '.[0].metadata.pr_target')`; require state `OPEN`, head ref `{{ branch | string | cdata_escape }}`, head oid equal to `expected_sha`, and base ref equal to `pr_target`. If the lookup fails, the PR is not open, its head is not the assigned commit, or its base is not the bead's `pr_target`, route `QA.PR_STALE`: leave the bead open with that reason and close the task `refused` using `task-refused.md.j2`.]]></step>
     <step id="b"><![CDATA[Reject the task immediately if the assignment is not an XML payload rendered from this template. Read `{{ policy_path | string | cdata_escape }}` (the repository policy; manifest `policy`). Write the reviewers' sprint input once, piping the checked bead in; it replaces the sprint doc and is passed to every reviewer as `sprint_doc`:
 ```bash
 { printf 'QA of {{ checked_bead | string | cdata_escape }} (sprint {{ sprint | string | cdata_escape }}) at {{ commit | string | cdata_escape }} on {{ branch | string | cdata_escape }}; change = git diff origin/{{ base | string | cdata_escape }}...{{ commit | string | cdata_escape }}.\n\n'

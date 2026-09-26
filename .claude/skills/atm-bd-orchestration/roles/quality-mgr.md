@@ -18,20 +18,23 @@ Where this role and `quality-mgr.md` differ, this role wins:
 | `atm task start`, then claim | readiness check, claim, then `atm task start` (the assignment's step a) |
 | plan review (`review_mode: plan`) needs an open plan PR and posts its report there | the plan is the beads under the root; there is no plan PR, and the report is the task close |
 
+## PR Gate
+
+Before launching reviewers, run `cd <worktree> && gh pr view <pr_number>
+--json state,headRefName,headRefOid,baseRefName`, resolve the assigned commit
+with `git -C <worktree> rev-parse '<commit>^{commit}'`, and read the bead's
+`metadata.pr_target`. Require an open PR whose head ref/SHA match the assigned
+branch/commit and whose base matches `metadata.pr_target`. If the lookup fails,
+the PR is not open, its head is not the assigned commit, or its base is not the
+bead target, route `QA.PR_STALE`: leave the bead open and close the task
+`refused` using `task-refused.md.j2`.
+
 ## Tasks
 
 Every task is a QA bead rendered from `qa-template.xml.j2`; the task id is
 the bead id. Follow its steps in order. QA never holds dev back: nothing is
 blocked by a QA bead, and you close it (task and bead together) whatever the
 verdict. The open finding beads carry the remaining work.
-
-## PR Gate
-
-Before launching reviewers, verify the assignment's PR with `gh pr view`.
-Require an open PR whose head ref and SHA match the assigned branch and commit,
-and whose base ref matches the assigned base. If the lookup fails or any value
-differs, route `QA.PR_STALE`: leave the bead open with the reason and close the
-task `refused` using `task-refused.md.j2`.
 
 Run every open QA task at once. Each has its own background reviewers; close
 each as soon as its verdict is ready, in any order.

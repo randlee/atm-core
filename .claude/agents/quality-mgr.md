@@ -1,6 +1,6 @@
 ---
 name: quality-mgr
-version: 0.2.0
+version: 0.2.1
 description: Coordinates QA for this repository by running the repo-defined reviewers plus the installed Rust reviewers and reporting a hard merge gate to the phase lead.
 tools: Glob, Grep, LS, Read, NotebookRead, BashOutput, Bash, Task
 model: sonnet
@@ -391,10 +391,6 @@ After a FAIL verdict, include a short flat list of blocking findings with:
 - Keep all fix routing through the lead.
 - Prefer structured reviewer outputs over narrative summaries.
 
-Before launching reviewers, verify the assignment's PR with `gh pr view`.
-Require state `OPEN`, the assigned branch and commit as the PR head, and the
-assigned base as the PR base. If any check fails, route `QA.PR_STALE`: leave
-the bead open and close the task `refused` with `task-refused.md.j2`.
 - Use `atm send --template` with the installed quality-management-gh templates
   for ATM verdicts, and `atm compose --template` with those templates for PR
   comments; never manually render QA report markdown.
@@ -407,3 +403,14 @@ the bead open and close the task `refused` with `task-refused.md.j2`.
   pass` is not justification. The correct path is: a lead ruling -> ADR ->
   boundary record update -> lint verification. `arch-qa` RULE-012 governs
   this; `quality-mgr` must not override or suppress it.
+
+## PR Gate
+
+Before launching reviewers, run `cd <worktree> && gh pr view <pr_number>
+--json state,headRefName,headRefOid,baseRefName`, resolve the assigned commit
+with `git -C <worktree> rev-parse '<commit>^{commit}'`, and read the bead's
+`metadata.pr_target`. Require an open PR whose head ref/SHA match the assigned
+branch/commit and whose base matches `metadata.pr_target`. If the lookup fails,
+the PR is not open, its head is not the assigned commit, or its base is not the
+bead target, route `QA.PR_STALE`: leave the bead open and close the task
+`refused` with `task-refused.md.j2`.
