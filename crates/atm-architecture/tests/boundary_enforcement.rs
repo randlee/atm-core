@@ -31,6 +31,7 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-daemon", "atm-observability"),
     ("atm-daemon", "peer-tls"),
     ("atm-daemon-bootstrap", "atm-peer-tls-interop"),
+    ("atm-daemon-bootstrap", "telemetry-implementation"),
     ("atm-daemon-client", "atm-daemon"),
     ("atm-daemon-client", "atm-storage-rusqlite"),
     ("atm-error", "atm-core"),
