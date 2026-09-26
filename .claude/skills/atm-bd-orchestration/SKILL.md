@@ -1,6 +1,6 @@
 ---
 name: atm-bd-orchestration
-version: 0.3.6
+version: 0.3.7
 description: Bead-driven phase orchestration for the lead. Use when running a phase whose plan is in beads, dispatching from `bd ready` with ATM tasks, and landing it as one gh stack.
 requires:
   cli:
@@ -235,7 +235,13 @@ Fix them as for any finding.
 Every agent on this host writes to the same shared Dolt server, so a claim
 or close is visible to everyone at once. `bd sync` (pull, conflict check,
 blocked-flag repair, push) exists only for the Dolt remote: the off-host
-copy and any other machine. The lead owns it and runs it:
+copy and any other machine. The remote is the `sync.remote` in
+`.beads/config.yaml` (for atm-core, DoltHub `randlee/atm-dev`;
+`bd dolt remote list` shows it). Nothing pushes on its own: the hooks
+committed under `.beads/hooks/` run only when git calls them, and a repo
+that pins `core.hooksPath` elsewhere (atm-core pins `.githooks`) never
+does, so the push is this explicit step and never a hook. The lead owns
+it and runs it:
 
 - right after a plan import;
 - after handling each close in the Loop, before the next `bd ready`;
@@ -252,6 +258,10 @@ fails:
 | 2 | merge conflict, nothing pushed | stop dispatching; report it to the user, who resolves it by hand |
 | 3 | push race or another writer mid-write | retry on the next close |
 | 4 | a stuck dirty working set | stop dispatching; report it to the user |
+
+A successful run prints `sync: pull`, `sync: recompute-blocked`,
+`sync: push`, `Sync complete.` and exits 0; a run that ends without
+`sync: push` pushed nothing, whatever it printed before.
 
 An agent on another machine has its own database. It must run `bd sync`
 before its ready check and after its close. No such agent exists today.
