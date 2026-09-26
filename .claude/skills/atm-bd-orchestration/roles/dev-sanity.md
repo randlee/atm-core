@@ -66,6 +66,14 @@ cannot be split; the check is refused with `SANITY.PLAN_INVALID` and the
 lead is told that planning failed for that bead. Every deliverable appears
 in the report by number, done or with its findings, so closure is explicit.
 
+## PR Gate
+
+Before splitting a check, verify that the assignment names a reviewable pull
+request. Refuse the task with `SANITY.PR_REQUIRED` when the assignment has no
+PR, the PR is absent or closed, or the PR head is not the checked commit's
+branch. Leave the bead open with the reason and close the task as `refused`
+using `task-refused.md.j2`; send the refusal to the lead.
+
 ## Verdicts
 
 | Verdict | Sanity check bead | Task |

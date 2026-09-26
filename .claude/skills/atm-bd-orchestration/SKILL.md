@@ -1,6 +1,6 @@
 ---
 name: atm-bd-orchestration
-version: 0.3.7
+version: 0.3.8
 description: Bead-driven phase orchestration for the lead. Use when running a phase whose plan is in beads, dispatching from `bd ready` with ATM tasks, and landing it as one gh stack.
 requires:
   cli:
@@ -55,8 +55,8 @@ commands, stack mechanics) are the manifest `.claude/project/orchestration.yaml`
 
 The orchestrator is the **lead**: the identity that dispatches beads, creates
 QA beads, links layers into the stack and receives every task close. Templates
-address it through the `lead` variable (default `team-lead`) and copy
-reports to `cc` (default `team-lead`; empty switches copies off). The role
+address it through the `lead` variable (default `lead`) and copy
+reports to `cc` (default `lead`; empty switches copies off). The role
 can move mid-phase: the outgoing lead sends the incoming lead the open task
 ids, open PRs and the stack number, and announces the new lead. In-flight
 tasks keep their assigner.
@@ -64,6 +64,11 @@ tasks keep their assigner.
 The lead is the only stack writer (`gh stack link`, `unstack`, `sync`,
 `rebase`, `merge`). quality-mgr files the finding beads from QA; the lead
 files those from a phase-end review.
+
+Every dev or fix bead closes only after a reviewable PR exists with the dev or
+fix branch as its head and the bead's `metadata.pr_target` as its base. The
+lead records the PR number and URL in the bead notes before accepting the
+completion.
 
 ## Roles
 
@@ -109,9 +114,9 @@ can follow. What this skill changes:
   rebase) and pushes. Layers therefore stack in completion order. When two
   layers finish on the same top, the lead rebases the second onto the first
   before linking it (Loop, sanity check PASS).
-- The lead opens the PR (base = the top it was rebased onto) and links it
-  when its **sanity check passes**, not at the first push. A sanity check
-  failure reopens a branch nothing is stacked on yet, so the dev-fix can
+- The lead opens the PR (base = the bead's `metadata.pr_target`) before
+  dispatching its **sanity check** and records it in the bead notes. A sanity
+  check failure reopens a branch nothing is stacked on yet, so the dev-fix can
   commit and rebase it again.
 - Once linked, a layer is frozen. A later finding on it is fixed on a new
   layer at the top of the same stack, one finding per layer, and fix layers
@@ -184,11 +189,11 @@ Then, on each task close:
 | --- | --- |
 | plan-review PASS | nothing when the bead closed: the root sprints are now ready. With minor findings the bead is assigned to you still open: fix each listed bead with `bd update`, then `bd close <root>-plan-qa --reason "minor fixes applied"` |
 | plan-review FAIL | have the author fix the listed beads, run `validate-plan` again, then dispatch the next round |
-| dev-complete | nothing: the sanity check is now ready |
-| sanity check PASS | check that the layer's `rebased_onto` (from its dev-complete or fix-complete) is still the pushed top. If another layer was linked since, rebase the branch onto the new top yourself: it is not linked and has no children. Run the test command and push with `--force-with-lease`. On a conflict, `bd reopen` the bead and send a dev-fix naming the new top. Then link the layer, then create the QA bead from [`qa-bead.json.j2`](templates/qa-bead.json.j2) (`validates` the dev or finding bead). For a finding, the QA dispatch sets `checked_bead` = the finding (it carries its own requirements and ADRs), `sprint_bead` = its `metadata.sprint_bead`, `carry_forward` = the finding id, and `round` = the `metadata.round` of the QA bead it was `discovered-from`, + 1, or 1 when it came from the phase-end review |
+| dev-complete | create a PR with `gh api -X POST repos/<owner>/<repo>/pulls` (head = the dev branch, base = bead metadata `pr_target`; a draft PR is allowed), record its number and URL in the dev bead notes, then dispatch the sanity check with `pr_number` and `pr_url`. No sanity check is dispatched without a PR: the user reviews code on the PR, and the status table reports it |
+| sanity check PASS | check that the layer's `rebased_onto` (from its dev-complete or fix-complete) is still the pushed top. If another layer was linked since, rebase the branch onto the new top yourself: it is not linked and has no children. Run the test command and push with `--force-with-lease`. On a conflict, `bd reopen` the bead and send a dev-fix naming the new top. Then link the layer; only after that stacked, rebased branch is pushed may the lead create the QA bead from [`qa-bead.json.j2`](templates/qa-bead.json.j2) (`validates` the dev or finding bead). For a finding, the QA dispatch sets `checked_bead` = the finding (it carries its own requirements and ADRs), `sprint_bead` = its `metadata.sprint_bead`, `carry_forward` = the finding id, and `round` = the `metadata.round` of the QA bead it was `discovered-from`, + 1, or 1 when it came from the phase-end review |
 | sanity check FAIL | `bd reopen <checked bead> --reason "<summary>"`, then [`dev-fix.xml.j2`](templates/dev-fix.xml.j2) with the findings. This applies to a finding bead too: its task id is the finding, and it closes with `dev-complete.md.j2` |
 | qa-complete | nothing to wire: quality-mgr filed and wired the finding beads; they are in the next `bd ready` |
-| fix-complete (`fixed`) | create the fix's sanity check bead (`atm-beads` [`dev-sanity-bead.json.j2`](../atm-beads/templates/dev-sanity-bead.json.j2), `dev_bead` = the finding) |
+| fix-complete (`fixed`) | require the reviewable PR before accepting the fix close, record its number and URL in the bead notes, then create the fix's sanity check bead (`atm-beads` [`dev-sanity-bead.json.j2`](../atm-beads/templates/dev-sanity-bead.json.j2), `dev_bead` = the finding) |
 | review-complete | file each finding with `finding-bead.json.j2` (`qa_bead` = the review bead) |
 | task-refused | read the reason and the bead state (`open`, or `blocked-failed` for a dev bead that declared failure). Reassign it, split it, or close the bead yourself with `bd close <bead> --force --reason "<why>"`. A `blocked` bead is never in `bd ready`: run `bd update <bead> --status open --assignee <new agent>` before you re-dispatch it |
 | fix-complete (`not_reproducible`) | nothing: no commit, no sanity check; the finding is closed |
@@ -350,7 +355,7 @@ written to beads with the `atm-beads` templates.
 | `dev-template.xml.j2` | assignment | lead → dev, a planned dev bead |
 | `dev-fix.xml.j2` | assignment | lead → dev, a dev bead reopened by a failed sanity check |
 | `dev-complete.md.j2` | close | dev, for `dev-template` and `dev-fix` |
-| `dev-sanity-template.xml.j2` | assignment | lead → dev-sanity member |
+| `dev-sanity-template.xml.j2` | assignment; requires `pr_number` and `pr_url` | lead → dev-sanity member |
 | `dev-sanity-complete.md.j2` | close | dev-sanity member, PASS or FAIL |
 | `qa-template.xml.j2` | assignment | lead → quality-mgr |
 | `qa-complete.md.j2` | close | quality-mgr, and its PR comment |

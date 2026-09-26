@@ -1,6 +1,6 @@
 ---
 name: dev-sanity-task
-version: 1.5.1
+version: 1.5.2
 description: lead sanity check assignment for the member that fills the dev-sanity role (resolve-role dev-sanity). task_id is the sanity check bead. The member splits the checked bead per numbered deliverable (sanity-split), runs one check subagent per deliverable with lint alongside, merges (sanity-merge) and reports PASS or FAIL. Not QA.
 format: xml
 required_variables:
@@ -11,13 +11,15 @@ required_variables:
   - branch
   - commit
   - base
+  - pr_number
+  - pr_url
 optional_variables:
   - lead
   - cc
   - lint_command
 defaults:
-  lead: team-lead
-  cc: team-lead
+  lead: lead
+  cc: lead
   lint_command: "just lint"
 metadata:
   type: dev-sanity-task
@@ -40,6 +42,7 @@ metadata:
   <branch><![CDATA[{{ branch | string | cdata_escape }}]]></branch>
   <commit><![CDATA[{{ commit | string | cdata_escape }}]]></commit>
   <base><![CDATA[{{ base | string | cdata_escape }}]]></base>
+  <pr number="{{ pr_number | string | cdata_escape }}"><![CDATA[{{ pr_url | string | cdata_escape }}]]></pr>
   <lint-command><![CDATA[{{ lint_command | string | cdata_escape }}]]></lint-command>
 
   <workflow>
