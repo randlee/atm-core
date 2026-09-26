@@ -1,0 +1,9 @@
+{
+  "task_id": "atm-phase-bd-plan-qa",
+  "root": "atm-phase-bd",
+  "phase": "bd",
+  "round": 1,
+  "lead": "team-lead",
+  "cc": "team-lead",
+  "trunk": "develop"
+}

@@ -1,0 +1,11 @@
+{
+  "task_id": "atm-bd-4",
+  "sprint": "bd-4",
+  "stack": "phase-bd",
+  "top": "sprint/bd-3-peer-config",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/sprint/bd-4-peer-retry-jitter",
+  "branch": "sprint/bd-4-peer-retry-jitter",
+  "lead": "team-lead",
+  "cc": "",
+  "test_command": "just test"
+}

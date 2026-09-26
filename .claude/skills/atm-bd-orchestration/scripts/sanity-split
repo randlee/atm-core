@@ -1,0 +1,402 @@
+#!/usr/bin/env python3
+"""Split one dev sanity check into one assignment per numbered deliverable.
+
+Usage:
+  sanity-split --task <sanity bead> --bead <dev bead> --worktree <path>
+               --branch <branch> --commit <commit> --base <base>
+               [--lint-command '<cmd>'] --scratch <dir>
+               [--bead-json <file>] [--split-only] [--template <path>]
+               [--lint-timeout-seconds <n>]
+  sanity-split lint-supervisor --worktree <path> --command '<cmd>' --log <file>
+               --exit-file <file> [--timeout-seconds <n>]
+
+Reads the checked bead (`bd show <bead> --json`, or `--bead-json`), parses the
+numbered list under `## Deliverables`, pins the target commit, lists the files
+changed since the base, renders `dev-sanity-assignment.json.j2` once per
+deliverable with `sc-compose`, starts the lint command detached in the
+worktree, and prints one JSON manifest to stdout:
+
+  {sha, base_sha, sanity_bead, dev_bead, branch, worktree_path,
+   deliverables_total, changed_files, files_outside_owned_paths,
+   lint: {command, log, exit_file, pid, timeout_seconds} | null,
+   assignments: [{number, assignment: <rendered object>}]}
+
+`--split-only` parses and renders only: no git pinning and no lint.
+`--lint-command` defaults to `commands.lint` of the repository manifest
+(`.claude/skills/atm-beads/scripts/manifest-get commands.lint`).
+
+The lint command runs under `lint-supervisor`, a detached process (its pid is
+`lint.pid`) that runs the command in a process group of its own, redirects the
+command's stdout and stderr to the log, waits at most `timeout_seconds`, and
+always writes the exit file: the exit code, or `timeout` (the command's group
+was killed), `cancelled` (the supervisor received SIGTERM or SIGINT) or `error`.
+On timeout and on cancellation the supervisor sends SIGTERM to the command's
+whole process group, waits up to 2 seconds, SIGKILLs every survivor and
+confirms the group is empty before writing; a group that still survives is
+written as `error`. `kill -- -<pid>` or `kill <pid>` stops the supervisor and
+the lint command with all its descendants.
+
+`## Deliverables` must be one top-level numbered list `1.` .. `X.`; wrapped
+lines, indented sub-bullets and blank lines belong to the item above them,
+fenced blocks (CommonMark: closed only by a line of the same fence character
+repeated at least the opening length) are text even when they contain headings
+or numbered lines, and anything else in the section, sub-headings included, is
+PLAN_INVALID. The section ends at the first `#` or `##` heading outside a fence.
+
+Exit codes (the code and message are printed on stderr):
+  0  ok
+  1  usage
+  2  SANITY.PLAN_INVALID      no numbered `## Deliverables` list (planning failed)
+  3  SANITY.TARGET_UNREADABLE worktree, commit, base or remote unreadable
+  4  SANITY.COMMIT_MISMATCH   HEAD, branch, dirty tree, or branch not pushed at SHA
+  5  RENDER_FAILED            sc-compose could not render an assignment
+"""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+
+HERE = Path(__file__).resolve().parent
+TEMPLATE = HERE.parent / "templates" / "dev-sanity-assignment.json.j2"
+MANIFEST_GET = HERE.parent.parent / "atm-beads" / "scripts" / "manifest-get"
+CODES = {2: "SANITY.PLAN_INVALID", 3: "SANITY.TARGET_UNREADABLE", 4: "SANITY.COMMIT_MISMATCH", 5: "RENDER_FAILED"}
+
+
+class Fail(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
+def die(code, message):
+    print(f"{CODES.get(code, 'USAGE')}: {message}", file=sys.stderr)
+    return code
+
+
+def load_bead(args):
+    if args.bead_json:
+        try:
+            data = json.loads(Path(args.bead_json).read_text())
+        except (OSError, ValueError) as exc:
+            raise Fail(1, f"cannot read --bead-json: {exc}")
+    else:
+        run = subprocess.run(["bd", "show", args.bead, "--json"], capture_output=True, text=True)
+        if run.returncode != 0:
+            raise Fail(3, f"bd show {args.bead} failed: {run.stderr.strip()}")
+        try:
+            data = json.loads(run.stdout)
+        except ValueError:
+            raise Fail(3, f"bd show {args.bead} did not print JSON")
+    if isinstance(data, list):
+        data = data[0] if data else None
+    if not isinstance(data, dict) or data.get("id") != args.bead:
+        raise Fail(3, f"bead {args.bead} not found in bead JSON")
+    return data
+
+
+ITEM = re.compile(r"^(\d+)\.\s+(\S.*)$")
+TOP_BULLET = re.compile(r"^[-*+]\s")
+FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+HEADING = re.compile(r"^(#{1,6}) ")
+
+
+def parse_deliverables(description):
+    match = re.search(r"^## Deliverables[ \t]*$", description or "", re.M)
+    if not match:
+        raise Fail(2, "bead has no `## Deliverables` section")
+    items, fence, prev_blank = [], None, True
+    for line in description[match.end():].splitlines():
+        stripped = line.strip()
+        if fence:                                   # fenced text belongs to the current item
+            items[-1][1] += " " + stripped
+            if re.fullmatch(re.escape(fence[0]) + "{%d,}" % len(fence), stripped):
+                fence = None                        # same character, at least the opening length
+            continue
+        heading = HEADING.match(line)
+        if heading:
+            if len(heading.group(1)) <= 2:
+                break                               # the section ends at the next `#`/`##` heading
+            raise Fail(2, f"`## Deliverables` has a sub-heading, which is not part of a numbered list: {stripped!r}")
+        if not stripped:
+            prev_blank = True
+            continue
+        item = ITEM.match(line)
+        if item:
+            items.append([int(item.group(1)), item.group(2).strip()])
+        elif not items:
+            raise Fail(2, f"`## Deliverables` has content before the first numbered item: {stripped!r}")
+        elif TOP_BULLET.match(line):
+            raise Fail(2, f"`## Deliverables` has an unnumbered top-level bullet: {stripped!r}")
+        elif FENCE.match(line):
+            fence = FENCE.match(line).group(1)       # closes on the same character, at least this long
+            items[-1][1] += " " + stripped
+        elif line[0] in " \t" or not prev_blank:    # indented sub-item, or wrapped item text
+            items[-1][1] += " " + stripped
+        else:
+            raise Fail(2, f"`## Deliverables` has an unnumbered paragraph: {stripped!r}")
+        prev_blank = False
+    if fence:
+        raise Fail(2, "`## Deliverables` has an unclosed fenced block")
+    if not items:
+        raise Fail(2, "`## Deliverables` has no numbered items (`1. ...`)")
+    numbers = [n for n, _ in items]
+    if numbers != list(range(1, len(items) + 1)):
+        raise Fail(2, f"`## Deliverables` numbering is not 1..{len(items)}: {numbers}")
+    return [{"number": n, "text": t} for n, t in items]
+
+
+def git(worktree, *argv, code=3, what=None):
+    try:
+        run = subprocess.run(["git", "-C", worktree, *argv], capture_output=True, text=True)
+    except OSError as exc:
+        raise Fail(3, f"git unavailable: {exc}")
+    if run.returncode != 0:
+        raise Fail(code, what or f"git {' '.join(argv)} failed: {run.stderr.strip()}")
+    return run.stdout
+
+
+def pin(args):
+    if not Path(args.worktree).is_dir():
+        raise Fail(3, f"worktree {args.worktree} is not a directory")
+    sha = git(args.worktree, "rev-parse", "--verify", "--quiet", f"{args.commit}^{{commit}}",
+              what=f"commit {args.commit} is not in {args.worktree}").strip()
+    base_sha = git(args.worktree, "rev-parse", "--verify", "--quiet", f"origin/{args.base}^{{commit}}",
+                   what=f"origin/{args.base} is not in {args.worktree}").strip()
+    head = git(args.worktree, "rev-parse", "HEAD").strip()
+    if head != sha:
+        raise Fail(4, f"HEAD is {head}, not {sha}")
+    branch = git(args.worktree, "rev-parse", "--abbrev-ref", "HEAD").strip()
+    if branch != args.branch:
+        raise Fail(4, f"checked-out branch is {branch}, not {args.branch}")
+    if git(args.worktree, "status", "--porcelain").strip():
+        raise Fail(4, "worktree has uncommitted or untracked changes")
+    remote = git(args.worktree, "ls-remote", "origin", f"refs/heads/{args.branch}",
+                 what=f"cannot read origin refs/heads/{args.branch}")
+    remote_sha = remote.split()[0] if remote.split() else ""
+    if remote_sha != sha:
+        raise Fail(4, f"origin/{args.branch} is {remote_sha or 'absent'}, not {sha}")
+    return sha, base_sha
+
+
+def changed_files(worktree, base_sha, sha):
+    out = git(worktree, "diff", "--name-status", "-z", "--find-renames", f"{base_sha}...{sha}")
+    fields = out.split("\0")
+    files, i = [], 0
+    while i < len(fields) and fields[i]:
+        status = fields[i]
+        if status[0] in "RC":                       # rename/copy: source, then destination
+            files.extend(fields[i + 1:i + 3])
+            i += 3
+        else:
+            files.append(fields[i + 1])
+            i += 2
+    return sorted(set(files))
+
+
+def glob_regex(pattern):
+    out, i = "", 0
+    while i < len(pattern):
+        c = pattern[i]
+        if pattern.startswith("**/", i):
+            out += "(?:.*/)?"
+            i += 3
+            continue
+        if pattern.startswith("**", i):
+            out += ".*"
+            i += 2
+            continue
+        out += "[^/]*" if c == "*" else "[^/]" if c == "?" else re.escape(c)
+        i += 1
+    return re.compile(f"^{out}$")
+
+
+def outside_fence(files, owned_paths):
+    if not owned_paths:
+        return []
+    fences = [glob_regex(p) for p in owned_paths]
+    return [f for f in files if not any(r.match(f) for r in fences)]
+
+
+def render(template, variables):
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+        json.dump(variables, handle)
+        var_file = handle.name
+    try:
+        run = subprocess.run(
+            ["sc-compose", "render", "--strict", "--root", str(template.parent), "--file", template.name,
+             "--var-file", var_file], capture_output=True, text=True)
+    except OSError as exc:
+        raise Fail(5, f"sc-compose unavailable: {exc}")
+    finally:
+        os.unlink(var_file)
+    if run.returncode != 0:
+        raise Fail(5, f"sc-compose render failed for deliverable {variables['deliverable_number']}: "
+                      f"{run.stderr.strip().splitlines()[0] if run.stderr.strip() else run.returncode}")
+    try:
+        return json.loads(run.stdout)
+    except ValueError:
+        raise Fail(5, f"rendered assignment {variables['deliverable_number']} is not JSON")
+
+
+def default_lint_command():
+    try:
+        run = subprocess.run([str(MANIFEST_GET), "commands.lint"], capture_output=True, text=True)
+    except OSError as exc:
+        raise Fail(1, f"--lint-command not given and manifest-get unavailable: {exc}")
+    if run.returncode != 0 or not run.stdout.strip():
+        raise Fail(1, f"--lint-command not given and the manifest has no commands.lint: {run.stderr.strip()}")
+    return run.stdout.strip()
+
+
+def start_lint(args):
+    scratch = Path(args.scratch)
+    scratch.mkdir(parents=True, exist_ok=True)
+    log = scratch / f"{args.task}-lint.log"
+    exit_file = scratch / f"{args.task}-lint.exit"
+    for stale in (log, exit_file):
+        if stale.exists():
+            stale.unlink()
+    proc = subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve()), "lint-supervisor", "--worktree", args.worktree,
+         "--command", args.lint_command, "--log", str(log), "--exit-file", str(exit_file),
+         "--timeout-seconds", str(args.lint_timeout_seconds)],
+        start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return {"command": args.lint_command, "log": str(log), "exit_file": str(exit_file),
+            "pid": proc.pid, "timeout_seconds": args.lint_timeout_seconds}
+
+
+GRACE_SECONDS = 2
+KILL_WAIT_SECONDS = 5
+
+
+class Cancelled(Exception):
+    pass
+
+
+def stop_group(pgid, child):
+    """TERM the lint process group, wait the grace period, KILL the survivors; True once the group is empty."""
+    def empty():
+        child.poll()                                # reap the direct child so it does not linger as a zombie
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return True
+        except PermissionError:                     # macOS: a member is still exiting; poll again
+            pass
+        return False
+
+    def signal_group(sig):
+        try:
+            os.killpg(pgid, sig)
+        except ProcessLookupError:
+            pass
+
+    def wait_empty(seconds):
+        deadline = time.monotonic() + seconds
+        while not empty():
+            if time.monotonic() > deadline:
+                return False
+            time.sleep(0.05)
+        return True
+
+    signal_group(signal.SIGTERM)
+    if wait_empty(GRACE_SECONDS):
+        return True
+    signal_group(signal.SIGKILL)
+    return wait_empty(KILL_WAIT_SECONDS)
+
+
+def supervise(argv):
+    """Run the lint command in its own process group; always write the exit file."""
+    parser = argparse.ArgumentParser(prog="sanity-split lint-supervisor")
+    for flag in ("--worktree", "--command", "--log", "--exit-file"):
+        parser.add_argument(flag, required=True)
+    parser.add_argument("--timeout-seconds", type=float, default=1800)
+    args = parser.parse_args(argv)
+    exit_file = Path(args.exit_file)
+    outcome, child = "error", None
+
+    def cancel(signum, frame):
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        raise Cancelled()
+
+    signal.signal(signal.SIGTERM, cancel)
+    signal.signal(signal.SIGINT, cancel)
+    try:
+        with open(args.log, "w") as log:
+            child = subprocess.Popen(["sh", "-c", args.command], cwd=args.worktree, stdin=subprocess.DEVNULL,
+                                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            try:
+                outcome = str(child.wait(timeout=args.timeout_seconds))
+            except subprocess.TimeoutExpired:
+                outcome = "timeout" if stop_group(child.pid, child) else "error"
+    except Cancelled:
+        outcome = "cancelled" if child is None or stop_group(child.pid, child) else "error"
+    except Exception:
+        outcome = "error"
+        if child is not None:
+            stop_group(child.pid, child)
+    finally:
+        exit_file.write_text(outcome + "\n")
+    return 0 if outcome not in ("cancelled", "error") else 1
+
+
+def main():
+    parser = argparse.ArgumentParser(add_help=True)
+    for flag in ("--task", "--bead", "--worktree", "--branch", "--commit", "--base", "--scratch"):
+        parser.add_argument(flag, required=True)
+    parser.add_argument("--lint-command")
+    parser.add_argument("--bead-json")
+    parser.add_argument("--split-only", action="store_true")
+    parser.add_argument("--template", type=Path, default=TEMPLATE)
+    parser.add_argument("--lint-timeout-seconds", type=int, default=1800)
+    try:
+        args = parser.parse_args()
+    except SystemExit:
+        return 1
+    try:
+        if args.lint_command is None:
+            args.lint_command = default_lint_command()
+        bead = load_bead(args)
+        deliverables = parse_deliverables(bead.get("description") or "")
+        owned = (bead.get("metadata") or {}).get("owned_paths") or []
+        if args.split_only:
+            sha, base_sha, files, lint = args.commit, args.base, [], None
+        else:
+            sha, base_sha = pin(args)
+            files = changed_files(args.worktree, base_sha, sha)
+            lint = None
+        outside = outside_fence(files, owned)
+        assignments = []
+        for item in deliverables:
+            assignments.append({"number": item["number"], "assignment": render(args.template, {
+                "sanity_bead": args.task, "dev_bead_id": bead["id"], "dev_bead_title": bead.get("title") or "",
+                "deliverable_number": item["number"], "deliverable_text": item["text"],
+                "deliverables_total": len(deliverables),
+                "acceptance_criteria": bead.get("acceptance_criteria") or "", "design": bead.get("design") or "",
+                "owned_paths": owned, "changed_files": files, "files_outside_owned_paths": outside,
+                "worktree_path": args.worktree, "branch": args.branch, "commit": sha, "base_sha": base_sha,
+            })})
+        if not args.split_only:
+            lint = start_lint(args)
+    except Fail as exc:
+        return die(exc.code, str(exc))
+    json.dump({"sha": sha, "base_sha": base_sha, "sanity_bead": args.task, "dev_bead": bead["id"],
+               "branch": args.branch, "worktree_path": args.worktree, "deliverables_total": len(deliverables),
+               "changed_files": files, "files_outside_owned_paths": outside, "lint": lint,
+               "assignments": assignments}, sys.stdout, indent=2)
+    print()
+    return 0
+
+
+if __name__ == "__main__":
+    if sys.argv[1:2] == ["lint-supervisor"]:
+        sys.exit(supervise(sys.argv[2:]))
+    sys.exit(main())

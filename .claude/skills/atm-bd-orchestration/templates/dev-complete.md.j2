@@ -1,0 +1,68 @@
+---
+name: dev-complete
+version: 2.0.0
+description: Dev completion report for a dev bead (dev-task or dev-fix); the body of `atm task close <task-id> completed`. The lead reads `commit` and `rebased_onto` from it for the sanity check and the link.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - sprint
+  - branch
+  - commit
+  - rebased_onto
+  - deliverables_complete
+  - deliverables_total
+  - deliverables_md
+  - validation_md
+optional_variables:
+  - inventory_md
+  - notes_md
+defaults:
+  inventory_md: ""
+  notes_md: ""
+metadata:
+  type: dev-complete
+  tags:
+    - stage:dev
+    - orchestration:beads
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: dev-complete
+    stage: dev
+    transition: complete
+---
+# Dev Complete
+
+Generated: {{ generated_at }}
+Bead: {{ task_id }} (sprint {{ sprint }})
+Branch: `{{ branch }}`
+Commit: `{{ commit }}`
+Rebased onto: `{{ rebased_onto }}`
+Deliverables: {{ deliverables_complete }}/{{ deliverables_total }}
+
+## Machine Status (JSON)
+```json
+{
+  "task": {{ task_id | tojson }},
+  "sprint": {{ sprint | tojson }},
+  "branch": {{ branch | tojson }},
+  "commit": {{ commit | tojson }},
+  "rebased_onto": {{ rebased_onto | tojson }},
+  "deliverables": {"complete": {{ deliverables_complete }}, "total": {{ deliverables_total }} }
+}
+```
+
+## Deliverables
+{{ deliverables_md }}
+
+## Validation
+{{ validation_md }}
+{% if inventory_md %}
+## Inventory
+{{ inventory_md }}
+{% endif %}{% if notes_md %}
+## Notes
+{{ notes_md }}
+{% endif %}

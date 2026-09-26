@@ -1,0 +1,68 @@
+---
+name: review-task
+version: 2.0.0
+description: lead phase-ending code review assignment for atm-bd-orchestration. task_id is a review bead the lead creates under the phase feature. Read-only; the lead files the findings as finding beads.
+format: xml
+required_variables:
+  - task_id
+  - phase
+  - branch
+  - commit
+  - worktree_path
+  - review_focus
+  - review_questions
+  - references
+optional_variables:
+  - lead
+  - cc
+defaults:
+  lead: team-lead
+  cc: team-lead
+metadata:
+  type: review-task
+  tags:
+    - stage:review
+    - orchestration:beads
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: review-start
+    stage: review
+    transition: start
+---
+<atm-review id="{{ task_id }}" phase="{{ phase }}">
+  <description><![CDATA[Phase-ending code review of the top of the phase stack. Read-only analysis only; no code changes.]]></description>
+
+  <branch><![CDATA[{{ branch | string | cdata_escape }}]]></branch>
+  <commit><![CDATA[{{ commit | string | cdata_escape }}]]></commit>
+  <worktree><![CDATA[{{ worktree_path | string | cdata_escape }}]]></worktree>
+
+  <review-focus><![CDATA[
+{{ review_focus | string | cdata_escape }}
+  ]]></review-focus>
+
+  <review-questions><![CDATA[
+{{ review_questions | string | cdata_escape }}
+  ]]></review-questions>
+
+  <references><![CDATA[
+{{ references | string | cdata_escape }}
+  ]]></references>
+
+  <output-format><![CDATA[
+    Structured findings report with sections:
+    1. SUMMARY — one-paragraph verdict
+    2. FINDINGS — numbered list, each with severity (blocking, important, minor), location, finding, recommendation
+    3. EXTRACTION-READINESS — score 1-5 per relevant module with rationale
+    4. RECOMMENDED-NEXT-SPRINTS — concrete follow-up work items
+  ]]></output-format>
+
+  <workflow>
+    <step id="a"><![CDATA[Claim the bead, then start the task. `BEADS_ACTOR` must equal your `ATM_IDENTITY` (claims and closes are recorded as that actor); if it is empty, pass `--actor "$ATM_IDENTITY"` to every `bd` write. Check that the review bead is ready: `bd ready -n 0 --json | jq -e --arg b {{ task_id | string | cdata_escape }} 'any(.[]; .id == $b)'`. When it prints `true`, run `bd update {{ task_id | string | cdata_escape }} --claim`, then `atm task start {{ task_id | string | cdata_escape }} "<one line: what you will do first>"`. When it prints `false`, do not claim or start: find the root cause (`bd show {{ task_id | string | cdata_escape }}`, `bd blocked --json | jq --arg b {{ task_id | string | cdata_escape }} '.[] | select(.id == $b)'`, `bd show <blocker>`) and report it with `atm send {{ lead | string | cdata_escape }} --stdin`, then wait.]]></step>
+    <step id="b"><![CDATA[Verify that `{{ worktree_path | string | cdata_escape }}` is on `{{ branch | string | cdata_escape }}` with `HEAD` exactly `{{ commit | string | cdata_escape }}`; reject a mismatched or moving checkout. Read relevant source and doc files at the assigned commit with `git show {{ commit | string | cdata_escape }}:<path>`. The phase plan is `bd show <phase feature>` and its children (`bd list --parent <phase feature> --all -n 0`).]]></step>
+    <step id="c"><![CDATA[Do not make any code changes and do not write to beads; {{ lead | string | cdata_escape }} files each finding as a finding bead from your report.]]></step>
+    <step id="d"><![CDATA[Re-verify every cited file:line at `{{ commit | string | cdata_escape }}`, never at a newer branch tip or moving worktree state; stale or missing evidence is a finding, not a guess. Then close the bead and the task together: `bd close {{ task_id | string | cdata_escape }} --reason "review complete: <verdict>"` and `atm task close {{ task_id | string | cdata_escape }} completed --template .claude/skills/atm-bd-orchestration/templates/review-complete.md.j2 --vars <scratch>/review-complete-{{ task_id | string | cdata_escape }}-vars.json`, with the vars built from that template's `required_variables` (`task_id`, `phase` and `commit` unchanged) and written outside the repository. Only this close frees your queue.{% if cc and cc != lead %} Copy a one-line summary to `{{ cc | string | cdata_escape }}` with a plain `atm send {{ cc | string | cdata_escape }} --stdin`.{% endif %}]]></step>
+    <step id="d1"><![CDATA[If the review cannot be performed, return the bead with `bd update {{ task_id | string | cdata_escape }} --status open --assignee "" --append-notes "<reason>"` and close the task with `atm task close {{ task_id | string | cdata_escape }} refused --template .claude/skills/atm-bd-orchestration/templates/task-refused.md.j2 --vars <scratch>/refused-{{ task_id | string | cdata_escape }}-vars.json`.]]></step>
+  </workflow>
+</atm-review>

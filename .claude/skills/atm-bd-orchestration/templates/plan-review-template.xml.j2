@@ -1,0 +1,55 @@
+---
+name: plan-review-task
+version: 1.1.1
+description: lead plan-review assignment for quality-mgr. task_id is the plan-review bead (<root>-plan-qa), which blocks every root sprint, so nothing is dispatched until the plan passes. The plan is the beads under the root; there is no plan PR.
+format: xml
+required_variables:
+  - task_id
+  - root
+  - phase
+  - round
+optional_variables:
+  - lead
+  - cc
+  - carry_forward
+  - trunk
+defaults:
+  lead: team-lead
+  cc: team-lead
+  carry_forward: ""
+  trunk: develop
+metadata:
+  type: plan-review-task
+  tags:
+    - stage:plan-review
+    - orchestration:beads
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: plan-review-start
+    stage: plan-review
+    transition: start
+---
+<atm-task id="{{ task_id }}" phase="{{ phase }}" mode="plan-review" round="{{ round }}">
+  <description><![CDATA[Plan review, round {{ round | string | cdata_escape }}, of the beads under `{{ root | string | cdata_escape }}` (phase {{ phase | string | cdata_escape }}). Docs-only: no code, no stack. The beads are the plan.]]></description>
+
+  <root><![CDATA[{{ root | string | cdata_escape }}]]></root>
+{% if carry_forward %}  <carry-forward><![CDATA[
+{{ carry_forward | string | cdata_escape }}
+  ]]></carry-forward>
+{% endif %}
+  <workflow>
+    <step id="a"><![CDATA[Claim the bead, then start the task. `BEADS_ACTOR` must equal your `ATM_IDENTITY` (claims and closes are recorded as that actor); if it is empty, pass `--actor "$ATM_IDENTITY"` to every `bd` write. Check that the bead is ready: `bd ready -n 0 --json | jq -e --arg b {{ task_id | string | cdata_escape }} 'any(.[]; .id == $b)'`. When it prints `true`, run `bd update {{ task_id | string | cdata_escape }} --claim`, then `atm task start {{ task_id | string | cdata_escape }} "plan review {{ phase | string | cdata_escape }} round {{ round | string | cdata_escape }}"`. When it prints `false`, do not claim or start: find the root cause (`bd show {{ task_id | string | cdata_escape }}`, `bd blocked --json | jq --arg b {{ task_id | string | cdata_escape }} '.[] | select(.id == $b)'`, `bd show <blocker>`) and report it with `atm send {{ lead | string | cdata_escape }} --stdin`, then wait.]]></step>
+    <step id="b"><![CDATA[From the repository root, run `.claude/skills/atm-beads/scripts/validate-plan --root {{ root | string | cdata_escape }}`. Exit 5: every printed problem line is a **blocking** finding, carried into the report as printed. Exit 2: the check could not run; go to step f. A `bd doctor` error is a blocking finding too: the plan is not reviewed against a broken database.]]></step>
+    <step id="c"><![CDATA[Requirements and ADRs are the tight gate. For every dev bead (`bd list --parent {{ root | string | cdata_escape }} -l stage:dev --all -n 0 --json`), pipe it into `<scratch>/<bead>-plan.md` (`bd show <bead> --json | jq '.[0] | {id, title, description, design, acceptance_criteria, metadata}'` inside a fenced json block) and run `req-qa` and `arch-qa` as background agents on it, with `sprint_doc` = that file and the docs-only plan rules of `.claude/agents/quality-mgr.md`. A plan in beads has no branch of its own: pin reviewers to `{{ trunk | string | cdata_escape }}` at its current head (`git rev-parse origin/{{ trunk | string | cdata_escape }}`) in the main checkout, which holds the governing requirements and architecture documents (`.claude/skills/atm-beads/scripts/manifest-get docs.requirements` and `manifest-get docs.architecture`). Each of the following is a **blocking** finding, never important or minor:
+- `metadata.requirements` or `metadata.adrs` is empty, missing, or mixes `NONE` with ids (validate-plan already reports these);
+- an id is not in the governing document, unless it meets the New Ids rule of `.claude/skills/atm-beads/resources/planning.md` (the document is in `owned_paths` and a deliverable says the sprint adds the id);
+- a listed id does not govern the work the bead describes;
+- the work touches a requirement or ADR the bead does not list, including a bead that says `NONE`.
+Also pipe the root the same way into `<scratch>/{{ root | string | cdata_escape }}-plan.md` and run `plan-scope-reviewer` over the whole set, its assignment rendered with `plan-scope-reviewer-assignment.json.j2` (`plan_docs` = every piped dev bead file, `phase_root_doc` = the root's file); it runs in full every round, fix rounds included, and its `parallelism` numbers go in the report. Run the other plan reviewers the docs-only plan rules name, each on the same piped files.{% if carry_forward %} This is a fix round: scope `req-qa` and `arch-qa` to the carried findings above and report each as fixed, regressed or open, plus any failure of step b.{% endif %}]]></step>
+    <step id="d"><![CDATA[Run `ceremony-finding-screen` over this round's findings, except the step b findings and the REQ/ADR findings of step c, which are never ceremony. Drop what it screens out and list each drop with its reason in the report.]]></step>
+    <step id="e"><![CDATA[Verdict: PASS when no blocking or important finding is open. PASS with no findings: `bd close {{ task_id | string | cdata_escape }} --reason "plan review PASS round {{ round | string | cdata_escape }}"`; this releases the root sprints. PASS with minor findings: do not close the bead, because that would release the root sprints before the fixes. Hand it to {{ lead | string | cdata_escape }} instead: `bd update {{ task_id | string | cdata_escape }} --assignee {{ lead | string | cdata_escape }} --append-notes "PASS round {{ round | string | cdata_escape }}; minor fixes before dispatch: <list>"`. The lead applies the fixes and closes the bead. FAIL: the bead must stay **open**, because closing it would release them: `bd update {{ task_id | string | cdata_escape }} --status open --assignee "" --append-notes "FAIL round {{ round | string | cdata_escape }}: <n> findings"`. Either way close the task with `atm task close {{ task_id | string | cdata_escape }} completed --template .claude/skills/atm-bd-orchestration/templates/plan-review-complete.md.j2 --vars <scratch>/plan-review-{{ task_id | string | cdata_escape }}-vars.json`. Findings live in the report, one line each: `<bead> <severity> <field>: <what is wrong>`. Do not file finding beads for a plan: the author fixes the beads with `bd update`, and {{ lead | string | cdata_escape }} assigns the next round.{% if cc and cc != lead %} Copy the verdict line to `{{ cc | string | cdata_escape }}` with a plain `atm send {{ cc | string | cdata_escape }} --stdin`.{% endif %}]]></step>
+    <step id="f"><![CDATA[If the review cannot run, return the bead with `bd update {{ task_id | string | cdata_escape }} --status open --assignee "" --append-notes "<reason>"` and close the task with `atm task close {{ task_id | string | cdata_escape }} refused --template .claude/skills/atm-bd-orchestration/templates/task-refused.md.j2 --vars <scratch>/refused-{{ task_id | string | cdata_escape }}-vars.json`.]]></step>
+  </workflow>
+</atm-task>

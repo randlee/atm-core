@@ -1,0 +1,10 @@
+{
+  "generated_at": "2026-09-25T07:50:00Z",
+  "task_id": "atm-bd-4-sanity",
+  "sprint": "bd-4",
+  "stage": "dev-sanity",
+  "bead_state": "open",
+  "reason_md": "The commit `4f1c2a9` is not on origin; `git fetch origin` does not find it.",
+  "branch": "sprint/bd-4-peer-retry-jitter",
+  "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d"
+}

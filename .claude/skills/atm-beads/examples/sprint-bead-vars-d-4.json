@@ -1,0 +1,33 @@
+{
+  "id": "atm-bd-4",
+  "phase": "bd",
+  "sprint": "bd-4",
+  "title": "Error enums",
+  "assignee": "fenix",
+  "stack": "phase-bd",
+  "layer": 1,
+  "branch": "sprint/bd-4-error-enums",
+  "pr_target": "integrate/phase-bd",
+  "worktree": "/Users/randlee/github/atm-core-worktrees/sprint/bd-4-error-enums",
+  "relation": "root",
+  "closure_type": "boundary",
+  "target_boundary": "atm-core error enums",
+  "owned_paths": [
+    "crates/atm-core/src/error.rs"
+  ],
+  "description": "## Goal\nTyped error enums.\n\n## Deliverables\n- D4-1 error enums\n\n## Does Not Close\n- peer signal model",
+  "design": "## Public Contract\n`pub enum AtmError { .. }`",
+  "acceptance_criteria": "## Acceptance Criteria\n- [ ] every error variant has a code\n\n## Validation\n- `cargo test -p atm-core`",
+  "blocked_by": [],
+  "model_class": "fable",
+  "requirements": [
+    "NONE"
+  ],
+  "release_train": "1.7",
+  "parent": "atm-phase-bd",
+  "adrs": [
+    "ADR-011",
+    "ADR-012",
+    "ADR-017"
+  ]
+}

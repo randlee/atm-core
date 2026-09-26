@@ -1,6 +1,6 @@
 ---
 name: codex-orchestration
-version: 0.1.0
+version: 0.1.1
 description: Orchestrate sprint work where an appointed lead coordinates, the developer the lead assigns each sprint to is its sole developer, and quality-mgr enforces the QA gate.
 depends_on:
   quality-management-gh: 1.x
@@ -172,6 +172,9 @@ of §0.
    - `ruthless-boundary-qa`
    - `rust-best-practices-agent`
    - `rust-service-hardening-agent`
+   - `plan-scope-reviewer`, every plan round, rendered from
+     `plan-scope-reviewer-assignment.json.j2` in this skill
+     (`.claude/project/quality-policy.md`, "Reviewer Policy")
 5. If plan QA passes, the hardened plan is ready for implementation dispatch.
 6. If plan QA fails, the lead uses the normal codex-orchestration
    triage-and-fix loop to route concrete fixes back to the developer.

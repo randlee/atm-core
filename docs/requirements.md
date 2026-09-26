@@ -3077,6 +3077,15 @@ Nudge invariant (Phase BA):
     `TASK_REMINDER_INTERVAL_MS` — resets the reminder and lead-notification
     counters; a shorter burst of activity does not.
 
+Task-history amendment (2026-09-26, issue #1599): rule 9's closed subcommand
+set additionally admits `history`, a read-only view over the past N tasks for
+the team (open and completed, newest first by `assigned_at`), with optional
+`--member` and `--limit`. It reuses the existing task-ledger list transport
+(`TaskLedgerQuery::History`) rather than adding a new request/response shape,
+and it never writes a task row, a `task_events` row, or a queue position; it
+does not alias into or replace `assign`, `start`, `close`, `move`, `list`, or
+`events`. See ADR-062's "History view" section for the read contract.
+
 ## 16. Observability Requirements
 
 Product requirement ID:

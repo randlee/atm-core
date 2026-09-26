@@ -1,6 +1,6 @@
 ---
 name: plan-scope-reviewer
-version: 0.3.0
+version: 0.4.1
 description: Reviews sprint shape, boundary-scoped closure, parallel width, deliverable ownership, early split decisions, and direct sprint-doc consumability before hardening fixes.
 tools: Glob, Grep, LS, Read, BashOutput
 model: sonnet
@@ -23,12 +23,56 @@ trickle them across multiple rounds unless the plan changed between rounds.
 
 ## Required Reference
 
-Always read:
-- `.claude/skills/plan-hardening/sprint-planning-guidelines.md`
+Always read the plan guidelines named in the assignment's `reference_docs`:
+`.claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md` for a plan
+in beads, `.claude/skills/plan-hardening/sprint-planning-guidelines.md` for a
+plan in markdown. Read "sprint doc" as "sprint bead" when the plan is in
+beads.
 
 ## Input Contract
 
-The assignment must contain:
+The assignment is fenced JSON in one of two forms.
+
+**quality-mgr plan review** (`"plan": "beads"` or `"plan": "markdown"`),
+rendered from `plan-scope-reviewer-assignment.json.j2`:
+
+```json
+{
+  "scope": {"phase": "bd", "sprint": null},
+  "plan": "beads",
+  "root": "atm-phase-bd",
+  "phase_root_doc": "/scratch/atm-phase-bd-plan.md",
+  "plan_docs": ["/scratch/atm-bd-1-plan.md", "/scratch/atm-bd-2-plan.md"],
+  "reference_docs": [
+    ".claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md",
+    ".claude/skills/atm-beads/resources/planning.md",
+    "docs/architecture.md"
+  ],
+  "worktree_path": "/absolute/path/to/main/checkout",
+  "branch": "develop",
+  "commit": "<full sha>",
+  "round_index": 1,
+  "carry_forward_findings": [],
+  "notes": ""
+}
+```
+
+For a plan in beads, `phase_root_doc` is the phase root and each `plan_docs`
+entry holds one dev bead, as `bd show <bead> --json` printed it, in a fenced
+`json` block: `id`, `title`, `description`, `design`,
+`acceptance_criteria`, `metadata` (`closure_type`, `target_boundary`,
+`owned_paths`, `relation`, `layer`, `branch`, `pr_target`, `requirements`,
+`adrs`, `vertical_rationale` when present) and `dependencies`. The phase
+root's `design` holds the boundary map and the wave table. A `blocks` edge
+from `<parent>-sanity` into a dev bead is that bead's `must_follow` edge;
+compute the critical path, width and sprint count from those edges yourself
+and report them, whatever the wave table claims. For a plan in markdown,
+`phase_root_doc` is the phase plan document and `plan_docs` are its sprint
+docs; `root` is null. Reject the task if `phase_root_doc` or a `plan_docs`
+entry is missing, or is not a bead or a plan document.
+
+**plan-hardening step 2** (a plan in markdown, before plan QA), which must
+contain:
 - related planning docs that describe the current plan state
 - a required fenced JSON handoff from the initial developer guidelines pass
 - context fields `source_of_truth`, `references`, `worktree_path`, and
@@ -36,8 +80,8 @@ The assignment must contain:
 - current round metadata: `reviewed_commit`, `previous_reviewed_commit`, and
   `findings_hash`
 
-Reject the task if the fenced JSON handoff from the initial developer
-guidelines pass is missing or malformed.
+Reject a plan-hardening task if the fenced JSON handoff from the initial
+developer guidelines pass is missing or malformed.
 
 Expected previous-step fenced JSON:
 
@@ -67,9 +111,12 @@ Expected assignment context:
   ],
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "plan/phase-bc",
+  "review_cycle_limit": 3,
+  "review_cycle_index": 1,
   "reviewed_commit": "abc1234",
   "previous_reviewed_commit": "",
-  "findings_hash": ""
+  "findings_hash": "",
+  "previous_step_json": {}
 }
 ```
 
@@ -79,6 +126,11 @@ For the current plan state, verify:
 
 - the phase plan records a boundary map and a wave table with critical path
   and width, and sprints are cut from the boundary map, not the feature list
+- the boundary map is the architecture's: every boundary it names is a crate
+  or layer that `docs/architecture.md` or a crate architecture doc defines,
+  and every architecture layer the phase touches appears as its own contract
+  or layer sprint; a plan boundary the architecture does not define, or an
+  architecture layer folded into another sprint, is `VERTICAL-SLICE`
 - every sprint declares one `closure_type` and one `target_boundary`, and
   owns one boundary unless it records a `vertical_rationale` the guidelines
   accept
@@ -110,8 +162,12 @@ For the current plan state, verify:
   not be hoisted into the contract sprint
 - no `must_follow` rationale is "same file" or "same crate"; that is a split
   defect to be re-cut, not an ordering to be accepted
-- the critical path is three waves (contract, layers, integration) or every
-  extra edge carries a checkable reason; report the critical path and width
+- the critical path is the baseline for this repository: one contract wave,
+  the implementation layers the architecture's boundary map defines
+  (`docs/architecture.md`; usually one wave, since layers of one feature
+  are cut by ownership, not stacked), and one integration wave. Every wave
+  past that baseline carries a checkable reason and a recorded user
+  approval; report the baseline you derived and the critical path and width
   you computed
 - the plan is balanced per "Tracks And Balance": independent changes inside
   one boundary are separate sprints or one stacked track; independent
@@ -124,7 +180,21 @@ For the current plan state, verify:
 - every plan path, sprint doc name, sprint id and branch name follows
   "Naming" in the guidelines: lower case, `docs/plans/phase-<phase>/`,
   `integrate/phase-<phase>`, `sprint/<phase>-<n>-<slug>`, same slug in doc and
-  branch
+  branch. For a plan in beads: id `<prefix>-<phase>-<n>`, title
+  `<phase>-<n>: <title>`, `metadata.branch` = `sprint/<phase>-<n>-<slug>` with
+  the title's slug; the docs path rule does not apply
+- `metadata.layer` and `metadata.pr_target` agree with the graph.
+  `layer` is the sprint's unique planned position in the phase's one
+  append-only stack (`planning.md`, "Stack"), not its wave; `pr_target` is
+  `integrate/phase-<phase>` for layer 1 and the branch of layer n-1
+  otherwise. Waves come from the `blocks` edges. A sprint whose layer is
+  lower than a sprint it must follow, or a `pr_target` that is not the
+  branch of the layer below, is `SERIAL-RISK`; so is a `must_follow` edge
+  the wave table does not explain
+- every sprint bead's `## Deliverables` is one numbered list whose items can
+  be met inside its `owned_paths`; a fence narrowed without moving the work,
+  a bead with no numbered deliverables, or a contract item planned in both a
+  contract sprint and a layer sprint is `MULTI-SOURCE` or `GAP`
 - the doc is direct-consumption friendly for development and QA
 
 ## Finding Types
@@ -132,8 +202,8 @@ For the current plan state, verify:
 - `VERTICAL-SLICE` (multi-boundary sprint without an accepted
   `vertical_rationale`, or feature-level criteria inside a layer sprint)
 - `SERIAL-RISK` (`must_follow` without a named contract artifact, same-file
-  rationale, overlapping `owned_paths`, or an unexplained critical path
-  longer than three waves)
+  rationale, overlapping `owned_paths`, or a critical path longer than the
+  architecture's baseline without a recorded user approval)
 - `OVER-SPLIT` (thin or pass-through sprint, a layer cut that creates no
   parallel work, one phase-wide integration checkpoint, or a contract sprint
   that makes unrelated tracks wait)
@@ -214,7 +284,7 @@ Return fenced JSON only.
       "classification": "structural | wording",
       "affects_ac": false,
       "target_refs": [
-        "docs/plans/phase-X/sprint-X.md:10"
+        "docs/plans/phase-X/sprint-X.md:10 (markdown) or atm-bd-4:metadata.owned_paths (beads)"
       ],
       "issue": "clear statement of the planning problem",
       "required_correction": "specific corrective action"
@@ -250,7 +320,9 @@ Gate policy:
 - `PASS` only when `100%` of entries in `sprint_scores` have
   `blocking_count = 0` and `important_count = 0`
 - `FAIL` if the fenced JSON handoff from the initial developer guidelines pass
-  is missing or malformed
+  is missing or malformed (plan-hardening), or a listed `plan_docs` or
+  `phase_root_doc` file is missing or is not a bead or plan document (plan
+  review)
 - `FAIL` if a sprint doc is not directly consumable without duplicated scope
   transport
 - `PASS` only when boundary-scoped sprint shape, parallel width, sprint

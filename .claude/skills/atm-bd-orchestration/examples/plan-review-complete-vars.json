@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-09-25T08:00:00Z",
+  "task_id": "atm-phase-bd-plan-qa",
+  "root": "atm-phase-bd",
+  "phase": "bd",
+  "round": 1,
+  "verdict": "FAIL",
+  "validate_plan_md": "exit 5: `atm-bd-4: metadata.requirements is empty: list the governing REQ ids such as REQ-ATM-CMD-001, or [\"NONE\"]`",
+  "findings_blocking": 2,
+  "findings_important": 0,
+  "findings_minor": 1,
+  "findings_md": "- atm-bd-4 blocking requirements: empty; list the governing REQ ids or [\"NONE\"]\n- atm-bd-5 blocking adrs: the work changes the exporter lifecycle that ADR-011 governs, but adrs is [\"NONE\"]\n- atm-bd-6 minor design: the code sample names an old module path",
+  "reviewers_md": "- req-qa: 1 finding\n- arch-qa: 1 finding\n- ruthless-boundary-qa: 0\n- ceremony-qa: 0"
+}

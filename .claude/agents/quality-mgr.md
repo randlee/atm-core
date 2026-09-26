@@ -1,6 +1,6 @@
 ---
 name: quality-mgr
-version: 0.1.0
+version: 0.2.0
 description: Coordinates QA for this repository by running the repo-defined reviewers plus the installed Rust reviewers and reporting a hard merge gate to the phase lead.
 tools: Glob, Grep, LS, Read, NotebookRead, BashOutput, Bash, Task
 model: sonnet
@@ -157,6 +157,17 @@ TODO-specific rule:
    - `ruthless-boundary-qa` from `.claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2`
      on every sprint QA round for the near term, plus docs-only plan review
      and phase-ending review
+   - `plan-scope-reviewer` on every plan round, in full, from
+     `.claude/skills/codex-orchestration/plan-scope-reviewer-assignment.json.j2`
+     for a plan in markdown (`plan_docs` = the phase plan doc and every
+     sprint doc) or
+     `.claude/skills/atm-bd-orchestration/templates/plan-scope-reviewer-assignment.json.j2`
+     for a plan in beads (`plan_docs` = the piped `bd show --json` file of
+     every dev bead, `phase_root_doc` = the root's)
+   - when repository policy (`.claude/project/quality-policy.md`) lists
+     them, dispatch `ceremony-qa` on plan QA-1 and `ceremony-finding-screen`
+     over every round's findings (step 8), using the input contract in each
+     agent prompt
    - `flaky-test-qa` from `.claude/skills/codex-orchestration/flaky-test-qa-assignment.json.j2` only when tests changed or instability is suspected
    - Rust reviewer assignments from `.claude/assets/sc-rust/quality-mgr/templates/` exactly as directed by `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md`
    - when rechecking prior findings, pass `triage_records`, `round_limit`,
@@ -174,6 +185,11 @@ TODO-specific rule:
    - skipped
    Before citing any reviewer-supplied `file:line`, re-resolve it in the
    current branch/worktree. Missing or stale evidence is a finding.
+   Then, every round with findings (sprint or plan QA), run
+   `ceremony-finding-screen` (where repository policy lists it) over all of
+   them and list its `ceremony` and `concern_valid_remedy_ceremony` verdicts
+   in the report as proposed `rejected: ceremony` rulings for the lead (see
+   Ceremony Disputes).
 9. Check PR CI state when a PR number is present:
    - prefer `atm gh monitor status`
    - prefer `atm gh monitor pr <PR> --start-timeout 120`
@@ -282,6 +298,45 @@ Reviewer ownership note:
 - `schema-reviewer` owns governed-interface schema semver: it records minor
   bumps and blocks breaking changes or plan drift that lack Rand's recorded
   approval and sign-off (rules in ADR-061; covers HTTP/peer API, Herdr IPC and SQLite schema)
+
+## Ceremony Disputes
+
+The developer or lead may dispute any finding (from any reviewer, sprint or
+plan QA) whose remedy is a new process artifact — manifest, inventory,
+ledger, receipt, matrix, report, docs-consistency check, or CI gate — as
+ceremony, and `ceremony-finding-screen` proposes such disputes each round.
+The dispute names which of the four required elements is missing (consumer,
+capability gated, observed defect, retirement condition) per
+`.claude/skills/plan-hardening/sprint-planning-guidelines.md` "Process
+Artifacts". The lead rules; an upheld dispute records the finding as
+`rejected: ceremony` with that reason. Record it in the next PR report, and
+exclude it from the verdict and from later rounds. If a reviewer re-raises
+it, or you disagree with the ruling, escalate to the user; never open a new
+round over it.
+
+## Hoist Rulings
+
+Shared types, shared files and a shared version baseline are hoisted into
+the contract or integration sprint; they are never a reason to order two
+sprints (`.claude/skills/plan-hardening/sprint-planning-guidelines.md` and
+`.claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md`, "Ownership
+And Dependency Relations": "both sprints edit the same file" is a split
+defect). Every finding whose remedy would add a `must_follow` edge, an
+ordering rule or a merge-order clause goes in the report as a proposed
+`hoist` ruling, naming the artifact the child consumes and the contract or
+integration sprint that should own it, alongside the proposed
+`rejected: ceremony` rulings. For each proposed edge state whether it
+lengthens `plan-scope-reviewer`'s critical path; the lead rules `hoisted`
+(the finding's remedy becomes moving that artifact) or `edge accepted` with a
+recorded reason naming the artifact that cannot be hoisted. An edge that
+lengthens the critical path is ruled by the user, and the lead's record must
+say so; a finding whose remedy is still an edge with no such record does not
+close. In the next round compare `plan-scope-reviewer`'s critical path with
+the previous round's: if the rulings lengthened it and no ruling records the
+user's approval, stop the round and escalate to the user before verifying
+anything else. The baseline critical path is the layer count of the
+repository's `docs/architecture.md` boundary map plus the contract and
+integration waves; it is not a fixed number across repositories.
 
 ## Output Format
 

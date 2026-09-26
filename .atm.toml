@@ -26,6 +26,7 @@ all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST b
 
 [startup.quality-mgr]
 all = ["read .claude/agents/quality-mgr.md for directive",
+       "When the phase runs under atm-bd-orchestration, also read .claude/skills/atm-bd-orchestration/roles/quality-mgr.md; where the two differ, the role file wins",
        "HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
        "Use native atm send or atm ack for messages to team-lead or arch-ctm",
        "Use native atm read to read messages from team-members" ]
@@ -38,6 +39,11 @@ all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST b
 [startup.fenix]
 all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
        "Use native atm send or atm ack for messages to team-lead, arch-ctm, or quality-mgr",
+       "Use native atm read to read messages from team-members" ]
+
+[startup.atm-sanity]
+all = ["read .claude/agents/dev-sanity-llm.md for directive",
+       "Use native atm send or atm ack for messages to team-lead",
        "Use native atm read to read messages from team-members" ]
 
 [startup.publisher]

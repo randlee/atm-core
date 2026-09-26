@@ -1,0 +1,28 @@
+{
+  "id": "atm-bd-4-qa1-f1",
+  "parent": "atm-phase-bd",
+  "qa_bead": "atm-bd-4-qa1",
+  "caused_by": "atm-bd-4",
+  "phase": "bd",
+  "sprint": "bd-4",
+  "stack": "phase-bd",
+  "found_on_layer": 4,
+  "found_at_commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
+  "severity": "blocking",
+  "screen": "keep",
+  "reviewer": "rust-qa-agent",
+  "finding_ref": "RQA-001",
+  "title": "retry without jitter",
+  "description": "Retries use a fixed delay, so many exporters retry in lockstep after a collector outage.",
+  "remedy": "Add full jitter to the retry delay in crates/atm-http-runtime/src/peer/sync.rs and a test for it.",
+  "evidence": "crates/atm-http-runtime/src/peer/sync.rs:97 `sleep(self.retry_delay)`",
+  "sprint_bead": "atm-bd-4",
+  "requirements": [
+    "NONE"
+  ],
+  "adrs": [
+    "ADR-011",
+    "ADR-012",
+    "ADR-017"
+  ]
+}

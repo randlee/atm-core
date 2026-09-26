@@ -186,6 +186,36 @@ Task selection for an idle member: the active task, else the first `assigned`
 task in queue order. A `reminded` event is recorded only against the task the
 prompt was rendered for.
 
+## History view (2026-09-26 amendment, issue #1599)
+
+`atm task history [--member <agent>] [--limit N] [--events] [--json]` is a
+read-only view, not a new state or transition. Every other task surface in
+this ADR (`atm task list`, `atm task events <id>`) filters completed rows out
+at some layer; once a task closes it stays reachable only through
+`atm task events <id>` if the caller still has the id. History exists to
+answer "what did the team do" without one.
+
+Contract:
+- selects the past `N` tasks for the caller's team, open and completed,
+  newest first by `assigned_at` (default `N` = 10, minimum 1, ceiling
+  `MAX_TASK_PAGE_LIMIT`); `--limit` is validated both client-side (CLI
+  pre-check) and again at the daemon/list boundary a
+  `TaskLedgerQuery::History` request reaches, since that request can be built
+  without going through the CLI
+- `--member` scopes the same team-wide row set to one assignee; it filters,
+  it does not change the transport
+- ledger-derived `started_at`/`closed_at`/outcome/duration columns come from
+  each selected task's own `task_events` rows, read in one batched round trip
+  keyed by the selected task-id set (`list_task_events_for_tasks`), not one
+  read per row
+- `--events` interleaves every selected task's `task_events` rows
+  chronologically across tasks in the rendered output; it changes rendering
+  only, not which tasks are selected or what is read
+- reuses the existing task-ledger list transport (`TaskLedgerQuery::History`
+  on the same `/messages` list endpoint `list`/`events` already use); it adds
+  no new request or response DTO shape and writes nothing: no task row,
+  `task_events` row, or queue position changes as a result of running it
+
 ## Consequences
 
 The lifecycle remains one row per task id, with explicit assignment events for reassignment and reopen; close outcomes remain limited to completed, refused, and cancelled.

@@ -100,6 +100,15 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-09-26 — issue #1599 (`atm task history`):** `HTTP_API_VERSION`
+  moves from `1.9.0` to `1.10.0`. `TaskLedgerQuery` gains the additive
+  `History { member, limit }` request variant, dispatched through the same
+  `/messages` list endpoint `Tasks`/`Events` already use; no new route or
+  response DTO shape. `pinned_1_10_0_history_query_fixture_decodes`
+  (`crates/atm-core/src/list.rs`) is the D3 previous-consumer proof: a
+  literal pinned 1.10.0 wire fixture, not one generated from the current
+  type, still decodes into `TaskLedgerQuery`. This is a minor,
+  backward-compatible bump.
 - **2026-09-13 — BB.7 documentation correction (BB7-OPENAPI-001):** The
   OpenAPI documentation now describes the bare `ListOutcome` body returned by
   `GET /messages` and the bare `ReadOutcome` body returned by
@@ -211,8 +220,9 @@ migration functions directly.
   fields, Phase BA.2 moves it to `1.5.0` for additive task write/projection
   fields, and Phase BA.4 moves it to `1.6.0` for task move; it is bumped on
   every later governed-interface change. Phase BB.1 moves it to `1.8.0` for
-  task-transition metadata, and Phase BB.6 moves it to `1.9.0` for prompt
-  handoffs in task-event responses.
+  task-transition metadata, Phase BB.6 moves it to `1.9.0` for prompt
+  handoffs in task-event responses, and issue #1599 moves it to `1.10.0` for
+  the `TaskLedgerQuery::History` request variant behind `atm task history`.
 - Herdr support becomes a matrix, not a single version; per-release
   conformance fixtures are required.
 - SQLite migrations gain a declared version and an explicit rollback test

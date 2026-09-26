@@ -1,0 +1,9 @@
+{
+  "id": "atm-phase-bd",
+  "plan_scope": "epic",
+  "phase": "bd",
+  "title": "peer transport hardening",
+  "description": "## Goal\nHarden the peer transport and its error model.\n\n## Stacks\n- peer: lowest-risk contract first",
+  "design": "## Decisions\n- one peer path (HTTP) with Herdr IPC unchanged",
+  "acceptance_criteria": "## Success Criteria\n- every stack merged to integrate/phase-bd"
+}

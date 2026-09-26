@@ -1,4 +1,8 @@
-//! Closed task command surface.
+//! `atm task` command surface: the closed subcommand set `assign`, `start`,
+//! `close`, `move`, `list`, `events`, plus the read-only `history` view
+//! (requirements.md §15.4 rule 9, dated amendment 2026-09-26, issue #1599).
+//! `history` mutates no task, event, or queue state; every other listed
+//! subcommand is a state transition.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
