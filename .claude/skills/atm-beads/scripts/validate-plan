@@ -21,16 +21,19 @@ set -uo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
 mg="$here/manifest-get"
-file="" root="" phase=""
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+file="" root="" phase="" write_index=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --file) file=$2; shift 2 ;;
     --root) root=$2; shift 2 ;;
     --phase) phase=$2; shift 2 ;;
+    --write) write_index=1; shift ;;
     *) echo "validate-plan: unknown argument $1" >&2; exit 2 ;;
   esac
 done
 [ -n "$file" ] || [ -n "$root" ] || { echo "validate-plan: pass --file or --root" >&2; exit 2; }
+[ "$write_index" -eq 0 ] || [ -n "$root" ] || { echo "validate-plan: --write requires --root" >&2; exit 2; }
 for c in bd jq atm git; do
   command -v "$c" >/dev/null || { echo "validate-plan: $c not on PATH; see .claude/skills/atm-beads/references/installation-and-troubleshooting.md" >&2; exit 2; }
 done
@@ -92,6 +95,30 @@ while IFS= read -r dep; do
   [ -n "$want" ] && ! grep -qw -- "$want" <<< "$labels" && problems+=("blocker $dep in beads is not labelled $want")
 done < <(jq -rs '(map(.id)) as $ids | [.[] | (.dependencies // [])[] | select(.type == "blocks") | .depends_on_id]
   | unique | map(select(. as $d | $ids | index($d) | not)) | .[]' "$plan")
+
+# 2c. the committed sprint index is a deterministic projection of the live plan.
+# `--write` is the explicit regeneration path used when accepting a plan change.
+if [ -n "$root" ]; then
+  phase_from_root=$(bd show "$root" --json 2>/dev/null | jq -r '.[0].metadata.phase // empty')
+  if [ -z "$phase_from_root" ] || [ -z "$repo_root" ]; then
+    echo "validate-plan: could not determine the phase index path for $root" >&2
+    exit 2
+  fi
+  index="$repo_root/docs/plans/phase-$phase_from_root/sprints.json"
+  if [ "$write_index" -eq 1 ]; then
+    "$here/export-sprint-index" --root "$root" --out "$index" \
+      || { echo "validate-plan: sprint index export failed for $root" >&2; exit 2; }
+  fi
+  fresh_index="$scratch/fresh-sprints.json"
+  "$here/export-sprint-index" --root "$root" --out "$fresh_index" \
+    || { echo "validate-plan: fresh sprint index export failed for $root" >&2; exit 2; }
+  if [ ! -f "$index" ]; then
+    problems+=("missing committed sprint index $index (run validate-plan --root $root --write)")
+  elif ! index_diff=$(diff -u "$index" "$fresh_index"); then
+    printf '%s\n' "$index_diff"
+    problems+=("committed sprint index $index is out of date (run validate-plan --root $root --write)")
+  fi
+fi
 
 # 3. REQ/ADR ids exist in the governing docs (manifest globs; content or file name)
 # shellcheck disable=SC2046
