@@ -3,7 +3,7 @@ agents:
     version: 0.1.0
     path: .claude/agents/scrum-master.md
   quality-mgr:
-    version: 0.1.0
+    version: 0.2.0
     path: .claude/agents/quality-mgr.md
   req-qa:
     version: 0.1.0
@@ -12,8 +12,20 @@ agents:
     version: 0.1.0
     path: .claude/agents/arch-qa.md
   plan-scope-reviewer:
-    version: 0.1.0
+    version: 0.4.1
     path: .claude/agents/plan-scope-reviewer.md
+  ceremony-qa:
+    version: 0.1.0
+    path: .claude/agents/ceremony-qa.md
+  ceremony-finding-screen:
+    version: 0.1.0
+    path: .claude/agents/ceremony-finding-screen.md
+  dev-sanity-llm:
+    version: 0.7.3
+    path: .claude/agents/dev-sanity-llm.md
+  sc-sanity-llm:
+    version: 0.4.0
+    path: .claude/agents/sc-sanity-llm.md
   critical-plan-reviewer:
     version: 0.1.0
     path: .claude/agents/critical-plan-reviewer.md
@@ -74,10 +86,26 @@ agents:
   sc-adversarial-fuzz-probe:
     version: 1.0.0
     path: .claude/agents/sc-adversarial-fuzz-probe.md
+roles:
+  dev-sanity: atm-sanity
+  quality-mgr: quality-mgr
+  lead: team-lead
 skills:
-  codex-orchestration:
-    version: 0.1.0
+  atm-beads:
+    version: 0.3.1
+  atm-bd-orchestration:
+    version: 0.3.5
     depends_on:
+      atm-beads: 0.x
+      quality-mgr: 0.x
+      ceremony-finding-screen: 0.x
+      dev-sanity-llm: 0.x
+      sc-sanity-llm: 0.x
+      plan-scope-reviewer: 0.x
+  codex-orchestration:
+    version: 0.1.1
+    depends_on:
+      plan-scope-reviewer: 0.x
       quality-management-gh: 1.x
       quality-mgr: 0.x
       req-qa: 0.x
