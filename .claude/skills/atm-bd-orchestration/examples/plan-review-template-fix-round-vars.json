@@ -1,0 +1,8 @@
+{
+  "task_id": "atm-phase-bd-plan-qa",
+  "root": "atm-phase-bd",
+  "phase": "bd",
+  "round": 2,
+  "carry_forward": "atm-bd-4 blocking requirements: empty; list the governing REQ ids or [\"NONE\"]\natm-bd-5 blocking adrs: ADR-099 is not in docs/architecture.md or docs/adr/",
+  "trunk": "develop"
+}

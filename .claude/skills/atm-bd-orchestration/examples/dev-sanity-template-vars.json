@@ -1,0 +1,12 @@
+{
+  "task_id": "atm-bd-4-sanity",
+  "checked_bead": "atm-bd-4",
+  "sprint": "bd-4",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/sprint/bd-4-peer-retry-jitter",
+  "branch": "sprint/bd-4-peer-retry-jitter",
+  "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
+  "base": "sprint/bd-3-peer-config",
+  "lead": "team-lead",
+  "cc": "",
+  "lint_command": "just lint"
+}

@@ -1,0 +1,68 @@
+---
+name: finding-bead
+version: 0.2.0
+description: One QA or review finding. It carries the governing `requirements` and `adrs` of the sprint it traces to (`sprint_bead`), so every fix and fix QA has them, however deep the fix-on-fix chain. Priority follows severity (blocking 1, important 3, minor 4) so `bd ready` queues blocking findings ahead of planned dev. Render strictly, then `jq -c .` into the import JSONL.
+format: json
+required_variables:
+  - id
+  - parent
+  - qa_bead
+  - caused_by
+  - phase
+  - sprint
+  - stack
+  - found_on_layer
+  - found_at_commit
+  - severity
+  - screen
+  - reviewer
+  - finding_ref
+  - sprint_bead
+  - requirements
+  - adrs
+  - title
+  - description
+  - remedy
+  - evidence
+optional_variables:
+  - assignee
+  - blocked_by
+defaults:
+  assignee: ""
+  blocked_by: []
+---
+{% if severity not in ["blocking", "important", "minor"] %}ERROR: severity must be blocking, important or minor, got {{ severity }}
+{% endif %}{% if screen not in ["keep", "not_applicable", "ceremony", "concern_valid_remedy_ceremony"] %}ERROR: screen must be a ceremony-finding-screen verdict, got {{ screen }}
+{% endif %}{% for k, v in [["requirements", requirements], ["adrs", adrs]] %}{% if not v or ("NONE" in v and v | length > 1) %}ERROR: {{ k }} must list ids or be exactly ["NONE"]
+{% endif %}{% endfor %}{
+  "id": {{ id | tojson }},
+  "title": {{ (sprint ~ " " ~ severity ~ ": " ~ title) | tojson }},
+  "issue_type": "bug",
+  "status": "open",
+  "priority": {{ {"blocking": 1, "important": 3, "minor": 4}[severity] }},
+  "assignee": {{ assignee | tojson }},
+  "description": {{ (description ~ "\n\nEvidence:\n" ~ evidence ~ "\n\nFixed on a new layer at the top of stack " ~ stack ~ ". QA verifies the fix after its sanity check; the sanity check judges only the acceptance criteria below.") | tojson }},
+  "design": {{ remedy | tojson }},
+  "acceptance_criteria": {{ "- [ ] the remedy (design) is applied at every occurrence in scope\n- [ ] a test or check that reproduces the defect passes at the fix head\n- [ ] the repository's validation passes" | tojson }},
+  "labels": {{ ["phase-" ~ phase, "stage:finding", "stack:" ~ stack, "severity:" ~ severity] | tojson }},
+  "dependencies": [
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ parent | tojson }}, "type": "parent-child"},
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ qa_bead | tojson }}, "type": "discovered-from"},
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ caused_by | tojson }}, "type": "caused-by"}{% for b in blocked_by %},
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ b | tojson }}, "type": "blocks"}{% endfor %}
+  ],
+  "metadata": {
+    "phase": {{ phase | tojson }},
+    "sprint": {{ sprint | tojson }},
+    "stack": {{ stack | tojson }},
+    "found_on_layer": {{ found_on_layer | tojson }},
+    "found_at_commit": {{ found_at_commit | tojson }},
+    "severity": {{ severity | tojson }},
+    "screen": {{ screen | tojson }},
+    "reviewer": {{ reviewer | tojson }},
+    "finding_ref": {{ finding_ref | tojson }},
+    "sprint_bead": {{ sprint_bead | tojson }},
+    "requirements": {{ requirements | tojson }},
+    "adrs": {{ adrs | tojson }}
+  }
+}

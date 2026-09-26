@@ -194,6 +194,15 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         at: IsoTimestamp,
         outcome: ReminderOutcome,
     ) -> Result<TaskRow, AtmError>;
+    /// Zeroes the reminder budget after the assignee is observed sustained
+    /// active. The budget then counts from the assignee's last observed
+    /// activity rather than from task assignment.
+    fn reset_reminders(
+        &self,
+        member: &MemberKey,
+        task_id: &TaskId,
+        at: IsoTimestamp,
+    ) -> Result<TaskRow, AtmError>;
     fn record_lead_notified(
         &self,
         member: &MemberKey,
@@ -536,6 +545,25 @@ impl TaskStore for DummyTaskStore {
             })?;
         row.last_reminded_at = Some(at);
         row.reminder_count = row.reminder_count.saturating_add(1);
+        Ok(row.clone())
+    }
+
+    fn reset_reminders(
+        &self,
+        member: &MemberKey,
+        task_id: &TaskId,
+        at: IsoTimestamp,
+    ) -> Result<TaskRow, AtmError> {
+        let mut rows = self.rows.lock().expect("dummy task rows lock");
+        let row = rows
+            .get_mut(&(member.team().clone(), task_id.clone()))
+            .ok_or_else(|| {
+                AtmError::new(crate::AtmErrorCode::InternalError, "dummy task row missing")
+            })?;
+        row.reminder_count = 0;
+        row.lead_notified_count = 0;
+        row.last_reminded_at = None;
+        row.updated_at = at;
         Ok(row.clone())
     }
 

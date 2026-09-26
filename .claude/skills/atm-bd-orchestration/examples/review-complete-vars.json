@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-09-25T10:00:00Z",
+  "task_id": "atm-phase-bd-review",
+  "phase": "bd",
+  "branch": "fix/bd-4-qa1-f1-retry-jitter",
+  "commit": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
+  "verdict": "PASS",
+  "findings_blocking": 0,
+  "findings_important": 1,
+  "findings_minor": 0,
+  "findings_md": "1. important: crates/atm-http-runtime/src/lib.rs:40 re-exports an internal type"
+}

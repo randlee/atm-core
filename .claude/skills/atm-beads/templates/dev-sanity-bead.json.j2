@@ -1,0 +1,39 @@
+---
+name: dev-sanity-bead
+version: 0.1.0
+description: The sanity check bead that follows a sprint's dev bead. It is blocked by the dev bead; dev beads that require this sprint list this bead in their `blocked_by`. Recipient and message are in resources/dev-sanity.md. Render strictly, then `jq -c .` into the import JSONL.
+format: json
+required_variables:
+  - id
+  - parent
+  - dev_bead
+  - phase
+  - sprint
+  - stack
+  - assignee
+optional_variables:
+  - priority
+defaults:
+  priority: 2
+---
+{
+  "id": {{ id | tojson }},
+  "title": {{ (sprint ~ ": sanity check") | tojson }},
+  "issue_type": "task",
+  "status": "open",
+  "priority": {{ priority }},
+  "assignee": {{ assignee | tojson }},
+  "description": {{ ("Sanity check of " ~ dev_bead ~ " (sprint " ~ sprint ~ ").\n\nVerify that the work is done:\n\n- the agent did not skip anything;\n- there are no obvious errors;\n- lint passes.\n\nThis is not QA.") | tojson }},
+  "acceptance_criteria": {{ ("- [ ] every deliverable and acceptance criterion of " ~ dev_bead ~ " is present in the pushed head (workflow steps that come after the sanity check, such as linking and QA, are not judged)\n- [ ] no obvious errors\n- [ ] lint passes") | tojson }},
+  "labels": {{ ["phase-" ~ phase, "stage:dev-sanity", "stack:" ~ stack] | tojson }},
+  "dependencies": [
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ parent | tojson }}, "type": "parent-child"},
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ dev_bead | tojson }}, "type": "blocks"}
+  ],
+  "metadata": {
+    "phase": {{ phase | tojson }},
+    "sprint": {{ sprint | tojson }},
+    "stack": {{ stack | tojson }},
+    "dev_bead": {{ dev_bead | tojson }}
+  }
+}

@@ -1,0 +1,47 @@
+---
+name: arch-qa-assignment
+version: 2.0.0
+description: Render a fenced-JSON assignment for arch-qa in atm-bd-orchestration. `sprint_doc` is the file quality-mgr writes by piping `bd show <checked bead> --json` (the bead is the sprint plan); `carry_forward_findings_json` is a JSON array of the reviewer's own finding ids (`metadata.finding_ref` of the carried finding beads). Triage records are replaced by finding beads and are always empty.
+format: json
+required_variables:
+  - review_mode
+  - worktree_path
+  - branch
+  - commit
+  - review_targets
+  - reference_docs
+optional_variables:
+  - phase
+  - sprint
+  - sprint_doc
+  - round_limit
+  - changed_files
+  - carry_forward_findings_json
+  - notes
+defaults:
+  phase: ""
+  sprint: ""
+  sprint_doc: ""
+  round_limit: false
+  changed_files: []
+  carry_forward_findings_json: "[]"
+  notes: ""
+---
+{
+  "review_mode": {{ review_mode }},
+  "worktree_path": {{ worktree_path }},
+  "branch": {{ branch }},
+  "commit": {{ commit }},
+  "scope": {
+    "phase": {% if phase %}{{ phase }}{% else %}null{% endif %},
+    "sprint": {% if sprint %}{{ sprint }}{% else %}null{% endif %}
+  },
+  "authoritative_sprint_doc": {% if sprint_doc %}{{ sprint_doc }}{% else %}null{% endif %},
+  "review_targets": [{% for target in review_targets %}{{ target }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "reference_docs": [{% for doc in reference_docs %}{{ doc }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "round_limit": {% if round_limit %}true{% else %}false{% endif %},
+  "changed_files": [{% for file in changed_files %}{{ file }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "triage_records": [],
+  "carry_forward_findings": {{ carry_forward_findings_json | safe }},
+  "notes": {{ notes }}
+}

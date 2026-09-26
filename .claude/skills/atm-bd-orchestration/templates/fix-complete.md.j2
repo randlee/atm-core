@@ -1,0 +1,63 @@
+---
+name: fix-complete
+version: 2.0.0
+description: Developer completion report for one finding bead (fix-task); the body of `atm task close <task-id> completed`. The lead reads `commit` and `rebased_onto` for the fix's sanity check and link.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - sprint
+  - branch
+  - commit
+  - rebased_onto
+  - outcome
+  - resolution_md
+  - validation_md
+optional_variables:
+  - notes_md
+defaults:
+  notes_md: ""
+metadata:
+  type: fix-complete
+  tags:
+    - stage:fix
+    - orchestration:beads
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: fix-complete
+    stage: fix
+    transition: complete
+---
+{% if outcome not in ["fixed", "not_reproducible"] %}{{ outcome | outcome_must_be_fixed_or_not_reproducible }}ERROR: outcome must be fixed or not_reproducible, got {{ outcome }}
+{% endif %}# Fix Complete
+
+Generated: {{ generated_at }}
+Finding bead: {{ task_id }} (sprint {{ sprint }})
+Branch: `{{ branch }}`
+Commit: `{{ commit }}`
+Rebased onto: `{{ rebased_onto }}`
+Outcome: **{{ outcome }}**
+
+## Machine Status (JSON)
+```json
+{
+  "task": {{ task_id | tojson }},
+  "sprint": {{ sprint | tojson }},
+  "branch": {{ branch | tojson }},
+  "commit": {{ commit | tojson }},
+  "rebased_onto": {{ rebased_onto | tojson }},
+  "outcome": {{ outcome | tojson }}
+}
+```
+
+## Resolution
+{{ resolution_md }}
+
+## Validation
+{{ validation_md }}
+{% if notes_md %}
+## Notes
+{{ notes_md }}
+{% endif %}

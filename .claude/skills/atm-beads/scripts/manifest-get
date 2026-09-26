@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Print one value of the repository's orchestration manifest.
+
+    manifest-get <dotted.key> [--json]
+
+The manifest is .claude/project/orchestration.yaml at the repository root:
+the repo-specific facts (bead prefix, trunk, integration branch pattern,
+governing docs, policy path, role map, commands, stack mechanics) that the
+atm-beads and atm-bd-orchestration skills read instead of hard-coding.
+
+A scalar prints as text; a list prints one item per line; `--json` prints
+any value as JSON. Exit 0 on success, 2 with a message on stderr when the
+manifest cannot be read or the key is not in it.
+"""
+import json
+import pathlib
+import subprocess
+import sys
+
+import yaml
+
+MANIFEST = ".claude/project/orchestration.yaml"
+
+
+def fail(message):
+    print(f"manifest-get: {message}", file=sys.stderr)
+    sys.exit(2)
+
+
+def manifest_path():
+    try:
+        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], check=True,
+                             capture_output=True, text=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        top = "."
+    return pathlib.Path(top, MANIFEST)
+
+
+def load():
+    path = manifest_path()
+    try:
+        data = yaml.safe_load(path.read_text())
+    except (OSError, yaml.YAMLError) as exc:
+        fail(f"cannot read {path}: {exc}")
+    if not isinstance(data, dict):
+        fail(f"{path} is not a YAML mapping")
+    return path, data
+
+
+def main(argv):
+    args = [a for a in argv if a != "--json"]
+    as_json = len(args) != len(argv)
+    if len(args) != 1 or not args[0]:
+        fail("usage: manifest-get <dotted.key> [--json]")
+    key = args[0]
+    path, value = load()
+    for part in key.split("."):
+        if not isinstance(value, dict) or part not in value:
+            fail(f"key '{key}' is not in {path}")
+        value = value[part]
+    if as_json:
+        print(json.dumps(value))
+    elif isinstance(value, list):
+        print("\n".join(str(v) for v in value))
+    elif isinstance(value, (dict, bool)) or value is None:
+        print(json.dumps(value))
+    else:
+        print(value)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

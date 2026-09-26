@@ -1,0 +1,12 @@
+{
+  "task_id": "atm-phase-bd-review",
+  "phase": "bd",
+  "branch": "fix/bd-4-qa1-f1-retry-jitter",
+  "commit": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/fix/bd-4-qa1-f1-retry-jitter",
+  "review_focus": "- peer transport boundaries (HTTP vs Herdr IPC)",
+  "review_questions": "- Is atm-http-runtime extractable without atm-daemon internals?",
+  "references": "- bd show atm-phase-bd\n- docs/architecture.md",
+  "lead": "team-lead",
+  "cc": ""
+}

@@ -1,0 +1,54 @@
+---
+name: fix-task
+version: 2.1.1
+description: lead fix assignment for one finding bead in atm-bd-orchestration. task_id is the finding bead; the fix is a new layer at the top of the stack the finding was found on.
+format: xml
+required_variables:
+  - task_id
+  - sprint
+  - stack
+  - top
+  - worktree_path
+  - branch
+optional_variables:
+  - lead
+  - cc
+  - test_command
+defaults:
+  lead: team-lead
+  cc: team-lead
+  test_command: "just validate"
+metadata:
+  type: fix-task
+  tags:
+    - stage:fix
+    - orchestration:beads
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: fix-start
+    stage: fix
+    transition: start
+---
+<atm-task id="{{ task_id }}" sprint="{{ sprint }}" mode="fix">
+  <description><![CDATA[Fix finding bead `{{ task_id | string | cdata_escape }}` (found in sprint {{ sprint | string | cdata_escape }}). `bd show {{ task_id | string | cdata_escape }}` is the assignment: the description is the finding and its evidence, the design is the remedy, the acceptance criteria say when it is fixed.]]></description>
+
+  <worktree><![CDATA[{{ worktree_path | string | cdata_escape }}]]></worktree>
+  <branch><![CDATA[{{ branch | string | cdata_escape }}]]></branch>
+  <stack><![CDATA[{{ stack | string | cdata_escape }}]]></stack>
+  <cut-from><![CDATA[{{ top | string | cdata_escape }}]]></cut-from>
+  <stack-discipline><![CDATA[The finding was found on a frozen layer of stack `{{ stack | string | cdata_escape }}`. It is never fixed there: `{{ branch | string | cdata_escape }}` is a new layer cut from `{{ top | string | cdata_escape }}`, the pushed top of that same stack, and holds this one finding. Work only on this branch. Other dev and fix work runs in parallel and the top moves while you work: when the fix is complete you rebase once onto the current pushed top and push. {{ lead | string | cdata_escape }} is the stack writer and links the layer after its sanity check passes; you never run `gh stack link`, `sync`, `rebase` or `merge`.]]></stack-discipline>
+
+  <workflow>
+    <step id="a"><![CDATA[Claim the bead, then start the task. `BEADS_ACTOR` must equal your `ATM_IDENTITY` (claims and closes are recorded as that actor); if it is empty, pass `--actor "$ATM_IDENTITY"` to every `bd` write. Check that the bead is ready: `bd ready -n 0 --json | jq -e --arg b {{ task_id | string | cdata_escape }} 'any(.[]; .id == $b)'`. When it prints `true`, run `bd update {{ task_id | string | cdata_escape }} --claim`, then `atm task start {{ task_id | string | cdata_escape }} "<one line: what you will do first>"`, and begin in the same work session unless blocked.]]></step>
+    <step id="a1"><![CDATA[When it prints `false` the bead is not ready: do not claim it and do not start the task. Find the root cause: `bd show {{ task_id | string | cdata_escape }}` (status, assignee), `bd blocked --json | jq --arg b {{ task_id | string | cdata_escape }} '.[] | select(.id == $b)'` (open blockers: another finding whose fix must land first), and `bd show <blocker>` for each. Report it with `atm send {{ lead | string | cdata_escape }} --stdin`: the bead, why it is not ready, and which bead or agent has to move. Then wait.]]></step>
+    <step id="b"><![CDATA[Read `bd show {{ task_id | string | cdata_escape }}`, then the bead it was caused by (`bd dep list {{ task_id | string | cdata_escape }}` shows the `caused-by` dev bead) for the scope it belongs to. Read every id in this finding's own `metadata.requirements` and `metadata.adrs` (in the documents `.claude/skills/atm-beads/scripts/manifest-get docs.requirements` and `manifest-get docs.architecture` list): the fix must keep satisfying them. `metadata.sprint_bead` is the sprint whose contract they come from. If this task touches Rust, read `.claude/skills/rust-development/guidelines.txt` and `.claude/skills/rust-best-practices/patterns/practice-inventory.md` before editing.]]></step>
+    <step id="c"><![CDATA[Before fixing, verify the defect is still present at the cited file:line in this worktree. If it does not reproduce (already fixed, superseded, or the code path no longer exists), do no speculative or invented work in its name: close it as not reproducible (step f) with the file:line you checked.]]></step>
+    <step id="d"><![CDATA[Fix every occurrence in scope, not just the first: when the finding is a repeatable pattern, search the worktree for the same pattern and fix each one. Touch only the files the remedy needs. Run `{{ test_command | string | cdata_escape }}` until it passes with zero failures.]]></step>
+    <step id="e"><![CDATA[Rebase once onto the current pushed top of stack `{{ stack | string | cdata_escape }}` (the `sc-gh-stack-view` skill (`gh-stack-view` until it is installed), the last open row): `git fetch origin && git rebase origin/<current top>`, re-run `{{ test_command | string | cdata_escape }}`, then `git push --force-with-lease origin {{ branch | string | cdata_escape }}` (`git push -u origin {{ branch | string | cdata_escape }}` on the first push). Record the full head SHA and the branch you rebased onto.]]></step>
+    <step id="f"><![CDATA[Close the bead and the task together: `bd close {{ task_id | string | cdata_escape }} --reason "fixed at <short sha>"` (or `--reason "not reproducible: <file:line checked>"`) and `atm task close {{ task_id | string | cdata_escape }} completed --template .claude/skills/atm-bd-orchestration/templates/fix-complete.md.j2 --vars <scratch>/fix-complete-{{ task_id | string | cdata_escape }}-vars.json`. Build the vars from that template's `required_variables`: `task_id` and `sprint` unchanged, `commit` the pushed head, `rebased_onto` the top from step e, the outcome, and the gate output lines. Write the vars file outside the repository. The fix then gets its own sanity check and QA. Only this close frees your queue.{% if cc and cc != lead %} Copy a one-line summary to `{{ cc | string | cdata_escape }}` with a plain `atm send {{ cc | string | cdata_escape }} --stdin`.{% endif %}]]></step>
+    <step id="f1"><![CDATA[If the fix cannot be done at all, leave the bead open with `bd update {{ task_id | string | cdata_escape }} --status open --assignee "" --append-notes "<reason>"` and close the task with `atm task close {{ task_id | string | cdata_escape }} refused --template .claude/skills/atm-bd-orchestration/templates/task-refused.md.j2 --vars <scratch>/refused-{{ task_id | string | cdata_escape }}-vars.json`. A finding is never closed unfixed by the fixer; only quality-mgr (ceremony) or {{ lead | string | cdata_escape }} closes one without a fix.]]></step>
+    <step id="g"><![CDATA[After the close, read ATM again: the next queued task starts only now.]]></step>
+  </workflow>
+</atm-task>

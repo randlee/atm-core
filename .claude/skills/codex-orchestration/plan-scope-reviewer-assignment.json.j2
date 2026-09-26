@@ -1,0 +1,42 @@
+---
+name: plan-scope-reviewer-assignment
+version: 1.0.0
+description: Render a fenced-JSON assignment for plan-scope-reviewer over a plan in markdown (codex-orchestration plan QA). `plan_docs` are the sprint docs of the phase plan; `phase_root_doc` is the phase plan document; `root` is null. `carry_forward_findings_json` is a JSON array of the reviewer's own finding ids from the previous round; the reviewer still recomputes the plan's shape in full.
+format: json
+required_variables:
+  - phase_root_doc
+  - plan_docs
+  - reference_docs
+  - worktree_path
+  - branch
+  - commit
+optional_variables:
+  - root
+  - phase
+  - round_index
+  - carry_forward_findings_json
+  - notes
+defaults:
+  root: ""
+  phase: ""
+  round_index: 1
+  carry_forward_findings_json: "[]"
+  notes: ""
+---
+{
+  "scope": {
+    "phase": {% if phase %}{{ phase }}{% else %}null{% endif %},
+    "sprint": null
+  },
+  "plan": "markdown",
+  "root": {% if root %}{{ root }}{% else %}null{% endif %},
+  "phase_root_doc": {{ phase_root_doc }},
+  "plan_docs": [{% for doc in plan_docs %}{{ doc }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "reference_docs": [{% for doc in reference_docs %}{{ doc }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "worktree_path": {{ worktree_path }},
+  "branch": {{ branch }},
+  "commit": {{ commit }},
+  "round_index": {{ round_index }},
+  "carry_forward_findings": {{ carry_forward_findings_json | safe }},
+  "notes": {{ notes }}
+}

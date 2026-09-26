@@ -187,6 +187,9 @@ pub(super) fn team_findings(
     }
     reserved_name_findings(team, roster, findings);
     for task in tasks.iter().filter(|task| {
+        // A task stays reported as stalled from the first full reminder
+        // budget until the assignee's sustained activity resets the counters
+        // (#1598); repeated lead escalations do not clear the finding.
         !matches!(task.state, TaskState::Complete(_))
             && task.reminder_count >= crate::boundary::TASK_STALLED_REMINDER_THRESHOLD
     }) {

@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""Print the ATM member that fills a role in this repository.
+
+The map is `roles:` in .claude/project/orchestration.yaml (role -> member
+name), with `roles:` in .claude/agents/registry.yaml as the fallback for a
+repository that has not adopted the manifest yet. The member's startup
+prompt in .atm.toml says which directive it runs, so a skill names only the
+role. Exit 0 with the member on stdout, 2 when no map is readable or the
+role is not mapped.
+"""
+import pathlib
+import subprocess
+import sys
+
+import yaml
+
+MAPS = (".claude/project/orchestration.yaml", ".claude/agents/registry.yaml")
+
+if len(sys.argv) != 2:
+    sys.exit("usage: resolve-role <role>")
+role = sys.argv[1]
+try:
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], check=True,
+                         capture_output=True, text=True).stdout.strip()
+except (OSError, subprocess.CalledProcessError) as exc:
+    print(f"resolve-role: cannot find the repository root: {exc}", file=sys.stderr)
+    sys.exit(2)
+member = None
+for name in MAPS:
+    path = pathlib.Path(top, name)
+    try:
+        roles = (yaml.safe_load(path.read_text()) or {}).get("roles") or {}
+    except FileNotFoundError:
+        continue
+    except (OSError, yaml.YAMLError) as exc:
+        print(f"resolve-role: cannot read the role map {path}: {exc}", file=sys.stderr)
+        sys.exit(2)
+    member = roles.get(role)
+    if isinstance(member, str) and member:
+        break
+    member = None
+if member is None:
+    print(f"resolve-role: role '{role}' is not mapped in {' or '.join(MAPS)} (roles:)",
+          file=sys.stderr)
+    sys.exit(2)
+print(member)

@@ -94,6 +94,54 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 - [`.claude/skills/phase-orchestration/SKILL.md`](./.claude/skills/phase-orchestration/SKILL.md) - phased sprint orchestration with fresh `scrum-master` coordinators
 - [`.claude/skills/quality-management-gh/SKILL.md`](./.claude/skills/quality-management-gh/SKILL.md) - multi-pass QA status, CI monitoring, and PR report conventions
 - [`.claude/skills/sprint-report/SKILL.md`](./.claude/skills/sprint-report/SKILL.md) - sprint status reporting templates for current phase and integration PR state
+- [`.claude/skills/atm-beads/SKILL.md`](./.claude/skills/atm-beads/SKILL.md) - the phase plan as a beads graph (manifest `.claude/project/orchestration.yaml`, `validate-plan`, `bd import`)
+- [`.claude/skills/atm-bd-orchestration/SKILL.md`](./.claude/skills/atm-bd-orchestration/SKILL.md) - dispatch, dev-sanity, QA and stack landing driven by `bd ready`
+- [`.claude/project/quality-policy.md`](./.claude/project/quality-policy.md) - repository QA policy: reviewer sets per round, validation commands, governed interfaces
+- [`.claude/agents/ceremony-qa.md`](./.claude/agents/ceremony-qa.md) - plan QA-1 reviewer that flags process artifacts with no consumer (with `ceremony-finding-screen` on every round's findings)
+
+Beads orchestration (`atm-beads` + `atm-bd-orchestration`) is the workflow
+for phases planned in beads; the Workflow sections below describe the
+markdown-plan workflow.
+
+---
+
+## Honest Work and Anti-Ceremony (binding for agents and humans alike)
+
+The purpose of agent work here is working, deployable capability. Process
+serves that outcome and never becomes the product.
+
+- A process artifact (certificate, ledger, dashboard, matrix, meta-report,
+  speculative check) may be created only if it names a concrete consumer,
+  the named feature it gates, the observed defect class justifying it, and
+  its deletion condition. Otherwise it does not get created. Boundary test:
+  if running code branches on it, it is product; if only humans and status
+  reports read it, it is process and the creation-gate rule above applies;
+  code written just to flip this answer counts as the pathology, not as a
+  consumer. Sole exception: a minimal
+  integrity/recovery control (crash-recovery state, provenance snapshot) is
+  legitimate when it prevents a named evidence-loss or corruption mode and
+  is necessary and minimal.
+- Real code + real tests in the same unit of work. Forbidden: faked tests,
+  fixtures/mocks presented as live proof, weakened assertions, golden
+  regeneration to force green, hard-coded success paths, placeholder macros
+  in commits, editing the spec instead of implementing it, narrowing scope
+  while claiming full success.
+- No self-certification: work is closed by an independent verifier citing
+  evidence at an exact revision. Solo sessions re-verify by re-execution and
+  state what was not independently verified.
+- A typed refusal beats a fabricated result and is less valuable than the
+  real capability; refusal-only work stays open and says so.
+- Truthful null results ("checked X, found no material increment") are
+  successful outcomes. Unsupported claims are worse than silence.
+- Metrics predeclare denominator and countermetric; agreement between
+  agents may raise confidence but is never independent evidence; never
+  silence stderr in evidence-bearing commands.
+- Name these pathologies when they occur (gate self-weakening, proof-class
+  inflation, golden regeneration, tolerance widening, suppression-pragma
+  laundering, refusal farming, follow-up laundering); the names are the
+  deterrent. The full catalog with countermeasures lives in the
+  just-say-no-to-process-porn-and-ceremony skill; ask the operator for it
+  if you cannot resolve that reference.
 
 ---
 

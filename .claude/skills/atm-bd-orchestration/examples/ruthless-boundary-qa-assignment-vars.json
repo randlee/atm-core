@@ -1,0 +1,10 @@
+{
+  "review_mode": "sprint",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/sprint/bd-4-peer-retry-jitter",
+  "branch": "sprint/bd-4-peer-retry-jitter",
+  "commit": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
+  "review_targets": [
+    "crates/atm-http-runtime"
+  ],
+  "carry_forward_findings_json": "[\"RBQA-004\"]"
+}
