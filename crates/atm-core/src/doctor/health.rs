@@ -158,6 +158,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{environment_visibility, observability_finding};
+    use crate::doctor::report::DoctorReport;
     use crate::doctor::report::DoctorSeverity;
     use crate::observability::{
         AtmObservabilityHealth, AtmObservabilityHealthState, AtmTelemetryExportHealth,
@@ -165,6 +166,7 @@ mod tests {
     };
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
+    use serde_json::json;
 
     // Synthetic stand-ins for the daemon's frozen launch-time environment.
     // Deliberately distinct from the caller's values so the test proves the
@@ -213,6 +215,77 @@ mod tests {
         let finding = observability_finding(&health);
         assert_eq!(finding.severity, DoctorSeverity::Info);
         assert_eq!(finding.remediation, None);
+    }
+
+    fn pinned_pre_1_11_doctor_report() -> serde_json::Value {
+        json!({
+            "summary": {
+                "status": "healthy",
+                "message": "pinned 1.10 doctor fixture",
+                "info_count": 0,
+                "warning_count": 0,
+                "error_count": 0
+            },
+            "findings": [],
+            "recommendations": [],
+            "environment": {
+                "atm_home": null,
+                "atm_team": null,
+                "atm_identity": null,
+                "team_override": null
+            },
+            "member_roster": null,
+            "observability": {
+                "active_log_path": null,
+                "logging_state": "healthy",
+                "query_state": "healthy",
+                "maintenance": null,
+                "diagnostic": null,
+                "jsonl": {
+                    "forwarded_total": 0,
+                    "dropped_queue_full_total": 0,
+                    "dropped_reentrant_total": 0
+                },
+                "timeline": {
+                    "written_total": 0,
+                    "dropped_queue_full_total": 0,
+                    "dropped_persist_error_total": 0
+                },
+                "degraded": [],
+                "detail": null
+            },
+            "config": { "findings": [] },
+            "mail_store": { "findings": [] },
+            "roster_store": { "findings": [] }
+        })
+    }
+
+    #[test]
+    fn pinned_pre_1_11_doctor_report_without_export_decodes() {
+        let report: DoctorReport = serde_json::from_value(pinned_pre_1_11_doctor_report()).unwrap();
+        assert_eq!(report.observability.export, None);
+    }
+
+    #[test]
+    fn doctor_report_with_export_health_round_trips() {
+        let mut report: DoctorReport =
+            serde_json::from_value(pinned_pre_1_11_doctor_report()).unwrap();
+        report.observability.export = Some(AtmTelemetryExportHealth {
+            state: AtmTelemetryExportState::Healthy,
+            endpoint: Some("http://collector:4317".to_string()),
+            protocol: Some(crate::task_telemetry::TelemetryExportProtocol::Grpc),
+            emitted: 12,
+            dropped_full: 0,
+            dropped_timeout: 0,
+            dropped_failure: 0,
+            dropped_shutdown: 0,
+            last_failure: None,
+        });
+        let encoded = serde_json::to_string(&report).unwrap();
+        assert_eq!(
+            serde_json::from_str::<DoctorReport>(&encoded).unwrap(),
+            report
+        );
     }
 
     #[test]

@@ -1038,8 +1038,16 @@ mod tests {
             "query_state": "healthy",
             "maintenance": null,
             "diagnostic": null,
-            "jsonl": {},
-            "timeline": {},
+            "jsonl": {
+                "forwarded_total": 0,
+                "dropped_queue_full_total": 0,
+                "dropped_reentrant_total": 0
+            },
+            "timeline": {
+                "written_total": 0,
+                "dropped_queue_full_total": 0,
+                "dropped_persist_error_total": 0
+            },
             "degraded": [],
             "detail": null
         });
