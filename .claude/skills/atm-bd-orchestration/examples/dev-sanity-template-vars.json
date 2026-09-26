@@ -1,14 +1,21 @@
 {
-  "task_id": "atm-bd-4-sanity",
-  "checked_bead": "atm-bd-4",
-  "sprint": "bd-4",
-  "worktree_path": "/Users/randlee/github/atm-core-worktrees/sprint/bd-4-peer-retry-jitter",
-  "branch": "sprint/bd-4-peer-retry-jitter",
+  "task_id": "obs-d-4-sanity",
+  "checked_bead": "obs-d-4",
+  "sprint": "d-4",
+  "worktree_path": "/Users/randlee/github/sc-observability-worktrees/sprint/d-4-otlp-sync-exporter",
+  "branch": "sprint/d-4-otlp-sync-exporter",
   "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
-  "base": "sprint/bd-3-peer-config",
-  "pr_number": 231,
-  "pr_url": "https://github.com/randlee/atm-core/pull/231",
-  "lead": "lead",
-  "cc": "",
-  "lint_command": "just lint"
+  "base": "sprint/d-3-otlp-config",
+  "lead": "obs-lead",
+  "cc": ""
+  ,"sanity_bead": "obs-d-4-sanity"
+  ,"dev_bead_id": "obs-d-4"
+  ,"dev_bead_title": "d-4: OTLP sync exporter"
+  ,"deliverable_number": 1
+  ,"deliverable_text": "Implement the pinned deliverable."
+  ,"deliverables_total": 1
+  ,"owned_paths": ["crates/sc-observability-otlp/src/sync.rs"]
+  ,"changed_files": ["crates/sc-observability-otlp/src/sync.rs"]
+  ,"files_outside_owned_paths": []
+  ,"base_sha": "sprint/d-3-otlp-config"
 }
