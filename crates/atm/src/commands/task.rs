@@ -53,6 +53,8 @@ enum TaskSubcommand {
     Close(TaskCloseCommand),
     /// Reorder one member's queue.
     Move(TaskMoveCommand),
+    /// Past N tasks for the team, open and completed, newest first.
+    History(history::TaskHistoryCommand),
 }
 
 /// Start an assigned task: moves it to active and tells the assigner.
@@ -247,6 +249,7 @@ impl TaskCommand {
             TaskSubcommand::Start(command) => command.run(observability).await,
             TaskSubcommand::Close(command) => command.run(observability).await,
             TaskSubcommand::Move(command) => command.run(observability).await,
+            TaskSubcommand::History(command) => command.run(observability).await,
         }
     }
 }
@@ -810,7 +813,7 @@ fn render_task_events(
     entries.sort_by_key(|(at, source, rowid, _)| (*at, *source, *rowid));
     for (_, _, _, entry) in entries {
         match entry {
-            TaskEventDisplay::Event(row) => render_task_event_line(&mut output, row),
+            TaskEventDisplay::Event(row) => render_task_event_line(&mut output, row, None),
             TaskEventDisplay::Prompt(row) => render_prompt_handoff_line(&mut output, row),
         }
     }
@@ -822,7 +825,9 @@ enum TaskEventDisplay<'a> {
     Prompt(&'a PromptHandoff),
 }
 
-fn render_task_event_line(output: &mut String, row: &TaskEventRow) {
+/// Renders one `task_events` ledger line, optionally prefixed with its task
+/// id so `atm task history --events` can interleave rows from several tasks.
+fn render_task_event_line(output: &mut String, row: &TaskEventRow, task_id: Option<&TaskId>) {
     let actor = match &row.actor {
         TaskActor::Member(member) => member.as_str(),
         TaskActor::Daemon => DAEMON_ACTOR_NAME,
@@ -835,6 +840,9 @@ fn render_task_event_line(output: &mut String, row: &TaskEventRow) {
         .or_else(|| row.marker.map(|marker| marker.as_str()))
         .or_else(|| row.outcome.map(|outcome| outcome.as_str()))
         .unwrap_or("-");
+    if let Some(task_id) = task_id {
+        write!(output, "{} ", task_id.as_str()).expect("writing to String cannot fail");
+    }
     writeln!(
         output,
         "{} {} {} {}→{} {} {}",
@@ -869,6 +877,8 @@ fn render_prompt_handoff_line(output: &mut String, row: &PromptHandoff) {
     )
     .expect("writing to String cannot fail");
 }
+
+mod history;
 
 #[cfg(test)]
 mod tests;

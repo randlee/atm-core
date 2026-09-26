@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- feat(task): `atm task history` lists the past N tasks for a team, open
+  and completed, newest first, with per-task started/closed times, outcome,
+  duration, reminders and escalations; `--events` interleaves the selected
+  tasks' ledger events chronologically (#1599)
+
 ## 1.6.1
 
 - Phase bc: consolidate atm-core observability onto the published

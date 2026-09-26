@@ -88,6 +88,15 @@ pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
         deadline: ReadDeadline,
     ) -> Result<Vec<TaskRow>, ReadLaneError>;
 
+    /// Past `limit` tasks for the team, open and completed, newest first.
+    async fn list_task_history(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        limit: usize,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError>;
+
     async fn list_task_events(
         &self,
         team: TeamName,
@@ -141,6 +150,13 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         &self,
         team: &TeamName,
         member: Option<&AgentName>,
+    ) -> Result<Vec<TaskRow>, AtmError>;
+    /// Past `limit` tasks for the team, open and completed, newest first.
+    fn list_task_history(
+        &self,
+        team: &TeamName,
+        member: Option<&AgentName>,
+        limit: usize,
     ) -> Result<Vec<TaskRow>, AtmError>;
     fn list_task_events(
         &self,
@@ -346,6 +362,22 @@ impl AsyncTaskLedgerReader for DummyTaskStore {
         )
     }
 
+    async fn list_task_history(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        limit: usize,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        Ok(
+            TaskStore::list_task_history(self, &team, member.as_ref(), limit).map_err(|error| {
+                ReadLaneError::Unavailable {
+                    message: error.to_string(),
+                }
+            })?,
+        )
+    }
+
     async fn list_task_events(
         &self,
         team: TeamName,
@@ -416,6 +448,23 @@ impl TaskStore for DummyTaskStore {
             .filter(|row| &row.team == team && member.is_none_or(|agent| &row.assignee == agent))
             .cloned()
             .collect())
+    }
+
+    fn list_task_history(
+        &self,
+        team: &TeamName,
+        member: Option<&AgentName>,
+        limit: usize,
+    ) -> Result<Vec<TaskRow>, AtmError> {
+        let mut rows = TaskStore::list_tasks(self, team, member)?;
+        rows.sort_by(|left, right| {
+            right
+                .assigned_at
+                .cmp(&left.assigned_at)
+                .then_with(|| right.task_id.cmp(&left.task_id))
+        });
+        rows.truncate(limit);
+        Ok(rows)
     }
 
     fn list_task_events(
