@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-TaskTelemetrySink"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "TaskTelemetrySink"
+
+[public]
+trait = "TaskTelemetrySink"
+notes = "Sealed, object-safe first-party task telemetry projection. Records contain only typed task-ledger and prompt-handoff facts; message payloads, template variables, and free-form details are forbidden."
+
+[implementation]
+type = "NoopTaskTelemetrySink"
+module = "atm_core::task_telemetry"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = ["atm_runtime::task_telemetry::TaskTelemetryRuntime::start"]
+
+[ownership]
+io_owns = ["best_effort_telemetry_export"]
+io_forbidden = ["database_io", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-runtime", "atm-observability"]
+allowed_dependencies = []
+forbidden_edges = ["atm -> telemetry-implementation", "atm-http-runtime -> telemetry-implementation", "atm-storage -> telemetry-implementation", "atm-storage-rusqlite -> telemetry-implementation", "atm-daemon-bootstrap -> telemetry-implementation", "atm-core -> sc-observability"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["TaskTelemetryRecord"]
+response_types = ["Result<(), TaskTelemetryError>"]
+error_types = ["TaskTelemetryError"]
+
+[testing]
+allowed_test_double_paths = ["atm_runtime::task_telemetry::tests", "atm_runtime_test_support::task_telemetry"]
+forbidden_test_bypasses = ["payload_bearing_record"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TASK-TELEMETRY-SINK-REFERENCES"]
+review_gates = ["first_party_only", "no_payload_or_vars", "best_effort_only"]
+
+[status]
+state = "concrete_landed"
+notes = ["atm-core owns the no-op implementation; atm-runtime composes and calls the sink, while atm-observability owns the exporting implementation."]

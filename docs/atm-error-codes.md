@@ -157,6 +157,9 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_WORKFLOW_TELEMETRY_CONFIG_INVALID` — configured telemetry worker
   capacity or timeout is outside its bounded range. ATM remains available with
   telemetry disabled; repair the configuration and restart the daemon.
+- `ATM_TELEMETRY_EXPORT_CONFIG_INVALID` — the configured OpenTelemetry
+  endpoint or protocol is invalid. ATM remains available with export disabled;
+  correct the `ATM_OTEL_*` configuration and restart the daemon.
 - `ATM_WORKFLOW_TELEMETRY_DROPPED` — the best-effort telemetry sink could not
   accept a record during a full queue, timeout, failure, or bounded shutdown.
   Inspect runtime diagnostics; this never changes admission, routing, or a

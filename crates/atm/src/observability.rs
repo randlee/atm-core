@@ -237,6 +237,7 @@ mod tests {
                 jsonl: Default::default(),
                 timeline: Default::default(),
                 degraded: Vec::new(),
+                export: None,
                 detail: Some("synthetic".to_string()),
             })
         }

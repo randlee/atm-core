@@ -100,6 +100,12 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-09-26 — Phase BD.1 task telemetry health:** `HTTP_API_VERSION`
+  moves from `1.10.0` to `1.11.0`. `AtmObservabilityHealth` gains the additive
+  optional `export` projection. It defaults to `None` when omitted, so a
+  pinned pre-1.11 `DoctorReport` payload still decodes; a current payload with
+  export health round-trips without loss. This is a minor,
+  backward-compatible bump.
 - **2026-09-26 — issue #1599 (`atm task history`):** `HTTP_API_VERSION`
   moves from `1.9.0` to `1.10.0`. `TaskLedgerQuery` gains the additive
   `History { member, limit }` request variant, dispatched through the same
@@ -223,6 +229,8 @@ migration functions directly.
   task-transition metadata, Phase BB.6 moves it to `1.9.0` for prompt
   handoffs in task-event responses, and issue #1599 moves it to `1.10.0` for
   the `TaskLedgerQuery::History` request variant behind `atm task history`.
+  Phase BD.1 moves it to `1.11.0` for the optional telemetry-export health
+  projection.
 - Herdr support becomes a matrix, not a single version; per-release
   conformance fixtures are required.
 - SQLite migrations gain a declared version and an explicit rollback test

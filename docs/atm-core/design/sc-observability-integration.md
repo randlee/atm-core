@@ -76,14 +76,17 @@ The initial retained-command integration scope is:
 - `sc-observability-types`
 - `sc-observability`
 
-The initial integration does not require:
+The initial retained-command integration did not require:
 
 - `sc-observe`
 - `sc-observability-otlp`
 
-Those higher layers remain available for future ATM telemetry or typed-routing
-work, but they are not required to deliver retained `send`, `read`, `ack`,
-`clear`, `log`, and `doctor`.
+Phase BD now adds OpenTelemetry task export through the ATM-owned,
+payload-free `TaskTelemetrySink`. `atm-core` continues to have no direct
+`sc-observability` dependency: `atm-runtime` owns bounded composition and
+best-effort emission, and `atm-observability` owns the concrete exporter.
+Retained `send`, `read`, `ack`, `clear`, `log`, and `doctor` continue to use
+the original logging boundary independently of this task-telemetry seam.
 
 ## 5. Pre-Publish Dependency Strategy
 

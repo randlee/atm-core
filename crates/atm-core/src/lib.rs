@@ -106,6 +106,8 @@ pub(crate) mod service_runtime_store;
 pub mod task_close;
 /// Read-only query contracts for the closed `atm task` command set.
 pub mod task_query;
+/// First-party-only telemetry contract for task-ledger facts.
+pub mod task_telemetry;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
 /// Pure resolution of template-declared workflow snapshots.
@@ -199,6 +201,10 @@ pub use send_to::{
 pub use service_runtime::graft_store_error;
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
+};
+pub use task_telemetry::{
+    NoopTaskTelemetrySink, TaskHandoffFacts, TaskTelemetryError, TaskTelemetryKind,
+    TaskTelemetryRecord, TaskTelemetrySink, TelemetryExportConfig, TelemetryExportProtocol,
 };
 pub use transfer_script::{
     ConfiguredTransferScript, TransferInvocation, TransferScript, TransferScriptKind,

@@ -87,6 +87,7 @@ impl RetainedLogger {
             jsonl: Default::default(),
             timeline: Default::default(),
             degraded: Vec::new(),
+            export: None,
             detail,
         })
     }
