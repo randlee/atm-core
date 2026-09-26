@@ -10,8 +10,6 @@ required_variables:
   - deliverable_number
   - deliverable_text
   - deliverables_total
-  - acceptance_criteria
-  - design
   - owned_paths
   - changed_files
   - files_outside_owned_paths
@@ -25,8 +23,6 @@ required_variables:
   "dev_bead": {"id": {{ dev_bead_id }}, "title": {{ dev_bead_title }}},
   "deliverable": {"number": {{ deliverable_number }}, "text": {{ deliverable_text }}},
   "deliverables_total": {{ deliverables_total }},
-  "acceptance_criteria": {{ acceptance_criteria }},
-  "design": {{ design }},
   "owned_paths": [{% for p in owned_paths %}{{ p }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "changed_files": [{% for f in changed_files %}{{ f }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "files_outside_owned_paths": [{% for f in files_outside_owned_paths %}{{ f }}{% if not loop.last %}, {% endif %}{% endfor %}],

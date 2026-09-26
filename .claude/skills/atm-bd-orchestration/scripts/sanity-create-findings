@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+"""Create one child finding bead for every unfinished deliverable.
+
+Usage:
+  sanity-create-findings --task <sanity-bead> --bead <checked-bead> \
+    --vars <sanity-vars.json> --reviewer <sc-sanity-llm|sc-sanity-jev> \
+    [--actor <identity>]
+
+The vars file is the JSON emitted by sanity-merge. On success, stdout is a
+JSON object containing every child bead id and its finding reference. It also
+adds `finding_bead_ids` to the supplied report vars so the final ATM report
+links directly to the created child beads. The script is idempotent for a
+task/commit/finding_ref tuple: a retry reuses the existing child instead of
+creating a duplicate.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+
+class HandoffError(RuntimeError):
+    pass
+
+
+def command(argv: list[str], actor: str, *, capture: bool = False) -> str:
+    if actor:
+        argv.extend(["--actor", actor])
+    proc = subprocess.run(argv, text=True, capture_output=capture)
+    if proc.returncode:
+        detail = (proc.stderr or "").strip() or (proc.stdout or "").strip()
+        raise HandoffError(f"{' '.join(argv[:3])} failed: {detail}")
+    return proc.stdout.strip() if capture else ""
+
+
+def load_vars(path: Path, task: str, bead: str) -> dict:
+    try:
+        report = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        raise HandoffError(f"cannot read sanity vars: {exc}") from exc
+    if report.get("task_id") != task or report.get("checked_bead") != bead:
+        raise HandoffError("sanity vars task_id or checked_bead does not match arguments")
+    if report.get("verdict") != "FAIL":
+        raise HandoffError("finding children may be created only for a FAIL report")
+    if not isinstance(report.get("commit"), str) or not report["commit"]:
+        raise HandoffError("sanity vars lacks pinned commit")
+    if not isinstance(report.get("findings"), list):
+        raise HandoffError("FAIL report lacks structured findings")
+    return report
+
+
+def finding_key(finding: dict) -> tuple[int, str, int]:
+    try:
+        deliverable, file, line = finding["deliverable"], finding["file"], finding["line"]
+    except KeyError as exc:
+        raise HandoffError(f"finding lacks {exc.args[0]}") from exc
+    if (not isinstance(deliverable, int) or isinstance(deliverable, bool)
+            or not isinstance(file, str) or not file
+            or not isinstance(line, int) or isinstance(line, bool)):
+        raise HandoffError(f"invalid finding selector: {finding!r}")
+    return deliverable, file, line
+
+
+def undone_findings(findings: list[dict]) -> list[dict]:
+    undone = []
+    numbers = set()
+    for finding in findings:
+        if not isinstance(finding, dict):
+            raise HandoffError(f"invalid finding: {finding!r}")
+        if finding.get("kind") != "skipped":
+            continue
+        deliverable = finding.get("deliverable")
+        text = finding.get("deliverable_text")
+        if (not isinstance(deliverable, int) or isinstance(deliverable, bool) or deliverable < 1
+                or not isinstance(text, str) or not text.strip()):
+            raise HandoffError(f"invalid undone deliverable finding: {finding!r}")
+        if deliverable in numbers:
+            raise HandoffError(f"more than one skipped finding for deliverable {deliverable}")
+        numbers.add(deliverable)
+        undone.append(finding)
+    return undone
+
+
+def existing_children(bead: str, actor: str, task: str, commit: str) -> dict[str, str]:
+    text = command(["bd", "list", "--all", "--parent", bead, "--json"], actor, capture=True)
+    try:
+        rows = json.loads(text)
+    except ValueError as exc:
+        raise HandoffError(f"cannot parse existing child beads: {exc}") from exc
+    found = {}
+    for row in rows:
+        metadata = row.get("metadata") or {}
+        report = metadata.get("sanity_finding") or {}
+        if (isinstance(report, dict) and report.get("sanity_bead") == task
+                and report.get("commit_checked") == commit
+                and isinstance(report.get("finding_ref"), str)):
+            found[report["finding_ref"]] = row["id"]
+    return found
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--task", required=True)
+    parser.add_argument("--bead", required=True)
+    parser.add_argument("--vars", required=True, type=Path)
+    parser.add_argument("--reviewer", required=True, choices=("sc-sanity-llm", "sc-sanity-jev"))
+    parser.add_argument("--actor", default=os.environ.get("ATM_IDENTITY", ""))
+    args = parser.parse_args()
+    try:
+        report = load_vars(args.vars, args.task, args.bead)
+        findings = undone_findings(report["findings"])
+        selectors = {finding_key(finding): finding for finding in findings}
+        if len(selectors) != len(findings):
+            raise HandoffError("two findings share a deliverable/file/line selector")
+        parent = json.loads(command(["bd", "show", args.bead, "--json"], args.actor, capture=True))[0]
+        parent_priority = parent.get("priority")
+        if not isinstance(parent_priority, int) or isinstance(parent_priority, bool):
+            raise HandoffError("checked bead has no integer priority")
+        child_priority = min(parent_priority + 1, 4)
+        parent_metadata = parent.get("metadata")
+        if not isinstance(parent_metadata, dict):
+            raise HandoffError("checked bead has no metadata")
+        required_parent_fields = ("phase", "sprint", "stack", "layer")
+        missing_parent_fields = [key for key in required_parent_fields if key not in parent_metadata]
+        if missing_parent_fields:
+            raise HandoffError("checked bead metadata lacks " + ", ".join(missing_parent_fields))
+        phase, sprint, stack = (parent_metadata["phase"], parent_metadata["sprint"], parent_metadata["stack"])
+        if not all(isinstance(value, str) and value for value in (phase, sprint, stack)):
+            raise HandoffError("checked bead phase, sprint, and stack metadata must be non-empty strings")
+        labels = [f"phase-{phase}", "stage:finding", f"stack:{stack}"]
+        children = existing_children(args.bead, args.actor, args.task, report["commit"])
+        created = []
+        for finding in findings:
+            ref = finding.get("finding_ref")
+            if not isinstance(ref, str) or not ref:
+                raise HandoffError(f"finding has no finding_ref: {finding!r}")
+            if ref in children:
+                continue
+            deliverable_text = finding["deliverable_text"].strip()
+            payload = {
+                "sanity_bead": args.task, "checked_bead": args.bead,
+                "commit_checked": report["commit"], "finding_ref": ref,
+                "deliverable": finding["deliverable"], "kind": finding["kind"],
+                "file": finding["file"], "line": finding["line"],
+                "issue": finding["issue"], "depends_on": finding.get("depends_on", []),
+                "deliverable_text": deliverable_text,
+            }
+            provenance = {
+                "phase": phase, "sprint": sprint, "stack": stack,
+                "found_on_layer": parent_metadata["layer"],
+                "found_at_commit": report["commit"], "reviewer": args.reviewer,
+                "finding_ref": ref, "sprint_bead": args.bead,
+            }
+            metadata = {**provenance, "sanity_finding": payload}
+            description = (f"Undone deliverable D{finding['deliverable']}:\n\n{deliverable_text}\n\n"
+                           "## Checker evidence\n\n```json\n" + json.dumps(payload, indent=2, sort_keys=True) + "\n```")
+            acceptance = "- [ ] this finding is fixed at every occurrence in scope\n- [ ] a targeted reproducer or check passes\n- [ ] repository validation passes"
+            title = f"{args.bead} D{finding['deliverable']} not done: {deliverable_text[:80]}"
+            child = command([
+                "bd", "create", title, "--type", "bug", "--status", "open",
+                "--parent", args.bead, "--description", description,
+                "--acceptance", acceptance,
+                "--priority", str(child_priority),
+                "--labels", ",".join(labels), "--no-inherit-labels",
+                "--metadata", json.dumps(metadata), "--silent",
+            ], args.actor, capture=True)
+            if not child:
+                raise HandoffError(f"bd create returned no id for {ref}")
+            children[ref] = child
+            created.append(child)
+        for child in children.values():
+            command(["bd", "update", child, "--priority", str(child_priority)], args.actor)
+        for finding in findings:
+            child = children[finding["finding_ref"]]
+            dependencies = finding.get("depends_on", [])
+            if not isinstance(dependencies, list):
+                raise HandoffError(f"{finding['finding_ref']}: depends_on must be a list")
+            for dependency in dependencies:
+                if not isinstance(dependency, dict):
+                    raise HandoffError(f"{finding['finding_ref']}: invalid dependency selector")
+                prerequisite = selectors.get(finding_key(dependency))
+                if prerequisite is None:
+                    raise HandoffError(f"{finding['finding_ref']}: prerequisite is not a reported finding")
+                prerequisite_id = children[prerequisite["finding_ref"]]
+                if prerequisite_id != child:
+                    command(["bd", "dep", "add", child, prerequisite_id, "--type", "blocks"], args.actor)
+        child_rows = [{"finding_ref": finding["finding_ref"], "id": children[finding["finding_ref"]]} for finding in findings]
+        finding_bead_ids = [row["id"] for row in child_rows]
+        report["finding_bead_ids"] = finding_bead_ids
+        args.vars.write_text(json.dumps(report, indent=2) + "\n")
+        json.dump({"task_id": args.task, "checked_bead": args.bead, "commit": report["commit"], "finding_bead_ids": finding_bead_ids, "children": child_rows, "created": created}, sys.stdout)
+        print()
+        return 0
+    except (HandoffError, KeyError, IndexError, OSError, ValueError) as exc:
+        print(f"SANITY.FINDING_HANDOFF_FAILED: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

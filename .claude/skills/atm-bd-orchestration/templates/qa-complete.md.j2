@@ -1,6 +1,6 @@
 ---
 name: qa-complete
-version: 1.0.0
+version: 1.1.0
 description: QA report for one layer; the body of `atm task close <task-id> completed` and of the PR comment. Lists the finding beads filed this round.
 format: markdown
 required_variables:
@@ -51,6 +51,9 @@ Reviewed commit: `{{ commit }}`
 PR: {{ ('#' ~ pr_number) if pr_number else 'none' }}
 Deliverables: {{ deliverables_complete }}/{{ deliverables_total }}
 Findings filed: {{ findings_blocking }} blocking, {{ findings_important }} important, {{ findings_minor }} minor; {{ findings_ceremony }} closed as ceremony
+
+Verdict rule: minor-only findings are phase backlog and PASS; important or
+blocking findings trigger one verify-only fix round.
 
 ## Machine Status (JSON)
 ```json

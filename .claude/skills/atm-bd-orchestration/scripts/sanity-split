@@ -4,7 +4,7 @@
 Usage:
   sanity-split --task <sanity bead> --bead <dev bead> --worktree <path>
                --branch <branch> --commit <commit> --base <base>
-               [--lint-command '<cmd>'] --scratch <dir>
+               --lint-command '<cmd>' --scratch <dir>
                [--bead-json <file>] [--split-only] [--template <path>]
                [--lint-timeout-seconds <n>]
   sanity-split lint-supervisor --worktree <path> --command '<cmd>' --log <file>
@@ -22,8 +22,6 @@ worktree, and prints one JSON manifest to stdout:
    assignments: [{number, assignment: <rendered object>}]}
 
 `--split-only` parses and renders only: no git pinning and no lint.
-`--lint-command` defaults to `commands.lint` of the repository manifest
-(`.claude/skills/atm-beads/scripts/manifest-get commands.lint`).
 
 The lint command runs under `lint-supervisor`, a detached process (its pid is
 `lint.pid`) that runs the command in a process group of its own, redirects the
@@ -64,7 +62,6 @@ import time
 
 HERE = Path(__file__).resolve().parent
 TEMPLATE = HERE.parent / "templates" / "dev-sanity-assignment.json.j2"
-MANIFEST_GET = HERE.parent.parent / "atm-beads" / "scripts" / "manifest-get"
 CODES = {2: "SANITY.PLAN_INVALID", 3: "SANITY.TARGET_UNREADABLE", 4: "SANITY.COMMIT_MISMATCH", 5: "RENDER_FAILED"}
 
 
@@ -244,16 +241,6 @@ def render(template, variables):
         raise Fail(5, f"rendered assignment {variables['deliverable_number']} is not JSON")
 
 
-def default_lint_command():
-    try:
-        run = subprocess.run([str(MANIFEST_GET), "commands.lint"], capture_output=True, text=True)
-    except OSError as exc:
-        raise Fail(1, f"--lint-command not given and manifest-get unavailable: {exc}")
-    if run.returncode != 0 or not run.stdout.strip():
-        raise Fail(1, f"--lint-command not given and the manifest has no commands.lint: {run.stderr.strip()}")
-    return run.stdout.strip()
-
-
 def start_lint(args):
     scratch = Path(args.scratch)
     scratch.mkdir(parents=True, exist_ok=True)
@@ -350,9 +337,8 @@ def supervise(argv):
 
 def main():
     parser = argparse.ArgumentParser(add_help=True)
-    for flag in ("--task", "--bead", "--worktree", "--branch", "--commit", "--base", "--scratch"):
+    for flag in ("--task", "--bead", "--worktree", "--branch", "--commit", "--base", "--lint-command", "--scratch"):
         parser.add_argument(flag, required=True)
-    parser.add_argument("--lint-command")
     parser.add_argument("--bead-json")
     parser.add_argument("--split-only", action="store_true")
     parser.add_argument("--template", type=Path, default=TEMPLATE)
@@ -362,8 +348,6 @@ def main():
     except SystemExit:
         return 1
     try:
-        if args.lint_command is None:
-            args.lint_command = default_lint_command()
         bead = load_bead(args)
         deliverables = parse_deliverables(bead.get("description") or "")
         owned = (bead.get("metadata") or {}).get("owned_paths") or []
@@ -380,7 +364,6 @@ def main():
                 "sanity_bead": args.task, "dev_bead_id": bead["id"], "dev_bead_title": bead.get("title") or "",
                 "deliverable_number": item["number"], "deliverable_text": item["text"],
                 "deliverables_total": len(deliverables),
-                "acceptance_criteria": bead.get("acceptance_criteria") or "", "design": bead.get("design") or "",
                 "owned_paths": owned, "changed_files": files, "files_outside_owned_paths": outside,
                 "worktree_path": args.worktree, "branch": args.branch, "commit": sha, "base_sha": base_sha,
             })})
