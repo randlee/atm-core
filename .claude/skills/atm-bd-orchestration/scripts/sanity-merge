@@ -8,7 +8,8 @@ Usage:
 the fenced JSON reply of every `sc-sanity-llm` subagent, one per deliverable.
 On success stdout is the vars object for `dev-sanity-complete.md.j2`
 (generated_at, task_id, checked_bead, sprint, branch, commit, verdict,
-findings_count, findings_md, lint_md).
+findings_count, findings, findings_md, lint_md). `findings` preserves the
+structured, per-finding evidence used to create child fix beads after FAIL.
 
 Before any verdict the worktree named in the manifest must still be at the
 pinned SHA, on the pinned branch, with a clean tree, so lint and the checkers
@@ -32,7 +33,7 @@ import re
 import subprocess
 import sys
 
-KINDS = {"skipped", "error"}
+CHECKER_KIND = "skipped"
 RUSTC = re.compile(r"^\s*-->\s+(?P<file>[^:\s]+):(?P<line>\d+):\d+", re.M)
 RUSTFMT = re.compile(r"^Diff in (?P<file>[^:\s]+)(?: at line |:)(?P<line>\d+)", re.M)
 
@@ -101,12 +102,26 @@ def validate(result, index, manifest, sanity_bead, dev_bead):
     findings = data.get("findings")
     if not isinstance(findings, list):
         raise Reject(f"{where}: findings must be a list")
+    if len(findings) > 1:
+        raise Reject(f"{where}: at most one finding is allowed")
     for finding in findings:
-        if (not isinstance(finding, dict) or finding.get("kind") not in KINDS
+        if (not isinstance(finding, dict) or finding.get("kind") != CHECKER_KIND
                 or not isinstance(finding.get("file"), str) or not finding["file"]
                 or not isinstance(finding.get("line"), int) or isinstance(finding.get("line"), bool)
                 or finding["line"] < 1 or not isinstance(finding.get("issue"), str) or not finding["issue"]):
-            raise Reject(f"{where}: finding must be {{kind: skipped|error, file, line >= 1, issue}}: {finding!r}")
+            raise Reject(f"{where}: finding must be {{kind: skipped, file, line >= 1, issue}}: {finding!r}")
+        dependencies = finding.get("depends_on", [])
+        if not isinstance(dependencies, list):
+            raise Reject(f"{where}: depends_on must be a list")
+        for dependency in dependencies:
+            if (not isinstance(dependency, dict)
+                    or not isinstance(dependency.get("deliverable"), int)
+                    or isinstance(dependency["deliverable"], bool)
+                    or not 1 <= dependency["deliverable"] <= total
+                    or not isinstance(dependency.get("file"), str) or not dependency["file"]
+                    or not isinstance(dependency.get("line"), int)
+                    or isinstance(dependency["line"], bool) or dependency["line"] < 1):
+                raise Reject(f"{where}: depends_on entries must be {{deliverable: 1..{total}, file, line >= 1}}: {dependency!r}")
     return number, findings
 
 
@@ -171,6 +186,16 @@ def fmt(finding):
     return f"- `{finding['file']}:{finding['line']}` {finding['kind']}: {finding['issue']}"
 
 
+def deliverable_text(manifest, number):
+    for assignment in manifest.get("assignments", []):
+        if assignment.get("number") == number:
+            deliverable = assignment.get("assignment", {}).get("deliverable", {})
+            text = deliverable.get("text")
+            if isinstance(text, str) and text:
+                return text
+    return f"Deliverable {number}"
+
+
 def main(argv):
     if len(argv) != 5:
         print(__doc__, file=sys.stderr)
@@ -208,10 +233,26 @@ def main(argv):
         return 3
 
     blocks = []
+    finding_records = []
     for number in sorted(by_number):
         findings = by_number[number]
         blocks.append(f"D{number}: done" if not findings else f"D{number}:\n" + "\n".join(fmt(f) for f in findings))
-    count = sum(len(f) for f in by_number.values()) + len(lint_findings)
+        for index, finding in enumerate(findings, 1):
+            finding_records.append({
+                "finding_ref": f"D{number}-F{index}", "deliverable": number,
+                "kind": finding["kind"], "file": finding["file"],
+                "line": finding["line"], "issue": finding["issue"],
+                "depends_on": finding.get("depends_on", []),
+                "deliverable_text": deliverable_text(manifest, number),
+            })
+    for index, finding in enumerate(lint_findings, 1):
+        finding_records.append({
+            "finding_ref": f"L-F{index}", "deliverable": 0,
+            "kind": finding["kind"], "file": finding["file"],
+            "line": finding["line"], "issue": finding["issue"],
+            "depends_on": [],
+        })
+    count = len(finding_records)
     lint_md = f"`{manifest['lint']['command']}` exit {lint_exit}"
     if lint_findings:
         lint_md += "\n" + "\n".join(fmt(f) for f in lint_findings)
@@ -219,8 +260,9 @@ def main(argv):
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "task_id": sanity_bead, "checked_bead": dev_bead, "sprint": sprint,
         "branch": manifest["branch"], "commit": manifest["sha"],
-        "verdict": "PASS" if count == 0 and lint_exit == 0 else "FAIL",
-        "findings_count": count, "findings_md": "\n".join(blocks), "lint_md": lint_md,
+        "verdict": "PASS" if all(not findings for findings in by_number.values()) and lint_exit == 0 else "FAIL",
+        "findings_count": count, "findings": finding_records,
+        "findings_md": "\n".join(blocks), "lint_md": lint_md,
     }, sys.stdout, indent=2)
     print()
     return 0

@@ -1,12 +1,23 @@
 {
   "generated_at": "2026-09-25T07:40:00Z",
-  "task_id": "atm-bd-4-sanity",
-  "checked_bead": "atm-bd-4",
-  "sprint": "bd-4",
-  "branch": "sprint/bd-4-peer-retry-jitter",
+  "task_id": "obs-d-4-sanity",
+  "checked_bead": "obs-d-4",
+  "sprint": "d-4",
+  "branch": "sprint/d-4-otlp-sync-exporter",
   "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
   "verdict": "FAIL",
   "findings_count": 1,
-  "findings_md": "- crates/atm-http-runtime/src/peer/sync.rs:88 BD.4-2 retry policy is `todo!()`",
+  "findings_md": "- crates/sc-observability-otlp/src/sync.rs:88 D.4-2 retry policy is `todo!()`",
   "lint_md": "- `just lint`: ok"
+  ,"sanity_bead": "obs-d-4-sanity"
+  ,"dev_bead_id": "obs-d-4"
+  ,"dev_bead_title": "d-4: OTLP sync exporter"
+  ,"deliverable_number": 1
+  ,"deliverable_text": "Implement the pinned deliverable."
+  ,"deliverables_total": 1
+  ,"owned_paths": ["crates/sc-observability-otlp/src/sync.rs"]
+  ,"changed_files": ["crates/sc-observability-otlp/src/sync.rs"]
+  ,"files_outside_owned_paths": []
+  ,"worktree_path": "/Users/randlee/github/sc-observability-worktrees/sprint/d-4-otlp-sync-exporter"
+  ,"base_sha": "sprint/d-3-otlp-config"
 }

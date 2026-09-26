@@ -4,18 +4,20 @@ The dev-sanity role runs the sanity check of every closed dev or fix bead in
 a phase run with atm-bd-orchestration. It is long-running; this role applies
 to every task it receives until the lead switches it back.
 
-A sanity check asks one question of a closed dev or fix bead: is the work
-done? Nothing skipped, no obvious errors, lint passes. It is not QA. Leave
-design, style and judgement to QA.
+A sanity check asks one question of a closed dev or fix bead: is each numbered
+deliverable written? It is not QA: requirements and quality belong to QA. Lint
+is a separate mechanical gate. The checker receives only deliverable text,
+owned paths, changed files, and a pinned commit; that evidence must let a
+luna-class agent answer `written: yes/no, file:line` correctly.
 
 ## Who Fills It
 
 The skill names the role, never a member or an agent. The repository
 decides both:
 
-| Setting | Where | atm-core |
+| Setting | Where | sc-observability |
 | --- | --- | --- |
-| member | `roles.dev-sanity` in `.claude/project/orchestration.yaml` (fallback: `.claude/agents/registry.yaml`); print it with `.claude/skills/atm-beads/scripts/resolve-role dev-sanity` | `atm-sanity` |
+| member | `roles.dev-sanity` in `.claude/agents/registry.yaml`; print it with `.claude/skills/atm-beads/scripts/resolve-role dev-sanity` | `obs-sanity` |
 | directive | that member's `[startup.<member>]` prompt in `.atm.toml` | `.claude/agents/dev-sanity-llm.md` |
 
 The member name is unique to the team, because Herdr agent names are global
@@ -66,17 +68,6 @@ cannot be split; the check is refused with `SANITY.PLAN_INVALID` and the
 lead is told that planning failed for that bead. Every deliverable appears
 in the report by number, done or with its findings, so closure is explicit.
 
-## PR Gate
-
-Before claiming or splitting a check, run `cd <worktree> && gh pr view
-<pr_number> --json state,headRefName,headRefOid,baseRefName` and resolve the
-assigned commit with `git rev-parse '<commit>^{commit}'`. Refuse the task with
-`SANITY.PR_REQUIRED` when the assignment has no PR, the lookup fails, the PR is
-not open, its head ref or resolved SHA does not match the assigned branch or
-checked commit, or its base does not match the assigned base. Leave the bead
-open with the reason and close the task as `refused` using
-`task-refused.md.j2`; send the refusal to the lead.
-
 ## Verdicts
 
 | Verdict | Sanity check bead | Task |
@@ -86,5 +77,18 @@ open with the reason and close the task as `refused` using
 | cannot run | stays open, with a note | `refused`, `task-refused.md.j2` |
 
 A FAIL never closes the bead. Closing it would release the dev beads that
-depend on the checked sprint. The lead reopens the checked bead and assigns
-the fix. When the fix closes, the same sanity check bead is ready again.
+depend on the checked sprint. The sanity member creates one child finding bead
+per undone deliverable, never one per lint diagnostic. The parent/child
+hierarchy is the closure gate; a parent-to-child
+`blocks` edge is invalid. Each child has priority `min(parent + 1, P4)`, records
+the same structured JSON finding data as the sanity report, and copies the
+checked bead's phase/sprint/stack/layer provenance. The lead reviews those
+children and may overrule or modify them, but does not recreate their report
+data. The lead then follows its existing process to reopen the parent and
+assign the dev fix. Reported prerequisite relationships become sibling `blocks`
+edges. The parent cannot close until all children close. That closure makes the
+same sanity check bead ready again.
+
+After the second FAIL for the same checked bead, the sanity member reports
+`SANITY.ROUND_CAP` to the lead with the undone deliverable numbers. No third
+round is dispatched without the lead's ruling.
