@@ -1,0 +1,8 @@
+{
+  "generated_at": "2026-09-25T05:00:00Z",
+  "task_id": "obs-d-plan-r1",
+  "phase": "D",
+  "round_index": 1,
+  "status": "PASS",
+  "result_json": "{\n  \"status\": \"PASS\",\n  \"mode\": \"plan-hardening-sprint-scope\",\n  \"round_id\": \"STEP2-R1\",\n  \"round_index\": 1,\n  \"reviewed_commit\": \"abc1234\",\n  \"ready_for_next_step\": true,\n  \"errors\": []\n}"
+}

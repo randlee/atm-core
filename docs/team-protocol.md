@@ -8,9 +8,12 @@ This protocol is mandatory for all ATM team communications.
    start the assigned task when its `task_ready` line arrives.
 2. Execute the requested task.
 3. Send a completion message with a concise summary of what was done. When
-   closing a tracked task, use `atm task close <task-id> completed --stdin`
-   or its alias, `atm send <assigner> --task-id <task-id> --task-complete
-   --stdin`, to deliver the completion report and close the task atomically.
+   closing a tracked task, use `atm task close <task-id> completed
+   --template <complete-template> --vars <file>` to deliver the completion
+   report and close the task atomically. Every close uses the complete
+   template that pairs with the assignment template (see Close Templates),
+   so ATM records the template sha and the `*-complete` workflow state that
+   ends the task's lifecycle and span.
 - Example: `task complete: <summary>`
 4. A task close is terminal. The assigner does not acknowledge it; the
    daemon's close receipt is the record, and the assigner closes the mirror
@@ -30,11 +33,33 @@ The task surface is a closed set:
 ```bash
 atm task assign solar --task-id BA-123 --stdin
 atm task start BA-123 "starting: reading the sprint doc"
-atm task close BA-123 completed --stdin
+atm task close BA-123 completed --template .claude/skills/codex-orchestration/dev-complete.md.j2 --vars <scratch>/dev-complete-BA-123-vars.json
 atm task move BA-123 --head
 atm task list --all
 atm task events BA-123
 ```
+
+An agent's queue releases the next task only when the current one closes.
+Every assignment is closed, and every close uses its complete template.
+
+### Close Templates
+
+| Assignment template | Close template |
+| --- | --- |
+| `codex-orchestration/dev-template.xml.j2` | `codex-orchestration/dev-complete.md.j2` |
+| `codex-orchestration/fix-assignment.xml.j2` | `codex-orchestration/fix-complete.md.j2` |
+| `codex-orchestration/review-template.xml.j2` | `codex-orchestration/review-complete.md.j2` |
+| `codex-orchestration/qa-template.xml.j2` | `quality-management-gh/findings-report.md.j2` (FAIL/IN-FLIGHT) or `quality-management-gh/quality-report.md.j2` (PASS) |
+| `graph-orchestration/dev-task.xml.j2` | `codex-orchestration/dev-complete.md.j2` (with `node_id`) |
+| `graph-orchestration/dev-fix.xml.j2` | `graph-orchestration/fix-complete.md.j2` |
+| `plan-hardening/01-plan-scope-review.xml.j2` | `plan-hardening/plan-scope-review-complete.md.j2` |
+| `plan-hardening/02-sprint-scope-hardening.xml.j2` | `plan-hardening/plan-sprint-hardening-complete.md.j2` |
+| `plan-hardening/03-consistency-hardening.xml.j2` | `plan-hardening/plan-consistency-hardening-complete.md.j2` |
+| `plan-hardening/plan-critical-review.xml.j2` | `plan-hardening/plan-critical-review-complete.md.j2` |
+
+Every assignment pairs `atm task start` with `atm task close --template`; that
+pair is the task's span. Paths are under `.claude/skills/`. `refused` and
+`cancelled` closes carry a reason instead of a report.
 
 `atm send <agent> --task-id <id> ...` aliases `atm task assign`.
 `atm send <assigner> --task-id <id> --task-complete ...` aliases
@@ -87,7 +112,7 @@ when the task pass emits `task_ready`.
 - Task ready:
   - `atm task start <task-id> "<one-line plan>"` immediately on `task_ready`.
 - Completion sent:
-  - `atm task close <task-id> completed <report>` (or `--task-complete`) after the work.
+  - `atm task close <task-id> completed --template <complete-template> --vars <file>` after the work.
 - Close received (assigner side, no message back):
   - `atm read --message-id <receipt>` then `atm task close <task-id> completed`
     on the mirror task.

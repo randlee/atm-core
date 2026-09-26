@@ -276,9 +276,12 @@ next orchestration step.
 
 Use the templates in this skill directory:
 - `dev-template.xml.j2`
+- `dev-complete.md.j2` (dev-task close report)
 - `fix-assignment.xml.j2`
+- `fix-complete.md.j2` (fix-task close report)
 - `qa-template.xml.j2`
 - `review-template.xml.j2`
+- `review-complete.md.j2` (review-task close report)
 - `req-qa-assignment.json.j2`
 - `arch-qa-assignment.json.j2`
 - `flaky-test-qa-assignment.json.j2`

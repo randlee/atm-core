@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-09-25T05:00:00Z",
+  "task_id": "obs-d-review1",
+  "phase": "D",
+  "branch": "integrate/phase-d",
+  "commit": "def5678",
+  "verdict": "PASS",
+  "findings_blocking": 0,
+  "findings_important": 0,
+  "findings_minor": 1,
+  "findings_md": "- R-M1 minor: doc comment typo at crates/sc-observability/src/lib.rs:5"
+}

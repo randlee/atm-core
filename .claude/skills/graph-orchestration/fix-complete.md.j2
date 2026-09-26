@@ -1,0 +1,71 @@
+---
+name: fix-complete
+version: 1.0.0
+description: Developer completion report for a graph-orchestration fix-task (sprint scope); the body of `atm task close <task-id> completed`.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - sprint
+  - branch
+  - commit
+  - findings_fixed
+  - findings_not_reproducible
+  - findings_md
+  - validation_md
+optional_variables:
+  - node_id
+  - pr_number
+  - notes_md
+defaults:
+  node_id: ""
+  pr_number: ""
+  notes_md: ""
+metadata:
+  type: fix-complete
+  tags:
+    - stage:fix
+    - orchestration:graph
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: fix-complete
+    stage: fix
+    transition: complete
+---
+# Fix Complete
+
+Generated: {{ generated_at }}
+Sprint/Task: {{ sprint }} / {{ task_id }}
+{% if node_id %}Node: {{ node_id }}
+{% endif %}Branch: `{{ branch }}`
+Commit: `{{ commit }}`
+PR: {{ ('#' ~ pr_number) if pr_number else 'not opened' }}
+Findings: {{ findings_fixed }} fixed, {{ findings_not_reproducible }} not reproducible
+
+## Machine Status (JSON)
+```json
+{
+  "sprint": {{ sprint | tojson }},
+  "node": {{ (node_id or none) | tojson }},
+  "task": {{ task_id | tojson }},
+  "branch": {{ branch | tojson }},
+  "commit": {{ commit | tojson }},
+  "pr": {{ pr_number if pr_number else "null" }},
+  "findings": {
+    "fixed": {{ findings_fixed }},
+    "not_reproducible": {{ findings_not_reproducible }}
+  }
+}
+```
+
+## Findings
+{{ findings_md }}
+
+## Validation
+{{ validation_md }}
+{% if notes_md %}
+## Notes
+{{ notes_md }}
+{% endif %}

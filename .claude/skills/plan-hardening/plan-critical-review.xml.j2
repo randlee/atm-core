@@ -1,6 +1,6 @@
 ---
 name: plan-critical-review-task
-version: 1.0.0
+version: 1.1.0
 description: assignment template for an agent-run critical plan review (critical-plan-reviewer role) during plan hardening.
 format: xml
 required_variables:
@@ -64,7 +64,7 @@ metadata:
     <step id="a">Start the task immediately with `atm task start {{ task_id }} "<one line on what you will do first>"`.</step>
     <step id="b">Assume the `critical-plan-reviewer` role from `.claude/agents/critical-plan-reviewer.md`. Read every document in `<references>` from `{{ worktree_path }}` at commit `{{ commit }}` with `git show {{ commit }}:<path>`; never review working files.</step>
     <step id="c">Verify every claim the plan makes about existing code against the branch before recording a finding; cite `file:line` on `{{ commit }}`.</step>
-    <step id="d">Return the STEP3 handoff fenced JSON (PLAN-CRIT-nnn findings, sprint_scores, PASS only at zero Blocking and zero Important) with `atm task close {{ task_id }} completed --stdin`. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
+    <step id="d">Return the STEP3 handoff fenced JSON (PLAN-CRIT-nnn findings, sprint_scores, PASS only at zero Blocking and zero Important) with `atm task close {{ task_id }} completed --template .claude/skills/plan-hardening/plan-critical-review-complete.md.j2 --vars <scratch>/plan-critical-review-complete-{{ task_id }}-vars.json`, with `status` PASS or FAIL, `result_json` the fenced JSON verbatim, and `task_id`, `phase` and `round_index` unchanged from this assignment; write the vars file outside the repository. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
   </workflow>
 </atm-review>
 {%- endautoescape %}

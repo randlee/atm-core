@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-09-25T05:00:00Z",
+  "task_id": "obs-d3-fix1",
+  "phase": "D",
+  "branch": "feature/pD-s3-otlp-sync-exporter",
+  "commit": "def5678",
+  "pr_number": 215,
+  "findings_fixed": 2,
+  "findings_not_reproducible": 1,
+  "findings_md": "- QA-001 fixed at crates/sc-observability-otlp/src/sync.rs:88\n- QA-002 fixed at crates/sc-observability-otlp/src/retry.rs:41\n- QA-003 not-reproducible: crates/sc-observability/src/lib.rs:12 no longer has the call",
+  "validation_md": "- `cargo test --workspace`: 214 passed, 0 failed"
+}

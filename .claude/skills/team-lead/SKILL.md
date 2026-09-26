@@ -187,16 +187,19 @@ work and nudges the agent. A plain send opens no task, so the agent cannot
   reference.
 - **Every task must be closed.** Write the close into the assignment itself:
   the body ends with the instruction to run
-  `atm task close <task-id> completed` with the commit or PR as the report
-  when the work is done. The orchestration dispatch templates already end
+  `atm task close <task-id> completed --template <complete-template> --vars
+  <file>` with the commit or PR in the report when the work is done; the
+  close templates are listed in `docs/team-protocol.md` (Close Templates). The orchestration dispatch templates already end
   this way; a hand-written assignment must too. An agent's queue releases
   the next task only when the current one closes, so an open finished task
   blocks everything behind it.
 - When work is reported complete, verify the task is closed with
-  `atm task list --all`. If it is still open, close it yourself:
-  `atm task close <task-id> completed "<what was delivered, commit or PR>"`.
+  `atm task list --all`. If it is still open, close it yourself with the
+  same complete template:
+  `atm task close <task-id> completed --template <complete-template> --vars <file>`,
+  filling the vars from the agent's report (commit or PR, deliverables).
   Do not spend a round trip asking the agent to close it. The assignee is
-  told the assigner closed the task, so put the real result in the reason.
+  told the assigner closed the task, so put the real result in the report.
 
 ### Communication Rules
 
