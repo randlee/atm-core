@@ -65,10 +65,8 @@ The lead is the only stack writer (`gh stack link`, `unstack`, `sync`,
 `rebase`, `merge`). quality-mgr files the finding beads from QA; the lead
 files those from a phase-end review.
 
-Every dev or fix bead closes only after a reviewable PR exists with the dev or
-fix branch as its head and the bead's `metadata.pr_target` as its base. The
-lead records the PR number and URL in the bead notes before accepting the
-completion.
+The close-time PR ownership and dispatch rule is defined once in the
+transition table below; the lead records its number and URL in the bead notes.
 
 ## Roles
 
