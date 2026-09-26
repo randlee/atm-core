@@ -203,6 +203,7 @@ impl ObservabilityPort for HealthyObservability {
             jsonl: Default::default(),
             timeline: Default::default(),
             degraded: Vec::new(),
+            export: None,
             detail: None,
         })
     }

@@ -873,6 +873,7 @@ impl ObservabilityPort for RecordingObservability {
             jsonl: Default::default(),
             timeline: Default::default(),
             degraded: Vec::new(),
+            export: None,
             detail: Some("test observer".to_string()),
         })
     }

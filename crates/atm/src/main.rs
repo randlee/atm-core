@@ -565,6 +565,7 @@ impl ObservabilityPort for ScObservabilityAdapter {
             jsonl: Default::default(),
             timeline: Default::default(),
             degraded: Vec::new(),
+            export: None,
             detail,
         })
     }

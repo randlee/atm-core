@@ -312,6 +312,7 @@ mod tests {
                 jsonl: Default::default(),
                 timeline: Default::default(),
                 degraded: Vec::new(),
+                export: None,
                 detail: Some("sweep pass completion test observer".to_string()),
             })
         }

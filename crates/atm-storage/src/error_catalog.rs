@@ -212,6 +212,9 @@ const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
         AtmErrorCode::WorkflowTelemetryConfigInvalid => {
             Some("Repair telemetry configuration; ATM will continue with telemetry disabled.")
         }
+        AtmErrorCode::TelemetryExportConfigInvalid => Some(
+            "Repair OpenTelemetry export configuration; ATM will continue with export disabled.",
+        ),
         AtmErrorCode::WorkflowTelemetryDropped => Some(
             "Inspect telemetry diagnostics and repair the exporter if durable observability is required.",
         ),

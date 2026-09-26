@@ -617,6 +617,41 @@ pub enum AtmObservabilityHealthState {
     Unavailable,
 }
 
+/// Current state of the optional OpenTelemetry export worker.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AtmTelemetryExportState {
+    Inert,
+    Healthy,
+    Degraded,
+    Unavailable,
+}
+
+/// Last classified OpenTelemetry export failure.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AtmTelemetryExportFailure {
+    ConfigInvalid,
+    Unavailable,
+    Rejected,
+    TimedOut,
+    ShutdownTimedOut,
+}
+
+/// Doctor-visible, payload-free OpenTelemetry export diagnostics.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AtmTelemetryExportHealth {
+    pub state: AtmTelemetryExportState,
+    pub endpoint: Option<String>,
+    pub protocol: Option<crate::task_telemetry::TelemetryExportProtocol>,
+    pub emitted: u64,
+    pub dropped_full: u64,
+    pub dropped_timeout: u64,
+    pub dropped_failure: u64,
+    pub dropped_shutdown: u64,
+    pub last_failure: Option<AtmTelemetryExportFailure>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AtmObservabilityDiagnostic {
     pub code: Option<ErrorCode>,
@@ -677,6 +712,8 @@ pub struct AtmObservabilityHealth {
     pub timeline: AtmTimelineObservabilityCounters,
     #[serde(default)]
     pub degraded: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export: Option<AtmTelemetryExportHealth>,
     pub detail: Option<String>,
 }
 
@@ -796,6 +833,7 @@ impl ObservabilityPort for NullObservability {
             jsonl: Default::default(),
             timeline: Default::default(),
             degraded: Vec::new(),
+            export: None,
             detail: Some("observability adapter is not configured".to_string()),
         })
     }
@@ -944,9 +982,10 @@ fn normalized_number_len_exceeds_limit(
 #[cfg(test)]
 mod tests {
     use super::{
-        AtmJsonNumber, AtmLogQuery, AtmObservabilityHealthState, LogFieldKey, LogFieldMap,
-        LogFieldValue, LogLevelFilter, LogMode, LogOrder, NullObservability, ObservabilityPort,
-        normalize_json_number,
+        AtmJsonNumber, AtmLogQuery, AtmObservabilityHealth, AtmObservabilityHealthState,
+        AtmTelemetryExportFailure, AtmTelemetryExportHealth, AtmTelemetryExportState, LogFieldKey,
+        LogFieldMap, LogFieldValue, LogLevelFilter, LogMode, LogOrder, NullObservability,
+        ObservabilityPort, normalize_json_number,
     };
     use serde_json::json;
 
@@ -988,6 +1027,43 @@ mod tests {
         assert_eq!(
             health.query_state,
             Some(AtmObservabilityHealthState::Unavailable)
+        );
+    }
+
+    #[test]
+    fn pre_1_11_observability_health_without_export_decodes() {
+        let pinned = json!({
+            "active_log_path": null,
+            "logging_state": "healthy",
+            "query_state": "healthy",
+            "maintenance": null,
+            "diagnostic": null,
+            "jsonl": {},
+            "timeline": {},
+            "degraded": [],
+            "detail": null
+        });
+        let decoded: AtmObservabilityHealth = serde_json::from_value(pinned).unwrap();
+        assert_eq!(decoded.export, None);
+    }
+
+    #[test]
+    fn telemetry_export_health_round_trips() {
+        let health = AtmTelemetryExportHealth {
+            state: AtmTelemetryExportState::Unavailable,
+            endpoint: Some("http://collector:4318".to_string()),
+            protocol: Some(crate::task_telemetry::TelemetryExportProtocol::HttpJson),
+            emitted: 8,
+            dropped_full: 1,
+            dropped_timeout: 2,
+            dropped_failure: 3,
+            dropped_shutdown: 4,
+            last_failure: Some(AtmTelemetryExportFailure::TimedOut),
+        };
+        let encoded = serde_json::to_string(&health).unwrap();
+        assert_eq!(
+            serde_json::from_str::<AtmTelemetryExportHealth>(&encoded).unwrap(),
+            health
         );
     }
 

@@ -3098,12 +3098,23 @@ Product requirement ID:
   subsystems.
 - `REQ-P-OBS-004` ATM retained-log maintenance must keep daemon success-path
   observability off the synchronous file-I/O hot path.
+- `REQ-P-OBS-005` Every durable task event and prompt handoff must be
+  exportable through OpenTelemetry when an endpoint is configured. Export is
+  a non-authoritative projection of durable rows and must never alter task
+  state, routing, admission, retry, policy, or security.
+- `REQ-CORE-TASK-TELEMETRY-001` `atm-core` must expose one typed task telemetry
+  record and sealed best-effort sink. The record may contain typed ledger and
+  handoff facts only; message bodies, template variables, and free-form event
+  detail are forbidden.
 
 Satisfied by:
 - `REQ-ATM-OBS-001` for CLI bootstrap/injection aspects
 - `REQ-CORE-LOG-001` for ATM log query/follow service aspects
 - `REQ-CORE-DOCTOR-001` for observability health reporting aspects
 - `REQ-CORE-OBS-001` for ATM event and query-model boundary aspects
+- `REQ-P-OBS-005` and `REQ-CORE-TASK-TELEMETRY-001` are satisfied by ADR-064,
+  `TaskTelemetryRecord`, `TaskTelemetrySink`, and the task-telemetry boundary
+  manifest
 - `REQ-DAEMON-OBS-001` and `REQ-DAEMON-OBS-002` for daemon/runtime retained
   event-baseline aspects
 
@@ -3113,9 +3124,10 @@ Initial shared integration scope:
 - `sc-observability-types`
 - `sc-observability`
 
-Deferred from the initial retained observability integration:
+Outside the initial retained observability integration:
 - `sc-observe`
-- `sc-observability-otlp`
+- Phase BD integrates task telemetry with OpenTelemetry through the ATM-owned
+  task telemetry boundary; `atm-core` does not import an exporter crate.
 
 Required ATM event classes:
 - command started

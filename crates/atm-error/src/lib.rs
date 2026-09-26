@@ -168,6 +168,10 @@ mod tests {
                 "ATM_WORKFLOW_TELEMETRY_CONFIG_INVALID",
             ),
             (
+                AtmErrorCode::TelemetryExportConfigInvalid,
+                "ATM_TELEMETRY_EXPORT_CONFIG_INVALID",
+            ),
+            (
                 AtmErrorCode::WorkflowTelemetryDropped,
                 "ATM_WORKFLOW_TELEMETRY_DROPPED",
             ),
