@@ -86,6 +86,15 @@ reassigned or reopened — a change in the assignee's
 runtime state alone does not resume it; a `Blocked` or `Offline` assignee
 escalates once per episode and receives zero nudges. See Section 15.4.
 
+Amendment (2026-09-26, randlee/atm-core#1598): a task reminder is emitted
+every `TASK_REMINDER_INTERVAL_MS` while the assignee is Idle with an open
+task, with no cap; the lead and configured escalation recipients are
+notified at every `TASK_STALLED_REMINDER_THRESHOLD` reminders (10, 20, 30,
+...). An assignee observed Active continuously for at least one reminder
+interval resets the reminder and lead-notification counters; a shorter burst
+of activity does not. Escalation mail is deferred daemon-originated mail,
+delivered as a herdr nudge by the queue-wake pump.
+
 The retained product surface is:
 - `atm send`
 - `atm list`

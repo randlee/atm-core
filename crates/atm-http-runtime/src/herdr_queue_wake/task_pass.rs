@@ -193,10 +193,19 @@ impl HerdrQueueWakePump {
     ) {
         let head = heads.get(&candidate.member);
         let mail_pending = open_mail.contains(&candidate.member);
+        let active_since = candidate.state_changed_at;
         let new_episode = self
             .escalation_state
             .observe(&candidate.member, candidate.state);
-        let provisional = dispose(mail_pending, candidate.state, head, now, new_episode, 0);
+        let provisional = dispose(
+            mail_pending,
+            candidate.state,
+            head,
+            now,
+            active_since,
+            new_episode,
+            0,
+        );
         if candidate.state != RuntimeMemberState::Idle || head.is_none() {
             self.apply_task_disposition(
                 task_store,
@@ -242,6 +251,7 @@ impl HerdrQueueWakePump {
             candidate.state,
             head,
             now,
+            active_since,
             new_episode,
             refusal_count,
         );
@@ -288,6 +298,12 @@ impl HerdrQueueWakePump {
                     && let Some(row) = head.cloned()
                 {
                     self.emit_task_reminder(task_store, candidate, row, now, stats)
+                        .await;
+                }
+            }
+            TaskDisposition::ResetReminders => {
+                if let Some(row) = head {
+                    self.reset_task_reminders(task_store, &candidate.member, row, now)
                         .await;
                 }
             }
@@ -488,6 +504,53 @@ impl HerdrQueueWakePump {
         }
     }
 
+    /// Resets an open task's reminder budget after the assignee has been
+    /// observed continuously active for at least one reminder interval. The
+    /// budget counts from the assignee's last observed activity, not from
+    /// task start.
+    async fn reset_task_reminders(
+        &self,
+        task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+        member: &MemberKey,
+        row: &TaskRow,
+        now: IsoTimestamp,
+    ) {
+        let store = Arc::clone(task_store);
+        let member = member.clone();
+        let task_id = row.task_id.clone();
+        let write_member = member.clone();
+        let write_task_id = task_id.clone();
+        match self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                store.reset_reminders(&write_member, &write_task_id, now)
+            })
+            .await
+        {
+            Ok(_) => {
+                tracing::info!(
+                    subsystem = "herdr_queue_wake",
+                    action = "task_reminder_reset",
+                    outcome = "reset",
+                    member = %member,
+                    task_id = %task_id,
+                    "Herdr task reminder budget reset after sustained assignee activity"
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "herdr_queue_wake",
+                    action = "task_reminder_reset",
+                    outcome = "failed",
+                    error = %error,
+                    member = %member,
+                    task_id = %task_id,
+                    "Herdr task reminder reset bookkeeping failed"
+                );
+            }
+        }
+    }
+
     fn note_task_step_availability(&self, available: bool, error: Option<&AtmError>) {
         let mut previous = self
             .task_step_available
@@ -517,10 +580,14 @@ impl HerdrQueueWakePump {
 }
 
 impl PreparedTaskPass {
+    /// Whether queue draining may proceed this tick for `member`'s pending
+    /// mail. This mirrors [`dispose`]'s `EscalateStalled` trigger: draining is
+    /// held only in the tick where a stall escalation is about to fire, not
+    /// for the whole time a task remains open.
     pub(super) fn queue_drain_allowed(&self, member: &MemberKey) -> bool {
         self.heads.get(member).is_none_or(|head| {
-            head.lead_notified_count > 0
-                || head.reminder_count < atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD
+            head.reminder_count / atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD
+                <= head.lead_notified_count
         })
     }
 }

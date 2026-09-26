@@ -376,6 +376,7 @@ pub enum TaskEventKind {
     LeadNotified,
     Moved,
     Migrated,
+    RemindersReset,
 }
 
 impl TaskEventKind {
@@ -395,6 +396,7 @@ impl TaskEventKind {
             Self::LeadNotified => "lead_notified",
             Self::Moved => "moved",
             Self::Migrated => "migrated",
+            Self::RemindersReset => "reminders_reset",
         }
     }
 }

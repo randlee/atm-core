@@ -942,7 +942,7 @@ async fn episode_message_summary_and_body() {
 }
 
 #[tokio::test]
-async fn escalation_mail_is_immediate_and_never_carries_marker() {
+async fn escalation_mail_is_deferred_and_sets_a_queue_marker() {
     let (_root, runtime, _fake, pump, store, keys, _now) =
         build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
     install_escalation_targets(&runtime, store.as_ref(), &keys, &[]);
@@ -967,13 +967,13 @@ async fn escalation_mail_is_immediate_and_never_carries_marker() {
             .expect("pending store")
             .claim_next_pending(&lead)
             .expect("claim pending marker")
-            .is_none(),
-        "immediate escalation mail must not create a queue marker"
+            .is_some(),
+        "deferred escalation mail must set a queue marker so the pump nudges the lead's pane"
     );
 }
 
 #[tokio::test]
-async fn tenth_reminder_escalates_once_then_silence() {
+async fn tenth_reminder_escalates_then_keeps_nudging_and_escalates_again() {
     let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-TENTH"]);
     for minute in 0..10 {
         *now.lock().expect("clock") =
@@ -1002,22 +1002,69 @@ async fn tenth_reminder_escalates_once_then_silence() {
         1
     );
 
-    for elapsed in 11..111 {
-        let hour = elapsed / 60;
-        let minute = elapsed % 60;
+    // The escalation mail is deferred daemon-originated mail, delivered as a
+    // herdr nudge by the queue-wake pump rather than sent inline.
+    let lead = atm_storage::MemberKey::new(
+        key.team().clone(),
+        atm_storage::roles::ROLE_TEAM_LEAD
+            .parse()
+            .expect("lead agent"),
+    );
+    assert!(
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .claim_next_pending(&lead)
+            .expect("claim pending marker")
+            .is_some(),
+        "the first stall escalation must set a queue marker for the lead"
+    );
+
+    // Idle nudging continues past the first escalation instead of holding
+    // "stalled" forever: ten more reminders reach the next budget boundary
+    // and escalate the lead again.
+    for minute in 11..=20 {
         *now.lock().expect("clock") =
-            IsoTimestamp::from_str(&format!("2030-01-01T{hour:02}:{minute:02}:00Z"))
-                .expect("timestamp");
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
     }
-    assert_eq!(prompt_texts(&fake).len(), 10);
+    assert_eq!(prompt_texts(&fake).len(), 20);
+    queue_idle_result(&fake, &key);
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:21:00Z").expect("timestamp");
+    pump.tick_once().await;
+    let row = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(row.reminder_count, 20);
+    assert_eq!(row.lead_notified_count, 2);
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        20,
+        "the escalation tick itself holds rather than nudging"
+    );
     assert_eq!(
         daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
             .await
             .len(),
-        1
+        2,
+        "a continued stall escalates the lead again at the next budget boundary"
     );
+
+    // Nudging resumes again after the second escalation.
+    queue_idle_result(&fake, &key);
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:22:00Z").expect("timestamp");
+    pump.tick_once().await;
+    let row = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(row.reminder_count, 21);
+    assert_eq!(row.lead_notified_count, 2);
+    assert_eq!(prompt_texts(&fake).len(), 21);
 }
 
 #[tokio::test]
@@ -1195,7 +1242,10 @@ async fn tenth_reminder_with_no_targets_records_terminal_audit() {
         IsoTimestamp::from_str("2030-01-01T00:11:00Z").expect("timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
-    assert_eq!(prompt_texts(&fake).len(), 10);
+    // Idle nudging to the assignee resumes on the next tick; only the
+    // escalation to the (empty) target list stays quiet until the next
+    // budget boundary.
+    assert_eq!(prompt_texts(&fake).len(), 11);
     assert_eq!(
         runtime
             .task_store()
@@ -1824,6 +1874,7 @@ async fn refusal_threshold_precedes_mail_pending_hold() {
             RuntimeMemberState::Idle,
             Some(&head),
             *now.lock().expect("clock"),
+            None,
             false,
             refusal_run.count,
         ),

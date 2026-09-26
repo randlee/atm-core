@@ -104,7 +104,7 @@ fn task_escalation_body(row: &TaskRow, now: IsoTimestamp, events: &[TaskEventRow
         .map(ReminderOutcome::as_str)
         .unwrap_or("unknown");
     format!(
-        "task {} assigned to {} by {} has been reminded {} times\n(first {}, last {}, last outcome {}).\nRun: atm list --task-events {} --member {}",
+        "task {} assigned to {} by {} has been reminded {} times\n(first {}, last {}, last outcome {}).\nRun: atm task events {}",
         row.task_id,
         row.assignee,
         row.assigner,
@@ -113,7 +113,6 @@ fn task_escalation_body(row: &TaskRow, now: IsoTimestamp, events: &[TaskEventRow
         row.last_reminded_at.unwrap_or(now),
         outcome,
         row.task_id,
-        row.assignee,
     )
 }
 
