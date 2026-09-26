@@ -15,13 +15,13 @@
 #      review checks the deliverable that adds it);
 #   4. every assignee is an ATM member of this team, and every sanity check
 #      bead is assigned to the dev-sanity role's member (scripts/resolve-role);
-#   5. the integration branch exists on origin (warning only).
+#   5. the committed sprint index matches a fresh export (root mode only);
+#   6. the integration branch exists on origin (warning only).
 # Exit 0 = valid, 5 = problems listed, 2 = could not run.
 set -uo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
 mg="$here/manifest-get"
-repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
 file="" root="" phase="" write_index=0
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -98,25 +98,31 @@ done < <(jq -rs '(map(.id)) as $ids | [.[] | (.dependencies // [])[] | select(.t
 
 # 2c. the committed sprint index is a deterministic projection of the live plan.
 # `--write` is the explicit regeneration path used when accepting a plan change.
-if [ -n "$root" ]; then
-  phase_from_root=$(bd show "$root" --json 2>/dev/null | jq -r '.[0].metadata.phase // empty')
-  if [ -z "$phase_from_root" ] || [ -z "$repo_root" ]; then
-    echo "validate-plan: could not determine the phase index path for $root" >&2
-    exit 2
-  fi
-  index="$repo_root/docs/plans/phase-$phase_from_root/sprints.json"
+index_needs_write=0
+if [ -n "$root" ] && [ -z "$file" ]; then
+  index=$("$here/phase-index-path" --root "$root") \
+    || { echo "validate-plan: could not determine the phase index path for $root" >&2; exit 2; }
   if [ "$write_index" -eq 1 ]; then
-    "$here/export-sprint-index" --root "$root" --out "$index" \
-      || { echo "validate-plan: sprint index export failed for $root" >&2; exit 2; }
+    index_needs_write=1
   fi
   fresh_index="$scratch/fresh-sprints.json"
   "$here/export-sprint-index" --root "$root" --out "$fresh_index" \
     || { echo "validate-plan: fresh sprint index export failed for $root" >&2; exit 2; }
   if [ ! -f "$index" ]; then
-    problems+=("missing committed sprint index $index (run validate-plan --root $root --write)")
-  elif ! index_diff=$(diff -u "$index" "$fresh_index"); then
-    printf '%s\n' "$index_diff"
-    problems+=("committed sprint index $index is out of date (run validate-plan --root $root --write)")
+    [ "$write_index" -eq 1 ] || problems+=("missing committed sprint index $index (run validate-plan --root $root --write)")
+  else
+    if index_diff=$(diff -u "$index" "$fresh_index"); then
+      index_needs_write=0
+    else
+      diff_rc=$?
+      case "$diff_rc" in
+        1)
+          printf '%s\n' "$index_diff"
+          [ "$write_index" -eq 1 ] || problems+=("committed sprint index $index is out of date (run validate-plan --root $root --write)")
+          ;;
+        *) echo "validate-plan: could not compare committed sprint index $index" >&2; exit 2 ;;
+      esac
+    fi
   fi
 fi
 
@@ -169,6 +175,9 @@ if [ -n "$trunk" ] && ! git ls-remote --exit-code --heads origin "$trunk" >/dev/
 fi
 
 if [ ${#problems[@]} -eq 0 ]; then
+  if [ "$index_needs_write" -eq 1 ]; then
+    cp "$fresh_index" "$index"
+  fi
   echo "plan valid: $(jq -s '[.[] | select((.labels // []) | index("stage:dev"))] | length' "$plan") dev beads checked"
   exit 0
 fi

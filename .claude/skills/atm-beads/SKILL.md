@@ -94,10 +94,7 @@ before the first dispatch. Run it from the repository root:
 ```bash
 .claude/skills/atm-beads/scripts/validate-plan --file <plan.jsonl>   # rendered, before import
 .claude/skills/atm-beads/scripts/validate-plan --root <root id>      # live beads
-.claude/skills/atm-beads/scripts/validate-plan --root <root id> --write  # regenerate the committed sprint index
 ```
-
-After importing a phase plan, export the sprint index and commit it with the plan.
 
 It runs `bd doctor` first. It fails on any doctor error, a missing field,
 a broken graph, a missing, empty or unknown REQ/ADR id (`["NONE"]` is the

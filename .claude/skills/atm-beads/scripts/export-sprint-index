@@ -17,6 +17,7 @@ DELIVERABLES = re.compile(
     re.MULTILINE | re.DOTALL | re.IGNORECASE,
 )
 NUMBERED_ITEM = re.compile(r"^\s*[0-9]+\.\s+", re.MULTILINE)
+FOLDED_INTO = re.compile(r"^folded into\s+(\S+)", re.IGNORECASE)
 
 
 def run_json(repo: Path, *args: str) -> Any:
@@ -44,22 +45,17 @@ def list_value(value: Any) -> list[Any]:
     return value if isinstance(value, list) else [value]
 
 
+def dependency_id(edge: dict[str, Any]) -> str:
+    return str(edge.get("depends_on_id") or edge.get("id") or "")
+
+
+def dependency_type(edge: dict[str, Any]) -> str:
+    return str(edge.get("type") or edge.get("dependency_type") or "")
+
+
 def deliverable_count(description: str) -> int:
     match = DELIVERABLES.search(description or "")
     return len(NUMBERED_ITEM.findall(match.group("body"))) if match else 0
-
-
-def choose_qa(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
-    if not candidates:
-        return None
-    return max(
-        candidates,
-        key=lambda bead: (
-            int(str(metadata(bead).get("round", "0")))
-            if str(metadata(bead).get("round", "0")).isdigit() else 0,
-            bead.get("id", ""),
-        ),
-    )
 
 
 def main() -> int:
@@ -77,7 +73,10 @@ def main() -> int:
         root_record = root_records[0]
         phase = str(metadata(root_record).get("phase") or "")
         if not phase:
-            raise RuntimeError(f"root bead {args.root} has no metadata.phase")
+            match = re.search(r"-phase-([a-z0-9]+)$", args.root)
+            if not match:
+                raise RuntimeError(f"root bead {args.root} has no metadata.phase")
+            phase = match.group(1)
         children = run_json(
             repo, "bd", "list", "--parent", args.root, "--all", "-n", "0", "--json"
         )
@@ -88,52 +87,42 @@ def main() -> int:
     prefix = args.root.split("-phase-", 1)[0]
     dev_pattern = re.compile(rf"^{re.escape(prefix)}-{re.escape(phase)}-[0-9]+$")
     devs = [bead for bead in children if dev_pattern.fullmatch(str(bead.get("id", "")))]
-    sanity_by_dev = {
-        str(metadata(bead).get("dev_bead")): bead for bead in children
-        if "stage:dev-sanity" in (bead.get("labels") or []) and metadata(bead).get("dev_bead")
-    }
-    qa_by_dev: dict[str, list[dict[str, Any]]] = {}
-    for bead in children:
-        checked = str(metadata(bead).get("checked_bead") or "")
-        if checked:
-            qa_by_dev.setdefault(checked, []).append(bead)
-            continue
-        for dependency in bead.get("dependencies") or []:
-            if dependency.get("dependency_type") == "validates":
-                qa_by_dev.setdefault(str(dependency.get("id")), []).append(bead)
 
-    def sprint_key(bead: dict[str, Any]) -> tuple[int, str]:
+    def sprint_key(bead: dict[str, Any]) -> tuple[int, int, str]:
         try:
             layer = int(metadata(bead).get("layer"))
         except (TypeError, ValueError):
             layer = 2**31 - 1
-        return layer, str(bead.get("id", ""))
+        match = re.search(r"(\d+)$", str(bead.get("id", "")))
+        number = int(match.group(1)) if match else 2**31 - 1
+        return layer, number, str(bead.get("id", ""))
 
     sprints = []
     for bead in sorted(devs, key=sprint_key):
         bead_meta = metadata(bead)
-        dependencies = sorted({
-            str(dependency.get("id"))
-            for dependency in bead.get("dependencies") or []
-            if dependency.get("dependency_type") != "parent-child" and dependency.get("id")
+        depends_on = sorted({
+            dependency_id(edge)
+            for edge in bead.get("dependencies") or []
+            if dependency_type(edge) != "parent-child" and dependency_id(edge)
         })
-        qa = choose_qa(qa_by_dev.get(str(bead["id"]), []))
-        sprints.append({
+        row = {
             "id": bead["id"],
             "sprint": bead_meta.get("sprint") or str(bead["id"]).removeprefix(f"{prefix}-"),
             "title": bead.get("title", ""),
             "layer": bead_meta.get("layer"),
             "pr_target": bead_meta.get("pr_target"),
             "stack": bead_meta.get("stack"),
-            "depends_on": dependencies,
-            "planned_assignee": bead.get("assignee"),
-            "sanity_bead": (sanity_by_dev.get(str(bead["id"])) or {}).get("id"),
-            "qa_bead": qa.get("id") if qa else None,
+            "depends_on": depends_on,
             "deliverable_count": deliverable_count(bead.get("description", "")),
             "owned_paths": list_value(bead_meta.get("owned_paths")),
             "requirements": list_value(bead_meta.get("requirements")),
             "adrs": list_value(bead_meta.get("adrs")),
-        })
+        }
+        folded = FOLDED_INTO.match(str(bead.get("close_reason") or ""))
+        if folded:
+            row["folded_into"] = folded.group(1)
+        sprints.append(row)
+
     output = {
         "phase_id": phase,
         "root_bead_id": args.root,
