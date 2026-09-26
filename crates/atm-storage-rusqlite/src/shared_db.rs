@@ -331,6 +331,7 @@ impl SharedDb {
                 queued_position,
                 reassign_notice,
                 task_rejection,
+                task_events,
                 ..
             } => Ok(MessageAdmissionOutcome {
                 existing: None,
@@ -339,6 +340,7 @@ impl SharedDb {
                 queued_position,
                 reassign_notice: reassign_notice.map(|notice| *notice),
                 task_rejection,
+                task_events,
             }),
             WriteOpResult::UpsertMessage {
                 inserted: false,
@@ -437,6 +439,7 @@ impl SharedDb {
                 queued_position,
                 reassign_notice,
                 task_rejection,
+                task_events,
                 ..
             } => Ok(MessageAdmissionOutcome {
                 existing: None,
@@ -445,6 +448,7 @@ impl SharedDb {
                 queued_position,
                 reassign_notice: reassign_notice.map(|notice| *notice),
                 task_rejection,
+                task_events,
             }),
             WriteOpResult::UpsertMessage {
                 inserted: false,
@@ -510,6 +514,7 @@ impl SharedDb {
                 queued_position,
                 reassign_notice,
                 task_rejection,
+                task_events,
                 ..
             } => Ok(MessageAdmissionOutcome {
                 existing: None,
@@ -518,6 +523,7 @@ impl SharedDb {
                 queued_position,
                 reassign_notice: reassign_notice.map(|message| *message),
                 task_rejection,
+                task_events,
             }),
             WriteOpResult::TemplateMessageAdmission {
                 inserted: false,

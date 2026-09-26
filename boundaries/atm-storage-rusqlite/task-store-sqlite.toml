@@ -30,7 +30,7 @@ forbidden = ["SqliteTaskStore", "rusqlite::Connection"]
 
 [contracts]
 request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "MessageWriteOrigin", "EscalationScope", "PromptHandoff"]
-response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>", "Vec<PromptHandoff>", "Vec<String>", "bool"]
+response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>", "Vec<PromptHandoff>", "Vec<String>", "bool", "TaskMoveRecord", "TaskReminderRecord"]
 error_types = ["AtmError"]
 notes = ["writer/task_ops.rs applies Assigned/Started/Reassigned/Reopened/Completed transitions in the same transaction as the message insert; replay is keyed by (team, task_id)", "task rows carry assignment_message_id only; nothing in this store dereferences the message body (design §3)", "prompt handoffs are inserted idempotently and read by task and timestamp/rowid order", "D8 escalation recipient methods persist daemon/team scope rows in SQLite"]
 

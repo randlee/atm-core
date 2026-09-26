@@ -39,6 +39,7 @@ pub(super) fn apply_task_close(
             task_assignee: None,
             queued_position: None,
             reassign_notice: None,
+            task_events: Vec::new(),
         });
     }
     if let Err(error) = admit(
@@ -72,7 +73,7 @@ pub(super) fn apply_task_close(
         ));
         return deliver_rejected_close_report(record, task_id, &row, error, connection, target);
     }
-    persist_task_close(
+    let event = persist_task_close(
         record, task_id, outcome, reason, &row, next_state, connection, cache, target,
     )?;
     Ok(TaskMessageResult::Applied {
@@ -80,6 +81,7 @@ pub(super) fn apply_task_close(
         task_assignee: Some(row.assignee),
         queued_position: None,
         reassign_notice: None,
+        task_events: vec![event],
     })
 }
 
@@ -92,7 +94,7 @@ fn deliver_rejected_close_report(
     target: &SharedDbTarget,
 ) -> Result<TaskMessageResult, AtmError> {
     drop_task_link_from_mail(record, connection, target)?;
-    append_task_event(
+    let event = append_task_event(
         connection,
         target,
         &record.team,
@@ -109,10 +111,13 @@ fn deliver_rejected_close_report(
         None,
         Some(error.message()),
     )?;
-    Ok(TaskMessageResult::RejectedReportDelivered(AtmError::new(
-        error.code(),
-        format!("{}; report delivered", error.detail()),
-    )))
+    Ok(TaskMessageResult::RejectedReportDelivered {
+        error: AtmError::new(
+            error.code(),
+            format!("{}; report delivered", error.detail()),
+        ),
+        event,
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -126,7 +131,7 @@ fn persist_task_close(
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
-) -> Result<(), AtmError> {
+) -> Result<atm_storage::TaskEventRow, AtmError> {
     acknowledge_assignment(connection, cache, target, record, row)?;
     connection
         .execute(
