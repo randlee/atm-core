@@ -142,6 +142,9 @@ on every restack and show up as out-of-scope work in that sprint's PR.
    with only the change, the implementors and call sites the compiler
    forces, and one test when it is a bug. The test command passes; push; PR
    into `<base>`.
+   When every roster agent is mid-task, the lead runs a background
+   `rust-developer` subagent for this step instead of waiting; the branch,
+   scope and test rule are the same.
 4. The lead reads the diff and merges it at once; there is no QA round,
    because the diff is the change and what it forces and the lead has read
    it. The lead then rebases the stack layers above the base and pushes each
