@@ -502,6 +502,9 @@ async fn unread_assignment_counts_to_stall_and_escalates_at_ten() {
         1
     );
 
+    // Idle nudging to the assignee resumes on the next tick instead of
+    // holding "stalled" forever; the lead is not escalated again until the
+    // next full budget of reminders (20).
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2020-01-01T00:11:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
@@ -510,11 +513,11 @@ async fn unread_assignment_counts_to_stall_and_escalates_at_ten() {
         .load_task(key.team(), &task_id)
         .expect("load task")
         .expect("task row");
-    assert_eq!(terminal.reminder_count, 10);
+    assert_eq!(terminal.reminder_count, 11);
     assert_eq!(terminal.lead_notified_count, 1);
     assert_eq!(
         prompt_texts(&fake).len(),
-        10,
+        11,
         "the assignment itself never enters the queue drain"
     );
     assert_eq!(

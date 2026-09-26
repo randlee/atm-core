@@ -5,7 +5,7 @@ title: Task State Machine
 # ADR-062 — Task State Machine
 
 Date: 2026-09-04
-Amended: 2026-09-11 (Phase BA)
+Amended: 2026-09-11 (Phase BA); 2026-09-26 (#1598)
 
 ## Phase AX decision (as built; superseded where marked)
 
@@ -73,6 +73,15 @@ zero task reminders and no reminder outcome recorded. Escalation for a stalled
 `TASK_STALLED_REMINDER_THRESHOLD` reminders and then holds until the task
 changes state or is reassigned/reopened.
 
+Amendment (2026-09-26, #1598): a task reminder is emitted every
+`TASK_REMINDER_INTERVAL_MS` while the assignee is Idle with an open task,
+with no cap — the reminder cycle no longer holds "stalled" forever after the
+first escalation. The lead and configured escalation recipients are notified
+at every `TASK_STALLED_REMINDER_THRESHOLD` reminders (10, 20, 30, ...). An
+assignee observed Active continuously for at least one reminder interval
+resets the reminder and lead-notification counters; a shorter burst of
+activity does not.
+
 ## Lead notification and escalation
 
 *Superseded (BA):* After a successful reminder is recorded, every tenth
@@ -81,6 +90,11 @@ one roster member whose `agent_type` is `lead`. The lead mail is deferred daemon
 audited as `LeadNotified` only when the lead write succeeds. A missing or
 ambiguous lead suppresses that audit event without suppressing configured
 escalation-recipient fan-out.
+
+The every-tenth-reminder escalation boundary marked *Superseded (BA)* above
+is reinstated by the 2026-09-26 amendment: escalation recurs at every
+budget of `TASK_STALLED_REMINDER_THRESHOLD` reminders rather than firing
+once.
 
 *Superseded (BA):* Blocked runtime observations create an in-memory episode.
 The first escalation is eligible after 60 seconds and subsequent notifications
@@ -165,7 +179,8 @@ ADR-054 capability. `task_events.reminded` remains the task-side counter;
 | assignee `Idle` with an incomplete task | remind, at most once per `TASK_REMINDER_INTERVAL_MS` (60 s) per member; queued messages are discharged first (ADR-054, Phase BA amendment) |
 | assignee `Active` | none; never divert |
 | assignee `Blocked` or `Offline` | no reminder; one escalation message per episode (first accepted observation of the state until the first accepted observation of another state), no cooldown, no re-notification |
-| `reminder_count` reaches `TASK_STALLED_REMINDER_THRESHOLD` (10) | escalate once; reminders stop until the task changes state (start or close) or is reassigned or reopened; a change in the assignee's runtime state alone does not resume nudging. |
+| `reminder_count` reaches `TASK_STALLED_REMINDER_THRESHOLD` (10) | *Superseded (2026-09-26, #1598):* escalate once; reminders stop until the task changes state (start or close) or is reassigned or reopened; a change in the assignee's runtime state alone does not resume nudging. |
+| `reminder_count` reaches a `TASK_STALLED_REMINDER_THRESHOLD` budget boundary (10, 20, 30, ...) | escalate the lead and configured escalation recipients again; reminders to the assignee continue in between escalations, with no cap and no terminal hold. Only sustained assignee activity — `Active` observed continuously for at least one `TASK_REMINDER_INTERVAL_MS` — resets `reminder_count` and `lead_notified_count`; a shorter burst of activity does not. |
 
 Task selection for an idle member: the active task, else the first `assigned`
 task in queue order. A `reminded` event is recorded only against the task the

@@ -419,6 +419,45 @@ impl TaskStore for SqliteTaskStore {
         })
     }
 
+    fn reset_reminders(
+        &self,
+        member: &MemberKey,
+        task_id: &TaskId,
+        at: IsoTimestamp,
+    ) -> Result<TaskRow, AtmError> {
+        self.db.with_transaction(|connection| {
+            let row = self
+                .load_row(connection, member, task_id)?
+                .ok_or_else(|| AtmError::validation("cannot reset reminders for a missing task"))?;
+            connection
+                .execute(
+                    "UPDATE tasks SET reminder_count = 0, lead_notified_count = 0,
+                     last_reminded_at = NULL, updated_at = ?4
+                     WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
+                    params![
+                        member.team().as_str(),
+                        task_id.as_str(),
+                        member.agent().as_str(),
+                        at.to_string()
+                    ],
+                )
+                .map_err(|error| self.db.error("failed to reset task reminders", error))?;
+            self.append_event(
+                connection,
+                member,
+                task_id,
+                at,
+                TaskEventKind::RemindersReset,
+                row.state,
+                atm_storage::DAEMON_ACTOR_NAME,
+                None,
+                None,
+            )?;
+            self.load_row(connection, member, task_id)?
+                .ok_or_else(|| AtmError::mailbox_write("task disappeared after reminder reset"))
+        })
+    }
+
     fn record_lead_notified(
         &self,
         member: &MemberKey,
@@ -593,6 +632,7 @@ fn parse_event(value: &str) -> rusqlite::Result<TaskEventKind> {
         "lead_notified" => Ok(TaskEventKind::LeadNotified),
         "moved" => Ok(TaskEventKind::Moved),
         "migrated" => Ok(TaskEventKind::Migrated),
+        "reminders_reset" => Ok(TaskEventKind::RemindersReset),
         _ => Err(invalid(value, "task event")),
     }
 }
@@ -648,6 +688,7 @@ const fn event_name(value: TaskEventKind) -> &'static str {
         TaskEventKind::LeadNotified => "lead_notified",
         TaskEventKind::Moved => "moved",
         TaskEventKind::Migrated => "migrated",
+        TaskEventKind::RemindersReset => "reminders_reset",
     }
 }
 const fn outcome_name(value: ReminderOutcome) -> &'static str {
