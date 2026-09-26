@@ -248,6 +248,8 @@ pub struct MessageAdmissionOutcome {
     /// ordinary mail. Callers must complete ordinary post-write handling
     /// before surfacing this error to the sender.
     pub task_rejection: Option<AtmError>,
+    /// Task-ledger rows appended atomically with this message admission.
+    pub task_events: Vec<TaskEventRow>,
 }
 
 impl MessageAdmissionOutcome {
