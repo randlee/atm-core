@@ -631,11 +631,12 @@ def _python_distribution_name_from_wheel(path: Path, expected: set[str]) -> str:
 
 def _python_distribution_name_from_sdist(path: Path, expected: set[str]) -> str | None:
     with tarfile.open(path, "r:gz") as archive:
-        metadata = [member for member in archive.getmembers() if member.name.endswith("/PKG-INFO")]
+        # Root-level PKG-INFO only: setuptools sdists also carry *.egg-info/PKG-INFO (sc-publish#74).
+        metadata = [m for m in archive.getmembers() if m.name.endswith("/PKG-INFO") and m.name.count("/") == 1]
         if not metadata:
             return None
         if len(metadata) != 1:
-            raise SystemExit(f"{path}: expected exactly one sdist PKG-INFO file")
+            raise SystemExit(f"{path}: expected exactly one root-level sdist PKG-INFO file")
         extracted = archive.extractfile(metadata[0])
         if extracted is None:
             raise SystemExit(f"{path}: unable to read sdist PKG-INFO")

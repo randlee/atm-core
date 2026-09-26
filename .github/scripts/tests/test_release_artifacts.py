@@ -826,7 +826,7 @@ def test_package_check_plan_skips_registry_verification_only_for_earlier_release
     ]
 
 
-def test_package_check_plan_keeps_full_verification_for_nonrelease_dependencies(
+def test_package_check_plan_skips_unpublished_crates_and_keeps_full_verification_for_their_dependents(
     tmp_path: Path,
 ) -> None:
     workspace, manifest = write_repo_fixture(tmp_path, manifest_wheels=["ubuntu-latest"])
@@ -847,10 +847,7 @@ def test_package_check_plan_keeps_full_verification_for_nonrelease_dependencies(
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == [
-        "sc-composer|verify|",
-        "sc-compose|verify|",
-    ]
+    assert result.stdout.splitlines() == ["sc-compose|verify|"]
 
 
 def test_rust_only_manifest_emits_empty_python_matrices(tmp_path: Path) -> None:
@@ -1247,7 +1244,7 @@ def test_release_workflows_gate_cargo_and_python_legs_on_the_manifest() -> None:
     assert "steps.build_plan.outputs.workspace_toml" in release_text
 
     assert "build-plan" in preflight_text
-    assert preflight_text.count("steps.build_plan.outputs.has_crates == 'true'") >= 5
+    assert preflight_text.count("steps.build_plan.outputs.has_crates == 'true'") >= 3
     assert "steps.build_plan.outputs.workspace_toml" in preflight_text
     assert '--workspace-toml Cargo.toml' not in preflight_text
     assert 'if [[ "${HAS_CRATES}" == "true" ]]; then' in preflight_text

@@ -35,9 +35,10 @@ jobs:
       pypi_config: ${{ steps.config.outputs.config }}
       python_upload_tool: ${{ steps.config.outputs.python_upload_tool }}
     steps:
+      # Check out the dispatch ref, not the immutable tag: this workflow only
+      # downloads published release assets, so the checkout supplies tooling
+      # and the manifest (sc-publish#76).
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.tag }}
       - uses: ./.github/actions/verify-published-release
         with:
           release_tag: ${{ inputs.tag }}
@@ -57,9 +58,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.target == 'production' && 'pypi' || 'testpypi' }}
     steps:
+      # Check out the dispatch ref, not the immutable tag: this workflow only
+      # downloads published release assets, so the checkout supplies tooling
+      # and the manifest (sc-publish#76).
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.tag }}
       - name: Download Python assets from the published GitHub Release
         shell: bash
         env:

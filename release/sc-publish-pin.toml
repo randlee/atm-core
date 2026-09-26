@@ -10,7 +10,7 @@
 [sc-publish]
 repository = "https://github.com/randlee/sc-publish"
 # The org-blessed, consumer-qualified kit revision (full 40-character SHA).
-revision = "3d6e533076d1111b51251bf910968152bae151e3"
+revision = "cbb9ce0858d168397421fa1d603a0ebfd5e19ac9"
 # The consumer tree is unchanged canonical-installer output of this exact
 # revision; rendered manifests come from the consumer input below. No shared
 # kit file is hand-edited in this repository.
