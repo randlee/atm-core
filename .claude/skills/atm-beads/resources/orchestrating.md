@@ -48,9 +48,10 @@ bead and blocks every dev bead that requires it. Its assignment is
 1. The dev agent completes its dev task and closes it; lead receives the
    dev-task completion.
 2. Lead assigns the sanity check.
-3. If sanity check fails, lead reopens the dev bead and gives the dev agent a
-   dev-fix assignment with the bead id and the findings (this may change once
-   the quality-mgr process is worked out):
+3. If sanity check fails, the sanity member files every reported failure as a
+   child finding bead of the dev bead. It adds sibling `blocks` edges only for
+   reported fix prerequisites. Lead reviews those child findings, then reopens
+   the dev bead and gives the dev agent a dev-fix assignment:
 
    ```bash
    bd reopen <dev-bead-id> --reason "<what sanity check found>"
