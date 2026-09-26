@@ -156,7 +156,8 @@ on every restack and show up as out-of-scope work in that sprint's PR.
 
 Once the fix is in the base, it leaves every rebased branch's PR diff, so CI
 and QA on those PRs never see it, and no sprint carries another sprint's
-edits.
+edits. It also means one copy of the missing code: without it each blocked
+sprint writes its own version of the change and they conflict at restack.
 
 ## Plan Gate
 
