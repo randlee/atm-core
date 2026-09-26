@@ -698,6 +698,40 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
             })
     }
 
+    async fn list_task_history(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        limit: usize,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        if let Some(delegate) = &self.delegate {
+            return delegate
+                .list_task_history(team, member, limit, deadline)
+                .await;
+        }
+        let mut rows = self
+            .tasks
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger reader task lock poisoned".to_owned(),
+            })?
+            .iter()
+            .filter(|task| {
+                task.team == team && member.as_ref().is_none_or(|agent| &task.assignee == agent)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        rows.sort_by(|left, right| {
+            right
+                .assigned_at
+                .cmp(&left.assigned_at)
+                .then_with(|| right.task_id.cmp(&left.task_id))
+        });
+        rows.truncate(limit);
+        Ok(rows)
+    }
+
     async fn list_task_events(
         &self,
         team: TeamName,

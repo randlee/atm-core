@@ -54,6 +54,10 @@ pub enum TaskLedgerQuery {
         task_id: TaskId,
         member: Option<AgentName>,
     },
+    History {
+        member: Option<AgentName>,
+        limit: usize,
+    },
 }
 
 impl ListQuery {
@@ -147,7 +151,9 @@ where
     }
     if let Some(task_ledger) = query.task_ledger.as_mut() {
         let member = match task_ledger {
-            TaskLedgerQuery::Tasks { member } | TaskLedgerQuery::Events { member, .. } => member,
+            TaskLedgerQuery::Tasks { member }
+            | TaskLedgerQuery::Events { member, .. }
+            | TaskLedgerQuery::History { member, .. } => member,
         };
         if let Some(candidate) = member
             && let Some((_, canonical)) = resolve_member(&query.caller_team, candidate, true)
@@ -369,6 +375,14 @@ pub async fn list_task_ledger_with_runtime_async(
                 .map_err(AtmError::from)?;
             (Vec::new(), task_event_rows, handoffs)
         }
+        (TaskLedgerQuery::History { member, limit }, _) => (
+            reader
+                .list_task_history(query.caller_team.clone(), member, limit, deadline)
+                .await
+                .map_err(AtmError::from)?,
+            Vec::new(),
+            Vec::new(),
+        ),
     };
     Ok(build_task_ledger_outcome(
         query,

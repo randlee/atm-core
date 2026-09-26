@@ -103,6 +103,21 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
             .await
     }
 
+    async fn list_task_history(
+        &self,
+        team: TeamName,
+        member: Option<AgentName>,
+        limit: usize,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskRow>, ReadLaneError> {
+        self.pool
+            .submit(deadline.remaining(), move |connection, target| {
+                list_task_history(connection, target, &team, member.as_ref(), limit)
+                    .map_err(read_lane_storage_error)
+            })
+            .await
+    }
+
     async fn list_task_events(
         &self,
         team: TeamName,
@@ -150,6 +165,33 @@ fn list_tasks(
         .map_err(|error| sqlite_error(target, "failed to list async tasks", error))?
         .map(|row| {
             row.map_err(|error| sqlite_error(target, "failed to decode async task row", error))
+        })
+        .collect()
+}
+
+fn list_task_history(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    team: &TeamName,
+    member: Option<&AgentName>,
+    limit: usize,
+) -> Result<Vec<TaskRow>, AtmError> {
+    let mut statement = connection
+        .prepare(&task_sql::select_task_history_sql())
+        .map_err(|error| sqlite_error(target, "failed to prepare async task history", error))?;
+    // SQLite binds LIMIT as i64; a `usize` beyond that range is not a
+    // realistic history page size, so clamp rather than error.
+    let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+    statement
+        .query_map(
+            params![team.as_str(), member.map(AgentName::as_str), limit],
+            SqliteTaskStore::decode_row,
+        )
+        .map_err(|error| sqlite_error(target, "failed to list async task history", error))?
+        .map(|row| {
+            row.map_err(|error| {
+                sqlite_error(target, "failed to decode async task history row", error)
+            })
         })
         .collect()
 }

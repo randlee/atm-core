@@ -320,6 +320,18 @@ impl TaskStore for SqliteTaskStore {
         })
     }
 
+    fn list_task_history(
+        &self,
+        team: &TeamName,
+        member: Option<&AgentName>,
+        limit: usize,
+    ) -> Result<Vec<TaskRow>, AtmError> {
+        self.db.with_connection(|connection| {
+            task_sql::select_task_history(connection, team, member, limit)
+                .map_err(|error| self.db.error("failed to list task history", error))
+        })
+    }
+
     fn list_task_events(
         &self,
         team: &TeamName,
@@ -845,6 +857,112 @@ mod tests {
                 .expect("recipient list")
                 .len(),
             MAX_ESCALATION_RECIPIENTS
+        );
+    }
+
+    /// Seeds one `tasks` row directly: `atm task history` needs completed
+    /// rows the mailbox-driven `save_message` fixture never produces, so
+    /// this writes the row shape the DDL admits instead of routing through
+    /// the message-admission writer.
+    fn insert_task_row(
+        store: &SqliteTaskStore,
+        team: &str,
+        task_id: &str,
+        assignee: &str,
+        assigned_at: &str,
+        complete: bool,
+    ) {
+        let state = if complete { "complete" } else { "assigned" };
+        let close_outcome = complete.then_some("completed");
+        let position = (!complete).then_some(1_i64);
+        let message_id = AtmMessageId::new().to_string();
+        store
+            .db
+            .with_connection(|connection| {
+                connection
+                    .execute(
+                        "INSERT INTO tasks(
+                            team, task_id, assignee, assigner, state, close_outcome, position,
+                            assignment_message_id, description, assigned_at, updated_at,
+                            last_reminded_at, reminder_count, lead_notified_count
+                        ) VALUES (?1, ?2, ?3, 'assigner', ?4, ?5, ?6, ?7, 'history fixture', ?8, ?8, NULL, 0, 0)",
+                        params![
+                            team,
+                            task_id,
+                            assignee,
+                            state,
+                            close_outcome,
+                            position,
+                            message_id,
+                            assigned_at,
+                        ],
+                    )
+                    .map(|_| ())
+                    .map_err(|error| store.db.error("seed task history row", error))
+            })
+            .expect("seed task history row");
+    }
+
+    #[test]
+    fn list_task_history_includes_completed_rows_honours_limit_and_member() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = Arc::clone(&backend.task_store);
+        let team: TeamName = "history-team".parse().expect("team");
+
+        insert_task_row(
+            &store,
+            team.as_str(),
+            "T1",
+            "alice",
+            "2026-01-01T00:00:00Z",
+            false,
+        );
+        insert_task_row(
+            &store,
+            team.as_str(),
+            "T2",
+            "alice",
+            "2026-01-02T00:00:00Z",
+            true,
+        );
+        insert_task_row(
+            &store,
+            team.as_str(),
+            "T3",
+            "bob",
+            "2026-01-03T00:00:00Z",
+            true,
+        );
+
+        let all =
+            TaskStore::list_task_history(store.as_ref(), &team, None, 10).expect("full history");
+        assert_eq!(
+            all.iter()
+                .map(|row| row.task_id.as_str())
+                .collect::<Vec<_>>(),
+            ["T3", "T2", "T1"],
+            "newest first and includes the completed rows"
+        );
+
+        let limited =
+            TaskStore::list_task_history(store.as_ref(), &team, None, 2).expect("bounded history");
+        assert_eq!(
+            limited
+                .iter()
+                .map(|row| row.task_id.as_str())
+                .collect::<Vec<_>>(),
+            ["T3", "T2"]
+        );
+
+        let alice: AgentName = "alice".parse().expect("agent");
+        let alice_only = TaskStore::list_task_history(store.as_ref(), &team, Some(&alice), 10)
+            .expect("member-scoped history");
+        assert_eq!(
+            alice_only
+                .iter()
+                .map(|row| row.task_id.as_str())
+                .collect::<Vec<_>>(),
+            ["T2", "T1"]
         );
     }
 }
