@@ -600,7 +600,7 @@ impl StorageAndNudgeRouter {
         let runtime = self.service_runtime.clone();
         self.control_path_sync_bridge
             .run(deadline, move || {
-                let (assignee, from, to) = runtime.task_store()?.move_task(
+                let record = runtime.task_store()?.move_task(
                     &request.caller_team,
                     &request.task_id,
                     &request.caller_identity,
@@ -610,9 +610,9 @@ impl StorageAndNudgeRouter {
                 Ok(ApiResponse::new(ResponseEnvelope::TaskMove(
                     TaskMoveOutcome {
                         task_id: request.task_id,
-                        assignee,
-                        from,
-                        to,
+                        assignee: record.assignee,
+                        from: record.from,
+                        to: record.to,
                     },
                 )))
             })

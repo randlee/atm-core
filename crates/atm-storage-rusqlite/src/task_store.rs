@@ -3,8 +3,8 @@ use std::sync::Arc;
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{
     AtmError, AtmMessageId, EscalationScope, MAX_ESCALATION_RECIPIENTS, MemberKey, MoveTarget,
-    PromptHandoff, PromptTrigger, QueuePosition, ReminderOutcome, TaskActor, TaskCloseOutcome,
-    TaskEventKind, TaskEventMarker, TaskEventRow, TaskRow, TaskState, TaskStateTag, TaskStore,
+    PromptHandoff, PromptTrigger, ReminderOutcome, TaskActor, TaskCloseOutcome, TaskEventKind,
+    TaskEventMarker, TaskEventRow, TaskRow, TaskState, TaskStateTag, TaskStore,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -256,7 +256,7 @@ impl SqliteTaskStore {
         actor: &str,
         message_id: Option<&AtmMessageId>,
         outcome: Option<ReminderOutcome>,
-    ) -> Result<(), AtmError> {
+    ) -> Result<TaskEventRow, AtmError> {
         let seq: u64 = connection
             .query_row(
                 "SELECT COALESCE(MAX(seq), 0) + 1 FROM task_events
@@ -288,7 +288,27 @@ impl SqliteTaskStore {
                 ],
             )
             .map_err(|error| self.db.error("failed to append task event", error))?;
-        Ok(())
+        Ok(TaskEventRow {
+            team: member.team().clone(),
+            task_id: task_id.clone(),
+            assignee: member.agent().clone(),
+            seq,
+            at,
+            event,
+            from_state: Some(state),
+            to_state: Some(state),
+            actor: if actor == atm_storage::DAEMON_ACTOR_NAME {
+                TaskActor::Daemon
+            } else {
+                TaskActor::Member(actor.parse().map_err(|error| {
+                    AtmError::validation(format!("invalid task event actor: {error}"))
+                })?)
+            },
+            message_id: message_id.copied(),
+            outcome,
+            marker: None,
+            detail: None,
+        })
     }
 }
 
@@ -344,7 +364,7 @@ impl TaskStore for SqliteTaskStore {
         })
     }
 
-    fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<(), AtmError> {
+    fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<PromptHandoff, AtmError> {
         self.db.with_connection(|connection| {
             let sql = format!(
                 "INSERT OR IGNORE INTO prompt_handoffs({})
@@ -365,7 +385,7 @@ impl TaskStore for SqliteTaskStore {
                         handoff.at.to_string(),
                     ],
                 )
-                .map(|_| ())
+                .map(|_| handoff.clone())
                 .map_err(|error| self.db.error("failed to record prompt handoff", error))
         })
     }
@@ -377,7 +397,7 @@ impl TaskStore for SqliteTaskStore {
         actor: &AgentName,
         target: &MoveTarget,
         at: IsoTimestamp,
-    ) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
+    ) -> Result<atm_storage::TaskMoveRecord, AtmError> {
         match self.db.submit_writer_op(crate::writer::WriteOp::TaskMove {
             team: team.clone(),
             task_id: task_id.clone(),
@@ -398,7 +418,7 @@ impl TaskStore for SqliteTaskStore {
         task_id: &TaskId,
         at: IsoTimestamp,
         outcome: ReminderOutcome,
-    ) -> Result<TaskRow, AtmError> {
+    ) -> Result<atm_storage::TaskReminderRecord, AtmError> {
         self.db.with_transaction(|connection| {
             let row = self.load_row(connection, member, task_id)?.ok_or_else(|| {
                 AtmError::validation("cannot record a reminder for a missing task")
@@ -415,7 +435,7 @@ impl TaskStore for SqliteTaskStore {
                     ],
                 )
                 .map_err(|error| self.db.error("failed to record task reminder", error))?;
-            self.append_event(
+            let event = self.append_event(
                 connection,
                 member,
                 task_id,
@@ -426,8 +446,10 @@ impl TaskStore for SqliteTaskStore {
                 None,
                 Some(outcome),
             )?;
-            self.load_row(connection, member, task_id)?
-                .ok_or_else(|| AtmError::mailbox_write("task disappeared after reminder write"))
+            let row = self
+                .load_row(connection, member, task_id)?
+                .ok_or_else(|| AtmError::mailbox_write("task disappeared after reminder write"))?;
+            Ok(atm_storage::TaskReminderRecord { row, event })
         })
     }
 
@@ -436,7 +458,7 @@ impl TaskStore for SqliteTaskStore {
         member: &MemberKey,
         task_id: &TaskId,
         at: IsoTimestamp,
-    ) -> Result<TaskRow, AtmError> {
+    ) -> Result<atm_storage::TaskReminderRecord, AtmError> {
         self.db.with_transaction(|connection| {
             let row = self
                 .load_row(connection, member, task_id)?
@@ -454,7 +476,7 @@ impl TaskStore for SqliteTaskStore {
                     ],
                 )
                 .map_err(|error| self.db.error("failed to reset task reminders", error))?;
-            self.append_event(
+            let event = self.append_event(
                 connection,
                 member,
                 task_id,
@@ -465,8 +487,10 @@ impl TaskStore for SqliteTaskStore {
                 None,
                 None,
             )?;
-            self.load_row(connection, member, task_id)?
-                .ok_or_else(|| AtmError::mailbox_write("task disappeared after reminder reset"))
+            let row = self
+                .load_row(connection, member, task_id)?
+                .ok_or_else(|| AtmError::mailbox_write("task disappeared after reminder reset"))?;
+            Ok(atm_storage::TaskReminderRecord { row, event })
         })
     }
 
@@ -477,7 +501,7 @@ impl TaskStore for SqliteTaskStore {
         at: IsoTimestamp,
         lead: &AgentName,
         message_id: &AtmMessageId,
-    ) -> Result<(), AtmError> {
+    ) -> Result<TaskEventRow, AtmError> {
         self.db.with_transaction(|connection| {
             let row = self.load_row(connection, member, task_id)?.ok_or_else(|| {
                 AtmError::validation("cannot record lead notification for a missing task")

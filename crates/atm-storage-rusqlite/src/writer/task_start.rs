@@ -19,7 +19,7 @@ pub(super) fn apply_task_start(
     task_id: &TaskId,
     connection: &Connection,
     target: &SharedDbTarget,
-) -> Result<AgentName, AtmError> {
+) -> Result<(AgentName, atm_storage::TaskEventRow), AtmError> {
     let row = load_startable_task(record, task_id, connection, target)?;
     if row.state == TaskState::Active {
         return Err(task_already_active(format!(
@@ -53,7 +53,7 @@ pub(super) fn apply_task_start(
         )
         .map_err(|error| sqlite_error(target, "failed to start task", error))?;
     renumber_queue(&record.team, &row.assignee, &order, connection, target)?;
-    append_task_event(
+    let event = append_task_event(
         connection,
         target,
         &record.team,
@@ -70,7 +70,7 @@ pub(super) fn apply_task_start(
         None,
         None,
     )?;
-    Ok(row.assignee)
+    Ok((row.assignee, event))
 }
 
 fn load_startable_task(

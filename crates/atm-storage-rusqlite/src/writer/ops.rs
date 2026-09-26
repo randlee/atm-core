@@ -18,7 +18,7 @@ use atm_storage::{
     MessageWriteOrigin, TemplateMessageAdmission, TemplateRegistration,
     TemplateRegistrationOutcome,
 };
-use atm_storage::{MoveTarget, QueuePosition, TaskId};
+use atm_storage::{MoveTarget, TaskId};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
 use std::sync::Arc;
@@ -149,10 +149,11 @@ pub(crate) enum WriteOpResult {
         /// Populated when task governance rejected the operation after
         /// retaining its report as ordinary mail.
         task_rejection: Option<AtmError>,
+        task_events: Vec<atm_storage::TaskEventRow>,
     },
     UpsertMessages,
     Acknowledged(Box<AcknowledgementCommit>),
-    TaskMoved((AgentName, QueuePosition, QueuePosition)),
+    TaskMoved(atm_storage::TaskMoveRecord),
     TemplateRegistration(TemplateRegistrationOutcome),
     DecomposedMessageAdmission(DecomposedMessageAdmissionOutcome),
     TemplateMessageAdmission {
@@ -162,6 +163,7 @@ pub(crate) enum WriteOpResult {
         queued_position: Option<u32>,
         reassign_notice: Option<Box<Message>>,
         task_rejection: Option<AtmError>,
+        task_events: Vec<atm_storage::TaskEventRow>,
     },
     DiagnosticsRecorded,
     DiagnosticsPruned(u64),
@@ -266,6 +268,7 @@ fn execute_admit_template_message(
             queued_position: None,
             reassign_notice: None,
             task_rejection: None,
+            task_events: Vec::new(),
         }),
         WriteOpResult::UpsertMessage {
             inserted: true,
@@ -273,6 +276,7 @@ fn execute_admit_template_message(
             queued_position,
             reassign_notice,
             task_rejection,
+            task_events,
             ..
         } => {
             let _ =
@@ -284,6 +288,7 @@ fn execute_admit_template_message(
                 queued_position,
                 reassign_notice,
                 task_rejection,
+                task_events,
             })
         }
         other => Err(AtmError::daemon_unavailable(format!(

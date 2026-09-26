@@ -496,7 +496,7 @@ impl HerdrQueueWakePump {
             })
             .await
         {
-            Ok(row) => Ok(row),
+            Ok(record) => Ok(record.row),
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_record", outcome = "failed", error = %error, member = %member, task_id = %task_id, "Herdr task reminder bookkeeping failed");
                 Err(error)

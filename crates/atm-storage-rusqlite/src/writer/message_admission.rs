@@ -36,12 +36,18 @@ pub(super) fn execute_upsert_message(
     } else {
         Some(Box::new(load_existing_message(record, connection, target)?))
     };
-    let (already_closed, task_assignee, queued_position, reassign_notice, task_rejection) =
-        if inserted && provenance == MessageWriteOrigin::Local {
-            apply_task_message(record, connection, cache, target)?.into_admission_parts()
-        } else {
-            (None, None, None, None, None)
-        };
+    let (
+        already_closed,
+        task_assignee,
+        queued_position,
+        reassign_notice,
+        task_rejection,
+        task_events,
+    ) = if inserted && provenance == MessageWriteOrigin::Local {
+        apply_task_message(record, connection, cache, target)?.into_admission_parts()
+    } else {
+        (None, None, None, None, None, Vec::new())
+    };
     Ok(WriteOpResult::UpsertMessage {
         inserted,
         existing,
@@ -50,5 +56,6 @@ pub(super) fn execute_upsert_message(
         queued_position,
         reassign_notice,
         task_rejection,
+        task_events,
     })
 }

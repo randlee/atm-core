@@ -29,7 +29,7 @@ forbidden = ["rusqlite::Connection"]
 
 [contracts]
 request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "MessageWriteOrigin", "EscalationScope", "PromptHandoff"]
-response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>", "Vec<PromptHandoff>", "Vec<String>", "bool"]
+response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>", "Vec<PromptHandoff>", "Vec<String>", "bool", "TaskMoveRecord", "TaskReminderRecord"]
 error_types = ["AtmError"]
 notes = [
   "state change: only the message writer transaction applies Assigned/Started/Reassigned/Reopened/Completed; no TaskStore method changes tasks.state",
