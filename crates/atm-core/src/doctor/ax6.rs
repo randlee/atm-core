@@ -187,12 +187,11 @@ pub(super) fn team_findings(
     }
     reserved_name_findings(team, roster, findings);
     for task in tasks.iter().filter(|task| {
-        // Mirrors the queue-wake pump's `EscalateStalled` trigger: a task is
-        // reported as stalled only while it is due for another escalation to
-        // the lead, not for its entire remaining open lifetime.
+        // A task stays reported as stalled from the first full reminder
+        // budget until the assignee's sustained activity resets the counters
+        // (#1598); repeated lead escalations do not clear the finding.
         !matches!(task.state, TaskState::Complete(_))
-            && task.reminder_count / crate::boundary::TASK_STALLED_REMINDER_THRESHOLD
-                > task.lead_notified_count
+            && task.reminder_count >= crate::boundary::TASK_STALLED_REMINDER_THRESHOLD
     }) {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Warning,
