@@ -5,6 +5,7 @@
 //! scenario backend-real while using the production bounded async reader lane
 //! over an isolated rusqlite assembly for each test.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -13,10 +14,12 @@ use atm_core::list::{ListQuery, TaskLedgerQuery, list_task_ledger_with_runtime_a
 use atm_core::observability::NullObservability;
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
+use atm_core::task_query::MAX_TASK_PAGE_LIMIT;
 use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER};
 use atm_core::types::{AgentName, IsoTimestamp, ModelName, ReadSelection, TaskId, TeamName};
 use atm_runtime_test_support::open_isolated_sqlite_boundary;
-use atm_storage::{ReadDeadline, RosterSnapshot, TaskEventKind, TaskState};
+use atm_storage::testing::InMemoryTaskLedgerReader;
+use atm_storage::{QueuePosition, ReadDeadline, RosterSnapshot, TaskEventKind, TaskRow, TaskState};
 
 const ASSIGNER: &str = TEST_SENDER;
 const ASSIGNEE: &str = TEST_RECIPIENT;
@@ -257,4 +260,104 @@ fn cli_task_completion_covers_ac2_success_unknown_id_and_conflict() {
             .message()
             .contains("task_id and task_complete name different tasks")
     );
+}
+
+fn history_task_row(team: &TeamName, task_id: &str) -> TaskRow {
+    TaskRow {
+        team: team.clone(),
+        task_id: task_id.parse().expect("task id"),
+        assignee: ASSIGNEE.parse().expect("assignee"),
+        assigner: ASSIGNER.parse().expect("assigner"),
+        state: TaskState::Assigned,
+        position: Some(QueuePosition::new(1).expect("position")),
+        assignment_message_id: AtmMessageId::new(),
+        description: task_id.to_owned(),
+        assigned_at: IsoTimestamp::now(),
+        updated_at: IsoTimestamp::now(),
+        last_reminded_at: None,
+        reminder_count: 0,
+        lead_notified_count: 0,
+    }
+}
+
+/// QA-CONV-001: `atm task history --limit` is validated CLI-side by
+/// `TaskHistoryCommand::resolved_limit`, but a `TaskLedgerQuery::History`
+/// request can also be built directly by a caller that skips the CLI (a
+/// future peer or graft caller). This proves the same bound is enforced at
+/// the daemon/list layer the request actually reaches.
+///
+/// No-Claim: this does not prove every future construction path for a
+/// `History` request goes through `list_task_ledger_with_runtime_async`;
+/// it only proves that when it does, an invalid limit is rejected there.
+#[tokio::test]
+async fn direct_history_request_rejects_limit_zero_and_oversized_limit_at_the_list_layer() {
+    let fixture = Fixture::new();
+    let deadline = ReadDeadline::new(Duration::from_secs(5)).expect("read deadline");
+
+    let zero_error = list_task_ledger_with_runtime_async(
+        fixture.list_query(TaskLedgerQuery::History {
+            member: None,
+            limit: 0,
+        }),
+        &fixture.runtime,
+        deadline,
+    )
+    .await
+    .expect_err("limit 0 must be rejected at the daemon/list layer, not only the CLI");
+    assert!(zero_error.message().contains("task limit"));
+
+    let oversized_error = list_task_ledger_with_runtime_async(
+        fixture.list_query(TaskLedgerQuery::History {
+            member: None,
+            limit: MAX_TASK_PAGE_LIMIT + 1,
+        }),
+        &fixture.runtime,
+        deadline,
+    )
+    .await
+    .expect_err("a limit above MAX_TASK_PAGE_LIMIT must be rejected at the daemon/list layer");
+    assert!(oversized_error.message().contains("task limit"));
+}
+
+/// QA-CONV-002: `TaskHistoryCommand::execute` used to fetch each returned
+/// row's events with its own ledger read (an N+1). The fix batches every
+/// row's events into the one `list_task_events_for_tasks` read the History
+/// arm of `list_task_ledger_with_runtime_async` now issues.
+///
+/// No-Claim: this proves the round trip count into the ledger reader stays
+/// flat as row count grows; it does not measure wall-clock latency or
+/// exercise the CLI's own `--events`/table rendering path.
+#[tokio::test]
+async fn history_round_trip_count_does_not_scale_with_row_count() {
+    let fixture = Fixture::new();
+    let deadline = ReadDeadline::new(Duration::from_secs(5)).expect("read deadline");
+
+    for size in [3_usize, 30_usize] {
+        let tasks = (0..size)
+            .map(|index| history_task_row(&fixture.team, &format!("t-{index}")))
+            .collect::<Vec<_>>();
+        let reader = Arc::new(InMemoryTaskLedgerReader::with_rows(tasks, Vec::new()));
+        let runtime = fixture
+            .runtime
+            .clone()
+            .with_async_task_ledger_reader(reader.clone());
+
+        let outcome = list_task_ledger_with_runtime_async(
+            fixture.list_query(TaskLedgerQuery::History {
+                member: None,
+                limit: size,
+            }),
+            &runtime,
+            deadline,
+        )
+        .await
+        .expect("history request");
+
+        assert_eq!(outcome.task_rows.len(), size);
+        assert_eq!(
+            reader.event_batch_call_count(),
+            1,
+            "one batched events call regardless of row count ({size} rows)"
+        );
+    }
 }

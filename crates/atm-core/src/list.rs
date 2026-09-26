@@ -375,14 +375,31 @@ pub async fn list_task_ledger_with_runtime_async(
                 .map_err(AtmError::from)?;
             (Vec::new(), task_event_rows, handoffs)
         }
-        (TaskLedgerQuery::History { member, limit }, _) => (
-            reader
+        (TaskLedgerQuery::History { member, limit }, _) => {
+            // Server-side enforcement: `history.rs::resolved_limit` already
+            // rejects 0 and MAX_TASK_PAGE_LIMIT client-side, but this request
+            // can also be built directly (peer/graft callers, other future
+            // clients), so the bound is re-checked at this boundary too.
+            // Reuses the same `TaskPage` ceiling `atm task list`/`events` use.
+            let crate::task_query::TaskPage::Bounded { limit } =
+                crate::task_query::TaskPage::bounded(limit)?
+            else {
+                unreachable!("TaskPage::bounded always returns Bounded on success")
+            };
+            let task_rows = reader
                 .list_task_history(query.caller_team.clone(), member, limit, deadline)
                 .await
-                .map_err(AtmError::from)?,
-            Vec::new(),
-            Vec::new(),
-        ),
+                .map_err(AtmError::from)?;
+            let task_ids = task_rows
+                .iter()
+                .map(|row| row.task_id.clone())
+                .collect::<Vec<_>>();
+            let task_event_rows = reader
+                .list_task_events_for_tasks(query.caller_team.clone(), task_ids, deadline)
+                .await
+                .map_err(AtmError::from)?;
+            (task_rows, task_event_rows, Vec::new())
+        }
     };
     Ok(build_task_ledger_outcome(
         query,
@@ -710,6 +727,40 @@ mod tests {
             Some(TaskLedgerQuery::Tasks {
                 member: Some(canonical),
             })
+        );
+    }
+
+    /// D4 pinned wire-compat fixture (ADR-061): `TaskLedgerQuery::History`
+    /// as shipped in `HTTP_API_VERSION` 1.10.0 (issue #1599). The fixture is
+    /// a literal byte-for-byte string, not generated from the current type,
+    /// so an accidental field rename or type change on `History` is caught
+    /// here even though the type it decodes into still compiles.
+    ///
+    /// No-Claim: this proves the 1.10.0 wire shape still decodes; it does
+    /// not prove any particular HTTP route or CLI command still calls it
+    /// correctly (`task_ledger_cli.rs` covers that end to end).
+    #[test]
+    fn pinned_1_10_0_history_query_fixture_decodes() {
+        let no_member = r#"{"History":{"member":null,"limit":10}}"#;
+        let decoded: TaskLedgerQuery =
+            serde_json::from_str(no_member).expect("1.10.0 history fixture decodes");
+        assert_eq!(
+            decoded,
+            TaskLedgerQuery::History {
+                member: None,
+                limit: 10
+            }
+        );
+
+        let with_member = r#"{"History":{"member":"alice","limit":25}}"#;
+        let decoded_with_member: TaskLedgerQuery =
+            serde_json::from_str(with_member).expect("1.10.0 history+member fixture decodes");
+        assert_eq!(
+            decoded_with_member,
+            TaskLedgerQuery::History {
+                member: Some("alice".parse().expect("agent")),
+                limit: 25
+            }
         );
     }
 

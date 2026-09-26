@@ -481,6 +481,10 @@ pub struct InMemoryTaskLedgerReader {
     delegate: Option<Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
     open_tasks_hook: std::sync::Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
     refusal_error: std::sync::Mutex<Option<ReadLaneError>>,
+    /// Counts calls to `list_task_events_for_tasks`, so a test can prove a
+    /// batched read stays at one call regardless of how many task rows or
+    /// ids it covers (as opposed to one call per row).
+    event_batch_calls: Arc<AtomicUsize>,
 }
 
 impl Default for InMemoryTaskLedgerReader {
@@ -492,6 +496,7 @@ impl Default for InMemoryTaskLedgerReader {
             delegate: None,
             open_tasks_hook: std::sync::Mutex::new(None),
             refusal_error: std::sync::Mutex::new(None),
+            event_batch_calls: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -506,6 +511,7 @@ impl InMemoryTaskLedgerReader {
             delegate: None,
             open_tasks_hook: std::sync::Mutex::new(None),
             refusal_error: std::sync::Mutex::new(None),
+            event_batch_calls: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -519,6 +525,12 @@ impl InMemoryTaskLedgerReader {
             open_tasks_hook: std::sync::Mutex::new(Some(Box::new(hook))),
             ..Self::default()
         }
+    }
+
+    /// Number of `list_task_events_for_tasks` calls observed so far.
+    #[must_use]
+    pub fn event_batch_call_count(&self) -> usize {
+        self.event_batch_calls.load(Ordering::SeqCst)
     }
 
     pub fn replace_rows(&self, tasks: Vec<TaskRow>, events: Vec<TaskEventRow>) {
@@ -757,6 +769,32 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
                             && event.task_id == task_id
                             && member.as_ref().is_none_or(|agent| &event.assignee == agent)
                     })
+                    .cloned()
+                    .collect()
+            })
+    }
+
+    async fn list_task_events_for_tasks(
+        &self,
+        team: TeamName,
+        task_ids: Vec<TaskId>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError> {
+        self.event_batch_calls.fetch_add(1, Ordering::SeqCst);
+        if let Some(delegate) = &self.delegate {
+            return delegate
+                .list_task_events_for_tasks(team, task_ids, deadline)
+                .await;
+        }
+        self.events
+            .lock()
+            .map_err(|_| ReadLaneError::Unavailable {
+                message: "in-memory task-ledger reader event lock poisoned".to_owned(),
+            })
+            .map(|events| {
+                events
+                    .iter()
+                    .filter(|event| event.team == team && task_ids.contains(&event.task_id))
                     .cloned()
                     .collect()
             })

@@ -105,6 +105,16 @@ pub trait AsyncTaskLedgerReader: sealed::Sealed + Send + Sync {
         deadline: ReadDeadline,
     ) -> Result<Vec<TaskEventRow>, ReadLaneError>;
 
+    /// Every task-event ledger row for the given task-id set, in one round
+    /// trip. Used by `atm task history` so that rendering `N` history rows
+    /// costs one ledger read, not one read per row.
+    async fn list_task_events_for_tasks(
+        &self,
+        team: TeamName,
+        task_ids: Vec<TaskId>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError>;
+
     async fn list_prompt_handoffs(
         &self,
         team: TeamName,
@@ -383,6 +393,16 @@ impl AsyncTaskLedgerReader for DummyTaskStore {
                 },
             )?,
         )
+    }
+
+    async fn list_task_events_for_tasks(
+        &self,
+        _team: TeamName,
+        _task_ids: Vec<TaskId>,
+        _deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError> {
+        // Matches `list_task_events` above: this dummy never tracks events.
+        Ok(Vec::new())
     }
 
     async fn list_prompt_handoffs(

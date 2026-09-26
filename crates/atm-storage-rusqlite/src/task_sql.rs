@@ -11,19 +11,44 @@ pub(crate) const TASK_EVENT_COLUMNS: &str = "team, task_id, assignee, seq, at, e
 pub(crate) const PROMPT_HANDOFF_COLUMNS: &str =
     "team, agent, message_key, kind, task_id, attempt, trigger, at";
 
+/// Shared `WHERE`/`ORDER BY` clause for the two team-scoped task-row
+/// projections below: every state, newest-assigned first. `select_tasks_for_team_sql`
+/// and `select_task_history_sql` differ only in whether a `LIMIT` is appended.
+const TASK_TEAM_RECENCY_WHERE_ORDER: &str =
+    "WHERE team = ?1 AND (?2 IS NULL OR assignee = ?2) ORDER BY assigned_at DESC, task_id DESC";
+
 pub(crate) fn select_tasks_for_team_sql() -> String {
-    format!(
-        "SELECT {TASK_COLUMNS} FROM tasks WHERE team = ?1 AND (?2 IS NULL OR assignee = ?2) ORDER BY assigned_at DESC, task_id DESC"
-    )
+    format!("SELECT {TASK_COLUMNS} FROM tasks {TASK_TEAM_RECENCY_WHERE_ORDER}")
 }
 
 /// The team task list, open and completed, newest first, bounded by `LIMIT`.
-/// This backs `atm task history`, distinct from [`select_tasks_for_team_sql`]
-/// which the daemon further filters to open rows only for `atm task list`.
+/// This backs `atm task history`, distinct from [`select_tasks_for_team_sql`]:
+/// that query returns every state too, but `atm task list` filters the open
+/// rows client-side in `atm_core::task_query::select_task_rows`, not here.
 pub(crate) fn select_task_history_sql() -> String {
+    format!("SELECT {TASK_COLUMNS} FROM tasks {TASK_TEAM_RECENCY_WHERE_ORDER} LIMIT ?3")
+}
+
+/// Builds `task_id IN (?2, ?3, ...)` against `task_id_count` ids so every
+/// selected task's events are read in one round trip. Ordered so grouping the
+/// result rows by task id in Rust yields each task's own rows in ascending
+/// `seq` order, matching [`select_task_events_sql`].
+pub(crate) fn select_task_events_for_tasks_sql(task_id_count: usize) -> String {
+    let placeholders = (0..task_id_count)
+        .map(|index| format!("?{}", index + 2))
+        .collect::<Vec<_>>()
+        .join(", ");
     format!(
-        "SELECT {TASK_COLUMNS} FROM tasks WHERE team = ?1 AND (?2 IS NULL OR assignee = ?2) ORDER BY assigned_at DESC, task_id DESC LIMIT ?3"
+        "SELECT {TASK_EVENT_COLUMNS} FROM task_events WHERE team = ?1 AND task_id IN ({placeholders}) ORDER BY task_id ASC, seq ASC"
     )
+}
+
+/// Clamps a page-size limit into SQLite's `i64` `LIMIT` binding. A `usize`
+/// beyond that range is not a realistic history/list page size, so this
+/// clamps rather than errors; the real ceiling (`MAX_TASK_PAGE_LIMIT`) is
+/// enforced earlier, in `atm_core::task_query::TaskPage::bounded`.
+pub(crate) fn clamp_limit_to_i64(limit: usize) -> i64 {
+    i64::try_from(limit).unwrap_or(i64::MAX)
 }
 
 pub(crate) fn select_task_events_sql() -> String {
@@ -132,9 +157,7 @@ pub(crate) fn select_task_history(
     limit: usize,
 ) -> rusqlite::Result<Vec<TaskRow>> {
     let mut statement = connection.prepare(&select_task_history_sql())?;
-    // SQLite binds LIMIT as i64; a `usize` beyond that range is not a
-    // realistic history page size, so clamp rather than error.
-    let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+    let limit = clamp_limit_to_i64(limit);
     statement
         .query_map(
             params![team.as_str(), member.map(AgentName::as_str), limit],

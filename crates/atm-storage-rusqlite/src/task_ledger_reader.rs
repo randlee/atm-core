@@ -8,7 +8,7 @@ use atm_storage::{
     AgentName, AsyncTaskLedgerReader, AtmError, PromptHandoff, ReadDeadline, ReadLaneError,
     RefusalRun, TaskEventRow, TaskId, TaskRow, TeamName,
 };
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, params, params_from_iter, types::Value};
 use std::sync::Arc;
 
 use crate::SqliteTaskStore;
@@ -133,6 +133,23 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
             .await
     }
 
+    async fn list_task_events_for_tasks(
+        &self,
+        team: TeamName,
+        task_ids: Vec<TaskId>,
+        deadline: ReadDeadline,
+    ) -> Result<Vec<TaskEventRow>, ReadLaneError> {
+        if task_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.pool
+            .submit(deadline.remaining(), move |connection, target| {
+                list_task_events_for_tasks(connection, target, &team, &task_ids)
+                    .map_err(read_lane_storage_error)
+            })
+            .await
+    }
+
     async fn list_prompt_handoffs(
         &self,
         team: TeamName,
@@ -179,9 +196,7 @@ fn list_task_history(
     let mut statement = connection
         .prepare(&task_sql::select_task_history_sql())
         .map_err(|error| sqlite_error(target, "failed to prepare async task history", error))?;
-    // SQLite binds LIMIT as i64; a `usize` beyond that range is not a
-    // realistic history page size, so clamp rather than error.
-    let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+    let limit = task_sql::clamp_limit_to_i64(limit);
     statement
         .query_map(
             params![team.as_str(), member.map(AgentName::as_str), limit],
@@ -218,6 +233,38 @@ fn list_task_events(
         .map_err(|error| sqlite_error(target, "failed to list async task events", error))?
         .map(|row| {
             row.map_err(|error| sqlite_error(target, "failed to decode async task event", error))
+        })
+        .collect()
+}
+
+/// Every task-event ledger row for `task_ids`, in one query, rather than one
+/// query per task id. Backs `atm task history`'s ledger-derived
+/// started/closed/outcome columns.
+fn list_task_events_for_tasks(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    team: &TeamName,
+    task_ids: &[TaskId],
+) -> Result<Vec<TaskEventRow>, AtmError> {
+    let sql = task_sql::select_task_events_for_tasks_sql(task_ids.len());
+    let mut statement = connection.prepare(&sql).map_err(|error| {
+        sqlite_error(target, "failed to prepare batched task event list", error)
+    })?;
+    let mut bindings = Vec::with_capacity(task_ids.len() + 1);
+    bindings.push(Value::Text(team.as_str().to_owned()));
+    bindings.extend(
+        task_ids
+            .iter()
+            .map(|task_id| Value::Text(task_id.as_str().to_owned())),
+    );
+    statement
+        .query_map(
+            params_from_iter(bindings),
+            SqliteTaskStore::decode_event_row,
+        )
+        .map_err(|error| sqlite_error(target, "failed to list batched task events", error))?
+        .map(|row| {
+            row.map_err(|error| sqlite_error(target, "failed to decode batched task event", error))
         })
         .collect()
 }
@@ -334,5 +381,74 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    /// No-Claim: proves the batched read returns every seeded task's events
+    /// in one call; it does not prove the caller only issues one such call
+    /// per `atm task history` invocation (that is
+    /// `history_round_trip_count_does_not_scale_with_row_count` in
+    /// `crates/atm/tests/task_ledger_cli.rs`).
+    #[tokio::test]
+    async fn sqlite_task_ledger_reader_batches_events_for_multiple_task_ids() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let reader = backend.async_task_ledger_reader();
+        let team: TeamName = "batch-events-team".parse().expect("team");
+        let deadline = || ReadDeadline::new(Duration::from_secs(1)).expect("deadline");
+
+        let mut task_ids = Vec::new();
+        for label in ["batch-task-a", "batch-task-b"] {
+            let task_id: TaskId = label.parse().expect("task id");
+            let message_id = AtmMessageId::new();
+            backend
+                .message_store()
+                .save_message(&Message {
+                    team: team.clone(),
+                    agent: "assignee".parse::<AgentName>().expect("agent"),
+                    message_key: MessageKey::new(format!("atm:{message_id}")).expect("message key"),
+                    envelope: MessageEnvelope {
+                        from: "assigner".parse().expect("assigner"),
+                        source_chat_id: None,
+                        text: "assignment".to_owned(),
+                        timestamp: IsoTimestamp::now(),
+                        read: false,
+                        source_team: Some(team.clone()),
+                        destination_chat_id: None,
+                        summary: None,
+                        message_id: Some(message_id),
+                        requires_ack: true,
+                        pending_ack_at: Some(IsoTimestamp::now()),
+                        acknowledged_at: None,
+                        acknowledges_message_id: None,
+                        parent_message_id: None,
+                        thread_mode: None,
+                        expires_at: None,
+                        task_id: Some(task_id.clone()),
+                        placement: None,
+                        task_op: None,
+                        task_complete: None,
+                        extra: Map::new(),
+                    },
+                })
+                .expect("seed task");
+            task_ids.push(task_id);
+        }
+
+        let batched = reader
+            .list_task_events_for_tasks(team.clone(), task_ids.clone(), deadline())
+            .await
+            .expect("batched task events");
+        assert_eq!(batched.len(), 2, "one assigned event per seeded task");
+        assert!(
+            task_ids
+                .iter()
+                .all(|task_id| batched.iter().any(|event| &event.task_id == task_id)),
+            "every seeded task id is represented"
+        );
+
+        let empty = reader
+            .list_task_events_for_tasks(team, Vec::new(), deadline())
+            .await
+            .expect("empty task-id set short-circuits without a query");
+        assert!(empty.is_empty());
     }
 }

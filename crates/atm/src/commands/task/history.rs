@@ -98,8 +98,11 @@ const fn close_event_outcome(event: TaskEventKind) -> Option<&'static str> {
 impl TaskHistoryCommand {
     fn resolved_limit(&self) -> Result<usize, atm_core::error::AtmError> {
         let limit = self.limit.unwrap_or(DEFAULT_HISTORY_LIMIT);
-        // Reuse the shared task-page bound so `--limit` rejects 0 and the
-        // same oversized-page ceiling the other task views enforce.
+        // Client-side pre-check only: reject an obviously bad `--limit`
+        // before a round trip. `list_task_ledger_with_runtime_async`'s
+        // `History` arm re-checks the same `TaskPage::bounded` ceiling at
+        // the daemon/list boundary, since a `TaskLedgerQuery::History`
+        // request can also be built without going through this CLI path.
         atm_core::task_query::TaskPage::bounded(limit)?;
         Ok(limit)
     }
@@ -150,11 +153,21 @@ impl TaskHistoryCommand {
         });
         let outcome = composition.list(history_query).await?;
 
+        // The History arm of `list_task_ledger_with_runtime_async` already
+        // batches every selected task's events into one ledger read, so
+        // this only needs to regroup `task_event_rows` by task id, not issue
+        // a further round trip per row.
+        let mut events_by_task: std::collections::HashMap<TaskId, Vec<TaskEventRow>> =
+            std::collections::HashMap::new();
+        for event in outcome.task_event_rows {
+            events_by_task
+                .entry(event.task_id.clone())
+                .or_default()
+                .push(event);
+        }
         let mut rows = Vec::with_capacity(outcome.task_rows.len());
         for row in outcome.task_rows {
-            let events =
-                load_task_events(composition, &caller, &home_dir, &current_dir, &row.task_id)
-                    .await?;
+            let events = events_by_task.remove(&row.task_id).unwrap_or_default();
             rows.push(HistoryRow::from_row_and_events(row, events));
         }
 
@@ -164,35 +177,6 @@ impl TaskHistoryCommand {
             Ok(render_history_table(&rows, self.events))
         }
     }
-}
-
-/// Reuses the `task events` ledger read for one task's history row.
-async fn load_task_events(
-    composition: &CliComposition<'_>,
-    caller: &CallerContext,
-    home_dir: &std::path::Path,
-    current_dir: &std::path::Path,
-    task_id: &TaskId,
-) -> Result<Vec<TaskEventRow>> {
-    let query = ListQuery::new(
-        home_dir.to_path_buf(),
-        current_dir.to_path_buf(),
-        caller.caller_identity.clone(),
-        None,
-        caller.caller_team.clone(),
-        ReadSelection::Actionable,
-        false,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )?
-    .with_task_ledger(TaskLedgerQuery::Events {
-        task_id: task_id.clone(),
-        member: None,
-    });
-    Ok(composition.list(query).await?.task_event_rows)
 }
 
 fn render_history_json(rows: &[HistoryRow], include_events: bool) -> Result<String> {
