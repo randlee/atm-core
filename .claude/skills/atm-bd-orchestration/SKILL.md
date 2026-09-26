@@ -237,11 +237,15 @@ or close is visible to everyone at once. `bd sync` (pull, conflict check,
 blocked-flag repair, push) exists only for the Dolt remote: the off-host
 copy and any other machine. The remote is the `sync.remote` in
 `.beads/config.yaml` (for atm-core, DoltHub `randlee/atm-dev`;
-`bd dolt remote list` shows it). Nothing pushes on its own: the hooks
-committed under `.beads/hooks/` run only when git calls them, and a repo
-that pins `core.hooksPath` elsewhere (atm-core pins `.githooks`) never
-does, so the push is this explicit step and never a hook. The lead owns
-it and runs it:
+`bd dolt remote list` shows it). Nothing publishes on its own: the
+hooks committed under `.beads/hooks/` run only when git calls them, and
+`bd hooks run pre-push` does not sync even then (in hook mode it only
+skips backup and export). atm-core therefore calls `bd sync` directly
+from `.githooks/pre-push` after its gates pass, so every `git push` also
+publishes the beads state; a failed sync there is printed as a warning
+and never refuses the code push. That covers pushes; bead writes that no
+git push follows (claims, closes, plan imports) still need the explicit
+`bd sync` below. The lead owns it and runs it:
 
 - right after a plan import;
 - after handling each close in the Loop, before the next `bd ready`;
