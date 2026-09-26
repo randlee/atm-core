@@ -2,6 +2,13 @@ name: CI
 
 on:
   workflow_call:
+    inputs:
+      build_release_artifacts:
+        # Release callers (hermes-atm-pypi-publish.yml) need the five wheel
+        # legs, the abi3 matrix and the sdist. Ordinary PR and push runs do
+        # not: they build the one host wheel they test inside the test job.
+        type: boolean
+        default: true
   pull_request:
     # `branches` filters on the PR *base*. Any branch a stacked layer can sit
     # on must be listed, or that layer's PR gets no CI at all. `*` does not
@@ -78,13 +85,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # PR runs lint on ubuntu only; the macOS/Windows lint legs are kept
-        # for pushes to develop/main. macOS runner slots are the CI queue's
-        # bottleneck and lint output is platform-independent for this repo.
-        # Each leg carries its exact interpreter pin: Unix uses the 3.14.7
-        # contract, Windows uses the separate stable pin because CPython
-        # 3.14.7 corrupts the lint scanner there (see tools/bootstrap.toml).
-        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"ubuntu-latest","python":"3.14.7"}]' || '[{"os":"ubuntu-latest","python":"3.14.7"},{"os":"macos-latest","python":"3.14.7"},{"os":"windows-latest","python":"3.12.10"}]') }}
+        # Lint runs on ubuntu only; the macOS/Windows lint legs run on a PR
+        # to main (the release PR) and nowhere else. Lint output is
+        # platform-independent for this repo, macOS runner slots are the CI
+        # queue's bottleneck, and the Windows leg alone took 12-14 min on
+        # every push to develop (Rand, 2026-09-26). Each leg carries its
+        # exact interpreter pin: Unix uses the 3.14.7 contract, Windows uses
+        # the separate stable pin because CPython 3.14.7 corrupts the lint
+        # scanner there (see tools/bootstrap.toml).
+        include: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref == 'main' && '[{"os":"ubuntu-latest","python":"3.14.7"},{"os":"macos-latest","python":"3.14.7"},{"os":"windows-latest","python":"3.12.10"}]' || '[{"os":"ubuntu-latest","python":"3.14.7"}]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -234,7 +243,7 @@ jobs:
   test:
     name: Test (${{ matrix.os }})
     needs: [clippy, ci-scope, hermes-atm-release-wheels]
-    if: ${{ always() && !cancelled() && needs.clippy.result == 'success' && (needs.ci-scope.outputs.runtime != 'true' || needs.hermes-atm-release-wheels.result == 'success') }}
+    if: ${{ always() && !cancelled() && needs.clippy.result == 'success' && (needs.ci-scope.outputs.runtime != 'true' || needs.hermes-atm-release-wheels.result == 'success' || needs.hermes-atm-release-wheels.result == 'skipped') }}
     strategy:
       fail-fast: false
       matrix:
@@ -394,11 +403,24 @@ jobs:
         run: cargo test -p agent-team-mail --features cli-surface-dump --test cli_surface --verbose
 
       - name: Download host release-wheel candidate
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' && needs.hermes-atm-release-wheels.result == 'success' }}
         uses: actions/download-artifact@v4
         with:
           name: hermes-atm-wheels-${{ matrix.release_artifact }}
           path: release-wheels
+
+      # PR and push runs do not build release wheels (see the
+      # hermes-atm-release-wheels job); the host wheel pair the parity
+      # fixture installs below is built here instead, from the same cached
+      # dev-profile target directory the workspace build just populated.
+      - name: Build host wheel candidate
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' && needs.hermes-atm-release-wheels.result != 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check maturin==1.14.1
+          maturin build --locked -i python --manifest-path crates/atm-graft-python/Cargo.toml --out release-wheels
+          python -m pip wheel --no-deps --wheel-dir release-wheels crates/hermes-atm
 
       - name: Select host release atm-graft wheel
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
@@ -485,10 +507,16 @@ jobs:
         if: ${{ always() && needs.ci-scope.outputs.runtime == 'true' }}
         run: python scripts/smoke/run_thorough_shared_host.py
 
+  # The three release-artifact jobs below (five wheel legs, the abi3 matrix,
+  # the sdist) run for release callers (workflow_call with
+  # build_release_artifacts, the default) and on a PR to main. Every other
+  # run builds and tests its host wheel inside the test job instead; the
+  # graft bridge runner already runs the hermes-atm unit tests there
+  # (Rand, 2026-09-26: "move wheels to release").
   hermes-atm-release-wheels:
     name: Hermes ATM release wheel (${{ matrix.name }})
     needs: [ci-scope]
-    if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+    if: ${{ needs.ci-scope.outputs.runtime == 'true' && (inputs.build_release_artifacts || (github.event_name == 'pull_request' && github.base_ref == 'main')) }}
     strategy:
       fail-fast: false
       matrix:
@@ -614,7 +642,7 @@ jobs:
   hermes-atm-abi3-compat:
     name: Hermes ATM abi3 compatibility (Python ${{ matrix.python-version }})
     needs: [ci-scope, hermes-atm-release-wheels]
-    if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+    if: ${{ needs.ci-scope.outputs.runtime == 'true' && (inputs.build_release_artifacts || (github.event_name == 'pull_request' && github.base_ref == 'main')) }}
     strategy:
       fail-fast: false
       matrix:
@@ -644,7 +672,7 @@ jobs:
   hermes-atm-sdist:
     name: Hermes ATM source-distribution fallback
     needs: [ci-scope]
-    if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+    if: ${{ needs.ci-scope.outputs.runtime == 'true' && (inputs.build_release_artifacts || (github.event_name == 'pull_request' && github.base_ref == 'main')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
