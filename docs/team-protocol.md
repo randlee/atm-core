@@ -5,12 +5,14 @@ This protocol is mandatory for all ATM team communications.
 ## Required Flow
 
 1. Read every ATM message that requires action (see Message Classes), then
-   start the assigned task when its `task_ready` line arrives.
+   start the assigned task when its `task_ready` line arrives and, when the
+   task id is also a bead, claim it with `bd update <task-id> --claim`.
 2. Execute the requested task.
 3. Send a completion message with a concise summary of what was done. When
    closing a tracked task, use `atm task close <task-id> completed
    --template <complete-template> --vars <file>` to deliver the completion
-   report and close the task atomically. Every close uses the complete
+   report and close the task atomically; when the task id is also a bead,
+   then close it with `bd close <task-id>`. Every close uses the complete
    template that pairs with the assignment template (see Close Templates),
    so ATM records the template sha and the `*-complete` workflow state that
    ends the task's lifecycle and span.
@@ -25,6 +27,14 @@ If work cannot be completed, close it with the typed outcome `refused` or
 `cancelled` and supply the reason as the optional third positional argument
 (or provide a report source such as `--stdin`). Never close a task as
 `reassigned`; reassign it in place with `atm task assign` and its existing id.
+
+For a phase planned in beads (`.claude/skills/atm-bd-orchestration`), the
+bead id is also the ATM task id for development, fix, and QA work. The lead
+creates and dependency-wires the bead before dispatch, assigns it to the
+recipient's ATM identity, and runs `bd ready` after paired task/bead closes
+to dispatch newly unblocked work. A refused ATM task leaves its bead open
+with a note. Rejected completed work is reopened or represented by a child
+bead.
 
 ## Task Commands
 
@@ -58,7 +68,10 @@ Every assignment is closed, and every close uses its complete template.
 | `plan-hardening/plan-critical-review.xml.j2` | `plan-hardening/plan-critical-review-complete.md.j2` |
 
 Every assignment pairs `atm task start` with `atm task close --template`; that
-pair is the task's span. Paths are under `.claude/skills/`. `refused` and
+pair is the task's span. When the task id is also a bead, `bd update <id>
+--claim` runs with the start and `bd close <id>` with the close.
+
+Paths are under `.claude/skills/`. `refused` and
 `cancelled` closes carry a reason instead of a report.
 
 `atm send <agent> --task-id <id> ...` aliases `atm task assign`.
