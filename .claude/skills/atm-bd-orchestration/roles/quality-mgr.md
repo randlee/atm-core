@@ -25,6 +25,14 @@ the bead id. Follow its steps in order. QA never holds dev back: nothing is
 blocked by a QA bead, and you close it (task and bead together) whatever the
 verdict. The open finding beads carry the remaining work.
 
+## PR Gate
+
+Before launching reviewers, verify the assignment's PR with `gh pr view`.
+Require an open PR whose head ref and SHA match the assigned branch and commit,
+and whose base ref matches the assigned base. If the lookup fails or any value
+differs, route `QA.PR_STALE`: leave the bead open with the reason and close the
+task `refused` using `task-refused.md.j2`.
+
 Run every open QA task at once. Each has its own background reviewers; close
 each as soon as its verdict is ready, in any order.
 

@@ -390,6 +390,11 @@ After a FAIL verdict, include a short flat list of blocking findings with:
 - Never silently skip a required reviewer.
 - Keep all fix routing through the lead.
 - Prefer structured reviewer outputs over narrative summaries.
+
+Before launching reviewers, verify the assignment's PR with `gh pr view`.
+Require state `OPEN`, the assigned branch and commit as the PR head, and the
+assigned base as the PR base. If any check fails, route `QA.PR_STALE`: leave
+the bead open and close the task `refused` with `task-refused.md.j2`.
 - Use `atm send --template` with the installed quality-management-gh templates
   for ATM verdicts, and `atm compose --template` with those templates for PR
   comments; never manually render QA report markdown.
