@@ -107,14 +107,14 @@ can follow. What this skill changes:
 
 - Dev and fix work runs in parallel. Each task works in its own worktree cut
   from the pushed top at task start, and is not linked while it runs.
-- Nothing is merged or stacked while work is incomplete. After a sanity check
-  passes, and before QA dispatch, the lead brings the live layer onto the
-  current pushed top: rebase when clean, or follow the declared sibling
-  merge-forward order in `~/.claude/skills/sc-gh-stack/references/preconditions.md`
-  and merge the other sibling forward with one merge commit. Push with
-  `--force-with-lease`, then link the layer; this is the one stacking rebase
-  between sanity PASS and QA. When two layers finish on the same top, the
-  declared sibling order governs the merge-forward.
+- Nothing is merged or stacked while work is incomplete. The developer performs
+  its one rebase onto the current pushed top before dev-complete/fix-complete;
+  the lead performs the one stacking rebase at sanity PASS, or the declared
+  sibling merge-forward for parallel siblings in
+  `~/.claude/skills/sc-gh-stack/references/preconditions.md`, before QA
+  dispatch. The developer never rebases after closing. Push with
+  `--force-with-lease`, then link the layer. When two layers finish on the same
+  top, the declared sibling order governs the merge-forward.
 - Once linked, a layer is frozen. A later finding on it is fixed on a new
   layer at the top of the same stack, one finding per layer, and fix layers
   land between dev layers.
@@ -186,8 +186,8 @@ Then, on each task close:
 | --- | --- |
 | plan-review PASS | nothing when the bead closed: the root sprints are now ready. With minor findings the bead is assigned to you still open: fix each listed bead with `bd update`, then `bd close <root>-plan-qa --reason "minor fixes applied"` |
 | plan-review FAIL | have the author fix the listed beads, run `validate-plan` again, then dispatch the next round |
-| dev-complete | verify the developer opened or located the draft PR as the last step before close (head = the branch, base = bead metadata `pr_target`) and included `pr_number`/`pr_url` in `dev-complete.md.j2`; then dispatch sanity with those fields. No sanity check is dispatched without a PR: the user reviews code on the PR, and the status table reports it |
-| sanity check PASS | check that the layer's `rebased_onto` (from its dev-complete or fix-complete) is still the pushed top. If another layer was linked since, use the declared sibling merge-forward order in `~/.claude/skills/sc-gh-stack/references/preconditions.md` or rebase the branch onto the current pushed top when clean; it is not linked and has no children. Run the test command and push with `--force-with-lease`. On a conflict, `bd reopen` the bead and send a dev-fix naming the new top. Then link the layer, then create the QA bead from [`qa-bead.json.j2`](templates/qa-bead.json.j2) (`validates` the dev or finding bead), carrying `pr_number`/`pr_url`, and dispatch QA only on that post-stack commit. Quality-mgr verifies the PR is open, its head is the assignment commit, and its base is the bead's `metadata.pr_target`; otherwise it refuses with `QA.PR_STALE`. For a finding, the QA dispatch sets `checked_bead` = the finding (it carries its own requirements and ADRs), `sprint_bead` = its `metadata.sprint_bead`, `carry_forward` = the finding id, and `round` = the `metadata.round` of the QA bead it was `discovered-from`, + 1, or 1 when it came from the phase-end review |
+| dev-complete | create or locate the draft PR (head = the branch, base = the bead's `metadata.pr_target`, draft allowed) with `gh api -X POST repos/<owner>/<repo>/pulls`, record the PR number in the dev bead notes, include `pr_number`/`pr_url` in `dev-complete.md.j2`, then dispatch sanity with those fields. No sanity check is dispatched without a PR: the user reviews the code on the PR, and the status table reports it |
+| sanity check PASS | check that the layer's `rebased_onto` (from its dev-complete or fix-complete) is still the pushed top. If another layer was linked since, use the declared sibling merge-forward order in `~/.claude/skills/sc-gh-stack/references/preconditions.md` or rebase the branch onto the current pushed top when clean; it is not linked and has no children. Run the test command and push with `--force-with-lease`. On a conflict, `bd reopen` the bead and send a dev-fix naming the new top. Then link the layer, retarget its PR if needed, and create the QA bead from [`qa-bead.json.j2`](templates/qa-bead.json.j2) (`validates` the dev or finding bead). The lead copies `pr_number`/`pr_url` from the sanity dispatch into the QA dispatch vars and sets `base` to the PR's actual base after restacking; `qa-bead.json.j2` carries no PR fields. Dispatch QA only on that post-stack commit. Quality-mgr verifies the PR is open, its head is the assignment commit, and its base is the dispatched `base`; otherwise it refuses with `QA.PR_STALE`. For a finding, the QA dispatch sets `checked_bead` = the finding (it carries its own requirements and ADRs), `sprint_bead` = its `metadata.sprint_bead`, `carry_forward` = the finding id, and `round` = the `metadata.round` of the QA bead it was `discovered-from`, + 1, or 1 when it came from the phase-end review |
 | sanity check FAIL | `bd reopen <checked bead> --reason "<summary>"`, then [`dev-fix.xml.j2`](templates/dev-fix.xml.j2) with the findings. This applies to a finding bead too: its task id is the finding, and it closes with `dev-complete.md.j2` |
 | qa-complete | nothing to wire: quality-mgr filed and wired the finding beads; they are in the next `bd ready` |
 | fix-complete (`fixed`) | require the reviewable PR before accepting the fix close, record its number and URL in the bead notes, then create the fix's sanity check bead (`atm-beads` [`dev-sanity-bead.json.j2`](../atm-beads/templates/dev-sanity-bead.json.j2), `dev_bead` = the finding) |

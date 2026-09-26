@@ -68,14 +68,16 @@ in the report by number, done or with its findings, so closure is explicit.
 
 ## PR Gate
 
-Before claiming or splitting a check, run `cd <worktree> && gh pr view
-<pr_number> --json state,headRefName,headRefOid,baseRefName` and resolve the
-assigned commit with `git rev-parse '<commit>^{commit}'`. Refuse the task with
-`SANITY.PR_REQUIRED` when the assignment has no PR, the lookup fails, the PR is
-not open, its head ref or resolved SHA does not match the assigned branch or
-checked commit, or its base does not match the assigned base. Leave the bead
-open with the reason and close the task as `refused` using
-`task-refused.md.j2`; send the refusal to the lead.
+The single verification command for every sanity PR gate is:
+`cd <worktree> && gh pr view <pr_number> --json state,isDraft,headRefOid,baseRefName`.
+Resolve the assigned full commit SHA with
+`git -C <worktree> rev-parse '<commit>^{commit}'`. A PR is reviewable when its
+state is `OPEN` and `headRefOid` equals that dispatched SHA; a draft is
+reviewable. Require `baseRefName` to equal the assignment's `base`. Refuse the
+task with `SANITY.PR_REQUIRED` when the assignment has no PR, the lookup fails,
+the PR is closed, its head does not match the checked commit, or its base does
+not match the assigned base. Leave the bead open with the reason and close the
+task as `refused` using `task-refused.md.j2`; send the refusal to the lead.
 
 ## Verdicts
 

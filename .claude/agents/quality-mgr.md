@@ -406,11 +406,10 @@ After a FAIL verdict, include a short flat list of blocking findings with:
 
 ## PR Gate
 
-Before launching reviewers, run `cd <worktree> && gh pr view <pr_number>
---json state,headRefName,headRefOid,baseRefName`, resolve the assigned commit
-with `git -C <worktree> rev-parse '<commit>^{commit}'`, and read the bead's
-`metadata.pr_target`. Require an open PR whose head ref/SHA match the assigned
-branch/commit and whose base matches `metadata.pr_target`. If the lookup fails,
-the PR is not open, its head is not the assigned commit, or its base is not the
-bead target, route `QA.PR_STALE`: leave the bead open and close the task
-`refused` with `task-refused.md.j2`.
+Plan-review tasks have no PR and skip this gate. For every other task, before
+launching reviewers, apply the PR gate in
+`.claude/skills/atm-bd-orchestration/roles/quality-mgr.md`, using the
+assignment's dispatched `base` after resolving the assigned commit. That role
+references the single verification command in `roles/dev-sanity.md`. A draft
+is reviewable; stale state routes `QA.PR_STALE` and uses the refusal procedure
+in that role document.
