@@ -15,9 +15,9 @@ luna-class agent answer `written: yes/no, file:line` correctly.
 The skill names the role, never a member or an agent. The repository
 decides both:
 
-| Setting | Where | sc-observability |
+| Setting | Where | atm-core |
 | --- | --- | --- |
-| member | `roles.dev-sanity` in `.claude/agents/registry.yaml`; print it with `.claude/skills/atm-beads/scripts/resolve-role dev-sanity` | `obs-sanity` |
+| member | `roles.dev-sanity` in `.claude/project/orchestration.yaml` (fallback: `.claude/agents/registry.yaml`); print it with `.claude/skills/atm-beads/scripts/resolve-role dev-sanity` | `atm-sanity` |
 | directive | that member's `[startup.<member>]` prompt in `.atm.toml` | `.claude/agents/dev-sanity-llm.md` |
 
 The member name is unique to the team, because Herdr agent names are global
@@ -67,6 +67,19 @@ There is no fallback. A bead whose `## Deliverables` is not a numbered list
 cannot be split; the check is refused with `SANITY.PLAN_INVALID` and the
 lead is told that planning failed for that bead. Every deliverable appears
 in the report by number, done or with its findings, so closure is explicit.
+
+## PR Gate
+
+The single verification command for every sanity PR gate is:
+`cd <worktree> && gh pr view <pr_number> --json state,isDraft,headRefOid,baseRefName`.
+Resolve the assigned full commit SHA with
+`git -C <worktree> rev-parse '<commit>^{commit}'`. A PR is reviewable when its
+state is `OPEN` and `headRefOid` equals that dispatched SHA; a draft is
+reviewable. Require `baseRefName` to equal the assignment's `base`. Refuse the
+task with `SANITY.PR_REQUIRED` when the assignment has no PR, the lookup fails,
+the PR is closed, its head does not match the checked commit, or its base does
+not match the assigned base. Leave the bead open with the reason and close the
+task as `refused` using `task-refused.md.j2`; send the refusal to the lead.
 
 ## Verdicts
 

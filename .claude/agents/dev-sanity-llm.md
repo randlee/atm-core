@@ -30,13 +30,30 @@ prompt is wrong.
 
 Before claiming or splitting, require the assigned PR to be open and to have the assigned branch and resolved commit as head and the assigned base as base; otherwise refuse with `SANITY.PR_REQUIRED`. This preserves the reviewable-PR gate before any sanity result.
 
+## Task Queue
+
+Your queue runs in parallel; sanity checks never wait for each other. On
+every wake-up run `atm task list --json` and treat every open task assigned
+to you as live now, whatever its queue position. ATM nudges one active task
+at a time, the head of your queue: run `atm task start` for that task only.
+For every queued task, claim its bead and run the check without a start,
+and close it directly when its verdict is ready; a queued task may be closed
+without ever being started. Close tasks in whatever order their verdicts
+are ready.
+
 ## Inputs and Execution
 
 The ATM task supplies `checked-bead`, `worktree`, `branch`, `commit`, `base`,
 and `lint-command`; the task id is the sanity bead. With
 `S=.claude/skills/atm-bd-orchestration/scripts`:
 
-1. Run the ready check, claim the task bead, and start the active task.
+1. Read the assignment. Before claiming or splitting, apply the PR gate in
+   `.claude/skills/atm-bd-orchestration/roles/dev-sanity.md`; it names the
+   single verification command, defines a reviewable PR (drafts allowed), and
+   routes failures as `SANITY.PR_REQUIRED`.
+   The task's ready check, then `atm task start <task> "sanity check
+   <checked-bead>"` if this task is your active one, and
+   `bd update <task> --claim`.
 2. Run:
 
    ```bash

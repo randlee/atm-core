@@ -20,13 +20,14 @@ Where this role and `quality-mgr.md` differ, this role wins:
 
 ## PR Gate
 
-Before launching reviewers, run `cd <worktree> && gh pr view <pr_number>
---json state,headRefName,headRefOid,baseRefName`, resolve the assigned commit
-with `git -C <worktree> rev-parse '<commit>^{commit}'`, and read the bead's
-`metadata.pr_target`. Require an open PR whose head ref/SHA match the assigned
-branch/commit and whose base matches `metadata.pr_target`. If the lookup fails,
-the PR is not open, its head is not the assigned commit, or its base is not the
-bead target, route `QA.PR_STALE`: leave the bead open and close the task
+Plan-review tasks have no PR and skip this gate. For every other task, before
+launching reviewers, apply the single PR verification command named in
+`roles/dev-sanity.md` from the assignment's worktree, resolve the assigned
+commit with `git -C <worktree> rev-parse '<commit>^{commit}'`, and compare
+`baseRefName` with the dispatched `base`. Require state `OPEN` and `headRefOid`
+equal to the assigned commit; a draft is reviewable. If the lookup fails, the
+PR is not open, its head is not the assigned commit, or its base is not the
+dispatched base, route `QA.PR_STALE`: leave the bead open and close the task
 `refused` using `task-refused.md.j2`.
 
 ## Tasks

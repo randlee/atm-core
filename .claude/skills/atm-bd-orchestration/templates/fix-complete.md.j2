@@ -35,7 +35,7 @@ metadata:
     transition: complete
 ---
 {% if outcome not in ["fixed", "not_reproducible"] %}{{ outcome | outcome_must_be_fixed_or_not_reproducible }}ERROR: outcome must be fixed or not_reproducible, got {{ outcome }}
-{% endif %}{% if outcome == "fixed" and (not pr_number or not pr_url) %}ERROR: fixed outcome requires pr_number and pr_url
+{% endif %}{% if outcome == "fixed" and (not pr_number or not pr_url) %}{{ outcome | fixed_outcome_requires_pr_number_and_pr_url }}
 {% endif %}# Fix Complete
 
 Generated: {{ generated_at }}
