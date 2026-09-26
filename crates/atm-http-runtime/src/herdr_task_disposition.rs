@@ -85,11 +85,7 @@ pub(crate) fn dispose(
         // only advances on an actual escalation and `reminder_count` only
         // advances when a reminder is recorded, this cannot double-fire
         // across pump passes.
-        (_, S::Idle, Some(task))
-            if task.reminder_count / TASK_STALLED_REMINDER_THRESHOLD > task.lead_notified_count =>
-        {
-            D::EscalateStalled
-        }
+        (_, S::Idle, Some(task)) if escalation_due(task) => D::EscalateStalled,
         (true, S::Idle, _) => D::Hold("mail pending"),
         (false, S::Idle, None) => D::Hold("no open task"),
         (false, S::Idle, Some(task)) if !reminder_due(task, now) => D::Hold("rate limited"),
@@ -104,6 +100,17 @@ fn sustained_active(active_since: Option<IsoTimestamp>, now: IsoTimestamp) -> bo
     active_since.is_some_and(|since| {
         (now.into_inner() - since.into_inner()).num_milliseconds() >= TASK_REMINDER_INTERVAL_MS
     })
+}
+
+/// Whether `task` has reached its next `TASK_STALLED_REMINDER_THRESHOLD`
+/// reminder budget without a matching lead escalation yet. The lead is
+/// escalated again at every such budget boundary (10, 20, 30, ...), so this
+/// is the single source of truth for that boundary check; it is shared by
+/// [`dispose`]'s `EscalateStalled` trigger and by the queue-wake pump's
+/// `queue_drain_allowed`, which holds queue draining only in the tick where a
+/// stall escalation is about to fire.
+pub(crate) fn escalation_due(task: &TaskRow) -> bool {
+    task.reminder_count / TASK_STALLED_REMINDER_THRESHOLD > task.lead_notified_count
 }
 
 fn reminder_due(task: &TaskRow, now: IsoTimestamp) -> bool {

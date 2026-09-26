@@ -2157,3 +2157,114 @@ async fn member_without_dispatchable_backend_holds_and_logs_once() {
             .is_empty()
     );
 }
+
+/// Sustained real-Herdr Active activity resets an accrued reminder budget,
+/// and a shorter burst does not.
+///
+/// No-Claim: this test observes the reset through the durable `TaskRow` and
+/// its event log via the real pump and task store; the fixture has no way to
+/// observe whether a herdr pane ever receives (or stops receiving) a nudge,
+/// so it makes no claim about pane-level delivery.
+#[tokio::test]
+async fn sustained_active_resets_reminders_and_a_short_burst_does_not() {
+    let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-RESET"]);
+    let store = runtime.task_store().expect("task store");
+
+    // Accrue three reminders on the Idle assignee across real ticks, one
+    // minute apart, the same way the interval tests drive reminder_count.
+    for minute in 0..3 {
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        if minute > 0 {
+            queue_idle_result(&fake, &key);
+        }
+        pump.tick_once().await;
+    }
+    let accrued = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(accrued.reminder_count, 3);
+    assert_eq!(accrued.lead_notified_count, 0);
+
+    // The tick that observes the transition to Active sets state_changed_at
+    // to that same tick's clock value, so elapsed-since-active is zero: this
+    // is not sustained activity.
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:02:30Z").expect("timestamp");
+    queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
+    pump.tick_once().await;
+    let just_transitioned = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(just_transitioned.reminder_count, 3);
+    assert_eq!(just_transitioned.lead_notified_count, 0);
+
+    // A further 30 seconds of continuous Active status (state_changed_at is
+    // unchanged, since the state did not change on this tick) is still under
+    // one reminder interval: the negative case. The budget must not reset.
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:03:00Z").expect("timestamp");
+    queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
+    pump.tick_once().await;
+    let short_burst = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(
+        short_burst.reminder_count, 3,
+        "30 seconds of continuous activity is short of one reminder interval"
+    );
+    assert_eq!(short_burst.lead_notified_count, 0);
+    assert!(short_burst.last_reminded_at.is_some());
+    let events_before_reset = store
+        .list_task_events(key.team(), &tasks[0], None)
+        .expect("task events");
+    assert_eq!(
+        events_before_reset
+            .iter()
+            .filter(|event| event.event == atm_storage::TaskEventKind::RemindersReset)
+            .count(),
+        0,
+        "no reset has been recorded yet"
+    );
+
+    // A full reminder interval (60s) of continuous Active status since the
+    // transition resets the budget.
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:03:30Z").expect("timestamp");
+    queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
+    pump.tick_once().await;
+    let reset = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(
+        reset.reminder_count, 0,
+        "sustained activity resets reminder_count"
+    );
+    assert_eq!(
+        reset.lead_notified_count, 0,
+        "sustained activity resets lead_notified_count"
+    );
+    assert_eq!(
+        reset.last_reminded_at, None,
+        "sustained activity clears last_reminded_at"
+    );
+    let events_after_reset = store
+        .list_task_events(key.team(), &tasks[0], None)
+        .expect("task events");
+    assert_eq!(
+        events_after_reset
+            .iter()
+            .filter(|event| event.event == atm_storage::TaskEventKind::RemindersReset)
+            .count(),
+        1,
+        "sustained activity appends exactly one RemindersReset event"
+    );
+    assert!(
+        prompt_texts(&fake).len() == 3,
+        "the Active member is never nudged while the reset condition is evaluated"
+    );
+}

@@ -3069,10 +3069,13 @@ Nudge invariant (Phase BA):
     zero nudges.
 18. Escalation MUST be one ordinary message to the roster lead (when exactly
     one) and to every configured escalation recipient, resolved
-    independently; when a task's reminder count reaches 10 it MUST escalate
-    once and nudging MUST stop until the task changes state (start or close) or
-    is reassigned or reopened; a change in the assignee's
-    runtime state alone does not resume nudging.
+    independently; a task's reminder count MUST escalate again every time it
+    reaches a `TASK_STALLED_REMINDER_THRESHOLD` (10) budget boundary (10, 20,
+    30, ...), and nudging to the assignee MUST continue in between
+    escalations, with no cap and no terminal hold. Only sustained assignee
+    activity — `Active` observed continuously for at least one
+    `TASK_REMINDER_INTERVAL_MS` — resets the reminder and lead-notification
+    counters; a shorter burst of activity does not.
 
 ## 16. Observability Requirements
 

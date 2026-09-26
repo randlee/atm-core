@@ -13,7 +13,7 @@ use atm_core::protocol::RuntimeMemberState;
 use atm_core::types::IsoTimestamp;
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus};
 
-use crate::herdr_task_disposition::{TaskDisposition, dispose};
+use crate::herdr_task_disposition::{TaskDisposition, dispose, escalation_due};
 
 use super::{
     CandidateTarget, HERDR_MAX_PROMPTS_PER_TICK, HERDR_REQUEST_BUDGET, HerdrCandidate,
@@ -585,9 +585,8 @@ impl PreparedTaskPass {
     /// held only in the tick where a stall escalation is about to fire, not
     /// for the whole time a task remains open.
     pub(super) fn queue_drain_allowed(&self, member: &MemberKey) -> bool {
-        self.heads.get(member).is_none_or(|head| {
-            head.reminder_count / atm_core::boundary::TASK_STALLED_REMINDER_THRESHOLD
-                <= head.lead_notified_count
-        })
+        self.heads
+            .get(member)
+            .is_none_or(|head| !escalation_due(head))
     }
 }
