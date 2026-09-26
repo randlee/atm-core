@@ -45,6 +45,9 @@ with free-form input.
   ],
   "practice_mode": "all | selected",
   "practice_ids": ["RBP-001", "RBP-004"],
+  "round_limit": false,
+  "changed_files": ["optional changed-file hint for limited recheck rounds"],
+  "triage_records": ["optional prior finding records to recheck"],
   "carry_forward_findings": ["optional/pre-existing finding ids assigned for verification this round"],
   "findings_scope_locked": false,
   "notes": "optional context"

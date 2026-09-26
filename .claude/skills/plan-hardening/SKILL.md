@@ -139,7 +139,8 @@ atm search --team <team> --type 'plan-*' --since <ISO> --json
 Rounds that run a reviewer as a background agent (steps 2 and 4) produce no
 ATM message on their own; the step docs require a `plan-review-notice` send
 after each such round so the run stays observable. Rounds routed to a team
-agent instead of a background agent use `plan-critical-review.xml.j2` (or
+agent instead of a background agent use `plan-critical-review.xml.j2` (vars:
+`examples/plan-critical-review-vars.example.json`) (or
 the numbered assignment templates) and are recorded by that dispatch.
 Install the templates before the first send:
 
@@ -170,4 +171,6 @@ Each step's task closes with its complete template
 - `.claude/skills/plan-hardening/examples/plan-hardening-vars.example.json`
 - `.claude/skills/plan-hardening/examples/plan-hardening-rounds.example.md`
 - `.claude/skills/plan-hardening/examples/plan-hardening-qa-vars.example.json`
+- `.claude/skills/plan-hardening/examples/plan-review-notice-vars.example.json`
+- `.claude/skills/plan-hardening/examples/plan-critical-review-vars.example.json`
 - `.claude/skills/plan-hardening/sprint-planning-guidelines.md`

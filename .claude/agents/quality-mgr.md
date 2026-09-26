@@ -171,7 +171,7 @@ TODO-specific rule:
    - `flaky-test-qa` from `.claude/skills/codex-orchestration/flaky-test-qa-assignment.json.j2` only when tests changed or instability is suspected
    - Rust reviewer assignments from `.claude/assets/sc-rust/quality-mgr/templates/` exactly as directed by `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md`
    - when rechecking prior findings, pass `triage_records`, `round_limit`,
-     `changed_files`, `duplicate_sweep_symbols`, and
+     `changed_files`, `duplicate_sweep_symbols` (boundary QA only), and
      `carry_forward_findings_json` through the rendered reviewer templates
      instead of wrapper prose
    - pass structured assignment context only; reviewers still execute the
