@@ -114,7 +114,10 @@ A background reviewer generates no ATM traffic, so the round is invisible to
 `plan-review-notice` (template
 `.claude/skills/plan-hardening/plan-review-notice.xml.j2`, installed under
 `~/.atm/templates/plan-hardening/`) with `reviewer: critical-plan-reviewer`,
-`round_index`, `verdict`, and a one-paragraph `summary`. Send it to
+`round_index`, `verdict`, and a one-paragraph `summary`. The template
+requires all of `phase`, `reviewer`, `round_index`, `pr_number`, `branch`,
+`commit`, `verdict` and `summary`; start from
+`.claude/skills/plan-hardening/examples/plan-review-notice-vars.example.json`. Send it to
 `team-lead`; when `team-lead` runs the round itself, send it to the plan
 author from Step 1 with `atm queue` so it never interrupts work in progress.
 The template declares `workflow.stage: plan`, which is what makes the round

@@ -1,6 +1,6 @@
 ---
 name: rust-qa-assignment
-version: 1.0.0
+version: 1.0.1
 description: Render a fenced-JSON assignment for rust-qa-agent.
 format: json
 required_variables:
@@ -50,6 +50,6 @@ defaults:
   "round_limit": {% if round_limit %}true{% else %}false{% endif %},
   "changed_files": [{% for file in changed_files %}{{ file }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "triage_records": [{% for record in triage_records %}{{ record }}{% if not loop.last %}, {% endif %}{% endfor %}],
-  "carry_forward_findings": {{ carry_forward_findings_json }},
+  "carry_forward_findings": {{ carry_forward_findings_json | safe }},
   "notes": {{ "Checklist: scan for infallible Result<T, E> shapes; check for Ok(x) as the sole return path in Result-returning functions; for deletion sprints, search the whole workspace for every removed legacy construct family named in the sprint doc, not just touched files." ~ (" " ~ notes if notes else "") }}
 }

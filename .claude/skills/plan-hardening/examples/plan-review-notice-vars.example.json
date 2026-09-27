@@ -1,0 +1,10 @@
+{
+  "phase": "phase-bc",
+  "reviewer": "plan-scope-reviewer",
+  "round_index": 1,
+  "pr_number": "",
+  "branch": "plan/phase-bc",
+  "commit": "",
+  "verdict": "PASS",
+  "summary": "One paragraph: what was reviewed, the blocking/important/minor counts, and critical_path and width."
+}

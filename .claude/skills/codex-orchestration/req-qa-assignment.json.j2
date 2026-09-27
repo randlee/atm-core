@@ -1,6 +1,6 @@
 ---
 name: req-qa-assignment
-version: 1.1.0
+version: 1.1.1
 description: Render a fenced-JSON assignment for req-qa.
 format: json
 required_variables:
@@ -46,6 +46,6 @@ defaults:
   "round_limit": {% if round_limit %}true{% else %}false{% endif %},
   "changed_files": [{% for file in changed_files %}{{ file }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "triage_records": [{% for record in triage_records %}{{ record }}{% if not loop.last %}, {% endif %}{% endfor %}],
-  "carry_forward_findings": {{ carry_forward_findings_json }},
+  "carry_forward_findings": {{ carry_forward_findings_json | safe }},
   "notes": {{ notes }}
 }

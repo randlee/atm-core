@@ -1,0 +1,12 @@
+{
+  "task_id": "phase-bc-plan-critical-review-r1",
+  "phase": "phase-bc",
+  "branch": "plan/phase-bc",
+  "commit": "",
+  "worktree_path": "/absolute/path/to/worktree",
+  "round_index": 1,
+  "review_focus": "- architecture mistakes\n- weak boundaries\n- false closure\n- cross-document ambiguity",
+  "review_questions": "- Does every feature-level criterion have exactly one integration-sprint owner?",
+  "references": "- docs/requirements.md\n- docs/architecture.md\n- docs/plans/phase-bc/phase-bc-plan.md",
+  "previous_step_json": ""
+}
