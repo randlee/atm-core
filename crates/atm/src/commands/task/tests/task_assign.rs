@@ -509,7 +509,7 @@ async fn preempted_task_resumes_with_task_start_and_keeps_its_original_history()
 /// The urgent task is usually already queued: `--preempt` against a task id
 /// already `assigned` to the same agent must still pause the active task and
 /// move the queued task to the head, in the same write as the same-agent
-/// update (Rand's ruling, 2026-09-27, #1620 follow-up).
+/// update (#1620 review, placement decision, 2026-09-27).
 #[tokio::test]
 #[serial(env)]
 async fn preempt_against_an_already_queued_same_agent_task_pauses_and_moves_it_to_head() {

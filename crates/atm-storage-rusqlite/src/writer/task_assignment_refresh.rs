@@ -8,9 +8,9 @@
 //! for reminders again. State and queue position are left unchanged here:
 //! this is not a reassignment, so the queue is not renumbered and
 //! `assigned_at` is not reset. `apply_same_agent_update`
-//! (`writer/task_ops.rs`) is the sole caller; it decides, from the caller's
+//! (below, called from `writer/task_ops.rs`) decides, from the caller's
 //! `placement`, whether the queue position is *also* moved in the same
-//! write (Rand's ruling, 2026-09-27, #1620 follow-up).
+//! write (#1620 review, placement decision, 2026-09-27).
 
 use atm_storage::task_state::{QueuePosition, TaskEvent, TaskState, Transition, transition};
 use atm_storage::types::{AgentName, TeamName};
@@ -83,8 +83,8 @@ pub(super) fn refresh_same_assignment_fields(
 /// fields, resets the reminder budget, and appends one `updated` event.
 ///
 /// A same-agent update carries a `placement`, which the plain field refresh
-/// above cannot express on its own; silently ignoring it is wrong (Rand's
-/// ruling, 2026-09-27, #1620 follow-up):
+/// above cannot express on its own; silently ignoring it is wrong (#1620 review,
+/// placement decision, 2026-09-27):
 /// - `--preempt` against an already-`assigned` (queued, not active) task
 ///   pauses the assignee's active task, if any, to `assigned` at position 2
 ///   (one `paused` event naming this task id) and moves this task to the

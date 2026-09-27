@@ -1367,8 +1367,8 @@ fn task_move_rejects_preempt_target() {
 /// The urgent task is usually already queued: `--preempt` against a task id
 /// already `assigned` to the same agent pauses the active task and moves
 /// this task to the head in the same write as the same-agent update, with
-/// only the `updated` event — no separate `moved` event (Rand's ruling,
-/// 2026-09-27, #1620 follow-up).
+/// only the `updated` event — no separate `moved` event (#1620 review, placement decision,
+/// 2026-09-27).
 #[test]
 fn preempt_against_an_already_assigned_same_agent_task_pauses_active_and_moves_it_to_head() {
     let h = Harness::new();
@@ -1423,7 +1423,7 @@ fn preempt_against_an_already_assigned_same_agent_task_pauses_active_and_moves_i
 
 /// A task that is already the assignee's active task has nothing to pause
 /// and nothing to move: `--preempt` against it is a plain same-agent update
-/// (Rand's ruling, 2026-09-27, #1620 follow-up).
+/// (#1620 review, placement decision, 2026-09-27).
 #[test]
 fn preempt_against_the_already_active_same_agent_task_is_a_plain_update_with_no_pause() {
     let h = Harness::new();
@@ -1448,7 +1448,7 @@ fn preempt_against_the_already_active_same_agent_task_is_a_plain_update_with_no_
 /// A plain `--head`/`--before`/`--end` placement on a same-agent update of a
 /// queued task is honored as an ordinary move, not silently ignored: it
 /// repositions the queue and appends one `moved` event alongside the
-/// `updated` event (Rand's ruling, 2026-09-27, #1620 follow-up).
+/// `updated` event (#1620 review, placement decision, 2026-09-27).
 #[test]
 fn plain_head_on_a_queued_same_agent_task_moves_it_and_appends_one_moved_event() {
     let h = Harness::new();

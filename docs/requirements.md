@@ -3015,8 +3015,8 @@ Required rules:
   task is eligible for reminders again, and MUST leave task state and queue
   position unchanged unless the re-assignment carries a `placement` (Rand,
   2026-09-27, #1619; supersedes the Phase BA design §3.1a "idempotent resend"
-  rule). A carried `placement` MUST NOT be silently ignored (Rand,
-  2026-09-27, #1620 follow-up): `--preempt` against an already-`assigned`
+  rule). A carried `placement` MUST NOT be silently ignored (#1620 review,
+  2026-09-27): `--preempt` against an already-`assigned`
   same-agent task MUST pause the assignee's active task (if any, per item 6
   below) and move this task to the head in the same write, appending only
   the `updated` event; a plain `--head`/`--before`/`--end` against an

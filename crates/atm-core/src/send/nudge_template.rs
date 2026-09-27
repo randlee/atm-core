@@ -462,7 +462,7 @@ mod tests {
         assert!(!rendered.contains("paused="));
     }
 
-    /// A same-agent update that also preempts (issue #1620 follow-up) renders
+    /// A same-agent update that also preempts (#1620 review placement decision) renders
     /// both optional attributes independently: `updated="1"` from #1619 and
     /// `paused="X"` from #1620 in the same notice, in that order.
     #[test]
