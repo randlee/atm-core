@@ -635,7 +635,11 @@ fn assert_herdr_rendered_default(
         )
         // BB.5: the task_queued template also carries the landed queue
         // position (crates/atm-core/src/send/nudge_template.rs:135).
-        .replace("{{position}}", &queued_position_text(dispatch));
+        .replace("{{position}}", &queued_position_text(dispatch))
+        // #1619: the task_queued template also carries the update marker
+        // for a same-agent update of an open task
+        // (crates/atm-core/src/send/nudge_template.rs:136).
+        .replace("{{updated}}", &queued_updated_text(dispatch));
     assert_eq!(target.rendered_nudge, expected);
 }
 
@@ -644,7 +648,19 @@ fn assert_herdr_rendered_default(
 /// (`crates/atm-core/src/send/nudge_template.rs:69`).
 fn queued_position_text(dispatch: &atm_core::boundary::BuiltInPostSendDispatch) -> String {
     match dispatch.event.task_transition {
-        Some(atm_core::boundary::TaskTransition::Queued { position }) => position.to_string(),
+        Some(atm_core::boundary::TaskTransition::Queued { position, .. }) => position.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// Renders the `{{updated}}` placeholder exactly as the production value
+/// map does: the update marker for a same-agent update of an open task,
+/// otherwise empty (`crates/atm-core/src/send/nudge_template.rs:76`).
+fn queued_updated_text(dispatch: &atm_core::boundary::BuiltInPostSendDispatch) -> String {
+    match dispatch.event.task_transition {
+        Some(atm_core::boundary::TaskTransition::Queued { is_update, .. }) if is_update => {
+            " updated=\"1\"".to_owned()
+        }
         _ => String::new(),
     }
 }
@@ -777,7 +793,7 @@ fn assert_local_matrix(herdr: bool) {
     // dispatch is the `task_queued` line carrying the landed queue position;
     // nothing is queued and no marker is written
     // (crates/atm-core/src/send/mod.rs:381).
-    let assignment = |mode, expected_position: u32| {
+    let assignment = |mode, expected_position: u32, expected_is_update: bool| {
         let task_id: TaskId = "task-ax1".parse().expect("task id");
         let mut prepared = prepare_write_with_runtime(
             write_request_for(
@@ -821,7 +837,8 @@ fn assert_local_matrix(herdr: bool) {
         assert_eq!(
             dispatch.event.task_transition,
             Some(atm_core::boundary::TaskTransition::Queued {
-                position: expected_position
+                position: expected_position,
+                is_update: expected_is_update,
             }),
         );
         // BB.5: a `Queued` transition selects the task_queued template
@@ -846,8 +863,11 @@ fn assert_local_matrix(herdr: bool) {
             .mark_pending_if_deferred(&runtime)
             .expect("marker seam is a no-op for an assignment");
     };
-    assignment(NudgeMode::Immediate, 1);
-    assignment(NudgeMode::Deferred, 1);
+    // The first assignment is fresh; the second re-assigns the same open
+    // task to the same recipient, which is an update, not a fresh assign
+    // (Rand, 2026-09-27, #1619).
+    assignment(NudgeMode::Immediate, 1, false);
+    assignment(NudgeMode::Deferred, 1, true);
 
     // BB.5: only the two ordinary deferred writes above set a marker; neither
     // assignment does (crates/atm-core/src/write/pipeline.rs:138).
@@ -942,7 +962,10 @@ fn assert_graft_assignment_dispatch(async_path: bool) {
         // (crates/atm-core/src/delivery_plan.rs:88).
         assert_eq!(
             dispatches[0].event.task_transition,
-            Some(atm_core::boundary::TaskTransition::Queued { position: 1 }),
+            Some(atm_core::boundary::TaskTransition::Queued {
+                position: 1,
+                is_update: false,
+            }),
         );
         // BB.5: a `Queued` transition selects the task_queued template
         // (crates/atm-core/src/boundary/mod.rs:163).

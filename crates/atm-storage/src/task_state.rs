@@ -49,12 +49,25 @@ pub enum TaskClosedOutcome {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", tag = "transition")]
 pub enum TaskTransition {
-    Queued { position: u32 },
+    Queued {
+        position: u32,
+        /// Set only for a same-agent update of an open task, so the
+        /// rendered nudge can mark the notice as an update to the same id
+        /// rather than a new assignment (Rand, 2026-09-27, #1619).
+        #[serde(default)]
+        is_update: bool,
+    },
     Ready,
-    Reminder { attempt: u32 },
+    Reminder {
+        attempt: u32,
+    },
     Started,
-    Complete { outcome: TaskCloseOutcome },
-    Closed { outcome: TaskClosedOutcome },
+    Complete {
+        outcome: TaskCloseOutcome,
+    },
+    Closed {
+        outcome: TaskClosedOutcome,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -377,6 +390,7 @@ pub enum TaskEventKind {
     Moved,
     Migrated,
     RemindersReset,
+    Updated,
 }
 
 impl TaskEventKind {
@@ -397,6 +411,7 @@ impl TaskEventKind {
             Self::Moved => "moved",
             Self::Migrated => "migrated",
             Self::RemindersReset => "reminders_reset",
+            Self::Updated => "updated",
         }
     }
 }
@@ -567,6 +582,22 @@ mod tests {
         assert!(QueuePosition::new(0).is_none());
         assert_eq!(QueuePosition::HEAD.get(), 1);
         assert_eq!(QueuePosition::HEAD.next().get(), 2);
+    }
+
+    #[test]
+    fn queued_transition_without_is_update_decodes_as_a_fresh_assignment() {
+        // A pre-#1619 payload has no `is_update` field; `#[serde(default)]`
+        // must decode it as `false` (Rand, 2026-09-27, #1619).
+        let legacy = serde_json::json!({ "transition": "queued", "position": 2 });
+        let transition: TaskTransition =
+            serde_json::from_value(legacy).expect("legacy queued payload decodes");
+        assert_eq!(
+            transition,
+            TaskTransition::Queued {
+                position: 2,
+                is_update: false,
+            }
+        );
     }
 
     fn row(task_id: &str, state: TaskState) -> TaskRow {

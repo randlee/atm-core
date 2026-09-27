@@ -5,7 +5,7 @@ use atm_storage::schema::{AtmMessageId, MessageEnvelope};
 use atm_storage::{
     AgentName, AtmErrorCode, IsoTimestamp, MailboxScope, MemberKey, MessageAdmissionOutcome,
     MessageQuery, MessageSearchQuery, MessageWriteOrigin, MoveTarget, QueuePosition, ReadDeadline,
-    ReminderOutcome, SearchAtom, SearchExpression, SearchMatchField, TaskCloseOutcome,
+    ReminderOutcome, SearchAtom, SearchExpression, SearchMatchField, TaskActor, TaskCloseOutcome,
     TaskEventKind, TaskId, TaskOp, TaskState, TeamName,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
@@ -514,13 +514,21 @@ fn reassign_releases_old_active_slot_in_same_transaction() {
 
 #[test]
 fn same_assignee_reassign_refreshes_row_and_emits_task_queued() {
+    // A same-agent re-assign of an open task is an update, not an idempotent
+    // no-op: it appends one `Updated` event and marks the admission outcome
+    // accordingly (Rand, 2026-09-27, #1619).
     let h = Harness::new();
     let first = h.assign("T1", "alice", "lead", None);
     let before = h.row("T1");
     let event_count = h.events("T1").len();
     let (second, admission) = h.assign_with_outcome("T1", "alice", "lead", Some(MoveTarget::Head));
     let after = h.row("T1");
-    assert_eq!(event_count, h.events("T1").len());
+    assert_eq!(event_count + 1, h.events("T1").len());
+    assert_eq!(
+        h.events("T1").last().map(|event| event.event),
+        Some(TaskEventKind::Updated)
+    );
+    assert!(admission.task_updated);
     assert_eq!(before.position, after.position);
     assert_eq!(before.assigned_at, after.assigned_at);
     assert_eq!(admission.queued_position, Some(1));
@@ -1242,4 +1250,173 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
         )
         .expect("record reminder after reset");
     assert_eq!(after_reset.reminder_count, 1);
+}
+
+/// Re-assigning an open task to the agent that already holds it is an
+/// update, not an idempotent resend: it appends exactly one `Updated` task
+/// event and resets the reminder budget, so a task stalled at the reminder
+/// cap with the lead already notified is eligible for reminders again
+/// (Rand, 2026-09-27, #1619).
+#[test]
+fn same_agent_update_of_assigned_task_appends_one_updated_event_and_resets_reminders() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    h.assign("T2", "alice", "lead", None);
+    let member = MemberKey::new(h.team.clone(), "alice".parse().unwrap());
+    let task_id: TaskId = "T1".parse().unwrap();
+    let task_store = h.backend.task_store();
+
+    for _ in 0..10 {
+        task_store
+            .record_reminder(
+                &member,
+                &task_id,
+                IsoTimestamp::now(),
+                ReminderOutcome::Emitted,
+            )
+            .expect("record reminder");
+    }
+    task_store
+        .record_lead_notified(
+            &member,
+            &task_id,
+            IsoTimestamp::now(),
+            &"lead".parse().unwrap(),
+            &AtmMessageId::new(),
+        )
+        .expect("record lead notified");
+    let stalled = h.row("T1");
+    assert_eq!(stalled.reminder_count, 10);
+    assert_eq!(stalled.lead_notified_count, 1);
+    assert!(stalled.last_reminded_at.is_some());
+    assert_eq!(stalled.state, TaskState::Assigned);
+    let before_events = h.events("T1").len();
+
+    let (second, admission) = h.assign_with_outcome("T1", "alice", "lead", None);
+
+    assert!(admission.task_updated);
+    assert_eq!(admission.queued_position, Some(1));
+    let updated = h.row("T1");
+    assert_eq!(updated.state, TaskState::Assigned);
+    assert_eq!(updated.position, stalled.position);
+    assert_eq!(updated.reminder_count, 0);
+    assert_eq!(updated.lead_notified_count, 0);
+    assert!(updated.last_reminded_at.is_none());
+    assert_eq!(
+        updated.assignment_message_id,
+        second.envelope.message_id.unwrap()
+    );
+
+    let events = h.events("T1");
+    assert_eq!(events.len(), before_events + 1);
+    let last = events.last().expect("appended event");
+    assert_eq!(last.event, TaskEventKind::Updated);
+    assert_eq!(last.actor, TaskActor::Member("lead".parse().unwrap()));
+    assert_eq!(last.message_id, second.envelope.message_id);
+    assert_eq!(last.from_state, Some(TaskState::Assigned));
+    assert_eq!(last.to_state, Some(TaskState::Assigned));
+
+    // The counters and timestamp that `herdr_task_disposition::reminder_due`
+    // / `escalation_due` gate on
+    // (crates/atm-http-runtime/src/herdr_queue_wake/herdr_task_disposition.rs)
+    // are back at zero/None, so a fresh reminder starts the budget at one
+    // rather than being blocked by the earlier stall.
+    let after_update = task_store
+        .record_reminder(
+            &member,
+            &task_id,
+            IsoTimestamp::now(),
+            ReminderOutcome::Emitted,
+        )
+        .expect("record reminder after update");
+    assert_eq!(after_update.reminder_count, 1);
+}
+
+#[test]
+fn same_agent_update_of_active_task_appends_one_updated_event_and_resets_reminders() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    h.start("T1", "alice").expect("start task");
+    let member = MemberKey::new(h.team.clone(), "alice".parse().unwrap());
+    let task_id: TaskId = "T1".parse().unwrap();
+    let task_store = h.backend.task_store();
+
+    for _ in 0..10 {
+        task_store
+            .record_reminder(
+                &member,
+                &task_id,
+                IsoTimestamp::now(),
+                ReminderOutcome::Emitted,
+            )
+            .expect("record reminder");
+    }
+    task_store
+        .record_lead_notified(
+            &member,
+            &task_id,
+            IsoTimestamp::now(),
+            &"lead".parse().unwrap(),
+            &AtmMessageId::new(),
+        )
+        .expect("record lead notified");
+    let stalled = h.row("T1");
+    assert_eq!(stalled.state, TaskState::Active);
+    assert_eq!(stalled.reminder_count, 10);
+    assert_eq!(stalled.lead_notified_count, 1);
+    let before_events = h.events("T1").len();
+
+    let (second, admission) = h.assign_with_outcome("T1", "alice", "lead", None);
+
+    assert!(admission.task_updated);
+    let updated = h.row("T1");
+    // Not a reassignment: the task stays active and in place.
+    assert_eq!(updated.state, TaskState::Active);
+    assert_eq!(updated.position, stalled.position);
+    assert_eq!(updated.assigned_at, stalled.assigned_at);
+    assert_eq!(updated.reminder_count, 0);
+    assert_eq!(updated.lead_notified_count, 0);
+    assert!(updated.last_reminded_at.is_none());
+    assert_eq!(
+        updated.assignment_message_id,
+        second.envelope.message_id.unwrap()
+    );
+
+    let events = h.events("T1");
+    assert_eq!(events.len(), before_events + 1);
+    let last = events.last().expect("appended event");
+    assert_eq!(last.event, TaskEventKind::Updated);
+    assert_eq!(last.from_state, Some(TaskState::Active));
+    assert_eq!(last.to_state, Some(TaskState::Active));
+}
+
+/// Negative case: assigning an open task to a *different* agent is still a
+/// reassignment, not an update — it must keep producing `Reassigned`, never
+/// `Updated` (Rand, 2026-09-27, #1619).
+#[test]
+fn different_agent_assign_on_open_task_still_appends_reassigned_not_updated() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    let member = MemberKey::new(h.team.clone(), "alice".parse().unwrap());
+    let task_id: TaskId = "T1".parse().unwrap();
+    let task_store = h.backend.task_store();
+    task_store
+        .record_reminder(
+            &member,
+            &task_id,
+            IsoTimestamp::now(),
+            ReminderOutcome::Emitted,
+        )
+        .expect("record reminder");
+    let before_events = h.events("T1").len();
+
+    let (_second, admission) = h.assign_with_outcome("T1", "bob", "lead", None);
+
+    assert!(!admission.task_updated);
+    let events = h.events("T1");
+    assert_eq!(events.len(), before_events + 1);
+    let last = events.last().expect("appended event");
+    assert_eq!(last.event, TaskEventKind::Reassigned);
+    assert_ne!(last.event, TaskEventKind::Updated);
+    assert_eq!(h.row("T1").assignee, "bob".parse::<AgentName>().unwrap());
 }

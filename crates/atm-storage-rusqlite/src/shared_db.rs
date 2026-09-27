@@ -329,6 +329,7 @@ impl SharedDb {
                 already_closed,
                 task_assignee,
                 queued_position,
+                task_updated,
                 reassign_notice,
                 task_rejection,
                 ..
@@ -337,6 +338,7 @@ impl SharedDb {
                 already_closed,
                 task_assignee,
                 queued_position,
+                task_updated,
                 reassign_notice: reassign_notice.map(|notice| *notice),
                 task_rejection,
             }),
@@ -435,6 +437,7 @@ impl SharedDb {
                 already_closed,
                 task_assignee,
                 queued_position,
+                task_updated,
                 reassign_notice,
                 task_rejection,
                 ..
@@ -443,6 +446,7 @@ impl SharedDb {
                 already_closed,
                 task_assignee,
                 queued_position,
+                task_updated,
                 reassign_notice: reassign_notice.map(|notice| *notice),
                 task_rejection,
             }),
@@ -508,6 +512,7 @@ impl SharedDb {
                 inserted: true,
                 task_assignee,
                 queued_position,
+                task_updated,
                 reassign_notice,
                 task_rejection,
                 ..
@@ -516,6 +521,7 @@ impl SharedDb {
                 already_closed: None,
                 task_assignee,
                 queued_position,
+                task_updated,
                 reassign_notice: reassign_notice.map(|message| *message),
                 task_rejection,
             }),

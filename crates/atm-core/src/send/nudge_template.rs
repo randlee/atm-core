@@ -59,14 +59,22 @@ pub(crate) fn validate_built_in_nudge_template_body(template_body: &str) -> Resu
             ("assignee", String::new()),
             ("outcome", String::new()),
             ("by", String::new()),
+            ("updated", String::new()),
         ]),
     )
     .map(|_| ())
 }
 
 fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
+    let mut updated = String::new();
     let (position, attempt, outcome) = match event.task_transition {
-        Some(TaskTransition::Queued { position }) => {
+        Some(TaskTransition::Queued {
+            position,
+            is_update,
+        }) => {
+            if is_update {
+                updated = " updated=\"1\"".to_owned();
+            }
             (position.to_string(), String::new(), String::new())
         }
         Some(TaskTransition::Reminder { attempt }) => {
@@ -110,6 +118,7 @@ fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
         ("position", position),
         ("attempt", attempt),
         ("assignee", assignee),
+        ("updated", updated),
         ("outcome", outcome),
         ("by", event.sender.to_string()),
     ])
@@ -133,7 +142,7 @@ pub fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
             "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\"/>"
         }
         BuiltInNudgeTemplateKind::TaskQueued => {
-            "<atm task=\"{{task_id}}\" queued=\"{{position}}\" message=\"{{message_id}}\" from=\"{{from}}\"/>"
+            "<atm task=\"{{task_id}}\" queued=\"{{position}}\"{{updated}} message=\"{{message_id}}\" from=\"{{from}}\"/>"
         }
         BuiltInNudgeTemplateKind::TaskReady => {
             "<atm task=\"{{task_id}}\" ready message=\"{{message_id}}\" from=\"{{from}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>atm task start {{task_id}}</action>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
@@ -286,6 +295,35 @@ mod tests {
     }
 
     #[test]
+    fn task_queued_update_carries_the_update_marker_a_fresh_assign_does_not() {
+        // Rand, 2026-09-27, #1619: a same-agent update of an open task must
+        // render a marker distinguishing it from a fresh assignment.
+        let mut event = base_event();
+        event.task_id = Some("task-9".parse().expect("task id"));
+        event.task_transition = Some(TaskTransition::Queued {
+            position: 2,
+            is_update: true,
+        });
+        let updated = render_built_in_nudge(
+            &event,
+            default_template(BuiltInNudgeTemplateKind::TaskQueued),
+        )
+        .expect("rendered update template");
+        assert!(updated.contains("updated=\"1\""), "{updated}");
+
+        event.task_transition = Some(TaskTransition::Queued {
+            position: 2,
+            is_update: false,
+        });
+        let fresh = render_built_in_nudge(
+            &event,
+            default_template(BuiltInNudgeTemplateKind::TaskQueued),
+        )
+        .expect("rendered fresh assignment template");
+        assert!(!fresh.contains("updated=\"1\""), "{fresh}");
+    }
+
+    #[test]
     fn every_default_body_renders_with_its_placeholders() {
         let cases = [
             (BuiltInNudgeTemplateKind::Delivery, None, true, true),
@@ -295,7 +333,10 @@ mod tests {
             (BuiltInNudgeTemplateKind::Acknowledge, None, false, false),
             (
                 BuiltInNudgeTemplateKind::TaskQueued,
-                Some(TaskTransition::Queued { position: 2 }),
+                Some(TaskTransition::Queued {
+                    position: 2,
+                    is_update: false,
+                }),
                 false,
                 false,
             ),
