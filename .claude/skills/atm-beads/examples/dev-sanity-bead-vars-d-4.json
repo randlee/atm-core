@@ -1,9 +1,9 @@
 {
-  "id": "atm-bd-4-sanity",
-  "parent": "atm-phase-bd",
-  "dev_bead": "atm-bd-4",
-  "phase": "bd",
-  "sprint": "bd-4",
-  "stack": "phase-bd",
+  "id": "atm-d-4-sanity",
+  "parent": "atm-phase-d",
+  "dev_bead": "atm-d-4",
+  "phase": "d",
+  "sprint": "d-4",
+  "stack": "phase-d",
   "assignee": "atm-sanity"
 }

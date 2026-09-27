@@ -1,12 +1,11 @@
 {
-  "id": "atm-bd-4-qa1",
-  "parent": "atm-phase-bd",
-  "checked_bead": "atm-bd-4",
-  "phase": "bd",
-  "sprint": "bd-4",
-  "stack": "phase-bd",
+  "id": "atm-d-4-qa1",
+  "checked_bead": "atm-d-4",
+  "phase": "d",
+  "sprint": "d-4",
+  "stack": "phase-d",
   "layer": 4,
-  "branch": "sprint/bd-4-peer-retry-jitter",
+  "branch": "sprint/d-4-otlp-sync-exporter",
   "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
   "round": 1,
   "assignee": "quality-mgr"

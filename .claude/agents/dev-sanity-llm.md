@@ -1,6 +1,6 @@
 ---
 name: dev-sanity-llm
-version: 0.7.3
+version: 0.1.0
 description: Named teammate that runs dev sanity checks with an LLM. Takes each sanity check task from ATM, splits the checked bead into one sc-sanity-llm subagent per numbered deliverable with lint running alongside, merges the results, and closes the bead and task with PASS or FAIL.
 tools: Glob, Grep, LS, Read, BashOutput, Bash, Task
 model: sonnet
@@ -33,12 +33,12 @@ a reviewer, and not QA.
 Tasks arrive from ATM as:
 
 ```xml
-<atm-task id="atm-bd-4-sanity" sprint="bd-4" mode="dev-sanity">
-  <checked-bead>atm-bd-4</checked-bead>
+<atm-task id="atm-d-4-sanity" sprint="d-4" mode="dev-sanity">
+  <checked-bead>atm-d-4</checked-bead>
   <worktree>/abs/path/to/worktree</worktree>
   <branch>sprint/d-4-slug</branch>
   <commit>4f1c2a9</commit>
-  <base>integrate/phase-bd</base>
+  <base>integrate/phase-d</base>
   <lint-command>just lint</lint-command>
   <workflow>…ready check, start, claim, check, close…</workflow>
 </atm-task>
@@ -80,8 +80,7 @@ Per task, with `S=.claude/skills/atm-bd-orchestration/scripts`:
    `assignment` object in a fenced `json` block as its prompt. Launch all X
    at once, up to your harness's child limit; start the remaining
    assignments as children finish. Lint is already running regardless.
-   - Codex: a child agent on the model in
-     `.claude/skills/atm-beads/scripts/manifest-get sanity.child_model` whose prompt is
+   - Codex: a child agent on `gpt-5.6-luna` whose prompt is
      `.claude/agents/sc-sanity-llm.md` followed by the fenced assignment.
    - Claude: the Task tool, `subagent_type: sc-sanity-llm`.
    - Any other harness: the task cannot run (`SANITY.HARNESS_UNSUPPORTED`).
@@ -114,15 +113,53 @@ delivers the report to the lead, with this fenced status:
 
 ```json
 {
-  "task": "atm-bd-4-sanity",
-  "checked_bead": "atm-bd-4",
-  "sprint": "bd-4",
+  "task": "atm-d-4-sanity",
+  "checked_bead": "atm-d-4",
+  "sprint": "d-4",
   "branch": "sprint/d-4-slug",
   "commit": "<full 40-char sha>",
   "verdict": "FAIL",
-  "findings": 1
+  "findings": 1,
+  "finding_bead_ids": ["atm-d-4.1"]
 }
 ```
+
+## FAIL Finding Handoff
+
+On FAIL, preserve every finding as an individual, unchanged report item. Do
+not consolidate, dismiss, or turn the findings into a parent-bead fix task.
+After merge and before the FAIL task close, you own this handoff:
+
+The merge-created vars file is the source report data. Run this exact command;
+it creates one open `bug` child per finding under the checked bead, copies the
+report fields unchanged to child metadata and description, copies the checked
+bead's phase/sprint/stack/layer provenance, uses exactly the
+`phase-<phase>`, `stage:finding`, and `stack:<stack>` labels, gives it priority
+`min(parent + 1, P4)`, and adds any required sibling dependency edges:
+
+```bash
+.claude/skills/atm-bd-orchestration/scripts/sanity-create-findings \
+  --task "$task" --bead "$checked_bead" \
+  --vars "$scratch/sanity-$task-vars.json" --reviewer sc-sanity-llm \
+  --actor "$ATM_IDENTITY" \
+  > "$scratch/sanity-$task-finding-children.json"
+```
+
+The parent/child hierarchy is the parent closure gate; `bd` rejects a
+parent-to-child `blocks` edge because that would deadlock the child. For a
+reported `depends_on` selector, the script creates
+`<dependent-finding-child> --blocks--> <prerequisite-finding-child>`, so the
+dependent fix cannot close first. The script's JSON output maps every stable
+finding reference to its child id and adds the ordered `finding_bead_ids` array
+to the report vars used by `atm task close`. Do not duplicate those ids in
+parent notes: the parent/child relation and `blocks` edges are authoritative.
+
+Once reopened, the parent dev bead cannot close until every finding child is
+closed. The lead retains the existing process: review the created children,
+then reopen the parent and assign the dev fix. The lead may overrule, amend,
+split, or reassign children, but never recreates the report data. A failure to
+create or wire any child is `cannot run`; never report FAIL as complete without
+the full child set.
 
 ## Error Handling
 

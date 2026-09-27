@@ -28,6 +28,20 @@ verdict. The open finding beads carry the remaining work.
 Run every open QA task at once. Each has its own background reviewers; close
 each as soon as its verdict is ready, in any order.
 
+## Pre-claim refusals
+
+Before claim, run `gh pr view "$PR_NUMBER" --json baseRefName,headRefOid`,
+read the pinned PASS commit with `bd show "$CHECKED_BEAD" --json | jq -r
+'.[0].metadata.sanity_pass_commit'`, and run `git rev-parse HEAD`. The PR base
+must equal `metadata.pr_target`, its head must equal the sanity PASS commit,
+and the QA worktree HEAD must equal that PR head. Otherwise refuse
+`SANITY_STALE`; no layer or quick fix lacking QA PASS at that pinned head is
+mergeable. Before the refusal message or task close, strictly render
+`templates/workflow-issue-bead.json.j2` with id `$TASK_ID-wf-SANITY_STALE`,
+`bd import <scratch>/$TASK_ID-wf-SANITY_STALE.json`, and include the created id
+in the refusal. The same render/import-before-refusal rule applies to any
+other QA cannot-run path.
+
 ## Plan Review
 
 A plan-review task (`plan-review-template.xml.j2`) reviews the beads under a
@@ -100,7 +114,7 @@ screen said. What happens next depends on the verdict:
 | `concern_valid_remedy_ceremony` | filed open with `remedy` rewritten to the existing mechanism the screen names |
 | `ceremony` | filed, then closed at once: `bd close <finding> --reason "ceremony: <reason>"` |
 
-- Severity sets priority: blocking P1, important P3, minor P4. Planned dev is
+- Severity sets priority: blocking P1, important P2, minor P4. Planned dev is
   P2, so a blocking finding comes up ahead of the next dev bead. Reviewers
   spell severity their own way; normalize before rendering: `critical`,
   `Blocking`, `BLOCKING` → `blocking`; `Important` → `important`; `Minor`,
@@ -108,6 +122,18 @@ screen said. What happens next depends on the verdict:
 - Render each finding to a file and gate it with `jq -e` before appending it
   to the import JSONL, so a finding the template rejects stops you instead of
   disappearing.
+- A round with only minor findings is PASS; its open finding beads remain
+  backlog. Any blocking or important finding is FAIL and receives exactly one
+  fix round. A second FAIL is `ROUND_CAP`: stop dispatch and record the root
+  cause rather than creating another fix round.
+- `difficulty` is required when rendering a finding. Copy it from the
+  checked sprint/finding; never select a default. The dispatch report prints
+  `UNCLASSIFIED` and no agent for a live bead missing it.
+- After filing every blocking finding, run `blocking-finding-gates.py --finding
+  <id>` before dispatch. `<id>-sanity` is the finding's sole sanity gate, not
+  a duplicate: it is parented under the finding's sprint dev bead and waits on
+  the finding through a `blocks` edge, then blocks only open downstream dev and
+  unclaimed finding/fix work. Important and minor findings do not add gates.
 - Findings are `parallel_safe` by default. Set `blocked_by` only when one fix
   needs another finding's fix first.
 - Ids are `<qa bead>-f<n>`, numbered in report order.

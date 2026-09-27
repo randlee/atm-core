@@ -1,8 +1,6 @@
 # Gate for a rendered bead plan: run on the import JSONL before `bd import`.
 #   jq -rs -f scripts/check-plan.jq plan.jsonl                                  # whole phase (root in the file)
-#   jq -rs --arg root <prefix>-phase-d --arg phase d -f scripts/check-plan.jq plan.jsonl  # sprints added to an existing root
-# --arg integration_branch <pattern> is the manifest's `integration_branch`
-# (`{phase}` = the phase id; default integrate/phase-{phase}); validate-plan passes it.
+#   jq -rs --arg root atm-phase-d --arg phase d -f scripts/check-plan.jq plan.jsonl  # sprints added to an existing root
 # A dev bead may also be blocked by a plan-review bead <root>-plan-qa[-<n>].
 # Prints problems and exits 5 if any.
 def need($c; $msg): if $c then empty else $msg end;
@@ -19,7 +17,7 @@ def closure($g): until((. as $s | [$s[] | ($g[.] // [])[]] + $s | unique) == .; 
 | ($roots[0] // {}) as $root
 | ($root.id // $ARGS.named.root // "") as $rid
 | ($root.metadata.phase // $ARGS.named.phase // "") as $p
-| ($root.metadata.integration_branch // (($ARGS.named.integration_branch // "integrate/phase-{phase}") | sub("\\{phase\\}"; $p))) as $trunk
+| ($root.metadata.integration_branch // "integrate/phase-\($p)") as $trunk
 | ([$qcs[] | {key: .id, value: (.metadata.dev_bead // "")}] | from_entries) as $qcdev
 | ([$devs[] | {key: .id, value: [deps("blocks")[] | select(endswith("-sanity")) | ($qcdev[.] // rtrimstr("-sanity"))]}] | from_entries) as $g
 | [
@@ -41,7 +39,7 @@ def closure($g): until((. as $s | [$s[] | ($g[.] // [])[]] + $s | unique) == .; 
           | need($s[$f] | blank | not; "\($id): empty \($f)") ),
         ( ["stack", "layer", "branch", "pr_target", "worktree", "relation", "closure_type", "target_boundary", "owned_paths"][] as $k
           | need($m[$k] | blank | not; "\($id): empty metadata.\($k)") ),
-        ( [["requirements", "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*-[0-9]+$", "REQ ids such as REQ-ATM-CMD-001"], ["adrs", "^ADR-[0-9]+$", "ADR-<n> ids"]][] as [$k, $re, $what]
+        ( [["requirements", "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*-[0-9]+$", "REQ ids such as LOG-001"], ["adrs", "^ADR-[0-9]+$", "ADR-<n> ids"]][] as [$k, $re, $what]
           | $m[$k] as $v
           | if ($v | type) != "array" or ($v | length) == 0 then "\($id): metadata.\($k) is empty: list the governing \($what), or [\"NONE\"]"
             elif $v == ["NONE"] then empty
@@ -60,9 +58,8 @@ def closure($g): until((. as $s | [$s[] | ($g[.] // [])[]] + $s | unique) == .; 
           else empty end ),
         ( if $m.layer == 1 then need($m.pr_target == $trunk; "\($id): layer 1 pr_target must be \($trunk)")
           else
-            [ $devs[] | select(.metadata.stack == $m.stack and .metadata.layer == $m.layer - 1) ] as $below
-            | if ($below | length) == 1 then need($m.pr_target == $below[0].metadata.branch; "\($id): pr_target must be \($below[0].metadata.branch) (layer below)")
-              else empty end
+            [ $devs[] | select(.metadata.stack == $m.stack and .metadata.layer < $m.layer) | .metadata.branch ] as $below
+            | need($m.pr_target == $trunk or ($below | index($m.pr_target)) != null; "\($id): pr_target must be \($trunk) or the branch of a lower layer")
           end ) ),
     ( $qcs[] as $q | "\($q.id)" as $id
       | need($q.assignee | blank | not; "\($id): no assignee (the dev-sanity agent)"),
