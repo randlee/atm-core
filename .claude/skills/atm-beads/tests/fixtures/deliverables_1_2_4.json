@@ -1,0 +1,207 @@
+{
+ "root": "x-phase-t",
+ "index": {
+  "root_bead_id": "x-phase-t",
+  "integration_branch": "integrate/phase-t",
+  "sprints": [
+   {
+    "dev_bead_id": "x-t-1",
+    "sanity_bead_id": "x-t-1-sanity"
+   },
+   {
+    "dev_bead_id": "x-t-2",
+    "sanity_bead_id": "x-t-2-sanity"
+   },
+   {
+    "dev_bead_id": "x-t-3",
+    "sanity_bead_id": "x-t-3-sanity"
+   }
+  ]
+ },
+ "beads": [
+  {
+   "id": "x-phase-t",
+   "status": "open",
+   "labels": [],
+   "priority": 2,
+   "issue_type": "epic",
+   "metadata": {
+    "integration_branch": "integrate/phase-t"
+   },
+   "dependencies": []
+  },
+  {
+   "id": "x-t-1",
+   "status": "open",
+   "labels": [
+    "stage:dev",
+    "stage:sprint"
+   ],
+   "priority": 2,
+   "issue_type": "task",
+   "metadata": {
+    "branch": "sprint/t-1",
+    "pr_target": "integrate/phase-t",
+    "layer": 1,
+    "sprint": "t-1",
+    "difficulty": "normal",
+    "owned_paths": [
+     "crates/t1/**"
+    ],
+    "relation": "root",
+    "requirements": [
+     "NONE"
+    ],
+    "adrs": [
+     "NONE"
+    ],
+    "worktree": "/w/t-1"
+   },
+   "dependencies": [],
+   "parent": "x-phase-t",
+   "description": "## Goal\nx\n\n## Deliverables\n1. one\n2. two\n3. three\n",
+   "acceptance_criteria": "- [ ] #1: a\n- [ ] #2\u20133: b\n"
+  },
+  {
+   "id": "x-t-1-sanity",
+   "status": "open",
+   "labels": [
+    "stage:dev-sanity"
+   ],
+   "priority": 2,
+   "issue_type": "task",
+   "metadata": {
+    "dev_bead": "x-t-1",
+    "difficulty": "normal",
+    "sprint": "t-1"
+   },
+   "dependencies": [
+    {
+     "dependency_type": "blocks",
+     "depends_on_id": "x-t-1"
+    }
+   ],
+   "parent": "x-phase-t"
+  },
+  {
+   "id": "x-t-2",
+   "status": "open",
+   "labels": [
+    "stage:dev",
+    "stage:sprint"
+   ],
+   "priority": 2,
+   "issue_type": "task",
+   "metadata": {
+    "branch": "sprint/t-2",
+    "pr_target": "sprint/t-1",
+    "layer": 2,
+    "sprint": "t-2",
+    "difficulty": "normal",
+    "owned_paths": [
+     "crates/t2/**"
+    ],
+    "relation": "must_follow",
+    "requirements": [
+     "NONE"
+    ],
+    "adrs": [
+     "NONE"
+    ],
+    "worktree": "/w/t-2"
+   },
+   "dependencies": [
+    {
+     "dependency_type": "blocks",
+     "depends_on_id": "x-t-1-sanity"
+    }
+   ],
+   "parent": "x-phase-t",
+   "description": "## Deliverables\n1. a\n2. b\n4. d\n",
+   "acceptance_criteria": "- [ ] #1: a\n- [ ] #2\u20133: b\n"
+  },
+  {
+   "id": "x-t-2-sanity",
+   "status": "open",
+   "labels": [
+    "stage:dev-sanity"
+   ],
+   "priority": 2,
+   "issue_type": "task",
+   "metadata": {
+    "dev_bead": "x-t-2",
+    "difficulty": "normal",
+    "sprint": "t-2"
+   },
+   "dependencies": [
+    {
+     "dependency_type": "blocks",
+     "depends_on_id": "x-t-2"
+    }
+   ],
+   "parent": "x-phase-t"
+  },
+  {
+   "id": "x-t-3",
+   "status": "open",
+   "labels": [
+    "stage:dev",
+    "stage:sprint"
+   ],
+   "priority": 2,
+   "issue_type": "task",
+   "metadata": {
+    "branch": "sprint/t-3",
+    "pr_target": "sprint/t-2",
+    "layer": 3,
+    "sprint": "t-3",
+    "difficulty": "normal",
+    "owned_paths": [
+     "crates/t3/**"
+    ],
+    "relation": "must_follow",
+    "requirements": [
+     "NONE"
+    ],
+    "adrs": [
+     "NONE"
+    ],
+    "worktree": "/w/t-3"
+   },
+   "dependencies": [
+    {
+     "dependency_type": "blocks",
+     "depends_on_id": "x-t-2-sanity"
+    }
+   ],
+   "parent": "x-phase-t",
+   "description": "## Goal\nx\n\n## Deliverables\n1. one\n2. two\n3. three\n",
+   "acceptance_criteria": "- [ ] #1: a\n- [ ] #2\u20133: b\n"
+  },
+  {
+   "id": "x-t-3-sanity",
+   "status": "open",
+   "labels": [
+    "stage:dev-sanity"
+   ],
+   "priority": 2,
+   "issue_type": "task",
+   "metadata": {
+    "dev_bead": "x-t-3",
+    "difficulty": "normal",
+    "sprint": "t-3"
+   },
+   "dependencies": [
+    {
+     "dependency_type": "blocks",
+     "depends_on_id": "x-t-3"
+    }
+   ],
+   "parent": "x-phase-t"
+  }
+ ],
+ "history": {},
+ "prs": [],
+ "now": "2026-09-26T20:00:00+00:00",
+ "live": true
+}

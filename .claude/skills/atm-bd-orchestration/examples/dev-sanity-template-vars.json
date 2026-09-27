@@ -1,12 +1,13 @@
 {
-  "task_id": "atm-bd-4-sanity",
-  "checked_bead": "atm-bd-4",
-  "sprint": "bd-4",
-  "worktree_path": "/Users/randlee/github/atm-core-worktrees/sprint/bd-4-peer-retry-jitter",
-  "branch": "sprint/bd-4-peer-retry-jitter",
+  "task_id": "atm-d-4-sanity",
+  "checked_bead": "atm-d-4",
+  "sprint": "d-4",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/feat/atm-core-worktrees/sprint/d-4-otlp-sync-exporter",
+  "branch": "sprint/d-4-otlp-sync-exporter",
   "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
-  "base": "sprint/bd-3-peer-config",
-  "lead": "team-lead",
-  "cc": "",
-  "lint_command": "just lint"
+  "base": "sprint/d-3-otlp-config",
+  "pr_number": 262,
+  "pr_url": "https://github.com/randlee/atm-core/pull/262",
+  "lead": "atm-lead",
+  "cc": ""
 }

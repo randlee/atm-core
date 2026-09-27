@@ -39,7 +39,7 @@ which one, with its install line above. Do not work around a missing CLI.
 | `validate-plan` exits 2: "atm members failed" | ATM daemon or team not reachable | `atm doctor --team "$ATM_TEAM"` and report its finding |
 | `bd doctor` reports an error | the beads database is unhealthy | report the check to the user; never import into or dispatch from it |
 | `sc-compose render` rejects `autoescape` or `}}}` | an XML or markdown template given to `sc-compose` | render those with `atm compose`; `sc-compose` is for the JSON templates |
-| `gh stack` hangs | an interactive form of the command | always pass branch names, `--auto`, `--json`, `--yes` (see the stack mechanics in `manifest-get stack.mechanics`) |
+| `gh stack` hangs | an interactive form of the command | always pass branch names, `--auto`, `--json`, `--yes` (see the `sc-gh-stack` skill) |
 
 Identity problems (`BEADS_ACTOR`, assignees) are in
 [`../resources/troubleshooting.md`](../resources/troubleshooting.md).

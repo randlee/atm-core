@@ -144,9 +144,9 @@ completes the work, rebases it onto the current top of its stack, and the
 stack writer (lead) links it. Layers therefore stack in the order they
 complete, and lead records each bead's actual `layer` and `pr_target` when it
 is linked; the plan-time values are the plan's intent. The mechanics are the
-documents and skills the manifest names in `stack.mechanics`
-(`.claude/skills/atm-beads/scripts/manifest-get stack.mechanics`), plain
-markdown any agent can follow.
+`sc-gh-stack` skill (`/sc-gh-stack` in Claude): its `workflow.md`,
+`recipe-cut-layer.md` and `recipe-link.md` are plain markdown any agent can
+follow.
 
 ## Lifecycle
 

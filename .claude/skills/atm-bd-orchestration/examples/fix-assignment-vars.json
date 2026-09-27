@@ -1,11 +1,10 @@
 {
-  "task_id": "atm-bd-4-qa1-f1",
-  "sprint": "bd-4",
-  "stack": "phase-bd",
-  "top": "sprint/bd-5-peer-logs",
-  "worktree_path": "/Users/randlee/github/atm-core-worktrees/fix/bd-4-qa1-f1-retry-jitter",
-  "branch": "fix/bd-4-qa1-f1-retry-jitter",
-  "lead": "team-lead",
-  "cc": "",
-  "test_command": "just test"
+  "task_id": "atm-d-4-qa1-f1",
+  "sprint": "d-4",
+  "stack": "phase-d",
+  "pr_target": "integrate/phase-d",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/feat/atm-core-worktrees/fix/d-4-qa1-f1-retry-jitter",
+  "branch": "fix/d-4-qa1-f1-retry-jitter",
+  "lead": "atm-lead",
+  "cc": ""
 }
