@@ -261,7 +261,11 @@ async fn admit_verified_template(
     Ok(DeliveryPersistenceResult::persisted(envelope)
         .with_task_assignee(admission.task_assignee)
         .with_task_rejection(admission.task_rejection)
-        .with_assignment_metadata(admission.queued_position, admission.reassign_notice))
+        .with_assignment_metadata(
+            admission.queued_position,
+            admission.reassign_notice,
+            admission.paused_task_id,
+        ))
 }
 
 fn build_template_admission(

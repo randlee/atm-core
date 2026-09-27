@@ -26,6 +26,9 @@ pub(crate) struct LogicalMessage {
     pub(crate) is_ack: bool,
     pub(crate) task_assignee: Option<AgentName>,
     pub(crate) task_transition: Option<TaskTransition>,
+    /// The task this message's own assignment displaced from active to
+    /// assigned, for a `--preempt` assignment. `None` for every other send.
+    pub(crate) paused_task_id: Option<crate::types::TaskId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,11 +63,20 @@ impl LogicalMessage {
             is_ack,
             task_assignee,
             task_transition: None,
+            paused_task_id: None,
         })
     }
 
     pub(crate) fn with_task_transition(mut self, task_transition: TaskTransition) -> Self {
         self.task_transition = Some(task_transition);
+        self
+    }
+
+    pub(crate) fn with_paused_task_id(
+        mut self,
+        paused_task_id: Option<crate::types::TaskId>,
+    ) -> Self {
+        self.paused_task_id = paused_task_id;
         self
     }
 
@@ -87,6 +99,7 @@ pub(crate) fn logical_messages_from_persistence(
     if let Some(position) = persistence.queued_position {
         message = message.with_task_transition(TaskTransition::Queued { position });
     }
+    message = message.with_paused_task_id(persistence.paused_task_id.clone());
     Ok(vec![message])
 }
 

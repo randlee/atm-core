@@ -7,7 +7,7 @@ use atm_core::test_support::{
 };
 use atm_storage::{
     MemberKey, Message, MessageEnvelope, MessageKey, ReminderOutcome, TaskEventKind, TaskOp,
-    TaskState,
+    TaskState, TeamName,
 };
 use serial_test::serial;
 
@@ -27,6 +27,7 @@ fn assign(task: &str, assignee: &str, actor: &str) -> TaskAssignCommand {
         task_id: Some(task.parse().expect("task id")),
         before: None,
         head: false,
+        preempt: false,
         message: MessageSourceArgs {
             text: Some(format!("assignment {task}")),
             file: None,
@@ -292,5 +293,215 @@ async fn assign_closed_id_reopens_same_row() {
             .unwrap()
             .event,
         TaskEventKind::Reopened
+    );
+}
+
+fn preempt(task: &str, assignee: &str, actor: &str) -> TaskAssignCommand {
+    TaskAssignCommand {
+        preempt: true,
+        ..assign(task, assignee, actor)
+    }
+}
+
+/// Sends the assignee's own `--task-id <task> --task-op start` write
+/// directly, bypassing the CLI's `CallerArgs` identity-match guard (the
+/// fixture's `ATM_IDENTITY` stays pinned to the assigner throughout these
+/// tests, matching every `assign`/`preempt` call).
+async fn start_task(fixture: &LoopbackFixture, team: &TeamName, task: &str) {
+    let mut request = atm_core::send::SendRequest::new(
+        fixture.home_dir.clone(),
+        fixture.current_dir.clone(),
+        "recipient".parse().unwrap(),
+        TEST_SENDER_ADDRESS,
+        team.clone(),
+        atm_core::send::SendMessageSource::Inline(format!("start {task}")),
+        None,
+        false,
+        Some(task.parse().expect("task id")),
+        false,
+    )
+    .unwrap();
+    request.task_op = Some(TaskOp::Start);
+    let observability = CliObservability::fallback();
+    fixture
+        .composition(&observability)
+        .send(request)
+        .await
+        .expect("start task");
+}
+
+/// Sends the assignee's own `--task-id <task> --task-op close` write
+/// directly, for the same identity-match reason as [`start_task`].
+async fn close_task(fixture: &LoopbackFixture, team: &TeamName, task: &str) {
+    let mut request = atm_core::send::SendRequest::new(
+        fixture.home_dir.clone(),
+        fixture.current_dir.clone(),
+        "recipient".parse().unwrap(),
+        TEST_SENDER_ADDRESS,
+        team.clone(),
+        atm_core::send::SendMessageSource::Inline(format!("{task} done")),
+        None,
+        false,
+        Some(task.parse().expect("task id")),
+        false,
+    )
+    .unwrap();
+    request.task_op = Some(TaskOp::Close {
+        outcome: atm_storage::TaskCloseOutcome::Completed,
+        reason: Some("done".into()),
+    });
+    let observability = CliObservability::fallback();
+    fixture
+        .composition(&observability)
+        .send(request)
+        .await
+        .expect("close task");
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn preempt_pauses_active_task_to_position_two_and_queues_new_task_at_head() {
+    let fixture = LoopbackFixture::new("recipient");
+    let team: TeamName = TEST_TEAM.parse().expect("team");
+    execute_assign(&fixture, assign("X", TEST_RECIPIENT_ADDRESS, TEST_SENDER)).await;
+    start_task(&fixture, &team, "X").await;
+    execute_assign(&fixture, preempt("Y", TEST_RECIPIENT_ADDRESS, TEST_SENDER)).await;
+
+    let store = fixture.task_store();
+    let member = MemberKey::new(team.clone(), "recipient".parse().expect("recipient"));
+
+    let paused = store
+        .load_task(&team, &"X".parse().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(paused.state, TaskState::Assigned);
+    assert_eq!(paused.position.expect("position").get(), 2);
+    let head = store
+        .load_task(&team, &"Y".parse().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(head.position.expect("position").get(), 1);
+
+    let x_events = store
+        .list_task_events(&team, &"X".parse().unwrap(), None)
+        .unwrap();
+    let paused_events: Vec<_> = x_events
+        .iter()
+        .filter(|event| event.event == TaskEventKind::Paused)
+        .collect();
+    assert_eq!(paused_events.len(), 1, "exactly one paused event on X");
+    assert!(paused_events[0].detail.as_deref().unwrap().contains("Y"));
+
+    let open = store.open_tasks(&member).unwrap();
+    assert_eq!(
+        open.iter()
+            .map(|row| (row.task_id.as_str(), row.position.unwrap().get()))
+            .collect::<std::collections::BTreeMap<_, _>>(),
+        std::collections::BTreeMap::from([("X", 2), ("Y", 1)])
+    );
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn preempt_without_active_task_behaves_exactly_like_head() {
+    let fixture = LoopbackFixture::new("recipient");
+    let team: TeamName = TEST_TEAM.parse().expect("team");
+    execute_assign(&fixture, assign("A", TEST_RECIPIENT_ADDRESS, TEST_SENDER)).await;
+    execute_assign(&fixture, preempt("B", TEST_RECIPIENT_ADDRESS, TEST_SENDER)).await;
+
+    let store = fixture.task_store();
+    let a = store
+        .load_task(&team, &"A".parse().unwrap())
+        .unwrap()
+        .unwrap();
+    let b = store
+        .load_task(&team, &"B".parse().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(b.position.expect("position").get(), 1);
+    assert_eq!(a.position.expect("position").get(), 2);
+    assert!(
+        store
+            .list_task_events(&team, &"A".parse().unwrap(), None)
+            .unwrap()
+            .iter()
+            .all(|event| event.event != TaskEventKind::Paused),
+        "no active task means no paused event"
+    );
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn plain_head_never_pauses_the_active_task() {
+    let fixture = LoopbackFixture::new("recipient");
+    let team: TeamName = TEST_TEAM.parse().expect("team");
+    execute_assign(&fixture, assign("X", TEST_RECIPIENT_ADDRESS, TEST_SENDER)).await;
+    start_task(&fixture, &team, "X").await;
+    execute_assign(
+        &fixture,
+        TaskAssignCommand {
+            head: true,
+            ..assign("Y", TEST_RECIPIENT_ADDRESS, TEST_SENDER)
+        },
+    )
+    .await;
+
+    let store = fixture.task_store();
+    let active = store
+        .load_task(&team, &"X".parse().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(active.state, TaskState::Active);
+    assert_eq!(active.position.expect("position").get(), 1);
+    assert!(
+        store
+            .list_task_events(&team, &"X".parse().unwrap(), None)
+            .unwrap()
+            .iter()
+            .all(|event| event.event != TaskEventKind::Paused),
+        "plain --head never pauses the active task"
+    );
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn preempted_task_resumes_with_task_start_and_keeps_its_original_history() {
+    let fixture = LoopbackFixture::new("recipient");
+    let team: TeamName = TEST_TEAM.parse().expect("team");
+    execute_assign(&fixture, assign("X", TEST_RECIPIENT_ADDRESS, TEST_SENDER)).await;
+    start_task(&fixture, &team, "X").await;
+    execute_assign(&fixture, preempt("Y", TEST_RECIPIENT_ADDRESS, TEST_SENDER)).await;
+
+    let store = fixture.task_store();
+    let assigned_event_before = store
+        .list_task_events(&team, &"X".parse().unwrap(), None)
+        .unwrap()
+        .into_iter()
+        .find(|event| event.event == TaskEventKind::Assigned)
+        .expect("original assigned event");
+
+    close_task(&fixture, &team, "Y").await;
+    start_task(&fixture, &team, "X").await;
+
+    let resumed = store
+        .load_task(&team, &"X".parse().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(resumed.state, TaskState::Active);
+
+    let events_after = store
+        .list_task_events(&team, &"X".parse().unwrap(), None)
+        .unwrap();
+    let assigned_event_after = events_after
+        .iter()
+        .find(|event| event.event == TaskEventKind::Assigned)
+        .expect("original assigned event still present");
+    assert_eq!(assigned_event_after.seq, assigned_event_before.seq);
+    assert_eq!(assigned_event_after.at, assigned_event_before.at);
+    assert!(
+        events_after
+            .iter()
+            .any(|event| event.event == TaskEventKind::Started),
+        "resumed task records a fresh started event"
     );
 }

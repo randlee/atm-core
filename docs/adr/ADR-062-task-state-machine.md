@@ -5,7 +5,7 @@ title: Task State Machine
 # ADR-062 — Task State Machine
 
 Date: 2026-09-04
-Amended: 2026-09-11 (Phase BA); 2026-09-26 (#1598)
+Amended: 2026-09-11 (Phase BA); 2026-09-26 (#1598); 2026-09-27 (#1620)
 
 ## Phase AX decision (as built; superseded where marked)
 
@@ -154,6 +154,26 @@ started; the task moves to the head. A prompt (`task_ready`,
 started stays `assigned` and keeps its reminder count. The daemon writes no
 `task_started` receipt; the assigner sees the assignee's start message rendered
 as `task_started`.
+
+### Preempt (2026-09-27, #1620)
+
+`atm task assign <agent> --task-id <new> --preempt` adds one event, `Paused`,
+and one additional cell to the transition table above: `(active, Paused) →
+assigned`. `--preempt` implies `--head` and conflicts with `--before`/`--end`
+(rejected at the CLI). In the one writer transaction that admits the new
+head task, if the assignee has an `active` task X, X transitions `active →
+assigned` at queue position 2 (directly behind the new task) and gets exactly
+one `paused` task event whose reason names the preempting task id; X's
+`assigned_at` and prior events are untouched, so `atm task start <X>` later
+resumes it with its original history intact (the `one_active_task_per_agent`
+unique index is free again once X is back to `assigned`). With no active
+task, `--preempt` behaves exactly like `--head` and appends no `paused`
+event. The assignee receives one notice naming both tasks — X paused, Y to
+start — rendered by the `TaskQueued` built-in nudge template's optional
+`paused="<X>"` attribute (`crates/atm-core/src/send/nudge_template.rs`).
+`atm task move` continues to reject repositioning or preempting the active
+task; `--preempt` is assign-only and `apply_task_move` rejects the
+`MoveTarget::Preempt` placement if constructed against it.
 
 ### Prompt handoffs (Phase BB)
 

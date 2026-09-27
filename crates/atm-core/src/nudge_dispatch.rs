@@ -151,6 +151,7 @@ pub fn rebuild_received_hook_dispatch(
         requires_ack: message.envelope.requires_ack,
         is_ack: message.envelope.acknowledges_message_id.is_some(),
         task_id: message.envelope.task_id.clone(),
+        paused_task_id: None,
         task_transition: None,
         recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
     };
@@ -195,6 +196,7 @@ pub fn build_task_reminder_dispatch(
         requires_ack: false,
         is_ack: false,
         task_id: Some(row.task_id.clone()),
+        paused_task_id: None,
         task_transition: Some(task_pass_transition(row.reminder_count)),
         recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
     };

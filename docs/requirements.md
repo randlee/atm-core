@@ -3029,7 +3029,16 @@ Task lifecycle (Phase BA):
    end of the queue.
 6. `atm task move <id> --before <other> | --head | --end` MUST reposition an
    `assigned` task only; `--head` MUST place it next up behind the active
-   task, and the active task MUST never be repositioned or preempted.
+   task, and the active task MUST never be repositioned or preempted by
+   `atm task move`. `atm task assign <agent> --task-id <new> --preempt` is
+   the sole exception (Rand, 2026-09-27, #1620): it implies `--head` and, in
+   the one write transaction that admits the new task, MUST move the
+   assignee's current `active` task (if any) to `assigned` at queue
+   position 2, appending exactly one `paused` task event whose reason names
+   the preempting task id; with no active task it behaves exactly like
+   `--head` and records no `paused` event. The paused task keeps its id and
+   full event history and resumes normally with `atm task start` once the
+   preempting task closes.
 7. Closing a task MUST record one typed outcome from
    `completed | refused | cancelled` with optional reason text,
    MUST remove the task from the queue, and MUST append a timestamped event.

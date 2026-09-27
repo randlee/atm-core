@@ -510,6 +510,7 @@ Assign a task with deferred notification
 | `--task-id` |  | no |  |
 | `--before` |  | no |  |
 | `--head` |  | no |  |
+| `--preempt` |  | no | Pause the assignee's active task (if any) to `assigned` at queue position 2 and insert this task at the head. Implies `--head`; conflicts with `--before`/`--head` via the shared `placement` group |
 | `<text>` |  | no |  |
 | `--file` |  | no |  |
 | `--stdin` |  | no |  |

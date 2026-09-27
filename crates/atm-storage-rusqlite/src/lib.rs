@@ -4286,7 +4286,8 @@ mod tests {
                 | TaskEventKind::LeadNotified
                 | TaskEventKind::Moved
                 | TaskEventKind::Migrated
-                | TaskEventKind::RemindersReset => None,
+                | TaskEventKind::RemindersReset
+                | TaskEventKind::Paused => None,
             })
             .try_fold(None, |state, event| {
                 let assignee = agent();

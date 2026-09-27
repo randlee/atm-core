@@ -191,6 +191,7 @@ pub(crate) fn post_send_event_from_message(
         requires_ack: message.requires_ack,
         is_ack: message.is_ack,
         task_id: message.envelope.task_id.clone(),
+        paused_task_id: message.paused_task_id.clone(),
         task_transition: message
             .task_transition
             .or_else(|| task_transition_from_message(message)),
@@ -288,6 +289,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: Some("BB.1".parse().expect("task id")),
+            paused_task_id: None,
             task_transition: task_transition_from_task_op(
                 None,
                 &AgentName::from_validated("sender"),

@@ -635,7 +635,10 @@ fn assert_herdr_rendered_default(
         )
         // BB.5: the task_queued template also carries the landed queue
         // position (crates/atm-core/src/send/nudge_template.rs:135).
-        .replace("{{position}}", &queued_position_text(dispatch));
+        .replace("{{position}}", &queued_position_text(dispatch))
+        // #1620: `--preempt` names the paused task in the same notice; this
+        // fixture never preempts, so the substituted value is empty.
+        .replace("{{paused}}", "");
     assert_eq!(target.rendered_nudge, expected);
 }
 

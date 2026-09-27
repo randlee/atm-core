@@ -27,6 +27,7 @@ fn assign(task: &str) -> TaskAssignCommand {
         task_id: Some(task.parse().unwrap()),
         before: None,
         head: false,
+        preempt: false,
         message: MessageSourceArgs {
             text: Some(format!("assign {task}")),
             file: None,
@@ -55,6 +56,7 @@ async fn move_task(f: &LoopbackFixture, task: &str, target: MoveTarget) -> Strin
         MoveTarget::Head => (true, false, None),
         MoveTarget::End => (false, true, None),
         MoveTarget::Before { task_id } => (false, false, Some(task_id)),
+        MoveTarget::Preempt => unreachable!("preempt is assign-only; this helper drives task move"),
     };
     let command = TaskMoveCommand {
         task_id: task.parse().unwrap(),

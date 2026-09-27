@@ -39,6 +39,7 @@ pub(super) fn apply_task_close(
             task_assignee: None,
             queued_position: None,
             reassign_notice: None,
+            paused_task_id: None,
         });
     }
     if let Err(error) = admit(
@@ -80,6 +81,7 @@ pub(super) fn apply_task_close(
         task_assignee: Some(row.assignee),
         queued_position: None,
         reassign_notice: None,
+        paused_task_id: None,
     })
 }
 

@@ -1292,6 +1292,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            paused_task_id: None,
             task_transition: None,
             recipient_pane_id: None,
         };
@@ -1315,6 +1316,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: Some("BB.1".parse().expect("task id")),
+            paused_task_id: None,
             task_transition: None,
             recipient_pane_id: None,
         };
@@ -1491,6 +1493,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            paused_task_id: None,
             task_transition: None,
             recipient_pane_id: None,
         };
@@ -1542,6 +1545,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            paused_task_id: None,
             task_transition: None,
             recipient_pane_id: None,
         };

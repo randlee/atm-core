@@ -59,6 +59,7 @@ pub(crate) fn validate_built_in_nudge_template_body(template_body: &str) -> Resu
             ("assignee", String::new()),
             ("outcome", String::new()),
             ("by", String::new()),
+            ("paused", String::new()),
         ]),
     )
     .map(|_| ())
@@ -94,6 +95,14 @@ fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
     } else {
         event.sender.to_string()
     };
+    // The whole optional `paused="X"` attribute (leading space included) is
+    // the substituted value, not just the bare task id, so an ordinary
+    // (non-preempt) `TaskQueued` notice renders with no stray attribute.
+    let paused = event
+        .paused_task_id
+        .as_ref()
+        .map(|paused_task_id| format!(" paused=\"{paused_task_id}\""))
+        .unwrap_or_default();
     BTreeMap::from([
         ("from", qualified_sender_identity(event)),
         ("team", event.recipient_team.to_string()),
@@ -112,6 +121,7 @@ fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
         ("assignee", assignee),
         ("outcome", outcome),
         ("by", event.sender.to_string()),
+        ("paused", paused),
     ])
 }
 
@@ -133,7 +143,7 @@ pub fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
             "<atm kind=\"ack\" from=\"{{from}}\" message-id=\"{{message_id}}\"/>"
         }
         BuiltInNudgeTemplateKind::TaskQueued => {
-            "<atm task=\"{{task_id}}\" queued=\"{{position}}\" message=\"{{message_id}}\" from=\"{{from}}\"/>"
+            "<atm task=\"{{task_id}}\" queued=\"{{position}}\" message=\"{{message_id}}\" from=\"{{from}}\"{{paused}}/>"
         }
         BuiltInNudgeTemplateKind::TaskReady => {
             "<atm task=\"{{task_id}}\" ready message=\"{{message_id}}\" from=\"{{from}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>atm task start {{task_id}}</action>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
@@ -212,6 +222,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            paused_task_id: None,
             task_transition: None,
             recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
         }
@@ -374,6 +385,34 @@ mod tests {
         ] {
             assert!(default_template(kind).contains("<action>atm task start {{task_id}}</action>"));
         }
+    }
+
+    #[test]
+    fn task_queued_notice_names_the_paused_task_when_preempting() {
+        let mut event = base_event();
+        event.task_id = Some("Y.1".parse().expect("task id"));
+        event.paused_task_id = Some("X.1".parse().expect("task id"));
+        event.task_transition = Some(TaskTransition::Queued { position: 1 });
+        let rendered = render_built_in_nudge(
+            &event,
+            default_template(BuiltInNudgeTemplateKind::TaskQueued),
+        )
+        .expect("rendered template");
+        assert!(rendered.contains("task=\"Y.1\""));
+        assert!(rendered.contains("paused=\"X.1\""));
+    }
+
+    #[test]
+    fn task_queued_notice_omits_paused_attribute_without_preemption() {
+        let mut event = base_event();
+        event.task_id = Some("Y.1".parse().expect("task id"));
+        event.task_transition = Some(TaskTransition::Queued { position: 1 });
+        let rendered = render_built_in_nudge(
+            &event,
+            default_template(BuiltInNudgeTemplateKind::TaskQueued),
+        )
+        .expect("rendered template");
+        assert!(!rendered.contains("paused="));
     }
 
     #[test]

@@ -1243,3 +1243,115 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
         .expect("record reminder after reset");
     assert_eq!(after_reset.reminder_count, 1);
 }
+
+#[test]
+fn preempt_pauses_active_task_in_the_same_write_that_admits_the_new_head_task() {
+    let h = Harness::new();
+    h.assign("X", "alice", "lead", None);
+    h.start("X", "alice").expect("start X");
+
+    let (_, outcome) = h.assign_with_outcome("Y", "alice", "lead", Some(MoveTarget::Preempt));
+
+    assert_eq!(outcome.paused_task_id, Some("X".parse().unwrap()));
+    assert_eq!(outcome.queued_position, Some(1));
+    assert!(outcome.reassign_notice.is_none());
+
+    let paused = h.row("X");
+    assert_eq!(paused.state, TaskState::Assigned);
+    assert_eq!(h.positions("alice")["X"], 2);
+    assert_eq!(h.positions("alice")["Y"], 1);
+
+    let paused_events: Vec<_> = h
+        .events("X")
+        .into_iter()
+        .filter(|event| event.event == TaskEventKind::Paused)
+        .collect();
+    assert_eq!(paused_events.len(), 1, "exactly one paused event on X");
+    assert_eq!(paused_events[0].detail.as_deref(), Some("preempted by Y"));
+}
+
+#[test]
+fn preempt_without_an_active_task_admits_like_head_and_records_no_paused_event() {
+    let h = Harness::new();
+    h.assign("A", "alice", "lead", None);
+
+    let (_, outcome) = h.assign_with_outcome("B", "alice", "lead", Some(MoveTarget::Preempt));
+
+    assert_eq!(outcome.paused_task_id, None);
+    assert_eq!(outcome.queued_position, Some(1));
+    assert_eq!(h.positions("alice")["A"], 2);
+    assert_eq!(h.positions("alice")["B"], 1);
+    assert!(
+        h.events("A")
+            .iter()
+            .all(|event| event.event != TaskEventKind::Paused)
+    );
+}
+
+#[test]
+fn plain_head_leaves_the_active_task_active_and_pauses_nothing() {
+    let h = Harness::new();
+    h.assign("X", "alice", "lead", None);
+    h.start("X", "alice").expect("start X");
+
+    let (_, outcome) = h.assign_with_outcome("Y", "alice", "lead", Some(MoveTarget::Head));
+
+    assert_eq!(outcome.paused_task_id, None);
+    assert_eq!(h.row("X").state, TaskState::Active);
+    assert_eq!(h.positions("alice")["X"], 1);
+    assert_eq!(h.positions("alice")["Y"], 2);
+    assert!(
+        h.events("X")
+            .iter()
+            .all(|event| event.event != TaskEventKind::Paused)
+    );
+}
+
+#[test]
+fn preempted_task_resumes_with_start_and_keeps_its_original_assigned_event() {
+    let h = Harness::new();
+    h.assign("X", "alice", "lead", None);
+    h.start("X", "alice").expect("start X");
+    h.assign_with_outcome("Y", "alice", "lead", Some(MoveTarget::Preempt));
+    let assigned_before = h
+        .events("X")
+        .into_iter()
+        .find(|event| event.event == TaskEventKind::Assigned)
+        .expect("original assigned event");
+
+    h.close("Y", "lead", "alice", TaskCloseOutcome::Completed)
+        .expect("close Y");
+    h.start("X", "alice").expect("resume X after Y closes");
+
+    assert_eq!(h.row("X").state, TaskState::Active);
+    let events_after = h.events("X");
+    let assigned_after = events_after
+        .iter()
+        .find(|event| event.event == TaskEventKind::Assigned)
+        .expect("original assigned event still present");
+    assert_eq!(assigned_after.seq, assigned_before.seq);
+    assert_eq!(assigned_after.at, assigned_before.at);
+    assert!(
+        events_after
+            .iter()
+            .any(|event| event.event == TaskEventKind::Started)
+    );
+}
+
+#[test]
+fn task_move_rejects_preempt_target() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    let error = h
+        .backend
+        .task_store()
+        .move_task(
+            &h.team,
+            &"T1".parse().unwrap(),
+            &"lead".parse().unwrap(),
+            &MoveTarget::Preempt,
+            IsoTimestamp::now(),
+        )
+        .expect_err("preempt is assign-only");
+    assert!(error.detail().contains("preempt"));
+}

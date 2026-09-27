@@ -108,6 +108,11 @@ struct TaskAssignCommand {
     before: Option<TaskId>,
     #[arg(long, group = "placement")]
     head: bool,
+    /// Pause the assignee's active task (if any) to `assigned` at queue
+    /// position 2 and insert this task at the head. Implies `--head`;
+    /// conflicts with `--before`/`--head` via the shared `placement` group.
+    #[arg(long, group = "placement")]
+    preempt: bool,
     #[command(flatten)]
     message: MessageSourceArgs,
     #[arg(long)]
@@ -118,13 +123,16 @@ struct TaskAssignCommand {
 
 impl TaskAssignCommand {
     fn placement(&self) -> Option<MoveTarget> {
-        match (&self.before, self.head) {
-            (Some(task_id), false) => Some(MoveTarget::Before {
+        match (&self.before, self.head, self.preempt) {
+            (Some(task_id), false, false) => Some(MoveTarget::Before {
                 task_id: task_id.clone(),
             }),
-            (None, true) => Some(MoveTarget::Head),
-            (None, false) => None,
-            (Some(_), true) => unreachable!("clap placement group"),
+            (None, true, false) => Some(MoveTarget::Head),
+            (None, false, true) => Some(MoveTarget::Preempt),
+            (None, false, false) => None,
+            (Some(_), true, _) | (Some(_), _, true) | (None, true, true) => {
+                unreachable!("clap placement group")
+            }
         }
     }
 }

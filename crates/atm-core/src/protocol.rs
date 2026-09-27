@@ -100,7 +100,7 @@ pub enum ResponseEnvelope {
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.10.0";
+pub const HTTP_API_VERSION: &str = "1.11.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskMoveRequest {
@@ -939,6 +939,41 @@ mod tests {
         let error = serde_json::from_slice::<RequestEnvelope15>(&task_move)
             .expect_err("1.5 enum must reject the 1.6-only variant");
         assert!(error.to_string().contains("unknown variant `TaskMove`"));
+    }
+
+    #[test]
+    fn codec_preserves_protocol_1_10_0_move_target_fixtures() {
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "snake_case", tag = "to")]
+        enum MoveTarget110 {
+            Head,
+            End,
+            Before { task_id: crate::types::TaskId },
+        }
+
+        for fixture in [MoveTarget::Head, MoveTarget::End] {
+            let encoded = serde_json::to_vec(&fixture).expect("1.10.0 target fixture");
+            serde_json::from_slice::<MoveTarget>(&encoded)
+                .expect("1.11.0 decodes its own pre-1.11.0 shaped fixture");
+            serde_json::from_slice::<MoveTarget110>(&encoded)
+                .expect("pinned 1.10.0 enum decodes fixture unchanged by the preempt addition");
+        }
+        let before = serde_json::to_vec(&MoveTarget::Before {
+            task_id: "T1".parse().expect("task id"),
+        })
+        .expect("before fixture");
+        match serde_json::from_slice::<MoveTarget110>(&before)
+            .expect("pinned 1.10.0 enum decodes before fixture")
+        {
+            MoveTarget110::Before { task_id } => assert_eq!(task_id.as_str(), "T1"),
+            other => panic!("expected before target, got {other:?}"),
+        }
+
+        let preempt = serde_json::to_vec(&MoveTarget::Preempt).expect("preempt fixture");
+        serde_json::from_slice::<MoveTarget>(&preempt).expect("1.11.0 decodes its own variant");
+        let error = serde_json::from_slice::<MoveTarget110>(&preempt)
+            .expect_err("1.10.0 enum must reject the 1.11.0-only preempt variant");
+        assert!(error.to_string().contains("unknown variant `preempt`"));
     }
 
     #[test]

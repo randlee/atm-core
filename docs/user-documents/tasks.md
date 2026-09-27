@@ -89,6 +89,15 @@ seq at event from→to actor detail
 ```
 
 `atm task move` reorders only the caller's open queue; select exactly one of
-`--head`, `--before <other-task-id>`, or `--end`.
+`--head`, `--before <other-task-id>`, or `--end`; the active task can never be
+repositioned or preempted through `move`.
+
+A lead who needs to interrupt an assignee's active task assigns a new one with
+`atm task assign <agent> --task-id <new-id> --preempt` (implies `--head`;
+conflicts with `--before`/`--end`). The active task is paused to `assigned` at
+queue position 2 and keeps its id and full event history; the assignee gets
+one notice naming both tasks. When the new task closes, the paused task is
+next in the queue and resumes normally with `atm task start`. With no active
+task, `--preempt` behaves exactly like `--head`.
 
 Return to the [ATM User Guide](./README.md).

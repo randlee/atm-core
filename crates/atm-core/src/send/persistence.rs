@@ -19,6 +19,7 @@ struct MessageAdmissionSnapshot {
     task_assignee: Option<AgentName>,
     queued_position: Option<u32>,
     reassign_notice: Option<atm_storage::Message>,
+    paused_task_id: Option<atm_storage::TaskId>,
     task_rejection: Option<AtmError>,
 }
 
@@ -30,6 +31,7 @@ impl MessageAdmissionSnapshot {
             task_assignee: None,
             queued_position: None,
             reassign_notice: None,
+            paused_task_id: None,
             task_rejection: None,
         }
     }
@@ -41,6 +43,7 @@ impl MessageAdmissionSnapshot {
             task_assignee: admission.task_assignee,
             queued_position: admission.queued_position,
             reassign_notice: admission.reassign_notice,
+            paused_task_id: admission.paused_task_id,
             task_rejection: admission.task_rejection,
         }
     }
@@ -105,6 +108,7 @@ pub(crate) fn persist_message_with_ack_update(
         task_assignee,
         queued_position,
         reassign_notice,
+        paused_task_id,
         task_rejection,
     } = mirror_message_to_store(
         runtime,
@@ -128,7 +132,7 @@ pub(crate) fn persist_message_with_ack_update(
     Ok(persistence
         .with_already_closed(already_closed)
         .with_task_assignee(task_assignee)
-        .with_assignment_metadata(queued_position, reassign_notice)
+        .with_assignment_metadata(queued_position, reassign_notice, paused_task_id)
         .with_task_rejection(task_rejection))
 }
 
@@ -200,6 +204,7 @@ pub(crate) async fn persist_message_with_async_admission(
         task_assignee,
         queued_position,
         reassign_notice,
+        paused_task_id,
         task_rejection,
     } = mirror_message_to_store_async(
         runtime,
@@ -222,7 +227,7 @@ pub(crate) async fn persist_message_with_async_admission(
     Ok(persistence
         .with_already_closed(already_closed)
         .with_task_assignee(task_assignee)
-        .with_assignment_metadata(queued_position, reassign_notice)
+        .with_assignment_metadata(queued_position, reassign_notice, paused_task_id)
         .with_task_rejection(task_rejection))
 }
 

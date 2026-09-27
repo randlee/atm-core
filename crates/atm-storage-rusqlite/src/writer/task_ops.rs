@@ -32,6 +32,7 @@ pub(super) enum TaskMessageResult {
         task_assignee: Option<AgentName>,
         queued_position: Option<u32>,
         reassign_notice: Option<Box<Message>>,
+        paused_task_id: Option<TaskId>,
     },
     RejectedReportDelivered(AtmError),
 }
@@ -44,14 +45,16 @@ impl TaskMessageResult {
                 task_assignee,
                 queued_position,
                 reassign_notice,
+                paused_task_id,
             } => (
                 already_closed,
                 task_assignee,
                 queued_position,
                 reassign_notice,
+                paused_task_id,
                 None,
             ),
-            Self::RejectedReportDelivered(error) => (None, None, None, None, Some(error)),
+            Self::RejectedReportDelivered(error) => (None, None, None, None, None, Some(error)),
         }
     }
 }
@@ -61,6 +64,7 @@ type TaskAdmissionParts = (
     Option<AgentName>,
     Option<u32>,
     Option<Box<Message>>,
+    Option<TaskId>,
     Option<AtmError>,
 );
 
@@ -174,6 +178,7 @@ pub(super) fn apply_task_message(
             task_assignee: None,
             queued_position: None,
             reassign_notice: None,
+            paused_task_id: None,
         });
     };
     match record.envelope.task_op.as_ref() {
@@ -183,6 +188,7 @@ pub(super) fn apply_task_message(
                 task_assignee: None,
                 queued_position: None,
                 reassign_notice: None,
+                paused_task_id: None,
             })
         }
         None => apply_task_assignment(
@@ -198,6 +204,7 @@ pub(super) fn apply_task_message(
             task_assignee: None,
             queued_position: Some(applied.queued_position),
             reassign_notice: applied.reassign_notice.map(Box::new),
+            paused_task_id: applied.paused_task_id,
         }),
         Some(TaskOp::Start) => {
             apply_task_start(record, task_id, connection, target).map(|task_assignee| {
@@ -206,6 +213,7 @@ pub(super) fn apply_task_message(
                     task_assignee: Some(task_assignee),
                     queued_position: None,
                     reassign_notice: None,
+                    paused_task_id: None,
                 }
             })
         }
@@ -245,6 +253,7 @@ fn is_existing_task_report(
 struct TaskAssignmentApplied {
     queued_position: u32,
     reassign_notice: Option<Message>,
+    paused_task_id: Option<TaskId>,
 }
 
 fn apply_task_assignment(
@@ -282,8 +291,15 @@ fn apply_task_assignment(
         return Ok(TaskAssignmentApplied {
             queued_position,
             reassign_notice: None,
+            paused_task_id: None,
         });
     }
+
+    let paused_task_id = if matches!(placement, Some(MoveTarget::Preempt)) {
+        pause_active_task_for_preempt(record, task_id, connection, target)?
+    } else {
+        None
+    };
 
     let previous_assignee = row
         .as_ref()
@@ -321,7 +337,74 @@ fn apply_task_assignment(
     Ok(TaskAssignmentApplied {
         queued_position,
         reassign_notice,
+        paused_task_id,
     })
+}
+
+/// Pauses `record.agent`'s active task, if any, back to `assigned` in place
+/// (its queue position is renumbered by the caller's own insertion), and
+/// appends the one `paused` event naming `task_id` (the preempting task) in
+/// its `detail`. Returns `None`, with no event, when the assignee has no
+/// active task or its active task is `task_id` itself — both cases fall
+/// through to plain `--head` behavior (issue #1620).
+fn pause_active_task_for_preempt(
+    record: &Message,
+    task_id: &TaskId,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<Option<TaskId>, AtmError> {
+    let order = queue_order(connection, target, &record.team, &record.agent)?;
+    let Some(active) = order
+        .first()
+        .map(|id| load_task_row(connection, target, &record.team, id))
+        .transpose()?
+        .flatten()
+        .filter(|row| row.state == TaskState::Active)
+    else {
+        return Ok(None);
+    };
+    if active.task_id == *task_id {
+        return Ok(None);
+    }
+    let Transition(next_state) = transition(
+        Some(active.state),
+        TaskEvent::Paused,
+        &active.task_id,
+        &record.envelope.from,
+        Some(&active.assignee),
+        &active.assignee,
+    )
+    .map_err(|error| error.into_atm_error())?;
+    let at = record.envelope.timestamp;
+    connection
+        .execute(
+            "UPDATE tasks SET state=?3, updated_at=?4 WHERE team=?1 AND task_id=?2",
+            params![
+                record.team.as_str(),
+                active.task_id.as_str(),
+                next_state.as_str(),
+                at.to_string()
+            ],
+        )
+        .map_err(|error| sqlite_error(target, "failed to pause active task", error))?;
+    append_task_event(
+        connection,
+        target,
+        &record.team,
+        &active.task_id,
+        &active.assignee,
+        &at,
+        TaskEventKind::Paused,
+        Some(active.state.tag()),
+        Some(next_state.tag()),
+        None,
+        &record.envelope.from,
+        None,
+        None,
+        None,
+        Some(&format!("preempted by {task_id}")),
+    )?;
+    Ok(Some(active.task_id))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -507,6 +590,11 @@ pub(super) fn apply_task_move(
     connection: &Connection,
     target: &SharedDbTarget,
 ) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
+    if matches!(target_pos, MoveTarget::Preempt) {
+        return Err(task_move_invalid(
+            "preempt is only valid on `atm task assign`, not `atm task move`",
+        ));
+    }
     let Some(row) = load_task_row(connection, target, team, task_id)? else {
         return Err(task_not_found(format!(
             "no open task {task_id} for {actor}"
@@ -660,7 +748,13 @@ fn insert_at_placement(
 ) -> Result<(), AtmError> {
     let index = match placement {
         MoveTarget::End => order.len(),
-        MoveTarget::Head => {
+        // `Preempt` reaches here only from `apply_task_assignment`, after the
+        // assignee's active task (if any) has already been paused to
+        // `assigned` in the same transaction. Once paused, the head of
+        // `order` is never `Active`, so this collapses to the same absolute
+        // head as `Head` — the paused task lands at position 2 by the same
+        // renumbering that would place any other queued task there.
+        MoveTarget::Head | MoveTarget::Preempt => {
             let active = order
                 .first()
                 .map(|id| load_task_row(connection, target, team, id))
