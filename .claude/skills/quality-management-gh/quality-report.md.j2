@@ -1,6 +1,6 @@
 ---
 name: quality-report
-version: 1.0.0
+version: 1.0.1
 description: Final QA closeout report template for PASS verdicts.
 format: markdown
 required_variables:
@@ -50,23 +50,23 @@ Final Verdict: **{{ verdict }}**
 ## Machine Status (JSON)
 ```json
 {
-  "sprint": "{{ sprint_id }}",
-  "task": "{{ task_id }}",
-  "branch": "{{ branch }}",
-  "commit": "{{ commit }}",
-  "pr": {{ pr_number }},
-  "verdict": "{{ verdict }}",
+  "sprint": {{ sprint_id | tojson }},
+  "task": {{ task_id | tojson }},
+  "branch": {{ branch | tojson }},
+  "commit": {{ commit | tojson }},
+  "pr": {{ pr_number | tojson }},
+  "verdict": {{ verdict | tojson }},
   "findings": {
-    "blocking": {{ findings_blocking }},
-    "important": {{ findings_important }},
-    "minor": {{ findings_minor }}
+    "blocking": {{ findings_blocking | tojson }},
+    "important": {{ findings_important | tojson }},
+    "minor": {{ findings_minor | tojson }}
   },
-  "blocking_ids": {{ blocking_ids_json }},
-  "merge_readiness": "{{ merge_readiness }}",
-  "merge_reason": "{{ merge_reason }}",
+  "blocking_ids": {{ blocking_ids_json | safe }},
+  "merge_readiness": {{ merge_readiness | tojson }},
+  "merge_reason": {{ merge_reason | tojson }},
   "next_action": "none",
   "owner": "none",
-  "recommendation": "{{ recommendation }}"
+  "recommendation": {{ recommendation | tojson }}
 }
 ```
 
