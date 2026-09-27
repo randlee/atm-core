@@ -1,8 +1,6 @@
 {
   "id": "atm-d-4-qa1-f1",
-  "parent": "atm-phase-d",
   "qa_bead": "atm-d-4-qa1",
-  "caused_by": "atm-d-4",
   "phase": "d",
   "sprint": "d-4",
   "stack": "phase-d",

@@ -19,25 +19,13 @@ import argparse
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"))
-from plan_contract import priority_for_severity
+from bd_commands import BLOCKS_RELATION, FINDING_LABEL, BdCommandError, command, priority_for_severity
 
 
 class HandoffError(RuntimeError):
     pass
-
-
-def command(argv: list[str], actor: str, *, capture: bool = False) -> str:
-    if actor:
-        argv.extend(["--actor", actor])
-    proc = subprocess.run(argv, text=True, capture_output=capture)
-    if proc.returncode:
-        detail = (proc.stderr or "").strip() or (proc.stdout or "").strip()
-        raise HandoffError(f"{' '.join(argv[:3])} failed: {detail}")
-    return proc.stdout.strip() if capture else ""
 
 
 def load_vars(path: Path, task: str, bead: str) -> dict:
@@ -113,7 +101,7 @@ def main() -> int:
         difficulty = parent_metadata.get("difficulty")
         if difficulty not in ("hard", "normal", "fast"):
             raise HandoffError("checked bead has no valid difficulty")
-        labels = [f"phase-{phase}", "stage:finding", f"stack:{stack}"]
+        labels = [f"phase-{phase}", FINDING_LABEL, f"stack:{stack}"]
         children = existing_children(args.bead, args.actor, args.task, report["commit"])
         created = []
         for finding in findings:
@@ -129,7 +117,7 @@ def main() -> int:
                 "file": finding["file"], "line": finding["line"],
                 "issue": finding["issue"], "depends_on": finding.get("depends_on", []),
             }
-            severity = str(finding.get("severity") or "").lower()
+            severity = str(finding.get("severity") or "blocking").lower()  # a sanity finding blocks unless the report says otherwise
             try:
                 priority = priority_for_severity(severity)
             except KeyError as exc:
@@ -142,8 +130,10 @@ def main() -> int:
                 "difficulty": difficulty,
             }
             metadata = {**provenance, "sanity_finding": payload}
-            description = "Sanity finding; the JSON below is the source report data.\n\n```json\n" + json.dumps(payload, indent=2, sort_keys=True) + "\n```"
-            acceptance = "- [ ] this finding is fixed at every occurrence in scope\n- [ ] a targeted reproducer or check passes\n- [ ] repository validation passes"
+            description = ("Sanity finding; the JSON below is the source report data.\n\n## Deliverables\n1. "
+                           f"{finding['issue']} ({finding['file']}:{finding['line']}, deliverable {finding['deliverable']} of {args.bead})"
+                           "\n\n```json\n" + json.dumps(payload, indent=2, sort_keys=True) + "\n```")
+            acceptance = "- [ ] #1: this finding is fixed at every occurrence in scope\n- [ ] #1: a targeted reproducer or check passes\n- [ ] #1: repository validation passes"
             title = f"{args.bead} {ref}: {finding['file']}:{finding['line']}"
             child = command([
                 "bd", "create", title, "--type", "bug", "--status", "open",
@@ -158,7 +148,7 @@ def main() -> int:
             children[ref] = child
             created.append(child)
         for finding in findings:
-            severity = str(finding.get("severity") or "").lower()
+            severity = str(finding.get("severity") or "blocking").lower()  # a sanity finding blocks unless the report says otherwise
             command(["bd", "update", children[finding["finding_ref"]], "--priority", str(priority_for_severity(severity))], args.actor)
         for finding in findings:
             child = children[finding["finding_ref"]]
@@ -173,7 +163,14 @@ def main() -> int:
                     raise HandoffError(f"{finding['finding_ref']}: prerequisite is not a reported finding")
                 prerequisite_id = children[prerequisite["finding_ref"]]
                 if prerequisite_id != child:
-                    command(["bd", "dep", "add", child, prerequisite_id, "--type", "blocks"], args.actor)
+                    command(["bd", "dep", "add", child, prerequisite_id, "--type", BLOCKS_RELATION], args.actor)
+        gate_script = Path(__file__).with_name("blocking-finding-gates.py")
+        for finding in findings:
+            if str(finding.get("severity") or "").lower() == "blocking":
+                gate_argv = [str(gate_script), "--finding", children[finding["finding_ref"]]]
+                if args.actor:
+                    gate_argv.extend(["--actor", args.actor])
+                command(gate_argv)
         child_rows = [{"finding_ref": finding["finding_ref"], "id": children[finding["finding_ref"]]} for finding in findings]
         finding_bead_ids = [row["id"] for row in child_rows]
         report["finding_bead_ids"] = finding_bead_ids
@@ -181,7 +178,7 @@ def main() -> int:
         json.dump({"task_id": args.task, "checked_bead": args.bead, "commit": report["commit"], "finding_bead_ids": finding_bead_ids, "children": child_rows, "created": created}, sys.stdout)
         print()
         return 0
-    except (HandoffError, KeyError, IndexError, OSError, ValueError) as exc:
+    except (BdCommandError, HandoffError, KeyError, IndexError, OSError, ValueError) as exc:
         print(f"SANITY.FINDING_HANDOFF_FAILED: {exc}", file=sys.stderr)
         return 2
 

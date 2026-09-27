@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Check that the required phase HTML and bead index were pushed to integration."""
+"""Check that the authored phase definition (sprints.json) and the phase DAG HTML were pushed to integration.
+
+The committed sprints.json is the planner's file, never a fresh export; this only verifies it is on the
+integration branch, parses, and names the phase root that the HTML embeds."""
 import argparse
 from html.parser import HTMLParser
 import json

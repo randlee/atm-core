@@ -5,9 +5,7 @@ description: One QA or review finding. It carries the governing `requirements` a
 format: json
 required_variables:
   - id
-  - parent
   - qa_bead
-  - caused_by
   - phase
   - sprint
   - stack
@@ -48,9 +46,8 @@ defaults:
   "acceptance_criteria": {{ "- [ ] the remedy (design) is applied at every occurrence in scope\n- [ ] a test or check that reproduces the defect passes at the fix head\n- [ ] the repository's validation passes" | tojson }},
   "labels": {{ ["phase-" ~ phase, "stage:finding", "stack:" ~ stack, "severity:" ~ severity] | tojson }},
   "dependencies": [
-    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ parent | tojson }}, "type": "parent-child"},
-    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ qa_bead | tojson }}, "type": "discovered-from"},
-    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ caused_by | tojson }}, "type": "caused-by"}{% for b in blocked_by %},
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ sprint_bead | tojson }}, "type": "parent-child"},
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ qa_bead | tojson }}, "type": "discovered-from"}{% for b in blocked_by %},
     {"issue_id": {{ id | tojson }}, "depends_on_id": {{ b | tojson }}, "type": "blocks"}{% endfor %}
   ],
   "metadata": {

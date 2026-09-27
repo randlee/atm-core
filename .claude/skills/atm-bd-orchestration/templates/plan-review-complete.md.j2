@@ -19,9 +19,11 @@ required_variables:
 optional_variables:
   - carried_md
   - notes_md
+  - validation_heading
 defaults:
   carried_md: ""
   notes_md: ""
+  validation_heading: "Validation"
 metadata:
   type: plan-review-complete
   tags:
@@ -54,7 +56,7 @@ Verdict: **{{ verdict }}** ({{ findings_blocking }} blocking, {{ findings_import
 }
 ```
 
-## validate-plan
+## {{ validation_heading }}
 {{ validate_plan_md }}
 
 ## Findings

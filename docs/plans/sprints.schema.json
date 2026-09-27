@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Phase foundational bead index",
+  "$comment": "Authored phase definition (user ruling 2026-09-26): the membership rows are the phase; the optional keys hold phase facts that are not in beads. sprint-report, DAG generation, check-phase-artifact and validate-plan share validate_index. Dev and sanity IDs must be unique, distinct from each other and the root, and resolve to a valid live pair. Undeclared keys and copied bead fields are rejected.",
+  "description": "Defines which beads make up a phase: the root bead and one dev/sanity pair per sprint. This file is authored and committed by the planner in the plan PR; it is never generated from beads and beads are never generated from it. validate-plan requires the children of the root to be exactly these pairs. It never duplicates bead content or execution state; optional phase facts that have no bead field live here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "root_bead_id",
+    "sprints"
+  ],
+  "properties": {
+    "root_bead_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Phase root bead ID. Phase identity and integration branch are read from this bead."
+    },
+    "sprints": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sprint"
+      },
+      "description": "One pair per current planned sprint: five sprints means five entries referencing five dev beads and five triage/sanity beads. Absorbed work is not a separate sprint."
+    },
+    "integration_branch": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Phase integration branch when it is not recorded on the root bead."
+    },
+    "review_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Repository paths of plan-review artifacts (e.g. the phase DAG HTML) beyond the defaults."
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "human_gates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Gate bead IDs of type human that the user explicitly agreed to place in this phase. A phase runs unattended; any other human gate blocking phase work is a validate-plan problem."
+        },
+        "waivers": {
+          "type": "array",
+          "description": "Past state violations the user accepted in the plan PR (a sanity reopened after PASS, a dev bead started before its blocker closed, a PASS that got no QA). validate-plan prints each as a warning instead of a problem. History is not rewritten; the waiver is the record.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["bead", "check", "reason"],
+            "properties": {
+              "bead": {"type": "string", "minLength": 1},
+              "check": {"type": "string", "enum": ["reopened_after_pass", "started_before_blocker", "pass_without_qa"]},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      },
+      "description": "Phase-wide policy agreed with the user."
+    }
+  },
+  "$defs": {
+    "sprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dev_bead_id",
+        "sanity_bead_id"
+      ],
+      "properties": {
+        "dev_bead_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Sprint development bead ID. Read labels, scope, dependencies, ordering, ownership and state from the bead."
+        },
+        "sanity_bead_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Paired triage/sanity gate bead ID. The live bead must block on this entry's dev bead; its criteria, verdict and state are not copied here."
+        }
+      }
+    }
+  }
+}

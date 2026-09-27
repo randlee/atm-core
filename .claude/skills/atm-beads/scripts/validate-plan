@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Validate a plan written to beads. Mandatory before import and before dispatch.
 #
-#   validate-plan --file <plan.jsonl> [--root <id> --phase <p>]   rendered plan, before `bd import`
-#   validate-plan --root <id>                                     live beads under a phase root
+#   validate-plan --file <plan.jsonl> [--root <id> --phase <p>] [--index <sprints.json>]   rendered plan, before `bd import`
+#   validate-plan --root <id> [--index <sprints.json>] [--scope <bead-id>]                  live beads under a phase root
+#
+# The authored phase definition is docs/plans/phase-<p>/sprints.json (the planner commits it in the
+# plan PR; it is never generated from beads). --index points at another copy; --scope limits the
+# REQ/ADR doc checks to one bead's own ids (an assignee validating its own branch).
 #
 # Run from the repository root. Checks, in order:
 #   1. `bd doctor` has no error (warnings are printed);
@@ -14,26 +18,31 @@
 #      "New Ids": plan review checks the deliverable that adds it);
 #   4. every assignee is an ATM member of this team, and every sanity check
 #      bead is assigned to the dev-sanity role's member (scripts/resolve-role);
-#   5. the committed sprint index matches a fresh export (root mode only);
-#      the initial SVG-in-HTML artifact and index are pushed on integration;
+#   5. scripts/phase_contract_check.py: the children of the root are exactly the pairs in
+#      sprints.json, the stage:sprint schema (deliverables, acceptance keys, difficulty),
+#      graph invariants (pr_target sanity closure, owned paths, handoffs) and, in root mode,
+#      the run-time state invariants (no reopen after PASS, blockers closed before start,
+#      PASS has QA, one fix round, PR base == pr_target, severity priority, human gates);
+#      the initial SVG-in-HTML artifact and the committed index are pushed on integration;
 #   6. the integration branch exists on origin (warning only).
-# Exit 0 = valid, 5 = problems listed, 2 = could not run.
+# Exit 0 = valid, 5 = problems listed (one per line, "<bead>: <message>"), 2 = could not run.
 set -uo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
-file="" root="" phase="" write_index=0
+file="" root="" phase="" index="" scope=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --file) file=$2; shift 2 ;;
     --root) root=$2; shift 2 ;;
     --phase) phase=$2; shift 2 ;;
-    --write) write_index=1; shift ;;
+    --index) index=$2; shift 2 ;;
+    --scope) scope=$2; shift 2 ;;
+    --write) echo "validate-plan: --write was removed; sprints.json is authored by the planner and committed in the plan PR (atm-beads resources/planning.md)" >&2; exit 2 ;;
     *) echo "validate-plan: unknown argument $1" >&2; exit 2 ;;
   esac
 done
 [ -n "$file" ] || [ -n "$root" ] || { echo "validate-plan: pass --file or --root" >&2; exit 2; }
-[ "$write_index" -eq 0 ] || [ -n "$root" ] || { echo "validate-plan: --write requires --root" >&2; exit 2; }
-for c in bd jq atm git; do
+for c in bd jq atm git python3; do
   command -v "$c" >/dev/null || { echo "validate-plan: $c not on PATH; see .claude/skills/atm-beads/references/installation-and-troubleshooting.md" >&2; exit 2; }
 done
 bdv=$(bd version 2>/dev/null | sed -nE 's/^bd version ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)
@@ -94,43 +103,29 @@ while IFS= read -r dep; do
 done < <(jq -rs '(map(.id)) as $ids | [.[] | (.dependencies // [])[] | select(.type == "blocks") | .depends_on_id]
   | unique | map(select(. as $d | $ids | index($d) | not)) | .[]' "$plan")
 
-# 2c. the committed index records foundational dev/sanity bead membership only.
-# `--write` is the explicit regeneration path used when accepting a plan change.
-index_needs_write=0
+# 2c. the phase contract: authored sprints.json against the beads (membership, schema, graph, state)
 if [ -n "$root" ] && [ -z "$file" ]; then
-  fresh_index="$scratch/fresh-sprints.json"
-  if ! index=$("$here/phase-index-path" --root "$root"); then
-    problems+=("could not determine the phase index path for $root")
-  elif ! "$here/export-sprint-index" --root "$root" --out "$fresh_index"; then
-    problems+=("fresh sprint index export failed for $root")
-  elif [ ! -f "$index" ]; then
-    if [ "$write_index" -eq 1 ]; then
-      index_needs_write=1
-    else
-      problems+=("missing committed sprint index $index (run validate-plan --root $root --write)")
-    fi
-  elif index_diff=$(diff -u "$index" "$fresh_index"); then
-    index_needs_write=0
-  else
-    diff_rc=$?
-    case $diff_rc in
-      1)
-        printf '%s\n' "$index_diff"
-        if [ "$write_index" -eq 1 ]; then
-          index_needs_write=1
-        else
-          problems+=("committed sprint index $index is out of date (run validate-plan --root $root --write)")
-        fi
-        ;;
-      *) problems+=("could not compare committed sprint index $index") ;;
-    esac
+  if [ -z "$index" ]; then
+    index=$("$here/phase-index-path" --root "$root") || { echo "validate-plan: could not determine the phase index path for $root" >&2; exit 2; }
   fi
+  contract_args=(--root "$root" --index "$index")
+  [ -n "$scope" ] && contract_args+=(--scope "$scope")
+else
+  contract_args=(--plan "$plan")
+  [ -n "$root" ] && contract_args+=(--root "$root")
+  [ -n "$index" ] && contract_args+=(--index "$index")
 fi
+out=$(python3 "$here/phase_contract_check.py" "${contract_args[@]}" 2>"$scratch/contract.err"); rc=$?
+case $rc in
+  0) [ -n "$out" ] && printf '%s\n' "$out" ;;
+  5) while IFS= read -r l; do [ -z "$l" ] && continue; case "$l" in warning:*) echo "$l" ;; *) problems+=("$l") ;; esac; done <<< "$out" ;;
+  *) echo "validate-plan: phase_contract_check failed: $(cat "$scratch/contract.err")" >&2; exit 2 ;;
+esac
 
-# 2d. A permanent phase diagram is required before plan review/dispatch.
-# Import JSONL is validated before bead creation; only live-root mode can render it.
-if [ -n "$root" ] && [ -z "$file" ] && [ -f "${fresh_index:-}" ]; then
-  if ! artifact_check=$("$here/check-phase-artifact" --root "$root" --index "$fresh_index" 2>&1); then
+# 2d. A permanent phase diagram and the committed index are required on integration before plan review/dispatch.
+# Import JSONL is validated before bead creation; only live-root mode can check the published artifact.
+if [ -n "$root" ] && [ -z "$file" ] && [ -f "$index" ]; then
+  if ! artifact_check=$("$here/check-phase-artifact" --root "$root" --index "$index" 2>&1); then
     problems+=("$artifact_check")
   fi
 fi
@@ -152,7 +147,7 @@ while IFS=$'\t' read -r id kind ref owned; do
   else
     problems+=("$id: $kind id $ref is not in $where")
   fi
-done < <(jq -r 'select((.labels // []) | index("stage:dev")) | .id as $id | ((.metadata.owned_paths // []) | join(" ")) as $o
+done < <(jq -r --arg scope "$scope" 'select((.labels // []) | index("stage:dev")) | select($scope == "" or .id == $scope) | .id as $id | ((.metadata.owned_paths // []) | join(" ")) as $o
   | ("requirements", "adrs") as $k | (.metadata[$k] // [])[] | [$id, $k, ., $o] | @tsv' "$plan")
 
 # 4. assignees are ATM members
@@ -180,12 +175,6 @@ if [ -n "$trunk" ] && ! git ls-remote --exit-code --heads origin "$trunk" >/dev/
 fi
 
 if [ ${#problems[@]} -eq 0 ]; then
-  if [ "$index_needs_write" -eq 1 ]; then
-    if ! mkdir -p "$(dirname "$index")" || ! cp "$fresh_index" "$index"; then
-      echo "validate-plan: could not write sprint index $index" >&2
-      exit 2
-    fi
-  fi
   echo "plan valid: $(jq -s '[.[] | select((.labels // []) | index("stage:dev"))] | length' "$plan") dev beads checked"
   exit 0
 fi

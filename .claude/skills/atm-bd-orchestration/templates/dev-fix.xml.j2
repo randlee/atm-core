@@ -9,14 +9,15 @@ required_variables:
   - stack
   - worktree_path
   - branch
-  - sanity_bead
   - pr_target
   - findings
 optional_variables:
+  - sanity_bead
   - lead
   - cc
   - test_command
 defaults:
+  sanity_bead: ""
   lead: team-lead
   cc: team-lead
   test_command: "just validate"
@@ -34,7 +35,7 @@ metadata:
     transition: start
 ---
 <atm-task id="{{ task_id }}" sprint="{{ sprint }}" mode="dev-fix">
-  <description><![CDATA[Sanity check `{{ sanity_bead | string | cdata_escape }}` failed dev bead `{{ task_id | string | cdata_escape }}` and {{ lead | string | cdata_escape }} reopened it. Finish the work the sanity check found missing or wrong. `bd show {{ task_id | string | cdata_escape }}` is still the assignment.]]></description>
+  <description><![CDATA[{% if sanity_bead %}Sanity check `{{ sanity_bead | string | cdata_escape }}` failed dev bead `{{ task_id | string | cdata_escape }}` and {{ lead | string | cdata_escape }} reopened it.{% else %}{{ lead | string | cdata_escape }} reopened dev bead `{{ task_id | string | cdata_escape }}` after plan review.{% endif %} Finish the work the sanity check found missing or wrong. `bd show {{ task_id | string | cdata_escape }}` is still the assignment.]]></description>
 
   <worktree><![CDATA[{{ worktree_path | string | cdata_escape }}]]></worktree>
   <branch><![CDATA[{{ branch | string | cdata_escape }}]]></branch>
@@ -46,13 +47,13 @@ metadata:
   ]]></dev-sanity-findings>
 
   <workflow>
-    <step id="a"><![CDATA[Before claiming, run `.claude/skills/atm-bd-orchestration/scripts/assignment-gates dev --root <phase> --bead {{ task_id | string | cdata_escape }} --pr-target {{ pr_target | string | cdata_escape }}`. A failed check is a refusal with its named code and a workflow-issue bead; a successful check permits a normal claim and task start.]]></step>
+    <step id="a"><![CDATA[Before claiming, run `.claude/skills/atm-bd-orchestration/scripts/assignment-gates dev --root <phase> --bead {{ task_id | string | cdata_escape }} --pr-target {{ pr_target | string | cdata_escape }}`. Each check, its command and its refusal code: (1) plan valid: `validate-plan --root <phase> --scope {{ task_id | string | cdata_escape }}` exits 0, else `PLAN_INVALID`; (2) ready: `bd ready -n 0 --json` lists the bead, else `NOT_READY`; (3) claimable without `--force`: `bd show {{ task_id | string | cdata_escape }} --json` shows status `open` and assignee empty or `$ATM_IDENTITY`, else `UNCLAIMABLE`; (4) target: `metadata.pr_target` equals `{{ pr_target | string | cdata_escape }}`, else `PR_TARGET_MISMATCH`; (5) difficulty: your `atm members --json` model is in `DIFFICULTY_MODELS[metadata.difficulty]`, else `DIFFICULTY_MISMATCH`; (6) base: `git merge-base --is-ancestor origin/{{ pr_target | string | cdata_escape }} HEAD` exits 0, else `WRONG_BASE`. `GATE_CANNOT_RUN` when a command fails. Before that refusal message or task close, strictly render `workflow-issue-bead.json.j2` with id `{{ task_id | string | cdata_escape }}-wf-<CODE>`, then `bd import <scratch>/{{ task_id | string | cdata_escape }}-wf-<CODE>.json`; state the created id in the refusal. A successful check permits a normal claim and task start.]]></step>
     <step id="a1"><![CDATA[When it prints `false` the bead is not ready: do not claim it and do not start the task. Find the root cause: `bd show {{ task_id | string | cdata_escape }}` (status, assignee; still `closed` means it was never reopened), `bd blocked --json | jq --arg b {{ task_id | string | cdata_escape }} '.[] | select(.id == $b)'` (its open blockers), and `bd show <blocker>` for each. Report it with `atm send {{ lead | string | cdata_escape }} --stdin`: the bead, why it is not ready, and which bead or agent has to move. Then wait.]]></step>
     <step id="b"><![CDATA[Read `bd show {{ task_id | string | cdata_escape }}` and the findings above. Fix every finding, then re-check the whole bead: the sanity check reports what it saw, not everything that is missing. Do not weaken a test or criterion to make a finding go away. The bead's `metadata.requirements` and `metadata.adrs` still govern the fix: re-read each one it names.]]></step>
     <step id="c"><![CDATA[Run `{{ test_command | string | cdata_escape }}` and the bead's validation commands until they pass with zero failures.]]></step>
     <step id="d"><![CDATA[Rebase only onto `origin/{{ pr_target | string | cdata_escape }}` (`git fetch origin && git rebase origin/{{ pr_target | string | cdata_escape }}`), re-run `{{ test_command | string | cdata_escape }}`, then `git push --force-with-lease origin {{ branch | string | cdata_escape }}`.]]></step>
     <step id="e"><![CDATA[Close the bead and the task together: `bd close {{ task_id | string | cdata_escape }} --reason "dev complete at <short sha>"` and `atm task close {{ task_id | string | cdata_escape }} completed --template .claude/skills/atm-bd-orchestration/templates/dev-complete.md.j2 --vars <scratch>/dev-complete-{{ task_id | string | cdata_escape }}-vars.json`. In the vars, `deliverables_md` lists each finding and what fixed it. The sanity check then runs again on the new head. Only this close frees your queue.{% if cc and cc != lead %} Copy a one-line summary to `{{ cc | string | cdata_escape }}` with a plain `atm send {{ cc | string | cdata_escape }} --stdin`.{% endif %}]]></step>
-    <step id="e1"><![CDATA[If the bead cannot be completed at all, declare failure: `bd update {{ task_id | string | cdata_escape }} --status blocked --assignee "" --append-notes "failed: <reason>"` (never `bd close`: a closed dev bead releases its sanity check) and `atm task close {{ task_id | string | cdata_escape }} refused --template .claude/skills/atm-bd-orchestration/templates/task-refused.md.j2 --vars <scratch>/refused-{{ task_id | string | cdata_escape }}-vars.json`.]]></step>
+    <step id="e1"><![CDATA[If the bead cannot be completed at all, first strictly render `workflow-issue-bead.json.j2` with id `{{ task_id | string | cdata_escape }}-wf-DEV_CANNOT_COMPLETE`, then `bd import <scratch>/{{ task_id | string | cdata_escape }}-wf-DEV_CANNOT_COMPLETE.json`. Declare failure with `bd update {{ task_id | string | cdata_escape }} --status blocked --assignee "" --append-notes "DEV_CANNOT_COMPLETE; workflow issue {{ task_id | string | cdata_escape }}-wf-DEV_CANNOT_COMPLETE: <reason>"` (never `bd close`: a closed dev bead releases its sanity check) and `atm task close {{ task_id | string | cdata_escape }} refused --template .claude/skills/atm-bd-orchestration/templates/task-refused.md.j2 --vars <scratch>/refused-{{ task_id | string | cdata_escape }}-vars.json`.]]></step>
     <step id="f"><![CDATA[After the close, read ATM again: the next queued task starts only now.]]></step>
   </workflow>
 </atm-task>

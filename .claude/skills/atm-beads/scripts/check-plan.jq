@@ -58,9 +58,8 @@ def closure($g): until((. as $s | [$s[] | ($g[.] // [])[]] + $s | unique) == .; 
           else empty end ),
         ( if $m.layer == 1 then need($m.pr_target == $trunk; "\($id): layer 1 pr_target must be \($trunk)")
           else
-            [ $devs[] | select(.metadata.stack == $m.stack and .metadata.layer == $m.layer - 1) ] as $below
-            | if ($below | length) == 1 then need($m.pr_target == $below[0].metadata.branch; "\($id): pr_target must be \($below[0].metadata.branch) (layer below)")
-              else empty end
+            [ $devs[] | select(.metadata.stack == $m.stack and .metadata.layer < $m.layer) | .metadata.branch ] as $below
+            | need($m.pr_target == $trunk or ($below | index($m.pr_target)) != null; "\($id): pr_target must be \($trunk) or the branch of a lower layer")
           end ) ),
     ( $qcs[] as $q | "\($q.id)" as $id
       | need($q.assignee | blank | not; "\($id): no assignee (the dev-sanity agent)"),

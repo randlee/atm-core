@@ -1,0 +1,274 @@
+#!/usr/bin/env python3
+"""Migrate an existing phase's beads to the phase contract (bead atm-bo-10 D6).
+
+  migrate-phase-contract --root <id> [--index <sprints.json>] [--difficulty-csv <path>] [--worklist <path>] [--apply]
+
+Dry run (default) prints every write it would make as a `bd` command, one per line, and exits 0.
+`--apply` runs them in order and prints each as it is made. The script is idempotent: a second
+`--apply` finds nothing to write. It never rewrites history (no status changes, no close reasons).
+
+Writes, in order:
+  1. every listed sprint dev bead gets label stage:sprint, `difficulty` from `model_class`
+     (astra->hard, terra->normal, luna->fast) and priority P2; its sanity bead gets the same difficulty and P2
+  2. the pr_target sprint's sanity bead is added as a blocker of every dev bead whose closure lacks it
+  3. finding, fix and fix-sanity beads parented on the phase root are re-parented under their sprint
+     (metadata.sprint_bead / checked_bead / dev_bead); a QA bead that `validates` a phase bead or a finding
+     `caused-by` one stays where it is (bd keeps one edge type per pair; the edge is the membership)
+  4. open findings: priority from the severity map (blocking P1, important P2, minor P4); closed findings
+     without `difficulty` get `normal` (history only); every open finding without `difficulty` is looked up in
+     the difficulty csv (columns: id,difficulty) and refused if absent: the worklist is printed
+     (`id, severity, sprint, title`) and written to --worklist, and `--apply` exits 5 without writing anything
+  5. R16: every open blocking finding gets a `<finding>-sanity` gate bead (stage:dev-sanity, dev_bead) that blocks
+     each not-started downstream dev bead and each open, unclaimed finding/fix on a downstream sprint
+
+Exit 0 done or dry run, 5 refused (unclassified open findings), 2 could not run.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import importlib.util
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import plan_contract as C  # noqa: E402
+
+_spec = importlib.util.spec_from_file_location("phase_contract_check", HERE / "phase_contract_check.py")
+pcc = importlib.util.module_from_spec(_spec)
+assert _spec.loader
+_spec.loader.exec_module(pcc)
+
+Write = tuple[list[str], str]  # (bd argv, why)
+
+
+def sh(*args: str) -> str:
+    r = subprocess.run(list(args), capture_output=True, text=True)
+    if r.returncode:
+        raise RuntimeError(f"{' '.join(args)}: {r.stderr.strip() or r.stdout.strip()}")
+    return r.stdout
+
+
+def load_csv(path: Path | None) -> dict[str, str]:
+    if not path or not path.exists():
+        return {}
+    out: dict[str, str] = {}
+    with path.open(newline="", encoding="utf-8") as fh:
+        for row in csv.DictReader(fh):
+            bid, diff = (row.get("id") or "").strip(), (row.get("difficulty") or "").strip()
+            if bid and diff:
+                if diff not in C.DIFFICULTY_MODELS:
+                    raise RuntimeError(f"{path}: {bid}: difficulty {diff!r} is not one of {', '.join(C.DIFFICULTIES)}")
+                out[bid] = diff
+    return out
+
+
+class Migration:
+    def __init__(self, root: str, index: dict[str, Any], beads: list[dict[str, Any]], classified: dict[str, str]) -> None:
+        self.root = root
+        self.check = pcc.PhaseCheck(root, index, beads, live=True)
+        self.by = self.check.by
+        self.pairs = self.check.pairs
+        self.classified = classified
+        self.writes: list[Write] = []
+        self.unresolved: list[str] = []
+        self.worklist: list[tuple[str, str, str, str]] = []
+
+    def w(self, why: str, *argv: str) -> None:
+        self.writes.append((["bd", *argv], why))
+
+    # 1 ------------------------------------------------------------------------------------------------
+    def sprint_beads(self) -> None:
+        for dev, san in self.pairs.items():
+            d, s = self.by.get(dev), self.by.get(san)
+            if not d:
+                self.unresolved.append(f"{dev}: listed in sprints.json but not in beads")
+                continue
+            md = pcc.meta(d)
+            if not pcc.has_label(d, C.SPRINT_LABEL):
+                self.w(f"{dev}: planned sprint", "update", dev, "--add-label", C.SPRINT_LABEL)
+            diff = str(md.get("difficulty") or "")
+            if not diff:
+                mc = str(md.get("model_class") or "")
+                diff = C.MODEL_CLASS_TO_DIFFICULTY.get(mc, "")
+                if diff:
+                    self.w(f"{dev}: difficulty from model_class {mc}", "update", dev, "--set-metadata", f"difficulty={diff}")
+                else:
+                    self.unresolved.append(f"{dev}: no difficulty and no known model_class ({mc or 'none'}); set metadata.difficulty by hand")
+            if d.get("priority") != C.PRIORITY_SPRINT:
+                self.w(f"{dev}: sprint beads are P{C.PRIORITY_SPRINT}", "update", dev, "--priority", str(C.PRIORITY_SPRINT))
+            if s:
+                if diff and not pcc.meta(s).get("difficulty"):
+                    self.w(f"{san}: difficulty of its dev bead", "update", san, "--set-metadata", f"difficulty={diff}")
+                if s.get("priority") != C.PRIORITY_SPRINT:
+                    self.w(f"{san}: sprint beads are P{C.PRIORITY_SPRINT}", "update", san, "--priority", str(C.PRIORITY_SPRINT))
+
+    # 2 ------------------------------------------------------------------------------------------------
+    def pr_target_edges(self) -> None:
+        br2dev = self.check.branch_to_dev()
+        for dev in self.pairs:
+            d = self.by.get(dev)
+            if not d:
+                continue
+            pt = str(pcc.meta(d).get("pr_target") or "")
+            below = br2dev.get(pt)
+            if not below or below == dev:
+                continue
+            san = self.check.sanity_of(below)
+            if san and san not in self.check.blocker_closure(dev):
+                self.w(f"{dev}: pr_target sprint {below}'s sanity gates it", "dep", "add", dev, san)
+
+    # 3 ------------------------------------------------------------------------------------------------
+    def reparent(self) -> None:
+        listed = set(self.pairs) | set(self.pairs.values())
+        devs = set(self.pairs)
+        for bid, b in sorted(self.by.items()):
+            if pcc.parent_of(b) != self.root or bid in listed:
+                continue
+            if any(pcc.has_label(b, l) for l in pcc.PLAN_GATE_LABELS) or b.get("issue_type") == "gate" or pcc.is_folded(b):
+                continue
+            md = pcc.meta(b)
+            st = pcc.stage(b)
+            target = ""
+            if st == C.FINDING_LABEL or st == C.FIX_LABEL:
+                target = str(md.get("sprint_bead") or "")
+            elif st == pcc.QA_LABEL:
+                target = str(md.get("checked_bead") or "")
+            elif st == C.SANITY_LABEL:
+                dev_of = str(md.get("dev_bead") or "")
+                if dev_of and pcc.is_folded(self.by.get(dev_of, {})):
+                    continue  # sanity of an absorbed sprint: history
+                target = dev_of  # a fix/finding sanity lives under the bead it checks
+            if not target:
+                target = str(md.get("sprint_bead") or md.get("checked_bead") or "")
+            if target and target not in devs and target in self.by and self.check.sprint_of(target) in devs:
+                target = self.check.sprint_of(target)  # findings on a fix: the fix already has caused-by edges to them
+            if target in devs:
+                for kind in ("caused-by", "validates"):
+                    if target in pcc.deps(b, kind):  # bd keeps one edge type per pair: drop the edge, the parent link replaces it
+                        self.w(f"{bid}: {kind} edge to {target} gives way to the parent link", "dep", "remove", bid, target)
+                self.w(f"{bid}: {st or 'unlabelled'} bead belongs under {target}", "update", bid, "--parent", target)
+            else:
+                self.unresolved.append(f"{bid}: {st or 'unlabelled'} child of {self.root} with no resolvable sprint (sprint_bead/checked_bead/dev_bead); reparent by hand")
+
+    # 4 ------------------------------------------------------------------------------------------------
+    def findings(self) -> None:
+        for bid, b in sorted(self.by.items()):
+            if bid not in self.check.phase_ids or pcc.stage(b) != C.FINDING_LABEL:
+                continue
+            md = pcc.meta(b)
+            closed = b.get("status") == "closed"
+            sev = pcc.severity(b)
+            if not closed and sev in C.SEVERITY_PRIORITY and b.get("priority") != C.SEVERITY_PRIORITY[sev]:
+                self.w(f"{bid}: {sev} finding", "update", bid, "--priority", str(C.SEVERITY_PRIORITY[sev]))
+            if not closed and sev in C.SEVERITY_PRIORITY and not pcc.has_label(b, f"severity:{sev}"):
+                self.w(f"{bid}: severity label from metadata", "update", bid, "--add-label", f"severity:{sev}")
+            if md.get("difficulty"):
+                continue
+            if closed:
+                self.w(f"{bid}: closed finding, history only", "update", bid, "--set-metadata", "difficulty=normal")
+            elif bid in self.classified:
+                self.w(f"{bid}: difficulty from the csv", "update", bid, "--set-metadata", f"difficulty={self.classified[bid]}")
+            else:
+                self.worklist.append((bid, sev or "none", self.check.sprint_of(bid) or "?", str(b.get("title") or "")))
+
+    # 5 ------------------------------------------------------------------------------------------------
+    def r16_gates(self) -> None:
+        for fid, f in sorted(self.by.items()):
+            if fid not in self.check.phase_ids or pcc.stage(f) != C.FINDING_LABEL or f.get("status") == "closed" or pcc.severity(f) != "blocking":
+                continue
+            sprint = self.check.sprint_of(fid)
+            if not sprint:
+                self.unresolved.append(f"{fid}: open blocking finding with no sprint; cannot gate downstream work")
+                continue
+            gate = self.check.sanity_of(fid) or f"{fid}-sanity"
+            if gate not in self.by:
+                diff = str(pcc.meta(f).get("difficulty") or self.classified.get(fid) or "normal")
+                self.w(f"{fid}: R16 gate bead for the blocking finding", "create", "--id", gate, "--type", "task",
+                       "--priority", str(C.SEVERITY_PRIORITY["blocking"]), "--title", f"{fid}: sanity gate (blocking finding on {sprint})",
+                       "--description", f"Sanity check of the fix for blocking finding {fid} on {sprint}. While open it blocks every "
+                                        f"not-started downstream dev bead and every open, unclaimed finding or fix on a downstream sprint (R16). "
+                                        f"Closes PASS with the fix commit; a FAIL stays open.")
+                self.w(f"{gate}: parent (the sprint, like every dev-sanity bead), label, dev_bead", "update", gate, "--parent", sprint,
+                       "--add-label", C.SANITY_LABEL, "--set-metadata", f"dev_bead={fid}", "--set-metadata", f"difficulty={diff}",
+                       "--set-metadata", f"sprint_bead={sprint}")
+                self.w(f"{gate}: not ready until the fix of {fid} lands", "dep", "add", gate, fid)
+            elif fid not in pcc.deps(self.by[gate], "blocks"):
+                self.w(f"{gate}: not ready until the fix of {fid} lands", "dep", "add", gate, fid)
+            for target in self.check.downstream_targets(sprint, self.check.blocker_closure(fid)):
+                if gate not in pcc.deps(self.by[target], "blocks"):
+                    self.w(f"{target}: gated by blocking finding {fid}", "dep", "add", target, gate)
+
+    def plan(self) -> None:
+        self.sprint_beads()
+        self.pr_target_edges()
+        self.reparent()
+        self.findings()
+        self.r16_gates()
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--root", required=True)
+    ap.add_argument("--index", type=Path, help="authored sprints.json (default from phase-index-path)")
+    ap.add_argument("--difficulty-csv", type=Path, help="id,difficulty rows for open findings (default docs/plans/phase-<p>/difficulty.csv)")
+    ap.add_argument("--worklist", type=Path, help="where to write the unclassified worklist csv (default: next to the difficulty csv)")
+    ap.add_argument("--apply", action="store_true")
+    a = ap.parse_args()
+    try:
+        index_path = a.index
+        if index_path is None:
+            index_path = Path(sh(str(HERE / "phase-index-path"), "--root", a.root).strip())
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        csv_path = a.difficulty_csv or index_path.parent / "difficulty.csv"
+        classified = load_csv(csv_path)
+        beads = json.loads(sh("bd", "list", "--json", "--all", "--limit", "5000") or "[]")
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"migrate-phase-contract: {exc}", file=sys.stderr)
+        return C.EXIT_CANNOT_RUN
+    m = Migration(a.root, index, beads, classified)
+    m.plan()
+    mode = "did" if a.apply else "would"
+    for line in m.unresolved:
+        print(f"unresolved: {line}")
+    if m.worklist:
+        wl = a.worklist or csv_path.with_name("difficulty-worklist.csv")
+        with wl.open("w", newline="", encoding="utf-8") as fh:
+            wr = csv.writer(fh)
+            wr.writerow(["id", "severity", "sprint", "title", "difficulty"])
+            for row in m.worklist:
+                wr.writerow([*row, ""])
+        print(f"unclassified open findings: {len(m.worklist)} (worklist written to {wl}; answer them in {csv_path} as id,difficulty)")
+        for bid, sev, sprint, title in m.worklist:
+            print(f"  {bid}, {sev}, {sprint}, {title}")
+    if a.apply and m.worklist:
+        print(f"refused: {len(m.worklist)} open findings have no difficulty; nothing written", file=sys.stderr)
+        return C.EXIT_PROBLEMS
+    if not m.writes:
+        print(f"{mode}: nothing to write; the phase already matches the contract")
+        return C.EXIT_VALID
+    for argv, why in m.writes:
+        print(f"{mode}: {' '.join(_q(x) for x in argv)}    # {why}")
+        if a.apply:
+            try:
+                sh(*argv)
+            except RuntimeError as exc:
+                print(f"migrate-phase-contract: write failed: {exc}", file=sys.stderr)
+                return C.EXIT_CANNOT_RUN
+    print(f"{mode}: {len(m.writes)} writes" + ("" if a.apply else " (dry run; pass --apply)"))
+    if a.apply:
+        print("next: bd sync, then validate-plan --root", a.root)
+    return C.EXIT_VALID
+
+
+def _q(x: str) -> str:
+    return x if x and all(c.isalnum() or c in "-_./:=@" for c in x) else json.dumps(x)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

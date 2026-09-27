@@ -102,8 +102,9 @@ important P2, minor P4).
 
 ## Gate Beads
 
-`bd gate` is the strategic way to hold work. A gate may represent critical CI
-or integration testing (`gh:run` or `gh:pr`), a timer, or a human decision.
+`bd gate` is the strategic way to hold work. A gate holds work to prioritize
+other work, waits for critical CI or integration testing (`gh:run` or
+`gh:pr`), a timer, or a human decision.
 Create the gate and wire the work explicitly, for example:
 
 ```bash
@@ -139,9 +140,8 @@ on every restack and show up as out-of-scope work in that sprint's PR.
 4. The lead dispatches one QA round on the fix PR (`qa-template.xml.j2`,
    `checked_bead` = the finder's bead, `layer` = the base) and merges when
    it passes; no PR into the integration branch or a stack layer merges
-   without QA. The lead then rebases the stack layers above the base and pushes each
-   with `--force-with-lease`. A live sprint branch rebases onto its new top
-   at its next push; the lead sends its owner the new top.
+   without QA. Every branch whose `pr_target` is the base rebases onto
+   `origin/<pr_target>` at its next push; the lead tells its owner the base moved.
 5. The lead records the fix branch and PR in the finder's bead notes and in
    the notes of every bead whose fence it touched. The finder's sprint task
    stays open and continues on the rebased layer.
@@ -221,9 +221,9 @@ Then, on each task close:
 | plan-review PASS | nothing when the bead closed: the root sprints are now ready. With minor findings the bead is assigned to you still open: fix each listed bead with `bd update`, then `bd close <root>-plan-qa --reason "minor fixes applied"` |
 | plan-review FAIL | have the author fix the listed beads, run `validate-plan` again, then dispatch the next round |
 | dev-complete | nothing: the sanity check is now ready |
-| sanity check PASS | verify the branch base is its declared `pr_target`, then create and dispatch the QA bead from [`qa-bead.json.j2`](templates/qa-bead.json.j2) (`validates` the dev or finding bead). For a finding, the QA dispatch sets `checked_bead` = the finding (it carries its own requirements and ADRs), `sprint_bead` = its `metadata.sprint_bead`, `carry_forward` = the finding id, and `round` = the `metadata.round` of the QA bead it was `discovered-from`, + 1, or 1 when it came from the phase-end review |
-| sanity check FAIL | the sanity member creates one child finding bead for every reported finding under `<checked bead>` at `min(parent priority + 1, P4)`; it does not edit the parent. It copies phase/sprint/stack/layer provenance and uses only `phase-<phase>`, `stage:finding`, and `stack:<stack>` labels. The hierarchy is the parent closure gate (`bd` rejects parent-to-child `blocks` edges); only reported prerequisite relationships become sibling `blocks` edges. Each child stores the exact structured report data. The lead reviews them and retains the existing process: reopen the dev bead, then assign it with [`dev-fix.xml.j2`](templates/dev-fix.xml.j2). The lead may overrule, amend, split, or reassign children, but does not recreate them. The parent cannot close until every child closes. This applies to a finding bead too: its task id is the finding, and it closes with `dev-complete.md.j2` |
-| qa-complete | quality-mgr files finding beads. For every blocking finding it runs `blocking-finding-gates.py --finding <id>`: that finding's sanity gate blocks graph-derived open downstream dev and unclaimed finding/fix work. Important and minor findings add no edge. |
+| sanity check PASS | verify the branch base is its declared `pr_target`, then create and dispatch the QA bead from [`qa-bead.json.j2`](templates/qa-bead.json.j2) (a child of the checked bead). For a finding, the QA dispatch sets `checked_bead` = the finding (it carries its own requirements and ADRs), `sprint_bead` = its `metadata.sprint_bead`, `carry_forward` = the finding id, and `round` = the `metadata.round` of the QA bead it was `discovered-from`, + 1, or 1 when it came from the phase-end review |
+| sanity check FAIL | the sanity member creates one child finding bead for every reported finding under `<checked bead>` at `min(parent priority + 1, P4)`; it does not edit the parent. It copies phase/sprint/stack/layer provenance and uses only `phase-<phase>`, `stage:finding`, and `stack:<stack>` labels. The hierarchy is the parent closure gate (`bd` rejects parent-to-child `blocks` edges); only reported prerequisite relationships become sibling `blocks` edges. Each child stores the exact structured report data. `sanity-create-findings` invokes `blocking-finding-gates.py` for every blocking child. Its `<finding>-sanity` gate is the finding's single sanity identity, not a second bead: it is parented under the finding's sprint dev bead, and its `blocks` edge to the finding makes it wait for that fix before blocking eligible downstream work. The lead reviews them and retains the existing process: reopen the dev bead, then assign it with [`dev-fix.xml.j2`](templates/dev-fix.xml.j2). The lead may overrule, amend, split, or reassign children, but does not recreate them. The parent cannot close until every child closes. This applies to a finding bead too: its task id is the finding, and it closes with `dev-complete.md.j2` |
+| qa-complete | quality-mgr files finding beads, applies the ceremony screen, and reports the verdict. |
 | fix-complete (`fixed`) | create the fix's sanity check bead (`atm-beads` [`dev-sanity-bead.json.j2`](../atm-beads/templates/dev-sanity-bead.json.j2), `dev_bead` = the finding) |
 | review-complete | file each finding with `finding-bead.json.j2` (`qa_bead` = the review bead) |
 | task-refused | read the reason and the bead state (`open`, or `blocked-failed` for a dev bead that declared failure). Reassign it, split it, or close the bead yourself with `bd close <bead> --force --reason "<why>"`. A `blocked` bead is never in `bd ready`: run `bd update <bead> --status open --assignee <new agent>` before you re-dispatch it |
@@ -232,6 +232,11 @@ Then, on each task close:
 
 Re-run `bd ready` after every close. Never cache the ready list. The open
 phase root also appears in it; it is never dispatched.
+
+After every bead write, run `validate-plan --root <root>`; fix any problem
+before the next dispatch. Verify branches read-only (`git -C <worktree> log`,
+`git diff`, `gh pr view`); never run a state-changing command in an
+assignee's worktree.
 
 When every sprint and finding bead is closed
 (`bd list -l phase-<x> --status open,in_progress,blocked -n 0 --json` lists only
@@ -252,9 +257,8 @@ bd create --id <root>-review --type task --parent <root> \
 On review-complete, file each finding with `finding-bead.json.j2`, using:
 
 - `qa_bead` = the review bead;
-- `caused_by` = the dev bead whose code it cites, or the phase root when it
-  spans sprints;
-- `sprint` and `found_on_layer` from that bead's metadata (`phase-end` and
+- `sprint` and `found_on_layer` from the metadata of the dev bead whose code
+  it cites (the phase root when it spans sprints) (`phase-end` and
   the top layer when it is the root);
 - `found_at_commit` = the reviewed commit;
 - `screen` = `keep`, unless you ran `ceremony-finding-screen` over them;

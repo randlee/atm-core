@@ -25,11 +25,15 @@ DIFFICULTIES: tuple[str, ...] = tuple(DIFFICULTY_MODELS)
 # Legacy `metadata.model_class` values and the difficulty each migrates to.
 MODEL_CLASS_TO_DIFFICULTY: dict[str, str] = {"astra": "hard", "terra": "normal", "luna": "fast"}
 
-# Label that marks a planned sprint dev bead (in addition to the unconstrained `stage:dev`).
+# Labels and dependency relation names shared by orchestration scripts.  Keep
+# these here so a graph rule cannot silently diverge from the plan contract.
+DEV_LABEL: str = "stage:dev"
 SPRINT_LABEL: str = "stage:sprint"
 SANITY_LABEL: str = "stage:dev-sanity"
 FINDING_LABEL: str = "stage:finding"
 FIX_LABEL: str = "stage:fix"
+BLOCKS_RELATION: str = "blocks"
+PARENT_CHILD_RELATION: str = "parent-child"
 
 # validate-plan exit codes and output contract.
 EXIT_VALID: int = 0
@@ -40,7 +44,10 @@ WARNING_PREFIX: str = "warning: "
 
 # Optional top-level keys of docs/plans/phase-<p>/sprints.json beyond the membership rows (user ruling 2026-09-26).
 INDEX_OPTIONAL_KEYS: tuple[str, ...] = ("integration_branch", "review_artifacts", "policy")
-POLICY_KEYS: tuple[str, ...] = ("human_gates",)
+POLICY_KEYS: tuple[str, ...] = ("human_gates", "waivers")
+# policy.waivers[{bead, check, reason}]: a past state violation the user accepted in the plan PR; the validator
+# prints it as a warning instead of a problem. `check` names the state invariant.
+WAIVABLE_CHECKS: tuple[str, ...] = ("reopened_after_pass", "started_before_blocker", "pass_without_qa")
 
 
 def model_matches(model: str | None, difficulty: str) -> bool:

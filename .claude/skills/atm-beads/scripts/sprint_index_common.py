@@ -55,10 +55,43 @@ def index_bead_pairs(index: dict) -> dict[str, str]:
     return pairs
 
 
+REQUIRED_KEYS = frozenset({"root_bead_id", "sprints"})
+# Phase facts that are not in beads (user ruling 2026-09-26); membership rows stay exactly as before.
+OPTIONAL_KEYS = frozenset({"integration_branch", "review_artifacts", "policy"})
+POLICY_KEYS = frozenset({"human_gates", "waivers"})
+WAIVABLE_CHECKS = frozenset({"reopened_after_pass", "started_before_blocker", "pass_without_qa"})
+
+
 def validate_index(index: Any) -> None:
-    """Enforce the bead-ID-only document contract for all producers/consumers."""
-    if not isinstance(index, dict) or set(index) != {"root_bead_id", "sprints"}:
-        raise RuntimeError("phase index must contain only root_bead_id and sprints")
+    """Enforce the document contract: membership rows plus declared phase facts, nothing else."""
+    if not isinstance(index, dict) or not REQUIRED_KEYS <= set(index):
+        raise RuntimeError("phase index must contain root_bead_id and sprints")
+    unknown = set(index) - REQUIRED_KEYS - OPTIONAL_KEYS
+    if unknown:
+        raise RuntimeError("phase index may contain only root_bead_id and sprints plus the declared phase facts "
+                           f"({', '.join(sorted(OPTIONAL_KEYS))}); undeclared keys: {', '.join(sorted(unknown))}")
+    branch = index.get("integration_branch")
+    if branch is not None and (not isinstance(branch, str) or not branch):
+        raise RuntimeError("integration_branch must be a nonempty branch name")
+    artifacts = index.get("review_artifacts")
+    if artifacts is not None and (not isinstance(artifacts, list) or not all(isinstance(a, str) and a for a in artifacts)):
+        raise RuntimeError("review_artifacts must be a list of repository paths")
+    policy = index.get("policy")
+    if policy is not None:
+        if not isinstance(policy, dict) or set(policy) - POLICY_KEYS:
+            raise RuntimeError(f"policy may only contain {', '.join(sorted(POLICY_KEYS))}")
+        gates = policy.get("human_gates")
+        if gates is not None and (not isinstance(gates, list) or not all(isinstance(g, str) and g for g in gates)):
+            raise RuntimeError("policy.human_gates must be a list of gate bead IDs")
+        waivers = policy.get("waivers")
+        if waivers is not None:
+            if not isinstance(waivers, list):
+                raise RuntimeError("policy.waivers must be a list of {bead, check, reason} objects")
+            for w in waivers:
+                if not isinstance(w, dict) or set(w) != {"bead", "check", "reason"} or not all(isinstance(w[k], str) and w[k] for k in w):
+                    raise RuntimeError("each policy.waivers entry has exactly bead, check and reason, all nonempty strings")
+                if w["check"] not in WAIVABLE_CHECKS:
+                    raise RuntimeError(f"policy.waivers check must be one of {', '.join(sorted(WAIVABLE_CHECKS))}")
     root = index["root_bead_id"]
     if not isinstance(root, str) or not root:
         raise RuntimeError("root_bead_id must be a nonempty bead ID")

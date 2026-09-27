@@ -37,6 +37,29 @@ waits on another check.
 
 ## Check Contract
 
+## Pre-claim refusals
+
+Before claim, the sanity member performs these numbered checks at the pinned
+commit. Each failure is a refusal, not a best-effort check:
+
+1. `test -n "$PR_NUMBER" && test -n "$PR_URL"`; otherwise refuse
+   `SANITY.PR_REQUIRED`.
+2. `gh pr view "$PR_NUMBER" --json baseRefName,headRefOid --jq '.baseRefName + " " + .headRefOid'`
+   must equal the declared `pr_target` and commit; after `git fetch origin`,
+   `git rev-parse "$PR_BASE"` must equal `git rev-parse "origin/$PR_TARGET"`.
+   Otherwise refuse `SANITY.STALE_BASE`.
+3. `git log --format=%H "origin/$PR_TARGET..$COMMIT" | grep -q .` must pass;
+   otherwise refuse `SANITY.ZERO_DELTA`.
+4. `test -z "$(git status --porcelain --untracked-files=no | grep -v '^?? \.beads\.gate\.lock$')"`
+   must pass; otherwise refuse `SANITY.DIRTY_TREE`.
+5. `bd history "$TASK_ID"` must contain no earlier PASS; otherwise refuse
+   `SANITY_FROZEN`.
+
+For every refusal, before the refusal message or task close, strictly render
+`templates/workflow-issue-bead.json.j2` with id `$TASK_ID-wf-$CODE`, import it
+with `bd import <scratch>/$TASK_ID-wf-$CODE.json`, and name that workflow issue
+id in the refusal.
+
 One check is one closed bead at one pinned commit, split per deliverable:
 
 - `scripts/sanity-split` reads the bead, parses the numbered list under

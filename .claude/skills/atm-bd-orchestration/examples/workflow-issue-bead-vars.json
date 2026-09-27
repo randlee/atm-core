@@ -1,0 +1,7 @@
+{
+  "id": "workflow-issue-example",
+  "parent": "atm-workflow-issues",
+  "title": "Example refusal workflow issue",
+  "description": "A pre-claim gate refused this example task.",
+  "remedy": "Correct the precondition and re-dispatch the task."
+}
