@@ -1,37 +1,48 @@
 #!/usr/bin/env bash
 # Validate a plan written to beads. Mandatory before import and before dispatch.
 #
-#   validate-plan --file <plan.jsonl> [--root <id> --phase <p>]   rendered plan, before `bd import`
-#   validate-plan --root <id>                                     live beads under a phase root
+#   validate-plan --file <plan.jsonl> [--root <id> --phase <p>] [--index <sprints.json>]   rendered plan, before `bd import`
+#   validate-plan --root <id> [--index <sprints.json>] [--scope <bead-id>]                  live beads under a phase root
+#
+# The authored phase definition is docs/plans/phase-<p>/sprints.json (the planner commits it in the
+# plan PR; it is never generated from beads). --index points at another copy; --scope limits the
+# REQ/ADR doc checks to one bead's own ids (an assignee validating its own branch).
 #
 # Run from the repository root. Checks, in order:
 #   1. `bd doctor` has no error (warnings are printed);
 #   2. scripts/check-plan.jq (fields, labels, graph, stack, REQ/ADR presence),
 #      and every blocker exists in the plan or in beads;
-#   3. every requirement id is in a docs.requirements file and every ADR id in a
-#      docs.architecture file of .claude/project/orchestration.yaml (globs; the
-#      id may be in the file's content or its file name); an id missing from a
-#      doc the sprint owns is a warning (resources/planning.md "New Ids": plan
-#      review checks the deliverable that adds it);
+#   3. every requirement id is in docs/requirements.md (or docs/*/requirements.md)
+#      and every ADR id is in docs/architecture.md (or docs/*/architecture.md);
+#      an id missing from a doc the sprint owns is a warning (resources/planning.md
+#      "New Ids": plan review checks the deliverable that adds it);
 #   4. every assignee is an ATM member of this team, and every sanity check
 #      bead is assigned to the dev-sanity role's member (scripts/resolve-role);
-#   5. the integration branch exists on origin (warning only).
-# Exit 0 = valid, 5 = problems listed, 2 = could not run.
+#   5. scripts/phase_contract_check.py: the children of the root are exactly the pairs in
+#      sprints.json, the stage:sprint schema (deliverables, acceptance keys, difficulty),
+#      graph invariants (pr_target sanity closure, owned paths, handoffs) and, in root mode,
+#      the run-time state invariants (no reopen after PASS, blockers closed before start,
+#      PASS has QA, one fix round, PR base == pr_target, severity priority, human gates);
+#      the initial SVG-in-HTML artifact and the committed index are pushed on integration;
+#   6. the integration branch exists on origin (warning only).
+# Exit 0 = valid, 5 = problems listed (one per line, "<bead>: <message>"), 2 = could not run.
 set -uo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
-mg="$here/manifest-get"
-file="" root="" phase=""
+file="" root="" phase="" index="" scope=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --file) file=$2; shift 2 ;;
     --root) root=$2; shift 2 ;;
     --phase) phase=$2; shift 2 ;;
+    --index) index=$2; shift 2 ;;
+    --scope) scope=$2; shift 2 ;;
+    --write) echo "validate-plan: --write was removed; sprints.json is authored by the planner and committed in the plan PR (atm-beads resources/planning.md)" >&2; exit 2 ;;
     *) echo "validate-plan: unknown argument $1" >&2; exit 2 ;;
   esac
 done
 [ -n "$file" ] || [ -n "$root" ] || { echo "validate-plan: pass --file or --root" >&2; exit 2; }
-for c in bd jq atm git; do
+for c in bd jq atm git python3; do
   command -v "$c" >/dev/null || { echo "validate-plan: $c not on PATH; see .claude/skills/atm-beads/references/installation-and-troubleshooting.md" >&2; exit 2; }
 done
 bdv=$(bd version 2>/dev/null | sed -nE 's/^bd version ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)
@@ -70,9 +81,8 @@ else
     | .dependencies = [(.dependencies // [])[] | {issue_id: $b.id, depends_on_id: .id, type: .dependency_type}]' > "$plan" \
     || { echo "validate-plan: bd show failed for $root" >&2; exit 2; }
 fi
-branch_pattern=$("$mg" integration_branch) || exit 2
-jqargs=(--arg integration_branch "$branch_pattern")
-if [ -n "$root" ] && [ -n "$file" ]; then jqargs+=(--arg root "$root" --arg phase "$phase"); fi
+jqargs=()
+if [ -n "$root" ] && [ -n "$file" ]; then jqargs=(--arg root "$root" --arg phase "$phase"); fi
 out=$(jq -rs "${jqargs[@]}" -f "$here/check-plan.jq" "$plan" 2>"$scratch/check.err"); rc=$?
 case $rc in
   0) ;;
@@ -93,11 +103,36 @@ while IFS= read -r dep; do
 done < <(jq -rs '(map(.id)) as $ids | [.[] | (.dependencies // [])[] | select(.type == "blocks") | .depends_on_id]
   | unique | map(select(. as $d | $ids | index($d) | not)) | .[]' "$plan")
 
-# 3. REQ/ADR ids exist in the governing docs (manifest globs; content or file name)
-# shellcheck disable=SC2046
-reqdocs=$(ls $("$mg" docs.requirements) 2>/dev/null)
-# shellcheck disable=SC2046
-adrdocs=$(ls $("$mg" docs.architecture) 2>/dev/null)
+# 2c. the phase contract: authored sprints.json against the beads (membership, schema, graph, state)
+if [ -n "$root" ] && [ -z "$file" ]; then
+  if [ -z "$index" ]; then
+    index=$("$here/phase-index-path" --root "$root") || { echo "validate-plan: could not determine the phase index path for $root" >&2; exit 2; }
+  fi
+  contract_args=(--root "$root" --index "$index")
+  [ -n "$scope" ] && contract_args+=(--scope "$scope")
+else
+  contract_args=(--plan "$plan")
+  [ -n "$root" ] && contract_args+=(--root "$root")
+  [ -n "$index" ] && contract_args+=(--index "$index")
+fi
+out=$(python3 "$here/phase_contract_check.py" "${contract_args[@]}" 2>"$scratch/contract.err"); rc=$?
+case $rc in
+  0) [ -n "$out" ] && printf '%s\n' "$out" ;;
+  5) while IFS= read -r l; do [ -z "$l" ] && continue; case "$l" in warning:*) echo "$l" ;; *) problems+=("$l") ;; esac; done <<< "$out" ;;
+  *) echo "validate-plan: phase_contract_check failed: $(cat "$scratch/contract.err")" >&2; exit 2 ;;
+esac
+
+# 2d. A permanent phase diagram and the committed index are required on integration before plan review/dispatch.
+# Import JSONL is validated before bead creation; only live-root mode can check the published artifact.
+if [ -n "$root" ] && [ -z "$file" ] && [ -f "$index" ]; then
+  if ! artifact_check=$("$here/check-phase-artifact" --root "$root" --index "$index" 2>&1); then
+    problems+=("$artifact_check")
+  fi
+fi
+
+# 3. REQ/ADR ids exist in the governing docs
+reqdocs=$(ls docs/requirements.md docs/*/requirements.md 2>/dev/null)
+adrdocs=$(ls docs/architecture.md docs/*/architecture.md 2>/dev/null)
 # An id the sprint itself adds is allowed only when the sprint owns that doc.
 while IFS=$'\t' read -r id kind ref owned; do
   [ "$ref" = "NONE" ] && continue
@@ -106,15 +141,13 @@ while IFS=$'\t' read -r id kind ref owned; do
   docs=$reqdocs; [ "$kind" = "adrs" ] && docs=$adrdocs
   # shellcheck disable=SC2086
   grep -qw -- "$ref" $docs 2>/dev/null && continue
-  # shellcheck disable=SC2086
-  printf '%s\n' $docs | grep -q -- "/$ref[^/]*$" && continue
-  where=$(echo $docs | tr '\n' ' ')
-  if printf '%s\n' $docs | grep -qxF -f <(tr ' ' '\n' <<< "$owned") 2>/dev/null; then
+  where=$(echo "$docs" | tr '\n' ' ')
+  if printf '%s\n' "$docs" | grep -qxF -f <(tr ' ' '\n' <<< "$owned") 2>/dev/null; then
     warn "$id: $kind id $ref is not in $where yet; the sprint owns that doc and must add it"
   else
     problems+=("$id: $kind id $ref is not in $where")
   fi
-done < <(jq -r 'select((.labels // []) | index("stage:dev")) | .id as $id | ((.metadata.owned_paths // []) | join(" ")) as $o
+done < <(jq -r --arg scope "$scope" 'select((.labels // []) | index("stage:dev")) | select($scope == "" or .id == $scope) | .id as $id | ((.metadata.owned_paths // []) | join(" ")) as $o
   | ("requirements", "adrs") as $k | (.metadata[$k] // [])[] | [$id, $k, ., $o] | @tsv' "$plan")
 
 # 4. assignees are ATM members
@@ -127,7 +160,7 @@ while IFS=$'\t' read -r id who; do
   echo "$members" | grep -qx -- "$who" || problems+=("$id: assignee $who is not an ATM member of this team")
 done < <(jq -r 'select(.issue_type != "epic" and .issue_type != "feature") | [.id, (.assignee // "")] | @tsv' "$plan")
 if ! sanity=$("$here/resolve-role" dev-sanity); then
-  echo "validate-plan: the dev-sanity role is not mapped (.claude/project/orchestration.yaml roles:)" >&2
+  echo "validate-plan: the dev-sanity role is not mapped (.claude/agents/registry.yaml roles:)" >&2
   exit 2
 fi
 while IFS=$'\t' read -r id who; do

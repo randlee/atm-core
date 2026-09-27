@@ -21,10 +21,10 @@ agents:
     version: 0.1.0
     path: .claude/agents/ceremony-finding-screen.md
   dev-sanity-llm:
-    version: 0.7.3
+    version: 0.1.0
     path: .claude/agents/dev-sanity-llm.md
   sc-sanity-llm:
-    version: 0.4.0
+    version: 0.1.0
     path: .claude/agents/sc-sanity-llm.md
   critical-plan-reviewer:
     version: 0.1.0
@@ -86,15 +86,18 @@ agents:
   sc-adversarial-fuzz-probe:
     version: 1.0.0
     path: .claude/agents/sc-adversarial-fuzz-probe.md
+# Values the atm-bd-orchestration package renders at install time (install.py).
+bead_prefix: atm
+
 roles:
   dev-sanity: atm-sanity
   quality-mgr: quality-mgr
   lead: team-lead
 skills:
   atm-beads:
-    version: 0.3.1
+    version: 0.1.0
   atm-bd-orchestration:
-    version: 0.3.7
+    version: 0.1.0
     depends_on:
       atm-beads: 0.x
       quality-mgr: 0.x

@@ -49,13 +49,77 @@ rather than reaching an agent:
    every problem. Fix them all and render again.
 4. `bd import --dry-run -i <scratch>/plan.jsonl`, then `bd import -i
    <scratch>/plan.jsonl`. Right away, create the plan-review bead
-   (`atm-bd-orchestration` "Plan Gate", step 2). Then run
-   `validate-plan --root <root>` on the imported beads, and `bd sync`.
+   (`atm-bd-orchestration` "Plan Gate", step 2). Then write the phase
+   definition by hand: `docs/plans/phase-<x>/sprints.json` lists the root bead
+   and one `{dev_bead_id, sanity_bead_id}` pair per sprint (schema
+   `docs/plans/sprints.schema.json`). It is authored, never exported: the
+   planner edits it in the same commit as the bead changes, and
+   `validate-plan --root <root>` refuses until the beads under the root are
+   exactly those pairs. Then run
+   `.claude/skills/sprint-review/scripts/sprint-review --root <root>`, which
+   renders the required initial `docs/plans/phase-<x>/phase-<x>-dag.html`
+   with embedded SVG and commits/pushes it together with `sprints.json` on the
+   root bead's integration branch. No viewer opens without `--view`.
+   Then run `validate-plan --root <root>` on the imported beads, and `bd sync`.
 
 The plan then goes to plan review (`atm-bd-orchestration` "Plan Gate").
 Nothing is dispatched until it passes.
 
 Keep `<scratch>` outside the repository.
+
+## Phase definition (`sprints.json`)
+
+`docs/plans/phase-<x>/sprints.json` is the authored, committed definition of
+the phase: which beads make it up. Planning five sprints creates five dev beads
+and five sanity beads through the validated import JSONL, and the planner
+lists those five pairs in the file in the same plan PR. Sprint content
+(title, deliverables, acceptance, REQ/ADR, edges, ownership, state) lives only
+in beads; `validate-plan` reads the ids from the file and everything else from
+`bd`.
+
+```json
+{
+  "root_bead_id": "atm-phase-d",
+  "integration_branch": "integrate/phase-d",
+  "sprints": [
+    {"dev_bead_id": "atm-d-1", "sanity_bead_id": "atm-d-1-sanity"}
+  ],
+  "policy": {"human_gates": []}
+}
+```
+
+`root_bead_id` and `sprints` are required; each pair has exactly those two
+ids. The optional keys hold phase facts that have no bead field:
+`integration_branch`, `review_artifacts` (extra plan-review artifact paths)
+and `policy.human_gates` (the ids of `human` gate beads the user explicitly
+agreed to; a phase runs unattended, so any other human gate blocking phase
+work is a validation problem). Undeclared keys are rejected. The formal
+schema is `docs/plans/sprints.schema.json`.
+
+The file is never generated from beads and beads are never generated from the
+file. A plan change is one planner transaction: change the beads, edit the
+file, commit both. `validate-plan --root <root>` passes only when the
+hierarchy below holds, each sanity bead blocks on its dev bead, and every
+listed dev bead carries `stage:sprint` with the sprint schema
+(`phase_contract_check.py`). It must stay green from plan approval to phase
+end; every template runs it before a claim.
+
+Hierarchy:
+
+- top level: epics only; the phase root is an epic or a `feature` under epics;
+- children of the root: exactly the listed pairs, plus `stage:plan*` beads,
+  `bd gate` beads and sprints closed "folded into ...";
+- under the sprint dev bead: its QA beads (parent = `checked_bead`), findings
+  (parent = `sprint_bead`, `discovered-from` the QA bead), fixes and their
+  sanity beads. No `validates` or `caused-by` edge to the sprint: bd allows one
+  edge type per pair, and the parent link is the membership.
+
+The initial `phase-<x>-dag.html` is a required plan-review artifact alongside
+`sprints.json`. Live-root validation verifies both files on the remote
+integration branch and checks that the HTML embeds SVG for this phase root.
+Later `/sprint-review` runs refresh and push the same page; `--view` only
+controls optional background viewing in Wyvern. Import JSONL validation runs
+before beads exist, so it does not require this generated artifact yet.
 
 ## Phase Root
 
@@ -78,7 +142,7 @@ Keep `<scratch>` outside the repository.
 | `acceptance_criteria` | acceptance criteria and the validation commands |
 | `assignee` | the ATM identity that owns it (`aobs`); must be in `atm members` |
 | `parent` | the phase root |
-| `blocked_by` | the **sanity check** bead of each prerequisite sprint (`atm-bd-4-sanity`), never its dev bead |
+| `blocked_by` | the **sanity check** bead of each prerequisite sprint (`atm-d-4-sanity`), never its dev bead |
 
 Its labels (`phase-<x>`, `stage:dev`, `stack:<stack>`, `train:<t>` when
 set) and metadata come from these required vars:
@@ -95,10 +159,10 @@ set) and metadata come from these required vars:
 | `closure_type` | from the guidelines' closure types |
 | `target_boundary` | the one boundary the sprint closes |
 | `owned_paths` | files and crates the sprint owns: its file fence |
-| `requirements` | every REQ id that governs the work (`REQ-ATM-CMD-001`, `REQ-CORE-BOUNDARY-001`, `NFR-…`), or exactly `["NONE"]` |
+| `requirements` | every REQ id that governs the work (`LOG-001`, `OTLP-008`, `ATM-BASE-3`, `NFR-…`), or exactly `["NONE"]` |
 | `adrs` | every ADR that governs the work (`ADR-011`), or exactly `["NONE"]` |
 
-Optional: `model_class` (a model class name the team uses), `release_train`,
+Optional: `model_class` (`astra`, `terra`, `luna`), `release_train`,
 `priority`.
 
 `requirements` and `adrs` are never left empty. The dev reads each listed id
@@ -141,12 +205,12 @@ after its work passes the sanity check. See [`dev-sanity.md`](dev-sanity.md).
   order they complete, and the lead records the actual values when it links
   each one (`atm-bd-orchestration` "Stack Discipline").
 - Sprints that can run at once must have disjoint `owned_paths`. Sprints that
-  must share a file are ordered with `must_follow`.
+  share a path must be ordered: one's sanity bead in the other's blocker closure.
 
 The stack table is a query, not a document:
 
 ```bash
-bd list -l phase-bd,stage:dev -n 0 --json | jq -r '.[] | [.metadata.stack, .metadata.layer, .metadata.sprint, .metadata.branch, .metadata.pr_target, .assignee] | @tsv' | sort
+bd list -l phase-d,stage:dev -n 0 --json | jq -r '.[] | [.metadata.stack, .metadata.layer, .metadata.sprint, .metadata.branch, .metadata.pr_target, .assignee] | @tsv' | sort
 ```
 
 ## Checks

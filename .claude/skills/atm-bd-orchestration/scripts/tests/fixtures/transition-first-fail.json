@@ -1,0 +1,1 @@
+{"state": {"qa": {"status": "closed", "close_reason": "FAIL", "metadata": {"round": 1}}, "findings": [{"status": "open", "metadata": {"severity": "important"}}]}, "expected": "one fix round"}

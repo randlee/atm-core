@@ -1,0 +1,12 @@
+---
+name: workflow-issue-bead
+version: 0.1.0
+format: json
+required_variables:
+  - id
+  - parent
+  - title
+  - description
+  - remedy
+---
+{"id": {{ id | tojson }}, "title": {{ title | tojson }}, "issue_type": "task", "status": "open", "description": {{ description | tojson }}, "design": {{ remedy | tojson }}, "labels": ["workflow-issue"], "dependencies": [{"issue_id": {{ id | tojson }}, "depends_on_id": {{ parent | tojson }}, "type": "parent-child"}]}

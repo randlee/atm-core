@@ -3,8 +3,8 @@
 This file contains repository-specific QA policy. Reusable agents and skills
 must read this file rather than embedding repository names, commands,
 interfaces, approval authorities, or temporary architectural exceptions in
-their own prompts. The manifest `.claude/project/orchestration.yaml` names
-this file as `policy`.
+their own prompts. The orchestration templates name this file as
+`policy_path`.
 
 ## Repository Baseline
 

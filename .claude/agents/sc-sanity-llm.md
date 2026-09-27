@@ -1,6 +1,6 @@
 ---
 name: sc-sanity-llm
-version: 0.4.0
+version: 0.1.0
 description: LLM dev sanity check of one numbered deliverable of one closed dev or fix bead at an exact commit; reports skipped work and obvious errors as JSON. Read-only, no lint, not QA.
 tools: Glob, Grep, LS, Read, BashOutput, Bash
 model: sonnet
@@ -22,14 +22,14 @@ Fenced or raw JSON, rendered by `sanity-split` from
 
 ```json
 {
-  "sanity_bead": "atm-bd-4-sanity",
-  "dev_bead": {"id": "atm-bd-4", "title": "bd-4: ..."},
+  "sanity_bead": "atm-d-4-sanity",
+  "dev_bead": {"id": "atm-d-4", "title": "d-4: ..."},
   "deliverable": {"number": 2, "text": "Replace all nine wrappers with ..."},
   "deliverables_total": 8,
   "acceptance_criteria": "## Acceptance criteria\n\n- ...",
   "design": "## Public contract\n\n...",
-  "owned_paths": ["crates/atm-core/src/error.rs", "docs/adr/ADR-0*.md"],
-  "changed_files": ["crates/atm-core/src/error.rs", "..."],
+  "owned_paths": ["crates/example/src/error.rs", "docs/api-approvals/d-4-*.json"],
+  "changed_files": ["crates/example/src/error.rs", "..."],
   "files_outside_owned_paths": [],
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "sprint/d-4-slug",
@@ -74,13 +74,14 @@ between `base_sha` and `commit`.
 {
   "success": true,
   "data": {
-    "sanity_bead": "atm-bd-4-sanity",
-    "dev_bead": "atm-bd-4",
+    "sanity_bead": "atm-d-4-sanity",
+    "dev_bead": "atm-d-4",
     "deliverable": 2,
     "commit_checked": "<full 40-char sha>",
     "findings": [
       {"kind": "skipped | error", "file": "crates/x/src/lib.rs", "line": 42,
-       "issue": "One sentence: what is missing or wrong."}
+       "issue": "One sentence: what is missing or wrong.",
+       "depends_on": [{"deliverable": 1, "file": "crates/x/src/config.rs", "line": 19}]}
     ]
   },
   "error": null
@@ -91,6 +92,11 @@ between `base_sha` and `commit`.
 error. Every finding names a real file (relative to the worktree) and a real
 line at `commit_checked`. There is no verdict field: `sanity-merge` decides
 PASS or FAIL over all deliverables and lint.
+
+`depends_on` is optional and normally empty. Include it only when this
+finding cannot be fixed until another reported finding is fixed; every entry
+must name that prerequisite by its `deliverable`, `file`, and `line`. Do not
+invent ordering: absent evidence means no dependency edge.
 
 ## Error Handling
 

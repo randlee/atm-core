@@ -1,10 +1,10 @@
 {
   "generated_at": "2026-09-25T08:10:00Z",
-  "task_id": "atm-bd-4-qa1",
-  "checked_bead": "atm-bd-4",
-  "sprint": "bd-4",
+  "task_id": "atm-d-4-qa1",
+  "checked_bead": "atm-d-4",
+  "sprint": "d-4",
   "round": 1,
-  "branch": "sprint/bd-4-peer-retry-jitter",
+  "branch": "sprint/d-4-otlp-sync-exporter",
   "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
   "verdict": "FAIL",
   "pr_number": 231,
@@ -14,6 +14,6 @@
   "findings_important": 0,
   "findings_minor": 1,
   "findings_ceremony": 1,
-  "findings_md": "- atm-bd-4-qa1-f1 (blocking, P1) retry without jitter: crates/atm-http-runtime/src/peer/sync.rs:97\n- atm-bd-4-qa1-f2 (minor, P4) doc comment names the wrong env var: crates/atm-http-runtime/src/peer/sync.rs:12\n- atm-bd-4-qa1-f3 (minor) closed: ceremony: asks for a retry-policy matrix doc no consumer reads",
+  "findings_md": "- atm-d-4-qa1-f1 (blocking, P1) retry without jitter: crates/example-otlp/src/sync.rs:97\n- atm-d-4-qa1-f2 (minor, P4) doc comment names the wrong env var: crates/example-otlp/src/sync.rs:12\n- atm-d-4-qa1-f3 (minor) closed: ceremony: asks for a retry-policy matrix doc no consumer reads",
   "reviewers_md": "- req-qa: PASS\n- arch-qa: PASS\n- rust-qa-agent: FAIL (1 blocking)\n- ruthless-boundary-qa: PASS\n- rust-best-practices-agent: 1 minor\n- rust-service-hardening-agent: skipped (no service)"
 }
