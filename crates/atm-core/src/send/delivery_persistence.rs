@@ -29,6 +29,9 @@ pub(crate) struct DeliveryPersistenceResult {
     pub(crate) already_closed: Option<TaskCloseOutcome>,
     pub(crate) task_assignee: Option<AgentName>,
     pub(crate) queued_position: Option<u32>,
+    /// True when `queued_position` was landed by a same-agent update rather
+    /// than a fresh assignment or reassignment (Rand, 2026-09-27, #1619).
+    pub(crate) task_updated: bool,
     pub(crate) reassign_notice: Option<Message>,
     pub(crate) task_rejection: Option<AtmError>,
     pub(crate) warnings: Vec<WarningEntry>,
@@ -44,6 +47,7 @@ impl DeliveryPersistenceResult {
             already_closed: None,
             task_assignee: None,
             queued_position: None,
+            task_updated: false,
             reassign_notice: None,
             task_rejection: None,
             warnings: Vec::new(),
@@ -59,6 +63,7 @@ impl DeliveryPersistenceResult {
             already_closed: None,
             task_assignee: None,
             queued_position: None,
+            task_updated: false,
             reassign_notice: None,
             task_rejection: None,
             warnings: Vec::new(),
@@ -74,6 +79,7 @@ impl DeliveryPersistenceResult {
             already_closed: None,
             task_assignee: None,
             queued_position: None,
+            task_updated: false,
             reassign_notice: None,
             task_rejection: None,
             warnings: Vec::new(),
@@ -100,9 +106,11 @@ impl DeliveryPersistenceResult {
     pub(crate) fn with_assignment_metadata(
         mut self,
         queued_position: Option<u32>,
+        task_updated: bool,
         reassign_notice: Option<Message>,
     ) -> Self {
         self.queued_position = queued_position;
+        self.task_updated = task_updated;
         self.reassign_notice = reassign_notice;
         self
     }

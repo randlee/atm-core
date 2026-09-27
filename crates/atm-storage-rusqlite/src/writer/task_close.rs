@@ -38,6 +38,7 @@ pub(super) fn apply_task_close(
             already_closed: Some(already),
             task_assignee: None,
             queued_position: None,
+            task_updated: false,
             reassign_notice: None,
         });
     }
@@ -79,6 +80,7 @@ pub(super) fn apply_task_close(
         already_closed: None,
         task_assignee: Some(row.assignee),
         queued_position: None,
+        task_updated: false,
         reassign_notice: None,
     })
 }

@@ -157,7 +157,10 @@ fn assert_task_send_surface(harness: RosterHarness, nudge_mode: NudgeMode, task_
     // (crates/atm-core/src/delivery_plan.rs:88).
     assert_eq!(
         dispatch.event.task_transition,
-        Some(TaskTransition::Queued { position: 1 }),
+        Some(TaskTransition::Queued {
+            position: 1,
+            is_update: false,
+        }),
     );
     // BB.5: an immediate dispatch carries the steer kind
     // (crates/atm-core/src/send/hook.rs:131).

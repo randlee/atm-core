@@ -85,7 +85,10 @@ pub(crate) fn logical_messages_from_persistence(
         persistence.task_assignee.clone(),
     )?;
     if let Some(position) = persistence.queued_position {
-        message = message.with_task_transition(TaskTransition::Queued { position });
+        message = message.with_task_transition(TaskTransition::Queued {
+            position,
+            is_update: persistence.task_updated,
+        });
     }
     Ok(vec![message])
 }

@@ -3007,9 +3007,14 @@ Required rules:
 - acknowledgement is message hygiene only: `atm ack` MUST NOT read, gate on,
   or change task state, and task admission MUST NOT reject a message ack
 - every transition, rejection, and reminder is append-only audit data; a
-  same-agent resend of an open task id records no task event and changes no task
-  state; it refreshes only the assignment message linkage (Phase BA design
-  §3.1a); the durable tables and replay contract are
+  same-agent re-assign of an open task id is an update, not an idempotent
+  resend: it MUST append exactly one `updated` task event carrying the same
+  actor and message fields the `assigned`/`reassigned` events carry, MUST
+  reset the reminder budget (`reminder_count`, `lead_notified_count`,
+  `last_reminded_at`) exactly as `assign`/`reassign`/`reopen` do so a stalled
+  task is eligible for reminders again, and MUST leave task state and queue
+  position unchanged (Rand, 2026-09-27, #1619; supersedes the Phase BA design
+  §3.1a "idempotent resend" rule); the durable tables and replay contract are
   defined by ADR-062
 
 Task lifecycle (Phase BA):
@@ -3033,11 +3038,13 @@ Task lifecycle (Phase BA):
 7. Closing a task MUST record one typed outcome from
    `completed | refused | cancelled` with optional reason text,
    MUST remove the task from the queue, and MUST append a timestamped event.
-8. Reassignment and reopening MUST use `atm task assign` on the same id:
-   an open id may be reassigned in place, and a closed id may be reopened;
-   neither operation creates a second row or permits simultaneous assignees.
-   Every transition MUST append exactly one `task_events` row under that id;
-   `reassigned` and `reopened` are event kinds, not outcomes.
+8. Reassignment, same-agent update, and reopening MUST use `atm task assign`
+   on the same id: an open id may be reassigned to a different agent, an open
+   id assigned to its current assignee is an update in place, and a closed id
+   may be reopened; none of these operations creates a second row or permits
+   simultaneous assignees. Every transition MUST append exactly one
+   `task_events` row under that id; `reassigned`, `updated`, and `reopened`
+   are event kinds, not outcomes.
 9. `atm task` MUST be the closed subcommand set `assign`, `start`, `close`,
    `move`, `list`, `events`; `atm send <agent> --task-id <id>` MUST alias `assign`
    and `atm send <assigner> --task-complete --task-id <id>` MUST alias

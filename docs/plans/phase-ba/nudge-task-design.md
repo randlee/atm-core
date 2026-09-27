@@ -10,6 +10,11 @@ Amended 2026-09-11 (Rand's rulings, recorded by fenix): §3.1a one id for the
 life of a task — reassign and reopen in place; §4 close outcomes and event
 kinds; §4.3 `assigned_at`; §5 `assign` placement flags. This commit replaces
 9b5c7d876 as the frozen baseline the phase-BA plan cites.
+Amended 2026-09-27 (Rand's ruling, #1619): §3.1a's "same agent" cell is
+superseded — a same-agent re-assign of an open task is an update (one
+`updated` event, reminder budget reset, state and position unchanged), not
+an idempotent no-op. See ADR-062 "Same-agent update (2026-09-27 amendment,
+issue #1619)" for the normative rule.
 
 ## 0. The two problems this exists to fix
 
@@ -171,7 +176,7 @@ exists does exactly one of three things, decided by the row:
 
 | row state | same agent | other agent |
 |---|---|---|
-| `assigned` / `active` | idempotent resend (no transition, no event) | **reassign in place**: `assignee` updated, state `assigned`, position END of the new agent's queue unless `--before`/`--head`; the old agent's active slot is freed; event `reassigned` |
+| `assigned` / `active` | *Superseded (2026-09-27, #1619): was "idempotent resend (no transition, no event)".* **update in place**: state and position unchanged, reminder budget reset (`reminder_count`, `lead_notified_count`, `last_reminded_at`), assignment message linkage refreshed; event `updated` (ADR-062) | **reassign in place**: `assignee` updated, state `assigned`, position END of the new agent's queue unless `--before`/`--head`; the old agent's active slot is freed; event `reassigned` |
 | closed (any outcome) | **reopen**: state `assigned` on the named agent, position as above; event `reopened` | same |
 
 No new verb: reassign and reopen are `assign`. "Terminal truth wins" is

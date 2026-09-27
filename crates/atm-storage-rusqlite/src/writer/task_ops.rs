@@ -31,6 +31,10 @@ pub(super) enum TaskMessageResult {
         already_closed: Option<TaskCloseOutcome>,
         task_assignee: Option<AgentName>,
         queued_position: Option<u32>,
+        /// True when `queued_position` was landed by a same-agent update
+        /// rather than a fresh assignment or reassignment (Rand, 2026-09-27,
+        /// #1619).
+        task_updated: bool,
         reassign_notice: Option<Box<Message>>,
     },
     RejectedReportDelivered(AtmError),
@@ -43,15 +47,17 @@ impl TaskMessageResult {
                 already_closed,
                 task_assignee,
                 queued_position,
+                task_updated,
                 reassign_notice,
             } => (
                 already_closed,
                 task_assignee,
                 queued_position,
+                task_updated,
                 reassign_notice,
                 None,
             ),
-            Self::RejectedReportDelivered(error) => (None, None, None, None, Some(error)),
+            Self::RejectedReportDelivered(error) => (None, None, None, false, None, Some(error)),
         }
     }
 }
@@ -60,6 +66,7 @@ type TaskAdmissionParts = (
     Option<TaskCloseOutcome>,
     Option<AgentName>,
     Option<u32>,
+    bool,
     Option<Box<Message>>,
     Option<AtmError>,
 );
@@ -173,6 +180,7 @@ pub(super) fn apply_task_message(
             already_closed: None,
             task_assignee: None,
             queued_position: None,
+            task_updated: false,
             reassign_notice: None,
         });
     };
@@ -182,6 +190,7 @@ pub(super) fn apply_task_message(
                 already_closed: None,
                 task_assignee: None,
                 queued_position: None,
+                task_updated: false,
                 reassign_notice: None,
             })
         }
@@ -197,6 +206,7 @@ pub(super) fn apply_task_message(
             already_closed: None,
             task_assignee: None,
             queued_position: Some(applied.queued_position),
+            task_updated: applied.is_update,
             reassign_notice: applied.reassign_notice.map(Box::new),
         }),
         Some(TaskOp::Start) => {
@@ -205,6 +215,7 @@ pub(super) fn apply_task_message(
                     already_closed: None,
                     task_assignee: Some(task_assignee),
                     queued_position: None,
+                    task_updated: false,
                     reassign_notice: None,
                 }
             })
@@ -244,6 +255,9 @@ fn is_existing_task_report(
 
 struct TaskAssignmentApplied {
     queued_position: u32,
+    /// True when this assignment was a same-agent update rather than a fresh
+    /// assignment or reassignment (Rand, 2026-09-27, #1619).
+    is_update: bool,
     reassign_notice: Option<Message>,
 }
 
@@ -276,11 +290,13 @@ fn apply_task_assignment(
         task_id,
         row.as_ref(),
         message_id,
+        at,
         connection,
         target,
     )? {
         return Ok(TaskAssignmentApplied {
             queued_position,
+            is_update: true,
             reassign_notice: None,
         });
     }
@@ -320,6 +336,7 @@ fn apply_task_assignment(
         .transpose()?;
     Ok(TaskAssignmentApplied {
         queued_position,
+        is_update: false,
         reassign_notice,
     })
 }
