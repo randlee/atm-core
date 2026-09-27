@@ -3007,10 +3007,24 @@ Required rules:
 - acknowledgement is message hygiene only: `atm ack` MUST NOT read, gate on,
   or change task state, and task admission MUST NOT reject a message ack
 - every transition, rejection, and reminder is append-only audit data; a
-  same-agent resend of an open task id records no task event and changes no task
-  state; it refreshes only the assignment message linkage (Phase BA design
-  §3.1a); the durable tables and replay contract are
-  defined by ADR-062
+  same-agent re-assign of an open task id is an update, not an idempotent
+  resend: it MUST append exactly one `updated` task event carrying the same
+  actor and message fields the `assigned`/`reassigned` events carry, MUST
+  reset the reminder budget (`reminder_count`, `lead_notified_count`,
+  `last_reminded_at`) exactly as `assign`/`reassign`/`reopen` do so a stalled
+  task is eligible for reminders again, and MUST leave task state and queue
+  position unchanged unless the re-assignment carries a `placement` (Rand,
+  2026-09-27, #1619; supersedes the Phase BA design §3.1a "idempotent resend"
+  rule). A carried `placement` MUST NOT be silently ignored (Rand,
+  2026-09-27, #1620 follow-up): `--preempt` against an already-`assigned`
+  same-agent task MUST pause the assignee's active task (if any, per item 6
+  below) and move this task to the head in the same write, appending only
+  the `updated` event; a plain `--head`/`--before`/`--end` against an
+  `assigned` same-agent task MUST reposition the queue and append one
+  `moved` event alongside the `updated` event; either placement against an
+  `active` same-agent task is a no-op, since the active task is never
+  repositioned. The durable tables and replay contract are defined by
+  ADR-062
 
 Task lifecycle (Phase BA):
 1. A task MUST exist as exactly one row per `(team, task_id)`.
@@ -3038,15 +3052,20 @@ Task lifecycle (Phase BA):
    the preempting task id; with no active task it behaves exactly like
    `--head` and records no `paused` event. The paused task keeps its id and
    full event history and resumes normally with `atm task start` once the
-   preempting task closes.
+   preempting task closes. When the preempting task id is already open and
+   assigned to the same agent — the ordinary case, since the urgent task is
+   usually already queued — the pause and head-move happen in the same
+   write as the same-agent update (15.4, above), not as a fresh assignment.
 7. Closing a task MUST record one typed outcome from
    `completed | refused | cancelled` with optional reason text,
    MUST remove the task from the queue, and MUST append a timestamped event.
-8. Reassignment and reopening MUST use `atm task assign` on the same id:
-   an open id may be reassigned in place, and a closed id may be reopened;
-   neither operation creates a second row or permits simultaneous assignees.
-   Every transition MUST append exactly one `task_events` row under that id;
-   `reassigned` and `reopened` are event kinds, not outcomes.
+8. Reassignment, same-agent update, and reopening MUST use `atm task assign`
+   on the same id: an open id may be reassigned to a different agent, an open
+   id assigned to its current assignee is an update in place, and a closed id
+   may be reopened; none of these operations creates a second row or permits
+   simultaneous assignees. Every transition MUST append exactly one
+   `task_events` row under that id; `reassigned`, `updated`, and `reopened`
+   are event kinds, not outcomes.
 9. `atm task` MUST be the closed subcommand set `assign`, `start`, `close`,
    `move`, `list`, `events`; `atm send <agent> --task-id <id>` MUST alias `assign`
    and `atm send <assigner> --task-complete --task-id <id>` MUST alias

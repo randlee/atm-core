@@ -145,6 +145,10 @@ pub(crate) enum WriteOpResult {
         already_closed: Option<TaskCloseOutcome>,
         task_assignee: Option<AgentName>,
         queued_position: Option<u32>,
+        /// True when `queued_position` was landed by a same-agent update
+        /// rather than a fresh assignment or reassignment (Rand, 2026-09-27,
+        /// #1619).
+        task_updated: bool,
         reassign_notice: Option<Box<Message>>,
         /// The task this insert's own assignment paused (`active` →
         /// `assigned`) as part of a `--preempt` request. `None` otherwise.
@@ -163,6 +167,7 @@ pub(crate) enum WriteOpResult {
         existing: Option<Box<Message>>,
         task_assignee: Option<AgentName>,
         queued_position: Option<u32>,
+        task_updated: bool,
         reassign_notice: Option<Box<Message>>,
         paused_task_id: Option<TaskId>,
         task_rejection: Option<AtmError>,
@@ -268,6 +273,7 @@ fn execute_admit_template_message(
             existing,
             task_assignee: None,
             queued_position: None,
+            task_updated: false,
             reassign_notice: None,
             paused_task_id: None,
             task_rejection: None,
@@ -276,6 +282,7 @@ fn execute_admit_template_message(
             inserted: true,
             task_assignee,
             queued_position,
+            task_updated,
             reassign_notice,
             paused_task_id,
             task_rejection,
@@ -288,6 +295,7 @@ fn execute_admit_template_message(
                 existing: None,
                 task_assignee,
                 queued_position,
+                task_updated,
                 reassign_notice,
                 paused_task_id,
                 task_rejection,

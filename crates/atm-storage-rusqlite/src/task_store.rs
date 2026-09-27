@@ -646,6 +646,7 @@ fn parse_event(value: &str) -> rusqlite::Result<TaskEventKind> {
         "migrated" => Ok(TaskEventKind::Migrated),
         "reminders_reset" => Ok(TaskEventKind::RemindersReset),
         "paused" => Ok(TaskEventKind::Paused),
+        "updated" => Ok(TaskEventKind::Updated),
         _ => Err(invalid(value, "task event")),
     }
 }
@@ -703,6 +704,7 @@ const fn event_name(value: TaskEventKind) -> &'static str {
         TaskEventKind::Migrated => "migrated",
         TaskEventKind::RemindersReset => "reminders_reset",
         TaskEventKind::Paused => "paused",
+        TaskEventKind::Updated => "updated",
     }
 }
 const fn outcome_name(value: ReminderOutcome) -> &'static str {

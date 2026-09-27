@@ -242,6 +242,9 @@ pub struct MessageAdmissionOutcome {
     pub task_assignee: Option<AgentName>,
     /// Landed queue position for an assignment admitted by this write.
     pub queued_position: Option<u32>,
+    /// True when `queued_position` was landed by a same-agent update rather
+    /// than a fresh assignment or reassignment (Rand, 2026-09-27, #1619).
+    pub task_updated: bool,
     /// Canonical reassignment notice inserted atomically for the old assignee.
     pub reassign_notice: Option<Message>,
     /// The task this admission's own assignment paused (`active` →

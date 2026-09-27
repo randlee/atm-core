@@ -364,7 +364,13 @@ mod tests {
     #[test]
     fn kind_decision_covers_every_transition() {
         let transitions = [
-            (TaskTransition::Queued { position: 2 }, K::TaskQueued),
+            (
+                TaskTransition::Queued {
+                    position: 2,
+                    is_update: false,
+                },
+                K::TaskQueued,
+            ),
             (TaskTransition::Ready, K::TaskReady),
             (TaskTransition::Reminder { attempt: 1 }, K::TaskReminder),
             (TaskTransition::Started, K::TaskStarted),

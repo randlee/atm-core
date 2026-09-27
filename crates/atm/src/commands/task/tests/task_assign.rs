@@ -505,3 +505,75 @@ async fn preempted_task_resumes_with_task_start_and_keeps_its_original_history()
         "resumed task records a fresh started event"
     );
 }
+
+/// The urgent task is usually already queued: `--preempt` against a task id
+/// already `assigned` to the same agent must still pause the active task and
+/// move the queued task to the head, in the same write as the same-agent
+/// update (Rand's ruling, 2026-09-27, #1620 follow-up).
+#[tokio::test]
+#[serial(env)]
+async fn preempt_against_an_already_queued_same_agent_task_pauses_and_moves_it_to_head() {
+    let fixture = LoopbackFixture::new("recipient");
+    let team: TeamName = TEST_TEAM.parse().expect("team");
+    execute_assign(&fixture, assign("X", TEST_RECIPIENT_ADDRESS, TEST_SENDER)).await;
+    start_task(&fixture, &team, "X").await;
+    execute_assign(&fixture, assign("Y", TEST_RECIPIENT_ADDRESS, TEST_SENDER)).await;
+
+    let store = fixture.task_store();
+    let queued_before = store
+        .load_task(&team, &"Y".parse().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(queued_before.position.expect("position").get(), 2);
+
+    execute_assign(&fixture, preempt("Y", TEST_RECIPIENT_ADDRESS, TEST_SENDER)).await;
+
+    let paused = store
+        .load_task(&team, &"X".parse().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(paused.state, TaskState::Assigned);
+    assert_eq!(paused.position.expect("position").get(), 2);
+    let head = store
+        .load_task(&team, &"Y".parse().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(head.state, TaskState::Assigned);
+    assert_eq!(head.position.expect("position").get(), 1);
+
+    let x_events = store
+        .list_task_events(&team, &"X".parse().unwrap(), None)
+        .unwrap();
+    let paused_events: Vec<_> = x_events
+        .iter()
+        .filter(|event| event.event == TaskEventKind::Paused)
+        .collect();
+    assert_eq!(paused_events.len(), 1, "exactly one paused event on X");
+    assert!(paused_events[0].detail.as_deref().unwrap().contains('Y'));
+
+    let y_events = store
+        .list_task_events(&team, &"Y".parse().unwrap(), None)
+        .unwrap();
+    assert_eq!(
+        y_events
+            .iter()
+            .filter(|event| event.event == TaskEventKind::Updated)
+            .count(),
+        1,
+        "the already-queued task gets one updated event, not a fresh assignment"
+    );
+    assert!(
+        y_events
+            .iter()
+            .all(|event| event.event != TaskEventKind::Moved),
+        "preempt's head move is silent; only `updated` records it"
+    );
+    assert_eq!(
+        y_events
+            .iter()
+            .filter(|event| event.event == TaskEventKind::Assigned)
+            .count(),
+        1,
+        "the original assigned event is untouched, not repeated"
+    );
+}

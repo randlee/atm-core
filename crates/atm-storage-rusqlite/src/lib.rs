@@ -4249,8 +4249,12 @@ mod tests {
         let events = tasks
             .list_task_events(&team(), &task_id, Some(&agent()))
             .expect("task events");
-        assert_eq!(events.len(), 2);
-        assert_eq!(events[1].event, TaskEventKind::Completed);
+        // The resend above is a same-agent update of the open assignment, so
+        // it appends an `Updated` event rather than being a silent no-op
+        // (Rand, 2026-09-27, #1619).
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[1].event, TaskEventKind::Updated);
+        assert_eq!(events[2].event, TaskEventKind::Completed);
 
         let peer_task: atm_storage::TaskId = "AX.3-peer".parse().expect("peer task");
         let mut peer = message("atm:peer-task", "peer receipt");
@@ -4287,7 +4291,8 @@ mod tests {
                 | TaskEventKind::Moved
                 | TaskEventKind::Migrated
                 | TaskEventKind::RemindersReset
-                | TaskEventKind::Paused => None,
+                | TaskEventKind::Paused
+                | TaskEventKind::Updated => None,
             })
             .try_fold(None, |state, event| {
                 let assignee = agent();

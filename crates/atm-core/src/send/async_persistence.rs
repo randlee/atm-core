@@ -263,6 +263,7 @@ async fn admit_verified_template(
         .with_task_rejection(admission.task_rejection)
         .with_assignment_metadata(
             admission.queued_position,
+            admission.task_updated,
             admission.reassign_notice,
             admission.paused_task_id,
         ))

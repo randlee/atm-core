@@ -5,7 +5,7 @@ title: Task State Machine
 # ADR-062 — Task State Machine
 
 Date: 2026-09-04
-Amended: 2026-09-11 (Phase BA); 2026-09-26 (#1598); 2026-09-27 (#1620)
+Amended: 2026-09-11 (Phase BA); 2026-09-26 (#1598); 2026-09-27 (#1619, #1620)
 
 ## Phase AX decision (as built; superseded where marked)
 
@@ -32,12 +32,14 @@ transition table is:
 *Superseded (BA):* Only local message admission applies
 assignment/completion, and only the acknowledgement writer operation applies
 acknowledgement. Peer-originated receipts are stored with
-`MessageWriteOrigin::Peer` and never transition the ledger. A local same-agent
-resend of an open id is idempotent under Phase BA: no state change and no task
-event; it refreshes only `assignment_message_id`, `description`, and
-`updated_at` so that close hygiene acknowledges the current assignment message
-(design §3.1a; DRIFT-062). Assigning the same open id to another agent, or
-any id that is closed, is the in-place reassign/reopen transition.
+`MessageWriteOrigin::Peer` and never transition the ledger. *Superseded
+(2026-09-27, #1619):* a local same-agent resend of an open id is idempotent
+under Phase BA: no state change and no task event; it refreshes only
+`assignment_message_id`, `description`, and `updated_at` so that close
+hygiene acknowledges the current assignment message (design §3.1a;
+DRIFT-062). See "Same-agent update" below for the current rule. Assigning
+the same open id to another agent, or any id that is closed, is the in-place
+reassign/reopen transition.
 Completion may be authored by the assignee or assigner; it rejects a missing
 task. *Superseded (BA):* it rejects a completed task. *Superseded (BA):*
 Acknowledging an assigned task rejects when another task is active for that
@@ -126,18 +128,18 @@ event, is never gated on task state, and never transitions a task.
 | Queue order | `ORDER BY position, assigned_at, task_id`; `position` is a separate column, default end of queue; `assigned_at` records the current assignment and is reset by reassign/reopen, never by move |
 | Close outcome | typed `completed \| refused \| cancelled`; free text is a human-facing reason only |
 | Reassignment | `assign` on an existing open id updates assignee/state/placement in place and appends `reassigned`; a closed id is reopened in place with `reopened` |
-| Replay | per `(team, task_id)`, fold events in ascending `seq`; `assigned` establishes initial state, `started`, outcome events, `reassigned`, `reopened`, and `migrated` change state, while `moved`, `rejected`, `reminded`, `lead_notified`, and `acked` are state-neutral |
+| Replay | per `(team, task_id)`, fold events in ascending `seq`; `assigned` establishes initial state, `started`, outcome events, `reassigned`, `reopened`, and `migrated` change state, while `moved`, `rejected`, `reminded`, `lead_notified`, `updated`, and `acked` are state-neutral |
 
 ### States and events
 
 States: `assigned`, `active`, `complete`. Events: `Assigned`, `Started`,
-`Reassigned`, `Reopened`, `Completed(outcome)`.
+`Reassigned`, `Updated`, `Reopened`, `Completed(outcome)`.
 
 | Current | Assigned | Started | Completed(outcome) |
 | --- | --- | --- | --- |
 | ∅ | assigned | reject | reject |
-| assigned | assigned (resend) — no event | active; reject when another task is active for the assignee | complete |
-| active | active (resend) — no event | reject `ATM_TASK_ALREADY_ACTIVE` (`task <id> is already active`); the write fails and nothing is delivered; one state-neutral `rejected` event is appended | complete |
+| assigned | assigned (same-agent update) — one `updated` event, reminder budget reset; *superseded (2026-09-27, #1619): was "resend — no event"* | active; reject when another task is active for the assignee | complete |
+| active | active (same-agent update) — one `updated` event, reminder budget reset; *superseded (2026-09-27, #1619): was "resend — no event"* | reject `ATM_TASK_ALREADY_ACTIVE` (`task <id> is already active`); the write fails and nothing is delivered; one state-neutral `rejected` event is appended | complete |
 | complete | assign reopens the same id | reject | no transition; deliver and inform already complete |
 
 `Started` notifies the assigner. `Completed(outcome)` dequeues the task (no
@@ -173,7 +175,10 @@ start — rendered by the `TaskQueued` built-in nudge template's optional
 `paused="<X>"` attribute (`crates/atm-core/src/send/nudge_template.rs`).
 `atm task move` continues to reject repositioning or preempting the active
 task; `--preempt` is assign-only and `apply_task_move` rejects the
-`MoveTarget::Preempt` placement if constructed against it.
+`MoveTarget::Preempt` placement if constructed against it. When the target
+task is already open and assigned to the same agent, "Same-agent update"
+below is the exact contract, since preempting an already-queued task is the
+ordinary case: the urgent task usually already exists in the queue.
 
 ### Prompt handoffs (Phase BB)
 
@@ -236,6 +241,58 @@ Contract:
   no new request or response DTO shape and writes nothing: no task row,
   `task_events` row, or queue position changes as a result of running it
 
+## Same-agent update (2026-09-27 amendment, issue #1619)
+
+Rand's ruling (2026-09-27, #1619) reverses the Phase BA §3.1a "idempotent
+resend" rule above: `atm task assign <same agent> --task-id <id>` on an open
+task is an update, not a no-op, and follows the normal assignment path.
+
+- It appends exactly one `updated` task event carrying the same actor and
+  message fields the `assigned`/`reassigned` events carry (`from_state` and
+  `to_state` both equal the task's current state, since this is not a
+  transition).
+- It resets the reminder budget — `reminder_count`, `lead_notified_count`,
+  and `last_reminded_at` — in the same write, exactly as `assign`/`reassign`/
+  `reopen` do, so a task stalled at `TASK_STALLED_REMINDER_THRESHOLD` with
+  the lead already notified is eligible for reminders again.
+- Task state (`assigned` stays `assigned`, `active` stays `active`) and
+  queue position are unchanged: this is not a reassignment, so the queue is
+  not renumbered and `assigned_at` is not reset.
+- The agent notification for an update carries an update marker
+  (`updated="1"` on the `<atm .../>` task tag,
+  `crates/atm-core/src/send/nudge_template.rs`) so the notice reads as an
+  update to the same task id rather than a new assignment.
+- Assigning the same open id to a *different* agent is unaffected: it still
+  produces `reassigned`, never `updated`.
+
+**Placement on a same-agent update (2026-09-27 amendment, issue #1620
+follow-up).** A same-agent update still carries a `placement`; silently
+ignoring it is wrong.
+- `--preempt` against an already-`assigned` (queued, not active) task is the
+  case `--preempt` exists for — the urgent task is usually already queued.
+  It pauses the assignee's active task, if any (one `paused` event, exactly
+  as the fresh-assignment preempt path above), and moves this task to the
+  queue head in the same write, with no separate `moved` event — only the
+  `updated` event. The agent's one notice carries both `updated="1"` and
+  `paused="<X>"`. Against an already-`active` task there is nothing to pause
+  (it is already the head) and nothing to move.
+- A plain `--head`/`--before <other>`/`--end` placement against an
+  `assigned` task is honored as an ordinary move: it repositions the queue
+  and appends one `moved` event, in the same write as the `updated` event.
+  Against an `active` task it is a no-op: the active task is always already
+  at the head and is never repositioned (lifecycle item 6, above).
+
+Implementation: `crates/atm-storage-rusqlite/src/writer/task_assignment_refresh.rs`
+(`is_same_agent_open_update`, `refresh_same_assignment_fields`) and
+`crates/atm-storage-rusqlite/src/writer/task_ops.rs`
+(`apply_same_agent_update`, `reposition_queue`), threaded through
+`TaskAssignmentApplied::is_update`, `MessageAdmissionOutcome::task_updated`,
+and `TaskTransition::Queued::is_update`
+(`crates/atm-storage/src/task_state.rs`). The `task_events.event` column has no
+`CHECK` constraint, so the additive `updated` value needed no schema-version
+change; `TaskTransition::Queued::is_update` is `#[serde(default)]` so a
+pre-#1619 payload without the field still decodes.
+
 ## Consequences
 
-The lifecycle remains one row per task id, with explicit assignment events for reassignment and reopen; close outcomes remain limited to completed, refused, and cancelled.
+The lifecycle remains one row per task id, with explicit assignment events for reassignment, same-agent update, and reopen; close outcomes remain limited to completed, refused, and cancelled.

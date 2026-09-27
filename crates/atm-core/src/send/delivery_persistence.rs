@@ -30,6 +30,9 @@ pub(crate) struct DeliveryPersistenceResult {
     pub(crate) already_closed: Option<TaskCloseOutcome>,
     pub(crate) task_assignee: Option<AgentName>,
     pub(crate) queued_position: Option<u32>,
+    /// True when `queued_position` was landed by a same-agent update rather
+    /// than a fresh assignment or reassignment (Rand, 2026-09-27, #1619).
+    pub(crate) task_updated: bool,
     pub(crate) reassign_notice: Option<Message>,
     /// The task this write's own assignment paused (`active` → `assigned`)
     /// as part of a `--preempt` admission. `None` for every other write.
@@ -48,6 +51,7 @@ impl DeliveryPersistenceResult {
             already_closed: None,
             task_assignee: None,
             queued_position: None,
+            task_updated: false,
             reassign_notice: None,
             paused_task_id: None,
             task_rejection: None,
@@ -64,6 +68,7 @@ impl DeliveryPersistenceResult {
             already_closed: None,
             task_assignee: None,
             queued_position: None,
+            task_updated: false,
             reassign_notice: None,
             paused_task_id: None,
             task_rejection: None,
@@ -80,6 +85,7 @@ impl DeliveryPersistenceResult {
             already_closed: None,
             task_assignee: None,
             queued_position: None,
+            task_updated: false,
             reassign_notice: None,
             paused_task_id: None,
             task_rejection: None,
@@ -107,10 +113,12 @@ impl DeliveryPersistenceResult {
     pub(crate) fn with_assignment_metadata(
         mut self,
         queued_position: Option<u32>,
+        task_updated: bool,
         reassign_notice: Option<Message>,
         paused_task_id: Option<TaskId>,
     ) -> Self {
         self.queued_position = queued_position;
+        self.task_updated = task_updated;
         self.reassign_notice = reassign_notice;
         self.paused_task_id = paused_task_id;
         self
