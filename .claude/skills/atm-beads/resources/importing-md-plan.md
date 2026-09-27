@@ -87,6 +87,7 @@ goes back to the plan's author to supply, with the exact list of gaps.
    - one plan into a running phase: `<root>-plan-qa` is already closed, so
      create `<root>-plan-qa-<n>` (the next free number), blocking every new
      dev bead.
+   **Mandatory:** export the phase sprint-bead list and commit it with the plan: `.claude/skills/atm-beads/scripts/export-sprint-index --root <root> --out docs/plans/phase-<x>/sprints.json`, then run `.claude/skills/sprint-review/scripts/sprint-review --root <root>`. It commits and pushes that index and the required initial `docs/plans/phase-<x>/phase-<x>-dag.html` on the root bead's integration branch. Do not open a viewer unless `--view` is requested.
 10. **Verify** with `.claude/skills/atm-beads/scripts/validate-plan --root
     <root>`, then check the graph:
     - `bd ready -l phase-<x> -n 0` lists the plan-review bead and no dev bead
@@ -109,9 +110,9 @@ Keep `<scratch>` outside the repository.
 | Bead var | Markdown source |
 | --- | --- |
 | `phase` | frontmatter `phase`, lower-cased (`D` → `d`) |
-| `id` | `<prefix>-phase-<x>` (`atm-phase-bd`) |
+| `id` | `<prefix>-phase-<x>` (`atm-phase-d`) |
 | `plan_scope` | `feature` for a phase under the Development epic |
-| `parent` | the Development epic (`atm-c4v`) |
+| `parent` | the Development epic (`atm-<epic>`) |
 | `title` | H1 without the `Phase <X> — ` prefix |
 | `description` | the intro paragraphs and the sprint table |
 | `design` | the stream / branch table and "Scope and retained gates" |
@@ -123,19 +124,19 @@ Keep `<scratch>` outside the repository.
 | Bead var | Markdown source |
 | --- | --- |
 | `sprint` | frontmatter `id`, lower-cased with `.` → `-` (`D.4` → `d-4`) |
-| `id` | `<prefix>-<sprint>` (`atm-bd-4`); its sanity check is `<id>-sanity` |
+| `id` | `<prefix>-<sprint>` (`atm-d-4`); its sanity check is `<id>-sanity` |
 | `parent` | the phase root's id |
 | `title` | H1 without the `<id> — ` prefix |
 | `assignee`, `model_class` | frontmatter `assignee`, `model_class` (or the sprint table's `agent:model`) |
 | `relation` | frontmatter `relation` (`root`, `must_follow`, `parallel_safe`) |
-| `blocked_by` | for each `must_follow` parent in `depends_on`: that parent's sanity check bead (`atm-bd-5-sanity`), never the parent's dev bead |
+| `blocked_by` | for each `must_follow` parent in `depends_on`: that parent's sanity check bead (`atm-d-5-sanity`), never the parent's dev bead |
 | `closure_type`, `target_boundary` | frontmatter or the "Closure" section |
 | `owned_paths` | the "Owned Paths" section, else "Exact Targets", plus `owned_docs` (see Checks) |
 | `description` | Goal, Deliverables, Required Work, and Non-closure, in that order, as markdown |
 | `design` | Explicit Code Samples ("Public contract"), Exact Targets, and the dependency rationale |
 | `acceptance_criteria` | Acceptance Criteria and Required Validation (the commands) |
 
-| `requirements` | frontmatter `requirements`, plus every REQ id the body relies on (`REQ-ATM-CMD-001`, `REQ-CORE-BOUNDARY-001`, `NFR-…`). Exactly `["NONE"]` only when the author says no requirement governs the sprint |
+| `requirements` | frontmatter `requirements`, plus every REQ id the body relies on (`LOG-001`, `OTLP-008`, `NFR-…`). Exactly `["NONE"]` only when the author says no requirement governs the sprint |
 | `adrs` | frontmatter `adrs`, plus every ADR the body relies on (`ADR-011`). Exactly `["NONE"]` only when the author says so |
 | `release_train` | frontmatter, when present |
 | `branch` | `sprint/<sprint>-<slug>`, with the slug taken from the doc's branch or file name |
@@ -174,8 +175,8 @@ does not stop it.
 | Owned paths taken only from the Deliverables list (no "Owned Paths" or "Exact Targets" section) | warn | import them and list them for the author to confirm |
 | Two sprints that can run at once (`parallel_safe`, or neither depends on the other) with overlapping owned paths or `owned_docs` | blocking | the author makes one `must_follow` or splits the sprint |
 | No requirement ids and no explicit "no requirements" statement, or the same for ADRs | blocking | ask the author for the ids, or for an explicit `NONE` |
-| A REQ or ADR id is not in the governing documents (`manifest-get docs.requirements` / `docs.architecture`, content or file name; or the crate's copy), and does not meet [New Ids](planning.md#new-ids) | blocking | ask the author |
-| An id with the REQ shape (`REQ-ATM-CMD-001`) used for something else, such as an error code | warn | list it; do not put it in `requirements` |
+| A REQ or ADR id is not in `docs/requirements.md` / `docs/architecture.md` (or the crate's copy), and does not meet [New Ids](planning.md#new-ids) | blocking | ask the author |
+| An id with the REQ shape (`LOG-001`) used for something else, such as an error code | warn | list it; do not put it in `requirements` |
 | The integration branch `integrate/phase-<x>` does not exist on origin | warn | lead creates it before the first dispatch |
 | Acceptance criteria or validation commands missing | blocking | ask the author |
 | No design content (no code samples, no exact targets) | blocking | ask the author; "no contract change" must be stated by the author with a reason |

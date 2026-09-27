@@ -15,7 +15,7 @@ decides both:
 
 | Setting | Where | atm-core |
 | --- | --- | --- |
-| member | `roles.dev-sanity` in `.claude/project/orchestration.yaml` (fallback: `.claude/agents/registry.yaml`); print it with `.claude/skills/atm-beads/scripts/resolve-role dev-sanity` | `atm-sanity` |
+| member | `roles.dev-sanity` in `.claude/agents/registry.yaml`; print it with `.claude/skills/atm-beads/scripts/resolve-role dev-sanity` | `atm-sanity` |
 | directive | that member's `[startup.<member>]` prompt in `.atm.toml` | `.claude/agents/dev-sanity-llm.md` |
 
 The member name is unique to the team, because Herdr agent names are global
@@ -75,5 +75,15 @@ in the report by number, done or with its findings, so closure is explicit.
 | cannot run | stays open, with a note | `refused`, `task-refused.md.j2` |
 
 A FAIL never closes the bead. Closing it would release the dev beads that
-depend on the checked sprint. The lead reopens the checked bead and assigns
-the fix. When the fix closes, the same sanity check bead is ready again.
+depend on the checked sprint. The sanity member preserves each finding as a
+separate item and creates one child finding bead per item. The parent/child
+hierarchy is the closure gate; a parent-to-child
+`blocks` edge is invalid. Each child has the severity priority (blocking P1,
+important P2, minor P4), records
+the same structured JSON finding data as the sanity report, and copies the
+checked bead's phase/sprint/stack/layer provenance. The lead reviews those
+children and may overrule or modify them, but does not recreate their report
+data. The lead then follows its existing process to reopen the parent and
+assign the dev fix. Reported prerequisite relationships become sibling `blocks`
+edges. The parent cannot close until all children close. That closure makes the
+same sanity check bead ready again.

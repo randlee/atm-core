@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Check that the required phase HTML and bead index were pushed to integration."""
+import argparse
+from html.parser import HTMLParser
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+from sprint_index_common import phase_id, run_json, validate_index
+
+
+class Artifact(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.svg = False
+        self.root = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'svg':
+            self.svg = True
+        attrs = dict(attrs)
+        if tag == 'meta' and attrs.get('name') == 'phase-root-bead':
+            self.root = attrs.get('content')
+
+
+def check_artifact(repo, root, expected_index):
+    records = run_json(repo, 'bd', 'show', root, '--json')
+    if not records:
+        raise RuntimeError(f'phase root missing: {root}')
+    phase = phase_id(root, records[0])
+    branch = (records[0].get('metadata') or {}).get('integration_branch')
+    if not branch:
+        raise RuntimeError(f'{root}: integration_branch is required for the phase artifact')
+    def git(*args):
+        result = subprocess.run(['git', *args], cwd=repo, text=True, capture_output=True)
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or f'git {args[0]} failed')
+        return result.stdout
+    git('check-ref-format', '--branch', branch)
+    ref = f'refs/remotes/origin/{branch}'
+    git('fetch', '--no-tags', 'origin', f'refs/heads/{branch}:{ref}')
+    base = f'docs/plans/phase-{phase}'
+    try:
+        page = git('show', f'{ref}:{base}/phase-{phase}-dag.html')
+        published_index = json.loads(git('show', f'{ref}:{base}/sprints.json'))
+    except (RuntimeError, ValueError) as exc:
+        raise RuntimeError(f'{branch}: required phase index/HTML artifact missing or unreadable; run sprint-review --root {root}: {exc}') from exc
+    validate_index(published_index)
+    if published_index != expected_index:
+        raise RuntimeError(f'{branch}: published membership differs from current index; run sprint-review --root {root}')
+    artifact = Artifact()
+    artifact.feed(page)
+    if not artifact.svg or artifact.root != root:
+        raise RuntimeError(f'{branch}: phase HTML must embed SVG and identify root {root}; run sprint-review --root {root}')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--root', required=True)
+    parser.add_argument('--index', required=True, type=Path)
+    args = parser.parse_args()
+    repo = Path(subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).strip())
+    index = json.loads(args.index.read_text())
+    validate_index(index)
+    check_artifact(repo, args.root, index)
+    print('required phase HTML and bead index are published on integration')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
+        print(f'check-phase-artifact: {exc}', file=sys.stderr)
+        raise SystemExit(5)

@@ -94,7 +94,7 @@ orchestration alert or sprint-plan violation or merge-conflict notice:
 - [`.claude/skills/phase-orchestration/SKILL.md`](./.claude/skills/phase-orchestration/SKILL.md) - phased sprint orchestration with fresh `scrum-master` coordinators
 - [`.claude/skills/quality-management-gh/SKILL.md`](./.claude/skills/quality-management-gh/SKILL.md) - multi-pass QA status, CI monitoring, and PR report conventions
 - [`.claude/skills/sprint-report/SKILL.md`](./.claude/skills/sprint-report/SKILL.md) - sprint status reporting templates for current phase and integration PR state
-- [`.claude/skills/atm-beads/SKILL.md`](./.claude/skills/atm-beads/SKILL.md) - the phase plan as a beads graph (manifest `.claude/project/orchestration.yaml`, `validate-plan`, `bd import`)
+- [`.claude/skills/atm-beads/SKILL.md`](./.claude/skills/atm-beads/SKILL.md) - the phase plan as a beads graph (`validate-plan`, `bd import`); installed from the atm-bd-orchestration package (https://github.com/randlee/atm-bd-orchestration), never edited here
 - [`.claude/skills/atm-bd-orchestration/SKILL.md`](./.claude/skills/atm-bd-orchestration/SKILL.md) - dispatch, dev-sanity, QA and stack landing driven by `bd ready`
 - [`.claude/project/quality-policy.md`](./.claude/project/quality-policy.md) - repository QA policy: reviewer sets per round, validation commands, governed interfaces
 - [`.claude/agents/ceremony-qa.md`](./.claude/agents/ceremony-qa.md) - plan QA-1 reviewer that flags process artifacts with no consumer (with `ceremony-finding-screen` on every round's findings)

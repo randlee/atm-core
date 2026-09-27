@@ -1,6 +1,6 @@
 ---
 name: dev-sanity-complete
-version: 1.0.0
+version: 0.1.0
 description: Sanity check report; the body of `atm task close <task-id> completed`. PASS closes the sanity check bead; FAIL leaves it open and the lead reopens the checked bead with these findings.
 format: markdown
 required_variables:
@@ -16,8 +16,10 @@ required_variables:
   - lint_md
 optional_variables:
   - notes_md
+  - finding_bead_ids
 defaults:
   notes_md: ""
+  finding_bead_ids: []
 metadata:
   type: dev-sanity-complete
   tags:
@@ -48,7 +50,8 @@ Verdict: **{{ verdict }}** ({{ findings_count }} findings)
   "branch": {{ branch | tojson }},
   "commit": {{ commit | tojson }},
   "verdict": {{ verdict | tojson }},
-  "findings": {{ findings_count }}
+  "findings": {{ findings_count }},
+  "finding_bead_ids": {{ finding_bead_ids | tojson }}
 }
 ```
 

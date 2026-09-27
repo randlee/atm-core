@@ -1,6 +1,6 @@
 ---
 name: atm-bd-orchestration
-version: 0.3.7
+version: 0.1.0
 description: Bead-driven phase orchestration for the lead. Use when running a phase whose plan is in beads, dispatching from `bd ready` with ATM tasks, and landing it as one gh stack.
 requires:
   cli:
@@ -12,6 +12,7 @@ requires:
     - name: gh
 depends_on:
   atm-beads: 0.x
+  sc-gh-stack: 0.x
   quality-mgr: 0.x
   ceremony-finding-screen: 0.x
 ---
@@ -41,15 +42,11 @@ Run this before anything else in the skill:
 for c in bd atm sc-compose jq gh; do command -v "$c" >/dev/null && echo "ok $c" || echo "MISSING $c"; done
 bd version    # 1.3.0 or newer
 gh stack --version   # the gh-stack extension
-.claude/skills/atm-beads/scripts/manifest-get bead_prefix   # the repository manifest is readable
 ```
 
 If anything is missing or too old, **read
 [`../atm-beads/references/installation-and-troubleshooting.md`](../atm-beads/references/installation-and-troubleshooting.md)
-before proceeding.** The repository facts this skill needs (bead prefix,
-trunk, integration branch pattern, governing docs, policy, role map,
-commands, stack mechanics) are the manifest `.claude/project/orchestration.yaml`
-(`atm-beads` "Manifest"); nothing repo-specific is written in the skill.
+before proceeding.**
 
 ## Lead Role
 
@@ -75,10 +72,9 @@ files those from a phase-end review.
 | quality-mgr | the long-running QA agent | [`roles/quality-mgr.md`](roles/quality-mgr.md) |
 
 This skill names roles, not members or agents. A repository maps a role to
-its team-unique member in `roles:` of the manifest
-`.claude/project/orchestration.yaml` (`roles:` of
-`.claude/agents/registry.yaml` is the fallback), and that member's
-`[startup.<member>]` prompt in `.atm.toml` names the directive it runs. Resolve the member with
+its team-unique member in `roles:` of `.claude/agents/registry.yaml`, and
+that member's `[startup.<member>]` prompt in `.atm.toml` names the directive
+it runs. Resolve the member with
 `.claude/skills/atm-beads/scripts/resolve-role <role>`; it exits 2 when the
 role is not mapped.
 
@@ -96,51 +92,91 @@ or ATM.
 
 ## Stack Discipline
 
-Every phase runs as one append-only `gh stack` on the phase integration
-branch (manifest `integration_branch`, `integrate/phase-<x>` here). The
-mechanics are the documents and skills the manifest names in
-`stack.mechanics` (`manifest-get stack.mechanics`), plain markdown any agent
-can follow. What this skill changes:
+Every bead declares its immutable `metadata.pr_target`. A dev or fix branch
+is cut from `origin/<pr_target>` and rebases only onto that branch. The lead
+opens the PR against that same target after sanity PASS; a passed sanity is
+frozen and a later change is a new fix bead with its own sanity. Sprint work
+does not wait for QA: the next sprint is dispatched as soon as its sanity
+blockers PASS. QA and fixes interleave by priority (blocking P1, sprint and
+important P2, minor P4).
 
-- Dev and fix work runs in parallel. Each task works in its own worktree cut
-  from the pushed top at task start, and is not linked while it runs.
-- When the work is complete the writer rebases it once onto the current
-  pushed top (it is live and has no children, so this is the one allowed
-  rebase) and pushes. Layers therefore stack in completion order. When two
-  layers finish on the same top, the lead rebases the second onto the first
-  before linking it (Loop, sanity check PASS).
-- The lead opens the PR (base = the top it was rebased onto) and links it
-  when its **sanity check passes**, not at the first push. A sanity check
-  failure reopens a branch nothing is stacked on yet, so the dev-fix can
-  commit and rebase it again.
-- Once linked, a layer is frozen. A later finding on it is fixed on a new
-  layer at the top of the same stack, one finding per layer, and fix layers
-  land between dev layers.
-- The lead records the linked bead's actual `layer` and `pr_target`:
-  `bd update <bead> --set-metadata layer=<n> --set-metadata pr_target=<branch>`.
-- Landing is one `gh stack merge <stack#> --yes --merge` after the last
-  finding closes (the landing procedure in `stack.mechanics`).
+## Gate Beads
+
+`bd gate` is the strategic way to hold work. A gate may represent critical CI
+or integration testing (`gh:run` or `gh:pr`), a timer, or a human decision.
+Create the gate and wire the work explicitly, for example:
+
+```bash
+bd gate create --id phase-d-integration --title 'phase d integration CI'
+bd dep add atm-d-7 phase-d-integration --type blocks
+```
+
+Human gates require explicit user agreement recorded in the phase
+`sprints.json` as `policy.human_gates[]`; unattended phases must not contain
+an unrecorded human gate.
+
+### Parallel Quick Fix
+
+A running sprint sometimes finds a change that other live branches need at
+the same time: a shared type or trait signature that parallel sprints all
+implement or consume, or a critical bug in code every branch carries. That
+change does not go into the finder's layer. Landed there, every other branch
+fails until that layer merges, and the cross-fence edits it forces conflict
+on every restack and show up as out-of-scope work in that sprint's PR.
+
+1. The finder stops the edit in the sprint worktree and tells the lead the
+   exact change and the branches it breaks.
+2. The lead picks the base: the lowest branch that already holds what the
+   change needs. That is `integrate/phase-<x>` for a bug in merged code, or
+   the stack layer whose types the change uses.
+3. The finder cuts `fix/<thing>` from `origin/<base>` in its own worktree,
+   with only the change, the implementors and call sites the compiler
+   forces, and one test when it is a bug. The test command passes; push; PR
+   into `<base>`.
+   When every roster agent is mid-task, the lead runs a background
+   `rust-developer` subagent for this step instead of waiting; the branch,
+   scope and test rule are the same.
+4. The lead dispatches one QA round on the fix PR (`qa-template.xml.j2`,
+   `checked_bead` = the finder's bead, `layer` = the base) and merges when
+   it passes; no PR into the integration branch or a stack layer merges
+   without QA. The lead then rebases the stack layers above the base and pushes each
+   with `--force-with-lease`. A live sprint branch rebases onto its new top
+   at its next push; the lead sends its owner the new top.
+5. The lead records the fix branch and PR in the finder's bead notes and in
+   the notes of every bead whose fence it touched. The finder's sprint task
+   stays open and continues on the rebased layer.
+
+Once the fix is in the base, it leaves every rebased branch's PR diff, so CI
+and QA on those PRs never see it, and no sprint carries another sprint's
+edits. It also means one copy of the missing code: without it each blocked
+sprint writes its own version of the change; the copies conflict at restack and
+the designs drift apart.
 
 ## Plan Gate
 
 No dev bead is dispatched until the plan passes review.
 
-1. Validate the plan:
-   `.claude/skills/atm-beads/scripts/validate-plan --root <root>`, run from
-   the repository root. It runs `bd doctor`, `check-plan.jq`, the REQ/ADR
-   existence check and the ATM member check. Exit 0 or stop.
-2. Create the plan-review bead right after the import (the import
+1. Create the plan-review bead right after the import (the import
    procedures do this as their next step), so that it blocks every root sprint (every dev
    bead with no sanity check blocker). For sprints imported into a running
    phase, use `<root>-plan-qa-<n>` (the next free number) and block only the
    new dev beads, including any that already have sanity check blockers:
 
    ```bash
-   bd create --id <root>-plan-qa --type task \
+   bd create --id <root>-plan-qa --type task --parent <root> \
      -l phase-<x>,stage:plan-review --assignee quality-mgr \
-     --title "phase-<x>: plan review" \
-     --deps parent-child:<root>,blocks:<root sprint>,blocks:<root sprint>
+     --title "phase-<x>: plan review" --deps blocks:<root sprint>,blocks:<root sprint>
    ```
+
+2. Generate and publish the initial phase diagram before review:
+   `.claude/skills/sprint-review/scripts/sprint-review --root <root>`.
+   The phase integration branch must contain the committed/pushed
+   `docs/plans/phase-<x>/sprints.json` bead-ID index and
+   `docs/plans/phase-<x>/phase-<x>-dag.html` with embedded SVG. Do not open the
+   diagram unless `--view` was requested and Wyvern is available.
+   Then run `.claude/skills/atm-beads/scripts/validate-plan --root <root>`
+   from the repository root. It checks beads, REQ/ADR references, ATM members,
+   index membership, and the published artifacts. Exit 0 or stop.
 
 3. Dispatch it with
    [`plan-review-template.xml.j2`](templates/plan-review-template.xml.j2).
@@ -185,9 +221,9 @@ Then, on each task close:
 | plan-review PASS | nothing when the bead closed: the root sprints are now ready. With minor findings the bead is assigned to you still open: fix each listed bead with `bd update`, then `bd close <root>-plan-qa --reason "minor fixes applied"` |
 | plan-review FAIL | have the author fix the listed beads, run `validate-plan` again, then dispatch the next round |
 | dev-complete | nothing: the sanity check is now ready |
-| sanity check PASS | check that the layer's `rebased_onto` (from its dev-complete or fix-complete) is still the pushed top. If another layer was linked since, rebase the branch onto the new top yourself: it is not linked and has no children. Run the test command and push with `--force-with-lease`. On a conflict, `bd reopen` the bead and send a dev-fix naming the new top. Then link the layer, then create the QA bead from [`qa-bead.json.j2`](templates/qa-bead.json.j2) (`validates` the dev or finding bead). For a finding, the QA dispatch sets `checked_bead` = the finding (it carries its own requirements and ADRs), `sprint_bead` = its `metadata.sprint_bead`, `carry_forward` = the finding id, and `round` = the `metadata.round` of the QA bead it was `discovered-from`, + 1, or 1 when it came from the phase-end review |
-| sanity check FAIL | `bd reopen <checked bead> --reason "<summary>"`, then [`dev-fix.xml.j2`](templates/dev-fix.xml.j2) with the findings. This applies to a finding bead too: its task id is the finding, and it closes with `dev-complete.md.j2` |
-| qa-complete | nothing to wire: quality-mgr filed and wired the finding beads; they are in the next `bd ready` |
+| sanity check PASS | verify the branch base is its declared `pr_target`, then create and dispatch the QA bead from [`qa-bead.json.j2`](templates/qa-bead.json.j2) (`validates` the dev or finding bead). For a finding, the QA dispatch sets `checked_bead` = the finding (it carries its own requirements and ADRs), `sprint_bead` = its `metadata.sprint_bead`, `carry_forward` = the finding id, and `round` = the `metadata.round` of the QA bead it was `discovered-from`, + 1, or 1 when it came from the phase-end review |
+| sanity check FAIL | the sanity member creates one child finding bead for every reported finding under `<checked bead>` at `min(parent priority + 1, P4)`; it does not edit the parent. It copies phase/sprint/stack/layer provenance and uses only `phase-<phase>`, `stage:finding`, and `stack:<stack>` labels. The hierarchy is the parent closure gate (`bd` rejects parent-to-child `blocks` edges); only reported prerequisite relationships become sibling `blocks` edges. Each child stores the exact structured report data. The lead reviews them and retains the existing process: reopen the dev bead, then assign it with [`dev-fix.xml.j2`](templates/dev-fix.xml.j2). The lead may overrule, amend, split, or reassign children, but does not recreate them. The parent cannot close until every child closes. This applies to a finding bead too: its task id is the finding, and it closes with `dev-complete.md.j2` |
+| qa-complete | quality-mgr files finding beads. For every blocking finding it runs `blocking-finding-gates.py --finding <id>`: that finding's sanity gate blocks graph-derived open downstream dev and unclaimed finding/fix work. Important and minor findings add no edge. |
 | fix-complete (`fixed`) | create the fix's sanity check bead (`atm-beads` [`dev-sanity-bead.json.j2`](../atm-beads/templates/dev-sanity-bead.json.j2), `dev_bead` = the finding) |
 | review-complete | file each finding with `finding-bead.json.j2` (`qa_bead` = the review bead) |
 | task-refused | read the reason and the bead state (`open`, or `blocked-failed` for a dev bead that declared failure). Reassign it, split it, or close the bead yourself with `bd close <bead> --force --reason "<why>"`. A `blocked` bead is never in `bd ready`: run `bd update <bead> --status open --assignee <new agent>` before you re-dispatch it |
@@ -200,17 +236,17 @@ phase root also appears in it; it is never dispatched.
 When every sprint and finding bead is closed
 (`bd list -l phase-<x> --status open,in_progress,blocked -n 0 --json` lists only
 the phase root), run the phase-end review (below). When its findings are
-closed too, land the stack (the landing procedure in `stack.mechanics`),
-close the phase root, and run `bd sync`.
+closed too, land the stack (`recipe-land.md`), close the phase root, and run
+`bd sync`.
 
 ### Phase-End Review
 
 Create the review bead, then dispatch it with `review-template.xml.j2`:
 
 ```bash
-bd create --id <root>-review --type task \
+bd create --id <root>-review --type task --parent <root> \
   -l phase-<x>,stage:review --assignee <reviewer> \
-  --title "phase-<x>: phase-end review" --deps parent-child:<root>
+  --title "phase-<x>: phase-end review"
 ```
 
 On review-complete, file each finding with `finding-bead.json.j2`, using:
@@ -236,17 +272,7 @@ Fix them as for any finding.
 Every agent on this host writes to the same shared Dolt server, so a claim
 or close is visible to everyone at once. `bd sync` (pull, conflict check,
 blocked-flag repair, push) exists only for the Dolt remote: the off-host
-copy and any other machine. The remote is the `sync.remote` in
-`.beads/config.yaml` (for atm-core, DoltHub `randlee/atm-dev`;
-`bd dolt remote list` shows it). Nothing publishes on its own: the
-hooks committed under `.beads/hooks/` run only when git calls them, and
-`bd hooks run pre-push` does not sync even then (in hook mode it only
-skips backup and export). atm-core therefore calls `bd sync` directly
-from `.githooks/pre-push` after its gates pass, so every `git push` also
-publishes the beads state; a failed sync there is printed as a warning
-and never refuses the code push. That covers pushes; bead writes that no
-git push follows (claims, closes, plan imports) still need the explicit
-`bd sync` below. The lead owns it and runs it:
+copy and any other machine. The lead owns it and runs it:
 
 - right after a plan import;
 - after handling each close in the Loop, before the next `bd ready`;
@@ -264,10 +290,6 @@ fails:
 | 3 | push race or another writer mid-write | retry on the next close |
 | 4 | a stuck dirty working set | stop dispatching; report it to the user |
 
-A successful run prints `sync: pull`, `sync: recompute-blocked`,
-`sync: push`, `Sync complete.` and exits 0; a run that ends without
-`sync: push` pushed nothing, whatever it printed before.
-
 An agent on another machine has its own database. It must run `bd sync`
 before its ready check and after its close. No such agent exists today.
 
@@ -282,25 +304,19 @@ atm task assign <agent> --task-id <bead> \
   --vars <scratch>/<bead>-vars.json
 ```
 
-- Before the first dispatch of a phase, create the integration branch
-  (`manifest-get integration_branch`, `{phase}` = the phase id) from the
-  trunk (`manifest-get trunk`) and push it.
-- For a dev or finding bead, create its branch and worktree from the pushed
-  top: `git fetch origin && git worktree add -b <branch> <worktree>
-  origin/<top>`. That is `top` in the vars, and `integrate/phase-<x>` while
-  the stack is empty.
+- Before the first dispatch of a phase, create `integrate/phase-<x>` from
+  `develop` and push it.
+- For a dev or finding bead, create its branch and worktree from its declared
+  target: `git fetch origin && git worktree add -b <branch> <worktree>
+  origin/<pr_target>`.
 - Set the bead's assignee to the recipient first:
   `bd update <bead> --assignee <agent>`. For a role, the recipient is
   `resolve-role <role>` (a sanity check bead is already assigned to it). A claim fails when the bead is
   assigned to anyone else.
 - Build vars from the template's `required_variables`, with `task_id` = the
   bead id; the bead supplies most of the rest
-  (`bd show <bead> --json | jq '.[0].metadata'`). Templates cannot run
-  scripts, so their defaults (`lint_command`, `test_command`, `policy_path`,
-  `trunk`) are only defaults: take the values from the manifest and put
-  them in every vars file, for example
-  `M=.claude/skills/atm-beads/scripts/manifest-get; jq -n --arg lint "$($M commands.lint)" --arg test "$($M commands.test)" --arg policy "$($M policy)" --arg trunk "$($M trunk)" '{lint_command: $lint, test_command: $test, policy_path: $policy, trunk: $trunk}'`
-  merged with the bead's values. Keep vars files outside the repository.
+  (`bd show <bead> --json | jq '.[0].metadata'`). Keep vars files outside the
+  repository.
 - Preview with `atm compose --template <template> --vars <file>`. Never
   render and paste a body.
 
@@ -332,7 +348,7 @@ templates. Each is a requirement for the planned combined `atm bd claim` /
 | Gap | Interim rule | `atm bd` requirement |
 | --- | --- | --- |
 | one active task per agent | ATM nudges one active task at a time; dev-sanity and quality-mgr execute every open task at once (`atm task start` for the active one, `bd update --claim` for all) and close a queued task without starting it | several active tasks for a coordinator role |
-| `BEADS_ACTOR` empty falls back to git `user.name` | `--actor "$ATM_IDENTITY"` on every `bd` write | the actor is always `ATM_IDENTITY` |
+| actor identity must be explicit | pass `--actor "$ATM_IDENTITY"` on every `bd` write | the actor is always `ATM_IDENTITY` |
 | claim fails when the bead is assigned to someone else | lead sets the assignee before `atm task assign`; returned beads clear it | claim reassigns the bead to the task's assignee |
 | only the original assigner can re-dispatch a closed task id | the lead that dispatched a bead re-dispatches it; after a lead handover, the outgoing lead re-dispatches the beads it had already dispatched | the current lead may take over closed tasks |
 | a bead can close with no task (ceremony finding) and a task can close with no bead change (cancel) | allowed; both carry a reason | a bead-only close and a task-only cancel |
@@ -362,6 +378,7 @@ written to beads with the `atm-beads` templates.
 | `req-qa`, `arch-qa`, `ruthless-boundary-qa`, `flaky-test-qa`, `schema-reviewer`, `plan-scope-reviewer` `-assignment.json.j2` | fenced JSON | quality-mgr → its background reviewers; `plan-scope-reviewer` every plan-review round |
 | `qa-bead.json.j2` | bead | lead, after a green sanity check |
 | `finding-bead.json.j2` | bead | quality-mgr (QA) and lead (review), one per finding |
+| `workflow-issue-bead.json.j2` | bead | anyone whose assignment gate refuses, one per refusal; `parent` is the repository's workflow-issues root bead, `atm-workflow-issues` here |
 
 Bead templates render with `sc-compose render --file <t> --var-file <v>
 --strict`, then `jq -c .` into a JSONL file for `bd import`. Examples of every
