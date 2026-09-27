@@ -247,6 +247,9 @@ pub struct MessageAdmissionOutcome {
     pub task_updated: bool,
     /// Canonical reassignment notice inserted atomically for the old assignee.
     pub reassign_notice: Option<Message>,
+    /// The task this admission's own assignment paused (`active` →
+    /// `assigned`) as part of a `--preempt` request. `None` otherwise.
+    pub paused_task_id: Option<TaskId>,
     /// A governed task operation rejected after its report was retained as
     /// ordinary mail. Callers must complete ordinary post-write handling
     /// before surfacing this error to the sender.

@@ -42,11 +42,12 @@ pub(super) fn execute_upsert_message(
         queued_position,
         task_updated,
         reassign_notice,
+        paused_task_id,
         task_rejection,
     ) = if inserted && provenance == MessageWriteOrigin::Local {
         apply_task_message(record, connection, cache, target)?.into_admission_parts()
     } else {
-        (None, None, None, false, None, None)
+        (None, None, None, false, None, None, None)
     };
     Ok(WriteOpResult::UpsertMessage {
         inserted,
@@ -56,6 +57,7 @@ pub(super) fn execute_upsert_message(
         queued_position,
         task_updated,
         reassign_notice,
+        paused_task_id,
         task_rejection,
     })
 }

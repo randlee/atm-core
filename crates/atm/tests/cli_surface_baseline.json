@@ -3174,6 +3174,17 @@
             },
             {
               "has_default": true,
+              "id": "preempt",
+              "long": "preempt",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
               "id": "stderr_logs",
               "long": "stderr-logs",
               "num_args": {

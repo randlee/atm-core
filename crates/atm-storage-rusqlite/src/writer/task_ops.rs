@@ -36,6 +36,7 @@ pub(super) enum TaskMessageResult {
         /// #1619).
         task_updated: bool,
         reassign_notice: Option<Box<Message>>,
+        paused_task_id: Option<TaskId>,
     },
     RejectedReportDelivered(AtmError),
 }
@@ -49,15 +50,19 @@ impl TaskMessageResult {
                 queued_position,
                 task_updated,
                 reassign_notice,
+                paused_task_id,
             } => (
                 already_closed,
                 task_assignee,
                 queued_position,
                 task_updated,
                 reassign_notice,
+                paused_task_id,
                 None,
             ),
-            Self::RejectedReportDelivered(error) => (None, None, None, false, None, Some(error)),
+            Self::RejectedReportDelivered(error) => {
+                (None, None, None, false, None, None, Some(error))
+            }
         }
     }
 }
@@ -68,6 +73,7 @@ type TaskAdmissionParts = (
     Option<u32>,
     bool,
     Option<Box<Message>>,
+    Option<TaskId>,
     Option<AtmError>,
 );
 
@@ -182,6 +188,7 @@ pub(super) fn apply_task_message(
             queued_position: None,
             task_updated: false,
             reassign_notice: None,
+            paused_task_id: None,
         });
     };
     match record.envelope.task_op.as_ref() {
@@ -192,6 +199,7 @@ pub(super) fn apply_task_message(
                 queued_position: None,
                 task_updated: false,
                 reassign_notice: None,
+                paused_task_id: None,
             })
         }
         None => apply_task_assignment(
@@ -208,6 +216,7 @@ pub(super) fn apply_task_message(
             queued_position: Some(applied.queued_position),
             task_updated: applied.is_update,
             reassign_notice: applied.reassign_notice.map(Box::new),
+            paused_task_id: applied.paused_task_id,
         }),
         Some(TaskOp::Start) => {
             apply_task_start(record, task_id, connection, target).map(|task_assignee| {
@@ -217,6 +226,7 @@ pub(super) fn apply_task_message(
                     queued_position: None,
                     task_updated: false,
                     reassign_notice: None,
+                    paused_task_id: None,
                 }
             })
         }
@@ -253,12 +263,13 @@ fn is_existing_task_report(
     )))
 }
 
-struct TaskAssignmentApplied {
-    queued_position: u32,
+pub(super) struct TaskAssignmentApplied {
+    pub(super) queued_position: u32,
     /// True when this assignment was a same-agent update rather than a fresh
     /// assignment or reassignment (Rand, 2026-09-27, #1619).
-    is_update: bool,
-    reassign_notice: Option<Message>,
+    pub(super) is_update: bool,
+    pub(super) reassign_notice: Option<Message>,
+    pub(super) paused_task_id: Option<TaskId>,
 }
 
 fn apply_task_assignment(
@@ -285,21 +296,45 @@ fn apply_task_assignment(
         .message_id
         .ok_or_else(|| task_move_invalid("task assignment is missing message id"))?;
 
-    if let Some(queued_position) = super::task_assignment_refresh::refresh_same_assignment(
-        record,
-        task_id,
-        row.as_ref(),
-        message_id,
-        at,
-        connection,
-        target,
-    )? {
-        return Ok(TaskAssignmentApplied {
-            queued_position,
-            is_update: true,
-            reassign_notice: None,
-        });
+    if super::task_assignment_refresh::is_same_agent_open_update(row.as_ref(), record) {
+        let existing = row
+            .as_ref()
+            .expect("checked open by is_same_agent_open_update");
+        return super::task_assignment_refresh::apply_same_agent_update(
+            record, task_id, placement, existing, message_id, at, connection, target,
+        );
     }
+
+    apply_fresh_task_assignment(
+        record, task_id, placement, row, message_id, at, next_state, connection, cache, target,
+    )
+}
+
+/// Admits a fresh assignment or reassignment (never a same-agent update,
+/// which the caller has already routed elsewhere): optionally pauses the
+/// assignee's active task for `--preempt`, persists the new row and queue
+/// position, and inserts a reassignment notice when the previous assignee
+/// differs from the new one.
+#[allow(clippy::too_many_arguments)]
+fn apply_fresh_task_assignment(
+    record: &Message,
+    task_id: &TaskId,
+    placement: Option<&MoveTarget>,
+    row: Option<TaskRow>,
+    message_id: AtmMessageId,
+    at: IsoTimestamp,
+    next_state: TaskState,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<TaskAssignmentApplied, AtmError> {
+    let paused_task_id = if matches!(placement, Some(MoveTarget::Preempt)) {
+        super::task_assignment_refresh::pause_active_task_for_preempt(
+            record, task_id, connection, target,
+        )?
+    } else {
+        None
+    };
 
     let previous_assignee = row
         .as_ref()
@@ -338,6 +373,7 @@ fn apply_task_assignment(
         queued_position,
         is_update: false,
         reassign_notice,
+        paused_task_id,
     })
 }
 
@@ -524,6 +560,11 @@ pub(super) fn apply_task_move(
     connection: &Connection,
     target: &SharedDbTarget,
 ) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
+    if matches!(target_pos, MoveTarget::Preempt) {
+        return Err(task_move_invalid(
+            "preempt is only valid on `atm task assign`, not `atm task move`",
+        ));
+    }
     let Some(row) = load_task_row(connection, target, team, task_id)? else {
         return Err(task_not_found(format!(
             "no open task {task_id} for {actor}"
@@ -666,7 +707,7 @@ pub(super) fn queue_order(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn insert_at_placement(
+pub(super) fn insert_at_placement(
     order: &mut Vec<TaskId>,
     task_id: &TaskId,
     placement: &MoveTarget,
@@ -677,7 +718,13 @@ fn insert_at_placement(
 ) -> Result<(), AtmError> {
     let index = match placement {
         MoveTarget::End => order.len(),
-        MoveTarget::Head => {
+        // `Preempt` reaches here only from `apply_task_assignment`, after the
+        // assignee's active task (if any) has already been paused to
+        // `assigned` in the same transaction. Once paused, the head of
+        // `order` is never `Active`, so this collapses to the same absolute
+        // head as `Head` — the paused task lands at position 2 by the same
+        // renumbering that would place any other queued task there.
+        MoveTarget::Head | MoveTarget::Preempt => {
             let active = order
                 .first()
                 .map(|id| load_task_row(connection, target, team, id))

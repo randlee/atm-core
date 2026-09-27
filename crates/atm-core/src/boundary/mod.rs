@@ -130,6 +130,10 @@ pub struct PostSendHookEvent {
     pub requires_ack: bool,
     pub is_ack: bool,
     pub task_id: Option<TaskId>,
+    /// Set only on the one notice sent for a `--preempt` assignment: the
+    /// task id this event's own task displaced from active to assigned.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paused_task_id: Option<TaskId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_transition: Option<TaskTransition>,
     pub recipient_pane_id: Option<PaneId>,
@@ -351,6 +355,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            paused_task_id: None,
             task_transition: None,
             recipient_pane_id: None,
         }

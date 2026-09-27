@@ -304,6 +304,7 @@ async fn task_target_on_other_team_or_host_is_rejected_before_send() {
             task_id: Some("T1".parse().unwrap()),
             before: None,
             head: false,
+            preempt: false,
             message: MessageSourceArgs {
                 text: Some("message".into()),
                 file: None,

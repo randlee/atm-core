@@ -1,4 +1,5 @@
 use crate::schema::InboxMessage;
+use crate::types::TaskId;
 use atm_storage::{AgentName, AtmError, Message, TaskCloseOutcome};
 
 use super::WarningEntry;
@@ -33,6 +34,9 @@ pub(crate) struct DeliveryPersistenceResult {
     /// than a fresh assignment or reassignment (Rand, 2026-09-27, #1619).
     pub(crate) task_updated: bool,
     pub(crate) reassign_notice: Option<Message>,
+    /// The task this write's own assignment paused (`active` → `assigned`)
+    /// as part of a `--preempt` admission. `None` for every other write.
+    pub(crate) paused_task_id: Option<TaskId>,
     pub(crate) task_rejection: Option<AtmError>,
     pub(crate) warnings: Vec<WarningEntry>,
 }
@@ -49,6 +53,7 @@ impl DeliveryPersistenceResult {
             queued_position: None,
             task_updated: false,
             reassign_notice: None,
+            paused_task_id: None,
             task_rejection: None,
             warnings: Vec::new(),
         }
@@ -65,6 +70,7 @@ impl DeliveryPersistenceResult {
             queued_position: None,
             task_updated: false,
             reassign_notice: None,
+            paused_task_id: None,
             task_rejection: None,
             warnings: Vec::new(),
         }
@@ -81,6 +87,7 @@ impl DeliveryPersistenceResult {
             queued_position: None,
             task_updated: false,
             reassign_notice: None,
+            paused_task_id: None,
             task_rejection: None,
             warnings: Vec::new(),
         }
@@ -108,10 +115,12 @@ impl DeliveryPersistenceResult {
         queued_position: Option<u32>,
         task_updated: bool,
         reassign_notice: Option<Message>,
+        paused_task_id: Option<TaskId>,
     ) -> Self {
         self.queued_position = queued_position;
         self.task_updated = task_updated;
         self.reassign_notice = reassign_notice;
+        self.paused_task_id = paused_task_id;
         self
     }
 

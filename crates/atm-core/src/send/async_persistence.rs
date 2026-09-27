@@ -265,6 +265,7 @@ async fn admit_verified_template(
             admission.queued_position,
             admission.task_updated,
             admission.reassign_notice,
+            admission.paused_task_id,
         ))
 }
 

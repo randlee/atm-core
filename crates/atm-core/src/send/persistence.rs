@@ -20,6 +20,7 @@ struct MessageAdmissionSnapshot {
     queued_position: Option<u32>,
     task_updated: bool,
     reassign_notice: Option<atm_storage::Message>,
+    paused_task_id: Option<atm_storage::TaskId>,
     task_rejection: Option<AtmError>,
 }
 
@@ -32,6 +33,7 @@ impl MessageAdmissionSnapshot {
             queued_position: None,
             task_updated: false,
             reassign_notice: None,
+            paused_task_id: None,
             task_rejection: None,
         }
     }
@@ -44,6 +46,7 @@ impl MessageAdmissionSnapshot {
             queued_position: admission.queued_position,
             task_updated: admission.task_updated,
             reassign_notice: admission.reassign_notice,
+            paused_task_id: admission.paused_task_id,
             task_rejection: admission.task_rejection,
         }
     }
@@ -109,6 +112,7 @@ pub(crate) fn persist_message_with_ack_update(
         queued_position,
         task_updated,
         reassign_notice,
+        paused_task_id,
         task_rejection,
     } = mirror_message_to_store(
         runtime,
@@ -132,7 +136,12 @@ pub(crate) fn persist_message_with_ack_update(
     Ok(persistence
         .with_already_closed(already_closed)
         .with_task_assignee(task_assignee)
-        .with_assignment_metadata(queued_position, task_updated, reassign_notice)
+        .with_assignment_metadata(
+            queued_position,
+            task_updated,
+            reassign_notice,
+            paused_task_id,
+        )
         .with_task_rejection(task_rejection))
 }
 
@@ -205,6 +214,7 @@ pub(crate) async fn persist_message_with_async_admission(
         queued_position,
         task_updated,
         reassign_notice,
+        paused_task_id,
         task_rejection,
     } = mirror_message_to_store_async(
         runtime,
@@ -227,7 +237,12 @@ pub(crate) async fn persist_message_with_async_admission(
     Ok(persistence
         .with_already_closed(already_closed)
         .with_task_assignee(task_assignee)
-        .with_assignment_metadata(queued_position, task_updated, reassign_notice)
+        .with_assignment_metadata(
+            queued_position,
+            task_updated,
+            reassign_notice,
+            paused_task_id,
+        )
         .with_task_rejection(task_rejection))
 }
 

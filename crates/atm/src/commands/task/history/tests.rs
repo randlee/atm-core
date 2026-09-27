@@ -27,6 +27,7 @@ fn assign(task: &str, assignee: &str) -> TaskAssignCommand {
         task_id: Some(task.parse().unwrap()),
         before: None,
         head: false,
+        preempt: false,
         message: MessageSourceArgs {
             text: Some(format!("assign {task}")),
             file: None,

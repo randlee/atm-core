@@ -639,7 +639,10 @@ fn assert_herdr_rendered_default(
         // #1619: the task_queued template also carries the update marker
         // for a same-agent update of an open task
         // (crates/atm-core/src/send/nudge_template.rs:136).
-        .replace("{{updated}}", &queued_updated_text(dispatch));
+        .replace("{{updated}}", &queued_updated_text(dispatch))
+        // #1620: `--preempt` names the paused task in the same notice; this
+        // fixture never preempts, so the substituted value is empty.
+        .replace("{{paused}}", "");
     assert_eq!(target.rendered_nudge, expected);
 }
 

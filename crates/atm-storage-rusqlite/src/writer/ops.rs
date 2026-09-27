@@ -150,6 +150,9 @@ pub(crate) enum WriteOpResult {
         /// #1619).
         task_updated: bool,
         reassign_notice: Option<Box<Message>>,
+        /// The task this insert's own assignment paused (`active` →
+        /// `assigned`) as part of a `--preempt` request. `None` otherwise.
+        paused_task_id: Option<TaskId>,
         /// Populated when task governance rejected the operation after
         /// retaining its report as ordinary mail.
         task_rejection: Option<AtmError>,
@@ -166,6 +169,7 @@ pub(crate) enum WriteOpResult {
         queued_position: Option<u32>,
         task_updated: bool,
         reassign_notice: Option<Box<Message>>,
+        paused_task_id: Option<TaskId>,
         task_rejection: Option<AtmError>,
     },
     DiagnosticsRecorded,
@@ -271,6 +275,7 @@ fn execute_admit_template_message(
             queued_position: None,
             task_updated: false,
             reassign_notice: None,
+            paused_task_id: None,
             task_rejection: None,
         }),
         WriteOpResult::UpsertMessage {
@@ -279,6 +284,7 @@ fn execute_admit_template_message(
             queued_position,
             task_updated,
             reassign_notice,
+            paused_task_id,
             task_rejection,
             ..
         } => {
@@ -291,6 +297,7 @@ fn execute_admit_template_message(
                 queued_position,
                 task_updated,
                 reassign_notice,
+                paused_task_id,
                 task_rejection,
             })
         }

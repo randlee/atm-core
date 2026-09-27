@@ -279,3 +279,46 @@ fn parser_accepts_move_head_end_and_before() {
         assert_eq!(command.target(), expected);
     }
 }
+
+#[test]
+fn assign_parser_accepts_preempt_and_it_implies_head_placement() {
+    let cli = Cli::try_parse_from(["atm", "task", "assign", "recipient@team", "--preempt"])
+        .expect("valid task assign");
+    let Command::Task(TaskCommand {
+        command: TaskSubcommand::Assign(command),
+    }) = cli.command
+    else {
+        panic!("expected task assign");
+    };
+    assert_eq!(command.placement(), Some(MoveTarget::Preempt));
+}
+
+#[test]
+fn assign_parser_rejects_preempt_combined_with_before_or_head() {
+    for conflicting in [
+        vec!["--preempt", "--before", "T2"],
+        vec!["--preempt", "--head"],
+    ] {
+        let mut args = vec!["atm", "task", "assign", "recipient@team"];
+        args.extend(conflicting);
+        let error = Cli::try_parse_from(args).expect_err("preempt conflicts with placement");
+        let rendered = error.to_string();
+        assert!(
+            rendered.contains("cannot be used with"),
+            "expected a clap group conflict, got: {rendered}"
+        );
+    }
+}
+
+#[test]
+fn assign_parser_plain_head_never_sets_preempt() {
+    let cli = Cli::try_parse_from(["atm", "task", "assign", "recipient@team", "--head"])
+        .expect("valid task assign");
+    let Command::Task(TaskCommand {
+        command: TaskSubcommand::Assign(command),
+    }) = cli.command
+    else {
+        panic!("expected task assign");
+    };
+    assert_eq!(command.placement(), Some(MoveTarget::Head));
+}

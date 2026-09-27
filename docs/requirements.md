@@ -3013,9 +3013,18 @@ Required rules:
   reset the reminder budget (`reminder_count`, `lead_notified_count`,
   `last_reminded_at`) exactly as `assign`/`reassign`/`reopen` do so a stalled
   task is eligible for reminders again, and MUST leave task state and queue
-  position unchanged (Rand, 2026-09-27, #1619; supersedes the Phase BA design
-  §3.1a "idempotent resend" rule); the durable tables and replay contract are
-  defined by ADR-062
+  position unchanged unless the re-assignment carries a `placement` (Rand,
+  2026-09-27, #1619; supersedes the Phase BA design §3.1a "idempotent resend"
+  rule). A carried `placement` MUST NOT be silently ignored (#1620 review,
+  2026-09-27): `--preempt` against an already-`assigned`
+  same-agent task MUST pause the assignee's active task (if any, per item 6
+  below) and move this task to the head in the same write, appending only
+  the `updated` event; a plain `--head`/`--before`/`--end` against an
+  `assigned` same-agent task MUST reposition the queue and append one
+  `moved` event alongside the `updated` event; either placement against an
+  `active` same-agent task is a no-op, since the active task is never
+  repositioned. The durable tables and replay contract are defined by
+  ADR-062
 
 Task lifecycle (Phase BA):
 1. A task MUST exist as exactly one row per `(team, task_id)`.
@@ -3034,7 +3043,19 @@ Task lifecycle (Phase BA):
    end of the queue.
 6. `atm task move <id> --before <other> | --head | --end` MUST reposition an
    `assigned` task only; `--head` MUST place it next up behind the active
-   task, and the active task MUST never be repositioned or preempted.
+   task, and the active task MUST never be repositioned or preempted by
+   `atm task move`. `atm task assign <agent> --task-id <new> --preempt` is
+   the sole exception (Rand, 2026-09-27, #1620): it implies `--head` and, in
+   the one write transaction that admits the new task, MUST move the
+   assignee's current `active` task (if any) to `assigned` at queue
+   position 2, appending exactly one `paused` task event whose reason names
+   the preempting task id; with no active task it behaves exactly like
+   `--head` and records no `paused` event. The paused task keeps its id and
+   full event history and resumes normally with `atm task start` once the
+   preempting task closes. When the preempting task id is already open and
+   assigned to the same agent — the ordinary case, since the urgent task is
+   usually already queued — the pause and head-move happen in the same
+   write as the same-agent update (15.4, above), not as a fresh assignment.
 7. Closing a task MUST record one typed outcome from
    `completed | refused | cancelled` with optional reason text,
    MUST remove the task from the queue, and MUST append a timestamped event.

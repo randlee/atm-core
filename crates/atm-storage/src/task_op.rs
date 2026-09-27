@@ -21,7 +21,14 @@ pub enum TaskOp {
 pub enum MoveTarget {
     Head,
     End,
-    Before { task_id: TaskId },
+    Before {
+        task_id: TaskId,
+    },
+    /// Assign-only: `--preempt`. Pauses the assignee's active task (if any)
+    /// to `assigned` at queue position 2, then inserts the new task at the
+    /// head. Behaves exactly like `Head` when there is no active task.
+    /// `atm task move` rejects this target; only `atm task assign` admits it.
+    Preempt,
 }
 
 #[cfg(test)]
@@ -55,5 +62,13 @@ mod tests {
         let encoded = serde_json::to_string(&target).unwrap();
         let decoded: MoveTarget = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, target);
+    }
+
+    #[test]
+    fn preempt_target_round_trips_and_is_tagged() {
+        let value = serde_json::to_value(MoveTarget::Preempt).unwrap();
+        assert_eq!(value["to"], "preempt");
+        let decoded: MoveTarget = serde_json::from_value(value).unwrap();
+        assert_eq!(decoded, MoveTarget::Preempt);
     }
 }

@@ -333,6 +333,7 @@ mod tests {
             requires_ack: false,
             is_ack: false,
             task_id: None,
+            paused_task_id: None,
             task_transition: None,
             recipient_pane_id: Some(atm_core::types::PaneId::from_cli("%9").expect("pane")),
         }
@@ -434,6 +435,7 @@ mod tests {
             event: PostSendHookEvent {
                 requires_ack: true,
                 task_id: Some("AD.21".parse().expect("task")),
+                paused_task_id: None,
                 ..base_event()
             },
             sink_target: BuiltInNudgeSinkTarget::Tmux,

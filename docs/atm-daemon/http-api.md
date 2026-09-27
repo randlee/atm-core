@@ -159,10 +159,11 @@ OpenAPI document against route schemas and tests every documented route. The
 embedded document is published by `atm api spec --format json|yaml`; no daemon
 network endpoint is needed merely to retrieve documentation.
 
-The v1 resource paths are durable. The current baseline is `1.8.0`.
+The v1 resource paths are durable. The current baseline is `1.11.0`.
 
 | Version | Phase / date | Additive HTTP surface |
 | --- | --- | --- |
+| `1.11.0` | Issue #1620, 2026-09-27 | `WriteRequest.placement` and `TaskMoveRequest.target` (`MoveTarget`) gain the `preempt` variant, assign-only; `atm task move` continues to reject it. |
 | `1.8.0` | Phase BB.1, 2026-09-12 | Optional `PostSendHookEvent.task_transition`; omitted values default to `None` and same-major consumers tolerate the additive field. |
 | `1.7.0` | Phase BA closure review, 2026-09-12 | Stable task-rejection error codes for not-found, already-closed, third-party, stale-counterparty, and invalid-move families; envelope shapes and detail text are unchanged. |
 | `1.6.0` | Phase BA.4, 2026-09-12 | Local-only `TaskMove` request/response and `/v1/atm/tasks/move` route; peer ingress rejects the operation. |

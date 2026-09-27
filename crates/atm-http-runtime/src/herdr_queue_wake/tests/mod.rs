@@ -1479,6 +1479,7 @@ async fn task_linked_prompt_without_task_id_logs_storage_failure_and_records_not
         requires_ack: false,
         is_ack: false,
         task_id: None,
+        paused_task_id: None,
         task_transition: Some(TaskTransition::Started),
         recipient_pane_id: None,
     };

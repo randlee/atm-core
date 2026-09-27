@@ -100,6 +100,20 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-09-27 — issue #1620 (`atm task assign --preempt`):**
+  `HTTP_API_VERSION` moves from `1.10.0` to `1.11.0`. `MoveTarget` (used by
+  `WriteRequest.placement` and `TaskMoveRequest.target`) gains the additive
+  `Preempt` variant, tagged `"to":"preempt"`; existing `head`/`end`/`before`
+  payloads are unchanged and still decode. `--preempt` is assign-only:
+  `apply_task_move` rejects the variant, so `TaskMoveRequest.target` never
+  actually carries it over the wire, and the documented `TaskMoveRequest`
+  schema in `openapi.yaml` is intentionally left without a `preempt` enum
+  value. `codec_preserves_protocol_1_5_0_fixtures`-style coverage is
+  extended by the new `MoveTarget` unit test
+  (`crates/atm-storage/src/task_op.rs::preempt_target_round_trips_and_is_tagged`)
+  plus the existing `placement_targets_round_trip` proving pre-1.11.0
+  `head`/`end`/`before` fixtures are untouched. This is a minor,
+  backward-compatible bump.
 - **2026-09-26 — issue #1599 (`atm task history`):** `HTTP_API_VERSION`
   moves from `1.9.0` to `1.10.0`. `TaskLedgerQuery` gains the additive
   `History { member, limit }` request variant, dispatched through the same
@@ -221,8 +235,10 @@ migration functions directly.
   fields, and Phase BA.4 moves it to `1.6.0` for task move; it is bumped on
   every later governed-interface change. Phase BB.1 moves it to `1.8.0` for
   task-transition metadata, Phase BB.6 moves it to `1.9.0` for prompt
-  handoffs in task-event responses, and issue #1599 moves it to `1.10.0` for
-  the `TaskLedgerQuery::History` request variant behind `atm task history`.
+  handoffs in task-event responses, issue #1599 moves it to `1.10.0` for
+  the `TaskLedgerQuery::History` request variant behind `atm task history`,
+  and issue #1620 moves it to `1.11.0` for the assign-only `MoveTarget::Preempt`
+  variant behind `atm task assign --preempt`.
 - Herdr support becomes a matrix, not a single version; per-release
   conformance fixtures are required.
 - SQLite migrations gain a declared version and an explicit rollback test

@@ -182,6 +182,9 @@ pub enum TaskEvent {
     Assigned,
     Started,
     Completed(TaskCloseOutcome),
+    /// A `--preempt` assignment displacing this row's active task back to
+    /// `assigned`, in place, at the head of its own queue slot.
+    Paused,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -322,7 +325,7 @@ pub fn transition(
     use TaskState as S;
     match (state, event) {
         (None, E::Assigned) => Ok(Transition(S::Assigned)),
-        (None, E::Started | E::Completed(_)) => Err(TaskRejected::new(
+        (None, E::Started | E::Completed(_) | E::Paused) => Err(TaskRejected::new(
             AtmErrorCode::TaskNotFound,
             format!("no open task {task_id} for {actor}"),
         )),
@@ -341,6 +344,10 @@ pub fn transition(
         (Some(S::Complete(_)), E::Started | E::Completed(_)) => {
             unreachable!("complete-row start/close is handled by the writer before transition()")
         }
+        (Some(S::Active), E::Paused) => Ok(Transition(S::Assigned)),
+        (Some(S::Assigned | S::Complete(_)), E::Paused) => {
+            unreachable!("pause is only requested by the writer against a verified active row")
+        }
     }
 }
 
@@ -357,7 +364,7 @@ pub fn admit(
             format!("no open task {task_id} for {actor}"),
         )),
         (None, TaskEvent::Assigned) => Ok(()),
-        (None, TaskEvent::Started) => Err(TaskRejected::new(
+        (None, TaskEvent::Started | TaskEvent::Paused) => Err(TaskRejected::new(
             AtmErrorCode::TaskNotFound,
             format!("no open task {task_id} for {actor}"),
         )),
@@ -390,6 +397,9 @@ pub enum TaskEventKind {
     Moved,
     Migrated,
     RemindersReset,
+    /// A `--preempt` assignment paused this row from `active` to
+    /// `assigned`; `detail` names the preempting task id (issue #1620).
+    Paused,
     Updated,
 }
 
@@ -411,6 +421,7 @@ impl TaskEventKind {
             Self::Moved => "moved",
             Self::Migrated => "migrated",
             Self::RemindersReset => "reminders_reset",
+            Self::Paused => "paused",
             Self::Updated => "updated",
         }
     }

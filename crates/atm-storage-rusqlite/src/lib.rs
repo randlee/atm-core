@@ -4291,6 +4291,7 @@ mod tests {
                 | TaskEventKind::Moved
                 | TaskEventKind::Migrated
                 | TaskEventKind::RemindersReset
+                | TaskEventKind::Paused
                 | TaskEventKind::Updated => None,
             })
             .try_fold(None, |state, event| {

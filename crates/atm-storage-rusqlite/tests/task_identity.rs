@@ -1252,6 +1252,295 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
     assert_eq!(after_reset.reminder_count, 1);
 }
 
+#[test]
+fn preempt_pauses_active_task_in_the_same_write_that_admits_the_new_head_task() {
+    let h = Harness::new();
+    h.assign("X", "alice", "lead", None);
+    h.start("X", "alice").expect("start X");
+
+    let (_, outcome) = h.assign_with_outcome("Y", "alice", "lead", Some(MoveTarget::Preempt));
+
+    assert_eq!(outcome.paused_task_id, Some("X".parse().unwrap()));
+    assert_eq!(outcome.queued_position, Some(1));
+    assert!(outcome.reassign_notice.is_none());
+
+    let paused = h.row("X");
+    assert_eq!(paused.state, TaskState::Assigned);
+    assert_eq!(h.positions("alice")["X"], 2);
+    assert_eq!(h.positions("alice")["Y"], 1);
+
+    let paused_events: Vec<_> = h
+        .events("X")
+        .into_iter()
+        .filter(|event| event.event == TaskEventKind::Paused)
+        .collect();
+    assert_eq!(paused_events.len(), 1, "exactly one paused event on X");
+    assert_eq!(paused_events[0].detail.as_deref(), Some("preempted by Y"));
+}
+
+#[test]
+fn preempt_without_an_active_task_admits_like_head_and_records_no_paused_event() {
+    let h = Harness::new();
+    h.assign("A", "alice", "lead", None);
+
+    let (_, outcome) = h.assign_with_outcome("B", "alice", "lead", Some(MoveTarget::Preempt));
+
+    assert_eq!(outcome.paused_task_id, None);
+    assert_eq!(outcome.queued_position, Some(1));
+    assert_eq!(h.positions("alice")["A"], 2);
+    assert_eq!(h.positions("alice")["B"], 1);
+    assert!(
+        h.events("A")
+            .iter()
+            .all(|event| event.event != TaskEventKind::Paused)
+    );
+}
+
+#[test]
+fn plain_head_leaves_the_active_task_active_and_pauses_nothing() {
+    let h = Harness::new();
+    h.assign("X", "alice", "lead", None);
+    h.start("X", "alice").expect("start X");
+
+    let (_, outcome) = h.assign_with_outcome("Y", "alice", "lead", Some(MoveTarget::Head));
+
+    assert_eq!(outcome.paused_task_id, None);
+    assert_eq!(h.row("X").state, TaskState::Active);
+    assert_eq!(h.positions("alice")["X"], 1);
+    assert_eq!(h.positions("alice")["Y"], 2);
+    assert!(
+        h.events("X")
+            .iter()
+            .all(|event| event.event != TaskEventKind::Paused)
+    );
+}
+
+#[test]
+fn preempted_task_resumes_with_start_and_keeps_its_original_assigned_event() {
+    let h = Harness::new();
+    h.assign("X", "alice", "lead", None);
+    h.start("X", "alice").expect("start X");
+    h.assign_with_outcome("Y", "alice", "lead", Some(MoveTarget::Preempt));
+    let assigned_before = h
+        .events("X")
+        .into_iter()
+        .find(|event| event.event == TaskEventKind::Assigned)
+        .expect("original assigned event");
+
+    h.close("Y", "lead", "alice", TaskCloseOutcome::Completed)
+        .expect("close Y");
+    h.start("X", "alice").expect("resume X after Y closes");
+
+    assert_eq!(h.row("X").state, TaskState::Active);
+    let events_after = h.events("X");
+    let assigned_after = events_after
+        .iter()
+        .find(|event| event.event == TaskEventKind::Assigned)
+        .expect("original assigned event still present");
+    assert_eq!(assigned_after.seq, assigned_before.seq);
+    assert_eq!(assigned_after.at, assigned_before.at);
+    assert!(
+        events_after
+            .iter()
+            .any(|event| event.event == TaskEventKind::Started)
+    );
+}
+
+#[test]
+fn task_move_rejects_preempt_target() {
+    let h = Harness::new();
+    h.assign("T1", "alice", "lead", None);
+    let error = h
+        .backend
+        .task_store()
+        .move_task(
+            &h.team,
+            &"T1".parse().unwrap(),
+            &"lead".parse().unwrap(),
+            &MoveTarget::Preempt,
+            IsoTimestamp::now(),
+        )
+        .expect_err("preempt is assign-only");
+    assert!(error.detail().contains("preempt"));
+}
+
+/// The urgent task is usually already queued: `--preempt` against a task id
+/// already `assigned` to the same agent pauses the active task and moves
+/// this task to the head in the same write as the same-agent update, with
+/// only the `updated` event — no separate `moved` event (#1620 review, placement decision,
+/// 2026-09-27).
+#[test]
+fn preempt_against_an_already_assigned_same_agent_task_pauses_active_and_moves_it_to_head() {
+    let h = Harness::new();
+    h.assign("X", "alice", "lead", None);
+    h.start("X", "alice").expect("start X");
+    h.assign("Y", "alice", "lead", None);
+    assert_eq!(h.positions("alice")["Y"], 2);
+
+    let (_, outcome) = h.assign_with_outcome("Y", "alice", "lead", Some(MoveTarget::Preempt));
+
+    assert!(outcome.task_updated);
+    assert_eq!(outcome.paused_task_id, Some("X".parse().unwrap()));
+    assert_eq!(outcome.queued_position, Some(1));
+    assert!(outcome.reassign_notice.is_none());
+
+    let paused = h.row("X");
+    assert_eq!(paused.state, TaskState::Assigned);
+    assert_eq!(h.positions("alice")["X"], 2);
+    assert_eq!(h.positions("alice")["Y"], 1);
+
+    let paused_events: Vec<_> = h
+        .events("X")
+        .into_iter()
+        .filter(|event| event.event == TaskEventKind::Paused)
+        .collect();
+    assert_eq!(paused_events.len(), 1, "exactly one paused event on X");
+    assert_eq!(paused_events[0].detail.as_deref(), Some("preempted by Y"));
+
+    let y_events = h.events("Y");
+    assert_eq!(
+        y_events
+            .iter()
+            .filter(|event| event.event == TaskEventKind::Updated)
+            .count(),
+        1
+    );
+    assert!(
+        y_events
+            .iter()
+            .all(|event| event.event != TaskEventKind::Moved),
+        "the head move is part of the preempt-update; it appends no separate moved event"
+    );
+    assert_eq!(
+        y_events
+            .iter()
+            .filter(|event| event.event == TaskEventKind::Assigned)
+            .count(),
+        1,
+        "the original assigned event is not repeated"
+    );
+}
+
+/// A task that is already the assignee's active task has nothing to pause
+/// and nothing to move: `--preempt` against it is a plain same-agent update
+/// (#1620 review, placement decision, 2026-09-27).
+#[test]
+fn preempt_against_the_already_active_same_agent_task_is_a_plain_update_with_no_pause() {
+    let h = Harness::new();
+    h.assign("Y", "alice", "lead", None);
+    h.start("Y", "alice").expect("start Y");
+
+    let (_, outcome) = h.assign_with_outcome("Y", "alice", "lead", Some(MoveTarget::Preempt));
+
+    assert!(outcome.task_updated);
+    assert_eq!(outcome.paused_task_id, None);
+    assert_eq!(outcome.queued_position, Some(1));
+    assert_eq!(h.row("Y").state, TaskState::Active);
+    assert_eq!(
+        h.events("Y")
+            .into_iter()
+            .filter(|event| event.event == TaskEventKind::Updated)
+            .count(),
+        1
+    );
+}
+
+/// A plain `--head`/`--before`/`--end` placement on a same-agent update of a
+/// queued task is honored as an ordinary move, not silently ignored: it
+/// repositions the queue and appends one `moved` event alongside the
+/// `updated` event (#1620 review, placement decision, 2026-09-27).
+#[test]
+fn plain_head_on_a_queued_same_agent_task_moves_it_and_appends_one_moved_event() {
+    let h = Harness::new();
+    h.assign("A", "alice", "lead", None);
+    h.assign("B", "alice", "lead", None);
+    h.assign("C", "alice", "lead", None);
+    assert_eq!(h.positions("alice")["C"], 3);
+
+    let (_, outcome) = h.assign_with_outcome("C", "alice", "lead", Some(MoveTarget::Head));
+
+    assert!(outcome.task_updated);
+    assert_eq!(outcome.paused_task_id, None, "plain --head never pauses");
+    assert_eq!(outcome.queued_position, Some(1));
+    assert_eq!(h.positions("alice")["C"], 1);
+    assert_eq!(h.positions("alice")["A"], 2);
+    assert_eq!(h.positions("alice")["B"], 3);
+
+    let events = h.events("C");
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event.event == TaskEventKind::Updated)
+            .count(),
+        1
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event.event == TaskEventKind::Moved)
+            .count(),
+        1,
+        "an honored placement on a same-agent update appends one moved event"
+    );
+}
+
+/// `--before <other>` on a same-agent update behaves the same as any other
+/// queue move: it repositions relative to the named task and records one
+/// `moved` event.
+#[test]
+fn plain_before_on_a_queued_same_agent_task_moves_it_and_appends_one_moved_event() {
+    let h = Harness::new();
+    h.assign("A", "alice", "lead", None);
+    h.assign("B", "alice", "lead", None);
+    h.assign("C", "alice", "lead", None);
+
+    let (_, outcome) = h.assign_with_outcome(
+        "C",
+        "alice",
+        "lead",
+        Some(MoveTarget::Before {
+            task_id: "A".parse().unwrap(),
+        }),
+    );
+
+    assert!(outcome.task_updated);
+    assert_eq!(outcome.queued_position, Some(1));
+    assert_eq!(h.positions("alice")["C"], 1);
+    assert_eq!(h.positions("alice")["A"], 2);
+    assert_eq!(h.positions("alice")["B"], 3);
+    assert_eq!(
+        h.events("C")
+            .iter()
+            .filter(|event| event.event == TaskEventKind::Moved)
+            .count(),
+        1
+    );
+}
+
+/// A same-agent update of the active task never repositions it (lifecycle
+/// item 6): a plain `--head` placement is a no-op, appending no `moved`
+/// event alongside the `updated` event.
+#[test]
+fn plain_head_on_an_active_same_agent_task_is_a_no_op_and_appends_no_moved_event() {
+    let h = Harness::new();
+    h.assign("X", "alice", "lead", None);
+    h.start("X", "alice").expect("start X");
+
+    let (_, outcome) = h.assign_with_outcome("X", "alice", "lead", Some(MoveTarget::Head));
+
+    assert!(outcome.task_updated);
+    assert_eq!(outcome.paused_task_id, None);
+    assert_eq!(outcome.queued_position, Some(1));
+    assert_eq!(h.row("X").state, TaskState::Active);
+    assert_eq!(h.positions("alice")["X"], 1);
+    assert!(
+        h.events("X")
+            .iter()
+            .all(|event| event.event != TaskEventKind::Moved),
+        "the active task is never repositioned, even by a same-agent update"
+    );
+}
+
 /// Re-assigning an open task to the agent that already holds it is an
 /// update, not an idempotent resend: it appends exactly one `Updated` task
 /// event and resets the reminder budget, so a task stalled at the reminder
