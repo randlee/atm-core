@@ -130,7 +130,7 @@ For every req-qa review, explicitly perform these checks:
    - `not-verifiable`
    - `execution-required` (see Execution-Required Items)
    - and, when the item is itself a gate artifact, also classify closure as
-     `closed`, `open`, or `not-applicable`
+     `closed`, `open`, `not-applicable`, or `execution-required`
 3. For every `partially-present`, `absent`, or `not-verifiable` item, emit a
    finding.
 4. For every gate artifact that is `open`, emit a finding even if the artifact
@@ -248,7 +248,7 @@ Return fenced JSON only.
     "deliverables_complete": 0,
     "deliverables_incomplete": 0,
     "deliverable_completion_percent": 0.0,
-    "execution_required": 0
+    "deliverables_execution_required": 0
   },
   "gate_reason": "why PASS or FAIL"
 }
@@ -262,6 +262,8 @@ Gate policy:
   is absent or not verifiable.
 - `FAIL` if any required gate artifact is still open.
 - `PASS` only when no Blocking findings exist and no unresolved cross-document
-  conflicts remain and deliverable completion is `100%`, counting
-  `execution-required` items as complete. They do not fail the gate;
-  quality-mgr resolves each `execution_required` entry before any QA PASS.
+  conflicts remain and every deliverable is `present` or
+  `execution-required`. `deliverables_complete` and the completion percent
+  count `present` only; `deliverables_execution_required` counts the rest.
+  Pending items do not fail the gate; quality-mgr resolves each
+  `execution_required` entry and computes final completion.

@@ -192,6 +192,11 @@ TODO-specific rule:
    `artifact_regeneration_required: true` at the same commit. A failing or
    unexecuted command, or evidence from another commit, is a Blocking finding
    under the requesting reviewer's id. QA never passes an unresolved entry.
+   Final deliverable completion is `req-qa`'s `deliverables_complete` plus its
+   resolved `execution-required` deliverables. The report takes every
+   reviewer entry as `execution_inventory` (`id`, `reviewer`, `ref`) and
+   exactly one resolution per entry as `execution_required`; pass `[]` for
+   both when there are none.
    Then, every round with findings (sprint or plan QA), run
    `ceremony-finding-screen` (where repository policy lists it) over all of
    them and list its `ceremony` and `concern_valid_remedy_ceremony` verdicts

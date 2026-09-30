@@ -1,6 +1,6 @@
 ---
 name: quality-report
-version: 1.0.0
+version: 1.1.0
 description: Final QA closeout report template for PASS verdicts.
 format: markdown
 required_variables:
@@ -20,6 +20,8 @@ required_variables:
   - merge_readiness
   - merge_reason
   - recommendation
+  - execution_inventory
+  - execution_required
 optional_variables:
   - blocking_ids_json
 defaults:
@@ -37,7 +39,11 @@ metadata:
     transition: approved
     iteration_variable: qa_pass
 ---
-# Final Quality Report
+{% for i in execution_inventory %}{% if execution_inventory | selectattr("reviewer", "eq", i.reviewer) | selectattr("id", "eq", i.id) | list | length != 1 %}{{ i.id | execution_inventory_duplicate_blocks_PASS }}ERROR: execution-required {{ i.id }} is listed twice in the reviewer inventory
+{% endif %}{% set m = execution_required | selectattr("reviewer", "eq", i.reviewer) | selectattr("id", "eq", i.id) | selectattr("ref", "eq", i.ref) | list %}{% if m | length != 1 %}{{ i.id | execution_required_omitted_or_duplicate_blocks_PASS }}ERROR: execution-required {{ i.id }} needs exactly one resolution
+{% else %}{% for x in m %}{% if x.status != "pass" or x.evidence_commit != commit %}{{ i.id | execution_required_unresolved_blocks_PASS }}ERROR: execution-required {{ i.id }} is not resolved at {{ commit }}
+{% endif %}{% endfor %}{% endif %}{% endfor %}{% for r in execution_required %}{% if execution_inventory | selectattr("reviewer", "eq", r.reviewer) | selectattr("id", "eq", r.id) | selectattr("ref", "eq", r.ref) | list | length != 1 %}{{ r.id | execution_required_unmatched_blocks_PASS }}ERROR: resolution {{ r.id }} matches no reviewer execution-required entry
+{% endif %}{% endfor %}# Final Quality Report
 
 Generated: {{ generated_at }}
 QA Pass: {{ qa_pass }}
@@ -66,9 +72,17 @@ Final Verdict: **{{ verdict }}**
   "merge_reason": "{{ merge_reason }}",
   "next_action": "none",
   "owner": "none",
-  "recommendation": "{{ recommendation }}"
+  "recommendation": "{{ recommendation }}",
+  "execution_inventory": {{ execution_inventory | tojson }},
+  "execution_required": {{ execution_required | tojson }}
 }
 ```
+{% if execution_required %}
+## Execution-Required Items
+| id | reviewer | ref | command | expected | result | evidence commit | status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+{% for item in execution_required %}| {{ item.id }} | {{ item.reviewer }} | {{ item.ref }} | `{{ item.command }}` | {{ item.expected }} | {{ item.result }} | `{{ item.evidence_commit }}` | {{ item.status }} |
+{% endfor %}{% endif %}
 
 ## Validated Scope
 {% if validated_scope_md -%}
