@@ -15,5 +15,24 @@
   "findings_minor": 1,
   "findings_ceremony": 1,
   "findings_md": "- atm-d-4-qa1-f1 (blocking, P1) retry without jitter: crates/example-otlp/src/sync.rs:97\n- atm-d-4-qa1-f2 (minor, P4) doc comment names the wrong env var: crates/example-otlp/src/sync.rs:12\n- atm-d-4-qa1-f3 (minor) closed: ceremony: asks for a retry-policy matrix doc no consumer reads",
-  "reviewers_md": "- req-qa: PASS\n- arch-qa: PASS\n- rust-qa-agent: FAIL (1 blocking)\n- ruthless-boundary-qa: PASS\n- rust-best-practices-agent: 1 minor\n- rust-service-hardening-agent: skipped (no service)"
+  "reviewers_md": "- req-qa: PASS\n- arch-qa: PASS\n- rust-qa-agent: FAIL (1 blocking)\n- ruthless-boundary-qa: PASS\n- rust-best-practices-agent: 1 minor\n- rust-service-hardening-agent: skipped (no service)",
+  "execution_inventory": [
+    {
+      "id": "REQ-QA-EX-001",
+      "reviewer": "req-qa",
+      "ref": "deliverable 1"
+    }
+  ],
+  "execution_required": [
+    {
+      "id": "REQ-QA-EX-001",
+      "reviewer": "req-qa",
+      "ref": "deliverable 1",
+      "command": "cargo fmt --all --check",
+      "expected": "exit 0",
+      "result": "exit 0",
+      "evidence_commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
+      "status": "pass"
+    }
+  ]
 }

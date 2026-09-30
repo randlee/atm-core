@@ -185,6 +185,18 @@ TODO-specific rule:
    - skipped
    Before citing any reviewer-supplied `file:line`, re-resolve it in the
    current branch/worktree. Missing or stale evidence is a finding.
+   Resolve every `execution_required` entry from `req-qa` or `arch-qa` against
+   `rust-qa-agent`'s `executed_checks` for that exact command, with its
+   `reviewed_commit` equal to the assigned commit. When that result lacks the
+   command, send it to `rust-qa-agent` as `artifact_commands` with
+   `artifact_regeneration_required: true` at the same commit. A failing or
+   unexecuted command, or evidence from another commit, is a Blocking finding
+   under the requesting reviewer's id. QA never passes an unresolved entry.
+   Final deliverable completion is `req-qa`'s `deliverables_complete` plus its
+   resolved `execution-required` deliverables. The report takes every
+   reviewer entry as `execution_inventory` (`id`, `reviewer`, `ref`) and
+   exactly one resolution per entry as `execution_required`; pass `[]` for
+   both when there are none.
    Then, every round with findings (sprint or plan QA), run
    `ceremony-finding-screen` (where repository policy lists it) over all of
    them and list its `ceremony` and `concern_valid_remedy_ceremony` verdicts

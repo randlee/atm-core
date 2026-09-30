@@ -1,6 +1,6 @@
 ---
 name: qa-complete
-version: 0.1.0
+version: 0.3.0
 description: QA report for one layer; the body of `atm task close <task-id> completed` and of the PR comment. Lists the finding beads filed this round.
 format: markdown
 required_variables:
@@ -20,6 +20,8 @@ required_variables:
   - findings_ceremony
   - findings_md
   - reviewers_md
+  - execution_inventory
+  - execution_required
 optional_variables:
   - pr_number
   - carried_md
@@ -42,7 +44,11 @@ metadata:
     transition: complete
 ---
 {% if verdict not in ["PASS", "FAIL"] %}{{ verdict | verdict_must_be_PASS_or_FAIL }}ERROR: verdict must be PASS or FAIL, got {{ verdict }}
-{% endif %}# QA {{ verdict }}: {{ checked_bead }} round {{ round }}
+{% endif %}{% if verdict == "PASS" %}{% for i in execution_inventory %}{% if execution_inventory | selectattr("reviewer", "eq", i.reviewer) | selectattr("id", "eq", i.id) | list | length != 1 %}{{ i.id | execution_inventory_duplicate_blocks_PASS }}ERROR: execution-required {{ i.id }} is listed twice in the reviewer inventory
+{% endif %}{% set m = execution_required | selectattr("reviewer", "eq", i.reviewer) | selectattr("id", "eq", i.id) | selectattr("ref", "eq", i.ref) | list %}{% if m | length != 1 %}{{ i.id | execution_required_omitted_or_duplicate_blocks_PASS }}ERROR: execution-required {{ i.id }} needs exactly one resolution
+{% else %}{% for x in m %}{% if x.status != "pass" or x.evidence_commit != commit %}{{ i.id | execution_required_unresolved_blocks_PASS }}ERROR: execution-required {{ i.id }} is not resolved at {{ commit }}
+{% endif %}{% endfor %}{% endif %}{% endfor %}{% for r in execution_required %}{% if execution_inventory | selectattr("reviewer", "eq", r.reviewer) | selectattr("id", "eq", r.id) | selectattr("ref", "eq", r.ref) | list | length != 1 %}{{ r.id | execution_required_unmatched_blocks_PASS }}ERROR: resolution {{ r.id }} matches no reviewer execution-required entry
+{% endif %}{% endfor %}{% endif %}# QA {{ verdict }}: {{ checked_bead }} round {{ round }}
 
 Generated: {{ generated_at }}
 QA bead: {{ task_id }} (sprint {{ sprint }})
@@ -63,7 +69,9 @@ Findings filed: {{ findings_blocking }} blocking, {{ findings_important }} impor
   "commit": {{ commit | tojson }},
   "verdict": {{ verdict | tojson }},
   "deliverables": {"complete": {{ deliverables_complete }}, "total": {{ deliverables_total }} },
-  "findings": {"blocking": {{ findings_blocking }}, "important": {{ findings_important }}, "minor": {{ findings_minor }}, "ceremony": {{ findings_ceremony }} }
+  "findings": {"blocking": {{ findings_blocking }}, "important": {{ findings_important }}, "minor": {{ findings_minor }}, "ceremony": {{ findings_ceremony }} },
+  "execution_inventory": {{ execution_inventory | tojson }},
+  "execution_required": {{ execution_required | tojson }}
 }
 ```
 
@@ -75,6 +83,12 @@ Findings filed: {{ findings_blocking }} blocking, {{ findings_important }} impor
 {% endif %}
 ## Reviewers
 {{ reviewers_md }}
+{% if execution_required %}
+## Execution-Required Items
+| id | reviewer | ref | command | expected | result | evidence commit | status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+{% for item in execution_required %}| {{ item.id }} | {{ item.reviewer }} | {{ item.ref }} | `{{ item.command }}` | {{ item.expected }} | {{ item.result }} | `{{ item.evidence_commit }}` | {{ item.status }} |
+{% endfor %}{% endif %}
 {% if notes_md %}
 ## Notes
 {{ notes_md }}

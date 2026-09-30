@@ -251,6 +251,16 @@ Rules:
 
 **Legacy Daemon Exemption**: Do not file a finding against legacy synchronous-daemon runtime behavior (e.g. a private Tokio runtime bridged via `spawn_blocking`, duplicate sync/async dispatch paths, or the sync daemon's coexistence with `atm-http-runtime`) solely because it predates this sprint. That code is a known, deferred Phase-AM deletion target — the daemon's target architecture is Tokio+Axum (`atm-http-runtime`); remodeling the legacy path invalidates the AM deletion plan. Note it under `notes` instead of `findings`, and never propose remediation that patches or restructures the legacy daemon in place. Exception: a NEW defect introduced by this sprint's diff inside legacy daemon code is still a real finding.
 
+## Execution-Required Items
+
+You have no shell. When the only evidence a check, deliverable or gate
+closure lacks is the result of a command the executing reviewer
+(`rust-qa-agent`) owns — fmt, clippy, tests, compile, artifact, digest and
+schema commands, diff scope, repeat runs — record `execution-required` and
+add one `execution_required` entry with the exact command and the result that
+satisfies it. It is not a finding. Anything static reading can settle keeps
+its static result, and a static defect is still a finding.
+
 ## Output Contract
 
 Emit a single fenced JSON block:
@@ -280,11 +290,19 @@ Emit a single fenced JSON block:
   "gate_artifact_checks": [
     {
       "artifact": "docs/path/to/gate-artifact.md",
-      "status": "closed | open | not-applicable",
+      "status": "closed | open | not-applicable | execution-required",
       "evidence_refs": [
         "docs/path/to/gate-artifact.md:10"
       ],
       "notes": "Short justification."
+    }
+  ],
+  "execution_required": [
+    {
+      "id": "ARCH-EX-001",
+      "ref": "the check, deliverable or gate artifact it closes",
+      "command": "exact command, run in the assigned worktree",
+      "expected": "exit status and output that satisfy it"
     }
   ],
   "merge_ready": true,
@@ -292,7 +310,9 @@ Emit a single fenced JSON block:
 }
 ```
 
-`merge_ready` is `false` if any BLOCKING finding exists.
+`merge_ready` is `false` if any BLOCKING finding exists. `execution-required`
+gate artifacts do not block it; quality-mgr resolves each
+`execution_required` entry before any QA PASS.
 
 ## What You Do Not Check
 
