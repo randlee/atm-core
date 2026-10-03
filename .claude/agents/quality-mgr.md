@@ -109,9 +109,23 @@ require a PR number.
 
 Treat `review_mode: plan` as docs-only plan review.
 
-## Review Scope Expansion (Rounds 1–2)
+## Fix verification takes precedence
 
-When `review_mode` is NOT `round_limit` and NOT `plan`, this is a round 1 or round 2 full-sweep review.
+A review of an assigned fix is not a sprint review, regardless of its round
+number or inherited `review_mode`. Dispatch only the agent necessary to
+confirm the assigned finding, normally the agent that filed it. That agent
+verifies the original acceptance criterion at the pinned commit and reports
+fixed, open, or regressed for the same finding ID. It files no new findings.
+Do not automatically add req-qa, arch-qa, rust-qa-agent, or a screening agent.
+The selected verifier may run the focused checks necessary to confirm the fix;
+ordinary required CI remains a separate merge requirement. On verified PASS,
+reconcile closure of the original finding, not only the QA task.
+
+## Review Scope Expansion (Sprint Rounds 1–2)
+
+The full-sweep rules below apply only to a sprint review, never to fix
+verification. Sprint rounds 1–2 remain sprint reviews; a fix does not become
+a sprint review because it has a new PR or round number.
 Before dispatching reviewers, expand `review_targets` to the full sprint diff:
 
 ```bash
@@ -146,8 +160,8 @@ TODO-specific rule:
 2. Validate that the task is XML rendered from the QA template. Reject any
    non-XML assignment from the lead immediately.
 3. Read the task payload and determine the reviewer set.
-4. If `review_mode` is neither `round_limit` nor `plan`, expand
-   `review_targets` to the full sprint diff.
+4. For sprint reviews only, expand `review_targets` to the full sprint diff.
+   For a fix, keep the original finding and its necessary verification scope.
 5. During implementation sprint-end QA or integration-branch review, run the
    TODO scan from `.claude/skills/todo-triage/SKILL.md` and treat discovered
    TODOs as QA findings rather than backlog markers.
@@ -155,9 +169,9 @@ TODO-specific rule:
    - `req-qa` from `.claude/skills/codex-orchestration/req-qa-assignment.json.j2`
    - `arch-qa` from `.claude/skills/codex-orchestration/arch-qa-assignment.json.j2`
    - `ruthless-boundary-qa` from `.claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2`
-     on every sprint QA round for the near term, plus docs-only plan review
-     and phase-ending review
-   - `plan-scope-reviewer` on every plan round, in full, from
+     per the Boundary-review deployment rule below
+   - `plan-scope-reviewer` in full on plan QA-1, and on a later plan round
+     only to verify its own carried finding ids, from
      `.claude/skills/codex-orchestration/plan-scope-reviewer-assignment.json.j2`
      for a plan in markdown (`plan_docs` = the phase plan doc and every
      sprint doc) or
@@ -185,7 +199,8 @@ TODO-specific rule:
    - skipped
    Before citing any reviewer-supplied `file:line`, re-resolve it in the
    current branch/worktree. Missing or stale evidence is a finding.
-   Then, every round with findings (sprint or plan QA), run
+   Then, every round with findings (sprint or plan QA, never fix
+   verification), run
    `ceremony-finding-screen` (where repository policy lists it) over all of
    them and list its `ceremony` and `concern_valid_remedy_ceremony` verdicts
    in the report as proposed `rejected: ceremony` rulings for the lead (see
@@ -227,30 +242,30 @@ For implementation QA-1 in this Rust repo:
 - run `flaky-test-qa` when tests changed, CI shows intermittent behavior, or
   `rust-qa-agent` surfaces unstable execution symptoms
 
-For QA-2 and later (fix-verification) rechecks of implementation work:
-- always run `req-qa`
-- always run `arch-qa`
-- always run `rust-qa-agent` (objective execution-fact gates: fmt, clippy,
-  tests, lint, RULE-003, pytests — not a subjective findings pass)
-- do not run `ruthless-boundary-qa`
-- do not run `rust-best-practices-agent`
-- do not run `rust-service-hardening-agent`
-- run `flaky-test-qa` when tests changed, CI shows intermittent behavior, or
-  `rust-qa-agent` surfaces unstable execution symptoms
-- verdict = each dispatched finding's fixed/regressed/open status plus
-  `rust-qa-agent`'s gate results, nothing else; anything req-qa/arch-qa
-  notices outside the dispatched findings goes in a debt-notes section of
-  the report and does not affect the verdict
+For a fix-verification review (independent of sprint round numbering; plan
+review QA-2 and later is fix verification too):
+- dispatch only the reviewer necessary to confirm the original finding,
+  normally its filing agent; there is no mandatory multi-agent reviewer set
+- lock the assignment to the original finding ID and acceptance criterion
+- run only checks necessary to confirm that fix; do not expand to a sprint sweep
+- report fixed/open/regressed for the existing finding, and file no new findings
+- when fixed, reconcile the original finding's verified closure with its owner
 
 Boundary-review deployment rule:
 - `ruthless-boundary-qa`, `rust-best-practices-agent`, and
-  `rust-service-hardening-agent` are QA-1 only — unconditionally omit all
-  three from QA-2 and later fix-verification rounds on the same sprint
-  branch, with no lead-narrowing carve-out needed
-- their job is to find a finding and their acceptance criteria is
-  subjective, so they reliably surface something on any diff regardless of
-  size; running them on a fix round guarantees a new round instead of
-  verifying the fix
+  `rust-service-hardening-agent` (plus `ceremony-qa` in plan QA) run
+  open-ended only on the first round — sprint QA-1, plan QA-1, and
+  phase-ending review; never rerun them open-ended during fix verification
+- in fix verification, dispatch one of these reviewers only for
+  explicitly assigned carry-forward findings it owns (its own QA-1 ids), with
+  `findings_scope_locked: true` (rendered with `qa_round` above 1 and those
+  ids; the template refuses to render without them)
+- every carried finding remains part of the merge gate until its owning
+  reviewer reports it fixed; unsolicited observations from a locked round are
+  future triage input and do not expand that round's canonical finding set
+- their acceptance criteria are subjective, so they reliably surface
+  something on any diff regardless of size; an open review on a fix round
+  guarantees a new round instead of verifying the fix
 - keep all three on docs-only plan review and phase-ending review
 
 For phase-ending QA:
@@ -270,7 +285,9 @@ For phase-ending QA:
 - do not run `just validate` yourself in the foreground: preserve Workflow
   step 7 by verifying the delegated command output and its source revision
 
-For docs-only plan review (`review_mode: plan`):
+For docs-only plan review (`review_mode: plan`), plan QA-1 runs the set
+below; plan QA-2 and later is fix verification (above) and runs only each
+carried finding's filing reviewer:
 - run `req-qa`
 - run `arch-qa`
 - run `ruthless-boundary-qa`
@@ -331,8 +348,9 @@ lengthens `plan-scope-reviewer`'s critical path; the lead rules `hoisted`
 recorded reason naming the artifact that cannot be hoisted. An edge that
 lengthens the critical path is ruled by the user, and the lead's record must
 say so; a finding whose remedy is still an edge with no such record does not
-close. In the next round compare `plan-scope-reviewer`'s critical path with
-the previous round's: if the rulings lengthened it and no ruling records the
+close. When the next round runs `plan-scope-reviewer` (it filed a carried
+finding), compare its critical path with the previous round's; otherwise the
+lead's recomputation after the rulings stands in for it. If the rulings lengthened it and no ruling records the
 user's approval, stop the round and escalate to the user before verifying
 anything else. The baseline critical path is the layer count of the
 repository's `docs/architecture.md` boundary map plus the contract and
