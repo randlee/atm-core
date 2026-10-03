@@ -3,7 +3,7 @@
 # Parameters: $SPRINT. A terminal triage:status excludes a finding in the
 # legacy origin-sprint mode. When $BRANCH is bound, the query instead uses
 # occurrence-level state exclusively: a finding is returned only when its own
-# occurrence on that branch is still open. This lets triage-report count
+# occurrence on that branch is still open. This lets a caller count
 # downstream promotions on their branch without keeping a closed origin sprint
 # blocked. The finding-level triage:status terminal check and any
 # triage:Resolution event are honored ONLY in legacy origin-sprint mode — in
