@@ -58,8 +58,12 @@ checks coverage before invoking JEV. Workers do not file findings.
    settings and approval receipts as requiring separate evidence. For oversized
    context (the API limit is 24,000 request bytes), split into named subchecks
    `<finding-id>.part-a`, `.part-b`, etc., recording the base finding ID. Divide
-   original obligation IDs across parts and reconcile their full union; each
-   part retains separate issue and quality questions. Never truncate deciding evidence or relabel partial
+   original obligation IDs across parts and reconcile their full union. If one
+   compound obligation is itself too large, give its constituent checks stable
+   IDs (for example `P1.row01` through `P1.row14`), retain their common original
+   quote and parent `P1`, and require every constituent before supporting `P1`.
+   Do not omit rows or weaken the parent obligation. Each part retains separate
+   issue and quality questions. Never truncate deciding evidence or relabel partial
    coverage as whole-finding. Do not infer absence from omitted code.
 
 ## Prepare packets, evaluate, investigate
