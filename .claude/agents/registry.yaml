@@ -93,6 +93,23 @@ roles:
   dev-sanity: atm-sanity
   quality-mgr: quality-mgr
   lead: team-lead
+worktree_base: ../atm-core-worktrees
+test_command: just test
+lint_command: just lint
+integration_branch_pattern: "integrate/phase-{phase}"
+plans_dir: docs/plans
+requirements_globs:
+  - docs/requirements.md
+adr_globs:
+  - "docs/adr/ADR-*.md"
+policy_path: .claude/project/quality-policy.md
+reviewers_round1:
+  - req-qa
+  - arch-qa
+  - ruthless-boundary-qa
+  - rust-qa-agent
+  - rust-best-practices-agent
+  - rust-service-hardening-agent
 skills:
   atm-beads:
     version: 0.1.0

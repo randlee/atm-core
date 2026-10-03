@@ -2,11 +2,29 @@
   "generated_at": "2026-09-25T10:00:00Z",
   "task_id": "atm-phase-d-review",
   "phase": "d",
-  "branch": "fix/d-4-qa1-f1-retry-jitter",
+  "branch": "integrate/phase-d",
   "commit": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
-  "verdict": "PASS",
+  "verdict": "FAIL",
   "findings_blocking": 0,
   "findings_important": 1,
   "findings_minor": 0,
-  "findings_md": "1. important: crates/example-otlp/src/lib.rs:40 re-exports an internal type"
+  "findings_md": "1. important: crates/example-otlp/src/lib.rs:40 re-exports an internal type",
+  "integration_review": "integration_review_failed",
+  "post_mortem_md": "Inventory: 1 finding; verified fixed 0, justified non-fix 0, unresolved 1.\n\n| Bead | Disposition | Integration evidence | Result |\n| --- | --- | --- | --- |\n| atm-d-4-qa1-f1 | fixed | Original reproducer still fails at the reviewed commit | unresolved |\n\nSystemic follow-up: no_systemic_followup; route the missing fix to its owner.",
+  "integration_commit": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
+  "post_mortem_counts": {
+    "total": 1,
+    "verified_fixed": 0,
+    "justified_nonfix": 0,
+    "unresolved": 1
+  },
+  "post_mortem_jev": {
+    "status": "completed",
+    "run_ids": [
+      "example-phase-review"
+    ],
+    "jsonl_path": ".sc/qa-logs/post-mortem-jev-phase-d.jsonl",
+    "integration_sha": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
+    "reason": ""
+  }
 }

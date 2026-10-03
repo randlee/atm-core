@@ -19,13 +19,15 @@ SPEC.loader.exec_module(gates)
 
 class FakeRunner:
     def __init__(self, responses): self.responses = responses
-    def __call__(self, args, **_kwargs):
+    cwds: list = []
+    def __call__(self, args, **kwargs):
+        self.cwds.append(kwargs.get("cwd"))
         code, stdout = self.responses.get(tuple(args), (0, ""))
         return subprocess.CompletedProcess(args, code, stdout, "")
 
 
 def ns(kind, **overrides):
-    values = dict(kind=kind, root="demo-phase-d", bead="bead", pr_target="target", identity="terra",
+    values = dict(kind=kind, root="atm-phase-d", bead="bead", pr_target="target", identity="terra",
                   pr_number="7", commit="head", checked_bead="checked")
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -36,7 +38,7 @@ def dumped(value): return json.dumps(value)
 
 def dev_runner(overrides=None):
     data = {
-        (".claude/skills/atm-beads/scripts/validate-plan", "--root", "demo-phase-d", "--scope", "bead"): (0, ""),
+        (gates.VALIDATE_PLAN, "--root", "atm-phase-d", "--scope", "bead"): (0, ""),
         ("bd", "ready", "-n", "0", "--json"): (0, dumped([{"id": "bead"}])),
         ("bd", "show", "bead", "--json"): (0, dumped([{"status": "open", "assignee": "", "metadata": {"difficulty": "normal", "pr_target": "target"}}])),
         ("atm", "members", "--json"): (0, dumped([{"identity": "terra", "model": "gpt-6-terra"}])),
@@ -82,7 +84,7 @@ class AssignmentGateTests(unittest.TestCase):
 
     def test_dev_refusals_and_ready(self):
         cases = [
-            ("plan-invalid.json", dev_runner({(".claude/skills/atm-beads/scripts/validate-plan", "--root", "demo-phase-d", "--scope", "bead"): (5, "bad")})),
+            ("plan-invalid.json", dev_runner({(gates.VALIDATE_PLAN, "--root", "atm-phase-d", "--scope", "bead"): (5, "bad")})),
             ("not-ready.json", dev_runner({("bd", "ready", "-n", "0", "--json"): (0, "[]")})),
             ("unclaimable.json", dev_runner({("bd", "show", "bead", "--json"): (0, dumped([{"status": "open", "assignee": "other", "metadata": {"difficulty": "normal"}}]))})),
             ("wrong-base.json", dev_runner({("git", "merge-base", "--is-ancestor", "origin/target", "HEAD"): (1, "")})),
@@ -91,6 +93,13 @@ class AssignmentGateTests(unittest.TestCase):
         ]
         for fixture, runner in cases:
             with self.subTest(fixture=fixture): self.assert_fixture(fixture, ns("dev"), runner)
+
+    def test_dev_gate_runs_validate_plan_in_primary_and_git_in_worktree(self):
+        runner = dev_runner({("git", "-C", "/wt", "merge-base", "--is-ancestor", "origin/target", "HEAD"): (0, "")})
+        self.assertEqual(gates.evaluate(ns("dev", worktree="/wt"), runner), "READY")
+        self.assertEqual(runner.cwds[0], str(gates.PRIMARY))
+        behind = dev_runner({("git", "-C", "/other", "merge-base", "--is-ancestor", "origin/target", "HEAD"): (1, "")})
+        self.assertEqual(gates.evaluate(ns("dev", worktree="/other"), behind), "WRONG_BASE")
 
     def test_sanity_refusals_and_ready(self):
         cases = [

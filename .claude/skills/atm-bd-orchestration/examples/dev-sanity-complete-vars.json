@@ -8,5 +8,17 @@
   "verdict": "FAIL",
   "findings_count": 1,
   "findings_md": "- crates/example-otlp/src/sync.rs:88 D.4-2 retry policy is `todo!()`",
-  "lint_md": "- `just lint`: ok"
+  "lint_md": "- `make lint`: ok"
+  ,"selection": [{"deliverable": 1, "llm": "undone", "jev": "undone", "selected": "llm", "reason": "", "rerun": null, "checker_defect": false}]
+  ,"sanity_bead": "atm-d-4-sanity"
+  ,"dev_bead_id": "atm-d-4"
+  ,"dev_bead_title": "d-4: OTLP sync exporter"
+  ,"deliverable_number": 1
+  ,"deliverable_text": "Implement the pinned deliverable."
+  ,"deliverables_total": 1
+  ,"owned_paths": ["crates/example-otlp/src/sync.rs"]
+  ,"changed_files": ["crates/example-otlp/src/sync.rs"]
+  ,"files_outside_owned_paths": []
+  ,"worktree_path": "../atm-core-worktrees/sprint/d-4-otlp-sync-exporter"
+  ,"base_sha": "sprint/d-3-otlp-config"
 }

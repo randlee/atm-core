@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+"""Refresh and push the phase DAG; --view optionally opens the artifact in Wyvern."""
+import argparse
+import os
+from pathlib import Path
+import sys
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--root', help='phase root bead ID')
+    parser.add_argument('--index', help='phase bead-membership index path')
+    parser.add_argument('--view', action='store_true', help='open in Wyvern when available, after pushing')
+    args = parser.parse_args()
+    report = Path(__file__).resolve().parents[2] / 'sprint-report/scripts/sprint-report'
+    command = [sys.executable, str(report), '--view' if args.view else '--dag']
+    for option, value in [('--root', args.root), ('--index', args.index)]:
+        if value:
+            command.extend([option, value])
+    os.execv(sys.executable, command)
+
+
+if __name__ == '__main__':
+    main()

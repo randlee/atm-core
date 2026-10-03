@@ -8,5 +8,5 @@
   "deliverables_complete": 3,
   "deliverables_total": 3,
   "deliverables_md": "- D.4-1 sync exporter: done\n- D.4-2 retry policy: done\n- D.4-3 tests: done",
-  "validation_md": "- `just validate`: ok (212 passed, 0 failed)"
+  "validation_md": "- `make test`: ok (212 passed, 0 failed)"
 }
