@@ -170,7 +170,8 @@ TODO-specific rule:
    - `arch-qa` from `.claude/skills/codex-orchestration/arch-qa-assignment.json.j2`
    - `ruthless-boundary-qa` from `.claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2`
      per the Boundary-review deployment rule below
-   - `plan-scope-reviewer` on every plan round, in full, from
+   - `plan-scope-reviewer` in full on plan QA-1, and on a later plan round
+     only to verify its own carried finding ids, from
      `.claude/skills/codex-orchestration/plan-scope-reviewer-assignment.json.j2`
      for a plan in markdown (`plan_docs` = the phase plan doc and every
      sprint doc) or
@@ -241,7 +242,8 @@ For implementation QA-1 in this Rust repo:
 - run `flaky-test-qa` when tests changed, CI shows intermittent behavior, or
   `rust-qa-agent` surfaces unstable execution symptoms
 
-For a fix-verification review (independent of sprint round numbering):
+For a fix-verification review (independent of sprint round numbering; plan
+review QA-2 and later is fix verification too):
 - dispatch only the reviewer necessary to confirm the original finding,
   normally its filing agent; there is no mandatory multi-agent reviewer set
 - lock the assignment to the original finding ID and acceptance criterion
@@ -283,7 +285,9 @@ For phase-ending QA:
 - do not run `just validate` yourself in the foreground: preserve Workflow
   step 7 by verifying the delegated command output and its source revision
 
-For docs-only plan review (`review_mode: plan`):
+For docs-only plan review (`review_mode: plan`), plan QA-1 runs the set
+below; plan QA-2 and later is fix verification (above) and runs only each
+carried finding's filing reviewer:
 - run `req-qa`
 - run `arch-qa`
 - run `ruthless-boundary-qa`
@@ -344,8 +348,9 @@ lengthens `plan-scope-reviewer`'s critical path; the lead rules `hoisted`
 recorded reason naming the artifact that cannot be hoisted. An edge that
 lengthens the critical path is ruled by the user, and the lead's record must
 say so; a finding whose remedy is still an edge with no such record does not
-close. In the next round compare `plan-scope-reviewer`'s critical path with
-the previous round's: if the rulings lengthened it and no ruling records the
+close. When the next round runs `plan-scope-reviewer` (it filed a carried
+finding), compare its critical path with the previous round's; otherwise the
+lead's recomputation after the rulings stands in for it. If the rulings lengthened it and no ruling records the
 user's approval, stop the round and escalate to the user before verifying
 anything else. The baseline critical path is the layer count of the
 repository's `docs/architecture.md` boundary map plus the contract and

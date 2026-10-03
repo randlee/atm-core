@@ -165,15 +165,21 @@ of §0.
    with `review_mode: plan`.
 3. The QA assignment must include the phase-plan document as `sprint_doc`, and
    that plan document is the authoritative scope source for plan QA.
-4. `quality-mgr` treats `review_mode: plan` as docs-only review and launches:
+4. `quality-mgr` treats `review_mode: plan` as docs-only review and on plan
+   QA-1 launches:
    - `req-qa`
    - `arch-qa`
    - `ruthless-boundary-qa`
    - `rust-best-practices-agent`
    - `rust-service-hardening-agent`
-   - `plan-scope-reviewer`, every plan round, rendered from
+   - `plan-scope-reviewer`, rendered from
      `plan-scope-reviewer-assignment.json.j2` in this skill
      (`.claude/project/quality-policy.md`, "Reviewer Policy")
+
+   Plan QA-2 and later is fix verification: only each carried finding's
+   filing reviewer runs, locked to that finding id; no other reviewer, no
+   screen, no new findings. Pass `triage_records` and `filing_reviewers` to
+   `qa-template.xml.j2`, which refuses a later plan round without them.
 5. If plan QA passes, the hardened plan is ready for implementation dispatch.
 6. If plan QA fails, the lead uses the normal codex-orchestration
    triage-and-fix loop to route concrete fixes back to the developer.

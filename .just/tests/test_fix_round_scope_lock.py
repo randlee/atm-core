@@ -1,12 +1,14 @@
 """A fix verification dispatches exactly the reviewer(s) that filed the finding.
 
-Rand's ruling (2026-10-03): a review of an assigned fix is not a sprint
-review, whatever its round number. It dispatches only the filing reviewer,
+Rand's rulings (2026-10-03): a review of an assigned fix is not a sprint
+review, whatever its round number, and plan review QA-2 and later is fix
+verification too. It dispatches only the filing reviewer,
 locked to the original finding id; there is no automatic ``req-qa``,
 ``arch-qa``, ``rust-qa-agent`` or screening panel. The codex QA assignment
 takes ``filing_reviewers`` and ``triage_records`` and refuses a ``fix/`` branch
-without them; the subjective reviewers' assignment templates require
-``qa_round`` and refuse to render above round 1 without their own ids. Each
+or a later plan round without them; the subjective reviewers' and
+``plan-scope-reviewer``'s assignment templates refuse to render above round 1
+without their own ids. Each
 case renders the template through the real ``sc-compose`` binary.
 """
 
@@ -25,6 +27,7 @@ SUBJECTIVE_TEMPLATES = (
     ".claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2",
 )
 QA_TEMPLATE = ".claude/skills/codex-orchestration/qa-template.xml.j2"
+PLAN_SCOPE_TEMPLATE = ".claude/skills/codex-orchestration/plan-scope-reviewer-assignment.json.j2"
 REVIEWER_BASE = {"review_mode": "sprint_review", "worktree_path": "/w", "review_targets": ["src/"]}
 QA_BASE = {
     "task_id": "t", "sprint": "s", "sprint_doc": "d.md", "review_mode": "sprint",
@@ -87,6 +90,30 @@ class SubjectiveReviewerScopeLockTests(unittest.TestCase):
                 self.assertIn("missing required variable: qa_round", completed.stderr)
 
 
+class PlanScopeReviewerScopeLockTests(unittest.TestCase):
+    BASE = {"phase_root_doc": "p.md", "plan_docs": ["s.md"], "reference_docs": ["g.md"],
+            "worktree_path": "/w", "branch": "plan/phase-x", "commit": "abc1234"}
+
+    def test_plan_qa_one_renders_an_open_review(self) -> None:
+        data = rendered_json(PLAN_SCOPE_TEMPLATE, {**self.BASE, "round_index": 1})
+        self.assertIs(data["findings_scope_locked"], False)
+
+    def test_later_plan_round_with_own_ids_is_scope_locked(self) -> None:
+        data = rendered_json(PLAN_SCOPE_TEMPLATE, {**self.BASE, "round_index": 2,
+                                                   "carry_forward_findings_json": '["PSR-002"]'})
+        self.assertIs(data["findings_scope_locked"], True)
+        self.assertEqual(data["carry_forward_findings"], ["PSR-002"])
+
+    def test_later_plan_round_without_ids_refuses_to_render(self) -> None:
+        for scope in (None, "[]", ""):
+            with self.subTest(scope=scope):
+                values: dict[str, object] = {**self.BASE, "round_index": 2}
+                if scope is not None:
+                    values["carry_forward_findings_json"] = scope
+                completed = render(PLAN_SCOPE_TEMPLATE, values)
+                self.assertNotEqual(completed.returncode, 0, completed.stdout)
+
+
 class CodexQaAssignmentFixVerificationTests(unittest.TestCase):
     # The XML task templates use {% autoescape %}, which `--strict` rejects as an
     # undeclared token on develop already, so these render without it.
@@ -110,7 +137,7 @@ class CodexQaAssignmentFixVerificationTests(unittest.TestCase):
                 completed = self.qa(round_index=round_index)
                 self.assertEqual(completed.returncode, 0, completed.stderr)
                 step = self.step_e(completed.stdout)
-                self.assertIn("This is a first-round review", step)
+                self.assertIn("This is a full review", step)
                 self.assertIn("render every reviewer assignment with `qa_round` = 1", step)
                 self.assertNotIn("<filing-reviewers>", completed.stdout)
 
@@ -124,10 +151,10 @@ class CodexQaAssignmentFixVerificationTests(unittest.TestCase):
         self.assertIn("This is fix verification, not a sprint review", step)
         self.assertIn("dispatch exactly the filing reviewer(s) `ruthless-boundary-qa`", step)
         self.assertIn("and no other reviewer", step)
-        self.assertIn("with `qa_round` = 3", step)
+        self.assertIn("(`round_index` for `plan-scope-reviewer`) = 3", step)
         for sprint_reviewer in ("req-qa", "arch-qa", "rust-qa-agent", "ceremony-finding-screen"):
             self.assertNotIn(sprint_reviewer, step)
-        self.assertNotIn("first-round review", step)
+        self.assertNotIn("This is a full review", step)
 
     def test_first_qa_of_a_fix_branch_is_fix_verification(self) -> None:
         completed = self.qa(round_index=1, branch="fix/s-1-x",
@@ -137,7 +164,7 @@ class CodexQaAssignmentFixVerificationTests(unittest.TestCase):
         self.assertEqual(self.filing_reviewers(completed.stdout), ["arch-qa", "rust-best-practices-agent"])
         step = self.step_e(completed.stdout)
         self.assertIn("This is fix verification", step)
-        self.assertIn("with `qa_round` = 2", step)
+        self.assertIn("(`round_index` for `plan-scope-reviewer`) = 2", step)
         for unfiled in ("req-qa", "rust-qa-agent", "ceremony-finding-screen"):
             self.assertNotIn(unfiled, step)
 
@@ -155,12 +182,28 @@ class CodexQaAssignmentFixVerificationTests(unittest.TestCase):
                 completed = self.qa(round_index=2, **values)
                 self.assertNotEqual(completed.returncode, 0, completed.stdout)
 
-    def test_plan_review_keeps_its_own_round_rules(self) -> None:
-        completed = self.qa(round_index=2, review_mode="plan", branch="fix/plan-x")
+    def test_plan_qa_one_is_a_full_review(self) -> None:
+        completed = self.qa(round_index=1, review_mode="plan", branch="plan/phase-x")
         self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("This is a full review", self.step_e(completed.stdout))
+        self.assertNotIn("<filing-reviewers>", completed.stdout)
+
+    def test_plan_round_two_dispatches_only_the_filers(self) -> None:
+        completed = self.qa(round_index=2, review_mode="plan", branch="plan/phase-x",
+                            triage_records=".triage/phase-x/findings/PSR-002.ttl",
+                            filing_reviewers="plan-scope-reviewer")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(self.filing_reviewers(completed.stdout), ["plan-scope-reviewer"])
         step = self.step_e(completed.stdout)
-        self.assertIn("This is plan review round 2", step)
-        self.assertNotIn("This is fix verification", step)
+        self.assertIn("This is fix verification", step)
+        self.assertIn("dispatch exactly the filing reviewer(s) `plan-scope-reviewer`", step)
+        for unfiled in ("req-qa", "arch-qa", "ceremony-qa", "ceremony-finding-screen"):
+            self.assertNotIn(unfiled, step)
+
+    def test_plan_round_two_without_filers_refuses_to_render(self) -> None:
+        completed = self.qa(round_index=2, review_mode="plan", branch="plan/phase-x",
+                            triage_records=".triage/phase-x/findings/PSR-002.ttl")
+        self.assertNotEqual(completed.returncode, 0, completed.stdout)
 
     def test_missing_round_refuses_to_render(self) -> None:
         completed = self.qa()

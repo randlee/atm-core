@@ -1,6 +1,6 @@
 ---
 name: plan-scope-reviewer
-version: 0.4.1
+version: 0.4.2
 description: Reviews sprint shape, boundary-scoped closure, parallel width, deliverable ownership, early split decisions, and direct sprint-doc consumability before hardening fixes.
 tools: Glob, Grep, LS, Read, BashOutput
 model: sonnet
@@ -53,9 +53,16 @@ rendered from `plan-scope-reviewer-assignment.json.j2`:
   "commit": "<full sha>",
   "round_index": 1,
   "carry_forward_findings": [],
+  "findings_scope_locked": false,
   "notes": ""
 }
 ```
+
+When `findings_scope_locked` is `true` (plan QA-2 and later, with
+`carry_forward_findings` non-empty), this is fix verification of your own
+earlier findings, not a plan review: report each assigned id as fixed, open,
+or regressed with evidence, restrict `findings` to those ids, and put any
+unrelated observation in `notes` only. File no new findings.
 
 For a plan in beads, `phase_root_doc` is the phase root and each `plan_docs`
 entry holds one dev bead, as `bd show <bead> --json` printed it, in a fenced
