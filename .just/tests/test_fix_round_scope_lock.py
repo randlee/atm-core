@@ -1,12 +1,13 @@
-"""Fix rounds never run the subjective reviewers open-ended.
+"""A fix verification dispatches exactly the reviewer(s) that filed the finding.
 
-Rand's ruling (2026-10-02): on a fix-verification round,
-``rust-best-practices-agent``, ``ruthless-boundary-qa`` and
-``rust-service-hardening-agent`` only re-check their own carried finding ids.
-Their assignment templates require ``qa_round`` and refuse to render above
-round 1 without those ids, and the codex QA assignment requires
-``round_index`` and refuses a round above 1 without triage records. Each case
-renders the template through the real ``sc-compose`` binary.
+Rand's ruling (2026-10-03): a review of an assigned fix is not a sprint
+review, whatever its round number. It dispatches only the filing reviewer,
+locked to the original finding id; there is no automatic ``req-qa``,
+``arch-qa``, ``rust-qa-agent`` or screening panel. The codex QA assignment
+takes ``filing_reviewers`` and ``triage_records`` and refuses a ``fix/`` branch
+without them; the subjective reviewers' assignment templates require
+``qa_round`` and refuse to render above round 1 without their own ids. Each
+case renders the template through the real ``sc-compose`` binary.
 """
 
 from __future__ import annotations
@@ -86,39 +87,80 @@ class SubjectiveReviewerScopeLockTests(unittest.TestCase):
                 self.assertIn("missing required variable: qa_round", completed.stderr)
 
 
-class CodexQaAssignmentRoundTests(unittest.TestCase):
+class CodexQaAssignmentFixVerificationTests(unittest.TestCase):
     # The XML task templates use {% autoescape %}, which `--strict` rejects as an
     # undeclared token on develop already, so these render without it.
     def qa(self, **values: object) -> subprocess.CompletedProcess[str]:
         return render(QA_TEMPLATE, {**QA_BASE, **values}, strict=False)
 
-    def test_round_one_sprint_branch_runs_the_full_set(self) -> None:
-        completed = self.qa(round_index=1)
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("This is round 1: render every reviewer assignment with `qa_round` = 1.", completed.stdout)
-        self.assertNotIn("This is a fix round", completed.stdout)
+    @staticmethod
+    def step_e(stdout: str) -> str:
+        start = stdout.index('<step id="e">')
+        return stdout[start:stdout.index("</step>", start)]
 
-    def test_fix_round_with_triage_records_is_scope_locked(self) -> None:
-        completed = self.qa(round_index=3, triage_records=".triage/phase-x/findings/X-1.ttl")
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("This is a fix round", completed.stdout)
-        self.assertIn("rendered with `qa_round` = 3", completed.stdout)
+    @staticmethod
+    def filing_reviewers(stdout: str) -> list[str]:
+        start = stdout.index("<filing-reviewers>") + len("<filing-reviewers>")
+        listed = stdout[start:stdout.index("</filing-reviewers>", start)]
+        return [name.strip() for name in listed.split(",") if name.strip()]
 
-    def test_first_qa_of_a_fix_branch_is_a_fix_round(self) -> None:
-        completed = self.qa(round_index=1, branch="fix/s-1-x")
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("This is a fix round", completed.stdout)
-        self.assertIn("rendered with `qa_round` = 2", completed.stdout)
-        self.assertNotIn("This is round 1", completed.stdout)
+    def test_sprint_rounds_one_and_two_stay_sprint_reviews(self) -> None:
+        for round_index in (1, 2):
+            with self.subTest(round_index=round_index):
+                completed = self.qa(round_index=round_index)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                step = self.step_e(completed.stdout)
+                self.assertIn("This is a first-round review", step)
+                self.assertIn("render every reviewer assignment with `qa_round` = 1", step)
+                self.assertNotIn("<filing-reviewers>", completed.stdout)
 
-    def test_fix_round_without_triage_records_refuses_to_render(self) -> None:
-        for records in (None, "", "  \n"):
-            with self.subTest(triage_records=records):
-                values: dict[str, object] = {"round_index": 2}
-                if records is not None:
-                    values["triage_records"] = records
-                completed = self.qa(**values)
+    def test_fix_branch_dispatches_exactly_the_filing_reviewer(self) -> None:
+        completed = self.qa(round_index=3, branch="fix/s-1-x",
+                            triage_records=".triage/phase-x/findings/RBQA-004.ttl",
+                            filing_reviewers="ruthless-boundary-qa")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(self.filing_reviewers(completed.stdout), ["ruthless-boundary-qa"])
+        step = self.step_e(completed.stdout)
+        self.assertIn("This is fix verification, not a sprint review", step)
+        self.assertIn("dispatch exactly the filing reviewer(s) `ruthless-boundary-qa`", step)
+        self.assertIn("and no other reviewer", step)
+        self.assertIn("with `qa_round` = 3", step)
+        for sprint_reviewer in ("req-qa", "arch-qa", "rust-qa-agent", "ceremony-finding-screen"):
+            self.assertNotIn(sprint_reviewer, step)
+        self.assertNotIn("first-round review", step)
+
+    def test_first_qa_of_a_fix_branch_is_fix_verification(self) -> None:
+        completed = self.qa(round_index=1, branch="fix/s-1-x",
+                            triage_records=".triage/phase-x/findings/ARCH-001.ttl",
+                            filing_reviewers="arch-qa, rust-best-practices-agent")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(self.filing_reviewers(completed.stdout), ["arch-qa", "rust-best-practices-agent"])
+        step = self.step_e(completed.stdout)
+        self.assertIn("This is fix verification", step)
+        self.assertIn("with `qa_round` = 2", step)
+        for unfiled in ("req-qa", "rust-qa-agent", "ceremony-finding-screen"):
+            self.assertNotIn(unfiled, step)
+
+    def test_fix_verification_without_findings_or_filers_refuses_to_render(self) -> None:
+        cases = (
+            {"branch": "fix/s-1-x"},
+            {"branch": "fix/s-1-x", "triage_records": ".triage/phase-x/findings/X-1.ttl"},
+            {"branch": "fix/s-1-x", "triage_records": ".triage/phase-x/findings/X-1.ttl",
+             "filing_reviewers": "  \n"},
+            {"branch": "fix/s-1-x", "filing_reviewers": "req-qa"},
+            {"filing_reviewers": "req-qa", "triage_records": "  \n"},
+        )
+        for values in cases:
+            with self.subTest(**values):
+                completed = self.qa(round_index=2, **values)
                 self.assertNotEqual(completed.returncode, 0, completed.stdout)
+
+    def test_plan_review_keeps_its_own_round_rules(self) -> None:
+        completed = self.qa(round_index=2, review_mode="plan", branch="fix/plan-x")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        step = self.step_e(completed.stdout)
+        self.assertIn("This is plan review round 2", step)
+        self.assertNotIn("This is fix verification", step)
 
     def test_missing_round_refuses_to_render(self) -> None:
         completed = self.qa()

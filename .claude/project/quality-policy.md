@@ -24,12 +24,12 @@ their own prompts. The orchestration templates name this file as
 - Initial implementation review (sprint QA-1): `req-qa`, `arch-qa`,
   `ruthless-boundary-qa`, `rust-qa-agent`, `rust-best-practices-agent`, and
   `rust-service-hardening-agent`
-- Fix verification (sprint QA-2 and later): `req-qa`, `arch-qa`, and
-  `rust-qa-agent`. `ruthless-boundary-qa`, `rust-best-practices-agent`, and
-  `rust-service-hardening-agent` never run open-ended on a fix round
-  (including every `fix/` branch); each runs only to re-check its own carried
-  finding ids (Rand's ruling, 2026-10-02; `quality-mgr.md`, "Boundary-review
-  deployment rule")
+- Fix verification is separate from sprint QA rounds 1–2: dispatch only the
+  agent necessary to confirm the specific fix, normally the filing reviewer.
+  Lock it to the original finding and acceptance criterion. No automatic
+  req-qa/arch-qa/rust-qa or screening panel, no full sweep, and no new findings.
+  The verifier runs necessary focused checks and confirms original-finding
+  closure. Required CI remains a separate merge requirement.
 - Plan review QA-1: `plan-scope-reviewer`, `req-qa`, `arch-qa`,
   `ruthless-boundary-qa`, `rust-best-practices-agent`,
   `rust-service-hardening-agent`, and `ceremony-qa`. `plan-scope-reviewer`
@@ -68,7 +68,8 @@ their own prompts. The orchestration templates name this file as
   a plan is not held to a fixed number of waves, but every wave past that
   baseline carries a user-approved reason
 - `ceremony-finding-screen`: every sprint or plan QA round that has
-  findings, over all of them, before the report is posted
+  findings, over all of them, before the report is posted; never on fix
+  verification, which files no new findings
 - Phase-end review: the initial implementation set plus `flaky-test-qa`
 - Run `flaky-test-qa` earlier when tests changed or instability is suspected
 - `schema-reviewer`: in plan review and phase-ending review whenever a

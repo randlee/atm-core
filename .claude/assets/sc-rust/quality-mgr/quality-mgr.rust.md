@@ -24,19 +24,27 @@ For Rust work, add:
 
 Do not launch `rust-qa-agent` for docs-only plan review.
 
-### Sprint / Fix QA
+### Sprint QA
 
-For Rust implementation work:
+For sprint reviews of Rust implementation work:
 - always launch `rust-qa-agent`
 - launch `rust-best-practices-agent` in `sprint_review` mode when changed Rust code is in scope
 - launch `rust-service-hardening-agent` in `sprint_review` mode when the changed scope is service-like or when service indicators are already known
-- on a fix round, `rust-best-practices-agent` and `rust-service-hardening-agent` launch only under the Fix-Round Dispatch Gate below
 
 Default sprint best-practices scope should follow the cadence matrix in `rust-best-practices/patterns/enforcement-strategy.md`. The usual sprint set is:
 - `RBP-001`
 - `RBP-004`
 - `RBP-006`
 - `RBP-007`
+
+### Fix QA
+
+A fix is not a sprint review. Only the agent necessary to confirm its original
+finding is dispatched, normally the filing reviewer. Do not automatically
+launch rust-qa-agent, best-practices, hardening, or another reviewer merely
+because Rust code or tests changed. The verifier runs the focused checks needed
+to confirm the original acceptance criterion and reports fixed/open/regressed
+for that finding only. It files no new findings. Required CI is separate.
 
 #### Fix-Round Dispatch Gate for Subjective Reviewers
 
@@ -49,7 +57,7 @@ dispatch, not omission of findings that still require verification:
 - When dispatching under that condition, pass `carry_forward_findings_json` populated with the assigned finding ids so the rendered assignment sets `findings_scope_locked: true` — this instructs the reviewer to report a disposition for those ids only and to keep any unsolicited new observation out of its canonical `findings` output.
 - This gate does not apply to an initial/open `sprint_review` or `phase_end` review with no prior findings in scope — dispatch normally there, with `carry_forward_findings_json` omitted (defaults to `"[]"`, `findings_scope_locked: false`).
 - Do not fold an unsolicited new finding any reviewer surfaces during a scope-locked verification round into this round's canonical `.ttl` deliverable. Surface it informationally to team-lead for a future dedicated triage pass instead.
-- Every `rust-best-practices-agent`, `rust-service-hardening-agent` and `ruthless-boundary-qa` assignment takes `qa_round`: 1 only for an open round-1 review, 2 or higher on every fix round including the first QA of a `fix/` layer; above round 1 the template refuses to render without that reviewer's own carried ids.
+- Every `rust-best-practices-agent`, `rust-service-hardening-agent` and `ruthless-boundary-qa` assignment takes `qa_round`: 1 only for an open round-1 review, 2 or higher on every fix verification, including the first QA of a `fix/` layer; above round 1 the template refuses to render without that reviewer's own carried ids.
 
 ### Phase-Ending Review
 
