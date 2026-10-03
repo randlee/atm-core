@@ -155,8 +155,7 @@ TODO-specific rule:
    - `req-qa` from `.claude/skills/codex-orchestration/req-qa-assignment.json.j2`
    - `arch-qa` from `.claude/skills/codex-orchestration/arch-qa-assignment.json.j2`
    - `ruthless-boundary-qa` from `.claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2`
-     on every sprint QA round for the near term, plus docs-only plan review
-     and phase-ending review
+     per the Boundary-review deployment rule below
    - `plan-scope-reviewer` on every plan round, in full, from
      `.claude/skills/codex-orchestration/plan-scope-reviewer-assignment.json.j2`
      for a plan in markdown (`plan_docs` = the phase plan doc and every
@@ -232,9 +231,8 @@ For QA-2 and later (fix-verification) rechecks of implementation work:
 - always run `arch-qa`
 - always run `rust-qa-agent` (objective execution-fact gates: fmt, clippy,
   tests, lint, RULE-003, pytests — not a subjective findings pass)
-- do not run `ruthless-boundary-qa`
-- do not run `rust-best-practices-agent`
-- do not run `rust-service-hardening-agent`
+- run `ruthless-boundary-qa`, `rust-best-practices-agent` and
+  `rust-service-hardening-agent` only per the Boundary-review deployment rule
 - run `flaky-test-qa` when tests changed, CI shows intermittent behavior, or
   `rust-qa-agent` surfaces unstable execution symptoms
 - verdict = each dispatched finding's fixed/regressed/open status plus
@@ -244,9 +242,10 @@ For QA-2 and later (fix-verification) rechecks of implementation work:
 
 Boundary-review deployment rule:
 - `ruthless-boundary-qa`, `rust-best-practices-agent`, and
-  `rust-service-hardening-agent` are QA-1 only — unconditionally omit all
-  three from QA-2 and later fix-verification rounds on the same sprint
-  branch, with no lead-narrowing carve-out needed
+  `rust-service-hardening-agent` run open-ended only in QA-1; on every fix
+  round (QA-2 and later, and every QA of a `fix/` branch) each runs only to
+  re-check its own carried finding ids, rendered with `qa_round` above 1 and
+  those ids, and is not dispatched at all when it has none
 - their job is to find a finding and their acceptance criteria is
   subjective, so they reliably surface something on any diff regardless of
   size; running them on a fix round guarantees a new round instead of

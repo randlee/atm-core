@@ -25,10 +25,11 @@ their own prompts. The orchestration templates name this file as
   `ruthless-boundary-qa`, `rust-qa-agent`, `rust-best-practices-agent`, and
   `rust-service-hardening-agent`
 - Fix verification (sprint QA-2 and later): `req-qa`, `arch-qa`, and
-  `rust-qa-agent` only. `ruthless-boundary-qa`,
-  `rust-best-practices-agent`, and `rust-service-hardening-agent` run in
-  round 1 only and are NEVER re-run on a fix-verification round (Rand's
-  standing rule; `quality-mgr.md`, "Boundary-review deployment rule")
+  `rust-qa-agent`. `ruthless-boundary-qa`, `rust-best-practices-agent`, and
+  `rust-service-hardening-agent` never run open-ended on a fix round
+  (including every `fix/` branch); each runs only to re-check its own carried
+  finding ids (Rand's ruling, 2026-10-02; `quality-mgr.md`, "Boundary-review
+  deployment rule")
 - Plan review QA-1: `plan-scope-reviewer`, `req-qa`, `arch-qa`,
   `ruthless-boundary-qa`, `rust-best-practices-agent`,
   `rust-service-hardening-agent`, and `ceremony-qa`. `plan-scope-reviewer`

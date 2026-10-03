@@ -117,9 +117,11 @@ Before starting a sprint:
    - `rust-best-practices-agent`
    - `rust-service-hardening-agent`
    - `flaky-test-qa` when test instability risk is present
-7. QA-2 and later (fix-verification) rounds on the same sprint branch omit
-   `ruthless-boundary-qa`, `rust-best-practices-agent`, and
-   `rust-service-hardening-agent` unconditionally — they reliably surface
+7. Fix rounds (QA-2 and later, and every QA of a `fix/` branch; pass
+   `round_index` to `qa-template.xml.j2`, which refuses a round above 1
+   without `triage_records`) run `ruthless-boundary-qa`,
+   `rust-best-practices-agent`, and `rust-service-hardening-agent` only to
+   re-check their own carried finding ids, never open-ended — they reliably surface
    findings on any diff regardless of size, which turns a small fix-round
    into unbounded review churn. QA-2+ rounds launch `req-qa` + `arch-qa`
    (scoped to the dispatched finding ids) plus `rust-qa-agent` (its
