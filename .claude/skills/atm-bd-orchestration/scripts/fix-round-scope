@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""Fix-verification scope: who may verify a fix, and what the verifier may report.
+
+A review of an assigned fix dispatches only the agent that filed each carried
+finding (the finding bead's `metadata.reviewer`), locked to that finding's own id
+(`metadata.finding_ref`). The verifier reports fixed, open or regressed for those
+ids and files no new findings.
+
+Plan findings are not beads: they are report lines `<bead> <severity> <reviewer>
+<field>: <what is wrong>`, and a plan fix round carries them as text. With
+`--plan`, `--carried` is that text; the filing reviewer is the line's third word
+and the finding id is `<bead> <field>`. `validate-plan` findings are re-checked by
+the plan review's own validate-plan step, so it is never a dispatched reviewer.
+
+    owned  --carried <bd show json> [--plan]              {filing reviewer: [its finding_refs]}
+    check  --carried <bd show json> --dispatch a,b         exit 5 unless the dispatch set is exactly the filing reviewers
+    filter --carried <bd show json> --reviewer <name> --result <json>
+                                                           the result reduced to dispositions on that reviewer's carried ids
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+
+PLAN_LINE = re.compile(r"^\s*(?:[-*]\s+)?(?P<bead>\S+)\s+(?P<severity>blocking|important|minor)\s+"
+                       r"(?P<reviewer>\S+)\s+(?P<field>[^:\s][^:]*):")
+PLAN_SCRIPT = "validate-plan"
+
+
+class ScopeError(ValueError):
+    """A carried finding cannot be locked to its filing reviewer."""
+
+
+def owned(carried: list[dict]) -> dict[str, list[str]]:
+    """Carried finding beads -> {filing reviewer: [its own finding_refs]}; the keys are the whole dispatch set."""
+    out: dict[str, list[str]] = {}
+    for bead in carried:
+        meta = bead.get("metadata") or {}
+        reviewer, ref = meta.get("reviewer"), meta.get("finding_ref")
+        if not (isinstance(reviewer, str) and reviewer and isinstance(ref, str) and ref):
+            raise ScopeError(f"{bead.get('id', '?')}: carried finding has no metadata.reviewer/finding_ref to lock to")
+        out.setdefault(reviewer, []).append(ref)
+    return out
+
+
+def plan_carried(text: str) -> list[dict]:
+    """Carried plan finding lines -> the bead-shaped records owned/check/filter take."""
+    out = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        m = PLAN_LINE.match(line)
+        if not m:
+            raise ScopeError(f"carried plan finding is not `<bead> <severity> <reviewer> <field>: ...`: {line.strip()}")
+        ref = f"{m['bead']} {m['field'].strip()}"
+        out.append({"id": ref, "metadata": {"reviewer": m["reviewer"], "finding_ref": ref}})
+    return out
+
+
+def check(carried: list[dict], dispatch: list[str]) -> tuple[list[str], list[str]]:
+    """(extra, missing): reviewers dispatched that filed no carried finding, and filing reviewers not dispatched."""
+    want = set(owned(carried)) - {PLAN_SCRIPT}
+    have = set(dispatch)
+    return sorted(have - want), sorted(want - have)
+
+
+def filter_result(reviewer: str, carried: list[dict], result: dict) -> dict:
+    """Reduce a verifier result to dispositions on its own carried beads; nothing else survives."""
+    scope = {(b.get("metadata") or {}).get("finding_ref"): b["id"] for b in carried
+             if (b.get("metadata") or {}).get("reviewer") == reviewer}
+    data = result.get("data", result)
+    reported, dropped = {}, []
+    for finding in data.get("findings") or []:
+        ref = finding.get("id")
+        if ref in scope and ref not in reported:
+            reported[ref] = finding
+        else:
+            dropped.append(finding)
+    dispositions = [{"bead": bead, "finding_ref": ref,
+                     "disposition": (reported[ref].get("disposition") or "open") if ref in reported else "fixed",
+                     "evidence": reported.get(ref, {}).get("evidence", "")}
+                    for ref, bead in scope.items()]
+    return {"reviewer": reviewer, "dispositions": dispositions, "new_findings": [], "dropped_out_of_scope": dropped}
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", choices=("owned", "filter", "check"))
+    parser.add_argument("--carried", required=True, help="bd show <carried ids> --json; with --plan, the carried plan finding lines")
+    parser.add_argument("--plan", action="store_true", help="--carried is a plan review's carried finding lines")
+    parser.add_argument("--dispatch", default="", help="check: the reviewers to be dispatched, comma-separated")
+    parser.add_argument("--reviewer", default="")
+    parser.add_argument("--result", default="", help="the reviewer's fenced-JSON result")
+    args = parser.parse_args(argv)
+    try:
+        carried = plan_carried(open(args.carried).read()) if args.plan else json.load(open(args.carried))
+        filing = owned(carried)
+    except ScopeError as exc:
+        print(f"fix-round-scope: {exc}", file=sys.stderr)
+        return 2
+    if args.command == "owned":
+        print(json.dumps(filing))
+        return 0
+    if args.command == "check":
+        extra, missing = check(carried, [n.strip() for n in args.dispatch.split(",") if n.strip()])
+        if extra or missing:
+            print("FIX_ROUND_DISPATCH_MISMATCH: not a filing reviewer: " + (" ".join(extra) or "-")
+                  + "; filing reviewer not dispatched: " + (" ".join(missing) or "-"), file=sys.stderr)
+            return 5
+        return 0
+    if args.reviewer not in filing or not args.result:
+        print(f"filter needs --reviewer in {tuple(filing)} and --result", file=sys.stderr)
+        return 2
+    print(json.dumps(filter_result(args.reviewer, carried, json.load(open(args.result)))))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

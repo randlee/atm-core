@@ -3,6 +3,16 @@
   "root": "atm-phase-d",
   "phase": "d",
   "round": 1,
-  "lead": "team-lead",
-  "cc": "team-lead"
+  "lead": "my-lead",
+  "cc": "",
+  "integration_branch": "integrate/phase-d",
+  "plans_dir": "docs/plans",
+  "requirements_globs": [
+    "docs/requirements.md",
+    "docs/*/requirements.md"
+  ],
+  "adr_globs": [
+    "docs/architecture.md",
+    "docs/*/architecture.md"
+  ]
 }

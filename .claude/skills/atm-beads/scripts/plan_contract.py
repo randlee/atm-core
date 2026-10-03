@@ -40,9 +40,8 @@ EXIT_VALID: int = 0
 EXIT_CANNOT_RUN: int = 2
 EXIT_PROBLEMS: int = 5
 PROBLEM_LINE: str = "{bead}: {message}"  # one per stdout line
-WARNING_PREFIX: str = "warning: "
 
-# Optional top-level keys of docs/plans/phase-<p>/sprints.json beyond the membership rows (user ruling 2026-09-26).
+# Legacy in-memory fixture keys. Persisted phase plans use sprints.jsonl tuples.
 INDEX_OPTIONAL_KEYS: tuple[str, ...] = ("integration_branch", "review_artifacts", "policy")
 POLICY_KEYS: tuple[str, ...] = ("human_gates", "waivers")
 # policy.waivers[{bead, check, reason}]: a past state violation the user accepted in the plan PR; the validator

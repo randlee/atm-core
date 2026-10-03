@@ -7,5 +7,5 @@
   "rebased_onto": "sprint/d-5-otlp-logs",
   "outcome": "fixed",
   "resolution_md": "- crates/example-otlp/src/sync.rs:97 retry delay now adds full jitter; test `retry_delay_has_jitter` added",
-  "validation_md": "- `just validate`: ok (214 passed, 0 failed)"
+  "validation_md": "- `make test`: ok (214 passed, 0 failed)"
 }

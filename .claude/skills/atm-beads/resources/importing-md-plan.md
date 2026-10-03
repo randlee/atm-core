@@ -4,7 +4,7 @@ Turns an existing markdown plan into beads so it can run under
 `atm-bd-orchestration`. Use it for either:
 
 - **one plan**: a single sprint doc added to a phase that is already in beads;
-- **a whole phase**: the phase plan (`docs/plans/phase-<x>/plan-phase-<x>.md`)
+- **a whole phase**: the phase plan (`<plans_dir>/phase-<x>/plan-phase-<x>.md`)
   and every sprint doc beside it.
 
 Once imported, the beads are the plan. The markdown files are left as they
@@ -51,15 +51,11 @@ goes back to the plan's author to supply, with the exact list of gaps.
 5. **Gate** the rendered plan. Run from the repository root:
 
    ```bash
-   .claude/skills/atm-beads/scripts/validate-plan --file <scratch>/plan.jsonl
+   .claude/skills/atm-beads/scripts/validate-plan --file <scratch>/plan.jsonl --root <id> --index <plans_dir>/phase-<x>/sprints.jsonl
    ```
 
-   Add `--root <id> --phase <x>` when the root is not in the file. The script
-   runs `bd doctor`, `check-plan.jq` (fields, labels, graph, stack, and
-   `requirements`/`adrs` present as ids or `["NONE"]`), the check that every
-   REQ/ADR id exists in its governing document, and the check that every
-   assignee is an ATM member. Exit 5 lists the problems, and every one of
-   them stops the import. A missing integration branch is only a warning.
+   Exit 5 lists the problems (`SKILL.md`, Validation), and every one of
+   them stops the import.
 6. **Check that no id exists yet.** `bd import` upserts: an existing id is
    overwritten, not refused.
 
@@ -87,7 +83,7 @@ goes back to the plan's author to supply, with the exact list of gaps.
    - one plan into a running phase: `<root>-plan-qa` is already closed, so
      create `<root>-plan-qa-<n>` (the next free number), blocking every new
      dev bead.
-   **Mandatory:** write the phase definition `docs/plans/phase-<x>/sprints.json` by hand (root id plus one dev/sanity pair per imported sprint; `resources/planning.md` "Phase definition") in the same commit as the plan, then run `.claude/skills/sprint-review/scripts/sprint-review --root <root>`. It commits and pushes that file and the required initial `docs/plans/phase-<x>/phase-<x>-dag.html` on the root bead's integration branch. Do not open a viewer unless `--view` is requested. The file is never exported from beads.
+   **Mandatory:** write the phase definition `<plans_dir>/phase-<x>/sprints.jsonl` by hand (one `[sprint_name, sanity_bead_id, depends_on_sprint_names]` tuple per imported sprint; `resources/planning.md` "Phase definition") in the same commit as the plan, push it to the root's `integration_branch`, then run `.claude/skills/atm-beads/scripts/validate-plan --root <root>` followed by `.claude/skills/sprint-review/scripts/sprint-review --root <root>`. It publishes the required initial `<plans_dir>/phase-<x>/phase-<x>-dag.html` on the root bead's integration branch. Do not open a viewer unless `--view` is requested. The plan is never exported from Beads.
 10. **Verify** with `.claude/skills/atm-beads/scripts/validate-plan --root
     <root>`, then check the graph:
     - `bd ready -l phase-<x> -n 0` lists the plan-review bead and no dev bead
@@ -117,7 +113,7 @@ Keep `<scratch>` outside the repository.
 | `description` | the intro paragraphs and the sprint table |
 | `design` | the stream / branch table and "Scope and retained gates" |
 | `acceptance_criteria` | the phase-level gates (retained gates, release gates) |
-| `integration_branch` | `integrate/phase-<x>` |
+| `integration_branch` | `integration_branch_pattern` from the repository configuration with `{phase}` = `<x>` |
 
 ### Each sprint
 
@@ -140,9 +136,9 @@ Keep `<scratch>` outside the repository.
 | `adrs` | frontmatter `adrs`, plus every ADR the body relies on (`ADR-011`). Exactly `["NONE"]` only when the author says so |
 | `release_train` | frontmatter, when present |
 | `branch` | `sprint/<sprint>-<slug>`, with the slug taken from the doc's branch or file name |
-| `worktree` | `<repo>-worktrees/<branch>` |
+| `worktree` | `<worktree_base>/<branch>` |
 | `stack` | `phase-<x>`: the phase is one append-only stack |
-| `layer`, `pr_target` | planned order: layer 1 targets `integrate/phase-<x>`, and layer n targets the branch of layer n−1. Number the layers in the sprint table's order among sprints of the same dependency depth, and by sprint number within a row. These are the plan's intent: layers really stack in completion order, and lead records the actual values at link time |
+| `layer`, `pr_target` | planned order: layer 1 targets the phase's `integration_branch`, and layer n targets the branch of layer n−1. Number the layers in the sprint table's order among sprints of the same dependency depth, and by sprint number within a row. These are the plan's intent: layers really stack in completion order, and lead records the actual values at link time |
 | sanity check bead | `id` = `<sprint id>-sanity`, `dev_bead` = the sprint id, `assignee` = `scripts/resolve-role dev-sanity` (ask lead when the role is not mapped or the member is not in `atm members`) |
 
 Section headings vary between plans. Map a section by what it holds, not by
@@ -175,9 +171,9 @@ does not stop it.
 | Owned paths taken only from the Deliverables list (no "Owned Paths" or "Exact Targets" section) | warn | import them and list them for the author to confirm |
 | Two sprints that can run at once (`parallel_safe`, or neither depends on the other) with overlapping owned paths or `owned_docs` | blocking | the author makes one `must_follow` or splits the sprint |
 | No requirement ids and no explicit "no requirements" statement, or the same for ADRs | blocking | ask the author for the ids, or for an explicit `NONE` |
-| A REQ or ADR id is not in `docs/requirements.md` / `docs/architecture.md` (or the crate's copy), and does not meet [New Ids](planning.md#new-ids) | blocking | ask the author |
+| A REQ or ADR id is not in a governing document (`requirements_globs` / `adr_globs` in the repository configuration), and does not meet [New Ids](planning.md#new-ids) | blocking | ask the author |
 | An id with the REQ shape (`LOG-001`) used for something else, such as an error code | warn | list it; do not put it in `requirements` |
-| The integration branch `integrate/phase-<x>` does not exist on origin | warn | lead creates it before the first dispatch |
+| The phase's `integration_branch` does not exist on origin | warn | lead creates it before the first dispatch |
 | Acceptance criteria or validation commands missing | blocking | ask the author |
 | No design content (no code samples, no exact targets) | blocking | ask the author; "no contract change" must be stated by the author with a reason |
 | `depends_on` names a sprint that is not in the plan or in beads | blocking | ask the author |
@@ -187,7 +183,7 @@ does not stop it.
 | The planned branch or worktree already exists (`git ls-remote`, `git worktree list`) | blocking | ask lead: rename it, or finish that sprint on the old workflow |
 | Branch name is not `sprint/<p>-<n>-<slug>`, and no branch exists yet | warn | rename it at import and list the old and new names |
 | `model_class` missing | warn | import without it; lead picks at dispatch |
-| Frontmatter `base` is `develop` rather than the integration branch | warn | ignore it; the stack's layer 1 targets `integrate/phase-<x>` |
+| Frontmatter `base` is not the phase's `integration_branch` | warn | ignore it; the stack's layer 1 targets the `integration_branch` |
 | Requirement or ADR ids named in the body but not in frontmatter | warn | add them to `requirements` / `adrs` and list them |
 
 The report to lead is one line per gap: `<doc>: <field>: <what is missing or

@@ -1,7 +1,7 @@
 ---
 name: finding-bead
-version: 0.1.0
-description: One QA or review finding. It carries the governing `requirements` and `adrs` of the sprint it traces to (`sprint_bead`), so every fix and fix QA has them, however deep the fix-on-fix chain. Priority follows severity (blocking 1, important 3, minor 4) so `bd ready` queues blocking findings ahead of planned dev. Render strictly, then `jq -c .` into the import JSONL.
+version: 0.2.0
+description: One QA or review finding. It carries the governing `requirements` and `adrs` of the sprint it traces to (`sprint_bead`), so every fix and fix QA has them, however deep the fix-on-fix chain. Priority follows severity (blocking 1, important 2, minor 4) so `bd ready` queues blocking findings ahead of planned dev. Render strictly, then `jq -c .` into the import JSONL.
 format: json
 required_variables:
   - id
@@ -41,7 +41,7 @@ defaults:
   "status": "open",
   "priority": {{ {"blocking": 1, "important": 2, "minor": 4}[severity] }},
   "assignee": {{ assignee | tojson }},
-  "description": {{ (description ~ "\n\n## Deliverables\n1. " ~ remedy ~ "\n\nEvidence:\n" ~ evidence ~ "\n\nFixed on a new layer at the top of stack " ~ stack ~ ". QA verifies the fix after its sanity check; the sanity check judges only the acceptance criteria below.") | tojson }},
+  "description": {{ (description ~ "\n\n## Deliverables\n1. " ~ remedy ~ "\n\n## Evidence\n" ~ evidence ~ "\n\nFixed on a new layer at the top of stack " ~ stack ~ ". QA verifies the fix after its sanity check; the sanity check judges only the acceptance criteria below.") | tojson }},
   "design": {{ remedy | tojson }},
   "acceptance_criteria": {{ "- [ ] the remedy (design) is applied at every occurrence in scope\n- [ ] a test or check that reproduces the defect passes at the fix head\n- [ ] the repository's validation passes" | tojson }},
   "labels": {{ ["phase-" ~ phase, "stage:finding", "stack:" ~ stack, "severity:" ~ severity] | tojson }},

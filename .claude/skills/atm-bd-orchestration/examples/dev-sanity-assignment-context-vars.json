@@ -1,0 +1,25 @@
+{
+  "sanity_bead": "atm-d-4-sanity",
+  "dev_bead_id": "atm-d-4",
+  "dev_bead_title": "OTLP sync exporter",
+  "deliverable_number": 1,
+  "deliverable_text": "Implement the exporter.",
+  "deliverables_total": 2,
+  "owned_paths": [
+    "crates/example-otlp"
+  ],
+  "changed_files": [
+    "crates/example-otlp/src/lib.rs"
+  ],
+  "files_outside_owned_paths": [],
+  "context": [
+    {
+      "path": "docs/retry.md",
+      "why": "The deliverable delegates retry policy here."
+    }
+  ],
+  "worktree_path": "../atm-core-worktrees/sprint/d-4-otlp-sync-exporter",
+  "branch": "sprint/d-4-otlp-sync-exporter",
+  "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
+  "base_sha": "0123456789abcdef0123456789abcdef01234567"
+}

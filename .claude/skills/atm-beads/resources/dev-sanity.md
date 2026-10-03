@@ -14,12 +14,12 @@ here). The role contract is
 [`../../atm-bd-orchestration/roles/dev-sanity.md`](../../atm-bd-orchestration/roles/dev-sanity.md).
 
 The sanity check bead's `assignee` is that member:
-`.claude/skills/atm-beads/scripts/resolve-role dev-sanity`. `validate-plan`
-rejects any other assignee, and a member that is not in `atm members`. If
-the team has no such member, lead adds one before the plan is imported (the
-`team-lead` skill, Step 3).
+`.claude/skills/atm-beads/scripts/resolve-role dev-sanity`. Plan review
+rejects any other assignee, and a member that is not in `atm members`
+(`validate-plan` checks only that the assignee is set). If the team has no
+such member, lead adds one before the plan is imported.
 
-Here the member runs codex `gpt-5.6-terra`. Its checks run `gpt-5.6-luna`
+Here the member runs a normal-class model. Its checks run a fast-class model
 under Codex, and the `sc-sanity-llm` frontmatter model (sonnet) under Claude. Candidates to replace it later:
 Haiku 5.5 once released (Haiku 4.5 is too weak for this), and typesafe.ai
 (<https://typesafe.ai/>), to be evaluated; a new check is a new directive

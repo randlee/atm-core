@@ -1,7 +1,7 @@
 ---
 name: plan-scope-reviewer-assignment
-version: 0.1.0
-description: Render a fenced-JSON assignment for plan-scope-reviewer over a plan in beads. `plan_docs` are the files quality-mgr writes by piping `bd show <dev bead> --json` for every dev bead under the root; `phase_root_doc` is the same for the root. `carry_forward_findings_json` is a JSON array of the reviewer's own finding ids from the previous round; the reviewer still recomputes the plan's shape in full.
+version: 1.1.1
+description: Render a fenced-JSON assignment for plan-scope-reviewer over a plan in beads. `plan_docs` are the files quality-mgr writes by piping `bd show <dev bead> --json` for every dev bead under the root; `phase_root_doc` is the same for the root. On plan QA-1, review the plan's shape in full; when `carry_forward_findings_json` has ids, verify only the reviewer's carried finding ids against their original acceptance criteria and do not recompute plan shape or file new findings. A round after the first refuses to render without them.
 format: json
 required_variables:
   - root
@@ -22,6 +22,10 @@ defaults:
   carry_forward_findings_json: "[]"
   notes: ""
 ---
+{#- A plan round after the first is fix verification: this reviewer re-checks only its own carried ids; without them the render fails instead of running open-ended. #}
+{%- set cf = carry_forward_findings_json | replace(" ", "") -%}
+{%- set locked = cf not in ["", "[]", "null", "[null]", "[\"\"]"] -%}
+{%- if round_index | int > 1 and not locked %}FIX_ROUND_SCOPE_LOCK_REQUIRED{% endif -%}
 {
   "scope": {
     "phase": {% if phase %}{{ phase }}{% else %}null{% endif %},
@@ -37,5 +41,6 @@ defaults:
   "commit": {{ commit }},
   "round_index": {{ round_index }},
   "carry_forward_findings": {{ carry_forward_findings_json | safe }},
+  "findings_scope_locked": {% if locked %}true{% else %}false{% endif %},
   "notes": {{ notes }}
 }

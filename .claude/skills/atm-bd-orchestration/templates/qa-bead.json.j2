@@ -1,6 +1,6 @@
 ---
 name: qa-bead
-version: 0.1.0
+version: 1.0.0
 description: The QA bead the lead creates when a sanity check passes. It is a child of the bead it checks and blocks nothing. Render strictly, then `jq -c .` into the import JSONL.
 format: json
 required_variables:
@@ -13,12 +13,11 @@ required_variables:
   - branch
   - commit
   - round
+  - qa_member
 optional_variables:
-  - assignee
   - priority
   - difficulty
 defaults:
-  assignee: quality-mgr
   priority: 2
   difficulty: normal
 ---
@@ -28,7 +27,7 @@ defaults:
   "issue_type": "task",
   "status": "open",
   "priority": {{ priority }},
-  "assignee": {{ assignee | tojson }},
+  "assignee": {{ qa_member | tojson }},
   "description": {{ ("QA round " ~ round ~ " of " ~ checked_bead ~ ", layer " ~ layer ~ " of stack " ~ stack ~ ", pinned at " ~ commit ~ " on " ~ branch ~ ".") | tojson }},
   "acceptance_criteria": {{ ("- [ ] every reviewer ran at " ~ commit ~ "\n- [ ] every finding filed as a finding bead (discovered-from this bead)\n- [ ] report posted and task closed") | tojson }},
   "labels": {{ ["phase-" ~ phase, "stage:qa", "stack:" ~ stack] | tojson }},
