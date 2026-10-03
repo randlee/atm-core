@@ -20,9 +20,9 @@ agents:
   ceremony-finding-screen:
     version: 0.1.0
     path: .claude/agents/ceremony-finding-screen.md
-  dev-sanity-llm:
-    version: 0.1.0
-    path: .claude/agents/dev-sanity-llm.md
+  dev-sanity:
+    version: 2.0.0
+    path: .claude/agents/dev-sanity.md
   sc-sanity-llm:
     version: 0.1.0
     path: .claude/agents/sc-sanity-llm.md
@@ -119,7 +119,7 @@ skills:
       atm-beads: 0.x
       quality-mgr: 0.x
       ceremony-finding-screen: 0.x
-      dev-sanity-llm: 0.x
+      dev-sanity: 2.x
       sc-sanity-llm: 0.x
       plan-scope-reviewer: 0.x
   codex-orchestration:

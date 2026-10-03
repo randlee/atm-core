@@ -42,7 +42,7 @@ all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST b
        "Use native atm read to read messages from team-members" ]
 
 [startup.atm-sanity]
-all = ["read .claude/agents/dev-sanity-llm.md for directive",
+all = ["read .claude/agents/dev-sanity.md for directive",
        "Use native atm send or atm ack for messages to team-lead",
        "Use native atm read to read messages from team-members" ]
 

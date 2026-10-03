@@ -103,7 +103,7 @@ root bead's `integration_branch`.
 | --- | --- | --- |
 | lead | the appointed lead | this skill |
 | dev | frontier / high-value devs; fast agents for important and minor findings | the assignment templates |
-| dev-sanity | the member the repository maps to the role, never a dev or fix agent | [`roles/dev-sanity.md`](roles/dev-sanity.md) |
+| dev-sanity | the member the repository maps to the role, never a dev or fix agent | `.claude/agents/dev-sanity.md` |
 | quality-mgr | the long-running QA agent | [`roles/quality-mgr.md`](roles/quality-mgr.md) |
 
 This skill names roles, not members or agents. A repository maps a role to
@@ -114,10 +114,12 @@ it runs. Resolve the member with
 role is not mapped.
 
 A long-running agent takes its role at session start, or whenever it is
-switched to this workflow:
+switched to this workflow, where `<prompt>` is the role's Prompt above
+(`.claude/skills/atm-bd-orchestration/roles/quality-mgr.md`,
+`.claude/agents/dev-sanity.md`):
 
 ```bash
-atm send <agent> "Operate under .claude/skills/atm-bd-orchestration/roles/<role>.md for every task until told otherwise. Read it now."
+atm send <agent> "Operate under <prompt> for every task until told otherwise. Read it now."
 ```
 
 Background agents (a subagent or child agent, whichever the harness provides)
@@ -390,7 +392,7 @@ The assignee pairs every ATM step with its bead step:
   blocker) and reports it to the lead.
 - A failed sanity check or plan review leaves its bead open, because closing
   it would release the beads it blocks (see
-  [`roles/dev-sanity.md`](roles/dev-sanity.md) and "Plan Gate").
+  `.claude/agents/dev-sanity.md` and "Plan Gate").
 - Every task closes with a template. A push or progress report closes
   nothing.
 

@@ -1,14 +1,12 @@
 {
   "package": "atm-bd-orchestration",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "files": {
-    ".claude/agents/dev-sanity-jev.md": "8096d87106141493be4d61e0d1bfabb53bf7a4906ae9771077f085c60e1944aa",
-    ".claude/agents/dev-sanity-llm.md": "48fd520e26fd332f3e1195c52b061c6c80194e9618c9d3546a22fc6f7c7b9857",
-    ".claude/agents/dev-sanity.md": "a0c8734709a2bde8e155863acbaa3fcff1d9d076770af71687550ecb726226e3",
+    ".claude/agents/dev-sanity.md": "ac6b888278c70da65764624324ad5ad58c419c00d4dea1c18e24e5cb6490e487",
     ".claude/agents/sc-sanity-jev.md": "7f391fcb7e41ab11373a1faa7b716cacb5c4bf20193219b48624ca3fba77892f",
     ".claude/agents/sc-sanity-llm.md": "1725990d2a92b5db50f3ac17c44f0b89be05dbefd913611fc9695665a753ab16",
     ".claude/project/atm-bd-orchestration.yaml": "a282fd6a00353eabac310e4e99b5f2b0fde6a39dca0fa95a52a20f5bf5695525",
-    ".claude/skills/atm-bd-orchestration/SKILL.md": "3f6ba9341c5c018e817080f15fa7a5232c90d9e66391e92cd9c445dc398ea89a",
+    ".claude/skills/atm-bd-orchestration/SKILL.md": "3a434eb4cf16e8d7fd68f0369fb8e29602041f3d72955262734480d5e0a866f6",
     ".claude/skills/atm-bd-orchestration/blocking-findings-guidelines.md": "9aef815d7ff9d30893d8857e1a48f7dfc0bff20be6d1ed3fbf1d631ac84c8d50",
     ".claude/skills/atm-bd-orchestration/examples/arch-qa-assignment-vars.json": "5d49d302f6db63540ca0a44d225c12ae2b066f412ad8972bb4abaf57359f43ed",
     ".claude/skills/atm-bd-orchestration/examples/dev-complete-vars.json": "c39b89039797d12e8ec9da5ecd21c8f7a1ade30696fd16e5f955f21958b1cb95",
@@ -42,7 +40,6 @@
     ".claude/skills/atm-bd-orchestration/references/post-mortem-context-preparation.md": "3bcad9dc41f6f49f5a29c0e5ad07e00a89294c39b328d705d6744ec82c3f6cc9",
     ".claude/skills/atm-bd-orchestration/references/post-mortem-jev.md": "f5420160c2df98b54654c5683613d6a364860c4e4dbd92b69c06ad6f25eae57d",
     ".claude/skills/atm-bd-orchestration/references/post-mortem.md": "d3536e9cb413fe66a4f36ed70ad7edb92e402817301f6ab68e6c7b4376db739e",
-    ".claude/skills/atm-bd-orchestration/roles/dev-sanity.md": "5915f6903fb1d181a84867c46c54e5ec4df96520eb687407d9a8a4c10b351ccd",
     ".claude/skills/atm-bd-orchestration/roles/quality-mgr.md": "f0fedb218a78823c8637de1172927063454780fb725b2bc65126a6b5379ef48b",
     ".claude/skills/atm-bd-orchestration/scripts/assignment-gates.py": "ea2574f441f2dba93b967d2f94491f71de5ee82d81182ee5bc3974efe891d453",
     ".claude/skills/atm-bd-orchestration/scripts/bd_commands.py": "21e220448c09444dbf577c0cc75c6519fabd491d99aef3c3227c22bba7b04a01",
@@ -120,7 +117,7 @@
     ".claude/skills/atm-beads/examples/sprint-bead-vars-d-5.json": "b28dde5785712596ebe8a0e40cea8a897ac6f51445c4e7aa886755e1258b7a14",
     ".claude/skills/atm-beads/references/installation-and-troubleshooting.md": "e62d5313eda2103767ed88addce5f1b48a5baf459647e78ae42ff8679b8c395b",
     ".claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md": "60714ca901a5ca7c3d36b2f14c872ec79a2a5e66cd6f4dd37bfc636fd4f10f23",
-    ".claude/skills/atm-beads/resources/dev-sanity.md": "0b8239bd20b10776c259b5db788a3cab2893188e582e2b44fab499605a243d50",
+    ".claude/skills/atm-beads/resources/dev-sanity.md": "76373aaec29520f233c5db676eb9cd6607dcfa838a137e513fe7829fd7aac9ac",
     ".claude/skills/atm-beads/resources/importing-md-plan.md": "2bd1cda6a23e275a289ee1aa79ae3f1a85b8ba8fa06242da100df1b38b54c404",
     ".claude/skills/atm-beads/resources/orchestrating.md": "8d9abf061eedf6d49f50d78d3691728e84075a247f881d76e20f8b615775c700",
     ".claude/skills/atm-beads/resources/planning.md": "f5764fb525fba42d0c5cce05f53b8b4cd623b8f018b656ec82c1e869f3567665",
@@ -159,6 +156,6 @@
     ".claude/skills/sprint-report/tests/test_sprint_review.py": "53c130950420e58b9ef356f65d5b9c5dd634120d80f42aa7f40a8e05f11f0f6c",
     ".claude/skills/sprint-review/SKILL.md": "4c59bba2ac7cf9a2fb03f655229adb430f64cc71347032d5bb658b18e60cdf1c",
     ".claude/skills/sprint-review/scripts/sprint-review": "980fea20505f54a4ac0f1dd38f92470c372fd6adaad882946c0eed876aef74d2",
-    "scripts/jev_client.py": "1a3a744e23831c04749c09c6cc24f112e1e60ff77f69d23a7e8479ae3739232f"
+    "scripts/jev_client.py": "c745a3275d3b169a06046eee3cece41712c6737e25999dac8fe599bd60f58631"
   }
 }

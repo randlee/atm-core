@@ -26,7 +26,7 @@ class JevError(Exception):
 def failure(exc):
     return {"success": False, "data": None, "error": {
         "code": exc.code, "message": exc.message, "recoverable": exc.recoverable,
-        "suggested_action": "set TYPESAFE_API_KEY or keep dev-sanity-llm" if "TYPESAFE_API_KEY is missing" in exc.message else "Keep the LLM directive active; correct Jev access or request data and rerun the startup probe",
+        "suggested_action": "set TYPESAFE_API_KEY; until then dev-sanity records every JEV slot as unavailable" if "TYPESAFE_API_KEY is missing" in exc.message else "dev-sanity records every JEV slot as unavailable; correct Jev access or request data and rerun the startup probe",
     }}
 
 
@@ -154,7 +154,7 @@ def main(argv=None):
         result = failure(JevError("VALIDATION.INPUT", "Request file unavailable or invalid JSON"))
     if args.startup and not result["success"]:
         error = result["error"]
-        message = f"dev-sanity Jev startup failed: {error['code']}: {error['message']}. No checks accepted; keep dev-sanity-llm active."
+        message = f"dev-sanity Jev startup failed: {error['code']}: {error['message']}. No sc-sanity-jev checks run; dev-sanity records every JEV slot as unavailable until a startup probe passes."
         try:
             sent = subprocess.run(["atm", "send", args.lead, "--stdin"], input=message,
                                   text=True, capture_output=True, timeout=15)
