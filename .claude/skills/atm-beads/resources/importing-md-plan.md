@@ -51,15 +51,11 @@ goes back to the plan's author to supply, with the exact list of gaps.
 5. **Gate** the rendered plan. Run from the repository root:
 
    ```bash
-   .claude/skills/atm-beads/scripts/validate-plan --file <scratch>/plan.jsonl
+   .claude/skills/atm-beads/scripts/validate-plan --file <scratch>/plan.jsonl --root <id> --index docs/plans/phase-<x>/sprints.jsonl
    ```
 
-   Add `--root <id> --phase <x>` when the root is not in the file. The script
-   runs `bd doctor`, `check-plan.jq` (fields, labels, graph, stack, and
-   `requirements`/`adrs` present as ids or `["NONE"]`), the check that every
-   REQ/ADR id exists in its governing document, and the check that every
-   assignee is an ATM member. Exit 5 lists the problems, and every one of
-   them stops the import. A missing integration branch is only a warning.
+   Exit 5 lists the problems (`SKILL.md`, Validation), and every one of
+   them stops the import.
 6. **Check that no id exists yet.** `bd import` upserts: an existing id is
    overwritten, not refused.
 
@@ -87,7 +83,7 @@ goes back to the plan's author to supply, with the exact list of gaps.
    - one plan into a running phase: `<root>-plan-qa` is already closed, so
      create `<root>-plan-qa-<n>` (the next free number), blocking every new
      dev bead.
-   **Mandatory:** write the phase definition `docs/plans/phase-<x>/sprints.json` by hand (root id plus one dev/sanity pair per imported sprint; `resources/planning.md` "Phase definition") in the same commit as the plan, then run `.claude/skills/sprint-review/scripts/sprint-review --root <root>`. It commits and pushes that file and the required initial `docs/plans/phase-<x>/phase-<x>-dag.html` on the root bead's integration branch. Do not open a viewer unless `--view` is requested. The file is never exported from beads.
+   **Mandatory:** write the phase definition `docs/plans/phase-<x>/sprints.jsonl` by hand (one `[sprint_name, sanity_bead_id, depends_on_sprint_names]` tuple per imported sprint; `resources/planning.md` "Phase definition") in the same commit as the plan, then run `.claude/skills/atm-beads/scripts/validate-plan --root <root>` followed by `.claude/skills/sprint-review/scripts/sprint-review --root <root>`. It publishes the required initial `docs/plans/phase-<x>/phase-<x>-dag.html` on the root bead's integration branch. Do not open a viewer unless `--view` is requested. The plan is never exported from Beads.
 10. **Verify** with `.claude/skills/atm-beads/scripts/validate-plan --root
     <root>`, then check the graph:
     - `bd ready -l phase-<x> -n 0` lists the plan-review bead and no dev bead

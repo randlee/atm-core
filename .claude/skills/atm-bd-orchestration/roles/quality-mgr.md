@@ -20,8 +20,11 @@ Where this role and `quality-mgr.md` differ, this role wins:
 
 ## Tasks
 
-Every task is a QA bead rendered from `qa-template.xml.j2`; the task id is
-the bead id. Follow its steps in order. QA never holds dev back: nothing is
+Ordinary QA tasks use `qa-template.xml.j2`; plan reviews use
+`plan-review-template.xml.j2`, and phase-ending reviews use
+`review-template.xml.j2`. The task id is the bead id. Follow the assigned
+template; the ordinary QA PR/sanity pre-claim checks below do not apply to
+plan reviews or integration post-mortems. QA never holds dev back: nothing is
 blocked by a QA bead, and you close it (task and bead together) whatever the
 verdict. The open finding beads carry the remaining work.
 
@@ -60,6 +63,31 @@ why they are strict:
   these, and never let ceremony-finding-screen remove them.
 - Plan findings are not finding beads. They go in the report, and the
   plan-review bead stays open until a round passes.
+
+## Phase-ending post-mortem
+
+You own the required JEV post-mortem as part of phase-ending review, after
+fixes land on the pinned `integrate/phase-<x>` head and before phase closure.
+Follow [post-mortem.md](../references/post-mortem.md) and
+[the context preparation workflow](../references/post-mortem-context-preparation.md).
+Inventory every phase finding, including closed and nested findings. Use JEV
+for code-fix screening; verify deferrals and administrative outcomes from
+receipts. Do not substitute closed bead status or commit ancestry for current
+behavior, and do not expand a carried finding into a new whole-sprint review.
+
+Investigate every uncertain or flagged result before accepting it or filing
+anything. Confirm defects against the original obligation and current source,
+deduplicate them, then file finding beads and report them to the lead for fix
+assignment. You verify these carried gaps after the fixes; the lead coordinates
+development. Keep unchecked cases unresolved rather than sampling them away.
+
+Append raw evaluations and linked investigation dispositions to the phase's
+JSONL evidence, with UTC timestamps, pinned SHA and run IDs. Preserve prior
+attempts. The review completion includes `post_mortem_jev` with run IDs, JSONL
+path, integration SHA and status, plus the complete inventory dispositions.
+A model error is not PASS. If no code findings exist, record `not_applicable`
+with the inventory reason; if JEV is unavailable, record `unavailable` and
+leave integration review pending. Quality scores are advisory, not closures.
 
 ## Reviewers
 
@@ -129,13 +157,11 @@ screen said. What happens next depends on the verdict:
 - `difficulty` is required when rendering a finding. Copy it from the
   checked sprint/finding; never select a default. The dispatch report prints
   `UNCLASSIFIED` and no agent for a live bead missing it.
-- After filing every blocking finding, run `blocking-finding-gates.py --finding
-  <id>` before dispatch. `<id>-sanity` is the finding's sole sanity gate, not
-  a duplicate: it is parented under the finding's sprint dev bead and waits on
-  the finding through a `blocks` edge, then blocks only open downstream dev and
-  unclaimed finding/fix work. Important and minor findings do not add gates.
-- Findings are `parallel_safe` by default. Set `blocked_by` only when one fix
-  needs another finding's fix first.
+- A blocking finding never adds a dependency to another planned sprint. The
+  canonical `sprints.jsonl` plan is the sole source of those edges; file and
+  dispatch the finding's own remediation through its normal finding/fix flow.
+- Findings are `parallel_safe` by default. Set `blocked_by` only to another finding
+  of this round, when its fix needs that one's fix first.
 - Ids are `<qa bead>-f<n>`, numbered in report order.
 - Every finding closes with a close reason. You close ceremony findings. The
   fixer closes the rest, as fixed or not reproducible. In a fix round you
@@ -143,3 +169,33 @@ screen said. What happens next depends on the verdict:
   is still open (`bd reopen`).
 
 Do not assign findings. The lead picks the member for each one.
+
+## QA Metrics Log
+
+`qa-template.xml.j2` step j appends one row to each of two JSONL logs at
+`.sc/qa-log/`, on every task close in step i (never on the step-i1 refusal
+path). Both rows are computed fresh at close time, the same way
+`.sc/sanity-log/phase-<p>.jsonl` is: never hand-incremented, never carried
+forward from a previous row.
+
+- `phase-<p>.jsonl` — one row per round, this round's own results:
+  `completed_at` (UTC), `completed_local` (24h HH:MM local), `duration`,
+  `phase`, `sprint`, `task`, `pr_number`, `iteration` (the round number),
+  `verdict`, `tested` (the carried finding_ref(s) for a fix round, else the
+  checked bead), and this round's own filed findings — `fnd`, `blk`, `imp`,
+  `min` — counting only findings whose screen verdict was not `ceremony`.
+- `phase-<p>-stats.jsonl` — one row per round, a phase-wide snapshot queried
+  live from `bd` at that same moment: `snapshot_at`, `snapshot_local`,
+  `phase`, `trigger_task` (the round that produced this snapshot), `tot`
+  (all finding beads ever filed in the phase), `open`, and `blk`/`imp`/`min`
+  (open findings by severity). This is the same query used to answer "how
+  many findings are open" ad hoc; it gives velocity and a closure estimate
+  across rounds, and ties out against `phase-<p>.jsonl` at phase end (sum of
+  its `fnd` across all rounds reconciles with this log's final `tot`).
+
+When you display either log's timestamps to the operator, convert to 24h
+local; the logs themselves keep both the UTC and local strings.
+
+Never edit either file by hand outside step j's append; a wrong row is
+fixed by filing a workflow-issue bead and appending a correcting row, not by
+rewriting history in place.

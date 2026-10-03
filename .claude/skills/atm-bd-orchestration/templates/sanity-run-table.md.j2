@@ -1,0 +1,12 @@
+---
+name: sanity-run-table
+version: 1.3.0
+description: Compact sanity reviewer rows, grouped newest run first. Ten runs can contain twenty rows.
+format: markdown
+required_variables:
+  - runs
+---
+| S | PR | R | Find | Result | Done | Iter |
+|:--|:--|:--|---:|:--|:--|---:|
+{% for run in runs %}| {{ run.sprint }} | {% if run.pr_number %}#{{ run.pr_number }}{% else %}—{% endif %} | {{ run.reviewer_short }} | {% if run.verdict == "CANNOT_RUN" %}—{% else %}{{ run.findings }}{% endif %} | {% if run.verdict == "PASS" %}✅{% elif run.verdict == "FAIL" %}❌{% else %}⚠ unavailable{% endif %} | {{ run.completed_local }} · {{ run.duration }} | {{ run.iteration }} |
+{% endfor %}

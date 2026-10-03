@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""Append a completed sanity run to the repository-local ignored JSONL ledger."""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def fail(message: str) -> None:
+    raise SystemExit(f"sanity-run-history: {message}")
+
+
+def read_vars(path: Path) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"cannot read completion vars {path}: {exc}")
+    if not isinstance(value, dict):
+        fail("completion vars must be a JSON object")
+    for field in ("sprint", "run_id", "reviewer", "commit", "started_at", "completed_at"):
+        if not isinstance(value.get(field), str) or not value[field]:
+            fail(f"completion vars.{field} must be a nonempty string")
+    if value["reviewer"] not in {"sanity-llm", "sanity-jev"}:
+        fail("invalid reviewer")
+    if value.get("verdict") not in {"PASS", "FAIL", "CANNOT_RUN"}:
+        fail("invalid verdict")
+    count = value.get("findings_count")
+    if value["verdict"] == "CANNOT_RUN":
+        if count is not None or not value.get("error"):
+            fail("CANNOT_RUN requires null findings_count and an error")
+    elif isinstance(count, bool) or not isinstance(count, int) or count < 0:
+        fail("findings_count must be a nonnegative integer")
+    for field in ("started_at", "completed_at"):
+        utc_timestamp(value[field])
+    return value
+
+
+def phase_from_sprint(sprint: str) -> str:
+    match = re.fullmatch(r"(?:phase-)?([a-z]+)(?:[-_]?\d+)?", sprint.lower())
+    if not match:
+        fail(f"cannot derive a phase from sprint {sprint!r}")
+    return match.group(1)
+
+
+def phase_from_bead(bead: str, sprint: str) -> str:
+    try:
+        result = subprocess.run(
+            ["bd", "show", bead, "--json"], check=True, capture_output=True, text=True
+        )
+        issues = json.loads(result.stdout)
+        metadata = issues[0].get("metadata") if isinstance(issues, list) and issues else None
+        value = metadata.get("phase") if isinstance(metadata, dict) else None
+        match = re.fullmatch(r"(?:phase-)?([a-z][a-z0-9_-]*)", value.lower()) if isinstance(value, str) else None
+        if match:
+            return match.group(1)
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError):
+        pass
+    return phase_from_sprint(sprint)
+
+
+def primary_root() -> Path:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            check=True, capture_output=True, text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        fail(f"cannot locate repository common directory: {exc}")
+    return Path(result.stdout.strip()).parent
+
+
+def load_log(path: Path) -> list[dict[str, object]]:
+    if not path.exists():
+        return []
+    records: list[dict[str, object]] = []
+    try:
+        lines = path.read_text().splitlines()
+        for number, line in enumerate(lines, start=1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                # Never append behind malformed/truncated bytes or rewrite history.
+                raise
+            if not isinstance(record, dict):
+                fail(f"log {path}:{number} is not a JSON object")
+            records.append(record)
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"cannot read log {path}: {exc}")
+    return records
+
+
+def utc_timestamp(value):
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+            raise ValueError("timestamp must be UTC")
+        return parsed
+    except (ValueError, AttributeError) as exc:
+        fail(f"invalid UTC timestamp {value!r}: {exc}")
+
+
+def display_runs(records, limit=10):
+    """One run is one shared run_id; legacy rows each represent an LLM run.
+
+    Group before limiting so a paired result is never dropped at the boundary.
+    Display fields are derived copies; historical ledger bytes are never changed.
+    """
+    groups = {}
+    for index, record in enumerate(records):
+        key = record.get("run_id") or f"legacy-{index}"
+        groups.setdefault(key, []).append(record)
+    ordered = sorted(groups.values(), key=lambda group: max(utc_timestamp(r["completed_at"]) for r in group), reverse=True)
+    rows = []
+    for group in ordered[:limit] if limit else ordered:
+        for record in sorted(group, key=lambda r: r.get("reviewer", "sanity-llm"), reverse=True):
+            row = dict(record)
+            row["reviewer"] = record.get("reviewer", "sanity-llm")
+            row["reviewer_short"] = {"sanity-llm": "LLM", "sanity-jev": "JEV"}.get(row["reviewer"], "?")
+            row["completed_local"] = utc_timestamp(record["completed_at"]).astimezone().strftime("%m-%d %H:%M")
+            rows.append(row)
+    return rows
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--vars", required=True, type=Path)
+    parser.add_argument("--task", required=True)
+    parser.add_argument("--bead", required=True)
+    parser.add_argument("--pr-number", required=True, type=int)
+    parser.add_argument("--iteration", required=True, type=int)
+    parser.add_argument("--started-at", type=float, help="Deprecated; merge vars carry reviewer timing")
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--limit", type=int, default=10)
+    args = parser.parse_args()
+    if args.pr_number < 1 or args.iteration < 1:
+        fail("--pr-number and --iteration must be positive")
+    if args.limit < 0:
+        fail("--limit must be zero (all) or positive")
+
+    vars = read_vars(args.vars)
+    completed = utc_timestamp(vars["completed_at"])
+    elapsed = max(0, round(completed.timestamp() - utc_timestamp(vars["started_at"]).timestamp()))
+    phase = phase_from_bead(args.bead, vars["sprint"])
+    record = {
+        "run_id": vars["run_id"], "reviewer": vars["reviewer"], "commit": vars["commit"],
+        "started_at": vars["started_at"], "duration_seconds": elapsed,
+        "error": vars.get("error"),
+        "task": args.task, "sprint": vars["sprint"], "phase": phase,
+        "pr_number": args.pr_number, "findings": vars["findings_count"],
+        "verdict": vars["verdict"], "iteration": args.iteration,
+        "completed_at": completed.isoformat().replace("+00:00", "Z"),
+        "duration": f"{elapsed // 60}m{elapsed % 60:02d}s",
+    }
+    record = render_record(record)
+    log_path = primary_root() / ".sc" / "sanity-log" / f"phase-{phase}.jsonl"
+    historical_path = log_path.parent / "sanity-llm.jsonl"
+    history = [r for r in load_log(historical_path)
+               if str(r.get("phase", "")).removeprefix("phase-") == phase
+               or (not r.get("phase") and phase_from_sprint(r["sprint"]) == phase)]
+    append_record(log_path, record, args.output, args.limit, history)
+
+
+RECORD_TEMPLATE = Path(__file__).resolve().parent.parent / "templates/sanity-run-record.json.j2"
+RECORD_TYPES = {
+    "run_id": str, "reviewer": str, "commit": str, "task": str, "sprint": str,
+    "phase": str, "started_at": str, "completed_at": str, "duration": str,
+    "duration_seconds": int, "pr_number": int, "iteration": int, "verdict": str,
+}
+
+
+def validate_record(record):
+    if not isinstance(record, dict) or set(record) != set(RECORD_TYPES) | {"findings", "error"}:
+        fail("rendered record has incorrect fields")
+    for field, expected in RECORD_TYPES.items():
+        if type(record[field]) is not expected or (expected is str and not record[field]):
+            fail(f"rendered record.{field} must be {expected.__name__}")
+    if record["reviewer"] not in {"sanity-llm", "sanity-jev"}:
+        fail("rendered record has invalid reviewer")
+    if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", record["commit"]):
+        fail("rendered record.commit must be a full commit SHA")
+    if record["pr_number"] < 1 or record["iteration"] < 1 or record["duration_seconds"] < 0:
+        fail("rendered record has invalid numeric range")
+    started, completed = (utc_timestamp(record[key]) for key in ("started_at", "completed_at"))
+    if completed < started:
+        fail("completion precedes reviewer start")
+    if record["verdict"] == "CANNOT_RUN":
+        error = record["error"]
+        if record["findings"] is not None or not isinstance(error, dict) or not all(
+                isinstance(error.get(key), str) and error[key] for key in ("code", "message")):
+            fail("CANNOT_RUN requires null findings and an error code/message")
+    elif record["verdict"] in {"PASS", "FAIL"}:
+        if type(record["findings"]) is not int or record["findings"] < 0 or record["error"] is not None:
+            fail("completed verdict requires integer findings and null error")
+    else:
+        fail("rendered record has invalid verdict")
+    return record
+
+
+def render_record(variables):
+    """Strict render, validate typed JSON, then hand to the locked append.
+
+    No shell pipeline: failed render/validation cannot append any output.
+    """
+    with tempfile.TemporaryDirectory(prefix="sanity-record-") as scratch:
+        var_file = Path(scratch) / "vars.json"
+        var_file.write_text(json.dumps(variables))
+        try:
+            result = subprocess.run(
+                ["sc-compose", "render", "--strict", "--root", str(RECORD_TEMPLATE.parent),
+                 "--file", str(RECORD_TEMPLATE),
+                 "--var-file", str(var_file)], check=True, capture_output=True, text=True)
+            record = json.loads(result.stdout)
+        except (OSError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
+            fail(f"record render failed: {exc}; {getattr(exc, 'stderr', '')}")
+    return validate_record(record)
+
+
+def append_record(log_path, record, output, limit=10, history=()):
+    validate_record(record)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = log_path.with_suffix(log_path.suffix + ".lock")
+    with lock_path.open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        records = load_log(log_path)
+        same_run = [r for r in records if r.get("run_id") == record["run_id"]]
+        if any(any(r.get(k) != record[k] for k in ("commit", "task", "sprint", "pr_number", "iteration")) for r in same_run):
+            fail("shared run identity disagrees with existing record")
+        prior = [r for r in same_run if r.get("reviewer") == record["reviewer"]]
+        if prior:
+            if prior[-1] != record:
+                fail("run/reviewer already logged with different results")
+        else:
+            # A valid last JSON object without newline is readable, but needs a
+            # separator before the next append; preserve all existing bytes.
+            separator = ""
+            if log_path.exists() and log_path.stat().st_size:
+                with log_path.open("rb") as existing:
+                    existing.seek(-1, os.SEEK_END)
+                    separator = "" if existing.read(1) == b"\n" else "\n"
+            with log_path.open("a", encoding="utf-8") as log:
+                log.write(separator + json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+                log.flush()
+                os.fsync(log.fileno())
+            records.append(record)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps({"runs": display_runs([*history, *records], limit)}, indent=2) + "\n")
+        fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+if __name__ == "__main__":
+    main()

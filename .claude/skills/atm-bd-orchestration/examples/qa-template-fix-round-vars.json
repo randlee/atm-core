@@ -10,7 +10,7 @@
   "branch": "fix/d-4-qa1-f1-retry-jitter",
   "commit": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
   "base": "sprint/d-5-otlp-logs",
-  "worktree_path": "/Users/randlee/github/atm-core-worktrees/feat/atm-core-worktrees/fix/d-4-qa1-f1-retry-jitter",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/chore/atm-core-worktrees/fix/d-4-qa1-f1-retry-jitter",
   "carry_forward": "atm-d-4-qa1-f1",
   "lead": "atm-lead",
   "cc": "",

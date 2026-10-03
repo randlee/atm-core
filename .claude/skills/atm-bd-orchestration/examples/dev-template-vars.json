@@ -3,8 +3,10 @@
   "sprint": "d-4",
   "stack": "phase-d",
   "pr_target": "integrate/phase-d",
-  "worktree_path": "/Users/randlee/github/atm-core-worktrees/feat/atm-core-worktrees/sprint/d-4-otlp-sync-exporter",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/chore/atm-core-worktrees/sprint/d-4-otlp-sync-exporter",
   "branch": "sprint/d-4-otlp-sync-exporter",
   "lead": "atm-lead",
-  "cc": ""
+  "cc": "",
+  "primary_checkout": "/Users/randlee/github/atm-core-worktrees/chore/install-atm-bd-orchestration-0.2.0",
+  "phase_root": "atm-phase-d"
 }

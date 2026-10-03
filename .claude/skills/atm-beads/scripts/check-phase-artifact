@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Check that the authored phase definition (sprints.json) and the phase DAG HTML were pushed to integration.
+"""Check that the authored phase definition (sprints.jsonl) and the phase DAG HTML were pushed to integration.
 
-The committed sprints.json is the planner's file, never a fresh export; this only verifies it is on the
+The committed sprints.jsonl is the planner's file, never a fresh export; this only verifies it is on the
 integration branch, parses, and names the phase root that the HTML embeds."""
 import argparse
 from html.parser import HTMLParser
-import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 
-from sprint_index_common import phase_id, run_json, validate_index
+from sprint_index_common import load_phase_plan, phase_id, run_json
 
 
 class Artifact(HTMLParser):
@@ -27,7 +27,7 @@ class Artifact(HTMLParser):
             self.root = attrs.get('content')
 
 
-def check_artifact(repo, root, expected_index):
+def check_artifact(repo, root, expected_plan_path):
     records = run_json(repo, 'bd', 'show', root, '--json')
     if not records:
         raise RuntimeError(f'phase root missing: {root}')
@@ -46,12 +46,17 @@ def check_artifact(repo, root, expected_index):
     base = f'docs/plans/phase-{phase}'
     try:
         page = git('show', f'{ref}:{base}/phase-{phase}-dag.html')
-        published_index = json.loads(git('show', f'{ref}:{base}/sprints.json'))
-    except (RuntimeError, ValueError) as exc:
+        published_plan = git('show', f'{ref}:{base}/sprints.jsonl')
+    except RuntimeError as exc:
         raise RuntimeError(f'{branch}: required phase index/HTML artifact missing or unreadable; run sprint-review --root {root}: {exc}') from exc
-    validate_index(published_index)
-    if published_index != expected_index:
-        raise RuntimeError(f'{branch}: published membership differs from current index; run sprint-review --root {root}')
+    # Validate the remote bytes without treating a Beads projection as input.
+    with tempfile.TemporaryDirectory(prefix='phase-artifact-check-') as directory:
+        published_path = Path(directory) / 'docs' / 'plans' / f'phase-{phase}' / 'sprints.jsonl'
+        published_path.parent.mkdir(parents=True)
+        published_path.write_text(published_plan)
+        load_phase_plan(published_path, root)
+    if published_plan != expected_plan_path.read_text():
+        raise RuntimeError(f'{branch}: published phase plan differs from current plan; run sprint-review --root {root}')
     artifact = Artifact()
     artifact.feed(page)
     if not artifact.svg or artifact.root != root:
@@ -64,10 +69,9 @@ def main():
     parser.add_argument('--index', required=True, type=Path)
     args = parser.parse_args()
     repo = Path(subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).strip())
-    index = json.loads(args.index.read_text())
-    validate_index(index)
-    check_artifact(repo, args.root, index)
-    print('required phase HTML and bead index are published on integration')
+    load_phase_plan(args.index, args.root)
+    check_artifact(repo, args.root, args.index)
+    print('required phase HTML and canonical phase plan are published on integration')
 
 
 if __name__ == '__main__':

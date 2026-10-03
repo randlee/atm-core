@@ -2,10 +2,16 @@
 """Merge the per-deliverable sanity results and the lint result into a verdict.
 
 Usage:
-  sanity-merge <manifest.json> <sanity bead> <dev bead> <sprint> < results.json
+  sanity-merge <manifest.json> <sanity bead> <dev bead> <sprint>
+    --reviewer sanity-llm|sanity-jev --started-at <epoch> < results.json
 
 `manifest.json` is what `sanity-split` printed. stdin is a JSON array holding
-the fenced JSON reply of every `sc-sanity-llm` subagent, one per deliverable.
+the unchanged JSON reply of every child of one selected reviewer, one per
+deliverable. Run once per reviewer against the same manifest/lint. New manifests
+require explicit reviewer and its dispatch start time; old manifests retain the
+legacy invocation contract. New reviewer reports include shared run_id, commit,
+reviewer, UTC timing and raw reviewer_results. Cannot-run emits CANNOT_RUN JSON
+with null findings and the original error (exit 1/3); exit 4 has no report yet.
 On success stdout is the vars object for `dev-sanity-complete.md.j2`
 (generated_at, task_id, checked_bead, sprint, branch, commit, verdict,
 findings_count, findings, findings_md, lint_md). `findings` preserves the
@@ -26,6 +32,7 @@ Exit codes (the message is printed on stderr):
      complete failure envelope, echoed
   4  lint still running (no exit file yet)
 """
+import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -33,7 +40,7 @@ import re
 import subprocess
 import sys
 
-KINDS = {"skipped", "error"}
+CHECKER_KIND = "skipped"
 RUSTC = re.compile(r"^\s*-->\s+(?P<file>[^:\s]+):(?P<line>\d+):\d+", re.M)
 RUSTFMT = re.compile(r"^Diff in (?P<file>[^:\s]+)(?: at line |:)(?P<line>\d+)", re.M)
 
@@ -102,12 +109,14 @@ def validate(result, index, manifest, sanity_bead, dev_bead):
     findings = data.get("findings")
     if not isinstance(findings, list):
         raise Reject(f"{where}: findings must be a list")
+    if len(findings) > 1:
+        raise Reject(f"{where}: at most one finding is allowed")
     for finding in findings:
-        if (not isinstance(finding, dict) or finding.get("kind") not in KINDS
+        if (not isinstance(finding, dict) or finding.get("kind") != CHECKER_KIND
                 or not isinstance(finding.get("file"), str) or not finding["file"]
                 or not isinstance(finding.get("line"), int) or isinstance(finding.get("line"), bool)
                 or finding["line"] < 1 or not isinstance(finding.get("issue"), str) or not finding["issue"]):
-            raise Reject(f"{where}: finding must be {{kind: skipped|error, file, line >= 1, issue}}: {finding!r}")
+            raise Reject(f"{where}: finding must be {{kind: skipped, file, line >= 1, issue}}: {finding!r}")
         dependencies = finding.get("depends_on", [])
         if not isinstance(dependencies, list):
             raise Reject(f"{where}: depends_on must be a list")
@@ -184,13 +193,58 @@ def fmt(finding):
     return f"- `{finding['file']}:{finding['line']}` {finding['kind']}: {finding['issue']}"
 
 
+def deliverable_text(manifest, number):
+    for assignment in manifest.get("assignments", []):
+        if assignment.get("number") == number:
+            deliverable = assignment.get("assignment", {}).get("deliverable", {})
+            text = deliverable.get("text")
+            if isinstance(text, str) and text:
+                return text
+    return f"Deliverable {number}"
+
+
 def main(argv):
-    if len(argv) != 5:
-        print(__doc__, file=sys.stderr)
+    parser = argparse.ArgumentParser(description=__doc__)
+    for name in ("manifest_path", "sanity_bead", "dev_bead", "sprint"):
+        parser.add_argument(name)
+    parser.add_argument("--reviewer", choices=("sanity-llm", "sanity-jev"))
+    parser.add_argument("--started-at", type=float)
+    try:
+        args = parser.parse_args(argv[1:])
+    except SystemExit:
         return 1
-    _, manifest_path, sanity_bead, dev_bead, sprint = argv
+    manifest_path, sanity_bead, dev_bead, sprint = args.manifest_path, args.sanity_bead, args.dev_bead, args.sprint
+    manifest = None
+    results = []
+
+    def metadata():
+        if not args.reviewer:
+            return {}
+        completed = datetime.now(timezone.utc)
+        return {"run_id": manifest["run_id"], "reviewer": args.reviewer,
+                "operational_reviewer": manifest["operational_reviewer"],
+                "started_at": datetime.fromtimestamp(args.started_at, timezone.utc).isoformat().replace("+00:00", "Z"),
+                "completed_at": completed.isoformat().replace("+00:00", "Z"),
+                "duration_seconds": max(0, round(completed.timestamp() - args.started_at)),
+                "reviewer_results": results}
+
+    def unavailable(code, message, legacy_status=None):
+        if args.reviewer and manifest and manifest.get("run_id") and args.started_at is not None:
+            json.dump({**metadata(), "task_id": sanity_bead, "checked_bead": dev_bead,
+                       "sprint": sprint, "branch": manifest["branch"], "commit": manifest["sha"],
+                       "verdict": "CANNOT_RUN", "findings_count": None,
+                       "error": {"code": code, "message": message}}, sys.stdout, indent=2)
+            print()
+        else:
+            print(legacy_status or code)
+
     try:
         manifest = load_manifest(manifest_path)
+        if manifest.get("run_id") and not args.reviewer:
+            raise Reject("a run manifest requires --reviewer and --started-at")
+        if args.reviewer and (args.reviewer not in manifest.get("reviewers", []) or args.started_at is None):
+            print("reviewer must be selected in manifest and --started-at is required", file=sys.stderr)
+            return 1
         results = read_results()
         by_number = {}
         for index, result in enumerate(results):
@@ -200,7 +254,8 @@ def main(argv):
                              "(success must be true or false; success, data and error must all be present)")
             if result["success"] is False:
                 envelope = failure_envelope(result, index, manifest["deliverables_total"])
-                print(f"{envelope['code']} {'recoverable' if envelope['recoverable'] else 'fatal'} {envelope['deliverable']}")
+                unavailable(envelope["code"], envelope["message"],
+                            f"{envelope['code']} {'recoverable' if envelope['recoverable'] else 'fatal'} {envelope['deliverable']}")
                 print(f"deliverable {envelope['deliverable']}: {envelope['message']}", file=sys.stderr)
                 return 3
             number, findings = validate(result, index, manifest, sanity_bead, dev_bead)
@@ -214,9 +269,11 @@ def main(argv):
         verify_worktree(manifest)
     except Reject as exc:
         print(str(exc), file=sys.stderr)
+        if exc.code != 4 and args.reviewer:
+            unavailable("SANITY.RESULT_INVALID", str(exc))
         return exc.code
     except TaskFailure as exc:
-        print(exc.args[0])
+        unavailable(exc.args[0].split()[0], exc.args[1], exc.args[0])
         print(exc.args[1], file=sys.stderr)
         return 3
 
@@ -231,6 +288,7 @@ def main(argv):
                 "kind": finding["kind"], "file": finding["file"],
                 "line": finding["line"], "issue": finding["issue"],
                 "depends_on": finding.get("depends_on", []),
+                "deliverable_text": deliverable_text(manifest, number),
             })
     for index, finding in enumerate(lint_findings, 1):
         finding_records.append({
@@ -244,10 +302,11 @@ def main(argv):
     if lint_findings:
         lint_md += "\n" + "\n".join(fmt(f) for f in lint_findings)
     json.dump({
+        **metadata(),
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "task_id": sanity_bead, "checked_bead": dev_bead, "sprint": sprint,
         "branch": manifest["branch"], "commit": manifest["sha"],
-        "verdict": "PASS" if count == 0 and lint_exit == 0 else "FAIL",
+        "verdict": "PASS" if all(not findings for findings in by_number.values()) and lint_exit == 0 else "FAIL",
         "findings_count": count, "findings": finding_records,
         "findings_md": "\n".join(blocks), "lint_md": lint_md,
     }, sys.stdout, indent=2)

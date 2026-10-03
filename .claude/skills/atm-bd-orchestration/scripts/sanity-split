@@ -6,7 +6,7 @@ Usage:
                --branch <branch> --commit <commit> --base <base>
                --lint-command '<cmd>' --scratch <dir>
                [--bead-json <file>] [--split-only] [--template <path>]
-               [--lint-timeout-seconds <n>]
+               [--lint-timeout-seconds <n>] [--reviewers both|llm|jev]
   sanity-split lint-supervisor --worktree <path> --command '<cmd>' --log <file>
                --exit-file <file> [--timeout-seconds <n>]
 
@@ -16,7 +16,7 @@ changed since the base, renders `dev-sanity-assignment.json.j2` once per
 deliverable with `sc-compose`, starts the lint command detached in the
 worktree, and prints one JSON manifest to stdout:
 
-  {sha, base_sha, sanity_bead, dev_bead, branch, worktree_path,
+  {run_id, reviewers, operational_reviewer, sha, base_sha, sanity_bead, dev_bead, branch, worktree_path,
    deliverables_total, changed_files, files_outside_owned_paths,
    lint: {command, log, exit_file, pid, timeout_seconds} | null,
    assignments: [{number, assignment: <rendered object>}]}
@@ -59,6 +59,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 
 HERE = Path(__file__).resolve().parent
 TEMPLATE = HERE.parent / "templates" / "dev-sanity-assignment.json.j2"
@@ -339,6 +340,7 @@ def main():
     parser = argparse.ArgumentParser(add_help=True)
     for flag in ("--task", "--bead", "--worktree", "--branch", "--commit", "--base", "--lint-command", "--scratch"):
         parser.add_argument(flag, required=True)
+    parser.add_argument("--reviewers", choices=("both", "llm", "jev"), default="both")
     parser.add_argument("--bead-json")
     parser.add_argument("--split-only", action="store_true")
     parser.add_argument("--template", type=Path, default=TEMPLATE)
@@ -364,7 +366,6 @@ def main():
                 "sanity_bead": args.task, "dev_bead_id": bead["id"], "dev_bead_title": bead.get("title") or "",
                 "deliverable_number": item["number"], "deliverable_text": item["text"],
                 "deliverables_total": len(deliverables),
-                "acceptance_criteria": bead.get("acceptance_criteria") or "", "design": bead.get("design") or "",
                 "owned_paths": owned, "changed_files": files, "files_outside_owned_paths": outside,
                 "worktree_path": args.worktree, "branch": args.branch, "commit": sha, "base_sha": base_sha,
             })})
@@ -372,7 +373,10 @@ def main():
             lint = start_lint(args)
     except Fail as exc:
         return die(exc.code, str(exc))
-    json.dump({"sha": sha, "base_sha": base_sha, "sanity_bead": args.task, "dev_bead": bead["id"],
+    json.dump({"run_id": str(uuid.uuid4()),
+               "reviewers": ["sanity-llm", "sanity-jev"] if args.reviewers == "both" else [f"sanity-{args.reviewers}"],
+               "operational_reviewer": "sanity-jev" if args.reviewers == "jev" else "sanity-llm",
+               "sha": sha, "base_sha": base_sha, "sanity_bead": args.task, "dev_bead": bead["id"],
                "branch": args.branch, "worktree_path": args.worktree, "deliverables_total": len(deliverables),
                "changed_files": files, "files_outside_owned_paths": outside, "lint": lint,
                "assignments": assignments}, sys.stdout, indent=2)

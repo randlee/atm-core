@@ -4,7 +4,7 @@
   "phase_root_doc": "/scratch/plan-qa/atm-phase-d-plan.md",
   "plan_docs": ["/scratch/plan-qa/atm-d-1-plan.md", "/scratch/plan-qa/atm-d-2-plan.md"],
   "reference_docs": [".claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md", ".claude/skills/atm-beads/resources/planning.md", "docs/architecture.md"],
-  "worktree_path": "/Users/randlee/github/atm-core-worktrees/feat/atm-bd-orchestration-package",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/chore/install-atm-bd-orchestration-0.2.0",
   "branch": "develop",
   "commit": "0123456789abcdef0123456789abcdef01234567",
   "round_index": 1,

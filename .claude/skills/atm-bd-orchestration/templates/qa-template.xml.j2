@@ -1,6 +1,6 @@
 ---
 name: qa-task
-version: 0.1.0
+version: 2.2.0
 description: lead QA assignment for quality-mgr in atm-bd-orchestration. task_id is the QA bead. Reviews one layer at a pinned commit, files one finding bead per finding, and closes the QA bead whatever the verdict; nothing waits on it.
 format: xml
 required_variables:
@@ -78,9 +78,51 @@ Render every selected reviewer's structured JSON assignment from `.claude/skills
     <step id="e"><![CDATA[Collect reviewer outputs. Re-verify every cited file:line at `{{ commit | string | cdata_escape }}` with `git show {{ commit | string | cdata_escape }}:<path>`; never substitute a moving branch tip or worktree. Stale or missing evidence is a finding, not a guess. For every finding that is a repeatable pattern, search the whole commit for other occurrences and include all of them in the finding. Ruthless-boundary-qa runs a workspace-wide duplicate sweep for every constant, function, or type the change touches.]]></step>
     <step id="f"><![CDATA[Run `ceremony-finding-screen` (`.claude/agents/ceremony-finding-screen.md`) as a background agent over every finding of this round, with the fenced-JSON input its contract names: `worktree_path` = `{{ worktree_path | string | cdata_escape }}`, `sprint_doc` = `<scratch>/{{ task_id | string | cdata_escape }}-sprint.md`, and `findings` = this round's findings.]]></step>
     <step id="g"><![CDATA[File one finding bead per finding, screened or not, with `.claude/skills/atm-bd-orchestration/templates/finding-bead.json.j2`: `id` = `{{ task_id | string | cdata_escape }}-f<n>`, `qa_bead` = `{{ task_id | string | cdata_escape }}`, `stack` = `{{ stack | string | cdata_escape }}`, `found_on_layer` = `{{ layer | string | cdata_escape }}`, `found_at_commit` = `{{ commit | string | cdata_escape }}`, the screen verdict, and the governing contract copied from the checked bead: `requirements` and `adrs` = its `metadata.requirements` and `metadata.adrs`, `sprint_bead` = its `metadata.sprint_bead` for a finding or its own id for a dev bead (`bd show {{ checked_bead | string | cdata_escape }} --json | jq '.[0] | {id, sprint_bead: (.metadata.sprint_bead // .id), requirements: .metadata.requirements, adrs: .metadata.adrs}'`). Normalize severity first: `critical`, `Blocking` and `BLOCKING` → `blocking`; `Important`/`IMPORTANT` → `important`; `Minor`/`MINOR`/`low` → `minor`. Render each to a file and gate it, so a rejected finding stops the round instead of vanishing: `sc-compose render --file <template> --var-file <vars> --strict --output <scratch>/<finding>.json && jq -e -c . <scratch>/<finding>.json >> <scratch>/{{ task_id | string | cdata_escape }}-findings.jsonl` (any failure: fix the vars and re-render; never skip the finding). Then `bd import <scratch>/{{ task_id | string | cdata_escape }}-findings.jsonl`. Apply the screen as `roles/quality-mgr.md` ("Findings") says; a `ceremony` finding is closed at once with `bd close <finding> --reason "ceremony: <reason>"`.{% if carry_forward %} The fixer already closed each carried finding bead. Record a confirmed fix with `bd update <finding> --append-notes "QA round {{ round | string | cdata_escape }}: fixed, verified at {{ commit | string | cdata_escape }}"`. Reopen a regressed or still-open one: `bd reopen <finding> --reason "QA round {{ round | string | cdata_escape }}: <regressed|open> at {{ commit | string | cdata_escape }}: <evidence>"`. It returns to `bd ready` with its assignee, and the lead re-dispatches it.{% endif %}]]></step>
-    <step id="g1"><![CDATA[Immediately after the import in step g, use the same gate path for every blocking finding: `jq -r 'select(.metadata.severity == "blocking") | .id' <scratch>/{{ task_id | string | cdata_escape }}-findings.jsonl | while IFS= read -r finding; do .claude/skills/atm-bd-orchestration/scripts/blocking-finding-gates.py --finding "$finding" --actor "$ATM_IDENTITY"; done`. `<finding>-sanity` is the finding's sole sanity gate, not a duplicate; it is parented under the finding's sprint dev bead, waits on that finding through `blocks`, and then blocks eligible downstream work.]]></step>
+    <step id="g1"><![CDATA[After the import in step g, verify that it added only finding children and declared inter-finding prerequisites. Do not add a finding-derived edge to a planned sprint: `docs/plans/phase-<phase>/sprints.jsonl` is the exclusive source of sprint dependency edges.]]></step>
     <step id="h"><![CDATA[{% if pr_number %}Post the report on PR {{ pr_number | string | cdata_escape }} before closing: `atm compose --template .claude/skills/atm-bd-orchestration/templates/qa-complete.md.j2 --vars <scratch>/qa-{{ task_id | string | cdata_escape }}-vars.json | gh pr comment {{ pr_number | string | cdata_escape }} --body-file -`. Check stack and CI state with the `sc-gh-stack-view` skill (`gh-stack-view` until it is installed) and `gh pr checks {{ pr_number | string | cdata_escape }} --json name,state,bucket`; never `--watch`, never parse its text output.{% else %}No PR was given; skip the PR comment and say so in the report's notes.{% endif %}]]></step>
     <step id="i"><![CDATA[Close the bead and the task together, whatever the verdict: `bd close {{ task_id | string | cdata_escape }} --reason "<PASS|FAIL>: <n> findings filed"` and `atm task close {{ task_id | string | cdata_escape }} completed --template .claude/skills/atm-bd-orchestration/templates/qa-complete.md.j2 --vars <scratch>/qa-{{ task_id | string | cdata_escape }}-vars.json`. Build the vars from that template's `required_variables` for this run only; keep them outside the repository. PASS requires 100% deliverable completion, a PASS from every required reviewer, and no finding filed open this round. The open finding beads carry the remaining work; the QA bead blocks nothing.{% if cc and cc != lead %} Copy a one-line summary to `{{ cc | string | cdata_escape }}` with a plain `atm send {{ cc | string | cdata_escape }} --stdin`.{% endif %}]]></step>
     <step id="i1"><![CDATA[If the review cannot be performed, first strictly render `workflow-issue-bead.json.j2` with id `{{ task_id | string | cdata_escape }}-wf-QA_CANNOT_RUN`, then `bd import <scratch>/{{ task_id | string | cdata_escape }}-wf-QA_CANNOT_RUN.json`. Include that id in the reason, return the bead with `bd update {{ task_id | string | cdata_escape }} --status open --assignee "" --append-notes "QA_CANNOT_RUN; workflow issue {{ task_id | string | cdata_escape }}-wf-QA_CANNOT_RUN: <reason>"` and close the task with `atm task close {{ task_id | string | cdata_escape }} refused --template .claude/skills/atm-bd-orchestration/templates/task-refused.md.j2 --vars <scratch>/refused-{{ task_id | string | cdata_escape }}-vars.json`.]]></step>
+    <step id="j"><![CDATA[After step i's closes succeed (never on the i1 refusal path — no round to log), append exactly one row to each of the two phase QA logs under `.sc/qa-log/`, as `roles/quality-mgr.md` ("QA Metrics Log") says. Compute both rows fresh at close time; never hand-carry a prior row's numbers:
+```bash
+mkdir -p .sc/qa-log
+LOCKDIR=.sc/qa-log/.append.lock
+for _ in $(seq 1 50); do mkdir "$LOCKDIR" 2>/dev/null && break; sleep 0.2; done
+trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
+
+CREATED=$(bd show {{ task_id | string | cdata_escape }} --json | jq -r '.[0].created_at')
+C_EPOCH=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$CREATED" +%s 2>/dev/null || date -u -d "$CREATED" +%s)
+NOW_EPOCH=$(date -u +%s)
+NOW=$(date -u -r "$NOW_EPOCH" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$NOW_EPOCH" +%Y-%m-%dT%H:%M:%SZ)
+LOCAL=$(date +%H:%M)
+SECS=$((NOW_EPOCH - C_EPOCH))
+DURATION="$((SECS/60))m$(printf '%02d' $((SECS%60)))s"
+
+FNDFILE=<scratch>/{{ task_id | string | cdata_escape }}-findings.jsonl
+BLK=$( [ -f "$FNDFILE" ] && jq -sc '[.[] | select(.screen!="ceremony" and .severity=="blocking")] | length' "$FNDFILE" || echo 0 )
+IMP=$( [ -f "$FNDFILE" ] && jq -sc '[.[] | select(.screen!="ceremony" and .severity=="important")] | length' "$FNDFILE" || echo 0 )
+MIN=$( [ -f "$FNDFILE" ] && jq -sc '[.[] | select(.screen!="ceremony" and .severity=="minor")] | length' "$FNDFILE" || echo 0 )
+FND=$((BLK + IMP + MIN))
+TESTED="{% if carry_forward %}{{ carry_forward | string | cdata_escape }}{% else %}{{ checked_bead | string | cdata_escape }}{% endif %}"
+
+jq -nc --arg completed_at "$NOW" --arg completed_local "$LOCAL" --arg duration "$DURATION" \
+  --arg phase "{{ phase | string }}" --arg sprint "{{ sprint | string }}" --arg task "{{ task_id | string }}" \
+  --arg pr_number "{{ pr_number | string }}" --argjson iteration {{ round }} --arg verdict "$VERDICT" \
+  --arg tested "$TESTED" --argjson fnd "$FND" --argjson blk "$BLK" --argjson imp "$IMP" --argjson min "$MIN" \
+  '{completed_at:$completed_at, completed_local:$completed_local, duration:$duration, phase:$phase, sprint:$sprint,
+    task:$task, pr_number:(($pr_number|tonumber?)//null), iteration:$iteration, verdict:$verdict, tested:$tested,
+    fnd:$fnd, blk:$blk, imp:$imp, min:$min}' >> .sc/qa-log/phase-{{ phase | string }}.jsonl
+
+bd list --all --json 2>/dev/null | jq -c --arg ph "{{ phase | string }}" --arg completed_at "$NOW" --arg completed_local "$LOCAL" --arg task "{{ task_id | string }}" '
+  [.[] | select(.id | test("-qa-f[0-9]+(\\.[0-9]+)?$")) | select(.metadata.phase == $ph)] as $f |
+  {snapshot_at: $completed_at, snapshot_local: $completed_local, phase: $ph, trigger_task: $task,
+   tot: ($f | length),
+   open: ([$f[] | select(.status=="open")] | length),
+   blk: ([$f[] | select(.status=="open" and .metadata.severity=="blocking")] | length),
+   imp: ([$f[] | select(.status=="open" and .metadata.severity=="important")] | length),
+   min: ([$f[] | select(.status=="open" and .metadata.severity=="minor")] | length)}' >> .sc/qa-log/phase-{{ phase | string }}-stats.jsonl
+
+rmdir "$LOCKDIR" 2>/dev/null
+```
+Set `$VERDICT` to the same `PASS`/`FAIL` value used in step i's `bd close` reason before running this. Never commit these logs from a QA worktree; the lead's own phase-end housekeeping stages them.]]></step>
   </workflow>
 </repo-qa-task>

@@ -1,11 +1,11 @@
 {
   "task_id": "atm-phase-d-review",
   "phase": "d",
-  "branch": "fix/d-4-qa1-f1-retry-jitter",
+  "branch": "integrate/phase-d",
   "commit": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
-  "worktree_path": "/Users/randlee/github/atm-core-worktrees/feat/atm-core-worktrees/fix/d-4-qa1-f1-retry-jitter",
+  "worktree_path": "/Users/randlee/github/atm-core-worktrees/chore/atm-core-worktrees/review/phase-d-integration",
   "review_focus": "- OTLP exporter boundaries (SDK vs sync path)",
-  "review_questions": "- Is example-otlp extractable without the workspace's other crates?",
+  "review_questions": "- Is example-otlp extractable without atm-core internals?",
   "references": "- bd show atm-phase-d\n- docs/architecture.md",
   "lead": "atm-lead",
   "cc": ""

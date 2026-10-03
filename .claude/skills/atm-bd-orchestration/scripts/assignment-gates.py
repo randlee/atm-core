@@ -15,6 +15,8 @@ from plan_contract import model_matches  # noqa: E402
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 IGNORED_STATUS_PATHS = (".beads.gate.lock", ".sc-compose/")
+PRIMARY = Path(__file__).resolve().parents[4]
+VALIDATE_PLAN = str(PRIMARY / ".claude/skills/atm-beads/scripts/validate-plan")
 
 
 def run(runner: Runner, *args: str) -> str:
@@ -58,8 +60,13 @@ def is_clean(status: str) -> bool:
     return not any(line and not any(path in line for path in IGNORED_STATUS_PATHS) for line in status.splitlines())
 
 
+def git_dir(args: argparse.Namespace) -> list[str]:
+    worktree = getattr(args, "worktree", "")
+    return ["-C", worktree] if worktree else []
+
+
 def dev_gate(args: argparse.Namespace, runner: Runner, identity: str) -> str:
-    if runner([".claude/skills/atm-beads/scripts/validate-plan", "--root", args.root, "--scope", args.bead], capture_output=True, text=True).returncode:
+    if runner([VALIDATE_PLAN, "--root", args.root, "--scope", args.bead], capture_output=True, text=True, cwd=str(PRIMARY)).returncode:
         return "PLAN_INVALID"
     ready = run_json(runner, "bd", "ready", "-n", "0", "--json")
     if not any(row.get("id") == args.bead for row in ready):
@@ -71,7 +78,7 @@ def dev_gate(args: argparse.Namespace, runner: Runner, identity: str) -> str:
         return "PR_TARGET_MISMATCH"
     if (reason := refusal_for_difficulty(bead, members_for(runner), identity)):
         return reason
-    if runner(["git", "merge-base", "--is-ancestor", f"origin/{args.pr_target}", "HEAD"], capture_output=True, text=True).returncode:
+    if runner(["git", *git_dir(args), "merge-base", "--is-ancestor", f"origin/{args.pr_target}", "HEAD"], capture_output=True, text=True).returncode:
         return "WRONG_BASE"
     return "READY"
 
@@ -84,8 +91,6 @@ def sanity_gate(args: argparse.Namespace, runner: Runner, identity: str) -> str:
     if pr.get("baseRefName") != args.pr_target or pr.get("headRefOid") != args.commit:
         return "STALE_BASE"
     run(runner, "git", "fetch", "origin")
-    if run(runner, "git", "rev-parse", args.pr_target) != run(runner, "git", "rev-parse", f"origin/{args.pr_target}"):
-        return "STALE_BASE"
     if not run(runner, "git", "log", "--format=%H", f"origin/{args.pr_target}..{args.commit}"):
         return "ZERO_DELTA"
     if not is_clean(run(runner, "git", "status", "--porcelain", "--untracked-files=no")):
@@ -136,6 +141,7 @@ def main(argv: list[str] | None = None, runner: Runner = subprocess.run) -> int:
     parser.add_argument("--pr-number", default="")
     parser.add_argument("--commit", default="")
     parser.add_argument("--checked-bead", default="")
+    parser.add_argument("--worktree", default="")
     args = parser.parse_args(argv)
     code = evaluate(args, runner)
     print(code)

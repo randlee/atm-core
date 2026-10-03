@@ -1,6 +1,6 @@
 ---
 name: review-complete
-version: 0.1.0
+version: 2.3.0
 description: Reviewer completion report for a review bead (review-task); the lead files each finding as a finding bead; the body of `atm task close <task-id> completed`.
 format: markdown
 required_variables:
@@ -14,6 +14,11 @@ required_variables:
   - findings_important
   - findings_minor
   - findings_md
+  - integration_review
+  - integration_commit
+  - post_mortem_counts
+  - post_mortem_md
+  - post_mortem_jev
 optional_variables:
   - notes_md
 defaults:
@@ -47,6 +52,10 @@ Verdict: **{{ verdict }}**
   "branch": {{ branch | tojson }},
   "commit": {{ commit | tojson }},
   "verdict": {{ verdict | tojson }},
+  "integration_review": {{ integration_review | tojson }},
+  "integration_commit": {{ integration_commit | tojson }},
+  "post_mortem_jev": {{ post_mortem_jev | tojson }},
+  "post_mortem_counts": {{ post_mortem_counts | tojson }},
   "findings": {
     "blocking": {{ findings_blocking }},
     "important": {{ findings_important }},
@@ -57,6 +66,13 @@ Verdict: **{{ verdict }}**
 
 ## Findings
 {{ findings_md }}
+
+## Integration Post-Mortem
+Outcome: **{{ integration_review }}**
+Verified integration head: `{{ integration_commit }}`
+Counts: {{ post_mortem_counts | tojson }}
+JEV execution: {{ post_mortem_jev | tojson }}
+{{ post_mortem_md }}
 {% if notes_md %}
 ## Notes
 {{ notes_md }}

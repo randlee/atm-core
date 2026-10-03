@@ -1,6 +1,6 @@
 ---
 name: plan-review-task
-version: 0.1.0
+version: 1.2.0
 description: lead plan-review assignment for quality-mgr. task_id is the plan-review bead (<root>-plan-qa), which blocks every root sprint, so nothing is dispatched until the plan passes. The plan is the beads under the root; there is no plan PR.
 format: xml
 required_variables:
@@ -39,7 +39,7 @@ metadata:
 {% endif %}
   <workflow>
     <step id="a"><![CDATA[Check readiness, claim the bead, then start the review. If blocked, report the exact blocker to {{ lead | string | cdata_escape }} and wait.]]></step>
-    <step id="b"><![CDATA[From the repository root, run `.claude/skills/atm-beads/scripts/validate-plan --root {{ root | string | cdata_escape }}`. Exit 5: every printed problem line is a **blocking** finding, carried into the report as printed. Exit 2: the check could not run; go to step f. The required initial `docs/plans/phase-{{ phase | string | cdata_escape }}/phase-{{ phase | string | cdata_escape }}-dag.html` (embedded SVG) and bead-ID `sprints.json` must be committed and pushed on the root bead's integration branch; validation checks them. A missing artifact is blocking. A `bd doctor` error is a blocking finding too: the plan is not reviewed against a broken database.]]></step>
+    <step id="b"><![CDATA[From the repository root, run `.claude/skills/atm-beads/scripts/validate-plan --root {{ root | string | cdata_escape }}`. Exit 5: every printed problem line is a **blocking** finding, carried into the report as printed. Exit 2: the check could not run; go to step f. The required initial `docs/plans/phase-{{ phase | string | cdata_escape }}/phase-{{ phase | string | cdata_escape }}-dag.html` (embedded SVG) and canonical `sprints.jsonl` must be committed and pushed on the root bead's integration branch; validation checks them. A missing artifact is blocking. A `bd doctor` error is a blocking finding too: the plan is not reviewed against a broken database.]]></step>
     <step id="c"><![CDATA[Requirements and ADRs are the tight gate. For every dev bead (`bd list --parent {{ root | string | cdata_escape }} -l stage:dev --all -n 0 --json`), pipe it into `<scratch>/<bead>-plan.md` (`bd show <bead> --json | jq '.[0] | {id, title, description, design, acceptance_criteria, metadata}'` inside a fenced json block) and run `req-qa` and `arch-qa` as background agents on it, with `sprint_doc` = that file and the docs-only plan rules of `.claude/agents/quality-mgr.md`. A plan in beads has no branch of its own: pin reviewers to `develop` at its current head (`git rev-parse origin/develop`) in the main checkout, which holds the governing `docs/requirements.md` and `docs/architecture.md`. Each of the following is a **blocking** finding, never important or minor:
 - `metadata.requirements` or `metadata.adrs` is empty, missing, or mixes `NONE` with ids (validate-plan already reports these);
 - an id is not in the governing document, unless it meets the New Ids rule of `.claude/skills/atm-beads/resources/planning.md` (the document is in `owned_paths` and a deliverable says the sprint adds the id);

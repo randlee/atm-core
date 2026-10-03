@@ -1,0 +1,122 @@
+{
+  "$defs": {
+    "Dependency": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "depends_on_id": {
+          "title": "Depends On Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "depends_on_id"
+      ],
+      "title": "Dependency",
+      "type": "object"
+    },
+    "SprintMetadata": {
+      "additionalProperties": true,
+      "properties": {
+        "requirements": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Requirements",
+          "type": "array"
+        },
+        "adrs": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Adrs",
+          "type": "array"
+        },
+        "worktree": {
+          "minLength": 1,
+          "title": "Worktree",
+          "type": "string"
+        },
+        "branch": {
+          "minLength": 1,
+          "title": "Branch",
+          "type": "string"
+        },
+        "pr_target": {
+          "minLength": 1,
+          "title": "Pr Target",
+          "type": "string"
+        },
+        "difficulty": {
+          "enum": [
+            "hard",
+            "normal",
+            "fast"
+          ],
+          "title": "Difficulty",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requirements",
+        "adrs",
+        "worktree",
+        "branch",
+        "pr_target",
+        "difficulty"
+      ],
+      "title": "SprintMetadata",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "description": "A stage:sprint dev bead.",
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "assignee": {
+      "minLength": 1,
+      "title": "Assignee",
+      "type": "string"
+    },
+    "dependencies": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Dependency"
+      },
+      "title": "Dependencies",
+      "type": "array"
+    },
+    "description": {
+      "pattern": "(?m)^## Deliverables\\s*\\n(?:\\s*\\n)*\\s*1[.)]\\s+\\S",
+      "title": "Description",
+      "type": "string"
+    },
+    "acceptance_criteria": {
+      "minLength": 1,
+      "title": "Acceptance Criteria",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/SprintMetadata"
+    }
+  },
+  "required": [
+    "id",
+    "assignee",
+    "description",
+    "acceptance_criteria",
+    "metadata"
+  ],
+  "title": "SprintBead",
+  "type": "object"
+}
