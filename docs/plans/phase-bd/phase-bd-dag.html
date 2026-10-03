@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="phase-root-bead" content="atm-phase-bd">
+  <meta name="wyvern:width" content="1536">
+  <meta name="wyvern:height" content="864">
+  <title>Sprint review · Phase BD</title>
+  <script id="wyvern-initial-size">
+    (() => {
+      function sizeWindow(event) {
+        const bounds = (event && event.detail) || window.__wyvernViewportBounds || {};
+        const screen = window.screen || {};
+        const width = Math.round(0.8 * (bounds.available_width || screen.availWidth || 1920));
+        const height = Math.round(0.8 * (bounds.available_height || screen.availHeight || 1080));
+        document.querySelector('meta[name="wyvern:width"]').content = String(width);
+        document.querySelector('meta[name="wyvern:height"]').content = String(height);
+        if (window.ipc && typeof window.ipc.postMessage === 'function') {
+          window.ipc.postMessage('resize:' + width + 'x' + height);
+        }
+      }
+      window.addEventListener('wyvern:viewport-bounds', sizeWindow);
+      sizeWindow();
+    })();
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #172b43; background: white; font: 14px system-ui, sans-serif; }
+    header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 10px;
+      padding: 12px 18px; background: #f8fafc; border-bottom: 1px solid #dbe3ed; }
+    h1 { margin: 0 auto 0 0; font-size: 17px; }
+    button { font: inherit; color: inherit; background: white; border: 1px solid #a8b7c9;
+      border-radius: 5px; padding: 5px 12px; cursor: pointer; }
+    button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+    output { min-width: 45px; text-align: center; }
+    main { overflow: auto; height: calc(100vh - 59px); padding: 12px; }
+    #diagram { width: 100%; }
+    #diagram > svg { display: block; width: 100%; height: auto; }
+    @media print { header { position: static; } button, output { display: none; }
+      main { height: auto; overflow: visible; } #diagram { width: 100% !important; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Sprint review · Phase BD</h1>
+    <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+    <output id="zoom-level" aria-live="polite">100%</output>
+    <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+    <button id="fit" type="button">Fit</button>
+  </header>
+  <main aria-label="Sprint dependency diagram">
+    <div id="diagram"><svg xmlns="http://www.w3.org/2000/svg" width="1142.0pt" height="524.0pt" viewBox="0.0 0.0 1142.0 524.0">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(28.8 406.8)">
+<title>execution</title>
+<polygon fill="white" stroke="none" points="-28.8,28.8 -28.8,-406.8 1113.56,-406.8 1113.56,28.8 -28.8,28.8" />
+<text xml:space="preserve" text-anchor="middle" x="542.38" y="-356" font-family="Arial" font-size="20.00">Phase BD — execution order</text>
+<text xml:space="preserve" text-anchor="middle" x="542.38" y="-332" font-family="Arial" font-size="20.00">Sprint completes → its gate passes → downstream sprint starts</text>
+<g id="clust1" class="cluster">
+<title>cluster_atm-bd-1</title>
+</g>
+<g id="clust2" class="cluster">
+<title>cluster_atm-bd-2</title>
+</g>
+<g id="clust3" class="cluster">
+<title>cluster_atm-bd-3</title>
+</g>
+<g id="clust4" class="cluster">
+<title>cluster_atm-bd-4</title>
+</g>
+<g id="clust5" class="cluster">
+<title>cluster_atm-bd-5</title>
+</g>
+<g id="clust6" class="cluster">
+<title>cluster_atm-bd-6</title>
+</g>
+<g id="clust7" class="cluster">
+<title>cluster_atm-bd-7</title>
+</g>
+
+<g id="node1" class="node">
+<title>atm-bd-1 — dev complete at 1b0e8ee95; awaiting sanity completion</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M73.3,-177C73.3,-177 28,-177 28,-177 22,-177 16,-171 16,-165 16,-165 16,-153 16,-153 16,-147 22,-141 28,-141 28,-141 73.3,-141 73.3,-141 79.3,-141 85.3,-147 85.3,-153 85.3,-153 85.3,-165 85.3,-165 85.3,-171 79.3,-177 73.3,-177" />
+<text xml:space="preserve" text-anchor="middle" x="50.65" y="-155.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-1</text>
+</g>
+
+<g id="node2" class="node">
+<title>atm-bd-1-sanity — Assigned; completion not recorded; completed sanity iterations: 0</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M244.27,-168.01C244.27,-168.01 227.39,-187.22 227.39,-187.22 223.43,-191.73 213.47,-196.23 207.47,-196.23 207.47,-196.23 166.02,-196.23 166.02,-196.23 160.02,-196.23 150.06,-191.73 146.1,-187.22 146.1,-187.22 129.22,-168.01 129.22,-168.01 125.26,-163.51 125.26,-154.49 129.22,-149.99 129.22,-149.99 146.1,-130.78 146.1,-130.78 150.06,-126.27 160.02,-121.77 166.02,-121.77 166.02,-121.77 207.47,-121.77 207.47,-121.77 213.47,-121.77 223.43,-126.27 227.39,-130.78 227.39,-130.78 244.27,-149.99 244.27,-149.99 248.23,-154.49 248.23,-163.51 244.27,-168.01" />
+<text xml:space="preserve" text-anchor="middle" x="186.74" y="-162.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-1</text>
+<text xml:space="preserve" text-anchor="middle" x="186.74" y="-147.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge1" class="edge">
+<title>atm-bd-1-&gt;atm-bd-1-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M85.49,-159C93.58,-159 102.53,-159 111.65,-159" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="111.57,-161.63 119.07,-159 111.57,-156.38 111.57,-161.63" />
+</g>
+
+<g id="node5" class="node">
+<title>atm-bd-3 — Blocked by unfinished prerequisites</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M617.68,-190C617.68,-190 572.38,-190 572.38,-190 566.38,-190 560.38,-184 560.38,-178 560.38,-178 560.38,-166 560.38,-166 560.38,-160 566.38,-154 572.38,-154 572.38,-154 617.68,-154 617.68,-154 623.68,-154 629.68,-160 629.68,-166 629.68,-166 629.68,-178 629.68,-178 629.68,-184 623.68,-190 617.68,-190" />
+<text xml:space="preserve" text-anchor="middle" x="595.03" y="-168.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-3</text>
+</g>
+
+<g id="edge3" class="edge">
+<title>atm-bd-1-sanity-&gt;atm-bd-3</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M224.17,-191.29C240.2,-203.41 259.96,-215.76 280.19,-222 387.3,-255.03 426.74,-259.45 532.38,-222 546.98,-216.82 560.64,-206.56 571.37,-196.67" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="573.16,-198.59 576.73,-191.49 569.51,-194.81 573.16,-198.59" />
+</g>
+
+<g id="node7" class="node">
+<title>atm-bd-4 — Blocked by unfinished prerequisites</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M617.68,-61C617.68,-61 572.38,-61 572.38,-61 566.38,-61 560.38,-55 560.38,-49 560.38,-49 560.38,-37 560.38,-37 560.38,-31 566.38,-25 572.38,-25 572.38,-25 617.68,-25 617.68,-25 623.68,-25 629.68,-31 629.68,-37 629.68,-37 629.68,-49 629.68,-49 629.68,-55 623.68,-61 617.68,-61" />
+<text xml:space="preserve" text-anchor="middle" x="595.03" y="-39.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-4</text>
+</g>
+
+<g id="edge7" class="edge">
+<title>atm-bd-1-sanity-&gt;atm-bd-4</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M202.08,-121.41C216.49,-89.55 242.06,-45.93 280.19,-26 367.71,19.75 488.34,-7.68 551.52,-27.69" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="550.45,-30.1 558.39,-29.92 552.07,-25.11 550.45,-30.1" />
+</g>
+
+<g id="node9" class="node">
+<title>atm-bd-5 — Blocked by unfinished prerequisites</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M617.68,-287C617.68,-287 572.38,-287 572.38,-287 566.38,-287 560.38,-281 560.38,-275 560.38,-275 560.38,-263 560.38,-263 560.38,-257 566.38,-251 572.38,-251 572.38,-251 617.68,-251 617.68,-251 623.68,-251 629.68,-257 629.68,-263 629.68,-263 629.68,-275 629.68,-275 629.68,-281 623.68,-287 617.68,-287" />
+<text xml:space="preserve" text-anchor="middle" x="595.03" y="-265.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-5</text>
+</g>
+
+<g id="edge9" class="edge">
+<title>atm-bd-1-sanity-&gt;atm-bd-5</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M217.49,-196.65C233.91,-214.56 255.89,-234.36 280.19,-245 370.17,-284.41 488.54,-280.31 551.06,-274.37" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="551.3,-276.98 558.5,-273.62 550.77,-271.76 551.3,-276.98" />
+</g>
+
+<g id="node13" class="node">
+<title>atm-bd-7 — Blocked by unfinished prerequisites</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M345.49,-102C345.49,-102 300.19,-102 300.19,-102 294.19,-102 288.19,-96 288.19,-90 288.19,-90 288.19,-78 288.19,-78 288.19,-72 294.19,-66 300.19,-66 300.19,-66 345.49,-66 345.49,-66 351.49,-66 357.49,-72 357.49,-78 357.49,-78 357.49,-90 357.49,-90 357.49,-96 351.49,-102 345.49,-102" />
+<text xml:space="preserve" text-anchor="middle" x="322.84" y="-80.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-7</text>
+</g>
+
+<g id="edge15" class="edge">
+<title>atm-bd-1-sanity-&gt;atm-bd-7</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M231.28,-134.65C247.3,-125.69 265.37,-115.58 281.13,-106.77" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="282.36,-109.09 287.62,-103.14 279.8,-104.51 282.36,-109.09" />
+</g>
+
+<g id="node3" class="node">
+<title>atm-bd-2 — dev complete at 2bc148678; awaiting sanity completion</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M345.49,-191C345.49,-191 300.19,-191 300.19,-191 294.19,-191 288.19,-185 288.19,-179 288.19,-179 288.19,-167 288.19,-167 288.19,-161 294.19,-155 300.19,-155 300.19,-155 345.49,-155 345.49,-155 351.49,-155 357.49,-161 357.49,-167 357.49,-167 357.49,-179 357.49,-179 357.49,-185 351.49,-191 345.49,-191" />
+<text xml:space="preserve" text-anchor="middle" x="322.84" y="-169.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-2</text>
+</g>
+
+<g id="node4" class="node">
+<title>atm-bd-2-sanity — Assigned; completion not recorded; completed sanity iterations: 0</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M516.46,-182.01C516.46,-182.01 499.58,-201.22 499.58,-201.22 495.62,-205.73 485.66,-210.23 479.66,-210.23 479.66,-210.23 438.21,-210.23 438.21,-210.23 432.21,-210.23 422.25,-205.73 418.29,-201.22 418.29,-201.22 401.41,-182.01 401.41,-182.01 397.45,-177.51 397.45,-168.49 401.41,-163.99 401.41,-163.99 418.29,-144.78 418.29,-144.78 422.25,-140.27 432.21,-135.77 438.21,-135.77 438.21,-135.77 479.66,-135.77 479.66,-135.77 485.66,-135.77 495.62,-140.27 499.58,-144.78 499.58,-144.78 516.46,-163.99 516.46,-163.99 520.42,-168.49 520.42,-177.51 516.46,-182.01" />
+<text xml:space="preserve" text-anchor="middle" x="458.93" y="-176.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-2</text>
+<text xml:space="preserve" text-anchor="middle" x="458.93" y="-161.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge2" class="edge">
+<title>atm-bd-2-&gt;atm-bd-2-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M357.68,-173C365.76,-173 374.72,-173 383.84,-173" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="383.76,-175.63 391.26,-173 383.76,-170.38 383.76,-175.63" />
+</g>
+
+<g id="edge4" class="edge">
+<title>atm-bd-2-sanity-&gt;atm-bd-3</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M524.23,-172.52C533.31,-172.45 542.46,-172.38 551.01,-172.32" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="550.8,-174.95 558.28,-172.27 550.76,-169.7 550.8,-174.95" />
+</g>
+
+<g id="node6" class="node">
+<title>atm-bd-3-sanity — Blocked by unfinished prerequisites; completed sanity iterations: 0</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M788.65,-180.01C788.65,-180.01 771.77,-199.22 771.77,-199.22 767.81,-203.73 757.85,-208.23 751.85,-208.23 751.85,-208.23 710.4,-208.23 710.4,-208.23 704.4,-208.23 694.44,-203.73 690.48,-199.22 690.48,-199.22 673.6,-180.01 673.6,-180.01 669.64,-175.51 669.64,-166.49 673.6,-161.99 673.6,-161.99 690.48,-142.78 690.48,-142.78 694.44,-138.27 704.4,-133.77 710.4,-133.77 710.4,-133.77 751.85,-133.77 751.85,-133.77 757.85,-133.77 767.81,-138.27 771.77,-142.78 771.77,-142.78 788.65,-161.99 788.65,-161.99 792.61,-166.49 792.61,-175.51 788.65,-180.01" />
+<text xml:space="preserve" text-anchor="middle" x="731.12" y="-174.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-3</text>
+<text xml:space="preserve" text-anchor="middle" x="731.12" y="-159.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge6" class="edge">
+<title>atm-bd-3-&gt;atm-bd-3-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M629.87,-171.75C638.01,-171.69 647.03,-171.62 656.23,-171.55" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="656.24,-174.18 663.72,-171.5 656.2,-168.93 656.24,-174.18" />
+</g>
+
+<g id="node11" class="node">
+<title>atm-bd-6 — Blocked by unfinished prerequisites</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M889.87,-189C889.87,-189 844.57,-189 844.57,-189 838.57,-189 832.57,-183 832.57,-177 832.57,-177 832.57,-165 832.57,-165 832.57,-159 838.57,-153 844.57,-153 844.57,-153 889.87,-153 889.87,-153 895.87,-153 901.87,-159 901.87,-165 901.87,-165 901.87,-177 901.87,-177 901.87,-183 895.87,-189 889.87,-189" />
+<text xml:space="preserve" text-anchor="middle" x="867.22" y="-167.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-6</text>
+</g>
+
+<g id="edge11" class="edge">
+<title>atm-bd-3-sanity-&gt;atm-bd-6</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M797.21,-171C806.03,-171 814.9,-171 823.2,-171" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="823.06,-173.63 830.56,-171 823.06,-168.38 823.06,-173.63" />
+</g>
+
+<g id="node8" class="node">
+<title>atm-bd-4-sanity — Blocked by unfinished prerequisites; completed sanity iterations: 0</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M788.65,-62.01C788.65,-62.01 771.77,-81.22 771.77,-81.22 767.81,-85.73 757.85,-90.23 751.85,-90.23 751.85,-90.23 710.4,-90.23 710.4,-90.23 704.4,-90.23 694.44,-85.73 690.48,-81.22 690.48,-81.22 673.6,-62.01 673.6,-62.01 669.64,-57.51 669.64,-48.49 673.6,-43.99 673.6,-43.99 690.48,-24.78 690.48,-24.78 694.44,-20.27 704.4,-15.77 710.4,-15.77 710.4,-15.77 751.85,-15.77 751.85,-15.77 757.85,-15.77 767.81,-20.27 771.77,-24.78 771.77,-24.78 788.65,-43.99 788.65,-43.99 792.61,-48.49 792.61,-57.51 788.65,-62.01" />
+<text xml:space="preserve" text-anchor="middle" x="731.12" y="-56.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-4</text>
+<text xml:space="preserve" text-anchor="middle" x="731.12" y="-41.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge8" class="edge">
+<title>atm-bd-4-&gt;atm-bd-4-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M629.87,-45.52C639.11,-46.21 649.47,-46.99 659.94,-47.77" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="659.73,-50.38 667.41,-48.32 660.13,-45.15 659.73,-50.38" />
+</g>
+
+<g id="edge12" class="edge">
+<title>atm-bd-4-sanity-&gt;atm-bd-6</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M768.76,-85.24C790.82,-104.65 818.45,-128.97 838.65,-146.74" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="836.8,-148.61 844.16,-151.59 840.26,-144.67 836.8,-148.61" />
+</g>
+
+<g id="node10" class="node">
+<title>atm-bd-5-sanity — Blocked by unfinished prerequisites; completed sanity iterations: 0</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M788.65,-278.01C788.65,-278.01 771.77,-297.22 771.77,-297.22 767.81,-301.73 757.85,-306.23 751.85,-306.23 751.85,-306.23 710.4,-306.23 710.4,-306.23 704.4,-306.23 694.44,-301.73 690.48,-297.22 690.48,-297.22 673.6,-278.01 673.6,-278.01 669.64,-273.51 669.64,-264.49 673.6,-259.99 673.6,-259.99 690.48,-240.78 690.48,-240.78 694.44,-236.27 704.4,-231.77 710.4,-231.77 710.4,-231.77 751.85,-231.77 751.85,-231.77 757.85,-231.77 767.81,-236.27 771.77,-240.78 771.77,-240.78 788.65,-259.99 788.65,-259.99 792.61,-264.49 792.61,-273.51 788.65,-278.01" />
+<text xml:space="preserve" text-anchor="middle" x="731.12" y="-272.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-5</text>
+<text xml:space="preserve" text-anchor="middle" x="731.12" y="-257.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge10" class="edge">
+<title>atm-bd-5-&gt;atm-bd-5-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M629.87,-269C637.95,-269 646.91,-269 656.03,-269" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="655.95,-271.63 663.45,-269 655.95,-266.38 655.95,-271.63" />
+</g>
+
+<g id="edge13" class="edge">
+<title>atm-bd-5-sanity-&gt;atm-bd-6</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M773.12,-242.07C783.49,-235.04 794.53,-227.37 804.57,-220 815.3,-212.12 826.79,-203.15 836.9,-195.05" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="838.44,-197.18 842.64,-190.43 835.15,-193.09 838.44,-197.18" />
+</g>
+
+<g id="node12" class="node">
+<title>atm-bd-6-sanity — Blocked by unfinished prerequisites; completed sanity iterations: 0</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M1060.84,-180.01C1060.84,-180.01 1043.96,-199.22 1043.96,-199.22 1040,-203.73 1030.03,-208.23 1024.03,-208.23 1024.03,-208.23 982.59,-208.23 982.59,-208.23 976.59,-208.23 966.63,-203.73 962.67,-199.22 962.67,-199.22 945.79,-180.01 945.79,-180.01 941.83,-175.51 941.83,-166.49 945.79,-161.99 945.79,-161.99 962.67,-142.78 962.67,-142.78 966.63,-138.27 976.59,-133.77 982.59,-133.77 982.59,-133.77 1024.03,-133.77 1024.03,-133.77 1030.03,-133.77 1040,-138.27 1043.96,-142.78 1043.96,-142.78 1060.84,-161.99 1060.84,-161.99 1064.8,-166.49 1064.8,-175.51 1060.84,-180.01" />
+<text xml:space="preserve" text-anchor="middle" x="1003.31" y="-174.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-6</text>
+<text xml:space="preserve" text-anchor="middle" x="1003.31" y="-159.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge14" class="edge">
+<title>atm-bd-6-&gt;atm-bd-6-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M902.05,-171C910.14,-171 919.09,-171 928.22,-171" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="928.14,-173.63 935.64,-171 928.14,-168.38 928.14,-173.63" />
+</g>
+
+<g id="node14" class="node">
+<title>atm-bd-7-sanity — Blocked by unfinished prerequisites; completed sanity iterations: 0</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M516.46,-84.01C516.46,-84.01 499.58,-103.22 499.58,-103.22 495.62,-107.73 485.66,-112.23 479.66,-112.23 479.66,-112.23 438.21,-112.23 438.21,-112.23 432.21,-112.23 422.25,-107.73 418.29,-103.22 418.29,-103.22 401.41,-84.01 401.41,-84.01 397.45,-79.51 397.45,-70.49 401.41,-65.99 401.41,-65.99 418.29,-46.78 418.29,-46.78 422.25,-42.27 432.21,-37.77 438.21,-37.77 438.21,-37.77 479.66,-37.77 479.66,-37.77 485.66,-37.77 495.62,-42.27 499.58,-46.78 499.58,-46.78 516.46,-65.99 516.46,-65.99 520.42,-70.49 520.42,-79.51 516.46,-84.01" />
+<text xml:space="preserve" text-anchor="middle" x="458.93" y="-78.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bd-7</text>
+<text xml:space="preserve" text-anchor="middle" x="458.93" y="-63.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge16" class="edge">
+<title>atm-bd-7-&gt;atm-bd-7-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M357.68,-81.73C366.86,-81.11 377.15,-80.42 387.55,-79.72" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="387.65,-82.35 394.96,-79.23 387.3,-77.11 387.65,-82.35" />
+</g>
+
+<g id="edge5" class="edge">
+<title>atm-bd-7-sanity-&gt;atm-bd-3</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M500.88,-102C511.25,-109.03 522.3,-116.68 532.38,-124 542.89,-131.63 554.16,-140.27 564.16,-148.1" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="562.29,-149.97 569.81,-152.55 565.54,-145.84 562.29,-149.97" />
+</g>
+<g class="state-badges"><g class="state-badge" transform="translate(40.65 -186)"><rect width="20" height="18" rx="6" fill="white" stroke="#64748b" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#64748b">○</text></g><g class="state-badge" transform="translate(167.74 -205.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#64748b" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#64748b">○</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#64748b">0</text></g><g class="state-badge" transform="translate(585.03 -199)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><g class="state-badge" transform="translate(585.03 -70)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><g class="state-badge" transform="translate(585.03 -296)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><g class="state-badge" transform="translate(312.84 -111)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><g class="state-badge" transform="translate(312.84 -200)"><rect width="20" height="18" rx="6" fill="white" stroke="#64748b" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#64748b">○</text></g><g class="state-badge" transform="translate(439.93 -219.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#64748b" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#64748b">○</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#64748b">0</text></g><g class="state-badge" transform="translate(712.12 -217.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">0</text></g><g class="state-badge" transform="translate(857.22 -198)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><g class="state-badge" transform="translate(712.12 -99.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">0</text></g><g class="state-badge" transform="translate(712.12 -315.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">0</text></g><g class="state-badge" transform="translate(984.31 -217.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">0</text></g><g class="state-badge" transform="translate(439.93 -121.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">0</text></g></g></g>
+<g class="state-legend" font-family="Arial" font-size="14" fill="#334155"><rect x="0" y="436.0" width="1142.0" height="88" fill="white" /><g class="state-badge" transform="translate(30 445)"><rect width="20" height="18" rx="6" fill="white" stroke="#15803d" stroke-width="1.2" /><path d="M 5 9 L 8 12 L 14 5" fill="none" stroke="#15803d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" /></g><text x="56" y="459.0">Complete / sanity PASS</text><g class="state-badge" transform="translate(232 445)"><rect width="20" height="18" rx="6" fill="white" stroke="#64748b" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#64748b">○</text></g><text x="258" y="459.0">Pending</text><g class="state-badge" transform="translate(329 445)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><text x="355" y="459.0">Blocked</text><g class="state-badge" transform="translate(426 445)"><rect width="20" height="18" rx="6" fill="white" stroke="#2563eb" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#2563eb">↻</text></g><text x="452" y="459.0">Active</text><g class="state-badge" transform="translate(516 445)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><text x="542" y="459.0">Findings</text><g class="state-badge" transform="translate(620 445)"><rect width="20" height="18" rx="6" fill="white" stroke="#b45309" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b45309">?</text></g><text x="646" y="459.0">Unconfirmed</text><g class="state-badge" transform="translate(745 445)"><rect width="20" height="18" rx="6" fill="white" stroke="#7e22ce" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#7e22ce">↷</text></g><text x="771" y="459.0">User override</text><text x="30" y="488.0" font-size="12">Top = dev/sanity; gate number = completed sanity iterations; ? = unavailable. Dev check requires sanity PASS. Snapshot: 2026-10-03T02:02:13.113018+00:00</text><text x="30" y="510.0" font-size="12">Bottom = QA: assigned / active / pass, or open blocking:important:minor findings after FAIL. Blank = undispatched.</text></g></svg></div>
+  </main>
+  <script>
+    const diagram = document.getElementById('diagram');
+    let zoom = 1;
+    function setZoom(value) {
+      zoom = Math.max(0.5, Math.min(4, value));
+      diagram.style.width = (zoom * 100) + '%';
+      document.getElementById('zoom-level').textContent = Math.round(zoom * 100) + '%';
+    }
+    document.getElementById('zoom-out').addEventListener('click', () => setZoom(zoom / 1.25));
+    document.getElementById('zoom-in').addEventListener('click', () => setZoom(zoom * 1.25));
+    document.getElementById('fit').addEventListener('click', () => setZoom(1));
+  </script>
+</body>
+</html>
