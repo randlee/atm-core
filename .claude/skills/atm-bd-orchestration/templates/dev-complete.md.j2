@@ -1,7 +1,7 @@
 ---
 name: dev-complete
-version: 0.1.0
-description: Dev completion report for a dev bead (dev-task or dev-fix); the body of `atm task close <task-id> completed`. The lead reads `commit` and `rebased_onto` from it for the sanity check and the link.
+version: 2.2.0
+description: Dev completion report for a dev bead (dev-task or dev-fix); the body of `atm task close <task-id> completed`. The task assigner reads `commit`, `rebased_onto` and the PR from it for the sanity check and the link.
 format: markdown
 required_variables:
   - generated_at
@@ -10,6 +10,9 @@ required_variables:
   - branch
   - commit
   - rebased_onto
+  - pr_number
+  - pr_url
+  - stack_view
   - deliverables_complete
   - deliverables_total
   - deliverables_md
@@ -40,7 +43,16 @@ Bead: {{ task_id }} (sprint {{ sprint }})
 Branch: `{{ branch }}`
 Commit: `{{ commit }}`
 Rebased onto: `{{ rebased_onto }}`
+PR: [#{{ pr_number }}]({{ pr_url }})
 Deliverables: {{ deliverables_complete }}/{{ deliverables_total }}
+
+{% if "VERDICT: ✅ COHERENT" not in stack_view or "LANDING: ✅" not in stack_view or "NOT COHERENT" in stack_view or "LANDING: ❌" in stack_view or "LANDING: ❓" in stack_view %}
+## Stack issue
+The `/sc-gh-stack-view` output below is not COHERENT with LANDING ✅.
+
+{% endif %}## Next (task assigner)
+1. Verify PR #{{ pr_number }} exists and link it on top of the phase stack (`/sc-gh-stack`), run `/sc-gh-stack-view`, and fix any stack problem yourself. The dev has already started its next queued task; do not message or re-dispatch the dev for stacking.
+2. `atm task assign` the bead's sanity check (for an important or minor finding bead, create it first: `SKILL.md` close table).
 
 ## Machine Status (JSON)
 ```json
@@ -50,6 +62,8 @@ Deliverables: {{ deliverables_complete }}/{{ deliverables_total }}
   "branch": {{ branch | tojson }},
   "commit": {{ commit | tojson }},
   "rebased_onto": {{ rebased_onto | tojson }},
+  "pr": {{ pr_number | tojson }},
+  "pr_url": {{ pr_url | tojson }},
   "deliverables": {"complete": {{ deliverables_complete }}, "total": {{ deliverables_total }} }
 }
 ```
@@ -59,6 +73,9 @@ Deliverables: {{ deliverables_complete }}/{{ deliverables_total }}
 
 ## Validation
 {{ validation_md }}
+
+## Stack View
+{{ stack_view }}
 {% if inventory_md %}
 ## Inventory
 {{ inventory_md }}

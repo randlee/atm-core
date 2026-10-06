@@ -3,24 +3,20 @@
   "phase": "d",
   "sprint": "d-5",
   "title": "OTLP 2.0 signal model",
-  "assignee": "aobs",
   "stack": "phase-d",
   "layer": 2,
   "branch": "sprint/d-5-otlp-signal-model",
   "pr_target": "sprint/d-4-error-enums",
-  "worktree": "/Users/randlee/github/atm-core-worktrees/feat/atm-core-worktrees/sprint/d-5-otlp-signal-model",
+  "worktree": "../atm-core-worktrees/sprint/d-5-otlp-signal-model",
   "relation": "must_follow",
   "closure_type": "boundary",
   "target_boundary": "example-otlp signal model",
   "owned_paths": [
     "crates/example-otlp/src/signal/"
   ],
-  "description": "## Goal\nNeutral OTLP 2.0 signal model.\n\n## Deliverables\n- D5-1 signal types\n\n## Does Not Close\n- transport",
+  "description": "## Goal\nNeutral OTLP 2.0 signal model.\n\n## Deliverables\n1. D5-1 signal types\n\n## Does Not Close\n- transport",
   "design": "## Public Contract\n`pub enum Signal { .. }`",
   "acceptance_criteria": "## Acceptance Criteria\n- [ ] signal types round-trip\n\n## Validation\n- `cargo test -p example-otlp`",
-  "blocked_by": [
-    "atm-d-4-sanity"
-  ],
   "model_class": "astra",
   "requirements": [
     "OTLP-008",
@@ -31,5 +27,6 @@
   "parent": "atm-phase-d",
   "adrs": [
     "NONE"
-  ]
+  ],
+  "difficulty": "normal"
 }

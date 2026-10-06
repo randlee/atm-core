@@ -1,6 +1,6 @@
 ---
 name: atm-beads
-version: 0.1.0
+version: 0.3.5
 description: Plans written as beads. Use when writing, validating or importing a phase plan into beads, or when pairing an ATM task with its bead (claim, start, close).
 requires:
   cli:
@@ -36,9 +36,9 @@ before proceeding.**
 ## Identity
 
 - `ATM_IDENTITY` and `BEADS_ACTOR` are already in every agent's environment
-  and are equal: the bare pane name (`team-lead`), never an alias (`atm-dev-lead`) and
+  and are equal: the bare pane name (`team-lead`), never an alias (`atm-lead`) and
   never a model class (`terra`).
-- A bead's assignee is the recipient's `ATM_IDENTITY`.
+- A bead's assignee is the recipient's `ATM_IDENTITY`, set at dispatch; a planned bead carries only `difficulty`.
 
 ## Lifecycle
 
@@ -62,17 +62,14 @@ Read only the one the current job needs.
 | [`resources/dev-sanity.md`](resources/dev-sanity.md) | writing or sending the sanity check assignment (recipient and message) |
 | [`resources/troubleshooting.md`](resources/troubleshooting.md) | a claim, close or assignee looks wrong, or `bd ready` misses assigned work |
 
-Every phase plan must include a committed `docs/plans/phase-<x>/sprints.json`:
-the authored definition of the phase (root ID, one dev/sanity pair per sprint,
-optional phase facts such as `policy.human_gates`). The planner writes it in
-the plan PR; it is never exported from beads. `validate-plan` requires the
-beads under the root to be exactly those pairs and must stay green from plan
-approval to phase end. Sprint content lives only in beads and is not
-duplicated in the file. Bead hierarchy: `resources/planning.md`.
-The initial `docs/plans/phase-<x>/phase-<x>-dag.html` (embedded SVG) must also be
-committed and pushed with the index on the phase integration branch before
-plan review. `sprint-review --root <root>` produces both without a viewer;
-`--view` optionally opens Wyvern in the background.
+Every phase plan must include the plan file `<plans_dir>/phase-<x>.jsonl` and the
+tracked phase file `.atm-bd/phase-<x>.toml` (format: `resources/planning.md`
+"Phase definition"), committed and pushed on the phase root's `integration_branch`
+before plan review. `.claude/skills/sprint-review/scripts/sprint-review --root <root>` writes
+`<plans_dir>/phase-<x>/phase-<x>-dag.html` locally (never commits or pushes) without a
+viewer; `--view` optionally opens Wyvern in the background. `plans_dir` and
+the other repository values come from the repository configuration
+(`atm-bd-orchestration` SKILL.md, "Repository configuration").
 
 ## Validation
 
@@ -80,11 +77,15 @@ Validation is mandatory before a plan is imported, before plan review and
 before the first dispatch. Run it from the repository root:
 
 ```bash
-.claude/skills/atm-beads/scripts/validate-plan --file <plan.jsonl>   # rendered, before import
-.claude/skills/atm-beads/scripts/validate-plan --root <root id>      # live beads
+.claude/skills/atm-beads/scripts/validate-plan --file <plan.jsonl> --phase <x> --index <plans_dir>/phase-<x>.jsonl   # before import
+.claude/skills/atm-beads/scripts/validate-plan --phase <x>   # live beads; plan file from origin/<integration_branch>
+.claude/skills/atm-beads/scripts/validate-plan --ci   # CI, offline: every tracked .atm-bd/phase-*.toml and its plan file parse
 ```
 
-It runs `bd doctor` first. It fails on any doctor error, a missing field,
-a broken graph, a missing, empty or unknown REQ/ADR id (`["NONE"]` is the
-only way to say there is none), or an assignee who is not an ATM member.
-Exit 0 means valid, 5 lists the problems, and 2 means it could not run.
+What it checks is listed once, in the header of
+[`.claude/skills/atm-beads/scripts/validate-plan`](scripts/validate-plan). The bead models are pydantic,
+in `.claude/skills/atm-beads/scripts/bead_schema.py`; `schemas/*.schema.json` are exported from them
+(`python3 .claude/skills/atm-beads/scripts/bead_schema.py export schemas`) and published. Exit 0 means valid, 5 lists
+the problems, and 2 means it could not run (the reason is on stderr, including
+`bd doctor`'s own stderr). Report problems to the lead; never edit the script,
+the plan or the graph to make it pass.

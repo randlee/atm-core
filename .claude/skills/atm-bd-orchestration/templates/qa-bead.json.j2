@@ -1,7 +1,7 @@
 ---
 name: qa-bead
-version: 0.1.0
-description: The QA bead the lead creates when a sanity check passes. It is a child of the bead it checks and blocks nothing. Render strictly, then `jq -c .` into the import JSONL.
+version: 1.3.0
+description: The QA bead the lead creates when it assigns an important or minor finding (with the finding's sanity bead; `parent` = the finding's parent, since bd refuses to close a bead with an open child, `blocked_by` = that sanity bead, and `layer`, `branch` and `commit` left empty until QA is dispatched), or for a Parallel Quick Fix with `quick_fix` true (its QA has no sanity check) and `pr_target`, the lower bound its PR base descends from. It is a child of `parent` (default the bead it checks) and blocks nothing. Render strictly, then `jq -c .` into the import JSONL.
 format: json
 required_variables:
   - id
@@ -9,18 +9,28 @@ required_variables:
   - phase
   - sprint
   - stack
+  - round
+  - qa_member
+optional_variables:
   - layer
   - branch
   - commit
-  - round
-optional_variables:
-  - assignee
+  - parent
+  - blocked_by
   - priority
   - difficulty
+  - quick_fix
+  - pr_target
 defaults:
-  assignee: quality-mgr
+  layer: ""
+  branch: ""
+  commit: ""
+  parent: ""
+  blocked_by: ""
   priority: 2
   difficulty: normal
+  quick_fix: false
+  pr_target: ""
 ---
 {
   "id": {{ id | tojson }},
@@ -28,22 +38,25 @@ defaults:
   "issue_type": "task",
   "status": "open",
   "priority": {{ priority }},
-  "assignee": {{ assignee | tojson }},
-  "description": {{ ("QA round " ~ round ~ " of " ~ checked_bead ~ ", layer " ~ layer ~ " of stack " ~ stack ~ ", pinned at " ~ commit ~ " on " ~ branch ~ ".") | tojson }},
-  "acceptance_criteria": {{ ("- [ ] every reviewer ran at " ~ commit ~ "\n- [ ] every finding filed as a finding bead (discovered-from this bead)\n- [ ] report posted and task closed") | tojson }},
+  "assignee": {{ qa_member | tojson }},
+  "description": {{ ("QA round " ~ round ~ " of " ~ checked_bead ~ (", layer " ~ layer ~ " of stack " ~ stack ~ ", pinned at " ~ commit ~ " on " ~ branch if commit else " on stack " ~ stack ~ ", pinned when it is dispatched") ~ ".") | tojson }},
+  "acceptance_criteria": {{ ("- [ ] every reviewer ran at " ~ (commit or "the dispatched head") ~ "\n- [ ] every finding filed as a finding bead (discovered-from this bead)\n- [ ] report posted and task closed") | tojson }},
   "labels": {{ ["phase-" ~ phase, "stage:qa", "stack:" ~ stack] | tojson }},
   "dependencies": [
-    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ checked_bead | tojson }}, "type": "parent-child"}
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ (parent or checked_bead) | tojson }}, "type": "parent-child"}{% if blocked_by %},
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ blocked_by | tojson }}, "type": "blocks"}{% endif %}
   ],
   "metadata": {
     "phase": {{ phase | tojson }},
     "sprint": {{ sprint | tojson }},
     "stack": {{ stack | tojson }},
-    "layer": {{ layer | tojson }},
-    "branch": {{ branch | tojson }},
-    "commit": {{ commit | tojson }},
+    "layer": {{ (layer if layer != "" else none) | tojson }},
+    "branch": {{ (branch or none) | tojson }},
+    "commit": {{ (commit or none) | tojson }},
     "round": {{ round | tojson }},
     "difficulty": {{ difficulty | tojson }},
+    "quick_fix": {{ quick_fix | tojson }},
+    "pr_target": {% if pr_target %}{{ pr_target | tojson }}{% else %}null{% endif %},
     "checked_bead": {{ checked_bead | tojson }}
   }
 }

@@ -1,6 +1,6 @@
 ---
 name: ceremony-qa
-version: 0.1.0
+version: 0.2.0
 description: Reviews phase and sprint plan docs for process porn and ceremony that does not serve shippable capability; recommends removals only.
 tools: Glob, Grep, LS, Read, BashOutput
 model: sonnet
@@ -53,6 +53,11 @@ Fenced or raw JSON:
    - **unjustified_serialization**: a `must_follow` edge without concrete
      coupling (same files/crates/public types, or consuming the parent's
      code); a shared release baseline alone is not coupling.
+   - **unrequested_ceremony_adr**: the plan adds or changes an ADR that
+     institutes a rule, constraint, gate, check, artifact or review step the
+     user did not explicitly request (e.g. a crate count, an API shape fixed
+     in the ADR instead of left to the code). Cite the user's request or
+     reject the ADR.
    - **misleading_status**: done/complete claimed for unimplemented work.
    - **bloat**: contracts or rules restated across docs; paragraphs where a
      sentence would do.
@@ -82,8 +87,8 @@ Fenced or raw JSON:
 }
 ```
 
-`important` when the ceremony adds implementation or CI work or serializes
-sprints; `minor` for doc bloat only.
+`important` when the ceremony adds implementation or CI work, serializes
+sprints, or is an `unrequested_ceremony_adr`; `minor` for doc bloat only.
 
 ## Error Handling
 

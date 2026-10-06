@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Locate a phase's committed sprint index."""
+"""Print the path of a phase's plan file, as `.atm-bd/phase-<p>.toml` names it."""
 import argparse
 import subprocess
 import sys
 from pathlib import Path
-from sprint_index_common import phase_id, phase_path, run_json
+from sprint_index_common import load_phase_config, phase_of_root
 
 
 def main():
@@ -15,13 +15,8 @@ def main():
     if not args.root and not args.phase:
         parser.error("pass --root or --phase")
     repo = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip())
-    phase = args.phase
-    if args.root:
-        records = run_json(repo, "bd", "show", args.root, "--json")
-        if not records:
-            raise RuntimeError(f"root bead not found: {args.root}")
-        phase = phase_id(args.root, records[0])
-    print(phase_path(repo, phase))
+    phase = args.phase or phase_of_root(args.root)
+    print(repo / load_phase_config(repo, phase)["plan"])
 
 
 if __name__ == "__main__":

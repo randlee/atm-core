@@ -1,0 +1,47 @@
+---
+name: sanity-run-record
+version: 4.0.0
+description: Fixed sanity ledger record; `jev_receipts` holds the Jev client's receipt (`data.jev`) of every sanity-jev success reply, required on a sanity-jev PASS/FAIL row and empty on sanity-llm (rows before 4.0.0 have none). sanity-run-history validates required string/integer/nullable fields after strict rendering and before locked append. UTC timestamps only.
+format: json
+required_variables:
+  - run_id
+  - reviewer
+  - commit
+  - task
+  - sprint
+  - phase
+  - started_at
+  - completed_at
+  - completed_local
+  - duration
+  - duration_seconds
+  - pr_number
+  - iteration
+  - verdict
+  - final_verdict
+  - findings
+  - error
+  - errors
+  - jev_receipts
+---
+{
+  "run_id": {{ run_id | tojson }},
+  "reviewer": {{ reviewer | tojson }},
+  "commit": {{ commit | tojson }},
+  "task": {{ task | tojson }},
+  "sprint": {{ sprint | tojson }},
+  "phase": {{ phase | tojson }},
+  "started_at": {{ started_at | tojson }},
+  "completed_at": {{ completed_at | tojson }},
+  "completed_local": {{ completed_local | tojson }},
+  "duration": {{ duration | tojson }},
+  "duration_seconds": {{ duration_seconds | tojson }},
+  "pr_number": {{ pr_number | tojson }},
+  "iteration": {{ iteration | tojson }},
+  "verdict": {{ verdict | tojson }},
+  "final_verdict": {{ final_verdict | tojson }},
+  "findings": {{ findings | tojson }},
+  "error": {{ error | tojson }},
+  "errors": {{ errors | tojson }},
+  "jev_receipts": {{ jev_receipts | tojson }}
+}

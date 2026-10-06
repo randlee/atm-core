@@ -1,0 +1,416 @@
+#!/usr/bin/env python3
+"""Read-only oversight: the phase's dropped orchestration work, joined with ATM tasks and the gh stack.
+
+  bead-queues (--phase P | --root ID) [--as ME] [--team T] [--all]
+              [--json [--min-age MIN] [--state-file PATH]] [--days N]
+
+Scope: the parent-child descendants of the phase root (`root` in
+`.atm-bd/phase-P.toml`, or --root). Each open bead with no open ATM task lands
+in one action queue once its prerequisite is met; pairing is by metadata
+(`dev_bead`, `checked_bead`) and dependency edges, never by bead-id patterns.
+Stack rows come from `gh api repos/{owner}/{repo}/stacks` and the open PRs of
+the phase integration branch (`integration_branch` in the phase file, or the
+root's metadata).
+
+Human mode prints every queue. --json is the cron contract: empty stdout when
+nothing new is dropped, one JSON object when something is, exit 0 either way.
+Rows are edge-triggered: a row (bead/PR id + queue) is reported once, and again
+only after it left its queue and came back; rows younger than --min-age are held
+back until they are older. The reported set is kept in --state-file (default
+`.atm-bd/bead-queues/<root>.json`, git-ignored); it is the only file written.
+bd, atm and gh are only read.
+
+Exit: 0 report (or nothing to report), 2 a bd/atm/gh call failed or the root is
+missing, 3 usage.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPTS.parents[1] / "atm-beads" / "scripts"))
+import repo_config  # noqa: E402
+import sprint_index_common  # noqa: E402
+
+SCHEMA = "atm-bd-orchestration/bead-queues/v1"
+FAILED, USAGE = 2, 3
+SANITY, QA, FINDING, PLAN_REVIEW = "stage:dev-sanity", "stage:qa", "stage:finding", "stage:plan-review"
+WORK = {"stage:dev", "stage:fix", FINDING}
+PR_RE = re.compile(r"\bPR #(\d+)")
+FIXED_RE = re.compile(r"(fixed|dev complete)\b", re.I)  # a finding closed by a fix, not a ruling
+SKIP_CLOSE = ("not_reproducible", "superseded")
+
+QUEUES = [  # key, label, next actor
+    ("in_flight", "In flight (ATM task open)", "assignee"),
+    ("task_bead_closed", "ATM task open, bead closed", "assignee (close task)"),
+    ("task_stalled", "Active task, assignee stopped (reminders unanswered)", "lead -> re-engage assignee"),
+    ("claimed_no_task", "Claimed (in_progress), no ATM task", "lead (verify)"),
+    ("needs_plan_review", "Plan review ready -> needs dispatch", "lead -> quality-mgr"),
+    ("needs_dev", "Dev ready -> needs dispatch", "lead -> dev"),
+    ("dev_no_pr", "Dev complete, no PR recorded", "lead (link, record)"),
+    ("needs_sanity", "Dev complete -> needs sanity dispatch", "lead -> dev-sanity"),
+    ("needs_dev_fix", "Sanity FAIL -> needs dev-fix dispatch", "lead -> dev"),
+    ("needs_qa", "Sanity PASS -> needs QA dispatch", "lead -> quality-mgr"),
+    ("no_qa_record", "Sanity PASS -> no QA bead", "lead (verify)"),
+    ("needs_fix", "QA FAIL -> fix ready, needs dispatch", "lead -> dev"),
+    ("needs_finding_fix", "Finding -> needs fix dispatch", "lead -> dev"),
+    ("finding_no_sanity", "Finding fixed -> no sanity bead", "lead -> dev-sanity"),
+    ("minor_backlog", "Minor finding (backlog)", "lead (schedule)"),
+    ("container_closable", "All children closed -> close it", "lead"),
+    ("ready_other", "Other ready, no task", "lead"),
+    ("pr_unlinked", "PR on the phase, not on an open stack", "lead (link)"),
+    ("stack_incoherent", "Open stack not coherent", "lead (stack writer)"),
+    ("not_ready", "Not ready (prerequisite open)", "-"),
+]
+QUIET = {"in_flight", "not_ready"}  # never reported by --json
+STALL_REMINDERS = 3  # ATM reminds only an idle assignee, so reminders on an active task mean it stopped
+
+
+class Fail(Exception):
+    pass
+
+
+def run_json(cmd: list[str]):
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True)
+    except OSError as exc:
+        raise Fail(f"{cmd[0]}: {exc}") from exc
+    if out.returncode != 0:
+        raise Fail(f"{' '.join(cmd)} exited {out.returncode}: {(out.stderr or out.stdout).strip()}")
+    try:
+        return json.loads(out.stdout or "[]")
+    except ValueError as exc:
+        raise Fail(f"{' '.join(cmd)}: not JSON ({exc})") from exc
+
+
+def bd_json(*args: str):
+    """bd --readonly, or plain bd (a read command) on a backend that has no strict readonly (proxied server)."""
+    try:
+        return run_json(["bd", "--readonly", *args])
+    except Fail as exc:
+        if "proxy.readonly.unsupported" not in str(exc):
+            raise
+    return run_json(["bd", *args])
+
+
+def ts(value: str | None) -> datetime | None:
+    return datetime.fromisoformat(value.replace("Z", "+00:00")) if value else None
+
+
+def age(value: str | None, now: datetime) -> str:
+    t = ts(value)
+    if t is None:
+        return "-"
+    mins = int((now - t).total_seconds() // 60)
+    return f"{mins}m" if mins < 60 else f"{mins // 60}h{mins % 60:02d}" if mins < 2880 else f"{mins // 1440}d"
+
+
+def stage(b: dict) -> str:
+    return next((l for l in b.get("labels") or [] if l.startswith("stage:")), "-")
+
+
+def meta(b: dict) -> dict:
+    m = b.get("metadata")
+    return m if isinstance(m, dict) else {}
+
+
+def is_pass(b: dict) -> bool:
+    return b["status"] == "closed" and str(b.get("close_reason") or "").startswith("PASS")
+
+
+def resolve(args, repo: Path) -> tuple[str, str | None]:
+    """(root id, integration branch) from --phase's phase file or --root and the root's metadata."""
+    if args.phase:
+        config = sprint_index_common.load_phase_config(repo, args.phase)
+        return config["root"], config["integration_branch"]
+    return args.root, None
+
+
+def build(args, repo: Path) -> dict:
+    now = datetime.now(timezone.utc)
+    root, branch = resolve(args, repo)
+    beads = bd_json("list", "--all", "-n", "0", "--json")
+    by_id = {b["id"]: b for b in beads}
+    if root not in by_id:
+        raise Fail(f"root bead {root} does not exist")
+    branch = branch or meta(by_id[root]).get("integration_branch")
+    ready = {b["id"] for b in bd_json("ready", "-n", "0", "--json")}
+    atm = ["atm", "task", "list", "--all", "--json", "--as", args.as_actor] + (["--team", args.team] if args.team else [])
+    tasks = {t["task_id"]: t for t in run_json(atm)}
+
+    children: dict[str, list[dict]] = {}
+    for b in beads:
+        if b.get("parent"):
+            children.setdefault(b["parent"], []).append(b)
+    scope, todo = set(), [root]
+    while todo:
+        for c in children.get(todo.pop(), []):
+            if c["id"] not in scope:
+                scope.add(c["id"])
+                todo.append(c["id"])
+
+    sanity_for: dict[str, list[dict]] = {}
+    qa_for: dict[str, list[dict]] = {}
+    for b in beads:
+        m = meta(b)
+        if stage(b) == SANITY and m.get("dev_bead"):
+            sanity_for.setdefault(m["dev_bead"], []).append(b)
+        if stage(b) == QA and m.get("checked_bead"):
+            qa_for.setdefault(m["checked_bead"], []).append(b)
+
+    def deps(b: dict, kind: str | None = None) -> list[str]:
+        return [d["depends_on_id"] for d in b.get("dependencies") or []
+                if d.get("issue_id", b["id"]) == b["id"] and (kind is None or d.get("type") == kind)]
+
+    def latest(rows: list[dict]) -> dict | None:
+        return max(rows, key=lambda s: (s["status"] == "closed", s.get("closed_at") or "", s.get("created_at") or "")) if rows else None
+
+    def paired_sanity(qa: dict) -> dict | None:
+        linked = [by_id[d] for d in deps(qa) if d in by_id and stage(by_id[d]) == SANITY]
+        return latest(linked or sanity_for.get(meta(qa).get("checked_bead") or "", []))
+
+    def sanity_child(b: dict) -> bool:
+        """A finding a sanity FAIL filed under its checked bead (metadata, or a work parent and no QA it came from)."""
+        from_qa = any(stage(by_id.get(d, {})) == QA for d in deps(b, "discovered-from"))
+        return bool(meta(b).get("sanity_finding")) or (stage(by_id.get(b.get("parent") or "", {})) in WORK and not from_qa)
+
+    def since(b: dict) -> str | None:
+        """When the bead entered its queue: its last update or the close of its last blocker."""
+        times = [b.get("updated_at") or b.get("created_at")]
+        times += [by_id[d].get("closed_at") for d in deps(b, "blocks") if d in by_id]
+        return max((t for t in times if t), default=None)
+
+    queues: dict[str, list[dict]] = {k: [] for k, _, _ in QUEUES}
+
+    def add(key: str, b: dict, when: str | None, detail: str = "") -> None:
+        queues[key].append({"queue": key, "id": b["id"], "stage": stage(b).removeprefix("stage:"), "status": b["status"],
+                            "assignee": b.get("assignee") or "-", "priority": b.get("priority"), "since": when,
+                            "age": age(when, now), "title": b.get("title", ""), "detail": detail})
+
+    for tid, t in tasks.items():
+        b = by_id.get(tid)
+        if b is None or tid not in scope:
+            continue
+        key = "task_bead_closed" if b["status"] == "closed" else "in_flight"
+        if key == "in_flight" and t.get("state") == "active" and (t.get("reminder_count") or 0) >= STALL_REMINDERS:
+            key = "task_stalled"
+        when = b.get("closed_at") if key == "task_bead_closed" else t.get("assigned_at")
+        add(key, b, when, f"task {t.get('state')}, assignee {t.get('assignee')}, {t.get('reminder_count', 0)} reminders")
+
+    for bid in sorted(scope):
+        b = by_id[bid]
+        s, m = stage(b), meta(b)
+        if bid in tasks:
+            continue
+        if b["status"] == "closed":
+            reason = str(b.get("close_reason") or "")
+            if s not in WORK or reason.startswith(SKIP_CLOSE) or sanity_child(b):
+                continue
+            pending = [x for x in sanity_for.get(bid, []) if x["status"] != "closed"]
+            recorded = PR_RE.search(f"{b.get('notes') or ''}\n{reason}")
+            if pending and not recorded:
+                add("dev_no_pr", b, b.get("closed_at"), f"sanity {pending[0]['id']} waits; no 'PR #<n>' in notes")
+            closed = ts(b.get("closed_at"))
+            quick = any(meta(by_id.get(d, {})).get("quick_fix") for d in deps(b, "discovered-from"))
+            if (s == FINDING and FIXED_RE.match(reason) and b.get("assignee") and bid not in sanity_for and bid not in qa_for and not quick
+                    and closed and now - closed <= timedelta(days=args.days)):
+                add("finding_no_sanity", b, b.get("closed_at"), reason[:60])
+            continue
+        kids = children.get(bid, [])
+        open_kids = [k for k in kids if k["status"] != "closed"]
+        if kids and not open_kids and s not in WORK:
+            add("container_closable", b, max(k.get("closed_at") or "" for k in kids) or None, f"{len(kids)} children closed")
+            continue
+        if b["status"] == "in_progress":
+            add("claimed_no_task", b, b.get("started_at") or b.get("updated_at"))
+            continue
+        if open_kids and s in WORK and any(sanity_child(k) for k in open_kids):
+            add("needs_dev_fix", b, since(b), f"{sum(sanity_child(k) for k in open_kids)} open sanity finding(s)")
+            continue
+        if sanity_child(b) and by_id[b["parent"]]["status"] != "closed":
+            continue  # dispatched with its checked bead's dev-fix
+        if b["status"] != "open" or bid not in ready:
+            blockers = [d for d in deps(b, "blocks") if by_id.get(d, {}).get("status") != "closed"]
+            add("not_ready", b, since(b), "blocked by " + ",".join(blockers) if blockers else f"status {b['status']}")
+            continue
+        if open_kids:
+            add("not_ready", b, since(b), "open children " + ",".join(k["id"] for k in open_kids[:3]))
+        elif s == PLAN_REVIEW:
+            add("needs_plan_review", b, since(b))
+        elif s == "stage:dev":
+            add("needs_dev", b, since(b), f"difficulty {m.get('difficulty', '-')}")
+        elif s == "stage:fix":
+            add("needs_fix", b, since(b), f"{m.get('finding_ref', '-')} round {m.get('round', '-')} filed by {m.get('filed_by', '-')}")
+        elif s == SANITY:
+            chk = by_id.get(m.get("dev_bead") or m.get("checked_bead") or "")
+            if chk is None:
+                add("not_ready", b, since(b), "no paired bead (metadata dev_bead)")
+            elif chk["status"] != "closed":
+                add("not_ready", b, since(b), f"checked {chk['id']} {chk['status']}")
+            else:
+                add("needs_sanity", b, chk.get("closed_at"), f"checks {chk['id']}")
+        elif s == QA:
+            san = paired_sanity(b)
+            if meta(b).get("quick_fix"):
+                add("needs_qa", b, since(b), "quick fix (no sanity)")
+            elif san is None or not is_pass(san):
+                add("not_ready", b, since(b), f"sanity {san['id'] if san else '(none)'} not PASS")
+            else:
+                add("needs_qa", b, san.get("closed_at"), f"sanity {san['id']} {str(san.get('close_reason'))[:30]}")
+        elif s == FINDING:
+            key = "minor_backlog" if str(m.get("severity", "")).lower() == "minor" else "needs_finding_fix"
+            add(key, b, since(b), f"{m.get('severity', '-')} by {m.get('reviewer', '-')}")
+        else:
+            add("ready_other", b, since(b))
+
+    # The latest closed sanity PASS per checked bead with no QA bead for it.
+    for chk, rows in sanity_for.items():
+        san = latest([r for r in rows if r["id"] in scope and r["status"] == "closed"])
+        closed = ts(san.get("closed_at")) if san else None
+        if not san or not is_pass(san) or not closed or now - closed > timedelta(days=args.days):
+            continue
+        if qa_for.get(chk) or any(san["id"] in deps(q) or chk in deps(q) for q in beads if stage(q) == QA):
+            continue
+        add("no_qa_record", san, san.get("closed_at"), f"checks {chk}")
+
+    stack_note = stacks(branch, queues, now) if branch else "no integration_branch: stack not checked"
+    for q in queues.values():
+        q.sort(key=lambda r: (r["priority"] if r["priority"] is not None else 9, r["id"]))
+    return {"schema": SCHEMA, "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "root": root,
+            "integration_branch": branch, "stack": stack_note, "queues": queues}
+
+
+def stacks(trunk: str, queues: dict, now: datetime) -> str:
+    """Stack rows for the phase trunk: open phase PRs on no open stack, and open stacks that are not coherent."""
+    pages = run_json(["gh", "api", "--paginate", "--slurp", "repos/{owner}/{repo}/stacks?per_page=100"])
+    on_trunk = [s for page in pages for s in page if s.get("open") and s.get("base", {}).get("ref") == trunk]
+    prs = {p["number"]: p for p in run_json(["gh", "pr", "list", "--state", "open", "--limit", "1000",
+                                              "--json", "number,baseRefName,headRefName,isDraft,createdAt,title"])}
+
+    def row(key, rid, when, title, detail):
+        queues[key].append({"queue": key, "id": rid, "stage": "stack", "status": "open", "assignee": "-",
+                            "priority": None, "since": when, "age": age(when, now), "title": title, "detail": detail})
+
+    linked: set[int] = set()
+    for s in on_trunk:
+        expect, problems = trunk, []
+        for p in s.get("pull_requests") or []:
+            linked.add(p["number"])
+            if p.get("state") != "open":
+                continue
+            base = prs.get(p["number"], {}).get("baseRefName")
+            if base != expect:
+                problems.append(f"#{p['number']} base {base}, expected {expect}")
+            expect = p["head"]["ref"]
+        if len(on_trunk) > 1:
+            problems.append(f"{len(on_trunk)} open stacks on {trunk}: not landable in one merge")
+        if problems:
+            row("stack_incoherent", f"stack#{s['number']}", s.get("created_at"), f"stack #{s['number']} on {trunk}", "; ".join(problems))
+    # open PRs reachable from the trunk by base chains
+    phase, frontier = {}, {trunk}
+    while frontier:
+        nxt = {p["headRefName"] for p in prs.values() if p["baseRefName"] in frontier and p["number"] not in phase}
+        phase.update({n: p for n, p in prs.items() if p["baseRefName"] in frontier})
+        frontier = nxt - frontier
+    loose = [p for n, p in phase.items() if n not in linked]
+    if not on_trunk and len(loose) == 1 and loose[0]["baseRefName"] == trunk:
+        loose = []  # layer 0 waits unlinked on the trunk until layer 1 opens
+    for p in loose:
+        row("pr_unlinked", f"pr#{p['number']}", p.get("createdAt"), p.get("title", ""), f"{p['headRefName']} -> {p['baseRefName']}")
+    return f"{len(on_trunk)} open stack(s) on {trunk}, {len(phase)} open PR(s) on the phase"
+
+
+def cron(report: dict, state_file: Path, min_age: int) -> dict | None:
+    """Edge-triggered rows: report a (queue, id) once while it stays in its queue, after it is min_age old."""
+    try:
+        seen = set(json.loads(state_file.read_text()).get("reported", []))
+    except FileNotFoundError:
+        seen = set()
+    except (OSError, ValueError) as exc:
+        raise Fail(f"{state_file}: {exc}") from exc
+    now = datetime.now(timezone.utc)
+    present, new = set(), []
+    for key, rows in report["queues"].items():
+        if key in QUIET:
+            continue
+        for r in rows:
+            k = f"{key}:{r['id']}"
+            when = ts(r["since"])
+            if min_age > 0 and when is not None and now - when < timedelta(minutes=min_age):
+                continue  # held back; seen at a later run once it is old enough
+            present.add(k)
+            if k not in seen:
+                new.append(r)
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    if state_file.parent.name == "bead-queues" and not (state_file.parent / ".gitignore").exists():
+        (state_file.parent / ".gitignore").write_text("*\n")
+    state_file.write_text(json.dumps({"schema": SCHEMA, "reported": sorted(present)}, indent=1) + "\n")
+    if not new:
+        return None
+    labels = {k: (label, actor) for k, label, actor in QUEUES}
+    for r in new:
+        r["label"], r["next_actor"] = labels[r["queue"]]
+    return {k: report[k] for k in ("schema", "generated_at", "root", "integration_branch", "stack")} | {"rows": new}
+
+
+def short(text: str, n: int) -> str:
+    return text if len(text) <= n else text[: n - 1] + "…"
+
+
+def render(report: dict, show_all: bool) -> None:
+    q = report["queues"]
+    print(f"Bead queues · descendants of {report['root']} · {report['generated_at']}")
+    print(f"stack: {report['stack']}\n")
+    print(f"  {'queue':42} {'count':>5}  next actor")
+    for key, label, actor in QUEUES:
+        print(f"  {label:42} {len(q[key]):>5}  {actor}")
+    for key, label, _ in QUEUES:
+        if not q[key] or (key == "not_ready" and not show_all):
+            continue
+        print(f"\n== {label} ({len(q[key])})")
+        for r in q[key]:
+            print(f"  {short(r['id'], 44):44} {short(r['assignee'], 10):10} {r['age']:>6}  {short(r['detail'] or r['title'], 70)}")
+    if q["not_ready"] and not show_all:
+        print(f"\n({len(q['not_ready'])} not-ready beads hidden; --all shows them with reasons)")
+
+
+def main(argv: list[str]) -> int:
+    p = argparse.ArgumentParser(prog="bead-queues", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    where = p.add_mutually_exclusive_group(required=True)
+    where.add_argument("--phase", help="phase; the root comes from .atm-bd/phase-<phase>.toml")
+    where.add_argument("--root", help="the phase root bead id")
+    p.add_argument("--as", dest="as_actor", default=os.environ.get("ATM_IDENTITY"), help="ATM identity (default $ATM_IDENTITY)")
+    p.add_argument("--team", default=os.environ.get("ATM_TEAM"), help="ATM team (default $ATM_TEAM)")
+    p.add_argument("--days", type=int, default=14, help="look-back for closed beads still owing a step (default 14)")
+    p.add_argument("--all", action="store_true", help="also list not-ready beads with reasons")
+    p.add_argument("--json", action="store_true", help="cron contract: new rows as one JSON object, else nothing")
+    p.add_argument("--min-age", type=int, default=10, help="--json: minutes a row must be old to be reported (default 10)")
+    p.add_argument("--state-file", type=Path, help="--json: reported-row state (default .atm-bd/bead-queues/<root>.json)")
+    args = p.parse_args(argv)
+    if not args.as_actor:
+        print("bead-queues: no ATM identity: set ATM_IDENTITY or pass --as", file=sys.stderr)
+        return USAGE
+    try:
+        repo = repo_config.repo_root()
+        report = build(args, repo)
+        if not args.json:
+            render(report, args.all)
+            return 0
+        out = cron(report, args.state_file or repo / ".atm-bd" / "bead-queues" / f"{report['root']}.json", args.min_age)
+    except (Fail, RuntimeError, repo_config.ConfigError) as exc:
+        print(f"bead-queues: {exc}", file=sys.stderr)
+        return FAILED
+    if out:
+        print(json.dumps(out, indent=1))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

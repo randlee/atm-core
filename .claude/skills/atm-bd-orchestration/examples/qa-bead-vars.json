@@ -8,5 +8,5 @@
   "branch": "sprint/d-4-otlp-sync-exporter",
   "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
   "round": 1,
-  "assignee": "quality-mgr"
+  "qa_member": "quality-mgr"
 }

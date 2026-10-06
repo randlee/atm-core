@@ -44,8 +44,9 @@ risk deferred to one late checkpoint. Both extremes are findings. See
 - A track is a `gh stack` on the phase integration branch. The stack is
   specified when the plan is written: each sprint bead's metadata records its
   `stack`, `layer` (1 = bottom), `branch`, `pr_target` and `worktree`, where
-  `pr_target` is the branch of the layer below (the integration branch for
-  layer 1).
+  `pr_target` is the branch of its nearest `must_follow` prerequisite, the one
+  it builds on (the integration branch when it has none; never a parallel
+  sibling), a lower bound: the PR's actual base is it or a descendant of it.
 - The plan is optimized for parallel execution, so waves are horizontal
   layers of code: contract, layers, integration. A bead is released as soon
   as all of its blockers are closed, that is when all its required work is
@@ -176,11 +177,11 @@ List each related sprint as `must_follow` or `parallel_safe` with a rationale.
 - "Both sprints edit the same file" is never a `must_follow` rationale. It is
   a split defect. Re-cut ownership so the file has one owner, move the shared
   file to the contract or integration sprint, or merge the two sprints.
-- A `must_follow` edge needs concrete coupling: the same files/crates/public
-  types, or the child consumes the parent's code. Shared release/version
-  baseline alone is not coupling; handle it with a final integration step.
-- Parallel tracks run as separate gh-stack stacks with named branches,
-  worktrees, and assigned agents.
+- A `must_follow` edge is a hard dependency: the child consumes the parent's
+  code. Shared release/version baseline alone is not coupling; handle it with
+  a final integration step.
+- Parallel tracks run as separate gh-stack stacks with named branches and
+  worktrees; the lead picks the agents at dispatch.
 
 The phase bead's design publishes a **wave table**: each track, its sprints by wave,
 their `target_boundary` and `owned_paths`, plus three numbers: **critical
@@ -237,10 +238,10 @@ the sprint count low.
 Each sprint bead should have one authoritative list for:
 
 - `requirements` (metadata): every REQ and NFR id the sprint implements or is
-  constrained by, from the requirements index and crate requirements docs
-  named in `.claude/project/quality-policy.md`
-- `adrs` (metadata): every ADR id that governs the sprint, from the architecture index
-  and crate architecture docs named in `.claude/project/quality-policy.md`;
+  constrained by, from the governing requirements documents
+  (`requirements_globs` in the repository configuration)
+- `adrs` (metadata): every ADR id that governs the sprint, from the governing
+  architecture documents (`adr_globs` in the repository configuration);
   a new or amended ADR is also a deliverable
 - deliverables, each naming the REQ/NFR id it serves (description)
 - acceptance criteria, each with its root (acceptance criteria)
@@ -253,8 +254,8 @@ wording.
 
 ## Naming
 
-One convention per repository, recorded under "Plan Naming" in
-`.claude/project/quality-policy.md`: phase id form, sprint id form, and
+One convention per repository, recorded under "Plan Naming" in the
+repository QA policy (`policy_path` in the repository configuration): phase id form, sprint id form, and
 phase, sprint and fix branch names. Its plan directory and file names do not
 apply. Every sprint id and branch follows it. Rules that hold in every
 repository:
@@ -267,8 +268,8 @@ repository:
 - Slugs use `a-z`, `0-9` and `-` only. No dots, no underscores, no capitals.
 - All phase work happens on the phase integration branch. Sprint and fix
   branches are cut from it, or from the top of their track's stack, and their
-  PRs target it or the layer below. Only the final phase PR targets
-  `develop`.
+  PRs target it or the layer below. Only the final phase PR targets the
+  repository's base branch.
 - `feature/` is not used for sprint work.
 - The worktree directory equals the branch name.
 - Phases before a naming rule keep their existing names. Do not rename merged
@@ -281,15 +282,11 @@ must have explicit code samples or signatures when prose alone would leave
 implementation choices open. In a phase with a contract sprint they live in
 that sprint bead's design; layer sprints reference them and do not restate them.
 
-## Recommended Agent / Model
+## Difficulty
 
-Each sprint bead names its agent as its assignee (the ATM identity) and its
-model in `model_class` metadata, chosen by the tier the work needs: a fast agent for
-bounded or documentation work; the workhorse for typical work; a
-deep-reasoning agent for algorithmic, architectural, or performance work.
-When the repository keeps a developer roster (its path is in
-`.claude/project/quality-policy.md`), name the agent from it, preferring
-a named team member over a background agent. How many agents run is decided
+Each sprint bead names its `difficulty`, never an agent, by the tier the work needs: `fast` for
+bounded or documentation work; `normal` for typical work; `hard`
+for algorithmic, architectural, or performance work. Which agents run, and how many, is decided
 at dispatch, not in the plan. Layer sprints are bounded by construction
 and suit one developer and one QA pass each, running concurrently.
 
@@ -297,13 +294,12 @@ and suit one developer and one QA pass each, running concurrently.
 
 Sprint beads must be short and structured enough that:
 
-- `req-qa` can enumerate the `requirements` list, deliverables and
-  acceptance criteria directly, and rejects a sprint bead whose REQ/NFR list
-  is missing or incomplete
-- `arch-qa` can enumerate the `adrs` list and structural gate artifacts
-  directly, and rejects a sprint bead whose ADR list is missing or incomplete
-- `ruthless-boundary-qa` can check `owned_paths` and `target_boundary`
-  against the repository's declared boundary manifests and validation policy
+- the reviewers (`reviewers_round1` in the repository configuration) can
+  enumerate the `requirements` and `adrs` lists, deliverables, acceptance
+  criteria and structural gate artifacts directly, and reject a sprint bead
+  whose REQ/NFR or ADR list is missing or incomplete
+- a boundary reviewer can check `owned_paths` and `target_boundary` against
+  the repository's declared boundary manifests and validation policy
 - `quality-mgr` can route QA without copying scope by hand
 
 QA scope follows the closure type: a `boundary` sprint is reviewed against
