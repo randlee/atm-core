@@ -64,10 +64,12 @@ enum TaskSubcommand {
 /// Start an assigned task: moves it to active and tells the assigner.
 #[derive(Debug, Args)]
 struct TaskStartCommand {
+    /// ID of the assigned task to start.
     task_id: TaskId,
     /// Optional note to the assigner (what you will do first). Also accepts --stdin/--file/--template.
     #[command(flatten)]
     report: MessageSourceArgs,
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
     #[command(flatten)]
@@ -76,10 +78,13 @@ struct TaskStartCommand {
 
 #[derive(Debug, Args)]
 struct TaskListCommand {
+    /// Include every member's open tasks.
     #[arg(long)]
     all: bool,
+    /// Maximum number of tasks to return.
     #[arg(long, value_name = "N", conflicts_with = "all")]
     limit: Option<usize>,
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
     #[command(flatten)]
@@ -88,11 +93,15 @@ struct TaskListCommand {
 
 #[derive(Debug, Args)]
 struct TaskEventsCommand {
+    /// ID of the task whose events to show.
     task_id: TaskId,
+    /// Maximum number of events to return.
     #[arg(long, value_name = "N", conflicts_with = "all")]
     limit: Option<usize>,
+    /// Include every event instead of applying the limit.
     #[arg(long)]
     all: bool,
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
     #[command(flatten)]
@@ -101,15 +110,20 @@ struct TaskEventsCommand {
 
 #[derive(Debug, Args)]
 struct TaskAssignCommand {
+    /// Member address to assign the task to.
     assignee: AgentAddress,
+    /// Explicit ID for the new task.
     #[arg(long = "task-id")]
     task_id: Option<TaskId>,
+    /// Place the task before this task in the assignee's queue.
     #[arg(long, value_name = "OTHER_TASK_ID", group = "placement")]
     before: Option<TaskId>,
+    /// Place the task at the head of the assignee's queue.
     #[arg(long, group = "placement")]
     head: bool,
     #[command(flatten)]
     message: MessageSourceArgs,
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
     #[command(flatten)]
@@ -131,13 +145,16 @@ impl TaskAssignCommand {
 
 #[derive(Debug, Args)]
 struct TaskCloseCommand {
+    /// ID of the task to close.
     task_id: TaskId,
+    /// Terminal task outcome to record.
     #[arg(value_enum)]
     outcome: OutcomeArg,
     /// Recorded on the close event; also the report body when no source is given.
     reason: Option<String>,
     #[command(flatten)]
     report: MessageSourceArgs,
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
     #[command(flatten)]
@@ -164,13 +181,18 @@ impl TaskCloseCommand {
         .args(["head", "end", "before"])
 ))]
 struct TaskMoveCommand {
+    /// ID of the task to move.
     task_id: TaskId,
+    /// Move the task to the head of its queue.
     #[arg(long)]
     head: bool,
+    /// Move the task to the end of its queue.
     #[arg(long)]
     end: bool,
+    /// Move the task before this task in its queue.
     #[arg(long, value_name = "OTHER_TASK_ID")]
     before: Option<TaskId>,
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
     #[command(flatten)]
@@ -197,22 +219,29 @@ impl From<OutcomeArg> for TaskCloseOutcome {
 
 #[derive(Debug, Args)]
 struct CallerArgs {
+    /// Act as this member instead of the environment identity.
     #[arg(long = "as")]
     actor: Option<String>,
+    /// Override the team resolved from caller context.
     #[arg(long)]
     team: Option<String>,
 }
 
 #[derive(Debug, Args)]
 struct MessageSourceArgs {
+    /// Message or report body.
     #[arg(value_name = "MESSAGE", conflicts_with_all = ["file", "stdin", "template"])]
     text: Option<String>,
+    /// Read the message or report body from this file.
     #[arg(long, conflicts_with_all = ["text", "stdin", "template"])]
     file: Option<PathBuf>,
+    /// Read the message or report body from standard input.
     #[arg(long, conflicts_with_all = ["text", "file", "template"])]
     stdin: bool,
+    /// Render the message or report body from this template file.
     #[arg(long, conflicts_with_all = ["text", "file", "stdin"])]
     template: Option<PathBuf>,
+    /// JSON object providing variables for `--template`; `-` reads stdin.
     #[arg(long, requires = "template")]
     vars: Option<String>,
 }

@@ -24,9 +24,11 @@ use crate::observability::CliObservability;
 #[derive(Debug, Args)]
 /// List the current member roster for one ATM team.
 pub struct MembersCommand {
+    /// Override the team resolved from caller context.
     #[arg(long)]
     team: Option<String>,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }

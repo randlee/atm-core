@@ -31,12 +31,16 @@ const DEFAULT_HISTORY_LIMIT: usize = 10;
 
 #[derive(Debug, Args)]
 pub(crate) struct TaskHistoryCommand {
+    /// Restrict history to tasks assigned to this member.
     #[arg(long)]
     member: Option<AgentName>,
+    /// Maximum number of past tasks to return.
     #[arg(long, value_name = "N")]
     limit: Option<usize>,
+    /// Include ledger events for the returned tasks.
     #[arg(long)]
     events: bool,
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
     #[command(flatten)]
