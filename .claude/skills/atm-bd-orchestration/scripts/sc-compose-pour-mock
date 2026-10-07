@@ -1,0 +1,327 @@
+#!/usr/bin/env python3
+"""Mock of the sc-compose beads attach-pour (sc-compose issue #613) until sc-compose ships it.
+
+  sc-compose-pour-mock bead render       --request REQUEST.json [--json]
+  sc-compose-pour-mock bead validate     --request REQUEST.json [--json]
+  sc-compose-pour-mock bead preview-pour --request REQUEST.json [--json]
+  sc-compose-pour-mock bead pour         --request REQUEST.json [--json]
+
+Same CLI, same `sc-compose/beads/v1` request file, same receipt and JSON
+envelope as `sc-compose bead` 1.6.1 (ADR-0021). `render` and `validate` run
+the real `sc-compose bead`. `preview-pour` and `pour` run the real render,
+then `bd cook --dry-run`, and then replace `bd mol pour` with an attach. The
+attach reads the rendered formula by path, so the mock has no active-registry
+step: the formula is never placed in bd's `formulas/` search path.
+
+- the formula's steps are created directly under the existing bead named by
+  the Beads variable `parent`, with stable ids `<parent>.<ref>-<step>`
+  (`ref` is the Beads variable `ref`, which the formula defaults; see
+  bead_formulas.attach_id for why not bond's `<parent>.<ref>.<step>`);
+- the pour creates only what a formula pours: the beads, `parent-child` to
+  the parent, and `blocks` for each step's `needs`/`depends_on`;
+- it is resume-safe: an existing bead is never edited or reopened, only
+  missing beads and edges are created, and a bead or edge that exists with a
+  different formula revision, scope or edge type is refused before any write;
+- the receipt adds `attachment`: the parent, the poured ids and what was
+  created.
+
+Exit status as sc-compose: 0 succeeded, 2 refused or failed, 3 usage.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+import tomllib
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from bead_formulas import PROVENANCE_KEY, Bd, BdError, attach_id  # noqa: E402
+
+SCHEMA = "sc-compose/beads/v1"
+SUCCESS, FAILED, USAGE = 0, 2, 3
+AUTHORIZATION = "CreatePersistentBeads"
+EXCERPT = 64 * 1024
+# Step fields the mock pours. Anything else (expand, loop, gate, children, condition, ...) is refused, not ignored.
+STEP_FIELDS = {"id", "title", "description", "notes", "type", "priority", "labels", "metadata", "assignee", "needs", "depends_on"}
+# bd 1.3.0 substitutes {{name}} (no spaces) in these step fields only (observed: not assignee, labels or metadata).
+SUBSTITUTED = ("title", "description", "notes")
+VAR = re.compile(r"\{\{([A-Za-z_][A-Za-z0-9_-]*)\}\}")
+
+
+class Stop(Exception):
+    """Ends the operation with a stable code; `refused` is a safe precondition, otherwise a failure."""
+
+    def __init__(self, code: str, message: str, *, refused: bool = False, usage: bool = False):
+        super().__init__(message)
+        self.code, self.refused, self.usage = code, refused, usage
+
+
+def stage(name, argv, started, proc=None, outcome="succeeded", stdout="", stderr=""):
+    if proc is not None:
+        stdout, stderr = proc.stdout, proc.stderr
+    return {
+        "stage": name, "argv": argv, "exit_status": None if proc is None else proc.returncode,
+        "elapsed_ms": int((time.monotonic() - started) * 1000),
+        "stdout_excerpt": stdout[:EXCERPT], "stderr_excerpt": stderr[:EXCERPT], "outcome": outcome,
+    }
+
+
+def emit(payload: dict, as_json: bool, code: int) -> int:
+    if as_json:
+        print(json.dumps({"schema_version": "1", "payload": payload, "diagnostics": []}, indent=2))
+    elif "error" in payload:
+        print(f"{payload['error']['code']}: {payload['error']['message']}", file=sys.stderr)
+    else:
+        outcome = payload["outcome"]
+        print(f"rendered_formula: {payload['rendered_formula']}")
+        print(f"outcome: {outcome if isinstance(outcome, str) else next(iter(outcome))}")
+        for s in payload["stages"]:
+            o = s["outcome"]
+            print(f"stage {s['stage']}: {o if isinstance(o, str) else 'failed (' + o['failed']['code'] + ')'}")
+        for node in (payload.get("attachment") or {}).get("nodes", []):
+            print(f"{node['action']}: {node['id']}")
+    return code
+
+
+def load_request(path: Path) -> dict:
+    try:
+        request = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        raise Stop("BEADS_REQUEST_DESERIALIZATION_FAILED", f"read {path}: {exc}", usage=True) from exc
+    if not isinstance(request, dict):
+        raise Stop("BEADS_REQUEST_DESERIALIZATION_FAILED", "request is not a JSON object", usage=True)
+    if request.get("schema") != SCHEMA:
+        raise Stop("BEADS_UNKNOWN_SCHEMA", f"unknown schema {request.get('schema')!r}", usage=True)
+    for key in ("working_directory", "template", "rendered_formula"):
+        if not isinstance(request.get(key), str) or not request[key]:
+            raise Stop("BEADS_REQUEST_DESERIALIZATION_FAILED", f"request lacks {key}", usage=True)
+    variables = request.get("bead_variables") or {}
+    if not isinstance(variables, dict) or not all(isinstance(v, str) for v in variables.values()):
+        raise Stop("BEADS_REQUEST_DESERIALIZATION_FAILED", "bead_variables must map names to strings", usage=True)
+    return request
+
+
+def run_sc_compose(subcommand: str, request_path: Path) -> subprocess.CompletedProcess:
+    exe = shutil.which("sc-compose")
+    if exe is None:
+        raise Stop("BEADS_RENDER_FAILED", "sc-compose is not on PATH (the mock renders with the real sc-compose)")
+    return subprocess.run([exe, "bead", subcommand, "--request", str(request_path), "--json"], text=True, capture_output=True)
+
+
+def parse_formula(path: Path) -> dict:
+    try:
+        formula = tomllib.loads(path.read_text()) if path.name.endswith(".toml") else json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        raise Stop("BEADS_POUR_FAILED", f"cannot parse rendered formula {path}: {exc}") from exc
+    steps = formula.get("steps")
+    if not isinstance(steps, list) or not steps:
+        raise Stop("BEADS_POUR_FAILED", "formula has no steps")
+    ids = set()
+    for step in steps:
+        extra = set(step) - STEP_FIELDS
+        if extra:
+            raise Stop("BEADS_MOCK_FORMULA_UNSUPPORTED", f"step {step.get('id')!r} uses {sorted(extra)}, which the mock does not pour", refused=True)
+        if not step.get("id") or not step.get("title") or step["id"] in ids:
+            raise Stop("BEADS_POUR_FAILED", f"step without a unique id and a title: {step.get('id')!r}")
+        ids.add(step["id"])
+    for step in steps:
+        for need in [*step.get("needs", []), *step.get("depends_on", [])]:
+            if need not in ids:
+                raise Stop("BEADS_POUR_FAILED", f"step {step['id']} needs unknown step {need}")
+    return formula
+
+
+def resolve_vars(formula: dict, supplied: dict[str, str]) -> dict[str, str]:
+    values = {}
+    for name, spec in (formula.get("vars") or {}).items():
+        spec = spec if isinstance(spec, dict) else {"default": spec}
+        if name in supplied:
+            values[name] = supplied[name]
+        elif "default" in spec:
+            values[name] = str(spec["default"])
+        elif spec.get("required"):
+            raise Stop("BEADS_ATTACH_VARIABLE_MISSING", f"required Beads variable {name} not supplied", usage=True)
+    for name in ("parent", "ref"):
+        if not values.get(name):
+            raise Stop("BEADS_ATTACH_VARIABLE_MISSING", f"attach needs the Beads variable {name} (declare it in the formula)", usage=True)
+    return values
+
+
+def substitute(text: str, values: dict[str, str]) -> str:
+    return VAR.sub(lambda m: values.get(m.group(1), m.group(0)), text)
+
+
+def plan_attach(bd: Bd, request: dict, formula: dict, formula_path: Path) -> dict:
+    """Everything the pour would do, checked against the database. No writes."""
+    values = resolve_vars(formula, request.get("bead_variables") or {})
+    parent, ref = values["parent"], values["ref"]
+    compose = request.get("compose_variables") or {}
+    for name, value in (("parent", parent), ("ref", ref)):
+        if name in compose and str(compose[name]) != value:
+            raise Stop("BEADS_ATTACH_SCOPE_MISMATCH",
+                       f"compose variable {name}={compose[name]!r} (baked into the formula) differs from Beads variable {name}={value!r}", refused=True)
+    if bd.show(parent) is None:
+        raise Stop("BEADS_ATTACH_PARENT_NOT_FOUND", f"attach parent {parent} does not exist", refused=True)
+    revision = "sha256:" + hashlib.sha256(formula_path.read_bytes()).hexdigest()
+    name = request.get("formula_name")
+    ids = {step["id"]: attach_id(parent, ref, step["id"]) for step in formula["steps"]}
+    nodes, edges = [], []
+    for step in formula["steps"]:
+        bead_id = ids[step["id"]]
+        provenance = {"formula": name, "version": formula.get("version"), "revision": revision,
+                      "parent": parent, "ref": ref, "step": step["id"]}
+        existing = bd.show(bead_id)
+        if existing is not None:
+            found = (existing.get("metadata") or {}).get(PROVENANCE_KEY)
+            if found != provenance:
+                raise Stop("BEADS_ATTACH_CONFLICT",
+                           f"{bead_id} exists but was not poured by this formula revision and scope (found {found!r})", refused=True)
+        current = bd.deps(bead_id) if existing is not None else {}
+        wanted = [(ids[n], "blocks") for n in [*step.get("needs", []), *step.get("depends_on", [])]]
+        for target, dep_type in [(parent, "parent-child"), *wanted]:
+            have = current.get(target)
+            if have is not None and have != dep_type:
+                raise Stop("BEADS_ATTACH_EDGE_CONFLICT", f"{bead_id} -> {target} exists as {have}, formula pours {dep_type}", refused=True)
+            edges.append({"from": bead_id, "to": target, "type": dep_type, "action": "existing" if have else "add"})
+        fields = {k: substitute(step[k], values) if k in SUBSTITUTED else step[k] for k in step}
+        labels = fields.get("labels") or []
+        if any("," in label for label in labels):
+            raise Stop("BEADS_MOCK_FORMULA_UNSUPPORTED", f"step {step['id']}: a label contains a comma", refused=True)
+        metadata = {**(fields.get("metadata") or {}), PROVENANCE_KEY: provenance}
+        nodes.append({"step": step["id"], "id": bead_id, "action": "existing" if existing is not None else "create",
+                      "fields": fields, "metadata": metadata})
+    return {"parent": parent, "ref": ref, "formula": name, "revision": revision, "attach": "direct",
+            "ids": ids, "nodes": nodes, "edges": edges}
+
+
+def apply_attach(bd: Bd, plan: dict) -> None:
+    for node in plan["nodes"]:
+        if node["action"] != "create":
+            continue
+        f = node["fields"]
+        argv = ["create", f["title"], "--id", node["id"], "--type", f.get("type", "task"),
+                "--priority", str(f.get("priority", 2)), "--metadata", json.dumps(node["metadata"]), "--silent"]
+        for key, flag in (("description", "--description"), ("notes", "--notes"), ("assignee", "--assignee")):
+            if f.get(key):
+                argv += [flag, f[key]]
+        if f.get("labels"):
+            argv += ["--labels", ",".join(f["labels"])]
+        bd.run(*argv)
+        node["action"] = "created"
+    for edge in plan["edges"]:
+        if edge["action"] == "add":
+            bd.dep_add(edge["from"], edge["to"], edge["type"])
+            edge["action"] = "added"
+
+
+def attach_operation(operation: str, request_path: Path, request: dict) -> tuple[dict, int]:
+    if not request.get("formula_name"):
+        raise Stop("BEADS_FORMULA_NAME_REQUIRED", "preview-pour and pour need formula_name", usage=True)
+    if operation == "pour":
+        auth = request.get("pour_authorization")
+        if auth is None:
+            raise Stop("BEADS_POUR_AUTH_REQUIRED", "pour needs pour_authorization CreatePersistentBeads", usage=True)
+        if auth != AUTHORIZATION:
+            raise Stop("BEADS_POUR_AUTH_INVALID", f"pour_authorization {auth!r} is not {AUTHORIZATION}", usage=True)
+    if not (request.get("bead_variables") or {}).get("parent"):
+        raise Stop("BEADS_ATTACH_PARENT_REQUIRED", "the mock attaches under bead_variables.parent; it never pours a parentless molecule", usage=True)
+    bd = Bd(request.get("bd_executable") or "bd")
+    # rendered_formula is replaced by the normalized absolute path the real render reports.
+    receipt = {"schema": SCHEMA, "operation": operation.replace("-", "_"), "rendered_formula": request["rendered_formula"], "stages": []}
+
+    def finish(code: str, refused: bool) -> tuple[dict, int]:
+        receipt["outcome"] = {"refused" if refused else "failed": {"code": code}}
+        return receipt, FAILED
+
+    started = time.monotonic()
+    proc = run_sc_compose("render", request_path)
+    try:
+        rendered_payload = json.loads(proc.stdout)["payload"]
+    except (ValueError, KeyError, TypeError):
+        receipt["stages"].append(stage("render", [], started, proc, {"failed": {"code": "BEADS_RENDER_FAILED"}}))
+        return finish("BEADS_RENDER_FAILED", False)
+    if "error" in rendered_payload:
+        raise Stop(rendered_payload["error"]["code"], rendered_payload["error"]["message"], usage=proc.returncode == USAGE)
+    receipt["stages"] += rendered_payload["stages"]
+    rendered = Path(rendered_payload["rendered_formula"])
+    receipt["rendered_formula"] = str(rendered)
+    if rendered_payload["outcome"] != "succeeded":
+        receipt["outcome"] = rendered_payload["outcome"]
+        return receipt, FAILED
+
+    variables = [arg for k, v in sorted((request.get("bead_variables") or {}).items()) for arg in ("--var", f"{k}={v}")]
+    started = time.monotonic()
+    argv = [bd.executable, "cook", str(rendered), "--dry-run", "--json", *variables]
+    proc = subprocess.run(argv, text=True, capture_output=True)
+    if proc.returncode:
+        try:
+            unsupported = json.loads(proc.stdout).get("code") == "proxy.formula.unsupported"
+        except (ValueError, AttributeError):
+            unsupported = False
+        if not unsupported:
+            receipt["stages"].append(stage("validate", argv, started, proc, {"failed": {"code": "BEADS_COOK_FAILED"}}))
+            return finish("BEADS_COOK_FAILED", False)
+        # Mock deviation: bd 1.3.0 cannot cook in proxied-server mode; the real sc-compose fails here.
+        receipt["stages"].append(stage("validate", argv, started, proc, "skipped"))
+    else:
+        receipt["stages"].append(stage("validate", argv, started, proc))
+
+    started = time.monotonic()
+    stage_name = "preview_pour" if operation == "preview-pour" else "pour"
+    mock_argv = ["sc-compose-pour-mock", "attach", str(rendered)]
+    try:
+        plan = plan_attach(bd, request, parse_formula(rendered), rendered)
+        mock_argv += ["--parent", plan["parent"], "--ref", plan["ref"]]
+        if operation == "pour":
+            apply_attach(bd, plan)
+    except Stop as stop:
+        receipt["stages"].append(stage(stage_name, mock_argv, started, outcome={"failed": {"code": stop.code}}, stderr=str(stop)))
+        return finish(stop.code, stop.refused)
+    except BdError as exc:
+        code = "BEADS_PREVIEW_POUR_FAILED" if operation == "preview-pour" else "BEADS_POUR_FAILED"
+        receipt["stages"].append(stage(stage_name, mock_argv, started, outcome={"failed": {"code": code}}, stderr=str(exc)))
+        return finish(code, False)
+    commands = "\n".join(" ".join(a) for a, _ in bd.log if a[1] in ("create", "dep") and a[2:3] != ["list"])
+    receipt["stages"].append(stage(stage_name, mock_argv, started, stdout=commands))
+    for node in plan["nodes"]:
+        node.pop("fields")
+        node.pop("metadata")
+    receipt["attachment"] = plan
+    receipt["outcome"] = "succeeded"
+    return receipt, SUCCESS
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="sc-compose-pour-mock", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest="group", required=True)
+    bead = sub.add_parser("bead").add_subparsers(dest="operation", required=True)
+    for op in ("render", "validate", "preview-pour", "pour"):
+        p = bead.add_parser(op)
+        p.add_argument("--request", required=True, type=Path)
+        p.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+    if args.operation in ("render", "validate"):
+        exe = shutil.which("sc-compose")
+        if exe is None:
+            print("sc-compose is not on PATH", file=sys.stderr)
+            return USAGE
+        os.execv(exe, [exe, "bead", args.operation, "--request", str(args.request), *(["--json"] if args.json else [])])
+    operation = args.operation.replace("-", "_")
+    try:
+        request = load_request(args.request)
+        receipt, code = attach_operation(args.operation, args.request, request)
+    except Stop as stop:
+        return emit({"schema": SCHEMA, "operation": operation, "error": {"code": stop.code, "message": str(stop)}},
+                    args.json, USAGE if stop.usage else FAILED)
+    return emit(receipt, args.json, code)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

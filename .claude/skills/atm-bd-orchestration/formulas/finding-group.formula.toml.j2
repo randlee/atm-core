@@ -1,0 +1,110 @@
+{#
+sc-compose beads formula (sc-compose/beads/v1, ADR-0021): the fix group of one
+blocking finding, poured as siblings directly under the sprint container
+(Rand, 2026-10-03): fix <- sanity <- qa, the same shape as the sprint's
+dev <- sanity <- qa. The fix bead is the dev's assigned task and carries the
+finding (finding_ref, severity, filing reviewer, remedy); there is no
+separate finding bead for a blocking finding. Poured ids are
+<sprint>.<finding_ref>-r<round>-<step>. The sprint cannot close while any
+poured group bead is open. Important and minor findings are not poured: QA
+files them as plain finding beads against the phase or feature.
+
+No step sets an assignee: every poured bead carries `difficulty` and the lead
+picks the agent at dispatch.
+
+Closers:
+  fix     the dev closes it when the fix is committed
+  sanity  dev-sanity closes it on PASS only; on FAIL it reopens the fix
+          bead and leaves sanity open, which re-blocks sanity through its
+          `needs fix` edge
+  qa      quality-mgr closes it, only after pouring the fix
+          groups of the blocking findings it raised (bead-groups refuses to
+          pour a group once the QA bead named in `filed_by` is closed) and
+          filing its important and minor findings
+
+`{{{ ... }}}` are compose variables, baked at render time (see
+sprint-group.formula.toml.j2). round and priority must be integers;
+requirements and adrs are lists of ids.
+
+Compose variables (bead-groups fills them from the findings file, the sprint
+container and the repository configuration):
+  parent         the attach parent: the sprint container (also the Beads variable `parent`)
+  ref            attach reference, "<finding_ref>-r<round>"
+  finding_ref, round, severity, reviewer, remedy, finding_title, filed_by
+  found_at_commit, requirements, adrs
+  phase, sprint, stack, difficulty, priority
+  edge_option    E1 option "C" (default), "B" or "A", as in sprint-group
+#}
+formula = "finding-group"
+description = "Fix of blocking finding {{{ finding_ref }}}, round {{{ round }}}, in sprint {{{ sprint }}}."
+version = 6
+type = "workflow"
+
+[vars.parent]
+description = "The sprint container the fix group attaches under."
+required = true
+
+[vars.ref]
+description = "Attach reference; poured ids are <parent>.<ref>-<step>."
+default = "{{{ ref }}}"
+
+[[steps]]
+id = "fix"
+title = "{{{ sprint }}}: fix {{{ finding_ref }}}: {{{ finding_title }}}"
+description = "Fix blocking finding {{{ finding_ref }}} (round {{{ round }}}), filed by {{{ reviewer }}} in {{{ filed_by }}}.\n\nRemedy: {{{ remedy }}}\n\nCommit the fix on the sprint's stack, then close this bead. A dev-sanity check and the filing reviewer's verification follow.\n\n## Deliverables\n1. {{{ remedy }}}"
+type = "task"
+priority = {{{ priority }}}
+labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:fix"]
+
+[steps.metadata]
+role = "fix"
+phase = "{{{ phase }}}"
+sprint = "{{{ sprint }}}"
+stack = "{{{ stack }}}"
+round = {{{ round }}}
+difficulty = "{{{ difficulty }}}"
+sprint_bead = "{{{ parent }}}"
+finding_ref = "{{{ finding_ref }}}"
+severity = "{{{ severity }}}"
+reviewer = "{{{ reviewer }}}"
+remedy = "{{{ remedy }}}"
+filed_by = "{{{ filed_by }}}"
+found_at_commit = "{{{ found_at_commit }}}"
+requirements = [{% for r in requirements %}"{{{ r }}}"{% if not loop.last %}, {% endif %}{% endfor %}]
+adrs = [{% for r in adrs %}"{{{ r }}}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% if edge_option != "A" %}
+
+[[steps]]
+id = "sanity"
+title = "{{{ sprint }}}: sanity check of the fix of {{{ finding_ref }}}"
+description = "Sanity check of {{{ parent }}}.{{{ ref }}}-fix: each numbered deliverable is written and lint passes. This is not QA. Close on PASS only; on FAIL reopen the fix bead and leave this bead open."
+type = "task"
+priority = {{{ priority }}}
+labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:dev-sanity"]
+{% if edge_option == "C" %}needs = ["fix"]
+{% endif %}
+[steps.metadata]
+dev_bead = "{{{ parent }}}.{{{ ref }}}-fix"
+difficulty = "{{{ difficulty }}}"
+
+[[steps]]
+id = "qa"
+title = "{{{ sprint }}}: verify the fix of {{{ finding_ref }}}"
+description = "Fix verification of {{{ parent }}}.{{{ ref }}}-fix for finding {{{ finding_ref }}}, by its filing reviewer {{{ reviewer }}} only, after its sanity check passes."
+type = "task"
+priority = {{{ priority }}}
+labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:qa"]
+needs = ["sanity"]
+
+[steps.metadata]
+role = "qa"
+phase = "{{{ phase }}}"
+sprint = "{{{ sprint }}}"
+stack = "{{{ stack }}}"
+round = {{{ round }}}
+difficulty = "{{{ difficulty }}}"
+checked_bead = "{{{ parent }}}.{{{ ref }}}-fix"
+finding_ref = "{{{ finding_ref }}}"
+reviewer = "{{{ reviewer }}}"
+sprint_bead = "{{{ parent }}}"
+{% endif %}

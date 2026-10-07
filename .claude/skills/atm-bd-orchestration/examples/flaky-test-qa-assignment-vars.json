@@ -1,5 +1,5 @@
 {
-  "worktree_path": "/Users/randlee/github/atm-core-worktrees/feat/atm-core-worktrees/sprint/d-4-otlp-sync-exporter",
+  "worktree_path": "../atm-core-worktrees/sprint/d-4-otlp-sync-exporter",
   "branch": "sprint/d-4-otlp-sync-exporter",
   "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
   "review_targets": [

@@ -1,7 +1,7 @@
 ---
 name: dev-sanity-bead
-version: 0.1.0
-description: The sanity check bead that follows a sprint's dev bead. It is blocked by the dev bead; dev beads that require this sprint list this bead in their `blocked_by`. Recipient and message are in resources/dev-sanity.md. Render strictly, then `jq -c .` into the import JSONL.
+version: 0.3.0
+description: The sanity check bead the lead creates when it assigns an important or minor finding bead, with the finding's QA bead (sprint and fix groups pour their own); its `parent` is the finding's parent, since bd keeps one edge type per bead pair and a child of the finding would lose the `blocks` edge. It is blocked by the bead it checks. Recipient and message are in resources/dev-sanity.md. Render strictly, then `jq -c .` into the import JSONL.
 format: json
 required_variables:
   - id
@@ -10,7 +10,6 @@ required_variables:
   - phase
   - sprint
   - stack
-  - assignee
 optional_variables:
   - priority
 defaults:
@@ -22,9 +21,8 @@ defaults:
   "issue_type": "task",
   "status": "open",
   "priority": {{ priority }},
-  "assignee": {{ assignee | tojson }},
-  "description": {{ ("Sanity check of " ~ dev_bead ~ " (sprint " ~ sprint ~ ").\n\nVerify that the work is done:\n\n- the agent did not skip anything;\n- there are no obvious errors;\n- lint passes.\n\nThis is not QA.") | tojson }},
-  "acceptance_criteria": {{ ("- [ ] every deliverable and acceptance criterion of " ~ dev_bead ~ " is present in the pushed head (workflow steps that come after the sanity check, such as linking and QA, are not judged)\n- [ ] no obvious errors\n- [ ] lint passes") | tojson }},
+  "description": {{ ("Sanity check of " ~ dev_bead ~ " (sprint " ~ sprint ~ ").\n\nVerify that the work is done:\n\n- each numbered deliverable is written;\n- lint passes.\n\nThis is not QA.") | tojson }},
+  "acceptance_criteria": {{ ("- [ ] each numbered deliverable of " ~ dev_bead ~ " is written in the pushed head (workflow steps that come after the sanity check, such as linking and QA, are not judged)\n- [ ] lint passes") | tojson }},
   "labels": {{ ["phase-" ~ phase, "stage:dev-sanity", "stack:" ~ stack] | tojson }},
   "dependencies": [
     {"issue_id": {{ id | tojson }}, "depends_on_id": {{ parent | tojson }}, "type": "parent-child"},

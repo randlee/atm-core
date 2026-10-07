@@ -5,7 +5,10 @@
   "branch": "fix/d-4-qa1-f1-retry-jitter",
   "commit": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
   "rebased_onto": "sprint/d-5-otlp-logs",
+  "pr_number": 271,
+  "pr_url": "https://github.com/randlee/atm-core/pull/271",
+  "stack_view": "stack: fix/d-4-qa1-f1-retry-jitter -> integrate/phase-d @ 0e640b20a\n\n| L | PR | rebase | merge | CI |\n|---|---|---|---|---|\n| 1/3 | #269 | ✅ | 🚧 | 🌀 |\n| 2/3 | #270 | ✅ | 🚧 | 🌀 |\n| 3/3 | #271 | ✅ | 🚧 | 🌀 |\n\nVERDICT: ✅ COHERENT - every base == parent head, every head pushed and on its PR\nLANDING: ✅ one merge of fix/d-4-qa1-f1-retry-jitter @ 9a8b7c6d5 lands the stack - top head contains all 3 open layer(s) and merges clean into integrate/phase-d",
   "outcome": "fixed",
   "resolution_md": "- crates/example-otlp/src/sync.rs:97 retry delay now adds full jitter; test `retry_delay_has_jitter` added",
-  "validation_md": "- `just validate`: ok (214 passed, 0 failed)"
+  "validation_md": "- `make test`: ok (214 passed, 0 failed)"
 }

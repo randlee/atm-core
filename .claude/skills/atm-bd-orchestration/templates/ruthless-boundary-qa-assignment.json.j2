@@ -1,6 +1,6 @@
 ---
 name: ruthless-boundary-qa-assignment
-version: 0.1.0
+version: 2.1.0
 description: Render a fenced-JSON assignment for ruthless-boundary-qa in atm-bd-orchestration. `sprint_doc` is the file quality-mgr writes by piping `bd show <checked bead> --json` (the bead is the sprint plan); `carry_forward_findings_json` is a JSON array of the reviewer's own finding ids (`metadata.finding_ref` of the carried finding beads). Triage records are replaced by finding beads and are always empty.
 format: json
 required_variables:
@@ -9,6 +9,7 @@ required_variables:
   - branch
   - commit
   - review_targets
+  - qa_round
 optional_variables:
   - reference_docs
   - round_limit
@@ -24,6 +25,10 @@ defaults:
   carry_forward_findings_json: "[]"
   notes: ""
 ---
+{#- A fix round (qa_round above 1) verifies only this reviewer's own carried ids; without them the render fails instead of running open-ended. #}
+{%- set cf = carry_forward_findings_json | replace(" ", "") -%}
+{%- set locked = cf not in ["", "[]", "null", "[null]", "[\"\"]"] -%}
+{%- if qa_round | int > 1 and not locked %}FIX_ROUND_SCOPE_LOCK_REQUIRED{% endif -%}
 {
   "review_mode": "{% if review_mode == "plan" %}doc_review{% elif review_mode == "phase_end" %}phase_end{% else %}sprint_review{% endif %}",
   "worktree_path": {{ worktree_path }},
@@ -36,6 +41,6 @@ defaults:
   "duplicate_sweep_symbols": [{% for symbol in duplicate_sweep_symbols %}{{ symbol }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "triage_records": [],
   "carry_forward_findings": {{ carry_forward_findings_json | safe }},
-  "findings_scope_locked": {% if carry_forward_findings_json != "[]" %}true{% else %}false{% endif %},
-  "notes": {{ notes ~ (" SCOPE LOCK: this is a fix-round verification dispatch. Report a disposition (fixed | open | regressed) for each id in carry_forward_findings ONLY. Do not add any new finding to the `findings` array beyond those ids, even if you notice something real and unrelated -- put anything else observed under `notes`, not `findings`." if carry_forward_findings_json != "[]" else "") }}
+  "findings_scope_locked": {% if locked %}true{% else %}false{% endif %},
+  "notes": {{ notes ~ (" SCOPE LOCK: this is a fix-round verification dispatch. Report a disposition (fixed | open | regressed) for each id in carry_forward_findings ONLY. Do not add any new finding to the `findings` array beyond those ids, even if you notice something real and unrelated -- put anything else observed under `notes`, not `findings`." if locked else "") }}
 }

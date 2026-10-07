@@ -1,7 +1,7 @@
 ---
 name: task-refused
-version: 0.1.0
-description: Refusal report for any atm-bd-orchestration assignment that cannot be done at all; the body of `atm task close <task-id> refused`. States what happened to the bead so the lead can act.
+version: 1.0.2
+description: Refusal report for any atm-bd-orchestration assignment that cannot be done at all; the body of `atm task close <task-id> refused`. States what happened to the bead so the task assigner can act; `notes_md` carries what the assigner must act on (for `REVIEW_PENDING_JEV`, the code findings and `post_mortem_jev`).
 format: markdown
 required_variables:
   - generated_at

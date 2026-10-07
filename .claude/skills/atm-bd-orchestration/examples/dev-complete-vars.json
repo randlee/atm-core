@@ -5,8 +5,11 @@
   "branch": "sprint/d-4-otlp-sync-exporter",
   "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
   "rebased_onto": "sprint/d-3-otlp-config",
+  "pr_number": 262,
+  "pr_url": "https://github.com/randlee/atm-core/pull/262",
+  "stack_view": "stack: sprint/d-4-otlp-sync-exporter -> integrate/phase-d @ 0e640b20a\n\n| L | PR | rebase | merge | CI |\n|---|---|---|---|---|\n| 1/2 | #261 | ✅ | 🚧 | 🌀 |\n| 2/2 | #262 | ✅ | 🚧 | 🌀 |\n\nVERDICT: ✅ COHERENT - every base == parent head, every head pushed and on its PR\nLANDING: ✅ one merge of sprint/d-4-otlp-sync-exporter @ 4f1c2a9e7 lands the stack - top head contains all 2 open layer(s) and merges clean into integrate/phase-d",
   "deliverables_complete": 3,
   "deliverables_total": 3,
   "deliverables_md": "- D.4-1 sync exporter: done\n- D.4-2 retry policy: done\n- D.4-3 tests: done",
-  "validation_md": "- `just validate`: ok (212 passed, 0 failed)"
+  "validation_md": "- `make test`: ok (212 passed, 0 failed)"
 }

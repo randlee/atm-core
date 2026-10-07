@@ -1,183 +1,279 @@
-#!/usr/bin/env bash
-# Validate a plan written to beads. Mandatory before import and before dispatch.
-#
-#   validate-plan --file <plan.jsonl> [--root <id> --phase <p>] [--index <sprints.json>]   rendered plan, before `bd import`
-#   validate-plan --root <id> [--index <sprints.json>] [--scope <bead-id>]                  live beads under a phase root
-#
-# The authored phase definition is docs/plans/phase-<p>/sprints.json (the planner commits it in the
-# plan PR; it is never generated from beads). --index points at another copy; --scope limits the
-# REQ/ADR doc checks to one bead's own ids (an assignee validating its own branch).
-#
-# Run from the repository root. Checks, in order:
-#   1. `bd doctor` has no error (warnings are printed);
-#   2. scripts/check-plan.jq (fields, labels, graph, stack, REQ/ADR presence),
-#      and every blocker exists in the plan or in beads;
-#   3. every requirement id is in docs/requirements.md (or docs/*/requirements.md)
-#      and every ADR id is in docs/architecture.md (or docs/*/architecture.md);
-#      an id missing from a doc the sprint owns is a warning (resources/planning.md
-#      "New Ids": plan review checks the deliverable that adds it);
-#   4. every assignee is an ATM member of this team, and every sanity check
-#      bead is assigned to the dev-sanity role's member (scripts/resolve-role);
-#   5. scripts/phase_contract_check.py: the children of the root are exactly the pairs in
-#      sprints.json, the stage:sprint schema (deliverables, acceptance keys, difficulty),
-#      graph invariants (pr_target sanity closure, owned paths, handoffs) and, in root mode,
-#      the run-time state invariants (no reopen after PASS, blockers closed before start,
-#      PASS has QA, one fix round, PR base == pr_target, severity priority, human gates);
-#      the initial SVG-in-HTML artifact and the committed index are pushed on integration;
-#   6. the integration branch exists on origin (warning only).
-# Exit 0 = valid, 5 = problems listed (one per line, "<bead>: <message>"), 2 = could not run.
-set -uo pipefail
+#!/usr/bin/env python3
+"""Validate a phase plan in beads against its plan file and its `.atm-bd/phase-<x>.toml`.
 
-here=$(cd "$(dirname "$0")" && pwd)
-file="" root="" phase="" index="" scope=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --file) file=$2; shift 2 ;;
-    --root) root=$2; shift 2 ;;
-    --phase) phase=$2; shift 2 ;;
-    --index) index=$2; shift 2 ;;
-    --scope) scope=$2; shift 2 ;;
-    --write) echo "validate-plan: --write was removed; sprints.json is authored by the planner and committed in the plan PR (atm-beads resources/planning.md)" >&2; exit 2 ;;
-    *) echo "validate-plan: unknown argument $1" >&2; exit 2 ;;
-  esac
-done
-[ -n "$file" ] || [ -n "$root" ] || { echo "validate-plan: pass --file or --root" >&2; exit 2; }
-for c in bd jq atm git python3; do
-  command -v "$c" >/dev/null || { echo "validate-plan: $c not on PATH; see .claude/skills/atm-beads/references/installation-and-troubleshooting.md" >&2; exit 2; }
-done
-bdv=$(bd version 2>/dev/null | sed -nE 's/^bd version ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)
-[ -n "$bdv" ] && [ "$(printf '%s\n1.3.0\n' "$bdv" | sort -V | head -1)" = "1.3.0" ] \
-  || { echo "validate-plan: bd ${bdv:-unknown} is older than 1.3.0; see .claude/skills/atm-beads/references/installation-and-troubleshooting.md" >&2; exit 2; }
+Problems (exit 5), and nothing else:
+  1. schema: a plan file line that is not {"sprint": "<name>", "depends_on"?: [...]}, a depends_on naming an
+     unknown sprint, a sprint container failing SprintBead, a poured sanity bead failing SanityBead
+     (scripts/bead_schema.py, published as schemas/);
+  2. a plan sprint with no sprint container `<prefix>-<sprint>`;
+  3. an extra sprint container: a `stage:sprint` bead of the phase that the plan file does not list;
+  4. the toml's integration_branch differs from the root's metadata.integration_branch;
+  5. a depends_on with no `blocks` edge from the dependent's dev bead (`<container>.group-dev`, or its
+     container) to the predecessor's initial sanity bead (`<pred>.group-sanity`) or its sprint container.
+Everything else is a warning on stderr: bd doctor errors, open non-epic beads at the top level, a plan-time
+assignee, a poured sanity bead whose metadata.dev_bead is not its group's dev bead, a group not poured yet
+before import (--file).
 
-problems=()
-warn() { echo "warning: $*"; }
+  validate-plan (--phase <x> | --root <id>) [--index <plan.jsonl>]                       live beads
+  validate-plan (--phase <x> | --root <id>) --file <beads.jsonl> [--index <plan.jsonl>]  rendered beads,
+                                                     before `bd import`; beads not in the file are read live
+  validate-plan --root <id> --index <plan.jsonl> --beads <beads.json> --no-doctor        test input
+  validate-plan --ci                                 offline (no bd, no fetch): every git-tracked
+                                                     .atm-bd/phase-*.toml loads and its plan file (working
+                                                     tree) parses; one "<file>: <problem>" line per problem
 
-# 1. bd doctor
-doctor=$(bd doctor --json 2>/dev/null) || true
-if ! echo "$doctor" | jq -e . >/dev/null 2>&1; then
-  echo "validate-plan: bd doctor produced no JSON" >&2; exit 2
-fi
-while IFS=$'\t' read -r status name msg; do
-  case "$status" in
-    error) problems+=("bd doctor: $name: $msg") ;;
-    warning) warn "bd doctor: $name: $msg" ;;
-  esac
-done < <(echo "$doctor" | jq -r '.checks[] | select(.status != "ok") | [.status, .name, (.message // "")] | @tsv')
+The phase file `.atm-bd/phase-<x>.toml` (tracked) names the plan file, the root and the integration branch.
+Without --index the plan file is read from origin/<integration_branch>:<plan>. The bead prefix is taken
+from the root id. Prints one "<bead>: <problem>" line per problem. Exit 0 valid, 5 problems, 2 validation
+could not run (no phase file, no plan file, bd or git failed). Report problems to the lead; never edit
+this script, the plan or the graph to make it pass.
+"""
+from __future__ import annotations
 
-# 2. the plan as import-shaped JSONL
-scratch=$(mktemp -d)
-trap 'rm -rf "$scratch"' EXIT
-plan="$scratch/plan.jsonl"
-if [ -n "$file" ]; then
-  cp "$file" "$plan"
-else
-  # the root, its dev beads, and their sanity checks (not the sanity checks of finding fixes)
-  ids=$( { echo "$root"; bd list --parent "$root" --all -n 0 --json 2>/dev/null \
-    | jq -r '[.[] | select((.labels // []) | index("stage:dev"))] as $d | ($d | map(.id)) as $dids
-      | ($d[].id), (.[] | select(((.labels // []) | index("stage:dev-sanity")) and ((.metadata.dev_bead // "") as $x | $dids | index($x))) | .id)'; } )
-  # bd show lists dependencies as {id, dependency_type}; check-plan.jq reads the import shape.
-  # shellcheck disable=SC2086
-  bd show $ids --json 2>/dev/null | jq -c '.[] | . as $b
-    | .dependencies = [(.dependencies // [])[] | {issue_id: $b.id, depends_on_id: .id, type: .dependency_type}]' > "$plan" \
-    || { echo "validate-plan: bd show failed for $root" >&2; exit 2; }
-fi
-jqargs=()
-if [ -n "$root" ] && [ -n "$file" ]; then jqargs=(--arg root "$root" --arg phase "$phase"); fi
-out=$(jq -rs "${jqargs[@]}" -f "$here/check-plan.jq" "$plan" 2>"$scratch/check.err"); rc=$?
-case $rc in
-  0) ;;
-  5) while IFS= read -r l; do [ -n "$l" ] && problems+=("$l"); done <<< "$out" ;;
-  *) echo "validate-plan: check-plan.jq failed: $(cat "$scratch/check.err")" >&2; exit 2 ;;
-esac
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
 
-# 2b. every blocker exists, in the plan or in the database
-while IFS= read -r dep; do
-  labels=$(bd show "$dep" --json 2>/dev/null | jq -r '.[0].labels // [] | join(" ")') \
-    || { problems+=("blocker $dep is neither in the plan nor in beads"); continue; }
-  case "$dep" in
-    *-sanity) want=stage:dev-sanity ;;
-    *-plan-qa*) want=stage:plan-review ;;
-    *) want="" ;;
-  esac
-  [ -n "$want" ] && ! grep -qw -- "$want" <<< "$labels" && problems+=("blocker $dep in beads is not labelled $want")
-done < <(jq -rs '(map(.id)) as $ids | [.[] | (.dependencies // [])[] | select(.type == "blocks") | .depends_on_id]
-  | unique | map(select(. as $d | $ids | index($d) | not)) | .[]' "$plan")
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import sprint_index_common as plan_io  # noqa: E402
+from plan_contract import SPRINT_LABEL  # noqa: E402
 
-# 2c. the phase contract: authored sprints.json against the beads (membership, schema, graph, state)
-if [ -n "$root" ] && [ -z "$file" ]; then
-  if [ -z "$index" ]; then
-    index=$("$here/phase-index-path" --root "$root") || { echo "validate-plan: could not determine the phase index path for $root" >&2; exit 2; }
-  fi
-  contract_args=(--root "$root" --index "$index")
-  [ -n "$scope" ] && contract_args+=(--scope "$scope")
-else
-  contract_args=(--plan "$plan")
-  [ -n "$root" ] && contract_args+=(--root "$root")
-  [ -n "$index" ] && contract_args+=(--index "$index")
-fi
-out=$(python3 "$here/phase_contract_check.py" "${contract_args[@]}" 2>"$scratch/contract.err"); rc=$?
-case $rc in
-  0) [ -n "$out" ] && printf '%s\n' "$out" ;;
-  5) while IFS= read -r l; do [ -z "$l" ] && continue; case "$l" in warning:*) echo "$l" ;; *) problems+=("$l") ;; esac; done <<< "$out" ;;
-  *) echo "validate-plan: phase_contract_check failed: $(cat "$scratch/contract.err")" >&2; exit 2 ;;
-esac
+VALID, CANNOT_RUN, PROBLEMS = 0, 2, 5
 
-# 2d. A permanent phase diagram and the committed index are required on integration before plan review/dispatch.
-# Import JSONL is validated before bead creation; only live-root mode can check the published artifact.
-if [ -n "$root" ] && [ -z "$file" ] && [ -f "$index" ]; then
-  if ! artifact_check=$("$here/check-phase-artifact" --root "$root" --index "$index" 2>&1); then
-    problems+=("$artifact_check")
-  fi
-fi
 
-# 3. REQ/ADR ids exist in the governing docs
-reqdocs=$(ls docs/requirements.md docs/*/requirements.md 2>/dev/null)
-adrdocs=$(ls docs/architecture.md docs/*/architecture.md 2>/dev/null)
-# An id the sprint itself adds is allowed only when the sprint owns that doc.
-while IFS=$'\t' read -r id kind ref owned; do
-  [ "$ref" = "NONE" ] && continue
-  # malformed ids are already reported by check-plan.jq
-  case "$kind:$ref" in adrs:ADR-[0-9]*|requirements:[A-Z]*-[0-9]*) ;; *) continue ;; esac
-  docs=$reqdocs; [ "$kind" = "adrs" ] && docs=$adrdocs
-  # shellcheck disable=SC2086
-  grep -qw -- "$ref" $docs 2>/dev/null && continue
-  where=$(echo "$docs" | tr '\n' ' ')
-  if printf '%s\n' "$docs" | grep -qxF -f <(tr ' ' '\n' <<< "$owned") 2>/dev/null; then
-    warn "$id: $kind id $ref is not in $where yet; the sprint owns that doc and must add it"
-  else
-    problems+=("$id: $kind id $ref is not in $where")
-  fi
-done < <(jq -r --arg scope "$scope" 'select((.labels // []) | index("stage:dev")) | select($scope == "" or .id == $scope) | .id as $id | ((.metadata.owned_paths // []) | join(" ")) as $o
-  | ("requirements", "adrs") as $k | (.metadata[$k] // [])[] | [$id, $k, ., $o] | @tsv' "$plan")
+class CannotRun(Exception):
+    pass
 
-# 4. assignees are ATM members
-if ! members=$(atm members --json 2>/dev/null | jq -er '.members | if type == "array" and all(.[]; type == "object" and (.name | type) == "string") then .[].name else error("bad roster") end' 2>/dev/null) \
-  || [ -z "$members" ]; then
-  echo "validate-plan: atm members failed or returned no members; assignees cannot be checked (run atm doctor)" >&2
-  exit 2
-fi
-while IFS=$'\t' read -r id who; do
-  echo "$members" | grep -qx -- "$who" || problems+=("$id: assignee $who is not an ATM member of this team")
-done < <(jq -r 'select(.issue_type != "epic" and .issue_type != "feature") | [.id, (.assignee // "")] | @tsv' "$plan")
-if ! sanity=$("$here/resolve-role" dev-sanity); then
-  echo "validate-plan: the dev-sanity role is not mapped (.claude/agents/registry.yaml roles:)" >&2
-  exit 2
-fi
-while IFS=$'\t' read -r id who; do
-  [ "$who" = "$sanity" ] || problems+=("$id: sanity check assignee $who is not the dev-sanity member $sanity")
-done < <(jq -r 'select((.labels // []) | index("stage:dev-sanity")) | [.id, (.assignee // "")] | @tsv' "$plan")
 
-# 5. integration branch
-trunk=$(jq -r 'select(.issue_type == "epic" or .issue_type == "feature") | .metadata.integration_branch // empty' "$plan" | head -1)
-[ -z "$trunk" ] && [ -n "$root" ] && trunk=$(bd show "$root" --json 2>/dev/null | jq -r '.[0].metadata.integration_branch // empty')
-if [ -n "$trunk" ] && ! git ls-remote --exit-code --heads origin "$trunk" >/dev/null 2>&1; then
-  warn "integration branch $trunk does not exist on origin yet"
-fi
+def warn(message: str) -> None:
+    print(f"validate-plan: warning: {message}", file=sys.stderr)
 
-if [ ${#problems[@]} -eq 0 ]; then
-  echo "plan valid: $(jq -s '[.[] | select((.labels // []) | index("stage:dev"))] | length' "$plan") dev beads checked"
-  exit 0
-fi
-printf '%s\n' "${problems[@]}"
-echo "${#problems[@]} problem(s)" >&2
-exit 5
+
+def blocks(bead: dict) -> set[str]:
+    return {str(d.get("depends_on_id") or d.get("id")) for d in bead.get("dependencies") or []
+            if (d.get("type") or d.get("dependency_type")) == "blocks"}
+
+
+def parent_of(bead: dict) -> str:
+    if bead.get("parent"):
+        return str(bead["parent"])
+    return next((str(d.get("depends_on_id") or d.get("id")) for d in bead.get("dependencies") or []
+                 if (d.get("type") or d.get("dependency_type")) == "parent-child"), "")
+
+
+class Beads:
+    """Bead lookup: a fixed list (--beads), rendered beads plus live (--file), or live bd."""
+
+    def __init__(self, fixed: list[dict] | None, file_beads: list[dict] | None, phase: str):
+        self.fixed = {b["id"]: b for b in fixed} if fixed is not None else None
+        self.file = {b["id"]: b for b in file_beads} if file_beads is not None else {}
+        self.phase = phase
+        self.cache: dict[str, dict | None] = {}
+
+    def bd(self, *args: str) -> str:
+        proc = subprocess.run(["bd", *args], capture_output=True, text=True)
+        if proc.returncode:
+            text = (proc.stderr + proc.stdout).lower()
+            if args[0] == "show" and ("not found" in text or "no issue" in text):
+                return "[]"
+            raise CannotRun(f"bd {' '.join(args[:2])} failed: {(proc.stderr or proc.stdout).strip()}")
+        return proc.stdout
+
+    def get(self, bead: str) -> dict | None:
+        if self.fixed is not None:
+            return self.fixed.get(bead)
+        if bead in self.file:
+            return self.file[bead]
+        if bead not in self.cache:
+            rows = json.loads(self.bd("show", bead, "--json") or "[]")
+            self.cache[bead] = rows[0] if rows else None
+        return self.cache[bead]
+
+    def sprint_containers(self) -> set[str]:
+        label = f"phase-{self.phase}"
+        if self.fixed is not None:
+            rows = list(self.fixed.values())
+        else:
+            rows = json.loads(self.bd("list", "-l", label, "-l", SPRINT_LABEL, "--all", "-n", "0", "--json") or "[]")
+            rows += list(self.file.values())
+        return {b["id"] for b in rows if {label, SPRINT_LABEL} <= set(b.get("labels") or [])
+                and b.get("status") != "tombstone"}
+
+    def everything(self) -> list[dict]:
+        if self.fixed is not None:
+            return list(self.fixed.values())
+        if self.file:
+            return list(self.file.values())
+        return json.loads(self.bd("list", "--all", "-n", "0", "--json") or "[]")
+
+
+def git(*args: str) -> str:
+    proc = subprocess.run(["git", *args], capture_output=True, text=True)
+    if proc.returncode:
+        raise CannotRun(f"git {args[0]} failed: {proc.stderr.strip()}")
+    return proc.stdout
+
+
+def plan_text(repo: Path, config: dict, index: Path | None) -> tuple[str, str]:
+    if index is not None:
+        try:
+            return index.read_text(encoding="utf-8"), str(index)
+        except OSError as exc:
+            raise CannotRun(f"read {index}: {exc}") from exc
+    branch = config["integration_branch"]
+    git("-C", str(repo), "fetch", "-q", "--no-tags", "origin", f"refs/heads/{branch}:refs/remotes/origin/{branch}")
+    proc = subprocess.run(["git", "-C", str(repo), "show", f"origin/{branch}:{config['plan']}"], capture_output=True, text=True)
+    if proc.returncode:
+        raise CannotRun(f"origin/{branch}:{config['plan']} is missing; push the plan file to {branch}")
+    return proc.stdout, f"origin/{branch}:{config['plan']}"
+
+
+def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], before_import: bool) -> None:
+    import bead_schema  # pydantic; --ci never loads it
+    root_id = config["root"]
+    prefix = plan_io.bead_prefix(root_id, Path("."))
+    root = beads.get(root_id)
+    if root is None:
+        raise CannotRun(f"phase root {root_id} does not exist")
+    branch = (root.get("metadata") or {}).get("integration_branch")
+    if branch != config["integration_branch"]:
+        problems.append(f"{root_id}: metadata.integration_branch is {json.dumps(branch)}; "
+                        f".atm-bd/phase-{beads.phase}.toml names {config['integration_branch']}")
+    planned = {r["sprint"]: plan_io.sprint_bead_id(prefix, r["sprint"]) for r in rows}
+    for container in sorted(beads.sprint_containers() - set(planned.values())):
+        problems.append(f"{container}: stage:sprint bead of phase-{beads.phase} that the plan file does not list")
+    for row in rows:
+        container = planned[row["sprint"]]
+        bead = beads.get(container)
+        if bead is None:
+            problems.append(f"{container}: sprint {row['sprint']} is in the plan file but has no sprint bead")
+            continue
+        problems += bead_schema.problems(bead, bead_schema.SprintBead)
+        dev_id, sanity_id = plan_io.group_id(container, "dev"), plan_io.group_id(container, "sanity")
+        dev, sanity = beads.get(dev_id), beads.get(sanity_id)
+        if sanity is not None:
+            problems += bead_schema.problems(sanity, bead_schema.SanityBead)
+            if (sanity.get("metadata") or {}).get("dev_bead") != dev_id:
+                warn(f"{sanity_id}: metadata.dev_bead is not {dev_id}")
+        for pred in row["depends_on"]:
+            pred_container = planned[pred]
+            wanted = {plan_io.group_id(pred_container, "sanity"), pred_container}
+            if dev is None and before_import:
+                warn(f"{container}: not poured yet; run bead-groups after import to add its edge to {pred}")
+                continue
+            held = (blocks(dev) if dev else set()) | blocks(bead)
+            if not held & wanted:
+                problems.append(f"{dev_id}: missing blocks edge to {plan_io.group_id(pred_container, 'sanity')} "
+                                f"or {pred_container} (plan file: {row['sprint']} depends on {pred})")
+                if dev is None:
+                    warn(f"{dev_id} does not exist; pour the group with bead-groups")
+
+
+def warnings(beads: Beads, root_id: str, file_beads: list[dict] | None) -> None:
+    everything = beads.everything()
+    since = next((b.get("created_at") or "" for b in everything if b.get("id") == root_id), "")
+    if not since and beads.get(root_id):
+        since = beads.get(root_id).get("created_at") or ""
+    for b in everything:
+        if b.get("status") != "closed" and not parent_of(b) and b.get("issue_type") != "epic" \
+                and (b.get("created_at") or "") >= since:
+            warn(f"{b['id']}: {b.get('issue_type')} at the top level; only epics live at the top level")
+    for b in file_beads or []:
+        if b.get("assignee"):
+            warn(f"{b['id']}: assignee set at plan time; planning carries difficulty only")
+
+
+def doctor() -> None:
+    proc = subprocess.run(["bd", "doctor", "--json"], capture_output=True, text=True)
+    try:
+        report = json.loads(proc.stdout)["checks"]
+    except (ValueError, KeyError, TypeError):
+        warn("bd doctor produced no JSON; its stderr follows")
+        sys.stderr.write(proc.stderr)
+        return
+    if proc.stderr.strip():
+        for line in proc.stderr.splitlines():
+            print(f"bd doctor (stderr): {line}", file=sys.stderr)
+    for c in report:
+        if c.get("status") == "error":
+            warn(f"bd doctor: {c.get('name')}: {c.get('message') or ''}")
+
+
+def ci(repo: Path) -> int:
+    """--ci: load every tracked phase file and parse its plan file; bd and the network are never used."""
+    names = [n for n in git("-C", str(repo), "ls-files", "-z", "--", ".atm-bd/phase-*.toml").split("\0")
+             if n and Path(n).parent == plan_io.PHASE_DIR]
+    if not names:
+        print("plan valid: no tracked .atm-bd/phase-*.toml to check")
+        return VALID
+    problems: list[str] = []
+    for name in sorted(names):
+        try:
+            config = plan_io.load_phase_config(repo, Path(name).stem.removeprefix("phase-"))
+            text = (repo / config["plan"]).read_text(encoding="utf-8")
+        except (RuntimeError, OSError) as exc:
+            problems.append(f"{name}: {exc}")
+            continue
+        problems += plan_io.parse_plan(text, config["plan"])[1]
+    if problems:
+        print("\n".join(problems))
+        print(f"{len(problems)} problem(s); report them to the lead", file=sys.stderr)
+        return PROBLEMS
+    print(f"plan valid: {len(names)} tracked phase file(s)")
+    return VALID
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="validate-plan", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--phase")
+    parser.add_argument("--root")
+    parser.add_argument("--index", type=Path)
+    parser.add_argument("--file", type=Path)
+    parser.add_argument("--beads", type=Path)
+    parser.add_argument("--no-doctor", action="store_true")
+    parser.add_argument("--ci", action="store_true")
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit:
+        return CANNOT_RUN
+    try:
+        if args.ci:
+            if any((args.phase, args.root, args.index, args.file, args.beads)):
+                raise CannotRun("--ci checks the tracked phase files only; it takes no other option")
+            return ci(Path(git("rev-parse", "--show-toplevel").strip()))
+        if not (args.phase or args.root):
+            raise CannotRun("pass --phase or --root")
+        phase = args.phase or plan_io.phase_of_root(args.root)
+        if args.root and plan_io.phase_of_root(args.root) != phase:
+            raise CannotRun(f"--root {args.root} is not a root of phase {phase}")
+        repo = Path(git("rev-parse", "--show-toplevel").strip())
+        config = plan_io.load_phase_config(repo, phase)
+        if args.root and args.root != config["root"]:
+            raise CannotRun(f"--root {args.root}; .atm-bd/phase-{phase}.toml names {config['root']}")
+        text, where = plan_text(repo, config, args.index)
+        rows, problems = plan_io.parse_plan(text, where)
+        fixed = json.loads(args.beads.read_text()) if args.beads else None
+        file_beads = None
+        if args.file:
+            file_beads = [json.loads(line) for line in args.file.read_text().splitlines() if line.strip()]
+        beads = Beads(fixed, file_beads, phase)
+        check(beads, config, rows, problems, before_import=args.file is not None)
+        warnings(beads, config["root"], file_beads)
+        if not args.no_doctor:
+            doctor()
+    except (CannotRun, RuntimeError, OSError, ValueError) as exc:
+        print(f"validate-plan: {exc}", file=sys.stderr)
+        return CANNOT_RUN
+    if not problems:
+        print(f"plan valid: {len(rows)} sprints")
+        return VALID
+    print("\n".join(problems))
+    print(f"{len(problems)} problem(s); report them to the lead", file=sys.stderr)
+    return PROBLEMS
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

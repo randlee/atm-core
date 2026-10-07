@@ -1,0 +1,95 @@
+{#
+sc-compose beads formula (sc-compose/beads/v1, ADR-0021): the dev, sanity and
+QA tasks of one sprint, poured directly under its existing sprint container.
+Poured ids are <parent>.<ref>-<step> (see bead_formulas.attach_id).
+
+`{{{ ... }}}` are compose variables, baked at render time; sc-compose escapes
+them for TOML strings. bd 1.3.0 substitutes its own `{{name}}` variables only
+in title, description and notes (not assignee, labels or metadata), so every
+id, member and metadata value here is a compose variable. layer and priority
+are written bare and must be integers.
+
+Compose variables (bead-groups fills them from the sprint container, the
+repository configuration and sprint-group.relations.json):
+  parent         the sprint container id (also the Beads variable `parent`)
+  ref            attach reference, "group"
+  phase, sprint, stack, layer, difficulty, priority
+  edge_option    E1: "C" sanity needs dev (poured `blocks`; the default),
+                 "B" no sanity -> dev edge in the pour (bead-groups adds
+                 `validates`), "A" only dev is poured
+The sanity step carries metadata.dev_bead (N9: it signals that the sanity
+agent runs on this sprint) and difficulty.
+
+No step sets an assignee: every poured bead carries `difficulty` and the lead
+picks the agent at dispatch (`bd update <bead> --assignee <agent>`).
+
+Closers: the dev closes dev; dev-sanity closes sanity on PASS only, and on
+FAIL reopens dev and leaves sanity open, which re-blocks it through
+`needs dev`; quality-mgr closes qa after pouring a finding-group for each
+blocking finding and filing the important and minor ones; the team lead
+closes the sprint container, which bd refuses while any group bead under it
+is open.
+#}
+formula = "sprint-group"
+description = "Sprint {{{ sprint }}}: dev, sanity and QA under sprint container {{{ parent }}}."
+version = 4
+type = "workflow"
+
+[vars.parent]
+description = "The existing sprint container the group attaches under."
+required = true
+
+[vars.ref]
+description = "Attach reference; poured ids are <parent>.<ref>-<step>."
+default = "{{{ ref }}}"
+
+[[steps]]
+id = "dev"
+title = "{{{ sprint }}}: dev"
+description = "Dev work for sprint {{{ sprint }}}. The deliverables and acceptance criteria are on the sprint container {{{ parent }}}."
+type = "task"
+priority = {{{ priority }}}
+labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:dev"]
+
+[steps.metadata]
+role = "dev"
+phase = "{{{ phase }}}"
+sprint = "{{{ sprint }}}"
+stack = "{{{ stack }}}"
+layer = {{{ layer }}}
+difficulty = "{{{ difficulty }}}"
+sprint_bead = "{{{ parent }}}"
+{% if edge_option != "A" %}
+
+[[steps]]
+id = "sanity"
+title = "{{{ sprint }}}: sanity check"
+description = "Sanity check of {{{ parent }}}.{{{ ref }}}-dev (sprint {{{ sprint }}}): each numbered deliverable is written and lint passes. This is not QA. Close on PASS only; on FAIL reopen the dev bead and leave this bead open."
+type = "task"
+priority = {{{ priority }}}
+labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:dev-sanity"]
+{% if edge_option == "C" %}needs = ["dev"]
+{% endif %}
+[steps.metadata]
+dev_bead = "{{{ parent }}}.{{{ ref }}}-dev"
+difficulty = "{{{ difficulty }}}"
+
+[[steps]]
+id = "qa"
+title = "{{{ sprint }}}: QA round 1"
+description = "QA round 1 of {{{ parent }}}.{{{ ref }}}-dev (sprint {{{ sprint }}}), after its sanity check passes."
+type = "task"
+priority = {{{ priority }}}
+labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:qa"]
+needs = ["sanity"]
+
+[steps.metadata]
+role = "qa"
+phase = "{{{ phase }}}"
+sprint = "{{{ sprint }}}"
+stack = "{{{ stack }}}"
+round = 1
+difficulty = "{{{ difficulty }}}"
+checked_bead = "{{{ parent }}}.{{{ ref }}}-dev"
+sprint_bead = "{{{ parent }}}"
+{% endif %}

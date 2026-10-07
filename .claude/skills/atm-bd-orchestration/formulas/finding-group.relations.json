@@ -1,0 +1,61 @@
+{
+  "formula": "finding-group",
+  "description": "bead-groups data for finding-group: the attach ref and the stage 2 edges the pour cannot make. The group attaches under the sprint container; there is no finding bead for a blocking finding. Endpoints are format strings over {parent}, {ref}, {steps[<step>]} and {vars[<name>]}.",
+  "ref": "{vars[finding_ref]}-r{vars[round]}",
+  "default_option": "C",
+  "defaults": {},
+  "options": {
+    "A": {
+      "description": "E1 option A: only the fix is poured; its sanity bead is created when the fix closes.",
+      "expect": [],
+      "edges": []
+    },
+    "B": {
+      "description": "E1 option B: the poured sanity step has no `needs fix`; sanity and QA each `validates` the fix.",
+      "expect": [
+        {
+          "from": "{steps[sanity]}",
+          "to": "{steps[fix]}",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "from": "{steps[sanity]}",
+          "to": "{steps[fix]}",
+          "type": "validates"
+        },
+        {
+          "from": "{steps[qa]}",
+          "to": "{steps[fix]}",
+          "type": "validates"
+        }
+      ]
+    },
+    "C": {
+      "description": "E1 option C, the existing schema: sanity `blocks` the fix (poured from `needs`) with metadata.dev_bead; QA `validates` the fix.",
+      "expect": [
+        {
+          "from": "{steps[sanity]}",
+          "to": "{steps[fix]}",
+          "type": "blocks"
+        }
+      ],
+      "edges": [
+        {
+          "from": "{steps[qa]}",
+          "to": "{steps[fix]}",
+          "type": "validates"
+        }
+      ]
+    }
+  },
+  "edges": [
+    {
+      "description": "the fix bead was found while working the QA bead that filed it",
+      "from": "{steps[fix]}",
+      "to": "{vars[filed_by]}",
+      "type": "discovered-from"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "id": "workflow-issue-example",
+  "id": "atm-wf-example",
   "parent": "atm-workflow-issues",
   "title": "Example refusal workflow issue",
   "description": "A pre-claim gate refused this example task.",

@@ -1,0 +1,236 @@
+#!/usr/bin/env python3
+"""Export live bead records, then analyze only that snapshot with BV robot commands.
+
+Usage (from the repository root):
+  .claude/skills/atm-bd-orchestration/scripts/bv-analyze --epic <root> [--modes ...] [--target <bead>]
+  .claude/skills/atm-bd-orchestration/scripts/bv-analyze --file <plan.jsonl> [--epic <root>] [--modes ...]
+
+Read-only: never writes a bead, never opens the BV TUI, never falls back to an
+existing JSONL. Prints a receipt summary; outputs land in a fresh temp directory.
+See ../references/bv.md for when the lead runs it and what each output means.
+"""
+
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+import re
+from pathlib import Path
+import subprocess
+import tempfile
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def run(argv, repo):
+    return subprocess.run(
+        argv, cwd=repo, env={**os.environ, "BV_ROBOT": "1"},
+        check=True, capture_output=True, text=True, timeout=120,
+    ).stdout
+
+
+MODES = ("triage", "alerts", "plan", "insights", "priority")
+
+
+def epic_scope(rows, epic):
+    """Select the hierarchy, recording edges omitted from its induced graph."""
+    by_id = {row["id"]: row for row in rows}
+    if epic not in by_id:
+        raise ValueError(f"epic is absent from export: {epic}")
+    children = {}
+    for row in rows:
+        for dep in row.get("dependencies", []):
+            if dep.get("type") == "parent-child":
+                children.setdefault(dep["depends_on_id"], []).append(row["id"])
+    members, pending = set(), [epic]
+    while pending:
+        bead = pending.pop()
+        if bead not in members:
+            members.add(bead)
+            pending.extend(children.get(bead, []))
+    return induced(rows, members)
+
+
+def prerequisite_scope(rows, target):
+    """Select the target and every bead it transitively waits on (any edge but parent-child)."""
+    by_id = {row["id"]: row for row in rows}
+    members, pending = set(), [target]
+    while pending:
+        bead = pending.pop()
+        if bead not in members and bead in by_id:
+            members.add(bead)
+            pending.extend(dep["depends_on_id"] for dep in by_id[bead].get("dependencies", [])
+                           if dep.get("type") != "parent-child")
+    return induced(rows, members)
+
+
+def induced(rows, members):
+    """Keep member rows and the edges between them, recording the edges that cross."""
+    selected, excluded = [], []
+    for row in rows:
+        inside = row["id"] in members
+        deps = []
+        for dep in row.get("dependencies", []):
+            target_inside = dep["depends_on_id"] in members
+            if inside != target_inside:
+                excluded.append({"issue_id": row["id"],
+                                 "depends_on_id": dep["depends_on_id"],
+                                 "type": dep["type"]})
+            if target_inside:
+                deps.append(dep)
+        if inside:
+            selected.append({**row, "dependencies": deps})
+    dependent_counts = {row["id"]: 0 for row in selected}
+    for row in selected:
+        for dep in row["dependencies"]:
+            dependent_counts[dep["depends_on_id"]] += 1
+    for row in selected:
+        row["dependency_count"] = len(row["dependencies"])
+        row["dependent_count"] = dependent_counts[row["id"]]
+    return selected, excluded
+
+
+def write_rows(path, rows):
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+
+def analyze(repo, label=None, target=None, modes=None, epic=None, plan_file=None):
+    """Analyze a fresh live export, or (plan_file) a rendered plan JSONL before import."""
+    if epic and label:
+        raise ValueError("choose epic membership or label scope, not both")
+    modes = tuple(dict.fromkeys(modes if modes is not None else ("triage", "alerts")))
+    if not modes or any(mode not in MODES for mode in modes):
+        raise ValueError("choose one or more supported robot modes")
+    repo = Path(repo).resolve(strict=True)
+    if plan_file:
+        plan_file = Path(plan_file).resolve(strict=True)
+        info = {}
+        versions = {"bv": run(["bv", "--version"], repo).strip()}
+    else:
+        info = json.loads(run(["bd", "info", "--json"], repo))
+        versions = {"bd": run(["bd", "version"], repo).strip(),
+                    "bv": run(["bv", "--version"], repo).strip()}
+    directory = Path(tempfile.mkdtemp(prefix="bv-analyze-"))
+    raw_export = directory / "export.jsonl"
+    snapshot = directory / "issues.jsonl"
+    receipt = {
+        "complete": False, "repo": str(repo), "versions": versions,
+        "database_path": info.get("database_path"), "database_mode": info.get("mode"),
+        "export_started_at": now(), "snapshot": str(snapshot),
+    }
+    if plan_file:
+        receipt["plan_file"] = str(plan_file)
+    # Capture database identity without retaining unrelated configuration values.
+    metadata = repo / ".beads" / "metadata.json"
+    if metadata.is_file() and not plan_file:
+        identity = json.loads(metadata.read_text())
+        receipt["database"] = identity.get("dolt_database")
+        receipt["backend"] = identity.get("backend")
+    receipt_path = directory / "receipt.json"
+    try:
+        if plan_file:
+            # Copy, so the hash checks cover exactly what BV read.
+            raw_export.write_bytes(plan_file.read_bytes())
+        else:
+            run(["bd", "--readonly", "export", "--all", "--output", str(raw_export)], repo)
+        receipt["export_finished_at"] = now()
+        rows = [json.loads(line) for line in raw_export.read_bytes().splitlines() if line.strip()]
+        # bd 1.3 exports tag rows with _type and include memories; BV reads issues only.
+        rows = [row for row in rows if row.get("_type", "issue") == "issue"]
+        write_rows(snapshot, rows)
+        content = snapshot.read_bytes()
+        ids = [row["id"] for row in rows]
+        if len(ids) != len(set(ids)):
+            raise ValueError("export contains duplicate bead IDs")
+        if target and target not in ids:
+            raise ValueError(f"target bead is absent from export: {target}")
+        if label and not any(label in (row.get("labels") or []) for row in rows):
+            raise ValueError(f"label is absent from export: {label}")
+        receipt.update(records=len(rows), sha256=hashlib.sha256(content).hexdigest(),
+                       label=label, target=target, receipt=str(receipt_path), outputs={})
+        analysis_snapshot, analysis_rows = snapshot, rows
+        if epic:
+            analysis_rows, excluded = epic_scope(rows, epic)
+            analysis_snapshot = directory / "epic.jsonl"
+            write_rows(analysis_snapshot, analysis_rows)
+            receipt.update(epic=epic, members=[row["id"] for row in analysis_rows],
+                           excluded_dependencies=excluded)
+        receipt.update(analysis_snapshot=str(analysis_snapshot), analysis_records=len(analysis_rows),
+                       analysis_sha256=hashlib.sha256(analysis_snapshot.read_bytes()).hexdigest())
+        commands = [(name, ["--robot-" + name], label, analysis_snapshot, len(analysis_rows))
+                    for name in modes]
+        if target:
+            chain_rows, _ = prerequisite_scope(rows, target)
+            chain_snapshot = directory / "prerequisites.jsonl"
+            write_rows(chain_snapshot, chain_rows)
+            receipt["prerequisites"] = [row["id"] for row in chain_rows]
+            commands.append(("blocker-chain", ["--robot-blocker-chain", target], None,
+                             chain_snapshot, len(chain_rows)))
+        receipt["commands"] = []
+        for name, flags, scope, source_path, record_count in commands:
+            argv = ["bv", "--db", str(source_path), "--no-cache", "--format", "json"]
+            if scope:
+                argv.extend(["--label", scope])
+            argv.extend(flags)
+            receipt["commands"].append(argv)
+            raw = run(argv, repo)
+            payload = json.loads(raw)
+            reported = payload.get("source_path")
+            authority = payload.get("source_authority", {})
+            if not reported or Path(reported).resolve() != source_path.resolve():
+                raise ValueError(f"{name}: bv read a different source: {reported}")
+            if authority.get("state") != "complete" or authority.get("valid") != record_count:
+                warnings = [w for source in authority.get("sources", []) for w in source.get("warnings", [])]
+                ids = [json.loads(line).get("id") for line in source_path.read_text().splitlines()]
+                rejected = [ids[int(m.group(1)) - 1] for w in warnings
+                            if (m := re.search(r"line (\d+)", w)) and 0 < int(m.group(1)) <= len(ids)]
+                raise ValueError(f"{name}: bv did not completely load the exported records; "
+                                 f"rejected {rejected}: {warnings}")
+            if any(source.get("stale") for source in authority.get("sources", [])):
+                raise ValueError(f"{name}: bv reported a stale source")
+            if any(authority.get(key, 0) for key in ("failed", "errors", "skipped", "read_errors")):
+                raise ValueError(f"{name}: bv reported source loading errors")
+            if hashlib.sha256(snapshot.read_bytes()).hexdigest() != receipt["sha256"]:
+                raise ValueError(f"{name}: input snapshot changed during analysis")
+            if hashlib.sha256(analysis_snapshot.read_bytes()).hexdigest() != receipt["analysis_sha256"]:
+                raise ValueError(f"{name}: scoped snapshot changed during analysis")
+            output = directory / f"{name}.json"
+            output.write_text(raw)
+            receipt["outputs"][name] = str(output)
+        receipt["complete"] = True
+        return receipt
+    except Exception as error:
+        receipt["error"] = str(error)
+        raise
+    finally:
+        receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", default=".", help="Checkout configured for the live bd database (default: .)")
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument("--label", help="Optional BV label scope")
+    scope.add_argument("--epic", help="Filter export to this epic and all its descendants before BV")
+    parser.add_argument("--file", dest="plan_file",
+                        help="Analyze this rendered plan JSONL (before bd import) instead of a live export")
+    parser.add_argument("--target", help="Also inspect this bead's blocker chain over everything it waits on")
+    parser.add_argument("--modes", nargs="+", choices=MODES,
+                        help="Robot outputs to collect (default: triage alerts)")
+    args = parser.parse_args()
+    try:
+        receipt = analyze(args.repo, args.label, args.target, args.modes, args.epic, args.plan_file)
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
+        parser.exit(1, f"Analysis failed; no existing JSONL fallback used: {error}\n")
+    summary = {key: value for key, value in receipt.items()
+               if key not in ("members", "excluded_dependencies", "commands")}
+    if "excluded_dependencies" in receipt:
+        summary["excluded_dependency_count"] = len(receipt["excluded_dependencies"])
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == "__main__":
+    main()

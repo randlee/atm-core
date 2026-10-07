@@ -4,6 +4,5 @@
   "dev_bead": "atm-d-4",
   "phase": "d",
   "sprint": "d-4",
-  "stack": "phase-d",
-  "assignee": "atm-sanity"
+  "stack": "phase-d"
 }
