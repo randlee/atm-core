@@ -183,7 +183,9 @@ def regenerate_cli_reference(repo_root: Path) -> dict[Path, str]:
         for path in (
             repo_root / "crates/atm/tests/cli_surface_baseline.json",
             repo_root / "docs/user-documents/cli-reference.md",
-            repo_root / "site/cli-reference.html",
+            repo_root / "site/cli/index.html",
+            repo_root / "site/cli/cli-reference.css",
+            repo_root / "site/cli/cli-reference.js",
         )
     }
 

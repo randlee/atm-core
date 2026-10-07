@@ -10,7 +10,7 @@
 //! they are regenerated.
 //!
 //! This module backs two maintainer-facing tools through the hidden parsed
-//! `atm __dump-cli-surface --format <json|markdown>` subcommand:
+//! `atm __dump-cli-surface --format <json|markdown|html>` subcommand:
 //!
 //! - `atm __dump-cli-surface --format json` prints [`command_surface_json`] output,
 //!   consumed by `crates/atm/tests/cli_surface.rs` and used to regenerate
@@ -23,6 +23,7 @@
 //! `crates/atm/examples/gen_cli_docs.rs` and the CLI-surface diff test.
 
 use clap::{Arg, Command};
+use serde::Serialize;
 use serde_json::{Value, json};
 
 /// Clap auto-injects `--help`/`--version` (and their short forms) on every
@@ -89,6 +90,7 @@ fn arg_surface_json(arg: &Arg) -> Value {
 /// notes) — that prose is exactly what a human reader needs and is exactly
 /// what the JSON diff gate excludes to avoid false positives.
 pub(crate) fn command_surface_markdown(command: &Command) -> String {
+    let document = command_document(command, "atm");
     let mut out = String::new();
     out.push_str("# ATM CLI Reference\n\n");
     out.push_str(&format!("Version: `{}`\n\n", env!("CARGO_PKG_VERSION")));
@@ -98,41 +100,29 @@ pub(crate) fn command_surface_markdown(command: &Command) -> String {
          --features cli-surface-dump --example gen_cli_docs` \
          (see `crates/atm/src/cli_surface.rs`).\n\n",
     );
-    render_command_markdown(command, 2, &mut out, "atm");
+    render_command_markdown(&document, 2, &mut out);
     out
 }
 
-/// Renders the same generated reference as a standalone HTML page for the
-/// published website. Keeping the Markdown as the single rendered body means
-/// the two delivery surfaces cannot acquire independent option lists.
+/// Renders a standalone HTML page from the same Clap-derived document model
+/// consumed by the Markdown renderer.
 pub(crate) fn command_surface_html(command: &Command) -> String {
-    let mut out = "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>ATM CLI Reference</title><style>body{font:16px system-ui,sans-serif;line-height:1.5;max-width:80rem;margin:3rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #888;padding:.4rem;text-align:left;vertical-align:top}code{white-space:nowrap}nav ul{columns:3}</style></head><body><main>\n".to_owned();
-    out.push_str(&format!("<h1>ATM CLI Reference</h1><p>Version: <code>{}</code></p><p>This page is generated from the live Clap command tree. Do not hand-edit it.</p><nav aria-label=\"Command index\"><h2>Command index</h2><ul>", env!("CARGO_PKG_VERSION")));
-    let mut index = Vec::new();
-    collect_command_index(command, "atm", &mut index);
-    for (name, id) in &index {
-        out.push_str(&format!(
-            "<li><a href=\"#{id}\"><code>{}</code></a></li>",
-            html_escape(name)
-        ));
-    }
-    out.push_str("</ul></nav>\n");
-    render_command_html(command, 2, &mut out, "atm");
-    out.push_str("</main></body></html>\n");
-    out
-}
-
-fn html_escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
+    let document = command_document(command, "atm");
+    let data = serde_json::to_string(&document)
+        .expect("CLI reference document model must serialize to JSON")
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e")
+        .replace('&', "\\u0026");
+    include_str!("../assets/cli-reference/template.html")
+        .replace("{{VERSION}}", env!("CARGO_PKG_VERSION"))
+        .replace("{{CLI_REFERENCE_DATA}}", &data)
 }
 
 fn command_anchor(full_name: &str) -> String {
-    full_name.replace(' ', "-")
+    full_name
+        .bytes()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()
 }
 
 fn public_subcommands(command: &Command) -> Vec<&Command> {
@@ -144,153 +134,170 @@ fn public_subcommands(command: &Command) -> Vec<&Command> {
     subcommands
 }
 
-fn collect_command_index(command: &Command, full_name: &str, index: &mut Vec<(String, String)>) {
-    index.push((full_name.to_owned(), command_anchor(full_name)));
-    for sub in public_subcommands(command) {
-        collect_command_index(sub, &format!("{full_name} {}", sub.get_name()), index);
-    }
+#[derive(Clone, Serialize)]
+struct ArgDoc {
+    anchor: String,
+    flag: String,
+    short: String,
+    value: String,
+    required: bool,
+    default: String,
+    allowed: String,
+    description: String,
+    name: String,
+    brief: String,
+}
+#[derive(Clone, Serialize)]
+struct CommandDoc {
+    name: String,
+    parent: Option<String>,
+    anchor: String,
+    about: String,
+    long_about: String,
+    usage: String,
+    args: Vec<ArgDoc>,
+    notes: String,
+    children: Vec<CommandDoc>,
+    brief: String,
+    description: String,
+    usages: Vec<String>,
+    arguments: Vec<ArgDoc>,
+    categories: Vec<OptionCategory>,
 }
 
-fn render_command_html(command: &Command, level: usize, out: &mut String, full_name: &str) {
-    let heading = level.min(6);
-    out.push_str(&format!(
-        "<section><h{heading} id=\"{}\"><code>{}</code></h{heading}>",
-        command_anchor(full_name),
-        html_escape(full_name)
-    ));
-    if let Some(about) = command.get_long_about().or_else(|| command.get_about()) {
-        out.push_str(&format!("<p>{}</p>", html_escape(&about.to_string())));
-    }
+#[derive(Clone, Serialize)]
+struct OptionCategory {
+    title: String,
+    options: Vec<ArgDoc>,
+}
+
+fn command_document(command: &Command, name: &str) -> CommandDoc {
+    command_document_with_parent(command, name, None)
+}
+
+fn command_document_with_parent(
+    command: &Command,
+    name: &str,
+    parent: Option<String>,
+) -> CommandDoc {
     let mut usage = command.clone();
-    out.push_str(&format!(
-        "<h{}>Usage</h{}><pre>{}</pre>",
-        (heading + 1).min(6),
-        (heading + 1).min(6),
-        html_escape(&usage.render_usage().to_string())
-    ));
-    let args: Vec<&Arg> = command
+    let args: Vec<ArgDoc> = command
         .get_arguments()
-        .filter(|arg| !is_auto_injected(arg))
-        .collect();
-    if !args.is_empty() {
-        out.push_str("<table><thead><tr><th>Flag</th><th>Short</th><th>Value</th><th>Required</th><th>Default</th><th>Allowed values</th><th>Description</th></tr></thead><tbody>");
-        for arg in args {
+        .filter(|arg| !is_auto_injected(arg) && !arg.is_hide_set())
+        .enumerate()
+        .map(|(index, arg)| {
+            let description = arg.get_help().map(ToString::to_string).unwrap_or_default();
             let flag = arg
                 .get_long()
                 .map(|long| format!("--{long}"))
                 .unwrap_or_else(|| format!("<{}>", arg.get_id()));
-            let short = arg
-                .get_short()
-                .map(|short| format!("-{short}"))
-                .unwrap_or_default();
-            let value = arg
-                .get_value_names()
-                .map(|names| {
-                    names
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                })
-                .unwrap_or_default();
-            let default = arg
-                .get_default_values()
-                .first()
-                .map(|value| value.to_string_lossy().to_string())
-                .unwrap_or_default();
-            let allowed = arg
-                .get_possible_values()
-                .iter()
-                .filter(|value| !value.is_hide_set())
-                .map(|value| value.get_name())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let description = arg
-                .get_help()
-                .map(|help| help.to_string())
-                .unwrap_or_default();
-            out.push_str(&format!("<tr><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td><td>{}</td><td><code>{}</code></td><td>{}</td><td>{}</td></tr>", html_escape(&flag), html_escape(&short), html_escape(&value), if arg.is_required_set() { "yes" } else { "no" }, html_escape(&default), html_escape(&allowed), html_escape(&description)));
-        }
-        out.push_str("</tbody></table>");
+            ArgDoc {
+                anchor: format!("{}-arg-{index}", command_anchor(name)),
+                flag: flag.clone(),
+                short: arg
+                    .get_short()
+                    .map(|short| format!("-{short}"))
+                    .unwrap_or_default(),
+                value: arg
+                    .get_value_names()
+                    .map(|names| {
+                        names
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    })
+                    .unwrap_or_default(),
+                required: arg.is_required_set(),
+                default: arg
+                    .get_default_values()
+                    .first()
+                    .map(|value| value.to_string_lossy().to_string())
+                    .unwrap_or_default(),
+                allowed: arg
+                    .get_possible_values()
+                    .iter()
+                    .filter(|value| !value.is_hide_set())
+                    .map(|value| value.get_name())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                description: description.clone(),
+                name: flag,
+                brief: description,
+            }
+        })
+        .collect();
+    let children = public_subcommands(command)
+        .into_iter()
+        .map(|sub| {
+            command_document_with_parent(
+                sub,
+                &format!("{name} {}", sub.get_name()),
+                Some(name.to_owned()),
+            )
+        })
+        .collect();
+    let about = command
+        .get_about()
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    let long_about = command
+        .get_long_about()
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    CommandDoc {
+        name: name.to_owned(),
+        parent,
+        anchor: command_anchor(name),
+        about: about.clone(),
+        long_about: long_about.clone(),
+        usage: usage.render_usage().to_string(),
+        args: args.clone(),
+        notes: command
+            .get_after_help()
+            .or_else(|| command.get_after_long_help())
+            .map(ToString::to_string)
+            .unwrap_or_default(),
+        children,
+        brief: about,
+        description: long_about,
+        usages: vec![usage.render_usage().to_string()],
+        arguments: args.clone(),
+        categories: vec![OptionCategory {
+            title: "Options".to_owned(),
+            options: args,
+        }],
     }
-    for sub in public_subcommands(command) {
-        render_command_html(
-            sub,
-            heading + 1,
-            out,
-            &format!("{full_name} {}", sub.get_name()),
-        );
-    }
-    out.push_str("</section>");
 }
 
-fn render_command_markdown(
-    command: &Command,
-    heading_level: usize,
-    out: &mut String,
-    full_name: &str,
-) {
+fn render_command_markdown(command: &CommandDoc, heading_level: usize, out: &mut String) {
     let heading = "#".repeat(heading_level.min(6));
-    out.push_str(&format!("{heading} `{full_name}`\n\n"));
+    out.push_str(&format!("{heading} `{}`\n\n", command.name));
 
-    if let Some(about) = command.get_long_about().or_else(|| command.get_about()) {
-        out.push_str(&about.to_string());
+    if !command.about.is_empty() {
+        out.push_str(&command.about);
         out.push_str("\n\n");
     }
 
-    let mut usage = command.clone();
     out.push_str("**Usage:**\n\n```text\n");
-    out.push_str(&usage.render_usage().to_string());
+    out.push_str(&command.usage);
     out.push_str("\n```\n\n");
 
-    let args: Vec<&Arg> = command
-        .get_arguments()
-        .filter(|arg| !is_auto_injected(arg))
-        .collect();
-
-    if !args.is_empty() {
+    if !command.args.is_empty() {
         out.push_str(
             "| Flag | Short | Value | Required | Default | Allowed values | Description |\n",
         );
         out.push_str(
             "|------|-------|-------|----------|---------|----------------|-------------|\n",
         );
-        for arg in &args {
-            let long = arg
-                .get_long()
-                .map(|long| format!("`--{long}`"))
-                .unwrap_or_else(|| format!("`<{}>`", arg.get_id()));
-            let short = arg
-                .get_short()
-                .map(|short| format!("`-{short}`"))
-                .unwrap_or_default();
-            let required = if arg.is_required_set() { "yes" } else { "no" };
-            let value = arg
-                .get_value_names()
-                .map(|names| {
-                    names
-                        .iter()
-                        .map(|name| format!("`{name}`"))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                })
-                .unwrap_or_default();
-            let default = arg
-                .get_default_values()
-                .first()
-                .map(|value| format!("`{}`", value.to_string_lossy()))
-                .unwrap_or_default();
-            let allowed_values = arg
-                .get_possible_values()
-                .iter()
-                .filter(|value| !value.is_hide_set())
-                .map(|value| format!("`{}`", value.get_name()))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let description = arg
-                .get_help()
-                .map(|help| help.to_string().replace(['\n', '|'], " "))
-                .unwrap_or_default();
+        for arg in &command.args {
+            let long = format!("`{}`", arg.flag);
+            let short = format!("`{}`", arg.short);
+            let required = if arg.required { "yes" } else { "no" };
+            let value = format!("`{}`", arg.value);
+            let default = format!("`{}`", arg.default);
+            let allowed_values = arg.allowed.clone();
+            let description = arg.description.replace(['\n', '|'], " ");
             out.push_str(&format!(
                 "| {long} | {short} | {value} | {required} | {default} | {allowed_values} | {description} |\n"
             ));
@@ -298,12 +305,9 @@ fn render_command_markdown(
         out.push('\n');
     }
 
-    if let Some(after_help) = command
-        .get_after_help()
-        .or_else(|| command.get_after_long_help())
-    {
+    if !command.notes.is_empty() {
         out.push_str("**Notes:**\n\n");
-        out.push_str(&after_help.to_string());
+        out.push_str(&command.notes);
         out.push_str("\n\n");
     }
 
@@ -311,14 +315,8 @@ fn render_command_markdown(
     // internal plumbing) are intentionally absent from `--help` and are not
     // part of the customer-facing surface this document describes. The JSON
     // structural diff in `command_surface_json` still tracks them.
-    let mut subcommands: Vec<&Command> = command
-        .get_subcommands()
-        .filter(|sub| !sub.is_hide_set())
-        .collect();
-    subcommands.sort_by_key(|sub| sub.get_name().to_string());
-    for sub in subcommands {
-        let child_full_name = format!("{full_name} {}", sub.get_name());
-        render_command_markdown(sub, (heading_level + 1).min(6), out, &child_full_name);
+    for sub in &command.children {
+        render_command_markdown(sub, (heading_level + 1).min(6), out);
     }
 }
 
@@ -330,6 +328,7 @@ mod tests {
 
     fn sample_command() -> Command {
         Command::new("sample")
+            .disable_help_flag(true)
             .about("Sample root command.")
             .arg(Arg::new("help").long("help").short('h'))
             .arg(
@@ -339,10 +338,14 @@ mod tests {
                     .required(true)
                     .help("The name to greet."),
             )
+            .after_help("Sample notes.")
             .subcommand(
-                Command::new("child")
-                    .about("Sample child command.")
-                    .arg(Arg::new("count").long("count").default_value("1")),
+                Command::new("child").about("Sample child command.").arg(
+                    Arg::new("count")
+                        .long("count")
+                        .default_value("1")
+                        .value_parser(["1", "2"]),
+                ),
             )
     }
 
@@ -376,14 +379,18 @@ mod tests {
         assert!(markdown.contains("`--name`"));
         assert!(markdown.contains("Usage:"));
         assert!(markdown.contains("Default"));
+        assert!(markdown.contains("Sample notes."));
         assert!(markdown.contains("### `atm child`"));
     }
 
     #[test]
-    fn html_reference_wraps_the_markdown_without_an_independent_surface() {
+    fn html_reference_embeds_the_same_command_document_model() {
         let html = command_surface_html(&sample_command());
         assert!(html.starts_with("<!doctype html>"));
         assert!(html.contains("ATM CLI Reference"));
-        assert!(html.contains("&lt;name&gt;"));
+        assert!(html.contains("cli-reference-data"));
+        assert!(html.contains("\"allowed\":\"1, 2\""));
+        assert!(html.contains("\"anchor\":\"61746d206368696c64\""));
+        assert!(html.contains("Sample notes."));
     }
 }

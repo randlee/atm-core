@@ -8,7 +8,7 @@
 //! `crates/atm/src/main.rs`), which walks the live `clap::Command` tree and
 //! prints canonical output through the normal CLI bootstrap path. This keeps a
 //! single source of truth for the walk/render logic — this example is just a
-//! thin driver that writes the two outputs to disk.
+//! thin driver that writes the generated output set to disk.
 //!
 //! # Usage
 //!
@@ -20,7 +20,7 @@
 //! - `crates/atm/tests/cli_surface_baseline.json` (consumed by the
 //!   `cli_surface` diff-gate integration test)
 //! - `docs/user-documents/cli-reference.md` (the installed, versioned manual)
-//! - `site/cli-reference.html` (the matching published website page)
+//! - `site/cli/index.html` plus its self-contained stylesheet and script
 //!
 //! Pass `--check` to reject missing or stale generated output without writing.
 
@@ -92,26 +92,33 @@ fn dump(atm_bin: &Path, mode: &str) -> String {
     String::from_utf8(output.stdout).expect("CLI-surface dump output must be valid UTF-8")
 }
 
-fn write_or_check(path: &Path, contents: &str, check: bool) {
+fn write_or_check(path: &Path, contents: &str, check: bool) -> Result<(), String> {
     if check {
         match std::fs::read_to_string(path) {
-            Ok(current) if current == contents => return,
-            Ok(_) => panic!(
-                "generated CLI reference is stale: {}; rerun gen_cli_docs",
-                path.display()
-            ),
+            Ok(current) if current == contents => return Ok(()),
+            Ok(_) => {
+                return Err(format!(
+                    "generated CLI reference is stale: {}; rerun gen_cli_docs",
+                    path.display()
+                ));
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                panic!(
+                return Err(format!(
                     "generated CLI reference is missing: {}; rerun gen_cli_docs",
                     path.display()
-                )
+                ));
             }
-            Err(error) => panic!("failed to read {}: {error}", path.display()),
+            Err(error) => return Err(format!("failed to read {}: {error}", path.display())),
         }
     }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
+    }
     std::fs::write(path, contents)
-        .unwrap_or_else(|error| panic!("failed to write {}: {error}", path.display()));
+        .map_err(|error| format!("failed to write {}: {error}", path.display()))?;
     println!("wrote {}", path.display());
+    Ok(())
 }
 
 fn main() {
@@ -119,19 +126,33 @@ fn main() {
     let check = match arguments.as_slice() {
         [] => false,
         [argument] if argument == "--check" => true,
-        _ => panic!("usage: gen_cli_docs [--check]"),
+        _ => {
+            eprintln!("usage: gen_cli_docs [--check]");
+            std::process::exit(2);
+        }
     };
     let atm_bin = ensure_atm_binary_built();
 
     let json = dump(&atm_bin, "json");
     let baseline_path = manifest_dir().join("tests/cli_surface_baseline.json");
-    write_or_check(&baseline_path, &json, check);
+    let mut result = write_or_check(&baseline_path, &json, check);
 
     let markdown = dump(&atm_bin, "markdown");
     let doc_path = workspace_root().join("docs/user-documents/cli-reference.md");
-    write_or_check(&doc_path, &markdown, check);
+    result = result.and_then(|_| write_or_check(&doc_path, &markdown, check));
 
     let html = dump(&atm_bin, "html");
-    let site_path = workspace_root().join("site/cli-reference.html");
-    write_or_check(&site_path, &html, check);
+    let site_path = workspace_root().join("site/cli/index.html");
+    result = result.and_then(|_| write_or_check(&site_path, &html, check));
+    for asset in ["cli-reference.css", "cli-reference.js"] {
+        let source = manifest_dir().join("assets/cli-reference").join(asset);
+        let contents = std::fs::read_to_string(&source)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", source.display()));
+        result =
+            result.and_then(|_| write_or_check(&site_path.with_file_name(asset), &contents, check));
+    }
+    if let Err(error) = result {
+        eprintln!("{error}");
+        std::process::exit(1);
+    }
 }

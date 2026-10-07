@@ -21,8 +21,8 @@
 //! ```
 //!
 //! or via `cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs`, which
-//! regenerates both this baseline and the version-suffixed
-//! `docs/atm/cli-reference-<version>.md` from the same live tree in one
+//! regenerates this baseline, `docs/user-documents/cli-reference.md`, and
+//! the site reference from the same live tree in one
 //! step. No established bless/regen convention exists
 //! elsewhere in this repo (searched for `bless`/`UPDATE_*` env vars in
 //! existing golden-file tests and found none), so this follows the common
@@ -287,7 +287,7 @@ fn generated_installed_and_site_references_match_the_live_clap_tree() {
             "markdown",
             root.join("docs/user-documents/cli-reference.md"),
         ),
-        ("html", root.join("site/cli-reference.html")),
+        ("html", root.join("site/cli/index.html")),
     ] {
         assert_eq!(
             std::fs::read_to_string(&path)
