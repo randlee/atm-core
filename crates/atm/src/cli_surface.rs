@@ -347,13 +347,13 @@ fn render_command_markdown(command: &CommandDoc, heading_level: usize, out: &mut
             "|------|-------|-------|----------|---------|----------------|-------------|\n",
         );
         for arg in &command.args {
-            let long = format!("`{}`", arg.flag);
-            let short = format!("`{}`", arg.short);
+            let long = markdown_table_cell(&format!("`{}`", arg.flag));
+            let short = markdown_table_cell(&format!("`{}`", arg.short));
             let required = if arg.required { "yes" } else { "no" };
-            let value = format!("`{}`", arg.value);
-            let default = format!("`{}`", arg.default);
-            let allowed_values = arg.allowed.clone();
-            let description = arg.description.replace(['\n', '|'], " ");
+            let value = markdown_table_cell(&format!("`{}`", arg.value));
+            let default = markdown_table_cell(&format!("`{}`", arg.default));
+            let allowed_values = markdown_table_cell(&arg.allowed);
+            let description = markdown_table_cell(&arg.description.replace('\n', " "));
             out.push_str(&format!(
                 "| {long} | {short} | {value} | {required} | {default} | {allowed_values} | {description} |\n"
             ));
@@ -374,6 +374,11 @@ fn render_command_markdown(command: &CommandDoc, heading_level: usize, out: &mut
     for sub in &command.children {
         render_command_markdown(sub, (heading_level + 1).min(6), out);
     }
+}
+
+/// Escapes a value placed in a GitHub-Flavored Markdown table cell.
+fn markdown_table_cell(value: &str) -> String {
+    value.replace('|', r"\|")
 }
 
 #[cfg(test)]
@@ -478,6 +483,43 @@ mod tests {
 
         let markdown = command_surface_markdown(&command);
         assert!(markdown.contains("Detailed name help."));
+    }
+
+    #[test]
+    fn markdown_surface_escapes_pipes_in_every_table_cell() {
+        let command = Command::new("sample").arg(
+            Arg::new("template")
+                .long("template")
+                .value_name("FILE|-")
+                .default_value("left|right")
+                .value_parser(["first|second"])
+                .help("Description | detail."),
+        );
+
+        let markdown = command_surface_markdown(&command);
+        let row = markdown
+            .lines()
+            .find(|line| line.starts_with("| `--template`"))
+            .expect("template row");
+        assert!(row.contains("FILE\\|-"));
+        assert!(row.contains("left\\|right"));
+        assert!(row.contains("first\\|second"));
+        assert!(row.contains("Description \\| detail."));
+        assert_eq!(
+            row.chars()
+                .fold(
+                    (false, 0),
+                    |(escaped, separators), character| match character {
+                        _ if escaped => (false, separators),
+                        '\\' => (true, separators),
+                        '|' => (false, separators + 1),
+                        _ => (false, separators),
+                    }
+                )
+                .1,
+            8,
+            "escaped pipes must not introduce Markdown table columns: {row}"
+        );
     }
 
     #[test]

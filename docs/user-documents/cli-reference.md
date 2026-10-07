@@ -95,7 +95,7 @@ Usage: atm compose [OPTIONS] --template <PATH>
 | Flag | Short | Value | Required | Default | Allowed values | Description |
 |------|-------|-------|----------|---------|----------------|-------------|
 | `--template` | `` | `PATH` | yes | `` |  | Template file to validate and render |
-| `--vars` | `` | `FILE|-` | no | `` |  | JSON object providing template variables; `-` reads stdin |
+| `--vars` | `` | `FILE\|-` | no | `` |  | JSON object providing template variables; `-` reads stdin |
 | `--var` | `` | `KEY=VALUE` | no | `` |  | One template variable; may be repeated |
 | `--env-prefix` | `` | `PREFIX` | no | `` |  | Capture environment variables with this prefix |
 | `--dry-run` | `` | `DRY_RUN` | no | `false` |  | Validate and render without any side effects (the default operation is already side-effect free; the flag makes scripts self-documenting) |
@@ -118,9 +118,9 @@ Usage: atm doctor [OPTIONS]
 
 | Flag | Short | Value | Required | Default | Allowed values | Description |
 |------|-------|-------|----------|---------|----------------|-------------|
-| `--team` | `` | `TEAM` | no | `` |  | Override the team resolved from caller context. |
+| `--team` | `` | `TEAM` | no | `` |  | Override the team resolved from caller context |
 | `--all-teams` | `` | `ALL_TEAMS` | no | `false` |  | Inspect every team in the canonical roster. |
-| `--json` | `` | `JSON` | no | `false` |  | Emit the result as JSON. |
+| `--json` | `` | `JSON` | no | `false` |  | Emit the result as JSON |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
 ### `atm escalation`
@@ -568,7 +568,7 @@ Usage: atm queue [OPTIONS] [TO] [MESSAGE]
 | `--file` | `` | `FILE` | no | `` |  | Read the message body from this file |
 | `--stdin` | `` | `STDIN` | no | `false` |  | Read the message body from standard input |
 | `--template` | `` | `PATH` | no | `` |  | Render and send a locally loaded template through the daemon-owned template admission path |
-| `--vars` | `` | `FILE|-` | no | `` |  | JSON object providing template variables. `-` reads this object from stdin; it is distinct from `--stdin`, which is a plain message source |
+| `--vars` | `` | `FILE\|-` | no | `` |  | JSON object providing template variables. `-` reads this object from stdin; it is distinct from `--stdin`, which is a plain message source |
 | `--var` | `` | `KEY=VALUE` | no | `` |  | One template variable. May be repeated; values parse as JSON when possible and otherwise remain strings |
 | `--env-prefix` | `` | `PREFIX` | no | `` |  | Capture current environment variables with this prefix at CLI composition time |
 | `--attach` | `` | `PATH` | no | `` |  | Attach a local file for Send-To delivery (ADR-055). May be repeated. A same-host recipient's files are staged under `$ATM_TEMP/send-to/<id>/`; a remote recipient's files are routed through that host's configured transfer script (see `docs/cross-host-file-transfer.md`). The landed path rides in the message text; there is no envelope change. Mutually exclusive with `--template` (structured template content and free-form attachment notes are not composed in this phase) |
@@ -696,7 +696,7 @@ Usage: atm send [OPTIONS] [TO] [MESSAGE]
 | `--file` | `` | `FILE` | no | `` |  | Read the message body from this file |
 | `--stdin` | `` | `STDIN` | no | `false` |  | Read the message body from standard input |
 | `--template` | `` | `PATH` | no | `` |  | Render and send a locally loaded template through the daemon-owned template admission path |
-| `--vars` | `` | `FILE|-` | no | `` |  | JSON object providing template variables. `-` reads this object from stdin; it is distinct from `--stdin`, which is a plain message source |
+| `--vars` | `` | `FILE\|-` | no | `` |  | JSON object providing template variables. `-` reads this object from stdin; it is distinct from `--stdin`, which is a plain message source |
 | `--var` | `` | `KEY=VALUE` | no | `` |  | One template variable. May be repeated; values parse as JSON when possible and otherwise remain strings |
 | `--env-prefix` | `` | `PREFIX` | no | `` |  | Capture current environment variables with this prefix at CLI composition time |
 | `--attach` | `` | `PATH` | no | `` |  | Attach a local file for Send-To delivery (ADR-055). May be repeated. A same-host recipient's files are staged under `$ATM_TEMP/send-to/<id>/`; a remote recipient's files are routed through that host's configured transfer script (see `docs/cross-host-file-transfer.md`). The landed path rides in the message text; there is no envelope change. Mutually exclusive with `--template` (structured template content and free-form attachment notes are not composed in this phase) |

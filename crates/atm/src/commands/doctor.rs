@@ -20,7 +20,7 @@ use crate::composition::{
 #[derive(Debug, Args)]
 /// Run ATM health and configuration diagnostics.
 pub struct DoctorCommand {
-    #[arg(long, help = "Override the team resolved from caller context.")]
+    #[arg(long, help = "Override the team resolved from caller context")]
     team: Option<String>,
 
     #[arg(
@@ -30,7 +30,7 @@ pub struct DoctorCommand {
     )]
     all_teams: bool,
 
-    #[arg(long, help = "Emit the result as JSON.")]
+    #[arg(long, help = "Emit the result as JSON")]
     json: bool,
 }
 
