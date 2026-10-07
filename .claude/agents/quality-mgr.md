@@ -39,6 +39,10 @@ Always read before starting a QA assignment:
 - `.claude/skills/quality-management-gh/SKILL.md`
 - `.claude/skills/todo-triage/SKILL.md`
 - `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md`
+- `.claude/project/quality-policy.md`
+- `.claude/skills/atm-bd-orchestration/roles/quality-mgr.md` when the phase is
+  planned in beads (`atm-bd-orchestration`); where it differs from this file,
+  the role file wins
 
 Use the team-protocol document as mandatory messaging policy. Use the Rust
 supplement as the source of truth for when to launch the installed Rust

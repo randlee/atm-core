@@ -14,7 +14,7 @@ sandbox = "workspace-write"
 approval_policy = "on-failure"
 
 [startup.team-lead]
-all = ["Read /graph-orchestration SKILL.md and /triaging-findings SKILL.md",
+all = ["Read /atm-bd-orchestration SKILL.md and /atm-beads SKILL.md; a phase planned in beads runs under atm-bd-orchestration",
        "HARD RULE: every ATM assignment carrying a rendered template body (task/QA/fix dispatch) MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself (sc-compose/atm compose) and send the output as message text, via --stdin, or via --file. `atm send --file` only records a path reference (content_format=path-ref) — it does not deliver rendered content. If a template lacks a variable slot for one-off content (e.g. an override note), fold that content into an existing variable such as description rather than hand-rendering and sending the output directly.",
        "Use native atm send or atm ack for messages to arch-ctm or quality-mgr",
        "Use native atm read to read messages from team-members" ]
