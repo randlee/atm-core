@@ -253,8 +253,8 @@ async fn run() -> Result<(), AtmError> {
 }
 
 /// Prints the live CLI-surface tree in the requested `mode` (`json`,
-/// `markdown`, or `html`) to stdout. Called only by the hidden parsed
-/// `atm __dump-cli-surface --format <json|markdown|html>` command.
+/// `markdown`, `html`, or `missing-help`) to stdout. Called only by the
+/// hidden parsed `atm __dump-cli-surface` command.
 #[cfg(any(test, feature = "cli-surface-dump"))]
 pub(crate) fn dump_cli_surface(mode: commands::CliSurfaceFormat) -> Result<(), AtmError> {
     let mut root = commands::Cli::command();
@@ -277,6 +277,14 @@ pub(crate) fn dump_cli_surface(mode: commands::CliSurfaceFormat) -> Result<(), A
         }
         commands::CliSurfaceFormat::Html => {
             println!("{}", cli_surface::command_surface_html(&root));
+            Ok(())
+        }
+        commands::CliSurfaceFormat::MissingHelp => {
+            let missing = cli_surface::undocumented_public_args(&root);
+            let rendered = serde_json::to_string_pretty(&missing).map_err(|_source| {
+                AtmError::validation("failed to render undocumented CLI-argument JSON")
+            })?;
+            println!("{rendered}");
             Ok(())
         }
     }

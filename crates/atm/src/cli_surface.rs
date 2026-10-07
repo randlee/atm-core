@@ -64,6 +64,42 @@ pub(crate) fn command_surface_json(command: &Command) -> Value {
     })
 }
 
+/// Lists public CLI arguments that have no non-empty help text.
+///
+/// This follows the same visibility rules as the customer-facing renderers:
+/// clap's auto-injected flags, hidden arguments, and hidden subcommands are
+/// intentionally absent. Each returned value identifies the command and
+/// argument so the CI gate can name the source surface that needs help.
+pub(crate) fn undocumented_public_args(command: &Command) -> Vec<String> {
+    let mut missing = Vec::new();
+    collect_undocumented_public_args(command, command.get_name(), &mut missing);
+    missing.sort();
+    missing
+}
+
+fn collect_undocumented_public_args(command: &Command, path: &str, missing: &mut Vec<String>) {
+    for arg in command
+        .get_arguments()
+        .filter(|arg| !is_auto_injected(arg) && !arg.is_hide_set())
+    {
+        let has_help = arg
+            .get_help()
+            .is_some_and(|help| !help.to_string().trim().is_empty());
+        if !has_help {
+            let display = arg
+                .get_long()
+                .map(|long| format!("--{long}"))
+                .unwrap_or_else(|| format!("<{}>", arg.get_id()));
+            missing.push(format!("{path} {display}"));
+        }
+    }
+
+    for subcommand in public_subcommands(command) {
+        let subcommand_path = format!("{path} {}", subcommand.get_name());
+        collect_undocumented_public_args(subcommand, &subcommand_path, missing);
+    }
+}
+
 fn arg_surface_json(arg: &Arg) -> Value {
     let num_args = arg.get_num_args().map(|range| {
         json!({
@@ -218,7 +254,15 @@ fn command_arguments(command: &Command, name: &str) -> Vec<ArgDoc> {
         .filter(|arg| !is_auto_injected(arg) && !arg.is_hide_set())
         .enumerate()
         .map(|(index, arg)| {
-            let description = arg.get_help().map(ToString::to_string).unwrap_or_default();
+            // Match clap's full `--help` rendering: a doc comment's first
+            // paragraph is brief help, while later paragraphs are long help.
+            // The generated manual is the long-form reference, so preserve
+            // that complete argument description when it is available.
+            let description = arg
+                .get_long_help()
+                .or_else(|| arg.get_help())
+                .map(ToString::to_string)
+                .unwrap_or_default();
             let flag = arg
                 .get_long()
                 .map(|long| format!("--{long}"))
@@ -336,7 +380,10 @@ fn render_command_markdown(command: &CommandDoc, heading_level: usize, out: &mut
 mod tests {
     use clap::{Arg, Command};
 
-    use super::{command_surface_html, command_surface_json, command_surface_markdown};
+    use super::{
+        command_surface_html, command_surface_json, command_surface_markdown,
+        undocumented_public_args,
+    };
 
     fn sample_command() -> Command {
         Command::new("sample")
@@ -384,6 +431,31 @@ mod tests {
     }
 
     #[test]
+    fn undocumented_public_args_excludes_hidden_surface_and_names_offenders() {
+        let command = Command::new("sample")
+            .arg(Arg::new("missing").long("missing"))
+            .arg(Arg::new("hidden").long("hidden").hide(true))
+            .subcommand(
+                Command::new("hidden-command")
+                    .hide(true)
+                    .arg(Arg::new("also-missing")),
+            )
+            .subcommand(
+                Command::new("visible-command")
+                    .arg(Arg::new("documented").long("documented").help("Explained."))
+                    .arg(Arg::new("missing-positional")),
+            );
+
+        assert_eq!(
+            undocumented_public_args(&command),
+            vec![
+                "sample --missing".to_owned(),
+                "sample visible-command <missing-positional>".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
     fn markdown_surface_includes_help_text_and_tables() {
         let markdown = command_surface_markdown(&sample_command());
         assert!(markdown.contains("Sample root command."));
@@ -393,6 +465,19 @@ mod tests {
         assert!(markdown.contains("Default"));
         assert!(markdown.contains("Sample notes."));
         assert!(markdown.contains("### `atm child`"));
+    }
+
+    #[test]
+    fn markdown_surface_prefers_long_argument_help() {
+        let command = Command::new("sample").arg(
+            Arg::new("name")
+                .long("name")
+                .help("Brief name help.")
+                .long_help("Brief name help.\n\nDetailed name help."),
+        );
+
+        let markdown = command_surface_markdown(&command);
+        assert!(markdown.contains("Detailed name help."));
     }
 
     #[test]

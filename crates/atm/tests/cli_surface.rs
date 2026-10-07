@@ -298,3 +298,14 @@ fn generated_installed_and_site_references_match_the_live_clap_tree() {
         );
     }
 }
+
+#[test]
+fn every_public_argument_has_help() {
+    let missing: Vec<String> = serde_json::from_str(&live_surface("missing-help"))
+        .expect("missing-help output must be a JSON array");
+    assert!(
+        missing.is_empty(),
+        "public ATM CLI arguments require help text; add help for:\n{}",
+        missing.join("\n")
+    );
+}
