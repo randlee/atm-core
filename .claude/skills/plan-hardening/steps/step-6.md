@@ -36,6 +36,7 @@ Expected `/tmp/plan-hardening-qa-vars.json` shape:
   "references": [
     "docs/project-plan.md"
   ],
+  "round_index": 1,
   "changed_files": "",
   "triage_records": ""
 }

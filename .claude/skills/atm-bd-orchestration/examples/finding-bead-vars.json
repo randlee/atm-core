@@ -6,7 +6,7 @@
   "stack": "phase-d",
   "found_on_layer": 4,
   "found_at_commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
-  "severity": "blocking",
+  "severity": "important",
   "difficulty": "hard",
   "screen": "keep",
   "reviewer": "rust-qa-agent",
@@ -15,6 +15,7 @@
   "description": "Retries use a fixed delay, so many exporters retry in lockstep after a collector outage.",
   "remedy": "Add full jitter to the retry delay in crates/example-otlp/src/sync.rs and a test for it.",
   "evidence": "crates/example-otlp/src/sync.rs:97 `sleep(self.retry_delay)`",
+  "parent": "atm-phase-d",
   "sprint_bead": "atm-d-4",
   "requirements": [
     "NONE"

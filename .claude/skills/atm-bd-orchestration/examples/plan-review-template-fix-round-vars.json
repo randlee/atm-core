@@ -3,5 +3,15 @@
   "root": "atm-phase-d",
   "phase": "d",
   "round": 2,
-  "carry_forward": "atm-d-4 blocking requirements: empty; list the governing REQ ids or [\"NONE\"]\natm-d-5 blocking adrs: ADR-020 is not in docs/architecture.md"
+  "carry_forward": "atm-d-4 blocking validate-plan requirements: empty; list the governing REQ ids or [\"NONE\"]\natm-d-5 blocking arch-qa adrs: ADR-020 is not in docs/architecture.md",
+  "integration_branch": "integrate/phase-d",
+  "plans_dir": "docs/plans",
+  "requirements_globs": [
+    "docs/requirements.md",
+    "docs/*/requirements.md"
+  ],
+  "adr_globs": [
+    "docs/architecture.md",
+    "docs/*/architecture.md"
+  ]
 }

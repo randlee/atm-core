@@ -88,6 +88,15 @@ agents:
     path: .claude/agents/sc-adversarial-fuzz-probe.md
 # Values the atm-bd-orchestration package renders at install time (install.py).
 bead_prefix: atm
+worktree_base: ../atm-core-worktrees
+test_command: just test
+lint_command: just lint
+integration_branch_pattern: integrate/phase-{phase}
+plans_dir: docs/plans
+requirements_globs: [docs/requirements.md]
+adr_globs: [docs/architecture.md, docs/adr/ADR-*.md]
+policy_path: .claude/project/quality-policy.md
+reviewers_round1: [req-qa, arch-qa, ruthless-boundary-qa, rust-qa-agent, rust-best-practices-agent, rust-service-hardening-agent]
 
 roles:
   dev-sanity: atm-sanity

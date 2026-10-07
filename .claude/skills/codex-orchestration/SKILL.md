@@ -117,18 +117,17 @@ Before starting a sprint:
    - `rust-best-practices-agent`
    - `rust-service-hardening-agent`
    - `flaky-test-qa` when test instability risk is present
-7. QA-2 and later (fix-verification) rounds on the same sprint branch omit
-   `ruthless-boundary-qa`, `rust-best-practices-agent`, and
-   `rust-service-hardening-agent` unconditionally — they reliably surface
-   findings on any diff regardless of size, which turns a small fix-round
-   into unbounded review churn. QA-2+ rounds launch `req-qa` + `arch-qa`
-   (scoped to the dispatched finding ids) plus `rust-qa-agent` (its
-   objective execution-fact gates — fmt, clippy, tests, lint, RULE-003,
-   pytests — are not a subjective findings pass and stay in every round).
-   The verdict is each dispatched finding's fixed/regressed/open status
-   plus `rust-qa-agent`'s gate results, nothing else. Anything req-qa or
-   arch-qa notices outside the dispatched findings goes in a debt-notes
-   section of the report and does not affect the verdict. All QA-1
+7. A review of an assigned fix (every QA of a `fix/` branch, whatever its
+   round number) is fix verification, not a sprint review; sprint QA rounds
+   1–2 stay full sprint reviews. Fix verification dispatches only the
+   reviewer(s) that filed the finding, locked to that finding id and its
+   original acceptance criterion. It reports fixed/open/regressed, files no
+   new findings, and runs only the focused checks the fix needs; there is no
+   automatic `req-qa`, `arch-qa`, `rust-qa-agent` or
+   `ceremony-finding-screen`, no sprint sweep and no TODO scan. Required CI
+   remains a separate merge requirement. Pass `triage_records` and
+   `filing_reviewers` to `qa-template.xml.j2`, which refuses a `fix/` branch
+   without them. All QA-1
    first-pass findings from every reviewer must still be fixed before
    merge — merge gate is 0B+0I+0m with no exceptions and no backlog
    deferral. QA-1 findings route back to the developer via
@@ -166,15 +165,21 @@ of §0.
    with `review_mode: plan`.
 3. The QA assignment must include the phase-plan document as `sprint_doc`, and
    that plan document is the authoritative scope source for plan QA.
-4. `quality-mgr` treats `review_mode: plan` as docs-only review and launches:
+4. `quality-mgr` treats `review_mode: plan` as docs-only review and on plan
+   QA-1 launches:
    - `req-qa`
    - `arch-qa`
    - `ruthless-boundary-qa`
    - `rust-best-practices-agent`
    - `rust-service-hardening-agent`
-   - `plan-scope-reviewer`, every plan round, rendered from
+   - `plan-scope-reviewer`, rendered from
      `plan-scope-reviewer-assignment.json.j2` in this skill
      (`.claude/project/quality-policy.md`, "Reviewer Policy")
+
+   Plan QA-2 and later is fix verification: only each carried finding's
+   filing reviewer runs, locked to that finding id; no other reviewer, no
+   screen, no new findings. Pass `triage_records` and `filing_reviewers` to
+   `qa-template.xml.j2`, which refuses a later plan round without them.
 5. If plan QA passes, the hardened plan is ready for implementation dispatch.
 6. If plan QA fails, the lead uses the normal codex-orchestration
    triage-and-fix loop to route concrete fixes back to the developer.

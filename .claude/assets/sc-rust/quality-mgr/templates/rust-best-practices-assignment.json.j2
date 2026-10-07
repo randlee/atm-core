@@ -1,12 +1,13 @@
 ---
 name: rust-best-practices-assignment
-version: 1.0.0
+version: 1.1.0
 description: Render a fenced-JSON assignment for rust-best-practices-agent.
 format: json
 required_variables:
   - review_mode
   - worktree_path
   - review_targets
+  - qa_round
 optional_variables:
   - practice_mode
   - practice_ids
@@ -24,6 +25,10 @@ defaults:
   triage_records: []
   notes: ""
 ---
+{#- A fix round (qa_round above 1) verifies only this reviewer's own carried ids; without them the render fails instead of running open-ended. #}
+{%- set cf = carry_forward_findings_json | replace(" ", "") -%}
+{%- set locked = cf not in ["", "[]", "null", "[null]", "[\"\"]"] -%}
+{%- if qa_round | int > 1 and not locked %}FIX_ROUND_SCOPE_LOCK_REQUIRED{% endif -%}
 {
   "review_mode": {{ review_mode }},
   "worktree_path": {{ worktree_path }},
@@ -41,7 +46,7 @@ defaults:
   "round_limit": {% if round_limit %}true{% else %}false{% endif %},
   "changed_files": [{% for file in changed_files %}{{ file }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "triage_records": [{% for record in triage_records %}{{ record }}{% if not loop.last %}, {% endif %}{% endfor %}],
-  "carry_forward_findings": {{ carry_forward_findings_json }},
-  "findings_scope_locked": {% if carry_forward_findings_json != "[]" %}true{% else %}false{% endif %},
-  "notes": {{ notes ~ (" SCOPE LOCK: this is a fix-round verification dispatch. Report a disposition (fixed | open | regressed) for each id in carry_forward_findings ONLY. Do not add any new finding to the `findings` array beyond those ids, even if you notice something real and unrelated -- put anything else observed under `notes`, not `findings`." if carry_forward_findings_json != "[]" else "") }}
+  "carry_forward_findings": {{ carry_forward_findings_json | safe }},
+  "findings_scope_locked": {% if locked %}true{% else %}false{% endif %},
+  "notes": {{ notes ~ (" SCOPE LOCK: this is a fix-round verification dispatch. Report a disposition (fixed | open | regressed) for each id in carry_forward_findings ONLY. Do not add any new finding to the `findings` array beyond those ids, even if you notice something real and unrelated -- put anything else observed under `notes`, not `findings`." if locked else "") }}
 }

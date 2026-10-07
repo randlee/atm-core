@@ -1,21 +1,29 @@
 ---
 name: fix-complete
-version: 0.1.0
-description: Developer completion report for one finding bead (fix-task); the body of `atm task close <task-id> completed`. The lead reads `commit` and `rebased_onto` for the fix's sanity check and link.
+version: 2.3.0
+description: Developer completion report for one finding bead (fix-task); the body of `atm task close <task-id> completed`. The task assigner reads `commit`, `rebased_onto` and the PR (required when `outcome` is `fixed`) for the fix's sanity check and link.
 format: markdown
 required_variables:
   - generated_at
   - task_id
   - sprint
   - branch
-  - commit
-  - rebased_onto
   - outcome
   - resolution_md
   - validation_md
 optional_variables:
+  - commit
+  - rebased_onto
+  - pr_number
+  - pr_url
+  - stack_view
   - notes_md
 defaults:
+  commit: ""
+  rebased_onto: ""
+  pr_number: ""
+  pr_url: ""
+  stack_view: ""
   notes_md: ""
 metadata:
   type: fix-complete
@@ -31,15 +39,28 @@ metadata:
     transition: complete
 ---
 {% if outcome not in ["fixed", "not_reproducible"] %}{{ outcome | outcome_must_be_fixed_or_not_reproducible }}ERROR: outcome must be fixed or not_reproducible, got {{ outcome }}
+{% endif %}{% if outcome == "fixed" and not (commit and rebased_onto) %}{{ outcome | fixed_requires_commit_and_rebased_onto }}ERROR: outcome fixed requires commit and rebased_onto
+{% endif %}{% if outcome == "fixed" and not (pr_number and pr_url and stack_view) %}{{ outcome | fixed_requires_pr_and_stack_view }}ERROR: outcome fixed requires pr_number, pr_url and stack_view
 {% endif %}# Fix Complete
 
 Generated: {{ generated_at }}
 Finding bead: {{ task_id }} (sprint {{ sprint }})
 Branch: `{{ branch }}`
-Commit: `{{ commit }}`
+{% if commit %}Commit: `{{ commit }}`
 Rebased onto: `{{ rebased_onto }}`
-Outcome: **{{ outcome }}**
+PR: [#{{ pr_number }}]({{ pr_url }})
+{% endif %}Outcome: **{{ outcome }}**
 
+{% if outcome == "fixed" %}
+{% if "VERDICT: ✅ COHERENT" not in stack_view or "LANDING: ✅" not in stack_view or "NOT COHERENT" in stack_view or "LANDING: ❌" in stack_view or "LANDING: ❓" in stack_view %}
+## Stack issue
+The `/sc-gh-stack-view` output below is not COHERENT with LANDING ✅.
+
+{% endif %}## Next (task assigner)
+1. Verify PR #{{ pr_number }} exists and link it on top of the phase stack (`/sc-gh-stack`), run `/sc-gh-stack-view`, and fix any stack problem yourself. The dev has already started its next queued task; do not message or re-dispatch the dev for stacking.
+2. `atm task assign` the bead's sanity check (for an important or minor finding bead, create it first: `SKILL.md` close table).
+
+{% endif %}
 ## Machine Status (JSON)
 ```json
 {
@@ -48,6 +69,8 @@ Outcome: **{{ outcome }}**
   "branch": {{ branch | tojson }},
   "commit": {{ commit | tojson }},
   "rebased_onto": {{ rebased_onto | tojson }},
+  "pr": {{ pr_number | tojson }},
+  "pr_url": {{ pr_url | tojson }},
   "outcome": {{ outcome | tojson }}
 }
 ```
@@ -57,7 +80,10 @@ Outcome: **{{ outcome }}**
 
 ## Validation
 {{ validation_md }}
-{% if notes_md %}
+{% if stack_view %}
+## Stack View
+{{ stack_view }}
+{% endif %}{% if notes_md %}
 ## Notes
 {{ notes_md }}
 {% endif %}

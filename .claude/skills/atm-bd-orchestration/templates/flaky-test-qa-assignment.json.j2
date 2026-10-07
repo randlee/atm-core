@@ -1,6 +1,6 @@
 ---
 name: flaky-test-qa-assignment
-version: 0.1.0
+version: 2.1.0
 description: Render a fenced-JSON assignment for flaky-test-qa in atm-bd-orchestration. `sprint_doc` is the file quality-mgr writes by piping `bd show <checked bead> --json` (the bead is the sprint plan); `carry_forward_findings_json` is a JSON array of the reviewer's own finding ids (`metadata.finding_ref` of the carried finding beads). Triage records are replaced by finding beads and are always empty.
 format: json
 required_variables:
@@ -23,6 +23,8 @@ defaults:
   carry_forward_findings_json: "[]"
   notes: ""
 ---
+{%- set cf = carry_forward_findings_json | replace(" ", "") -%}
+{%- set locked = cf not in ["", "[]", "null", "[null]", "[\"\"]"] -%}
 {
   "worktree_path": {{ worktree_path }},
   "branch": {{ branch }},
@@ -36,5 +38,5 @@ defaults:
   "changed_files": [{% for file in changed_files %}{{ file }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "triage_records": [],
   "carry_forward_findings": {{ carry_forward_findings_json | safe }},
-  "notes": {{ notes }}
+  "notes": {{ notes ~ (" SCOPE LOCK: this is a fix-round verification dispatch. Report a disposition (fixed | open | regressed) for each id in carry_forward_findings ONLY. Do not add any new finding to the `findings` array beyond those ids, even if you notice something real and unrelated -- put anything else observed under `notes`, not `findings`." if locked else "") }}
 }

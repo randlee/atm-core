@@ -87,7 +87,9 @@ After each scrum-master reports completion:
    fix all findings found there
 2. verify QA passed
    - QA-1 includes the Rust best-practices review
-   - QA-2 and later rounds must omit Rust best-practices review entirely
+   - a review of an assigned fix is fix verification, whatever its round
+     number: only the reviewer that filed each finding re-checks it, locked
+     to that finding id
    - unresolved QA-1 RBP findings not fixed in the first fix round carry to
      the next phase backlog instead of being re-raised in later rounds
 3. wait for CI green

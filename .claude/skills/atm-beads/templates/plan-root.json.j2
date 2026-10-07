@@ -1,6 +1,6 @@
 ---
 name: plan-root
-version: 0.1.0
+version: 1.0.0
 description: Root bead of a plan written to beads (the epic or feature every sprint bead sits under). Render strictly, then `jq -c .` into the import JSONL.
 format: json
 required_variables:
@@ -11,13 +11,12 @@ required_variables:
   - description
   - design
   - acceptance_criteria
+  - integration_branch
 optional_variables:
   - priority
-  - integration_branch
   - parent
 defaults:
   priority: 2
-  integration_branch: ""
   parent: ""
 ---
 {% if plan_scope not in ["epic", "feature"] %}ERROR: plan_scope must be epic or feature, got {{ plan_scope }}
@@ -37,6 +36,6 @@ defaults:
   "metadata": {
     "plan_scope": {{ plan_scope | tojson }},
     "phase": {{ phase | tojson }},
-    "integration_branch": {{ (integration_branch or "integrate/phase-" ~ phase) | tojson }}
+    "integration_branch": {{ integration_branch | tojson }}
   }
 }

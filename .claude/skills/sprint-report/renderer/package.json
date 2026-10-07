@@ -1,0 +1,9 @@
+{
+  "name": "sprint-report-dag-renderer",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "@viz-js/viz": "3.30.0"
+  }
+}

@@ -143,7 +143,7 @@ def resolve_integration_root(
         return Path(_git(cwd, "rev-parse", "--show-toplevel"))
 
     # Auto-discover the sibling integration worktree from a sprint worktree.
-    # Same worktree-walk pattern as triage-report's discover_integration_root:
+    # Worktree-walk pattern for discovering the integration root:
     # fail closed unless exactly one integrat* worktree exists. The prefix is
     # 'integrat' (not 'integrate') so both integrate/* and integration/*
     # branch spellings match.
@@ -179,7 +179,7 @@ def _branch_from_criteria(criteria: str) -> str | None:
     """Derive the documented sprint-branch convention from a criteria path.
 
     ``triage:branch`` is preferred when a phase records it explicitly; this
-    fallback (same as triage-report's) keeps older phase records usable.
+    fallback keeps older phase records usable.
     """
     match = re.fullmatch(
         r"sprint-([a-z][a-z0-9]*)-([0-9]+)(?:-(pre))?-(.+)",

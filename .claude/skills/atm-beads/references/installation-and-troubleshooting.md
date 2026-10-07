@@ -35,8 +35,10 @@ which one, with its install line above. Do not work around a missing CLI.
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `validate-plan` exits 2: "bd … is older than 1.3.0" | an old `bd` is first on `PATH` | `brew upgrade beads`, then `hash -r` |
-| `validate-plan` exits 2: "atm members failed" | ATM daemon or team not reachable | `atm doctor --team "$ATM_TEAM"` and report its finding |
+| `bd version` is below 1.3.0 | an old `bd` is first on `PATH` | `brew upgrade beads`, then `hash -r` |
+| `validate-plan` warns: "bd doctor produced no JSON" | `bd doctor` cannot run in this beads mode (its stderr follows the message, for example `proxy.doctor.unsupported` in proxied-server mode) | run beads in server mode; report the stderr to the lead |
+| `validate-plan` exits 2: "origin/<branch>:<plan> is missing" | the plan file is not pushed to the phase's integration branch | push the plan file and `.atm-bd/phase-<x>.toml` to it, or pass `--index` |
+| `validate-plan` exits 5: "metadata.integration_branch is …; .atm-bd/phase-<x>.toml names …" | the phase root's integration branch is missing or differs from the phase file | `bd update <root> --set-metadata integration_branch=<branch>` |
 | `bd doctor` reports an error | the beads database is unhealthy | report the check to the user; never import into or dispatch from it |
 | `sc-compose render` rejects `autoescape` or `}}}` | an XML or markdown template given to `sc-compose` | render those with `atm compose`; `sc-compose` is for the JSON templates |
 | `gh stack` hangs | an interactive form of the command | always pass branch names, `--auto`, `--json`, `--yes` (see the `sc-gh-stack` skill) |

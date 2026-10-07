@@ -1,0 +1,62 @@
+{
+  "formula": "sprint-group",
+  "description": "bead-groups data for sprint-group: the attach ref and the stage 2 edges the pour cannot make. Endpoints are format strings over {parent}, {ref}, {steps[<step>]}, {vars[<name>]} and, in an `each` edge, {each}. vars: predecessor_sanity (a list: the initial sanity bead of each sprint the plan file names in depends_on).",
+  "ref": "group",
+  "default_option": "C",
+  "defaults": {},
+  "options": {
+    "A": {
+      "description": "E1 option A: only dev is poured; the sanity bead is created when dev closes. Nothing to add after the pour.",
+      "expect": [],
+      "edges": []
+    },
+    "B": {
+      "description": "E1 option B: the poured sanity step has no `needs dev`; sanity and QA each `validates` dev.",
+      "expect": [
+        {
+          "from": "{steps[sanity]}",
+          "to": "{steps[dev]}",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "from": "{steps[sanity]}",
+          "to": "{steps[dev]}",
+          "type": "validates"
+        },
+        {
+          "from": "{steps[qa]}",
+          "to": "{steps[dev]}",
+          "type": "validates"
+        }
+      ]
+    },
+    "C": {
+      "description": "E1 option C, the existing schema: sanity `blocks` dev (poured from `needs`) with metadata.dev_bead; QA `validates` the checked bead.",
+      "expect": [
+        {
+          "from": "{steps[sanity]}",
+          "to": "{steps[dev]}",
+          "type": "blocks"
+        }
+      ],
+      "edges": [
+        {
+          "from": "{steps[qa]}",
+          "to": "{steps[dev]}",
+          "type": "validates"
+        }
+      ]
+    }
+  },
+  "edges": [
+    {
+      "description": "the dependent sprint's dev bead blocks on each predecessor's initial sanity bead (hard dependency); an edge to the predecessor's sprint container is added only on the user's request",
+      "each": "predecessor_sanity",
+      "from": "{steps[dev]}",
+      "to": "{each}",
+      "type": "blocks"
+    }
+  ]
+}

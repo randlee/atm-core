@@ -4,19 +4,21 @@
 Usage:
   sanity-split --task <sanity bead> --bead <dev bead> --worktree <path>
                --branch <branch> --commit <commit> --base <base>
-               --lint-command '<cmd>' --scratch <dir>
+               --lint-command '<cmd>' --scratch <dir> [--layer-pr <n> ...]
                [--bead-json <file>] [--split-only] [--template <path>]
                [--lint-timeout-seconds <n>]
   sanity-split lint-supervisor --worktree <path> --command '<cmd>' --log <file>
                --exit-file <file> [--timeout-seconds <n>]
 
 Reads the checked bead (`bd show <bead> --json`, or `--bead-json`), parses the
-numbered list under `## Deliverables`, pins the target commit, lists the files
-changed since the base, renders `dev-sanity-assignment.json.j2` once per
+numbered list under `## Deliverables` (a poured bead without one, or without
+`owned_paths`, takes it from its sprint container `metadata.sprint_bead`), pins the target commit, lists the files
+changed since the base (with `--layer-pr`, the union of those PRs' own ranges,
+`gh pr view <n> --json baseRefOid,headRefOid`, the checked PR last), renders `dev-sanity-assignment.json.j2` once per
 deliverable with `sc-compose`, starts the lint command detached in the
 worktree, and prints one JSON manifest to stdout:
 
-  {sha, base_sha, sanity_bead, dev_bead, branch, worktree_path,
+  {run_id, reviewers, operational_reviewer, sha, base_sha, sanity_bead, dev_bead, branch, worktree_path,
    deliverables_total, changed_files, files_outside_owned_paths,
    lint: {command, log, exit_file, pid, timeout_seconds} | null,
    assignments: [{number, assignment: <rendered object>}]}
@@ -31,8 +33,9 @@ was killed), `cancelled` (the supervisor received SIGTERM or SIGINT) or `error`.
 On timeout and on cancellation the supervisor sends SIGTERM to the command's
 whole process group, waits up to 2 seconds, SIGKILLs every survivor and
 confirms the group is empty before writing; a group that still survives is
-written as `error`. `kill -- -<pid>` or `kill <pid>` stops the supervisor and
-the lint command with all its descendants.
+written as `error`. The exit file appears atomically, complete or not at all.
+`kill -- -<pid>` or `kill <pid>` stops the supervisor and the lint command
+with all its descendants.
 
 `## Deliverables` must be one top-level numbered list `1.` .. `X.`; wrapped
 lines, indented sub-bullets and blank lines belong to the item above them,
@@ -59,6 +62,10 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
+
+# Tool lock and log files a clean worktree may hold; the same as `IGNORED_STATUS_PATHS` in assignment-gates.py.
+IGNORED_STATUS_PATHS = (".beads.gate.lock", ".sc-compose/")
 
 HERE = Path(__file__).resolve().parent
 TEMPLATE = HERE.parent / "templates" / "dev-sanity-assignment.json.j2"
@@ -76,25 +83,36 @@ def die(code, message):
     return code
 
 
-def load_bead(args):
+def load_bead(args, bead_id=None):
+    """One bead by id: `bd show <id> --json`, or the entry with that id in `--bead-json` (a bead or a list)."""
+    bead_id = bead_id or args.bead
     if args.bead_json:
         try:
             data = json.loads(Path(args.bead_json).read_text())
         except (OSError, ValueError) as exc:
             raise Fail(1, f"cannot read --bead-json: {exc}")
     else:
-        run = subprocess.run(["bd", "show", args.bead, "--json"], capture_output=True, text=True)
+        run = subprocess.run(["bd", "show", bead_id, "--json"], capture_output=True, text=True)
         if run.returncode != 0:
-            raise Fail(3, f"bd show {args.bead} failed: {run.stderr.strip()}")
+            raise Fail(3, f"bd show {bead_id} failed: {run.stderr.strip()}")
         try:
             data = json.loads(run.stdout)
         except ValueError:
-            raise Fail(3, f"bd show {args.bead} did not print JSON")
+            raise Fail(3, f"bd show {bead_id} did not print JSON")
     if isinstance(data, list):
-        data = data[0] if data else None
-    if not isinstance(data, dict) or data.get("id") != args.bead:
-        raise Fail(3, f"bead {args.bead} not found in bead JSON")
+        data = next((item for item in data if isinstance(item, dict) and item.get("id") == bead_id), None)
+    if not isinstance(data, dict) or data.get("id") != bead_id:
+        raise Fail(3, f"bead {bead_id} not found in bead JSON")
     return data
+
+
+def plan_source(args, bead):
+    """The bead holding the plan: the checked bead, or for a poured dev bead without `## Deliverables`
+    (or without owned_paths) its sprint container `metadata.sprint_bead`."""
+    sprint = (bead.get("metadata") or {}).get("sprint_bead")
+    if sprint and not (DELIVERABLES.search(bead.get("description") or "") and (bead.get("metadata") or {}).get("owned_paths")):
+        return load_bead(args, sprint)
+    return bead
 
 
 ITEM = re.compile(r"^(\d+)\.\s+(\S.*)$")
@@ -103,8 +121,11 @@ FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 HEADING = re.compile(r"^(#{1,6}) ")
 
 
+DELIVERABLES = re.compile(r"^## Deliverables[ \t]*$", re.M)
+
+
 def parse_deliverables(description):
-    match = re.search(r"^## Deliverables[ \t]*$", description or "", re.M)
+    match = DELIVERABLES.search(description or "")
     if not match:
         raise Fail(2, "bead has no `## Deliverables` section")
     items, fence, prev_blank = [], None, True
@@ -171,7 +192,8 @@ def pin(args):
     branch = git(args.worktree, "rev-parse", "--abbrev-ref", "HEAD").strip()
     if branch != args.branch:
         raise Fail(4, f"checked-out branch is {branch}, not {args.branch}")
-    if git(args.worktree, "status", "--porcelain").strip():
+    if any(line and not any(path in line for path in IGNORED_STATUS_PATHS)
+           for line in git(args.worktree, "status", "--porcelain").splitlines()):
         raise Fail(4, "worktree has uncommitted or untracked changes")
     remote = git(args.worktree, "ls-remote", "origin", f"refs/heads/{args.branch}",
                  what=f"cannot read origin refs/heads/{args.branch}")
@@ -179,6 +201,29 @@ def pin(args):
     if remote_sha != sha:
         raise Fail(4, f"origin/{args.branch} is {remote_sha or 'absent'}, not {sha}")
     return sha, base_sha
+
+
+def layer_range(worktree, pr):
+    """One stack layer's own range: its PR's (baseRefOid, headRefOid)."""
+    try:
+        run = subprocess.run(["gh", "pr", "view", pr, "--json", "baseRefOid,headRefOid"], capture_output=True, text=True, cwd=worktree)
+    except OSError as exc:
+        raise Fail(3, f"gh unavailable: {exc}")
+    if run.returncode != 0:
+        raise Fail(3, f"gh pr view {pr} failed: {run.stderr.strip()}")
+    try:
+        data = json.loads(run.stdout)
+        return str(data["baseRefOid"]), str(data["headRefOid"])
+    except (ValueError, KeyError, TypeError):
+        raise Fail(3, f"gh pr view {pr} returned no baseRefOid/headRefOid")
+
+
+def layer_files(worktree, prs, sha):
+    """The union of the changed files of each layer PR's own range; the last (checked) PR's head must be the pinned sha."""
+    ranges = [layer_range(worktree, pr) for pr in prs]
+    if ranges[-1][1] != sha:
+        raise Fail(4, f"PR {prs[-1]} head is {ranges[-1][1]}, not {sha}")
+    return sorted(set().union(*(changed_files(worktree, base, head) for base, head in ranges)))
 
 
 def changed_files(worktree, base_sha, sha):
@@ -330,8 +375,10 @@ def supervise(argv):
         outcome = "error"
         if child is not None:
             stop_group(child.pid, child)
-    finally:
-        exit_file.write_text(outcome + "\n")
+    finally:                                        # written whole, then renamed: a reader never sees it partial
+        partial = exit_file.with_name(exit_file.name + ".tmp")
+        partial.write_text(outcome + "\n")
+        os.replace(partial, exit_file)
     return 0 if outcome not in ("cancelled", "error") else 1
 
 
@@ -340,6 +387,7 @@ def main():
     for flag in ("--task", "--bead", "--worktree", "--branch", "--commit", "--base", "--lint-command", "--scratch"):
         parser.add_argument(flag, required=True)
     parser.add_argument("--bead-json")
+    parser.add_argument("--layer-pr", action="append", default=[])
     parser.add_argument("--split-only", action="store_true")
     parser.add_argument("--template", type=Path, default=TEMPLATE)
     parser.add_argument("--lint-timeout-seconds", type=int, default=1800)
@@ -349,13 +397,15 @@ def main():
         return 1
     try:
         bead = load_bead(args)
-        deliverables = parse_deliverables(bead.get("description") or "")
-        owned = (bead.get("metadata") or {}).get("owned_paths") or []
+        source = plan_source(args, bead)
+        own = bead.get("description") or ""
+        deliverables = parse_deliverables(own if DELIVERABLES.search(own) else source.get("description") or "")
+        owned = (bead.get("metadata") or {}).get("owned_paths") or (source.get("metadata") or {}).get("owned_paths") or []
         if args.split_only:
             sha, base_sha, files, lint = args.commit, args.base, [], None
         else:
             sha, base_sha = pin(args)
-            files = changed_files(args.worktree, base_sha, sha)
+            files = layer_files(args.worktree, args.layer_pr, sha) if args.layer_pr else changed_files(args.worktree, base_sha, sha)
             lint = None
         outside = outside_fence(files, owned)
         assignments = []
@@ -364,15 +414,18 @@ def main():
                 "sanity_bead": args.task, "dev_bead_id": bead["id"], "dev_bead_title": bead.get("title") or "",
                 "deliverable_number": item["number"], "deliverable_text": item["text"],
                 "deliverables_total": len(deliverables),
-                "acceptance_criteria": bead.get("acceptance_criteria") or "", "design": bead.get("design") or "",
                 "owned_paths": owned, "changed_files": files, "files_outside_owned_paths": outside,
+                "context": [],
                 "worktree_path": args.worktree, "branch": args.branch, "commit": sha, "base_sha": base_sha,
             })})
         if not args.split_only:
             lint = start_lint(args)
     except Fail as exc:
         return die(exc.code, str(exc))
-    json.dump({"sha": sha, "base_sha": base_sha, "sanity_bead": args.task, "dev_bead": bead["id"],
+    json.dump({"run_id": str(uuid.uuid4()),
+               "reviewers": ["sanity-llm", "sanity-jev", "sanity-selected"],
+               "operational_reviewer": "sanity-selected",
+               "sha": sha, "base_sha": base_sha, "sanity_bead": args.task, "dev_bead": bead["id"],
                "branch": args.branch, "worktree_path": args.worktree, "deliverables_total": len(deliverables),
                "changed_files": files, "files_outside_owned_paths": outside, "lint": lint,
                "assignments": assignments}, sys.stdout, indent=2)

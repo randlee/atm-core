@@ -1,7 +1,7 @@
 ---
 name: sprint-report
-version: 3.3.0
-description: Sprint status report for atm-core phases.
+version: 4.0.0
+description: Sprint status report for phase plans.
 format: markdown
 required_variables:
   - mode
@@ -13,8 +13,8 @@ required_variables:
 ────────────────────────────────────────
 {{ integration_row }}
 {% else %}
-| Sprint | DEV | QA | CI | PR | Live B | Live I | Live M | Ready | OK |
-|--------|-----|----|----|----|--------|--------|--------|-------|----|
+| Sprint | DEV | S | QA | FIND | CI | PR |
+|--------|-----|---|----|------|----|-----|
 {{ sprint_rows }}
 {{ integration_row }}
 {% endif %}

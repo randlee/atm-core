@@ -1,0 +1,12 @@
+---
+name: sanity-run-table
+version: 2.1.0
+description: Sanity ledger rows, two per run (LLM, JEV), rendered from the ledger tail; other reviewers' rows (pre-0.8.2 `sanity-selected`) are skipped.
+format: markdown
+required_variables:
+  - runs
+---
+| S | PR | R | Find | Result | Match | Done | Iter |
+|:--|:--|:--|---:|:--|:--|:--|---:|
+{% for run in runs %}{% if run.reviewer in ["sanity-llm", "sanity-jev"] %}| {{ run.sprint }} | {% if run.pr_number %}#{{ run.pr_number }}{% else %}—{% endif %} | {% if run.reviewer == "sanity-jev" %}JEV{% else %}LLM{% endif %} | {% if run.verdict == "CANNOT_RUN" %}—{% else %}{{ run.findings }}{% endif %} | {% if run.verdict == "PASS" %}✅{% elif run.verdict == "FAIL" %}❌{% else %}⚠ unavailable{% endif %} | {% if not run.final_verdict | default("") %}—{% elif run.verdict == run.final_verdict %}✓{% else %}✗{% endif %} | {{ run.completed_local | default(run.completed_at) }} · {{ run.duration }} | {{ run.iteration }} |
+{% endif %}{% endfor %}

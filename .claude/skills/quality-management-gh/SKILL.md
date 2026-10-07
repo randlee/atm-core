@@ -84,10 +84,11 @@ Use fenced JSON for machine-readable status payloads:
 ## QA Lifecycle (Multi-Pass)
 
 1. Initial pass: usually `FAIL` with findings.
-   - If Rust best-practices review is in scope, run it in QA-1 only.
+   - If Rust best-practices review is in scope, run it open-ended in QA-1 only.
 2. Fix passes: `IN-FLIGHT` or `FAIL` while fixes are in progress.
-   - QA-2 and later rounds must not re-run Rust best-practices review on the
-     same sprint branch.
+   - A fix verification (every QA of an assigned fix, whatever its round
+     number) dispatches only the reviewer that filed each finding, locked to that
+     finding id; it files no new findings and adds no other reviewer.
    - Unresolved QA-1 RBP findings that are not fixed in the first fix round
      carry to the next phase backlog instead of being re-raised in later rounds.
 3. Final pass: `PASS` with final quality report and merge recommendation.
