@@ -39,7 +39,8 @@ all = ["Your role is dev under atm-bd-orchestration: work arrives by atm task as
        "Use native atm read to read messages from team-members" ]
 
 [startup.fenix]
-all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
+all = ["Your role is dev under atm-bd-orchestration: work arrives by atm task assign with the dev template; no user is watching, so execute every step through to the task close and never end a turn on a promise of future work",
+       "HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
        "Use native atm send or atm ack for messages to team-lead, arch-ctm, or quality-mgr",
        "Use native atm read to read messages from team-members" ]
 
@@ -54,7 +55,8 @@ all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST b
        "Use native atm read to read messages from team-members" ]
 
 [startup.solar]
-all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
+all = ["Your role is dev under atm-bd-orchestration: work arrives by atm task assign with the dev template; no user is watching, so execute every step through to the task close and never end a turn on a promise of future work",
+       "HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
        "Use native atm send or atm ack for messages to team-lead or quality-mgr",
        "Use native atm read to read messages from team-members" ]
 
