@@ -157,6 +157,39 @@ def update_lockfile(repo_root: Path) -> str:
     return (repo_root / "Cargo.lock").read_text(encoding="utf-8")
 
 
+def regenerate_cli_reference(repo_root: Path) -> dict[Path, str]:
+    """Regenerate the versioned installed and website CLI references."""
+    result = subprocess.run(
+        [
+            "cargo",
+            "run",
+            "-p",
+            "agent-team-mail",
+            "--features",
+            "cli-surface-dump",
+            "--example",
+            "gen_cli_docs",
+        ],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise SystemExit(f"CLI reference regeneration failed: {detail}")
+    return {
+        path: path.read_text(encoding="utf-8")
+        for path in (
+            repo_root / "crates/atm/tests/cli_surface_baseline.json",
+            repo_root / "docs/user-documents/cli-reference.md",
+            repo_root / "site/cli/index.html",
+            repo_root / "site/cli/cli-reference.css",
+            repo_root / "site/cli/cli-reference.js",
+        )
+    }
+
+
 def verify_lockstep(repo_root: Path) -> None:
     result = subprocess.run(
         [sys.executable, str(repo_root / ".just" / "check_version_sync.py")],
@@ -233,6 +266,7 @@ def candidate_changes(repo_root: Path, old: str, new: str) -> dict[Path, str]:
         candidate_updates = update_manifest_versions(candidate, old, new)
         lockfile = update_lockfile(candidate)
         candidate_updates[candidate / "Cargo.lock"] = lockfile
+        candidate_updates.update(regenerate_cli_reference(candidate))
         validate_candidate(candidate, new, candidate_updates)
         return {
             repo_root / path.relative_to(candidate): text

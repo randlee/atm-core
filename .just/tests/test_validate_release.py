@@ -159,8 +159,8 @@ class ValidateReleaseContractTests(unittest.TestCase):
 
         self.assertFalse(findings)
         self.assertEqual(
-            run_capture.call_args.args[0],
-            [
+            [call.args[0] for call in run_capture.call_args_list],
+            [[
                 "cargo",
                 "test",
                 "-p",
@@ -169,8 +169,21 @@ class ValidateReleaseContractTests(unittest.TestCase):
                 "cli-surface-dump",
                 "--test",
                 "cli_surface",
-            ],
+            ], [
+                "cargo", "run", "-p", "agent-team-mail", "--features", "cli-surface-dump",
+                "--example", "gen_cli_docs", "--", "--check",
+            ]],
         )
+
+    @mock.patch.object(VALIDATE_RELEASE, "run_capture")
+    def test_validate_cli_surface_reports_stale_generated_reference(self, run_capture: mock.Mock) -> None:
+        run_capture.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="stale"),
+        ]
+        findings: list[VALIDATE_RELEASE.Finding] = []
+        VALIDATE_RELEASE.validate_cli_surface(self.root, findings)
+        self.assertTrue(any(f.blocks and f.check == "cli-surface" for f in findings))
 
     @mock.patch.object(VALIDATE_RELEASE, "run_capture")
     def test_manifest_validation_uses_installed_kit_contract(self, run_capture: mock.Mock) -> None:
