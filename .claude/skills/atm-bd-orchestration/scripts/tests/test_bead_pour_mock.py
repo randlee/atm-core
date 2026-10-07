@@ -1,10 +1,12 @@
 """bead-groups and sc-compose-pour-mock against a real bd 1.3.0 database.
 
-The module initializes one throwaway proxied-server workspace
-(`bd init --prefix t --proxied-server`; the embedded engine is not in this bd
-build) laid out like an installed repository, so these tests need `bd`,
-`dolt` (the proxy's backend) and `sc-compose` (the mock renders with the real
-one). Nothing here mocks bd. Each test uses its own phase.
+The module starts its own `dolt sql-server` on a free loopback port and
+initializes one throwaway workspace against it (`bd init --server --external`,
+the mode consuming repositories run in), laid out like an installed
+repository, so these tests need `bd`, `dolt` and `sc-compose` (the mock
+renders with the real one). Proxied-server mode is not used: its proxy stops
+and restarts the dolt child, and the restart can find the old child still on
+the port (#88). Nothing here mocks bd. Each test uses its own phase.
 """
 from __future__ import annotations
 
@@ -12,9 +14,11 @@ import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -47,13 +51,11 @@ class Workspace:
         return proc
 
     def server_logs(self) -> str:
-        """The proxied server's log tails, so a dropped connection carries its cause."""
-        out = ""
-        for name in ("proxy.log", "server.log"):
-            log = self.root / ".beads" / "dolt" / name
-            if log.is_file():
-                out += f"\n--- {name} (last 40 lines) ---\n" + "\n".join(log.read_text(errors="replace").splitlines()[-40:])
-        return out
+        """The dolt server's log tail, so a dropped connection carries its cause."""
+        log = self.root / SERVER_DIR / "server.log"
+        if not log.is_file():
+            return ""
+        return "\n--- server.log (last 40 lines) ---\n" + "\n".join(log.read_text(errors="replace").splitlines()[-40:])
 
     def bd(self, *args, check=True):
         return self.run("bd", *args, check=check)
@@ -114,9 +116,35 @@ class Workspace:
         return json.loads(proc.stdout)
 
 
+SERVER_DIR = ".dolt-server"   # data directory and log of the workspace's own dolt sql-server
+
+
+def start_server(root: Path) -> int:
+    """Start a dolt sql-server for the workspace on a free loopback port; return the port once it accepts connections."""
+    data = root / SERVER_DIR
+    data.mkdir()
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    with (data / "server.log").open("w") as log:
+        server = subprocess.Popen(["dolt", "sql-server", "-H", "127.0.0.1", "-P", str(port), f"--data-dir={data}"],
+                                  cwd=data, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        if server.poll() is not None:
+            break
+        try:
+            socket.create_connection(("127.0.0.1", port), timeout=0.5).close()
+            return port
+        except OSError:
+            time.sleep(0.2)
+    tail = "\n".join((data / "server.log").read_text(errors="replace").splitlines()[-40:])
+    raise AssertionError(f"dolt sql-server on 127.0.0.1:{port} did not accept connections "
+                         f"(exit {server.poll()}):\n{tail}")
+
+
 def stop_server(root: Path) -> None:
-    subprocess.run(["bd", "dolt", "stop"], cwd=root, env=clean_env(), capture_output=True)
-    marker = str(root / ".beads" / "dolt")
+    marker = str(root / SERVER_DIR)
     for line in subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True).stdout.splitlines():
         pid, _, command = line.strip().partition(" ")
         if marker in command:
@@ -129,7 +157,9 @@ def stop_server(root: Path) -> None:
 def init_workspace(w: Workspace) -> None:
     root = w.root
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    w.bd("init", "--prefix", "t", "--proxied-server", "--non-interactive", "--quiet", "--skip-agents", "--skip-hooks")
+    port = start_server(root)
+    w.bd("init", "--prefix", "t", "--server", "--external", "--server-host", "127.0.0.1", "--server-port", str(port),
+         "--non-interactive", "--quiet", "--skip-agents", "--skip-hooks")
     ignore = shutil.ignore_patterns("__pycache__", "tests")
     shutil.copytree(SKILL, root / ".claude/skills/atm-bd-orchestration", ignore=ignore)
     shutil.copytree(ATM_BEADS, root / ".claude/skills/atm-beads", ignore=ignore)

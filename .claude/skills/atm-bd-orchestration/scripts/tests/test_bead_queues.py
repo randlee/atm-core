@@ -1,4 +1,4 @@
-"""bead-queues against a real bd workspace (the pour tests' proxied server), with `atm` and `gh` stubbed.
+"""bead-queues against a real bd workspace (the pour tests' own dolt server), with `atm` and `gh` stubbed.
 
 The beads are built in the package's shape: sprint groups poured by bead-groups
 under a container that is a child of the phase root, finding beads and fix

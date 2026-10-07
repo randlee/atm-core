@@ -1,6 +1,6 @@
 {
   "package": "atm-bd-orchestration",
-  "version": "0.11.4",
+  "version": "0.11.6",
   "files": {
     ".claude/agents/ceremony-qa.md": "5f0b5f2276b0e8e5b33ddec296e42bc69106b57bae94100084e89736e0dc52b2",
     ".claude/agents/dev-sanity.md": "9610c6f909959dc5726080973ee2ab6429b3e2c95ffa04e8e6259f58665c5ccb",
@@ -8,7 +8,7 @@
     ".claude/agents/sc-sanity-jev.md": "ea3c6ef285ba1d7b2a6c1ad7eaf2a74b67b9649426efaaea36dff3faa315c235",
     ".claude/agents/sc-sanity-llm.md": "1725990d2a92b5db50f3ac17c44f0b89be05dbefd913611fc9695665a753ab16",
     ".claude/project/atm-bd-orchestration.yaml": "024c8109db944f4261af45f2182802dda3ddff6f7866d245352cadb84d3499ab",
-    ".claude/skills/atm-bd-orchestration/SKILL.md": "31d1475ba9c5e84d09ffbfebccaa9c87f6b0ce410512a8829f90336b3e0e6dd4",
+    ".claude/skills/atm-bd-orchestration/SKILL.md": "fe5f8ee3ad3a0fdf1be6cb1a77b5a64ca4ece37bf2d7cac3b9013097e8b50244",
     ".claude/skills/atm-bd-orchestration/blocking-findings-guidelines.md": "9aef815d7ff9d30893d8857e1a48f7dfc0bff20be6d1ed3fbf1d631ac84c8d50",
     ".claude/skills/atm-bd-orchestration/examples/arch-qa-assignment-vars.json": "5d49d302f6db63540ca0a44d225c12ae2b066f412ad8972bb4abaf57359f43ed",
     ".claude/skills/atm-bd-orchestration/examples/dev-complete-vars.json": "55197c0a2caeafe4fb8f8bae30a74d020a4cc8d03b3b018c2c8f978623d49142",
@@ -89,8 +89,8 @@
     ".claude/skills/atm-bd-orchestration/scripts/tests/jev_receipts.py": "c81c1c6998c6982ba9cb768d38b59c65c9f40198898b885f0456c87d1ae9ba08",
     ".claude/skills/atm-bd-orchestration/scripts/tests/test_assignment_gates.py": "6f50e00068f8979ae88b439d975d6b360c2f097f9e7350f2b87d994cd1ea4a6f",
     ".claude/skills/atm-bd-orchestration/scripts/tests/test_atomic.py": "763de39b9204b7e5e7cef68684d2f145517b4713fb5cf76eaefd3b8c502c2169",
-    ".claude/skills/atm-bd-orchestration/scripts/tests/test_bead_pour_mock.py": "bf8c6d191d469d121e1e723af053db1ec70770236226912a97462946572e754f",
-    ".claude/skills/atm-bd-orchestration/scripts/tests/test_bead_queues.py": "e58b433887d64631798a18d4a1b964bb89e77e66c971cf584ea824f6ddd20412",
+    ".claude/skills/atm-bd-orchestration/scripts/tests/test_bead_pour_mock.py": "336412e7c495dfdebf8da6f64887044e0619064868d4f5b7a98579d1bda5dec1",
+    ".claude/skills/atm-bd-orchestration/scripts/tests/test_bead_queues.py": "f2b2c4a0a0a4dc1bfef4322b5a61a65e4ccfe88becca0bf026108ef886670540",
     ".claude/skills/atm-bd-orchestration/scripts/tests/test_bv_analyze.py": "a9760d906f22d109df5965463ee83b9e02c5ca683a8689702ff1d2a90bc64eeb",
     ".claude/skills/atm-bd-orchestration/scripts/tests/test_fix_round_scope.py": "52dea76c5b9577d503256b976f6027198b27382a50b3666e639cd07b2864e934",
     ".claude/skills/atm-bd-orchestration/scripts/tests/test_jev_client.py": "5a12e3f098056067d4dc3fc42e726c64a982c83c15dc58d112be859573951a76",
