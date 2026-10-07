@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
 import os
 import re
@@ -246,36 +245,37 @@ def render_record(variables):
 
 
 def append_record(log_path, record):
+    """Append one row; an identical retry of a logged run/reviewer is a no-op, a differing one fails.
+    The row is one os.write on an O_APPEND descriptor, so concurrent writers never interleave."""
     validate_record(record)
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    lock_path = log_path.with_suffix(log_path.suffix + ".lock")
-    with lock_path.open("a+") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        records = load_log(log_path)
-        same_run = [r for r in records if r.get("run_id") == record["run_id"]]
-        if any(any(r.get(k) != record[k] for k in ("commit", "task", "sprint", "pr_number", "iteration", "final_verdict")) for r in same_run):
-            fail("shared run identity disagrees with existing record")
-        prior = [r for r in same_run if r.get("reviewer") == record["reviewer"]]
-        if prior:
-            # completed_local follows the process TZ; a retry under another TZ is the same row.
-            # A row logged before a field existed (`errors`, `jev_receipts`) is compared without it.
-            later = [key for key in LATER_FIELDS if key not in prior[-1]]
-            if {**prior[-1], "completed_local": None} != {**{k: v for k, v in record.items() if k not in later}, "completed_local": None}:
-                fail("run/reviewer already logged with different results")
-        else:
-            # A valid last JSON object without newline is readable, but needs a
-            # separator before the next append; preserve all existing bytes.
-            separator = ""
-            if log_path.exists() and log_path.stat().st_size:
-                with log_path.open("rb") as existing:
-                    existing.seek(-1, os.SEEK_END)
-                    separator = "" if existing.read(1) == b"\n" else "\n"
-            with log_path.open("a", encoding="utf-8") as log:
-                log.write(separator + json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
-                log.flush()
-                os.fsync(log.fileno())
-        fcntl.flock(lock, fcntl.LOCK_UN)
-
+    records = load_log(log_path)
+    same_run = [r for r in records if r.get("run_id") == record["run_id"]]
+    if any(any(r.get(k) != record[k] for k in ("commit", "task", "sprint", "pr_number", "iteration", "final_verdict")) for r in same_run):
+        fail("shared run identity disagrees with existing record")
+    prior = [r for r in same_run if r.get("reviewer") == record["reviewer"]]
+    if prior:
+        # completed_local follows the process TZ; a retry under another TZ is the same row.
+        # A row logged before a field existed (`errors`, `jev_receipts`) is compared without it.
+        later = [key for key in LATER_FIELDS if key not in prior[-1]]
+        if {**prior[-1], "completed_local": None} != {**{k: v for k, v in record.items() if k not in later}, "completed_local": None}:
+            fail("run/reviewer already logged with different results")
+        return
+    # A valid last JSON object without newline is readable, but needs a
+    # separator before the next append; preserve all existing bytes.
+    separator = ""
+    if log_path.exists() and log_path.stat().st_size:
+        with log_path.open("rb") as existing:
+            existing.seek(-1, os.SEEK_END)
+            separator = "" if existing.read(1) == b"\n" else "\n"
+    line = (separator + json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    fd = os.open(log_path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    try:
+        if os.write(fd, line) != len(line):
+            fail(f"{log_path}: short append")
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 if __name__ == "__main__":
     main()

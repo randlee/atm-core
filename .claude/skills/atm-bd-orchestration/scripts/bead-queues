@@ -4,6 +4,11 @@
   bead-queues (--phase P | --root ID) [--as ME] [--team T] [--all]
               [--json [--min-age MIN] [--state-file PATH]] [--days N]
 
+The ATM caller is --as, else $ATM_IDENTITY, else the repository's `lead`
+(.claude/project/atm-bd-orchestration.yaml); the team is --team, else
+$ATM_TEAM, else `[atm].default_team` in the repository's .atm.toml. Neither
+variable is required in a repository that has both.
+
 Scope: the parent-child descendants of the phase root (`root` in
 `.atm-bd/phase-P.toml`, or --root). Each open bead with no open ATM task lands
 in one action queue once its prerequisite is met; pairing is by metadata
@@ -31,6 +36,7 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -75,6 +81,10 @@ STALL_REMINDERS = 3  # ATM reminds only an idle assignee, so reminders on an act
 
 class Fail(Exception):
     pass
+
+
+class Usage(Exception):
+    """The caller cannot be resolved; exit 3."""
 
 
 def run_json(cmd: list[str]):
@@ -133,6 +143,24 @@ def resolve(args, repo: Path) -> tuple[str, str | None]:
     return args.root, None
 
 
+def atm_caller(args, repo: Path) -> tuple[str, str | None]:
+    """The ATM identity and team for `atm task list`: flag, then environment, then the repository's own files."""
+    actor = args.as_actor or os.environ.get("ATM_IDENTITY") or repo_config.load(repo).get("lead")
+    if not actor:
+        raise Usage("no ATM identity: pass --as, set ATM_IDENTITY, or set roles.lead in .claude/agents/registry.yaml "
+                    "and rerun the atm-bd-orchestration installer")
+    team = args.team or os.environ.get("ATM_TEAM")
+    if not team:
+        path = repo / ".atm.toml"
+        try:
+            team = tomllib.loads(path.read_text(encoding="utf-8")).get("atm", {}).get("default_team")
+        except FileNotFoundError:
+            team = None
+        except (OSError, tomllib.TOMLDecodeError) as exc:
+            raise Fail(f"{path}: cannot read [atm].default_team ({exc}); fix the file or pass --team") from exc
+    return actor, team
+
+
 def build(args, repo: Path) -> dict:
     now = datetime.now(timezone.utc)
     root, branch = resolve(args, repo)
@@ -142,7 +170,8 @@ def build(args, repo: Path) -> dict:
         raise Fail(f"root bead {root} does not exist")
     branch = branch or meta(by_id[root]).get("integration_branch")
     ready = {b["id"] for b in bd_json("ready", "-n", "0", "--json")}
-    atm = ["atm", "task", "list", "--all", "--json", "--as", args.as_actor] + (["--team", args.team] if args.team else [])
+    actor, team = atm_caller(args, repo)
+    atm = ["atm", "task", "list", "--all", "--json", "--as", actor] + (["--team", team] if team else [])
     tasks = {t["task_id"]: t for t in run_json(atm)}
 
     children: dict[str, list[dict]] = {}
@@ -386,17 +415,14 @@ def main(argv: list[str]) -> int:
     where = p.add_mutually_exclusive_group(required=True)
     where.add_argument("--phase", help="phase; the root comes from .atm-bd/phase-<phase>.toml")
     where.add_argument("--root", help="the phase root bead id")
-    p.add_argument("--as", dest="as_actor", default=os.environ.get("ATM_IDENTITY"), help="ATM identity (default $ATM_IDENTITY)")
-    p.add_argument("--team", default=os.environ.get("ATM_TEAM"), help="ATM team (default $ATM_TEAM)")
+    p.add_argument("--as", dest="as_actor", help="ATM identity (default $ATM_IDENTITY, else the repository's lead)")
+    p.add_argument("--team", help="ATM team (default $ATM_TEAM, else [atm].default_team in .atm.toml)")
     p.add_argument("--days", type=int, default=14, help="look-back for closed beads still owing a step (default 14)")
     p.add_argument("--all", action="store_true", help="also list not-ready beads with reasons")
     p.add_argument("--json", action="store_true", help="cron contract: new rows as one JSON object, else nothing")
     p.add_argument("--min-age", type=int, default=10, help="--json: minutes a row must be old to be reported (default 10)")
     p.add_argument("--state-file", type=Path, help="--json: reported-row state (default .atm-bd/bead-queues/<root>.json)")
     args = p.parse_args(argv)
-    if not args.as_actor:
-        print("bead-queues: no ATM identity: set ATM_IDENTITY or pass --as", file=sys.stderr)
-        return USAGE
     try:
         repo = repo_config.repo_root()
         report = build(args, repo)
@@ -404,6 +430,9 @@ def main(argv: list[str]) -> int:
             render(report, args.all)
             return 0
         out = cron(report, args.state_file or repo / ".atm-bd" / "bead-queues" / f"{report['root']}.json", args.min_age)
+    except Usage as exc:
+        print(f"bead-queues: {exc}", file=sys.stderr)
+        return USAGE
     except (Fail, RuntimeError, repo_config.ConfigError) as exc:
         print(f"bead-queues: {exc}", file=sys.stderr)
         return FAILED

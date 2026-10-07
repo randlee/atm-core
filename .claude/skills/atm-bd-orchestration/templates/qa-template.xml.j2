@@ -93,9 +93,7 @@ Render every selected reviewer's structured JSON assignment from `.claude/skills
     <step id="j"><![CDATA[After step i's closes succeed (never on the i1 refusal path — no round to log), append exactly one row to each of the two phase QA logs under `.sc/qa-log/`, per `roles/quality-mgr.md` ("QA Metrics Log"). Compute both rows fresh at close time; never hand-carry a prior row's numbers:
 ```bash
 mkdir -p .sc/qa-log
-LOCKDIR=.sc/qa-log/.append.lock
-for _ in $(seq 1 50); do mkdir "$LOCKDIR" 2>/dev/null && break; sleep 0.2; done
-trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
+# Each row is built first and appended with one printf: a single O_APPEND write, atomic without a lock.
 
 CREATED=$(bd show {{ task_id | string | cdata_escape }} --json | jq -r '.[0].created_at')
 C_EPOCH=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$CREATED" +%s 2>/dev/null || date -u -d "$CREATED" +%s)
@@ -113,15 +111,16 @@ MIN=$( [ -f "$FNDFILE" ] && jq -sc '[.[] | select(.metadata.screen!="ceremony" a
 FND=$((BLK + IMP + MIN))
 TESTED="{% if carry_forward %}{{ carry_forward | string | cdata_escape }}{% else %}{{ checked_bead | string | cdata_escape }}{% endif %}"
 
-jq -nc --arg completed_at "$NOW" --arg completed_local "$LOCAL" --arg duration "$DURATION" \
+ROW=$(jq -nc --arg completed_at "$NOW" --arg completed_local "$LOCAL" --arg duration "$DURATION" \
   --arg phase "{{ phase | string }}" --arg sprint "{{ sprint | string }}" --arg task "{{ task_id | string }}" \
   --arg pr_number "{{ pr_number | string }}" --argjson iteration {{ round }} --arg verdict "$VERDICT" \
   --arg tested "$TESTED" --argjson fnd "$FND" --argjson blk "$BLK" --argjson imp "$IMP" --argjson min "$MIN" \
   '{completed_at:$completed_at, completed_local:$completed_local, duration:$duration, phase:$phase, sprint:$sprint,
     task:$task, pr_number:(($pr_number|tonumber?)//null), iteration:$iteration, verdict:$verdict, tested:$tested,
-    fnd:$fnd, blk:$blk, imp:$imp, min:$min}' >> .sc/qa-log/phase-{{ phase | string }}.jsonl
+    fnd:$fnd, blk:$blk, imp:$imp, min:$min}')
+printf '%s\n' "$ROW" >> .sc/qa-log/phase-{{ phase | string }}.jsonl
 
-bd list --all --json 2>/dev/null | jq -c --arg ph "{{ phase | string }}" --arg completed_at "$NOW" --arg completed_local "$LOCAL" --arg task "{{ task_id | string }}" '
+STATS=$(bd list --all --json 2>/dev/null | jq -c --arg ph "{{ phase | string }}" --arg completed_at "$NOW" --arg completed_local "$LOCAL" --arg task "{{ task_id | string }}" '
   [.[] | select(.metadata.phase == $ph)] as $all |
   ([$all[] | select((.labels // []) | index("stage:finding")) | select(.metadata.sanity_finding | not)]
    + ([$all[] | select((.labels // []) | index("stage:fix"))]
@@ -131,9 +130,8 @@ bd list --all --json 2>/dev/null | jq -c --arg ph "{{ phase | string }}" --arg c
    open: ([$f[] | select(.status=="open")] | length),
    blk: ([$f[] | select(.status=="open" and .metadata.severity=="blocking")] | length),
    imp: ([$f[] | select(.status=="open" and .metadata.severity=="important")] | length),
-   min: ([$f[] | select(.status=="open" and .metadata.severity=="minor")] | length)}' >> .sc/qa-log/phase-{{ phase | string }}-stats.jsonl
-
-rmdir "$LOCKDIR" 2>/dev/null
+   min: ([$f[] | select(.status=="open" and .metadata.severity=="minor")] | length)}')
+printf '%s\n' "$STATS" >> .sc/qa-log/phase-{{ phase | string }}-stats.jsonl
 ```
 Before running it, set `$VERDICT` to the `PASS`/`FAIL` value in step i's `bd close` reason. Never commit these logs from a QA worktree; the lead's phase-end housekeeping stages them.]]></step>
   </workflow>
