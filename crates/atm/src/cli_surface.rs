@@ -106,11 +106,20 @@ pub(crate) fn command_surface_markdown(command: &Command) -> String {
 /// published website. Keeping the Markdown as the single rendered body means
 /// the two delivery surfaces cannot acquire independent option lists.
 pub(crate) fn command_surface_html(command: &Command) -> String {
-    let markdown = command_surface_markdown(command);
-    format!(
-        "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>ATM CLI Reference</title>\n  <style>body {{ font: 16px system-ui, sans-serif; line-height: 1.5; max-width: 70rem; margin: 3rem auto; padding: 0 1rem; }} pre {{ white-space: pre-wrap; overflow-wrap: anywhere; }}</style>\n</head>\n<body>\n  <main><pre>{}</pre></main>\n</body>\n</html>\n",
-        html_escape(&markdown)
-    )
+    let mut out = "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>ATM CLI Reference</title><style>body{font:16px system-ui,sans-serif;line-height:1.5;max-width:80rem;margin:3rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #888;padding:.4rem;text-align:left;vertical-align:top}code{white-space:nowrap}nav ul{columns:3}</style></head><body><main>\n".to_owned();
+    out.push_str(&format!("<h1>ATM CLI Reference</h1><p>Version: <code>{}</code></p><p>This page is generated from the live Clap command tree. Do not hand-edit it.</p><nav aria-label=\"Command index\"><h2>Command index</h2><ul>", env!("CARGO_PKG_VERSION")));
+    let mut index = Vec::new();
+    collect_command_index(command, "atm", &mut index);
+    for (name, id) in &index {
+        out.push_str(&format!(
+            "<li><a href=\"#{id}\"><code>{}</code></a></li>",
+            html_escape(name)
+        ));
+    }
+    out.push_str("</ul></nav>\n");
+    render_command_html(command, 2, &mut out, "atm");
+    out.push_str("</main></body></html>\n");
+    out
 }
 
 fn html_escape(value: &str) -> String {
@@ -120,6 +129,99 @@ fn html_escape(value: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+fn command_anchor(full_name: &str) -> String {
+    full_name.replace(' ', "-")
+}
+
+fn public_subcommands(command: &Command) -> Vec<&Command> {
+    let mut subcommands: Vec<&Command> = command
+        .get_subcommands()
+        .filter(|sub| !sub.is_hide_set())
+        .collect();
+    subcommands.sort_by_key(|sub| sub.get_name().to_string());
+    subcommands
+}
+
+fn collect_command_index(command: &Command, full_name: &str, index: &mut Vec<(String, String)>) {
+    index.push((full_name.to_owned(), command_anchor(full_name)));
+    for sub in public_subcommands(command) {
+        collect_command_index(sub, &format!("{full_name} {}", sub.get_name()), index);
+    }
+}
+
+fn render_command_html(command: &Command, level: usize, out: &mut String, full_name: &str) {
+    let heading = level.min(6);
+    out.push_str(&format!(
+        "<section><h{heading} id=\"{}\"><code>{}</code></h{heading}>",
+        command_anchor(full_name),
+        html_escape(full_name)
+    ));
+    if let Some(about) = command.get_long_about().or_else(|| command.get_about()) {
+        out.push_str(&format!("<p>{}</p>", html_escape(&about.to_string())));
+    }
+    let mut usage = command.clone();
+    out.push_str(&format!(
+        "<h{}>Usage</h{}><pre>{}</pre>",
+        (heading + 1).min(6),
+        (heading + 1).min(6),
+        html_escape(&usage.render_usage().to_string())
+    ));
+    let args: Vec<&Arg> = command
+        .get_arguments()
+        .filter(|arg| !is_auto_injected(arg))
+        .collect();
+    if !args.is_empty() {
+        out.push_str("<table><thead><tr><th>Flag</th><th>Short</th><th>Value</th><th>Required</th><th>Default</th><th>Allowed values</th><th>Description</th></tr></thead><tbody>");
+        for arg in args {
+            let flag = arg
+                .get_long()
+                .map(|long| format!("--{long}"))
+                .unwrap_or_else(|| format!("<{}>", arg.get_id()));
+            let short = arg
+                .get_short()
+                .map(|short| format!("-{short}"))
+                .unwrap_or_default();
+            let value = arg
+                .get_value_names()
+                .map(|names| {
+                    names
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .unwrap_or_default();
+            let default = arg
+                .get_default_values()
+                .first()
+                .map(|value| value.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let allowed = arg
+                .get_possible_values()
+                .iter()
+                .filter(|value| !value.is_hide_set())
+                .map(|value| value.get_name())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let description = arg
+                .get_help()
+                .map(|help| help.to_string())
+                .unwrap_or_default();
+            out.push_str(&format!("<tr><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td><td>{}</td><td><code>{}</code></td><td>{}</td><td>{}</td></tr>", html_escape(&flag), html_escape(&short), html_escape(&value), if arg.is_required_set() { "yes" } else { "no" }, html_escape(&default), html_escape(&allowed), html_escape(&description)));
+        }
+        out.push_str("</tbody></table>");
+    }
+    for sub in public_subcommands(command) {
+        render_command_html(
+            sub,
+            heading + 1,
+            out,
+            &format!("{full_name} {}", sub.get_name()),
+        );
+    }
+    out.push_str("</section>");
 }
 
 fn render_command_markdown(
