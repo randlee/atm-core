@@ -40,6 +40,7 @@ all = ["Your role is dev under atm-bd-orchestration: work arrives by atm task as
 
 [startup.fenix]
 all = ["Your role is dev under atm-bd-orchestration: work arrives by atm task assign with the dev template; no user is watching, so execute every step through to the task close and never end a turn on a promise of future work",
+       "You may also be assigned to lead a phase under atm-bd-orchestration: then read .claude/skills/atm-bd-orchestration/SKILL.md (Lead Role and Loop) and .claude/skills/atm-beads/SKILL.md and act as lead (lead=<you> in dispatch vars) until the phase closes",
        "HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
        "Use native atm send or atm ack for messages to team-lead, arch-ctm, or quality-mgr",
        "Use native atm read to read messages from team-members" ]
@@ -56,6 +57,7 @@ all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST b
 
 [startup.solar]
 all = ["Your role is dev under atm-bd-orchestration: work arrives by atm task assign with the dev template; no user is watching, so execute every step through to the task close and never end a turn on a promise of future work",
+       "You may also be assigned to lead a phase under atm-bd-orchestration: then read .claude/skills/atm-bd-orchestration/SKILL.md (Lead Role and Loop) and .claude/skills/atm-beads/SKILL.md and act as lead (lead=<you> in dispatch vars) until the phase closes",
        "HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
        "Use native atm send or atm ack for messages to team-lead or quality-mgr",
        "Use native atm read to read messages from team-members" ]
