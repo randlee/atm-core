@@ -181,7 +181,39 @@ fn command_document_with_parent(
     parent: Option<String>,
 ) -> CommandDoc {
     let mut usage = command.clone();
-    let args: Vec<ArgDoc> = command
+    let args = command_arguments(command, name);
+    let children = command_children(command, name);
+    let about = command
+        .get_about()
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    let long_about = command
+        .get_long_about()
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    CommandDoc {
+        name: name.to_owned(),
+        parent,
+        anchor: command_anchor(name),
+        about: about.clone(),
+        long_about: long_about.clone(),
+        usage: usage.render_usage().to_string(),
+        args: args.clone(),
+        notes: command_notes(command),
+        children,
+        brief: about,
+        description: long_about,
+        usages: vec![usage.render_usage().to_string()],
+        arguments: args.clone(),
+        categories: vec![OptionCategory {
+            title: "Options".to_owned(),
+            options: args,
+        }],
+    }
+}
+
+fn command_arguments(command: &Command, name: &str) -> Vec<ArgDoc> {
+    command
         .get_arguments()
         .filter(|arg| !is_auto_injected(arg) && !arg.is_hide_set())
         .enumerate()
@@ -226,8 +258,11 @@ fn command_document_with_parent(
                 brief: description,
             }
         })
-        .collect();
-    let children = public_subcommands(command)
+        .collect()
+}
+
+fn command_children(command: &Command, name: &str) -> Vec<CommandDoc> {
+    public_subcommands(command)
         .into_iter()
         .map(|sub| {
             command_document_with_parent(
@@ -236,38 +271,15 @@ fn command_document_with_parent(
                 Some(name.to_owned()),
             )
         })
-        .collect();
-    let about = command
-        .get_about()
+        .collect()
+}
+
+fn command_notes(command: &Command) -> String {
+    command
+        .get_after_help()
+        .or_else(|| command.get_after_long_help())
         .map(ToString::to_string)
-        .unwrap_or_default();
-    let long_about = command
-        .get_long_about()
-        .map(ToString::to_string)
-        .unwrap_or_default();
-    CommandDoc {
-        name: name.to_owned(),
-        parent,
-        anchor: command_anchor(name),
-        about: about.clone(),
-        long_about: long_about.clone(),
-        usage: usage.render_usage().to_string(),
-        args: args.clone(),
-        notes: command
-            .get_after_help()
-            .or_else(|| command.get_after_long_help())
-            .map(ToString::to_string)
-            .unwrap_or_default(),
-        children,
-        brief: about,
-        description: long_about,
-        usages: vec![usage.render_usage().to_string()],
-        arguments: args.clone(),
-        categories: vec![OptionCategory {
-            title: "Options".to_owned(),
-            options: args,
-        }],
-    }
+        .unwrap_or_default()
 }
 
 fn render_command_markdown(command: &CommandDoc, heading_level: usize, out: &mut String) {
