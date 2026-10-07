@@ -252,9 +252,9 @@ async fn run() -> Result<(), AtmError> {
     }
 }
 
-/// Prints the live CLI-surface tree in the requested `mode` (`json` or
-/// `markdown`) to stdout. Called only by the hidden parsed
-/// `atm __dump-cli-surface --format <json|markdown>` command.
+/// Prints the live CLI-surface tree in the requested `mode` (`json`,
+/// `markdown`, or `html`) to stdout. Called only by the hidden parsed
+/// `atm __dump-cli-surface --format <json|markdown|html>` command.
 #[cfg(any(test, feature = "cli-surface-dump"))]
 pub(crate) fn dump_cli_surface(mode: commands::CliSurfaceFormat) -> Result<(), AtmError> {
     let mut root = commands::Cli::command();
@@ -273,6 +273,10 @@ pub(crate) fn dump_cli_surface(mode: commands::CliSurfaceFormat) -> Result<(), A
         }
         commands::CliSurfaceFormat::Markdown => {
             println!("{}", cli_surface::command_surface_markdown(&root));
+            Ok(())
+        }
+        commands::CliSurfaceFormat::Html => {
+            println!("{}", cli_surface::command_surface_html(&root));
             Ok(())
         }
     }

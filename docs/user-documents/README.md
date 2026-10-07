@@ -16,6 +16,7 @@ They are not developer architecture notes.
 
 - [Install Layout](./install-layout.md)
 - [Quickstart](./quickstart.md)
+- [CLI Reference](./cli-reference.md)
 - [Identity And Team](./identity-and-team.md)
 - [Mailbox Workflows](./mailbox-workflows.md)
 - [Tasks](./tasks.md)

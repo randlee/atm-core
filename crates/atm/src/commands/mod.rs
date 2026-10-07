@@ -63,6 +63,7 @@ use crate::observability::CliObservability;
 pub(crate) enum CliSurfaceFormat {
     Json,
     Markdown,
+    Html,
 }
 
 /// Emit the live clap command tree for maintainers and the structural CLI gate.

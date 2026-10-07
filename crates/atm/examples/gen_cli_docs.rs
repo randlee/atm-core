@@ -19,14 +19,10 @@
 //! This regenerates:
 //! - `crates/atm/tests/cli_surface_baseline.json` (consumed by the
 //!   `cli_surface` diff-gate integration test)
-//! - `docs/atm/cli-reference-<version>.md` (a generated, human-readable CLI
-//!   reference for the current crate version; do not hand-edit)
+//! - `docs/user-documents/cli-reference.md` (the installed, versioned manual)
+//! - `site/cli-reference.html` (the matching published website page)
 //!
-//! The reference doc's filename is version-suffixed (e.g.
-//! `cli-reference-1-3-1.md` for version `1.3.1`) so each release's snapshot
-//! is preserved as a historical baseline rather than overwritten by the
-//! next regeneration. Run this in the same commit that adds or changes any
-//! `atm` subcommand or argument, then review the diff before committing.
+//! Pass `--check` to reject missing or stale generated output without writing.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -41,12 +37,6 @@ fn workspace_root() -> PathBuf {
         .and_then(Path::parent)
         .expect("crates/atm has a workspace root two directories up")
         .to_path_buf()
-}
-
-/// Turns the crate version (e.g. `1.3.1`) into the dash-separated slug used
-/// in the versioned CLI reference filename (e.g. `1-3-1`).
-fn version_slug() -> String {
-    env!("CARGO_PKG_VERSION").replace('.', "-")
 }
 
 /// Builds and locates the sibling `atm` binary alongside this example's own
@@ -102,18 +92,46 @@ fn dump(atm_bin: &Path, mode: &str) -> String {
     String::from_utf8(output.stdout).expect("CLI-surface dump output must be valid UTF-8")
 }
 
+fn write_or_check(path: &Path, contents: &str, check: bool) {
+    if check {
+        match std::fs::read_to_string(path) {
+            Ok(current) if current == contents => return,
+            Ok(_) => panic!(
+                "generated CLI reference is stale: {}; rerun gen_cli_docs",
+                path.display()
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                panic!(
+                    "generated CLI reference is missing: {}; rerun gen_cli_docs",
+                    path.display()
+                )
+            }
+            Err(error) => panic!("failed to read {}: {error}", path.display()),
+        }
+    }
+    std::fs::write(path, contents)
+        .unwrap_or_else(|error| panic!("failed to write {}: {error}", path.display()));
+    println!("wrote {}", path.display());
+}
+
 fn main() {
+    let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let check = match arguments.as_slice() {
+        [] => false,
+        [argument] if argument == "--check" => true,
+        _ => panic!("usage: gen_cli_docs [--check]"),
+    };
     let atm_bin = ensure_atm_binary_built();
 
     let json = dump(&atm_bin, "json");
     let baseline_path = manifest_dir().join("tests/cli_surface_baseline.json");
-    std::fs::write(&baseline_path, json)
-        .unwrap_or_else(|error| panic!("failed to write {}: {error}", baseline_path.display()));
-    println!("wrote {}", baseline_path.display());
+    write_or_check(&baseline_path, &json, check);
 
     let markdown = dump(&atm_bin, "markdown");
-    let doc_path = workspace_root().join(format!("docs/atm/cli-reference-{}.md", version_slug()));
-    std::fs::write(&doc_path, markdown)
-        .unwrap_or_else(|error| panic!("failed to write {}: {error}", doc_path.display()));
-    println!("wrote {}", doc_path.display());
+    let doc_path = workspace_root().join("docs/user-documents/cli-reference.md");
+    write_or_check(&doc_path, &markdown, check);
+
+    let html = dump(&atm_bin, "html");
+    let site_path = workspace_root().join("site/cli-reference.html");
+    write_or_check(&site_path, &html, check);
 }

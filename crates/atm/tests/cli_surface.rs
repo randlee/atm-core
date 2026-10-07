@@ -66,6 +66,32 @@ fn live_surface_json() -> Value {
     serde_json::from_str(&stdout).expect("CLI-surface dump output must be valid JSON")
 }
 
+fn live_surface(format: &str) -> String {
+    let fixture = tempfile::tempdir().expect("temporary ATM environment");
+    let output = Command::new(env!("CARGO_BIN_EXE_atm"))
+        .args(["__dump-cli-surface", "--format", format])
+        .env("ATM_HOME", fixture.path())
+        .env("ATM_CONFIG_HOME", fixture.path().join("config"))
+        .env("ATM_LOG_DIR", fixture.path().join("logs"))
+        .env("ATM_TEAMS_DIR", fixture.path().join("teams"))
+        .output()
+        .expect("run ATM CLI reference renderer");
+    assert!(
+        output.status.success(),
+        "CLI reference renderer failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).expect("CLI reference output must be UTF-8")
+}
+
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .expect("workspace root")
+        .to_path_buf()
+}
+
 #[test]
 fn legacy_environment_variable_cannot_bypass_clap_parsing() {
     let fixture = tempfile::tempdir().expect("temporary ATM environment");
@@ -251,4 +277,24 @@ fn cli_surface_matches_committed_baseline() {
          `{BLESS_ENV}=1 cargo test -p agent-team-mail --features cli-surface-dump --test cli_surface`).",
         additions.join("\n")
     );
+}
+
+#[test]
+fn generated_installed_and_site_references_match_the_live_clap_tree() {
+    let root = workspace_root();
+    for (format, path) in [
+        (
+            "markdown",
+            root.join("docs/user-documents/cli-reference.md"),
+        ),
+        ("html", root.join("site/cli-reference.html")),
+    ] {
+        assert_eq!(
+            std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("read {}: {error}", path.display())),
+            live_surface(format),
+            "{} is stale; rerun `cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs`",
+            path.display()
+        );
+    }
 }

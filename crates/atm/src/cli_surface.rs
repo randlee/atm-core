@@ -16,7 +16,7 @@
 //!   consumed by `crates/atm/tests/cli_surface.rs` and used to regenerate
 //!   `crates/atm/tests/cli_surface_baseline.json`.
 //! - `atm __dump-cli-surface --format markdown` prints [`command_surface_markdown`]
-//!   output, used to regenerate the version-suffixed `docs/atm/cli-reference-<version>.md`.
+//!   output, used to regenerate the installed CLI manual and website reference.
 //!
 //! The command is hidden from normal help but still uses the normal parse,
 //! tracing, and observability bootstrap path. It is invoked by
@@ -91,6 +91,7 @@ fn arg_surface_json(arg: &Arg) -> Value {
 pub(crate) fn command_surface_markdown(command: &Command) -> String {
     let mut out = String::new();
     out.push_str("# ATM CLI Reference\n\n");
+    out.push_str(&format!("Version: `{}`\n\n", env!("CARGO_PKG_VERSION")));
     out.push_str(
         "This document is generated from the live `clap` command tree. Do \
          not hand-edit it — regenerate with `cargo run -p agent-team-mail \
@@ -99,6 +100,26 @@ pub(crate) fn command_surface_markdown(command: &Command) -> String {
     );
     render_command_markdown(command, 2, &mut out, "atm");
     out
+}
+
+/// Renders the same generated reference as a standalone HTML page for the
+/// published website. Keeping the Markdown as the single rendered body means
+/// the two delivery surfaces cannot acquire independent option lists.
+pub(crate) fn command_surface_html(command: &Command) -> String {
+    let markdown = command_surface_markdown(command);
+    format!(
+        "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>ATM CLI Reference</title>\n  <style>body {{ font: 16px system-ui, sans-serif; line-height: 1.5; max-width: 70rem; margin: 3rem auto; padding: 0 1rem; }} pre {{ white-space: pre-wrap; overflow-wrap: anywhere; }}</style>\n</head>\n<body>\n  <main><pre>{}</pre></main>\n</body>\n</html>\n",
+        html_escape(&markdown)
+    )
+}
+
+fn html_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 fn render_command_markdown(
@@ -115,14 +136,23 @@ fn render_command_markdown(
         out.push_str("\n\n");
     }
 
+    let mut usage = command.clone();
+    out.push_str("**Usage:**\n\n```text\n");
+    out.push_str(&usage.render_usage().to_string());
+    out.push_str("\n```\n\n");
+
     let args: Vec<&Arg> = command
         .get_arguments()
         .filter(|arg| !is_auto_injected(arg))
         .collect();
 
     if !args.is_empty() {
-        out.push_str("| Flag | Short | Required | Description |\n");
-        out.push_str("|------|-------|----------|-------------|\n");
+        out.push_str(
+            "| Flag | Short | Value | Required | Default | Allowed values | Description |\n",
+        );
+        out.push_str(
+            "|------|-------|-------|----------|---------|----------------|-------------|\n",
+        );
         for arg in &args {
             let long = arg
                 .get_long()
@@ -133,12 +163,34 @@ fn render_command_markdown(
                 .map(|short| format!("`-{short}`"))
                 .unwrap_or_default();
             let required = if arg.is_required_set() { "yes" } else { "no" };
+            let value = arg
+                .get_value_names()
+                .map(|names| {
+                    names
+                        .iter()
+                        .map(|name| format!("`{name}`"))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .unwrap_or_default();
+            let default = arg
+                .get_default_values()
+                .first()
+                .map(|value| format!("`{}`", value.to_string_lossy()))
+                .unwrap_or_default();
+            let allowed_values = arg
+                .get_possible_values()
+                .iter()
+                .filter(|value| !value.is_hide_set())
+                .map(|value| format!("`{}`", value.get_name()))
+                .collect::<Vec<_>>()
+                .join(", ");
             let description = arg
                 .get_help()
-                .map(|help| help.to_string().replace('\n', " "))
+                .map(|help| help.to_string().replace(['\n', '|'], " "))
                 .unwrap_or_default();
             out.push_str(&format!(
-                "| {long} | {short} | {required} | {description} |\n"
+                "| {long} | {short} | {value} | {required} | {default} | {allowed_values} | {description} |\n"
             ));
         }
         out.push('\n');
@@ -172,7 +224,7 @@ fn render_command_markdown(
 mod tests {
     use clap::{Arg, Command};
 
-    use super::{command_surface_json, command_surface_markdown};
+    use super::{command_surface_html, command_surface_json, command_surface_markdown};
 
     fn sample_command() -> Command {
         Command::new("sample")
@@ -220,6 +272,16 @@ mod tests {
         assert!(markdown.contains("Sample root command."));
         assert!(markdown.contains("The name to greet."));
         assert!(markdown.contains("`--name`"));
+        assert!(markdown.contains("Usage:"));
+        assert!(markdown.contains("Default"));
         assert!(markdown.contains("### `atm child`"));
+    }
+
+    #[test]
+    fn html_reference_wraps_the_markdown_without_an_independent_surface() {
+        let html = command_surface_html(&sample_command());
+        assert!(html.starts_with("<!doctype html>"));
+        assert!(html.contains("ATM CLI Reference"));
+        assert!(html.contains("&lt;name&gt;"));
     }
 }
