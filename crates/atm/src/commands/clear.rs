@@ -14,18 +14,23 @@ use crate::output;
 #[derive(Debug, Args)]
 /// Clear read or acknowledged messages from a mailbox.
 pub struct ClearCommand {
+    /// Override the team resolved from caller context.
     #[arg(long)]
     team: Option<String>,
 
+    /// Clear messages older than this duration (`s`, `m`, `h`, or `d`).
     #[arg(long = "older-than", value_name = "DURATION")]
     older_than: Option<String>,
 
+    /// Clear only idle mailbox messages.
     #[arg(long)]
     idle_only: bool,
 
+    /// Show the messages that would be cleared without clearing them.
     #[arg(long)]
     dry_run: bool,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }

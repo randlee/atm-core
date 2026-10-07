@@ -14,12 +14,16 @@ use crate::output;
 #[derive(Debug, Args)]
 /// Acknowledge one pending-ack message and emit a reply when required.
 pub struct AckCommand {
+    /// ID of the pending-ack message to acknowledge.
     message_id: String,
+    /// Reply body recorded with the acknowledgement.
     reply: String,
 
+    /// Override the team resolved from caller context.
     #[arg(long)]
     team: Option<String>,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }

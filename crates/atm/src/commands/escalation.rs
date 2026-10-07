@@ -20,17 +20,22 @@ enum EscalationSubcommand {
 
 #[derive(Debug, Args)]
 struct RecipientCommand {
+    /// Recipient address to add or remove.
     address: String,
+    /// Limit the change to this team; omit for daemon-wide recipients.
     #[arg(long)]
     team: Option<String>,
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }
 
 #[derive(Debug, Args)]
 struct ListCommand {
+    /// Limit the listing to this team; omit for daemon-wide recipients.
     #[arg(long)]
     team: Option<String>,
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }

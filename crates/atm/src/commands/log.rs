@@ -112,7 +112,7 @@ struct QueryArgs {
     #[arg(long)]
     limit: Option<usize>,
 
-    /// Emit machine-readable JSON output.
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }
