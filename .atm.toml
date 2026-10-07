@@ -42,11 +42,16 @@ all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST b
        "Use native atm read to read messages from team-members" ]
 
 [startup.atm-sanity]
-all = ["read .claude/agents/dev-sanity-llm.md for directive",
+all = ["read .claude/agents/dev-sanity.md for directive",
        "Use native atm send or atm ack for messages to team-lead",
        "Use native atm read to read messages from team-members" ]
 
 [startup.publisher]
+all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
+       "Use native atm send or atm ack for messages to team-lead or quality-mgr",
+       "Use native atm read to read messages from team-members" ]
+
+[startup.solar]
 all = ["HARD RULE: every ATM assignment carrying a rendered template body MUST be sent with `atm send <agent> --template <path> --vars <json>` only. Never render a template yourself and send the output as message text, via --stdin, or via --file — `--file` only records a path reference, not delivered content. Fold one-off content into an existing template variable instead of hand-rendering.",
        "Use native atm send or atm ack for messages to team-lead or quality-mgr",
        "Use native atm read to read messages from team-members" ]
@@ -79,7 +84,7 @@ model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
-# Window 2: Support agents (cipher + fenix)
+# Window 2: Support agents (cipher + fenix + atm-sanity)
 [[rmux.windows]]
 name = "support"
 layout = "even-horizontal"
@@ -93,6 +98,12 @@ env = { ATM_IDENTITY = "cipher", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID 
 name = "fenix"
 model = "fable"
 env = { ATM_IDENTITY = "fenix", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
+
+[[rmux.windows.panes]]
+name = "atm-sanity"
+model = "sonnet"
+color = "green"
+env = { ATM_IDENTITY = "atm-sanity", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 # Window 3: Publishing (publisher + solar)
 [[rmux.windows]]
