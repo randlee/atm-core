@@ -61,16 +61,25 @@ Export is inert unless `ATM_OTEL_ENDPOINT` is set. Configure it with
 `ATM_LOG_DESTINATION` defaults to `file`; `otel` and `both` require an export
 endpoint. Do not place credentials in an endpoint URL.
 
-ATM exports the typed task-ledger and prompt-handoff facts listed in ADR-064,
-including the two latency histograms. It never exports message bodies,
-template variables, or free-form event detail. Historical Acked/Migrated test
-fixtures are not evidence of live producers.
+The live task-ledger records cover assignment, start, completion, refusal,
+cancellation, reassignment, reopening, rejection, reminders, lead notification,
+moves, and reminder resets; inserted prompt handoffs are also projected.
+Historical Acked/Migrated test fixtures are not live producer kinds. Export
+includes the `atm.task.time_to_start_ms` and
+`atm.task.time_to_close_ms` histograms. The record contract is described in
+[ADR-064, D1 ATM-owned record](../adr/ADR-064-task-telemetry-opentelemetry-export.md#d1-atm-owned-record).
+ATM sends these typed records through the official OpenTelemetry SDK directly
+over gRPC, without a facade or wrapper. It never exports message bodies,
+template variables, or free-form event detail.
 
-`atm doctor` prints `observability.export` with its state (`inert`, `healthy`,
-`degraded`, or `unavailable`), endpoint, protocol, and non-zero counters.
-`atm doctor --json` exposes the same `observability.export` object. Doctor
-findings describe degraded or unavailable export; use their remediation rather
-than treating telemetry delivery as a reason to retry a task operation.
+`atm doctor` prints `observability.export` with `state` (`inert`, `healthy`,
+`degraded`, or `unavailable`), `endpoint`, `protocol`, `emitted`,
+`dropped_full`, `dropped_timeout`, `dropped_failure`, `dropped_shutdown`, and
+`last_failure`. The JSON object has those same fields; `endpoint`, `protocol`,
+and `last_failure` may be null. `healthy` reports local SDK admission/processing
+evidence; it does not confirm collector receipt. Doctor findings describe
+degraded or unavailable export; use their remediation rather than treating
+telemetry delivery as a reason to retry a task operation.
 
 ## Log
 
