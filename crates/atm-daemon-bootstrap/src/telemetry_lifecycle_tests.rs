@@ -8,6 +8,7 @@
 //! received-hook selector accepts every prompt (so a real prompt handoff is
 //! recorded without a tmux pane), and Herdr is the trait-boundary fake.
 
+mod exit;
 mod receiver;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -323,6 +324,28 @@ pub(super) struct EventIdentity {
     task_id: String,
     seq: Option<String>,
     at_unix_nanos: u64,
+}
+
+/// A synthetic assignment record for queue-pressure tests.
+fn task_record(seq: u64) -> TaskTelemetryRecord {
+    TaskTelemetryRecord {
+        kind: TaskTelemetryKind::Assigned,
+        team: TEAM.parse().expect("team"),
+        task_id: "BD6-Q".parse().expect("task id"),
+        assignee: "recipient".parse().expect("agent"),
+        actor: TaskActor::Daemon,
+        seq: Some(seq),
+        at: "2026-10-08T00:00:00Z"
+            .parse::<IsoTimestamp>()
+            .expect("timestamp"),
+        from_state: None,
+        to_state: None,
+        close_outcome: None,
+        message_id: None,
+        reminder_outcome: None,
+        marker: None,
+        handoff: None,
+    }
 }
 
 fn attribute(attributes: &[KeyValue], key: &str) -> Option<String> {
@@ -721,26 +744,8 @@ async fn concurrent_and_cancelled_export_shutdown_obey_their_deadlines() {
     let (task, _workflow) = observability.take_telemetry_setups();
     let task = task.expect("configured task setup");
     let runtime = atm_runtime::TaskTelemetryRuntime::start(task.config, task.sink);
-    let record = |seq| TaskTelemetryRecord {
-        kind: TaskTelemetryKind::Assigned,
-        team: TEAM.parse().expect("team"),
-        task_id: "BD6-S".parse().expect("task id"),
-        assignee: "recipient".parse().expect("agent"),
-        actor: TaskActor::Daemon,
-        seq: Some(seq),
-        at: "2026-10-08T00:00:00Z"
-            .parse::<IsoTimestamp>()
-            .expect("timestamp"),
-        from_state: None,
-        to_state: None,
-        close_outcome: None,
-        message_id: None,
-        reminder_outcome: None,
-        marker: None,
-        handoff: None,
-    };
     for seq in 1..=64 {
-        runtime.try_emit(record(seq));
+        runtime.try_emit(task_record(seq));
     }
     stalled
         .capture
