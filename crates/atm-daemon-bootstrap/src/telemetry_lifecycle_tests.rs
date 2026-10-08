@@ -20,8 +20,8 @@ use std::time::Duration;
 
 use atm_core::api::{ApiRequest, RequestDeadline};
 use atm_core::boundary::{
-    AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
-    PostSendEmissionPath, RosterEntry, TaskActor,
+    AsyncMessageReceivedHookEmitter, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch,
+    MessageReceivedHookSelector, PostSendEmissionPath, PromptTrigger, RosterEntry, TaskActor,
 };
 use atm_core::doctor::{DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
@@ -29,10 +29,10 @@ use atm_core::observability::{
     AtmTelemetryExportFailure, AtmTelemetryExportHealth, AtmTelemetryExportState,
 };
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
-use atm_core::send::{SendMessageSource, WriteRequest};
+use atm_core::send::{SendMessageSource, TemplateSendSource, WriteRequest};
 use atm_core::test_support::FakeEnvSource;
 use atm_core::types::{AgentName, IsoTimestamp, ModelName, TeamName};
-use atm_core::{DaemonApiClient, TaskTelemetryKind, TaskTelemetryRecord};
+use atm_core::{DaemonApiClient, TaskHandoffFacts, TaskTelemetryKind, TaskTelemetryRecord};
 use atm_core::{LocalServiceRuntime, SweepConfig};
 use atm_http_runtime::{
     DirectPeerTcpConfig, LoopbackTcpConfig, PeerPoolConfig, RuntimeHealth, StorageAndNudgeRouter,
@@ -91,6 +91,13 @@ impl MessageReceivedHookSelector for AcceptingSelector {
 
 fn endpoint_env(endpoint: &str) -> FakeEnvSource {
     FakeEnvSource::new([("ATM_OTEL_ENDPOINT", Some(endpoint))])
+}
+
+fn endpoint_env_with_auth(endpoint: &str, auth_header: &str) -> FakeEnvSource {
+    FakeEnvSource::new([
+        ("ATM_OTEL_ENDPOINT", Some(endpoint)),
+        ("ATM_OTEL_AUTH_HEADER", Some(auth_header)),
+    ])
 }
 
 pub(super) struct Daemon {
@@ -464,6 +471,51 @@ fn histogram_count(capture: &Capture, name: &str) -> u64 {
         .unwrap_or(0)
 }
 
+/// Returns the wire-format debug rendering of every payload the in-process
+/// collector accepted. This deliberately covers span attributes/events, log
+/// bodies/attributes, and metric data points instead of only task spans.
+fn captured_export_text(capture: &Capture) -> String {
+    format!(
+        "{:?}\n{:?}\n{:?}",
+        capture.spans.lock().unwrap(),
+        capture.logs.lock().unwrap(),
+        capture.metrics.lock().unwrap(),
+    )
+}
+
+fn assert_export_excludes(capture: &Capture, sentinels: &[&str]) {
+    let exported = captured_export_text(capture);
+    for sentinel in sentinels {
+        assert!(
+            !exported.contains(sentinel),
+            "collector export leaked sentinel {sentinel:?}: {exported}"
+        );
+    }
+}
+
+fn prompt_handoff_record(task_id: &str) -> TaskTelemetryRecord {
+    TaskTelemetryRecord {
+        kind: TaskTelemetryKind::PromptHandoff,
+        team: TEAM.parse().expect("team"),
+        task_id: task_id.parse().expect("task id"),
+        assignee: "recipient".parse().expect("assignee"),
+        actor: TaskActor::Daemon,
+        seq: None,
+        at: "2026-10-08T00:00:00Z".parse().expect("timestamp"),
+        from_state: None,
+        to_state: None,
+        close_outcome: None,
+        message_id: None,
+        reminder_outcome: None,
+        marker: None,
+        handoff: Some(TaskHandoffFacts {
+            attempt: 1,
+            trigger: PromptTrigger::TaskPass,
+            template_kind: BuiltInNudgeTemplateKind::TaskReminder,
+        }),
+    }
+}
+
 fn export_health(doctor: &serde_json::Value) -> AtmTelemetryExportHealth {
     serde_json::from_value(doctor["observability"]["export"].clone())
         .expect("doctor JSON carries export health")
@@ -585,6 +637,136 @@ async fn running_daemon_exports_each_committed_task_event_to_the_collector() {
     );
 
     daemon.shutdown().await.expect("clean daemon shutdown");
+    receiver.stop().await;
+}
+
+/// A real template write crosses the daemon's HTTP boundary and reaches the
+/// live collector, but D1/D5 must project only typed ledger facts. The lower
+/// layer pins the record field set in `task_telemetry::record_field_set_is_pinned_and_payload_free`;
+/// this daemon proof catches a future composition path that bypasses it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn running_daemon_export_excludes_message_template_and_auth_sentinels() {
+    const BODY: &str = "BD6-F2-MESSAGE-BODY-SENTINEL";
+    const VARIABLE: &str = "BD6-F2-TEMPLATE-VARIABLE-SENTINEL";
+    const AUTH: &str = "Bearer BD6-F2-AUTH-SENTINEL";
+
+    let receiver = Receiver::start(false).await;
+    let daemon = Daemon::start(endpoint_env_with_auth(&receiver.endpoint, AUTH)).await;
+    let template_path = daemon.root.path().join("private-message.j2");
+    std::fs::write(&template_path, format!("{BODY}: {{{{ private_value }}}}"))
+        .expect("write private template fixture");
+    let mut request = daemon.request("sender", "recipient", "BD6-REDACT", None);
+    request.message_source = SendMessageSource::Template(TemplateSendSource {
+        canonical_template_path: std::fs::canonicalize(&template_path)
+            .expect("canonical template path"),
+        canonical_template_root: std::fs::canonicalize(daemon.root.path())
+            .expect("canonical template root"),
+        raw_file_bytes: std::fs::read(&template_path).expect("read template fixture"),
+        input_defaults: Map::new(),
+        var_file_values: Map::new(),
+        explicit_values: Map::from_iter([(
+            "private_value".to_owned(),
+            serde_json::Value::String(VARIABLE.to_owned()),
+        )]),
+        environment_values: Map::new(),
+    });
+    daemon.write(request).await.expect("template assignment");
+
+    receiver
+        .capture
+        .wait(EXPORT_WAIT, "the template assignment export", || {
+            exported_events(&receiver.capture)
+                .iter()
+                .any(|event| event.task_id == "BD6-REDACT" && event.kind == "assigned")
+        })
+        .await;
+    daemon.shutdown().await.expect("clean daemon shutdown");
+    // Negative control: each distinctive value was present at daemon ingress;
+    // any body, merged-var, or exporter-auth projection makes this fail.
+    assert_export_excludes(&receiver.capture, &[BODY, VARIABLE, AUTH]);
+
+    receiver.stop().await;
+}
+
+/// The router's SQLite replay proof lives in
+/// `storage_and_nudge_router/tests/bd3_task_telemetry.rs`; this composed
+/// daemon/exporter check proves the same immutable handoff cannot produce two
+/// OTLP task-event spans if it reaches the runtime twice.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn running_daemon_exports_duplicate_handoff_once() {
+    let receiver = Receiver::start(false).await;
+    let daemon = Daemon::start(endpoint_env(&receiver.endpoint)).await;
+    let handoff = prompt_handoff_record("BD6-DUPLICATE-HANDOFF");
+    daemon.workers.task_telemetry.try_emit(handoff.clone());
+    daemon.workers.task_telemetry.try_emit(handoff);
+
+    receiver
+        .capture
+        .wait(EXPORT_WAIT, "one deduplicated handoff export", || {
+            exported_events(&receiver.capture)
+                .iter()
+                .filter(|event| {
+                    event.task_id == "BD6-DUPLICATE-HANDOFF" && event.kind == "prompt_handoff"
+                })
+                .count()
+                == 1
+        })
+        .await;
+    // Drain the composed runtime before counting so a second queued projection
+    // cannot arrive after the first export made the wait condition true.
+    daemon.shutdown().await.expect("clean daemon shutdown");
+    assert_eq!(
+        exported_events(&receiver.capture)
+            .iter()
+            .filter(|event| {
+                event.task_id == "BD6-DUPLICATE-HANDOFF" && event.kind == "prompt_handoff"
+            })
+            .count(),
+        1,
+        "a duplicate handoff must not fabricate a second event"
+    );
+
+    receiver.stop().await;
+}
+
+/// Acked and migrated facts are state-neutral: they must be visible as facts,
+/// but must not invent time-to-start or time-to-close samples.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn running_daemon_export_has_no_duration_for_acked_or_migrated() {
+    let receiver = Receiver::start(false).await;
+    let daemon = Daemon::start(endpoint_env(&receiver.endpoint)).await;
+    let mut acked = task_record(1);
+    acked.task_id = "BD6-STATE-NEUTRAL".parse().expect("task id");
+    acked.kind = TaskTelemetryKind::Acked;
+    let mut migrated = acked.clone();
+    migrated.kind = TaskTelemetryKind::Migrated;
+    migrated.seq = Some(2);
+    daemon.workers.task_telemetry.try_emit(acked);
+    daemon.workers.task_telemetry.try_emit(migrated);
+
+    receiver
+        .capture
+        .wait(EXPORT_WAIT, "acked and migrated exports", || {
+            let events = exported_events(&receiver.capture);
+            ["acked", "migrated"].into_iter().all(|kind| {
+                events
+                    .iter()
+                    .any(|event| event.task_id == "BD6-STATE-NEUTRAL" && event.kind == kind)
+            })
+        })
+        .await;
+    daemon.shutdown().await.expect("clean daemon shutdown");
+    assert_eq!(
+        histogram_count(&receiver.capture, "atm.task.time_to_start_ms"),
+        0,
+        "Acked/Migrated must not invent a start duration"
+    );
+    assert_eq!(
+        histogram_count(&receiver.capture, "atm.task.time_to_close_ms"),
+        0,
+        "Acked/Migrated must not invent a close duration"
+    );
+
     receiver.stop().await;
 }
 
