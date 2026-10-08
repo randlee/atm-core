@@ -27,7 +27,7 @@ forbidden_edges = ["atm -> telemetry-implementation", "atm-http-runtime -> telem
 
 [references]
 scope = "outside_owner_crate"
-forbidden = []
+forbidden = ["NoopTaskTelemetrySink"]
 
 [contracts]
 request_types = ["TaskTelemetryRecord"]
