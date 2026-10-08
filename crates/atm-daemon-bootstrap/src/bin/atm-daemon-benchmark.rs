@@ -459,7 +459,7 @@ async fn run_direct_core_write_interval(
                 }
                 let request = direct_core_write_request(&home, sequence_offset + sequence)?;
                 let source_preflight = preflight_write_source_request(&runtime, &request)?;
-                prepare_write_with_preflight_async_runtime(
+                let _committed_write = prepare_write_with_preflight_async_runtime(
                     request,
                     &NullObservability,
                     &runtime,

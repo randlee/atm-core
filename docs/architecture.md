@@ -453,8 +453,10 @@ Initial retained-command integration scope:
 
 Outside the initial retained-command integration scope:
 - `sc-observe`
-- Phase BD integrates task telemetry with OpenTelemetry through the ATM-owned
-  `TaskTelemetrySink`; `atm-core` remains independent of exporter crates.
+- Phase BD integrates task telemetry with OpenTelemetry 0.33 through the
+  ATM-owned `TaskTelemetrySink`; `atm-core` remains independent of exporter
+  crates, and `atm-daemon-bootstrap` composes the exporter once and owns only
+  the provider lifecycle (ADR-064 D11).
 
 Phase W typed observability migration note:
 - `DaemonSubsystem` and the typed `emit_subsystem_event(...)` boundary are

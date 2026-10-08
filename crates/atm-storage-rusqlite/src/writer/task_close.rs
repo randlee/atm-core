@@ -94,6 +94,7 @@ fn deliver_rejected_close_report(
     target: &SharedDbTarget,
 ) -> Result<TaskMessageResult, AtmError> {
     drop_task_link_from_mail(record, connection, target)?;
+    let detail = format!("{}: {}", error.code(), error.message());
     let event = append_task_event(
         connection,
         target,
@@ -110,7 +111,7 @@ fn deliver_rejected_close_report(
             message_id: record.envelope.message_id,
             outcome: None,
             marker: None,
-            detail: Some(error.message()),
+            detail: Some(&detail),
         },
     )?;
     Ok(TaskMessageResult::RejectedReportDelivered {

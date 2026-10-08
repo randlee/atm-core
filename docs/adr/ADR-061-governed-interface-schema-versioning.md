@@ -100,7 +100,7 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
-- **2026-09-26 — Phase BD.1 task telemetry health:** `HTTP_API_VERSION`
+- **2026-10-07 — Phase BD.1 task telemetry health:** `HTTP_API_VERSION`
   moves from `1.10.0` to `1.11.0`. `AtmObservabilityHealth` gains the additive
   optional `export` projection. It defaults to `None` when omitted, so a
   pinned pre-1.11 `DoctorReport` payload still decodes; a current payload with

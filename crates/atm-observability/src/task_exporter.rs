@@ -143,8 +143,9 @@ pub(crate) struct TaskExporter {
     events: Counter<u64>,
     time_to_start: Histogram<f64>,
     time_to_close: Histogram<f64>,
-    // MUTEX: the task and workflow runtime workers share bounded projection
-    // state. No I/O, await or SDK lifecycle operation occurs while it is held.
+    // MUTEX: task and workflow workers share bounded projection state. Keep
+    // only projection and nonblocking SDK recording/admission here; exporter
+    // network I/O and SDK lifecycle/shutdown work must remain outside.
     state: Mutex<State>,
 }
 

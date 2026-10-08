@@ -169,26 +169,14 @@ async fn ay4_l4_connection_reset_keeps_unknown_prompt_pending_without_duplicate_
 #[tokio::test]
 async fn ay4_l5_shutdown_stops_new_queue_wake_admissions() {
     let fixture = fixture();
-    let list_gate = fixture.fake.block_next_list();
+    let (list_gate, parked) = fixture.fake.block_next_list();
     let (shutdown, receiver) = tokio::sync::watch::channel(());
     let task = Arc::new(fixture.pump.clone()).start(receiver);
-    tokio::time::timeout(Duration::from_secs(1), async {
-        loop {
-            if fixture
-                .fake
-                .calls()
-                .iter()
-                .any(|call| matches!(call, atm_herdr::testing::FakeHerdrCall::List { .. }))
-            {
-                return;
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("queue wake began its bounded list request");
+    tokio::time::timeout(Duration::from_secs(1), parked.notified())
+        .await
+        .expect("queue wake reached its bounded list request");
     shutdown.send(()).expect("shutdown signal");
-    list_gate.notify_waiters();
+    list_gate.notify_one();
     tokio::time::timeout(Duration::from_secs(1), task)
         .await
         .expect("queue wake joins after completing in-flight work")
