@@ -21,10 +21,10 @@ use tonic::metadata::{Ascii, MetadataValue};
 use tonic::transport::{ClientTlsConfig, Endpoint};
 
 /// Production per-export bound, shared by tonic and every SDK processor.
-pub const EXPORT_TIMEOUT: Duration = Duration::from_millis(400);
-pub const EXPORT_QUEUE: usize = 256;
-pub const EXPORT_BATCH: usize = 256;
-pub const EXPORT_INTERVAL: Duration = Duration::from_secs(1);
+pub(crate) const EXPORT_TIMEOUT: Duration = Duration::from_millis(400);
+pub(crate) const EXPORT_QUEUE: usize = 256;
+pub(crate) const EXPORT_BATCH: usize = 256;
+pub(crate) const EXPORT_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Existing runtime setup values plus unwrapped, standard SDK providers.
 pub type TelemetrySetup = (

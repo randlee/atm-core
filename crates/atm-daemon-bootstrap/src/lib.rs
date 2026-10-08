@@ -83,20 +83,16 @@ pub const REPLACEMENT_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 /// can only lower the body policy; it cannot raise this server ceiling.
 const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
 
-/// Build the retained-log adapter at the active Tokio/Axum composition
-/// boundary. Filesystem readiness is synchronous, so it is explicitly kept
-/// off a runtime worker and joined before the replacement daemon starts.
+/// Build the retained-log adapter and the optional native OpenTelemetry export
+/// at the active Tokio/Axum composition boundary. The SDK providers are built
+/// on this runtime; filesystem readiness is synchronous, so the retained
+/// logger is built off a runtime worker and joined before the daemon starts.
 pub async fn bootstrap_replacement_observability()
 -> Result<Arc<dyn ObservabilityPort + Send + Sync>, AtmError> {
-    let observability =
-        tokio::task::spawn_blocking(daemon_observability::DaemonObservability::bootstrap)
-            .await
-            .map_err(|source| {
-                AtmError::observability_bootstrap(format!(
-                    "daemon observability bootstrap worker did not complete: {source}"
-                ))
-            })??;
+    let observability = daemon_observability::DaemonObservability::bootstrap().await?;
     observability.install_tracing_bridge()?;
+    observability.report_export_config();
+    observability.register_process_owner();
     Ok(Arc::new(observability))
 }
 
@@ -191,6 +187,7 @@ pub fn assemble_host_runtime_with_template_composer(
         non_claude_outbound,
         template_composer,
         SqliteStorageFactory::host_scoped(),
+        (None, None),
     )
 }
 
@@ -199,15 +196,20 @@ fn assemble_host_runtime_with_storage_factory(
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
     template_composer: Option<Arc<dyn TemplateComposer>>,
     storage_factory: SqliteStorageFactory,
+    telemetry: (
+        Option<atm_runtime::TaskTelemetrySetup>,
+        Option<atm_runtime::WorkflowTelemetrySetup>,
+    ),
 ) -> Result<RuntimeAssembly, AtmError> {
+    let (task_telemetry, workflow_telemetry) = telemetry;
     assemble_runtime(RuntimeAssemblyInputs {
         host_runtime_scope: current_host_runtime_scope()?,
         storage_factory: Arc::new(storage_factory),
         config_current_dir,
         non_claude_outbound,
         template_composer,
-        workflow_telemetry: None,
-        task_telemetry: None,
+        workflow_telemetry,
+        task_telemetry,
     })
 }
 
@@ -228,17 +230,33 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 /// (for example while the workspace volume is being reconciled).  The daemon
 /// must not depend on that directory: [`RuntimeAssembly::for_daemon`] removes
 /// the workspace-backed config doctor before requests can be served.
+///
+/// The process observability owner forwards its task/workflow telemetry
+/// setups here once; without an owner (or without an endpoint) both runtimes
+/// are inert.
 pub fn assemble_daemon_runtime() -> Result<RuntimeAssembly, AtmError> {
     let storage_factory = SqliteStorageFactory::host_scoped()
         .with_observability(Arc::new(sqlite_observability::DaemonSqliteObservability))
         .with_timeline_observer(Arc::new(diagnostic_timeline::attach_timeline));
-    assemble_host_runtime_with_storage_factory(
+    let owner = daemon_observability::DaemonObservability::process_owner();
+    let telemetry = owner
+        .as_ref()
+        .map_or((None, None), |owner| owner.take_telemetry_setups());
+    let assembly = assemble_host_runtime_with_storage_factory(
         PathBuf::new(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
         Some(template_composer()),
         storage_factory,
+        telemetry,
     )
-    .map(RuntimeAssembly::for_daemon)
+    .map(RuntimeAssembly::for_daemon)?;
+    if let Some(owner) = owner {
+        owner.attach_runtime_telemetry(
+            assembly.task_telemetry.diagnostics(),
+            Arc::clone(assembly.workflow_telemetry.diagnostics()),
+        );
+    }
+    Ok(assembly)
 }
 
 /// Starts the replacement Tokio/Axum daemon as the only active serving path.
@@ -441,6 +459,7 @@ async fn run_replacement_daemon_with_selector(
     let herdr_config = daemon_herdr_config(&ProcessEnvSource)?;
     let assembly = assemble_daemon_runtime()?;
     let workflow_telemetry = assembly.workflow_telemetry.clone();
+    let task_telemetry = assembly.task_telemetry.clone();
     let diagnostic_timeline = Arc::clone(&assembly.diagnostic_timeline);
     let diagnostic_counters = diagnostic_timeline::active_counters();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
@@ -486,13 +505,28 @@ async fn run_replacement_daemon_with_selector(
     run_until_shutdown(
         running,
         handler,
-        workflow_telemetry,
-        recovery_sweep,
-        atm_temp_sweeper,
+        DaemonWorkers {
+            workflow_telemetry,
+            task_telemetry,
+            recovery_sweep,
+            atm_temp_sweeper,
+            observability: daemon_observability::DaemonObservability::process_owner(),
+        },
         owner,
         singleton_guards,
     )
     .await
+}
+
+/// The supervised subsystems every terminal daemon path drains exactly once.
+struct DaemonWorkers {
+    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
+    task_telemetry: atm_runtime::TaskTelemetryRuntime,
+    recovery_sweep: queue_drain::RecoverySweepHandle,
+    atm_temp_sweeper: AtmTempSweeperRuntime,
+    /// The process owner of the standard SDK providers; absent for the
+    /// benchmark and null-observability daemons.
+    observability: Option<daemon_observability::DaemonObservability>,
 }
 
 fn acquire_verified_singleton_scope() -> Result<
@@ -556,31 +590,20 @@ async fn start_replacement_runtime_or_abort(
 async fn run_until_shutdown(
     running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
     handler: Arc<StorageAndNudgeRouter>,
-    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
-    recovery_sweep: queue_drain::RecoverySweepHandle,
-    atm_temp_sweeper: AtmTempSweeperRuntime,
+    workers: DaemonWorkers,
     owner: DaemonOwnerGuard,
     singleton_guards: SingletonGuards,
 ) -> Result<(), AtmError> {
     if let Err(error) = emit_ready_signal_if_requested() {
         // The process has not advertised readiness, so it must not retain an
         // otherwise-live listener when its supervisor handshake fails.
-        let _ = shutdown_replacement_daemon(
-            running,
-            handler.as_ref(),
-            workflow_telemetry,
-            recovery_sweep,
-            atm_temp_sweeper,
-        )
-        .await;
+        let _ = shutdown_replacement_daemon(running, handler.as_ref(), workers).await;
         return Err(error);
     }
     await_runtime_or_shutdown(
         running,
         handler.as_ref(),
-        workflow_telemetry,
-        recovery_sweep,
-        atm_temp_sweeper,
+        workers,
         &owner,
         &singleton_guards,
     )
@@ -646,9 +669,7 @@ async fn start_replacement_runtime(
 async fn await_runtime_or_shutdown(
     mut running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
     handler: &StorageAndNudgeRouter,
-    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
-    recovery_sweep: queue_drain::RecoverySweepHandle,
-    atm_temp_sweeper: AtmTempSweeperRuntime,
+    workers: DaemonWorkers,
     owner: &DaemonOwnerGuard,
     singleton_guards: &SingletonGuards,
 ) -> Result<(), AtmError> {
@@ -668,14 +689,7 @@ async fn await_runtime_or_shutdown(
             }
             _ = running.wait_for_server_stop() => {
                 tracing::error!(target: "atm_daemon_bootstrap::lifecycle", code = "ATM_RUNTIME_UNEXPECTED_STOP", "replacement ATM HTTP runtime server stopped unexpectedly; beginning cleanup");
-                let result = shutdown_replacement_daemon(
-                    running,
-                    handler,
-                    workflow_telemetry,
-                    recovery_sweep,
-                    atm_temp_sweeper,
-                )
-                .await;
+                let result = shutdown_replacement_daemon(running, handler, workers).await;
                 return match result {
                     Ok(()) => Err(AtmError::daemon_unavailable(
                         "replacement HTTP runtime server stopped unexpectedly",
@@ -685,14 +699,7 @@ async fn await_runtime_or_shutdown(
             }
         }
     }
-    shutdown_replacement_daemon(
-        running,
-        handler,
-        workflow_telemetry,
-        recovery_sweep,
-        atm_temp_sweeper,
-    )
-    .await
+    shutdown_replacement_daemon(running, handler, workers).await
 }
 
 /// Resolves `$ATM_TEMP` (defaulting and emitting the one-time fallback
@@ -759,26 +766,45 @@ fn legacy_literal_ip_policy_from_value(value: Option<String>) -> LegacyLiteralIp
     }
 }
 
-/// Drain the Axum runtime before releasing outbound peer drivers and the
-/// best-effort workflow telemetry worker. Every terminal daemon path uses the
-/// same sequence so a failed ready handshake cannot leave either subsystem
-/// alive after the listener is gone.
+/// Bounded wait for the listener step beyond the cumulative deadline: the
+/// runtime's own shutdown timeout starts a moment after the deadline, so this
+/// lets its abort-and-join run instead of detaching the Axum task.
+const LISTENER_ABORT_GRACE: Duration = Duration::from_millis(250);
+
+/// Drains every supervised subsystem under one cumulative deadline fixed at
+/// shutdown entry (ADR-055, REQ-DAEMON-RUNTIME-003): listener, recovery sweep,
+/// peer connections, task/workflow telemetry drains, exporter shutdown and the
+/// `$ATM_TEMP` sweeper each get only the remaining time, never a fresh budget.
+/// Every terminal daemon path uses this sequence, so a failed ready handshake
+/// cannot leave a subsystem alive after the listener is gone. The returned
+/// result is the listener's; telemetry outcomes are retained as health.
 async fn shutdown_replacement_daemon(
     running: atm_http_runtime::HttpRuntime<atm_http_runtime::Running>,
     handler: &StorageAndNudgeRouter,
-    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
-    recovery_sweep: queue_drain::RecoverySweepHandle,
-    atm_temp_sweeper: AtmTempSweeperRuntime,
+    workers: DaemonWorkers,
 ) -> Result<(), AtmError> {
-    let stopped = running.begin_shutdown().finish().await;
-    recovery_sweep.shutdown(REPLACEMENT_DRAIN_DEADLINE).await;
-    handler
-        .shutdown_peer_connections(REPLACEMENT_DRAIN_DEADLINE)
-        .await;
-    workflow_telemetry
-        .shutdown(tokio::time::Instant::now() + REPLACEMENT_DRAIN_DEADLINE)
-        .await;
-    atm_temp_sweeper.shutdown().await;
+    let deadline = tokio::time::Instant::now() + REPLACEMENT_DRAIN_DEADLINE;
+    let stopped = tokio::time::timeout_at(
+        deadline + LISTENER_ABORT_GRACE,
+        running.begin_shutdown().finish(),
+    )
+    .await
+    .unwrap_or_else(|_| {
+        Err(AtmError::daemon_unavailable(
+            "replacement HTTP runtime exceeded the cumulative daemon shutdown deadline",
+        ))
+    });
+    workers.recovery_sweep.shutdown(deadline).await;
+    handler.shutdown_peer_connections(deadline).await;
+    // Both drains feed the SDK, so they finish (or abort) before the exporter.
+    tokio::join!(
+        workers.task_telemetry.shutdown(deadline),
+        workers.workflow_telemetry.shutdown(deadline),
+    );
+    if let Some(observability) = &workers.observability {
+        observability.shutdown_export(deadline).await;
+    }
+    workers.atm_temp_sweeper.shutdown(deadline).await;
     diagnostic_timeline::stop_flush_worker();
     let _stopped = stopped?;
     Ok(())

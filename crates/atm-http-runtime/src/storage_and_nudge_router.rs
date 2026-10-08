@@ -287,11 +287,17 @@ impl StorageAndNudgeRouter {
     /// deliberately did not wait for. Individual request guards remain
     /// non-blocking on drop; only this daemon lifecycle path awaits driver
     /// termination.
-    pub async fn shutdown_peer_connections(&self, deadline: std::time::Duration) {
+    /// Releases outbound peer drivers, then detached received hooks, both
+    /// within the one caller-owned shutdown `deadline`: the drain gets only
+    /// what the pool left, never a fresh budget.
+    pub async fn shutdown_peer_connections(&self, deadline: tokio::time::Instant) {
         if let Some(pool) = &self.peer_connection_pool {
-            pool.shutdown(deadline).await;
+            pool.shutdown(deadline.saturating_duration_since(tokio::time::Instant::now()))
+                .await;
         }
-        self.detached_received_hooks.drain(deadline).await;
+        self.detached_received_hooks
+            .drain(deadline.saturating_duration_since(tokio::time::Instant::now()))
+            .await;
     }
 
     async fn commit_write(

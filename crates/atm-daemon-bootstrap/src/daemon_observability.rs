@@ -1,17 +1,31 @@
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
+use atm_core::atm_temp::ProcessEnvSource;
 use atm_core::error::AtmError;
 use atm_core::home;
 use atm_core::observability::{
-    AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
+    AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmTelemetryExportFailure,
+    AtmTelemetryExportHealth, AtmTelemetryExportState, CommandEvent, LogTailSession,
     ObservabilityPort,
 };
+use atm_core::{LogDestination, TelemetryExportConfig, TelemetryExportProtocol};
 use atm_observability::{
-    RetainedCommandEvent, RetainedLogOffer, RetainedLogPolicy, RetainedLogger,
-    build_retained_logger_from_env,
+    ExportDiagnostics, RetainedCommandEvent, RetainedLogOffer, RetainedLogPolicy, RetainedLogger,
+    build_routed_retained_logger, logger_level_override,
 };
+use atm_runtime::{
+    TaskTelemetryDiagnostics, TaskTelemetrySetup, WorkflowTelemetryDiagnostics,
+    WorkflowTelemetrySetup,
+};
+use opentelemetry::logs::LoggerProvider;
+use opentelemetry_sdk::error::OTelSdkError;
+use opentelemetry_sdk::logs::SdkLoggerProvider;
+use opentelemetry_sdk::metrics::SdkMeterProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
+use tokio::sync::watch;
+use tokio::time::Instant;
 
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_DAEMON_TARGET: &str = "atm.daemon";
@@ -24,6 +38,13 @@ const RETAINED_LOG_MAINTENANCE_CADENCE: Duration = Duration::from_secs(60);
 // graceful drain budget so retained-log shutdown cannot consume the entire
 // daemon stop window by itself.
 const RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
+/// Upper bound on the exporter step of daemon shutdown. The bd-5 production
+/// limits need at most two 400ms exports per quiescent signal.
+const EXPORT_SHUTDOWN_BOUND: Duration = Duration::from_secs(1);
+
+/// The one daemon process owner, registered by `bootstrap_replacement_observability`
+/// like the process-global tracing bridge it installs.
+static PROCESS_OWNER: OnceLock<DaemonObservability> = OnceLock::new();
 
 struct LoggerLifecycle(Arc<RetainedLogger>);
 
@@ -33,11 +54,109 @@ impl LoggerLifecycle {
     }
 }
 
+/// Resolved export selection. Only validated endpoints are retained.
+enum ExportSelection {
+    Absent,
+    Invalid,
+    Configured { endpoint: String },
+}
+
+type Providers = (SdkTracerProvider, SdkLoggerProvider, SdkMeterProvider);
+
+/// Export state owned by the process lifecycle: the standard SDK providers
+/// (retained only for shutdown), the setups handed once to runtime assembly,
+/// and the runtime counters attached after assembly.
+struct Export {
+    selection: ExportSelection,
+    diagnostics: Arc<ExportDiagnostics>,
+    // MUTEX: runtime assembly takes the setups once; shutdown takes providers once.
+    setups: Mutex<Option<(TaskTelemetrySetup, WorkflowTelemetrySetup)>>,
+    providers: Mutex<Option<Providers>>,
+    runtime: OnceLock<(
+        Arc<TaskTelemetryDiagnostics>,
+        Arc<WorkflowTelemetryDiagnostics>,
+    )>,
+    shutdown: OnceLock<watch::Receiver<bool>>,
+}
+
+impl Export {
+    fn inert() -> Self {
+        Self::new(ExportSelection::Absent, Arc::default(), None)
+    }
+
+    fn new(
+        selection: ExportSelection,
+        diagnostics: Arc<ExportDiagnostics>,
+        setup: Option<atm_observability::TelemetrySetup>,
+    ) -> Self {
+        let (setups, providers) = match setup {
+            Some((task, workflow, tracer, logger, meter)) => {
+                (Some((task, workflow)), Some((tracer, logger, meter)))
+            }
+            None => (None, None),
+        };
+        Self {
+            selection,
+            diagnostics,
+            setups: Mutex::new(setups),
+            providers: Mutex::new(providers),
+            runtime: OnceLock::new(),
+            shutdown: OnceLock::new(),
+        }
+    }
+
+    fn health(&self) -> AtmTelemetryExportHealth {
+        let mut health = AtmTelemetryExportHealth {
+            state: AtmTelemetryExportState::Inert,
+            endpoint: None,
+            protocol: None,
+            emitted: 0,
+            dropped_full: 0,
+            dropped_timeout: 0,
+            dropped_failure: 0,
+            dropped_shutdown: 0,
+            last_failure: None,
+        };
+        match &self.selection {
+            ExportSelection::Absent => return health,
+            ExportSelection::Invalid => {
+                health.state = AtmTelemetryExportState::Unavailable;
+                health.last_failure = Some(AtmTelemetryExportFailure::ConfigInvalid);
+                return health;
+            }
+            ExportSelection::Configured { endpoint } => {
+                health.state = AtmTelemetryExportState::Healthy;
+                health.endpoint = Some(endpoint.clone());
+                health.protocol = Some(TelemetryExportProtocol::Grpc);
+            }
+        }
+        // Task and workflow admission queues are separate, so their known
+        // runtime losses are disjoint and add without double counting.
+        if let Some((task, workflow)) = self.runtime.get() {
+            use std::sync::atomic::Ordering::Relaxed;
+            let task = task.snapshot();
+            health.emitted = task.emitted;
+            health.dropped_full = task.dropped_full + workflow.dropped_full.load(Relaxed);
+            health.dropped_timeout = task.dropped_timeout + workflow.dropped_timeout.load(Relaxed);
+            health.dropped_failure = task.dropped_failure + workflow.dropped_failure.load(Relaxed);
+            health.dropped_shutdown =
+                task.dropped_shutdown + workflow.dropped_shutdown.load(Relaxed);
+            if health.dropped_full + health.dropped_timeout + health.dropped_failure > 0 {
+                health.state = AtmTelemetryExportState::Degraded;
+            }
+        }
+        // Observable SDK transport/lifecycle failures; never SDK loss counts.
+        self.diagnostics.project(&mut health);
+        health
+    }
+}
+
 pub(crate) struct DaemonObservability {
     // Keep one shared logger lifecycle behind a mutex so emit/health paths and
     // shutdown can coordinate a single transition into the stopped state.
     logger: Arc<Mutex<LoggerLifecycle>>,
     active_log_path: PathBuf,
+    export: Arc<Export>,
 }
 
 impl std::fmt::Debug for DaemonObservability {
@@ -53,13 +172,110 @@ impl Clone for DaemonObservability {
         Self {
             logger: Arc::clone(&self.logger),
             active_log_path: self.active_log_path.clone(),
+            export: Arc::clone(&self.export),
         }
     }
 }
 
 impl DaemonObservability {
-    pub(crate) fn bootstrap() -> Result<Self, AtmError> {
-        Self::bootstrap_at_log_dir(home::host_log_dir()?)
+    /// Resolves export configuration, constructs the standard SDK providers on
+    /// the current Tokio runtime, then builds the routed retained logger on the
+    /// blocking pool. Invalid export configuration never fails the daemon: it
+    /// selects file logging and reports `Unavailable`/`ConfigInvalid` health.
+    pub(crate) async fn bootstrap() -> Result<Self, AtmError> {
+        let export = resolve_export(&ProcessEnvSource);
+        let log_dir = home::host_log_dir()?;
+        let destination = export.destination;
+        let otel_logger = export
+            .export
+            .providers
+            .lock()
+            .ok()
+            .and_then(|providers| providers.as_ref().map(|p| p.1.logger(ATM_SERVICE_NAME)));
+        let (logger, active_log_path) = tokio::task::spawn_blocking(move || {
+            let level = logger_level_override()?;
+            let active_log_path = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
+            let logger = build_routed_retained_logger(
+                ATM_SERVICE_NAME,
+                &log_dir,
+                retained_log_policy(RETAINED_LOG_ROTATION_MAX_BYTES),
+                level,
+                destination,
+                otel_logger,
+            )?;
+            Ok::<_, AtmError>((logger, active_log_path))
+        })
+        .await
+        .map_err(|source| {
+            AtmError::observability_bootstrap(format!(
+                "daemon observability bootstrap worker did not complete: {source}"
+            ))
+        })??;
+        Ok(Self {
+            logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
+            active_log_path,
+            export: Arc::new(export.export),
+        })
+    }
+
+    /// Registers this value as the process lifecycle owner. Called once by
+    /// the daemon entrypoint, after the process-global tracing bridge exists.
+    pub(crate) fn register_process_owner(&self) {
+        let _ = PROCESS_OWNER.set(self.clone());
+    }
+
+    pub(crate) fn process_owner() -> Option<Self> {
+        PROCESS_OWNER.get().cloned()
+    }
+
+    /// Hands the existing task/workflow setups to runtime assembly once.
+    pub(crate) fn take_telemetry_setups(
+        &self,
+    ) -> (Option<TaskTelemetrySetup>, Option<WorkflowTelemetrySetup>) {
+        self.export
+            .setups
+            .lock()
+            .ok()
+            .and_then(|mut setups| setups.take())
+            .map_or((None, None), |(task, workflow)| {
+                (Some(task), Some(workflow))
+            })
+    }
+
+    /// Attaches the assembled runtimes' known-loss counters to doctor health.
+    pub(crate) fn attach_runtime_telemetry(
+        &self,
+        task: Arc<TaskTelemetryDiagnostics>,
+        workflow: Arc<WorkflowTelemetryDiagnostics>,
+    ) {
+        let _ = self.export.runtime.set((task, workflow));
+    }
+
+    /// Shuts the three standard providers down concurrently on the blocking
+    /// pool, bounded by `min(1s, deadline)`. The first call owns the work in a
+    /// spawned task, so a cancelled caller cannot lose the outcome; every
+    /// caller awaits the same completion until its own deadline. A timeout
+    /// abandons the wait, not the blocking call: runtime teardown drops the
+    /// SDK tasks and releases those calls.
+    pub(crate) async fn shutdown_export(&self, deadline: Instant) {
+        let export = Arc::clone(&self.export);
+        let mut done = self
+            .export
+            .shutdown
+            .get_or_init(|| {
+                let (sender, receiver) = watch::channel(false);
+                let bound = deadline.min(Instant::now() + EXPORT_SHUTDOWN_BOUND);
+                tokio::spawn(async move {
+                    let providers = export.providers.lock().ok().and_then(|mut p| p.take());
+                    if let Some(providers) = providers {
+                        shutdown_providers(providers, bound, &export.diagnostics).await;
+                    }
+                    let _ = sender.send(true);
+                });
+                receiver
+            })
+            .clone();
+        let _ = tokio::time::timeout_at(deadline, done.wait_for(|done| *done)).await;
     }
 
     pub(crate) fn install_tracing_bridge(&self) -> Result<(), AtmError> {
@@ -74,6 +290,7 @@ impl DaemonObservability {
         })?;
         atm_observability::TracingBridgeLayer::install(Arc::clone(&logger.0))
             .map(|bridge| {
+                bridge.set_export_diagnostics(Arc::clone(&self.export.diagnostics));
                 crate::diagnostic_timeline::register_bridge(bridge);
             })
             .map_err(|error| match error {
@@ -85,20 +302,18 @@ impl DaemonObservability {
             })
     }
 
-    fn bootstrap_at_log_dir(log_dir: PathBuf) -> Result<Self, AtmError> {
-        Self::bootstrap_at_log_dir_with_rotation(log_dir, RETAINED_LOG_ROTATION_MAX_BYTES)
-    }
-
-    fn bootstrap_at_log_dir_with_rotation(
-        log_dir: PathBuf,
-        rotation_max_bytes: u64,
-    ) -> Result<Self, AtmError> {
-        let (logger, active_log_path) =
-            build_logger(&log_dir, retained_log_policy(rotation_max_bytes))?;
-        Ok(Self {
-            logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
-            active_log_path,
-        })
+    /// Reports an invalid export configuration once the bridge exists. Only
+    /// the stable code is logged: rejected values may carry credentials.
+    pub(crate) fn report_export_config(&self) {
+        if matches!(self.export.selection, ExportSelection::Invalid)
+            || self.export.health().last_failure == Some(AtmTelemetryExportFailure::ConfigInvalid)
+        {
+            tracing::warn!(
+                target: "atm_daemon_bootstrap::observability",
+                code = "ATM_TELEMETRY_EXPORT_CONFIG_INVALID",
+                "OpenTelemetry export disabled: invalid ATM_OTEL_* or ATM_LOG_DESTINATION configuration; the daemon continues with file logging"
+            );
+        }
     }
 
     #[cfg(test)]
@@ -106,10 +321,11 @@ impl DaemonObservability {
         log_dir: PathBuf,
         retained_log_policy: RetainedLogPolicy,
     ) -> Result<Self, AtmError> {
-        let (logger, active_log_path) = build_logger(&log_dir, retained_log_policy)?;
+        let (logger, active_log_path) = build_file_logger(&log_dir, retained_log_policy)?;
         Ok(Self {
             logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
             active_log_path,
+            export: Arc::new(Export::inert()),
         })
     }
 
@@ -134,6 +350,74 @@ impl DaemonObservability {
     fn flush_for_test(&self) {
         let logger = self.logger.lock().expect("test observability logger lock");
         logger.0.flush().expect("test observability logger flush");
+    }
+}
+
+async fn shutdown_providers(
+    (tracer, logger, meter): Providers,
+    bound: Instant,
+    diagnostics: &ExportDiagnostics,
+) {
+    let all = async {
+        tokio::join!(
+            tokio::task::spawn_blocking(move || tracer.shutdown()),
+            tokio::task::spawn_blocking(move || logger.shutdown()),
+            tokio::task::spawn_blocking(move || meter.shutdown()),
+        )
+    };
+    match tokio::time::timeout_at(bound, all).await {
+        Ok((trace, log, metric)) => {
+            for result in [trace, log, metric] {
+                diagnostics.observe_result(result.unwrap_or_else(|_| {
+                    Err(OTelSdkError::InternalFailure(
+                        "provider shutdown worker panicked".to_owned(),
+                    ))
+                }));
+            }
+        }
+        Err(_) => diagnostics.shutdown_wait_timed_out(),
+    }
+}
+
+struct ResolvedExport {
+    export: Export,
+    destination: LogDestination,
+}
+
+/// Absent endpoint: no exporter, worker or provider and `Inert` health.
+/// Invalid configuration (including `http/json`) or failed SDK setup keeps the
+/// daemon operational with file logging and `ConfigInvalid` diagnostics.
+fn resolve_export(env: &dyn atm_core::atm_temp::EnvSource) -> ResolvedExport {
+    let diagnostics = Arc::new(ExportDiagnostics::default());
+    let invalid = || ResolvedExport {
+        export: Export::new(ExportSelection::Invalid, Arc::default(), None),
+        destination: LogDestination::File,
+    };
+    let Ok(destination) = LogDestination::from_env(env) else {
+        return invalid();
+    };
+    let config = match TelemetryExportConfig::from_env(env) {
+        Ok(Some(config)) => config,
+        Ok(None) => {
+            return ResolvedExport {
+                export: Export::inert(),
+                destination,
+            };
+        }
+        Err(_) => return invalid(),
+    };
+    let selection = ExportSelection::Configured {
+        endpoint: config.endpoint().to_owned(),
+    };
+    match atm_observability::setup_telemetry(&config, &diagnostics) {
+        Ok(setup) => ResolvedExport {
+            export: Export::new(selection, diagnostics, Some(setup)),
+            destination,
+        },
+        Err(_) => ResolvedExport {
+            export: Export::new(selection, diagnostics, None),
+            destination: LogDestination::File,
+        },
     }
 }
 
@@ -177,16 +461,24 @@ impl ObservabilityPort for DaemonObservability {
                 "failed to read daemon observability health because the logger lock was poisoned",
             )
         })?;
-        logger.health(self.active_log_path.clone())
+        let mut health = logger.health(self.active_log_path.clone())?;
+        health.export = Some(self.export.health());
+        Ok(health)
     }
 }
 
-fn build_logger(
-    log_dir: &Path,
+#[cfg(test)]
+fn build_file_logger(
+    log_dir: &std::path::Path,
     retained_log_policy: RetainedLogPolicy,
 ) -> Result<(RetainedLogger, PathBuf), AtmError> {
     let active_log_path = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
-    let logger = build_retained_logger_from_env(ATM_SERVICE_NAME, log_dir, retained_log_policy)?;
+    let logger = atm_observability::build_retained_logger(
+        ATM_SERVICE_NAME,
+        log_dir,
+        retained_log_policy,
+        None,
+    )?;
     Ok((logger, active_log_path))
 }
 
@@ -228,9 +520,9 @@ mod tests {
             .expect("backdate rotated log");
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn bootstrap_fails_closed_when_atm_log_dir_is_invalid() {
+    async fn bootstrap_fails_closed_when_atm_log_dir_is_invalid() {
         let tempdir = TempDir::new().expect("tempdir");
         let _env = EnvGuard::set_many([
             ("ATM_LOG_DIR", Some("relative/logs")),
@@ -239,14 +531,16 @@ mod tests {
             ("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", None),
         ]);
 
-        let error = DaemonObservability::bootstrap().expect_err("invalid ATM_LOG_DIR");
+        let error = DaemonObservability::bootstrap()
+            .await
+            .expect_err("invalid ATM_LOG_DIR");
         assert!(error.is_config());
         assert!(error.message().contains("absolute path"));
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn bootstrap_fails_closed_when_retained_log_dir_cannot_be_created() {
+    async fn bootstrap_fails_closed_when_retained_log_dir_cannot_be_created() {
         let tempdir = TempDir::new().expect("tempdir");
         let blocked_parent = tempdir.path().join("blocked-parent");
         std::fs::write(&blocked_parent, "not a directory").expect("blocked parent");
@@ -264,8 +558,9 @@ mod tests {
             ("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", None),
         ]);
 
-        let error =
-            DaemonObservability::bootstrap().expect_err("retained log dir create should fail");
+        let error = DaemonObservability::bootstrap()
+            .await
+            .expect_err("retained log dir create should fail");
         assert!(error.is_observability_bootstrap());
         assert!(
             error
@@ -275,9 +570,9 @@ mod tests {
         assert!(error.message().contains(&expected), "{error}");
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn bootstrap_fails_closed_when_retained_log_file_is_not_appendable() {
+    async fn bootstrap_fails_closed_when_retained_log_file_is_not_appendable() {
         let tempdir = TempDir::new().expect("tempdir");
         let blocked_log_dir = tempdir.path().join("logs");
         std::fs::create_dir_all(&blocked_log_dir).expect("blocked log dir");
@@ -300,8 +595,9 @@ mod tests {
             ("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", None),
         ]);
 
-        let error =
-            DaemonObservability::bootstrap().expect_err("retained log file open should fail");
+        let error = DaemonObservability::bootstrap()
+            .await
+            .expect_err("retained log file open should fail");
         assert!(error.is_observability_bootstrap());
         assert!(error.message().contains("atm.log.jsonl"));
         assert!(

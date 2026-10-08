@@ -197,11 +197,10 @@ Product-level boundary rules:
 - `atm-core` owns ATM business logic and the strict I/O boundaries that the current SQLite/daemon architecture
   routes through a daemon runtime.
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
-- `atm-daemon` owns transport adapters, singleton enforcement, live-status
-  runtime state, request routing, and daemon-owned runtime projection.
-- `atm-daemon-bootstrap` owns executable assembly and process bootstrap.
-- `atm-http-runtime` owns Tokio/Axum request handling and transport-neutral
-  daemon service orchestration.
+- `atm-daemon` is only the shipped binary entrypoint plus its retained
+  observability adapter.
+- `atm-daemon-bootstrap` owns lifecycle and composition.
+- `atm-http-runtime` owns the maintained Axum server.
 - `atm-runtime` owns concrete runtime/store composition and storage-neutral
   doctor/runtime assembly for daemon and direct CLI doctor callers.
 - `atm-storage` owns backend-neutral durable DTOs and storage traits.
@@ -209,7 +208,8 @@ Product-level boundary rules:
   store boundaries.
 - `atm-observability` owns concrete shared-observability adapters and telemetry
   exporters.
-- `atm-daemon-client` owns the thin client transport used to call the daemon.
+- `atm-daemon-client` is retained only for narrow non-write compatibility
+  calls.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
 - `atm-daemon` must not become a second business-logic crate.

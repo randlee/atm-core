@@ -517,8 +517,7 @@ impl Drop for ClaimedPendingMessage {
 }
 
 impl RecoverySweepHandle {
-    pub(crate) async fn shutdown(mut self, deadline: Duration) {
-        let deadline_at = tokio::time::Instant::now() + deadline;
+    pub(crate) async fn shutdown(mut self, deadline_at: tokio::time::Instant) {
         let _ = self.tracker.cancel.send(true);
         if let Some(mut join) = self.join.take()
             && tokio::time::timeout(
