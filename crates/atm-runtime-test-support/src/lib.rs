@@ -24,7 +24,7 @@ pub mod task_telemetry;
 
 pub use atm_storage::testing::InMemoryTaskLedgerReader;
 pub use atm_storage_rusqlite::{TemplateAdmissionMessage, TemplateAdmissionSnapshot};
-pub use task_telemetry::RecordingTaskTelemetrySink;
+pub use task_telemetry::{RecordingTaskTelemetrySink, StalledTaskTelemetrySink};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RecordedWriterOutcome {
