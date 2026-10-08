@@ -57,6 +57,10 @@ pub const MAX_ESCALATION_RECIPIENTS: usize = 8;
 #[derive(Debug, Clone, PartialEq)]
 pub struct CommittedTaskWrite<T> {
     pub operation: Result<T, AtmError>,
+    /// Committed rejection-audit rows, non-empty only when `operation` is
+    /// `Err`. A successful operation carries its own rows in its result
+    /// (`MessageAdmissionOutcome::task_events`, `TaskMoveRecord::event`), so
+    /// at most one of the two carriers is ever non-empty.
     pub task_events: Vec<TaskEventRow>,
 }
 
