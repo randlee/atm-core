@@ -13,7 +13,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use super::receiver::Receiver;
-use super::{Daemon, endpoint_env, sent_message_id, task_record};
+use super::{Daemon, DaemonObservability, endpoint_env, sent_message_id, task_record};
 use atm_core::test_support::FakeEnvSource;
 
 const CHILD_MODE: &str = "ATM_BD6_EXIT_CHILD";
@@ -83,10 +83,16 @@ pub(super) fn is_child_scenario(scenario: &str) -> bool {
 /// Runs the `scenario` child test in its own process, so it owns the
 /// process-global tracing bridge, and requires it to pass.
 pub(super) fn run_child_scenario(scenario: &str) {
+    run_child_scenario_with(scenario, &[]);
+}
+
+/// [`run_child_scenario`] with extra child environment.
+fn run_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) {
     let mut child = Command::new(std::env::current_exe().expect("test binary"))
         .args(["--exact", scenario, "--nocapture", "--test-threads=1"])
         .env(CHILD_SCENARIO, scenario)
         .env_remove(CHILD_MODE)
+        .envs(envs.iter().copied())
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -199,6 +205,102 @@ async fn process_exits_within_five_seconds_when_clean() {
             .iter()
             .any(|span| span.name == "atm.task.event"),
         "shutdown flushed the child's task events"
+    );
+    healthy.stop().await;
+}
+
+const FINAL_RECORD_CHILD: &str = "telemetry_lifecycle_tests::exit::final_record_child";
+const CHILD_LOG_DIR: &str = "ATM_BD6_LOG_DIR";
+/// The bridge retains allowlisted fields only, never message text.
+const FINAL_RECORD: &str = "ATM_DAEMON_SHUTDOWN_DRAINED";
+const BACKLOG_RECORD: &str = "BD6_RETAINED_BACKLOG";
+/// Below the 1024-event logger queue, so every record is admitted, and long
+/// enough that the writer is still behind when the process exits undrained.
+const BACKLOG: usize = 512;
+
+/// Child half of [`final_lifecycle_record_survives_process_exit`]; a no-op
+/// unless launched by it.
+#[test]
+fn final_record_child() {
+    if !is_child_scenario(FINAL_RECORD_CHILD) {
+        return;
+    }
+    let log_dir = std::env::var(CHILD_LOG_DIR).expect("log dir");
+    let endpoint = std::env::var(CHILD_ENDPOINT).expect("collector endpoint");
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .build()
+        .expect("child runtime");
+    runtime.block_on(async {
+        let env = FakeEnvSource::new([
+            ("ATM_OTEL_ENDPOINT", Some(endpoint.as_str())),
+            ("ATM_LOG_DESTINATION", Some("both")),
+        ]);
+        // Production order: bootstrap, install the global bridge, compose.
+        let observability = DaemonObservability::bootstrap_from(&env, log_dir.into())
+            .await
+            .expect("daemon observability");
+        observability
+            .install_tracing_bridge()
+            .expect("the child process owns the global tracing bridge");
+        let root = tempfile::tempdir().expect("daemon root");
+        let daemon = Daemon::compose(root, observability).await;
+        for seq in 0..BACKLOG {
+            tracing::info!(target: "atm_daemon_bootstrap::lifecycle", code = BACKLOG_RECORD, attempt = seq, "backlog");
+        }
+        daemon.shutdown().await.expect("child daemon shutdown");
+    });
+    // Process exit follows; nothing in the child flushes the logger itself.
+    drop(runtime);
+}
+
+/// Positive: after `shutdown_replacement_daemon` and a real process exit, the
+/// final lifecycle record is the last line on disk behind a full backlog, and
+/// the collector received it before the logger provider stopped. Omitting the
+/// retained-logger drain loses it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn final_lifecycle_record_survives_process_exit() {
+    let healthy = Receiver::start(false).await;
+    // The logger root is the log directory's parent, as for the host `logs`.
+    let root = tempfile::tempdir().expect("log root");
+    let logs = root.path().join("logs");
+    let log_dir = logs.to_str().expect("utf-8 log dir").to_owned();
+    let endpoint = healthy.endpoint.clone();
+    tokio::task::spawn_blocking(move || {
+        run_child_scenario_with(
+            FINAL_RECORD_CHILD,
+            &[(CHILD_LOG_DIR, &log_dir), (CHILD_ENDPOINT, &endpoint)],
+        );
+    })
+    .await
+    .expect("parent driver");
+    let jsonl = std::fs::read_to_string(logs.join(atm_observability::CANONICAL_LOG_FILE_NAME))
+        .expect("retained log file");
+    let lines: Vec<&str> = jsonl.lines().collect();
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|line| line.contains(BACKLOG_RECORD))
+            .count(),
+        BACKLOG,
+        "every admitted backlog record is on disk; last lines: {:?}",
+        lines.iter().rev().take(3).collect::<Vec<_>>()
+    );
+    assert!(
+        lines.last().is_some_and(|line| line.contains(FINAL_RECORD)),
+        "the final lifecycle record is the last line on disk: {:?}",
+        lines.last()
+    );
+    assert!(
+        healthy
+            .capture
+            .logs
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|record| format!("{record:?}").contains(FINAL_RECORD)),
+        "the collector received the final lifecycle record"
     );
     healthy.stop().await;
 }

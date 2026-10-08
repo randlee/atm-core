@@ -15,7 +15,7 @@ use opentelemetry::trace::{Span, Tracer, TracerProvider};
 use opentelemetry_proto::tonic::metrics::v1::metric::Data;
 
 use super::otel_setup::{TelemetrySetup, setup_with_limits};
-use receiver::Receiver;
+use receiver::{Receiver, Signal};
 
 fn config(endpoint: &str) -> TelemetryExportConfig {
     TelemetryExportConfig::from_env(&FakeEnvSource::new([

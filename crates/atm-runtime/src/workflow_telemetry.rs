@@ -67,6 +67,20 @@ struct Lifecycle {
     drain_deadline: Option<Instant>,
 }
 
+/// Runtime producer handle for best-effort workflow telemetry.
+///
+/// Producers use [`WorkflowTelemetryRuntime::try_emit`]; this handle
+/// intentionally does not implement [`WorkflowTelemetrySink`], whose
+/// implementation belongs to the exporter provided when the runtime starts.
+///
+/// ```compile_fail
+/// use atm_core::WorkflowTelemetrySink;
+/// use atm_runtime::WorkflowTelemetryRuntime;
+///
+/// fn runtime_is_not_a_sink(runtime: WorkflowTelemetryRuntime) -> Box<dyn WorkflowTelemetrySink> {
+///     Box::new(runtime)
+/// }
+/// ```
 #[derive(Clone)]
 pub struct WorkflowTelemetryRuntime {
     sender: Arc<std::sync::Mutex<Option<mpsc::Sender<WorkflowTelemetryRecord>>>>,
@@ -247,20 +261,6 @@ async fn emit_one(
                 .dropped_failure
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
-    }
-}
-
-impl atm_core::boundary::sealed::Sealed for WorkflowTelemetryRuntime {}
-
-impl WorkflowTelemetrySink for WorkflowTelemetryRuntime {
-    fn emit(
-        &self,
-        record: WorkflowTelemetryRecord,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<(), WorkflowTelemetryError>> + Send + '_>,
-    > {
-        self.try_emit(record);
-        Box::pin(async { Ok(()) })
     }
 }
 
