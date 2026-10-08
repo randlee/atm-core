@@ -7,8 +7,10 @@
 //! the daemon's capability-authenticated loopback listener, as from `atm`. Two seams are test-owned: the
 //! received-hook selector accepts every prompt (so a real prompt handoff is
 //! recorded without a tmux pane), and Herdr is the trait-boundary fake.
+#![cfg(test)]
 
 mod exit;
+mod queue_wake;
 pub(crate) mod receiver;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -99,20 +101,49 @@ pub(super) struct Daemon {
     workers: DaemonWorkers,
     client: Arc<dyn DaemonApiClient>,
     runtime: LocalServiceRuntime,
+    herdr: Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+    /// The composed queue-wake pump, when composed with a test clock.
+    pump: Option<atm_http_runtime::HerdrQueueWakePump>,
 }
 
 impl Daemon {
     pub async fn start(env: FakeEnvSource) -> Self {
+        let (root, observability) = Self::bootstrap(env).await;
+        Self::compose(root, observability).await
+    }
+
+    /// The daemon's observability bootstrap over an isolated root.
+    pub async fn bootstrap(env: FakeEnvSource) -> (tempfile::TempDir, DaemonObservability) {
         let root = tempfile::tempdir().expect("daemon root");
         let observability = DaemonObservability::bootstrap_from(&env, root.path().join("logs"))
             .await
             .expect("daemon observability bootstraps for any export configuration");
+        (root, observability)
+    }
+
+    /// Composes and starts the daemon on a bootstrapped observability owner.
+    pub async fn compose(root: tempfile::TempDir, observability: DaemonObservability) -> Self {
+        Self::compose_with(root, observability, None).await
+    }
+
+    /// [`Self::compose`]; a `clock` is installed on the composed queue-wake
+    /// pump, which is kept, and Herdr worker plus lead members are seeded.
+    pub async fn compose_with(
+        root: tempfile::TempDir,
+        observability: DaemonObservability,
+        clock: Option<crate::replacement_handler::queue_wake_probe::Clock>,
+    ) -> Self {
         let assembly = compose_daemon_assembly(
             SqliteStorageFactory::at_path(root.path().join("runtime").join("mail.sqlite3")),
             Some(&observability),
         )
         .expect("compose daemon runtime");
-        seed_roster(&assembly.service_runtime);
+        seed_roster(&assembly.service_runtime, clock.is_some());
+        let herdr = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        let probed = clock.is_some();
+        if let Some(clock) = clock {
+            crate::replacement_handler::queue_wake_probe::arm(clock);
+        }
         let runtime = assembly.service_runtime.clone();
         let task_telemetry = assembly.task_telemetry.clone();
         let workflow_telemetry = assembly.workflow_telemetry.clone();
@@ -135,12 +166,15 @@ impl Daemon {
                 diagnostic_counters: None,
                 bare_cli: Default::default(),
                 herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
-                herdr_process: Some(Arc::new(
-                    atm_herdr::testing::FakeHerdrProcessAdapter::default(),
-                )),
+                herdr_process: Some(herdr.clone()),
             },
         )
         .expect("compose the replacement daemon handler");
+        // Taken in the same synchronous step that armed it, on this thread.
+        let pump = probed.then(|| {
+            crate::replacement_handler::queue_wake_probe::take()
+                .expect("composition installed the test clock on its pump")
+        });
         let instance = ulid::Ulid::new();
         // The loopback client admits only the recorded owning instance.
         std::fs::write(
@@ -192,6 +226,8 @@ impl Daemon {
             client,
             runtime,
             root,
+            herdr,
+            pump,
         }
     }
 
@@ -285,25 +321,35 @@ impl Daemon {
     }
 }
 
-fn seed_roster(runtime: &LocalServiceRuntime) {
+fn seed_roster(runtime: &LocalServiceRuntime, with_herdr: bool) {
     let team: TeamName = TEAM.parse().expect("team");
+    let member = |agent: &str| RosterEntry {
+        team_name: team.clone(),
+        agent_name: agent.parse().expect("agent"),
+        member_kind: RosterMemberKind::Permanent,
+        harness: RosterHarness::PythonGraft,
+        agent_type: atm_core::schema::AgentType::default(),
+        model: ModelName::default(),
+        recipient_pane_id: None,
+        metadata_json: Map::new(),
+    };
+    let mut members: Vec<RosterEntry> = ["sender", "recipient", "third"]
+        .into_iter()
+        .map(member)
+        .collect();
+    if with_herdr {
+        let mut worker = member("worker");
+        worker.harness = RosterHarness::CodexCli;
+        worker.metadata_json = atm_core::delivery_channel::test_backend_type_metadata("herdr");
+        let mut lead = member("lead");
+        lead.agent_type = atm_storage::AgentType::Lead;
+        members.extend([worker, lead]);
+    }
     runtime
         .shared_roster_store_arc()
         .save_roster(&RosterSnapshot {
             team_name: team.clone(),
-            members: ["sender", "recipient", "third"]
-                .into_iter()
-                .map(|agent| RosterEntry {
-                    team_name: team.clone(),
-                    agent_name: agent.parse().expect("agent"),
-                    member_kind: RosterMemberKind::Permanent,
-                    harness: RosterHarness::PythonGraft,
-                    agent_type: atm_core::schema::AgentType::default(),
-                    model: ModelName::default(),
-                    recipient_pane_id: None,
-                    metadata_json: Map::new(),
-                })
-                .collect(),
+            members,
             refreshed_at: None,
         })
         .expect("seed roster");
@@ -436,10 +482,8 @@ fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId
 /// durable identity, kind, seq and timestamp, together with the counter and
 /// both histograms, while the daemon is still serving.
 /// Negative: the acknowledgement adds neither a ledger row nor a span.
-/// No-Claim: reminder, reminder reset and lead notification are produced only
-/// by the queue-wake pump after `TASK_REMINDER_INTERVAL_MS` (60s) of real
-/// idle time; their projection is proven at pump level by bd-3
-/// (`herdr_queue_wake/tests/bd3_task_telemetry.rs`), not end to end here.
+/// Reminder, lead notification and reminder reset come from the composed
+/// queue-wake pump and are proven in `queue_wake.rs`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn running_daemon_exports_each_committed_task_event_to_the_collector() {
     let receiver = Receiver::start(false).await;
@@ -628,65 +672,94 @@ async fn doctor_until(
     condition: impl Fn(&AtmTelemetryExportHealth) -> bool,
 ) -> serde_json::Value {
     let mut cadence = tokio::time::interval(Duration::from_millis(100));
+    let last = std::sync::Mutex::new(None);
     let reached = tokio::time::timeout(EXPORT_WAIT, async {
         loop {
             cadence.tick().await;
             let doctor = daemon.doctor_json().await;
-            if condition(&export_health(&doctor)) {
+            let health = export_health(&doctor);
+            if condition(&health) {
                 return doctor;
             }
+            *last.lock().unwrap() = Some(health);
         }
     })
     .await;
-    reached.unwrap_or_else(|_| panic!("doctor never reported {what} within {EXPORT_WAIT:?}"))
+    reached.unwrap_or_else(|_| {
+        panic!(
+            "doctor never reported {what} within {EXPORT_WAIT:?}; last export health {:?}",
+            last.lock().unwrap()
+        )
+    })
 }
 
 /// Positive: SDK transport failures against an unreachable collector reach
-/// doctor JSON as `Unavailable` through the installed tracing bridge, while
-/// the daemon keeps serving and every task write keeps its result.
+/// doctor JSON as `Unavailable` through the process-global tracing bridge,
+/// while the daemon keeps serving and every task write keeps its result.
 /// Negative: no SDK loss quantity is invented (`dropped_failure` stays 0).
-#[tokio::test]
-async fn unreachable_collector_degrades_health_without_changing_task_results() {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let unreachable = format!("http://{}", listener.local_addr().unwrap());
-    drop(listener);
-    let daemon = Daemon::start(endpoint_env(&unreachable)).await;
-    // The SDK reports export failures as internal tracing events; on this
-    // current-thread runtime the bridge sees every SDK worker event.
-    let dispatch = tracing::Dispatch::new(tracing_subscriber::layer::SubscriberExt::with(
-        tracing_subscriber::registry(),
-        daemon.observability.tracing_bridge_for_test(),
-    ));
-    let _bridge = tracing::dispatcher::set_default(&dispatch);
-    for task in ["BD6-U1", "BD6-U2", "BD6-U3"] {
-        sent_message_id(
-            daemon
-                .write(daemon.request("sender", "recipient", task, None))
-                .await
-                .expect("assignment result is independent of the collector"),
-        );
+/// The scenario runs in a child process because the bridge is process-global
+/// in production; a thread-scoped test dispatcher races other tests' scoped
+/// dispatchers in tracing's per-callsite interest cache and can miss the SDK
+/// failure event entirely.
+#[test]
+fn unreachable_collector_degrades_health_without_changing_task_results() {
+    exit::run_child_scenario(UNREACHABLE_CHILD);
+}
+
+const UNREACHABLE_CHILD: &str = "telemetry_lifecycle_tests::unreachable_collector_child";
+
+/// Child half of [`unreachable_collector_degrades_health_without_changing_task_results`];
+/// a no-op unless launched by [`exit::run_child_scenario`].
+#[test]
+fn unreachable_collector_child() {
+    if !exit::is_child_scenario(UNREACHABLE_CHILD) {
+        return;
     }
-    let doctor = doctor_until(&daemon, "Unavailable export", |health| {
-        health.state == AtmTelemetryExportState::Unavailable
-    })
-    .await;
-    let health = export_health(&doctor);
-    assert_eq!(
-        health.last_failure,
-        Some(AtmTelemetryExportFailure::Unavailable)
-    );
-    assert_eq!(health.dropped_failure, 0);
-    assert_export_remediation(&doctor);
-    let started = Instant::now();
-    daemon
-        .shutdown()
-        .await
-        .expect("shutdown result is the listener's");
-    assert!(
-        started.elapsed() <= Duration::from_secs(5),
-        "{:?}",
-        started.elapsed()
-    );
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .build()
+        .expect("child runtime");
+    runtime.block_on(async {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let unreachable = format!("http://{}", listener.local_addr().unwrap());
+        drop(listener);
+        // Production order: bootstrap, install the global bridge, compose.
+        let (root, observability) = Daemon::bootstrap(endpoint_env(&unreachable)).await;
+        observability
+            .install_tracing_bridge()
+            .expect("the child process owns the global tracing bridge");
+        let daemon = Daemon::compose(root, observability).await;
+        for task in ["BD6-U1", "BD6-U2", "BD6-U3"] {
+            sent_message_id(
+                daemon
+                    .write(daemon.request("sender", "recipient", task, None))
+                    .await
+                    .expect("assignment result is independent of the collector"),
+            );
+        }
+        let doctor = doctor_until(&daemon, "Unavailable export", |health| {
+            health.state == AtmTelemetryExportState::Unavailable
+        })
+        .await;
+        let health = export_health(&doctor);
+        assert_eq!(
+            health.last_failure,
+            Some(AtmTelemetryExportFailure::Unavailable)
+        );
+        assert_eq!(health.dropped_failure, 0);
+        assert_export_remediation(&doctor);
+        let started = Instant::now();
+        daemon
+            .shutdown()
+            .await
+            .expect("shutdown result is the listener's");
+        assert!(
+            started.elapsed() <= Duration::from_secs(5),
+            "{:?}",
+            started.elapsed()
+        );
+    });
 }
 
 /// Positive: a collector that accepts connections but never answers leaves

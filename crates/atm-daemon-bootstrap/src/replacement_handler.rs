@@ -311,16 +311,53 @@ fn build_queue_wake_pump(
     runtime_health: RuntimeHealth,
     herdr_process: Arc<dyn HerdrProcessAdapter>,
 ) -> Result<Arc<HerdrQueueWakePump>, AtmError> {
-    Ok(Arc::new(
-        HerdrQueueWakePump::new(
-            assembly.service_runtime.clone(),
-            selector,
-            runtime_health,
-            herdr_process,
-        )
-        .with_daemon_home(atm_core::home::atm_home()?)
-        .with_task_telemetry(assembly.task_telemetry.clone()),
-    ))
+    let pump = HerdrQueueWakePump::new(
+        assembly.service_runtime.clone(),
+        selector,
+        runtime_health,
+        herdr_process,
+    )
+    .with_daemon_home(atm_core::home::atm_home()?)
+    .with_task_telemetry(assembly.task_telemetry.clone());
+    #[cfg(test)]
+    let pump = queue_wake_probe::attach(pump);
+    Ok(Arc::new(pump))
+}
+
+/// Test-only access to the composed queue-wake pump. A test arms a clock on
+/// its own thread before composing; composition installs it on the pump and
+/// keeps a clone, which shares every piece of pump state.
+#[cfg(test)]
+pub(crate) mod queue_wake_probe {
+    use std::cell::RefCell;
+    use std::sync::Arc;
+
+    use atm_core::types::IsoTimestamp;
+    use atm_http_runtime::HerdrQueueWakePump;
+
+    pub(crate) type Clock = Arc<dyn Fn() -> IsoTimestamp + Send + Sync>;
+
+    thread_local! {
+        static ARMED: RefCell<Option<Clock>> = const { RefCell::new(None) };
+        static COMPOSED: RefCell<Option<HerdrQueueWakePump>> = const { RefCell::new(None) };
+    }
+
+    pub(crate) fn arm(clock: Clock) {
+        ARMED.with(|armed| *armed.borrow_mut() = Some(clock));
+    }
+
+    pub(super) fn attach(pump: HerdrQueueWakePump) -> HerdrQueueWakePump {
+        let Some(clock) = ARMED.with(|armed| armed.borrow_mut().take()) else {
+            return pump;
+        };
+        let pump = pump.with_clock(clock);
+        COMPOSED.with(|composed| *composed.borrow_mut() = Some(pump.clone()));
+        pump
+    }
+
+    pub(crate) fn take() -> Option<HerdrQueueWakePump> {
+        COMPOSED.with(|composed| composed.borrow_mut().take())
+    }
 }
 
 fn build_doctor_projection(

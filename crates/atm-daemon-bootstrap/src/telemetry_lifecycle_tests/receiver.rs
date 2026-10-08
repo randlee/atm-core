@@ -1,4 +1,5 @@
 //! In-process OTLP gRPC collector for the daemon lifecycle proofs.
+#![cfg(test)]
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
