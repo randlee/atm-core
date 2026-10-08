@@ -195,8 +195,16 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
 #[tokio::test]
 async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() {
     let receiver = Receiver::start(true).await;
-    let setup =
-        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+    // Deterministic by construction: the tonic transport bound is 50 ms while
+    // the SDK processor bounds are 30 s, so only the transport timeout can end
+    // a stalled export inside this test. Equal bounds would race.
+    let setup = setup_with_timeouts(
+        &config(&receiver.endpoint),
+        64,
+        Duration::from_millis(50),
+        Duration::from_secs(30),
+    )
+    .unwrap();
     setup
         .0
         .sink
@@ -236,9 +244,9 @@ async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() 
     .await
     .expect("all configured shutdown timeouts return before the test deadline");
     // The receiver never releases these exports, so each one ends only when
-    // its own signal's configured timeout cancels the request. The pinned
-    // SDK wraps that timeout as InternalFailure text naming the signal's
-    // client, so a non-timeout failure or another signal's error fails here.
+    // the transport timeout cancels the request (the SDK bound is 30 s and
+    // cannot fire). The pinned SDK wraps the tonic failure as InternalFailure
+    // text naming the signal's client, which is then the only possible shape.
     capture
         .wait(|| {
             Signal::ALL

@@ -14,7 +14,7 @@ use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 use opentelemetry::trace::{Span, Tracer, TracerProvider};
 use opentelemetry_proto::tonic::metrics::v1::metric::Data;
 
-use super::otel_setup::{TelemetrySetup, setup_with_limits};
+use super::otel_setup::{TelemetrySetup, setup_with_limits, setup_with_timeouts};
 use receiver::{Receiver, Signal};
 
 fn config(endpoint: &str) -> TelemetryExportConfig {

@@ -65,8 +65,21 @@ pub(crate) fn setup_with_limits(
     batch: usize,
     timeout: Duration,
 ) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
+    setup_with_timeouts(config, batch, timeout, timeout)
+}
+
+/// Production passes one value for both bounds. Tests may give the tonic
+/// transport and the SDK processors different bounds so exactly one timer can
+/// decide an outcome.
+pub(crate) fn setup_with_timeouts(
+    config: &TelemetryExportConfig,
+    batch: usize,
+    transport_timeout: Duration,
+    timeout: Duration,
+) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
     tokio::runtime::Handle::try_current()?;
-    let mut endpoint = Endpoint::from_shared(config.endpoint().to_owned())?.timeout(timeout);
+    let mut endpoint =
+        Endpoint::from_shared(config.endpoint().to_owned())?.timeout(transport_timeout);
     if config.endpoint().starts_with("https://") {
         endpoint = endpoint.tls_config(ClientTlsConfig::new().with_native_roots())?;
     }
@@ -89,7 +102,7 @@ pub(crate) fn setup_with_limits(
             $builder
                 .with_tonic()
                 .with_channel(channel.clone())
-                .with_timeout(timeout)
+                .with_timeout(transport_timeout)
                 .with_compression(Compression::Gzip)
                 .with_interceptor(interceptor.clone())
                 .build()?
