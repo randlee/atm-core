@@ -112,6 +112,16 @@ impl RetainedLogger {
         self.0.health()
     }
 
+    /// Drains the retained-log writer through a shared handle within
+    /// `timeout`. Later calls return `Ok(())`; events offered after the first
+    /// call are refused.
+    pub fn shutdown_with_timeout(
+        &self,
+        timeout: Duration,
+    ) -> Result<(), sc_observability_types::v2::ShutdownError> {
+        self.0.shutdown_with_timeout(timeout)
+    }
+
     pub(crate) fn try_log(&self, event: LogEvent) -> RetainedLogOffer {
         #[cfg(test)]
         if queue_full_for_test() {

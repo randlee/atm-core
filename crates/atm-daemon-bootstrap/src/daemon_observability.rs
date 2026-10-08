@@ -286,6 +286,24 @@ impl DaemonObservability {
         drop(tokio::time::timeout_at(deadline, done.wait_for(|done| *done)).await);
     }
 
+    /// Drains the retained logger, file and routed OpenTelemetry sinks, on the
+    /// blocking pool, bounded by `min(1s, deadline)`. It runs before
+    /// [`Self::shutdown_export`] so routed records reach the SDK logger before
+    /// its provider stops. The process-owner static and the tracing bridge keep
+    /// clones that are never dropped, so this is the only drain on exit. A
+    /// timeout abandons the wait; the stopping logger admits nothing new.
+    pub(crate) async fn shutdown_logger(&self, deadline: Instant) {
+        let Ok(logger) = self.logger.lock().map(|logger| Arc::clone(&logger.0)) else {
+            return;
+        };
+        let bound = deadline.min(Instant::now() + RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT);
+        let budget = bound.saturating_duration_since(Instant::now());
+        let drain = tokio::task::spawn_blocking(move || logger.shutdown_with_timeout(budget));
+        // Writer errors land in logger health; a writer timeout has no sink
+        // left to report to once the logger stops, so the outcome is dropped.
+        drop(tokio::time::timeout_at(bound, drain).await);
+    }
+
     pub(crate) fn install_tracing_bridge(&self) -> Result<(), AtmError> {
         // The replacement daemon deliberately owns this process-global
         // subscriber. A pre-installed subscriber is a bootstrap configuration

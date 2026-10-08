@@ -311,7 +311,7 @@ Initial crate requirement IDs:
   `REQ-CORE-DOCTOR-002`.
   After `AA.4`, daemon code reaches concrete SQLite-backed runtime state only
   through `atm-runtime` and `atm-core` boundaries rather than a direct
-  `atm-daemon -> atm-rusqlite` dependency.
+  `atm-daemon -> atm-storage-rusqlite` dependency.
 - `REQ-DAEMON-SIGNAL-001` `atm-daemon` owns runtime-control installation and
   handling for daemon lifecycle transitions. Unix may satisfy this through
   signals; Windows may satisfy it through console or service-control events.
