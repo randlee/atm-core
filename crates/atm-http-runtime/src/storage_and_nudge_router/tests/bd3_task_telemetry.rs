@@ -322,6 +322,54 @@ async fn replayed_router_handoff_emits_nothing_for_the_existing_sqlite_key() {
     );
 }
 
+/// A real SQLite handoff failure is observational only: the already-committed
+/// dispatch still reports success, while no failed handoff is projected.
+#[tokio::test]
+async fn router_handoff_sqlite_failure_emits_nothing_and_keeps_the_hook_successful() {
+    let fixture = fixture(true, None, None);
+    write(
+        &fixture.router,
+        assignment_request(&fixture, "sender", "recipient", "BD3-HANDOFF-FAIL"),
+    )
+    .await
+    .expect("initial assignment succeeds before telemetry is attached");
+    let dispatch = fixture
+        .received_hook
+        .dispatches
+        .lock()
+        .expect("recorded dispatch")
+        .last()
+        .cloned()
+        .expect("assignment emitted a task-linked dispatch");
+    atm_runtime_test_support::install_sqlite_prompt_handoff_write_failure(&fixture.database_path)
+        .expect("install deterministic prompt-handoff failure");
+
+    let sink = RecordingTaskTelemetrySink::new();
+    let runtime = recording_runtime(&sink);
+    let router = fixture.router.clone().with_task_telemetry(runtime.clone());
+    let warnings = router
+        .emit_received_hook(
+            Ok(vec![dispatch]),
+            RequestDeadline::after(Duration::from_secs(10)),
+        )
+        .await;
+    assert!(
+        warnings.is_empty(),
+        "handoff recording failure does not change the caller result"
+    );
+
+    settle(&runtime).await;
+    assert_eq!(
+        prompt_handoffs(&fixture, "BD3-HANDOFF-FAIL").await.len(),
+        1,
+        "the failed replay adds no durable handoff"
+    );
+    assert!(
+        sink.records().is_empty(),
+        "failed SQLite handoff emits no projection"
+    );
+}
+
 #[derive(Debug, PartialEq)]
 struct Observed {
     responses: Vec<Result<&'static str, atm_storage::AtmErrorCode>>,

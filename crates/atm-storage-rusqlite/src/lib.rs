@@ -161,6 +161,32 @@ pub fn install_message_write_failure_for_test(path: impl AsRef<Path>) -> Result<
         })
 }
 
+/// Installs a test-only SQLite trigger that rejects prompt-handoff inserts.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+pub fn install_prompt_handoff_write_failure_for_test(
+    path: impl AsRef<Path>,
+) -> Result<(), AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
+        AtmError::daemon_unavailable("failed to open sqlite handoff-failure test connection")
+            .with_cause(error)
+    })?;
+    connection
+        .execute_batch(
+            r#"
+            CREATE TRIGGER fail_test_prompt_handoff_insert
+            BEFORE INSERT ON prompt_handoffs
+            BEGIN
+                SELECT RAISE(FAIL, 'test prompt handoff insert failure');
+            END;
+            "#,
+        )
+        .map_err(|error| {
+            AtmError::daemon_unavailable("failed to install sqlite handoff-failure trigger")
+                .with_cause(error)
+        })
+}
+
 #[cfg(test)]
 pub(crate) use mailbox_metadata_types::SqliteMailboxMetadataRow;
 
