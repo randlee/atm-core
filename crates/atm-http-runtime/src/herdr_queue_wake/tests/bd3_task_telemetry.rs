@@ -20,6 +20,36 @@ fn set_clock(now: &Arc<Mutex<IsoTimestamp>>, value: &str) {
     *now.lock().expect("clock") = IsoTimestamp::from_str(value).expect("timestamp");
 }
 
+type ExpectedTaskEventFields = (
+    u64,
+    &'static str,
+    Option<atm_core::boundary::TaskState>,
+    Option<atm_core::boundary::TaskState>,
+    Option<atm_storage::TaskCloseOutcome>,
+    atm_core::boundary::TaskActor,
+    Option<&'static str>,
+);
+
+fn assert_literal_row_fields(
+    row: &atm_core::boundary::TaskEventRow,
+    expected: ExpectedTaskEventFields,
+) {
+    assert_eq!(row.seq, expected.0);
+    assert_eq!(row.at, expected.1.parse().expect("literal timestamp"));
+    assert_eq!(row.from_state, expected.2);
+    assert_eq!(row.to_state, expected.3);
+    assert_eq!(
+        row.to_state
+            .and_then(atm_core::boundary::TaskState::close_outcome),
+        expected.4
+    );
+    assert_eq!(row.actor, expected.5);
+    assert_eq!(
+        row.message_id,
+        expected.6.map(|id| id.parse().expect("literal message id"))
+    );
+}
+
 /// Positive: reminders, their task-pass handoffs, the lead notification and
 /// the reminder reset each reach the sink as exactly their durable rows.
 /// The assignment was committed before the runtime was attached, so it is the
@@ -70,6 +100,34 @@ async fn queue_wake_producers_project_exactly_their_committed_rows() {
         .await
         .expect("prompt handoffs");
     assert_eq!(rows[0].event, atm_storage::TaskEventKind::Assigned);
+    assert_literal_row_fields(
+        &rows[1],
+        (
+            2,
+            "2030-01-01T00:00:00Z",
+            Some(atm_core::boundary::TaskState::Assigned),
+            Some(atm_core::boundary::TaskState::Assigned),
+            None,
+            atm_core::boundary::TaskActor::Daemon,
+            None,
+        ),
+    );
+    let reminders_reset = rows
+        .iter()
+        .find(|row| row.event == atm_storage::TaskEventKind::RemindersReset)
+        .expect("literal reminders-reset row");
+    assert_literal_row_fields(
+        reminders_reset,
+        (
+            13,
+            "2030-01-01T00:11:30Z",
+            Some(atm_core::boundary::TaskState::Assigned),
+            Some(atm_core::boundary::TaskState::Assigned),
+            None,
+            atm_core::boundary::TaskActor::Daemon,
+            None,
+        ),
+    );
     let mut expected: Vec<TaskTelemetryRecord> = rows[1..].iter().map(record_from_event).collect();
     expected.extend(handoffs.iter().map(record_from_handoff));
     assert_eq!(canonical(&records), canonical(&expected));
@@ -171,7 +229,7 @@ async fn failed_sqlite_lead_notification_update_emits_nothing() {
 
 #[tokio::test]
 async fn failed_sqlite_reminder_reset_update_emits_nothing() {
-    let (root, _runtime, fake, pump, key, _tasks, now) = build_real_task_pump(&["BD3-RESET-FAIL"]);
+    let (root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["BD3-RESET-FAIL"]);
     advance_to_lead_notification(&pump, &fake, &key, &now).await;
     set_clock(&now, "2030-01-01T00:10:00Z");
     queue_idle_result(&fake, &key);
@@ -185,12 +243,32 @@ async fn failed_sqlite_reminder_reset_update_emits_nothing() {
     )
     .expect("install deterministic task update failure");
 
-    set_clock(&now, "2030-01-01T00:10:30Z");
-    queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
-    pump.tick_once().await;
+    let before = runtime
+        .task_store()
+        .expect("task store")
+        .load_task(key.team(), &tasks[0])
+        .expect("load task")
+        .expect("task row");
+    // A reset needs two consecutive Working observations a reminder apart.
+    for at in ["2030-01-01T00:10:30Z", "2030-01-01T00:11:30Z"] {
+        set_clock(&now, at);
+        queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
+        pump.tick_once().await;
+    }
     telemetry
         .shutdown(tokio::time::Instant::now() + Duration::from_secs(5))
         .await;
+    let after = runtime
+        .task_store()
+        .expect("task store")
+        .load_task(key.team(), &tasks[0])
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(
+        (after.reminder_count, after.lead_notified_count),
+        (before.reminder_count, before.lead_notified_count),
+        "failed reset leaves the durable row unchanged"
+    );
     assert!(
         sink.records().is_empty(),
         "failed reminder reset emits no telemetry"
