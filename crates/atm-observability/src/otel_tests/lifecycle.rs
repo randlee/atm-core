@@ -92,9 +92,17 @@ fn production_limits_are_distinct_from_test_deadlines_and_terminal_failure_is_re
 
 #[tokio::test]
 async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recovery() {
+    // The collector accepts each connection and closes it at once, so every
+    // export fails immediately on every OS. A closed port is not equivalent:
+    // a refused connect is OS-timed, and on Windows CI no span or log export
+    // failure surfaced within 30 s.
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
-    drop(listener);
+    let collector = tokio::spawn(async move {
+        while let Ok((connection, _)) = listener.accept().await {
+            drop(connection);
+        }
+    });
     let root = tempfile::tempdir().unwrap();
     let logger = Arc::new(
         build_retained_logger(
@@ -164,6 +172,7 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
     for result in [trace, log, metric] {
         diagnostics.observe_result(result.unwrap());
     }
+    collector.abort();
     // Assert after explicit shutdown, so fixture failure cannot deadlock the
     // current-thread runtime by dropping live native providers during unwind.
     assert!(
