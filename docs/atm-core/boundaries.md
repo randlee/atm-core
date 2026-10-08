@@ -276,7 +276,7 @@ Notes:
   the legacy compile-bridge `MailStore` / `RosterStore` handles used during
   AC.4 consumer cutover.
 - `AA.4` relies on these adjunct contracts to remove the direct
-  `atm-daemon -> atm-rusqlite` dependency while keeping shutdown finalization
+  `atm-daemon -> atm-storage-rusqlite` dependency while keeping shutdown finalization
   storage-neutral at the daemon boundary. Any retained lifecycle operation is
   storage-owned; it is not a `RuntimeStorageFinalizer` boundary. ADR-038's
   canonical-record query is a narrow storage trait method, not a

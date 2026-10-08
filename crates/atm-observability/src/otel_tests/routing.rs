@@ -28,6 +28,36 @@ pub(super) fn policy() -> RetainedLogPolicy {
     }
 }
 
+#[test]
+fn otel_and_both_routes_require_an_sdk_logger() {
+    for destination in [LogDestination::Otel, LogDestination::Both] {
+        let root = tempfile::tempdir().unwrap();
+        let log_dir = root.path().join("logs");
+        let result = build_routed_retained_logger(
+            "atm",
+            &log_dir,
+            policy(),
+            Some(RetainedLogLevel::Info),
+            destination,
+            None,
+        );
+        let error = match result {
+            Err(error) => error,
+            Ok(_) => panic!("{destination:?} must reject a missing SDK logger"),
+        };
+
+        assert!(
+            error.is_observability_bootstrap(),
+            "{destination:?}: {error}"
+        );
+        assert_eq!(
+            error.message().split('\n').next(),
+            Some("OTel log destination requires a configured SDK logger"),
+            "{destination:?}"
+        );
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_alive() {
     for destination in [
