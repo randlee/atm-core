@@ -761,6 +761,8 @@ fn unreachable_collector_child() {
             started.elapsed()
         );
     });
+    drop(runtime);
+    println!("{}", exit::CHILD_SCENARIO_SENTINEL);
 }
 
 /// Positive: a collector that accepts connections but never answers leaves
