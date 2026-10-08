@@ -167,6 +167,7 @@ impl Daemon {
                 bare_cli: Default::default(),
                 herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                 herdr_process: Some(herdr.clone()),
+                daemon_home: root.path().join("home"),
             },
         )
         .expect("compose the replacement daemon handler");
@@ -760,6 +761,8 @@ fn unreachable_collector_child() {
             started.elapsed()
         );
     });
+    drop(runtime);
+    println!("{}", exit::CHILD_SCENARIO_SENTINEL);
 }
 
 /// Positive: a collector that accepts connections but never answers leaves
