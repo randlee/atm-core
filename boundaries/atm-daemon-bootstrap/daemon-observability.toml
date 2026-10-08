@@ -5,7 +5,7 @@ name = "DaemonObservability"
 
 [public]
 trait = "ObservabilityPort"
-notes = "DaemonObservability is the permit-listed retained-log implementation of the sealed ATM observability port for the active Tokio/Axum replacement-daemon composition boundary."
+notes = "DaemonObservability is the permit-listed retained-log implementation of the sealed ATM observability port for the active Tokio/Axum replacement-daemon composition boundary. It also retains the standard OpenTelemetry SDK provider handles solely for their lifecycle and projects export health; exporter construction and task/workflow domain projection remain in atm-observability."
 
 [implementation]
 type = "DaemonObservability"
@@ -17,7 +17,7 @@ constructor = "pub(crate)"
 roots = ["atm_daemon_bootstrap::bootstrap_replacement_observability", "atm_daemon_bootstrap::run_replacement_daemon"]
 
 [ownership]
-io_owns = ["retained_log_bootstrap", "retained_log_emit", "retained_log_health_projection"]
+io_owns = ["retained_log_bootstrap", "retained_log_emit", "retained_log_drain_and_shutdown", "retained_log_health_projection", "otel_sdk_provider_lifecycle", "otel_export_health_projection"]
 io_forbidden = ["daemon_request_dispatch", "daemon_transport", "direct_sqlite_io"]
 
 [dependencies]
@@ -44,4 +44,4 @@ review_gates = ["sealed_impl_allowlisted", "tokio_axum_entrypoint_only", "no_leg
 
 [status]
 state = "active"
-notes = ["The concrete adapter is source-visible to lint_boundaries.py; no include shim may hide its sealed implementation.", "The binary reaches the adapter only through atm-daemon-bootstrap and the Tokio/Axum atm-http-runtime path.", "The active injection surface is Arc<dyn ObservabilityPort + Send + Sync>; no daemon-specific flush trait exists."]
+notes = ["The concrete adapter is source-visible to lint_boundaries.py; no include shim may hide its sealed implementation.", "The binary reaches the adapter only through atm-daemon-bootstrap and the Tokio/Axum atm-http-runtime path.", "The active injection surface is Arc<dyn ObservabilityPort + Send + Sync>; no daemon-specific flush trait exists.", "Retained logger drain and shutdown remain a distinct lifecycle step before SDK provider shutdown; bootstrap owns only SDK provider lifecycle handles, while atm-observability owns exporter construction and task/workflow domain projection."]

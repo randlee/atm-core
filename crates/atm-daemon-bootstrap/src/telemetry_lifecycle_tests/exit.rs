@@ -74,6 +74,7 @@ fn exit_proof_child() {
 }
 
 const CHILD_SCENARIO: &str = "ATM_BD6_CHILD_SCENARIO";
+pub(super) const CHILD_SCENARIO_SENTINEL: &str = "BD6-CHILD-SCENARIO-COMPLETED";
 
 /// Whether this process is the child launched for `scenario`.
 pub(super) fn is_child_scenario(scenario: &str) -> bool {
@@ -87,30 +88,61 @@ pub(super) fn run_child_scenario(scenario: &str) {
 }
 
 /// [`run_child_scenario`] with extra child environment.
-fn run_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) {
-    let mut child = Command::new(std::env::current_exe().expect("test binary"))
+pub(super) fn run_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) {
+    let output = spawn_child_scenario_with(scenario, envs);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        child_execution_is_proven(&output),
+        "scenario child {scenario} did not complete successfully: {}\noutput:\n{stdout}",
+        output.status
+    );
+}
+
+fn spawn_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) -> std::process::Output {
+    let child = Command::new(std::env::current_exe().expect("test binary"))
         .args(["--exact", scenario, "--nocapture", "--test-threads=1"])
         .env(CHILD_SCENARIO, scenario)
         .env_remove(CHILD_MODE)
         .envs(envs.iter().copied())
         .stdin(Stdio::null())
-        .stdout(Stdio::inherit())
+        .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
         .expect("spawn scenario child");
-    let (exit_tx, exit_rx) = mpsc::channel();
     let id = child.id();
+    let (exit_tx, exit_rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let _ = exit_tx.send(child.wait());
+        let _ = exit_tx.send(child.wait_with_output());
     });
-    let Ok(status) = exit_rx.recv_timeout(Duration::from_secs(90)) else {
-        let _ = Command::new("kill").arg(id.to_string()).status();
-        panic!("scenario child {scenario} did not exit within 90s");
-    };
-    let status = status.expect("scenario child status");
+    exit_rx
+        .recv_timeout(Duration::from_secs(90))
+        .unwrap_or_else(|_| {
+            let _ = Command::new("kill").arg(id.to_string()).status();
+            panic!("scenario child {scenario} did not exit within 90s");
+        })
+        .expect("scenario child output")
+}
+
+fn child_execution_is_proven(output: &std::process::Output) -> bool {
+    output.status.success()
+        && String::from_utf8_lossy(&output.stdout).contains(CHILD_SCENARIO_SENTINEL)
+}
+
+#[test]
+fn wrong_scenario_name_does_not_prove_child_execution() {
+    let output = spawn_child_scenario_with(
+        "telemetry_lifecycle_tests::exit::misspelled_child_scenario",
+        &[],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "wrong-name child output: {stdout}");
     assert!(
-        status.success(),
-        "scenario child {scenario} failed: {status}"
+        stdout.contains("running 0 tests"),
+        "wrong-name child output: {stdout}"
+    );
+    assert!(
+        !child_execution_is_proven(&output),
+        "a successful zero-test child must fail the execution proof"
     );
 }
 
@@ -253,6 +285,7 @@ fn final_record_child() {
     });
     // Process exit follows; nothing in the child flushes the logger itself.
     drop(runtime);
+    println!("{CHILD_SCENARIO_SENTINEL}");
 }
 
 /// Runs [`final_record_child`] against `endpoint` and returns the retained
