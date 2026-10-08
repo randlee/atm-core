@@ -130,6 +130,9 @@ struct Lifecycle {
 /// ```
 #[derive(Clone)]
 pub struct TaskTelemetryRuntime {
+    // MUTEX: a std mutex is correct here: the guard only clones or takes the
+    // sender and is never held across an await. Poison is recovered with
+    // `into_inner`: the slot holds no invariant a panic could break.
     sender: Arc<std::sync::Mutex<Option<mpsc::Sender<TaskTelemetryRecord>>>>,
     diagnostics: Arc<TaskTelemetryDiagnostics>,
     lifecycle: Arc<tokio::sync::Mutex<Lifecycle>>,
@@ -187,7 +190,12 @@ impl TaskTelemetryRuntime {
 
     /// Non-blocking producer path: telemetry never delays task processing.
     pub fn try_emit(&self, record: TaskTelemetryRecord) {
-        let Some(sender) = self.sender.lock().ok().and_then(|sender| sender.clone()) else {
+        let sender = self
+            .sender
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let Some(sender) = sender else {
             if self.diagnostics.closed.load(Ordering::Relaxed) {
                 self.diagnostics
                     .dropped_shutdown
@@ -216,9 +224,12 @@ impl TaskTelemetryRuntime {
     /// aborts and joins the worker. Repeated calls are no-ops once the worker
     /// is joined; a cancelled call leaves the worker for the next caller.
     pub async fn shutdown(&self, deadline: Instant) {
-        if let Ok(mut sender) = self.sender.lock()
-            && sender.take().is_some()
-        {
+        let taken = self
+            .sender
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if taken.is_some() {
             self.diagnostics.closed.store(true, Ordering::Relaxed);
         }
         let mut lifecycle = self.lifecycle.lock().await;
