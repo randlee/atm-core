@@ -145,19 +145,21 @@ pub(super) fn append_rejected_task_event(
     append_task_event(
         connection,
         target,
-        &team,
-        &task_id,
-        assignee,
-        &IsoTimestamp::now(),
-        TaskEventKind::Rejected,
-        state,
-        state,
-        row.as_ref().and_then(|row| row.state.close_outcome()),
-        &actor,
-        message_id,
-        None,
-        None,
-        Some(error.message()),
+        &TaskEventDraft {
+            team: &team,
+            task_id: &task_id,
+            assignee,
+            at: &IsoTimestamp::now(),
+            event: TaskEventKind::Rejected,
+            from_state: state,
+            to_state: state,
+            close_outcome: row.as_ref().and_then(|row| row.state.close_outcome()),
+            actor: &actor,
+            message_id,
+            outcome: None,
+            marker: None,
+            detail: Some(error.message()),
+        },
     )
     .map(Some)
 }
@@ -386,24 +388,26 @@ fn persist_task_assignment(
             append_task_event(
                 connection,
                 target,
-                &record.team,
-                task_id,
-                &record.agent,
-                &at,
-                TaskEventKind::Moved,
-                Some(next_state.tag()),
-                Some(next_state.tag()),
-                None,
-                &record.envelope.from,
-                Some(message_id),
-                None,
-                None,
-                Some(&format!(
-                    "{}→{}",
-                    row.and_then(|row| row.position)
-                        .map_or(0, QueuePosition::get),
-                    final_position
-                )),
+                &TaskEventDraft {
+                    team: &record.team,
+                    task_id,
+                    assignee: &record.agent,
+                    at: &at,
+                    event: TaskEventKind::Moved,
+                    from_state: Some(next_state.tag()),
+                    to_state: Some(next_state.tag()),
+                    close_outcome: None,
+                    actor: &record.envelope.from,
+                    message_id: Some(message_id),
+                    outcome: None,
+                    marker: None,
+                    detail: Some(&format!(
+                        "{}→{}",
+                        row.and_then(|row| row.position)
+                            .map_or(0, QueuePosition::get),
+                        final_position
+                    )),
+                },
             )
         })
         .transpose()?;
@@ -534,19 +538,21 @@ fn append_assignment_event(
     append_task_event(
         connection,
         target,
-        &record.team,
-        task_id,
-        &record.agent,
-        &at,
-        event,
-        row.map(|row| row.state.tag()),
-        Some(next_state.tag()),
-        row.and_then(|row| row.state.close_outcome()),
-        &record.envelope.from,
-        Some(message_id),
-        None,
-        None,
-        None,
+        &TaskEventDraft {
+            team: &record.team,
+            task_id,
+            assignee: &record.agent,
+            at: &at,
+            event,
+            from_state: row.map(|row| row.state.tag()),
+            to_state: Some(next_state.tag()),
+            close_outcome: row.and_then(|row| row.state.close_outcome()),
+            actor: &record.envelope.from,
+            message_id: Some(message_id),
+            outcome: None,
+            marker: None,
+            detail: None,
+        },
     )
 }
 
@@ -632,19 +638,21 @@ fn apply_queued_task_move(
     let event = append_task_event(
         connection,
         target,
-        team,
-        task_id,
-        &row.assignee,
-        at,
-        TaskEventKind::Moved,
-        Some(row.state.tag()),
-        Some(next_state.tag()),
-        None,
-        actor,
-        None,
-        None,
-        None,
-        Some(&detail),
+        &TaskEventDraft {
+            team,
+            task_id,
+            assignee: &row.assignee,
+            at,
+            event: TaskEventKind::Moved,
+            from_state: Some(row.state.tag()),
+            to_state: Some(next_state.tag()),
+            close_outcome: None,
+            actor,
+            message_id: None,
+            outcome: None,
+            marker: None,
+            detail: Some(&detail),
+        },
     )?;
     Ok(atm_storage::TaskMoveRecord {
         assignee: row.assignee.clone(),
@@ -668,19 +676,21 @@ fn append_active_task_move(
     append_task_event(
         connection,
         target,
-        team,
-        task_id,
-        &row.assignee,
-        at,
-        TaskEventKind::Moved,
-        Some(row.state.tag()),
-        Some(next_state.tag()),
-        None,
-        actor,
-        None,
-        None,
-        None,
-        Some("1→1"),
+        &TaskEventDraft {
+            team,
+            task_id,
+            assignee: &row.assignee,
+            at,
+            event: TaskEventKind::Moved,
+            from_state: Some(row.state.tag()),
+            to_state: Some(next_state.tag()),
+            close_outcome: None,
+            actor,
+            message_id: None,
+            outcome: None,
+            marker: None,
+            detail: Some("1→1"),
+        },
     )
 }
 
@@ -861,26 +871,49 @@ pub(super) fn acknowledge_assignment(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
+/// One task event row as the writer builds it, before its sequence number is
+/// allocated. Typed fields keep the reminder outcome and marker from being
+/// transposed with free-text `detail`.
+pub(super) struct TaskEventDraft<'a> {
+    pub(super) team: &'a TeamName,
+    pub(super) task_id: &'a TaskId,
+    pub(super) assignee: &'a AgentName,
+    pub(super) at: &'a IsoTimestamp,
+    pub(super) event: TaskEventKind,
+    pub(super) from_state: Option<TaskStateTag>,
+    pub(super) to_state: Option<TaskStateTag>,
+    pub(super) close_outcome: Option<TaskCloseOutcome>,
+    pub(super) actor: &'a AgentName,
+    pub(super) message_id: Option<AtmMessageId>,
+    pub(super) outcome: Option<atm_storage::ReminderOutcome>,
+    pub(super) marker: Option<TaskEventMarker>,
+    pub(super) detail: Option<&'a str>,
+}
+
 pub(super) fn append_task_event(
     connection: &Connection,
     target: &SharedDbTarget,
-    team: &TeamName,
-    task_id: &TaskId,
-    assignee: &AgentName,
-    at: &IsoTimestamp,
-    event: TaskEventKind,
-    from_state: Option<TaskStateTag>,
-    to_state: Option<TaskStateTag>,
-    close_outcome: Option<TaskCloseOutcome>,
-    actor: &AgentName,
-    message_id: Option<AtmMessageId>,
-    outcome: Option<&str>,
-    marker: Option<&str>,
-    detail: Option<&str>,
+    draft: &TaskEventDraft<'_>,
 ) -> Result<atm_storage::TaskEventRow, AtmError> {
-    let from_tag = from_state;
-    let to_tag = to_state;
+    let TaskEventDraft {
+        team,
+        task_id,
+        assignee,
+        at,
+        event,
+        from_state: from_tag,
+        to_state: to_tag,
+        close_outcome,
+        actor,
+        message_id,
+        outcome,
+        marker,
+        detail,
+    } = *draft;
+    // Build the typed row states before the INSERT so a rejected state
+    // combination cannot fail after the row is written.
+    let from_state = task_event_state(from_tag, close_outcome)?;
+    let to_state = task_event_state(to_tag, close_outcome)?;
     let seq: u64 = connection
         .query_row(
             "SELECT COALESCE(MAX(seq),0)+1 FROM task_events WHERE team=?1 AND task_id=?2",
@@ -905,21 +938,17 @@ pub(super) fn append_task_event(
                 close_outcome.map(TaskCloseOutcome::as_str),
                 actor.as_str(),
                 message_id.map(|id| id.to_string()),
-                outcome,
-                marker,
+                outcome.map(atm_storage::ReminderOutcome::as_str),
+                marker.map(TaskEventMarker::as_str),
                 detail
             ],
         )
         .map_err(|error| sqlite_error(target, "failed to append task event", error))?;
-    let from_state = task_event_state(from_tag, close_outcome)?;
-    let to_state = task_event_state(to_tag, close_outcome)?;
     let actor = if actor.as_str() == atm_storage::DAEMON_ACTOR_NAME {
         TaskActor::Daemon
     } else {
         TaskActor::Member(actor.clone())
     };
-    let outcome = outcome.map(task_event_reminder_outcome).transpose()?;
-    let marker = marker.map(task_event_marker).transpose()?;
     Ok(atm_storage::TaskEventRow {
         team: team.clone(),
         task_id: task_id.clone(),
@@ -950,27 +979,6 @@ fn task_event_state(
         )
     })
     .transpose()
-}
-
-fn task_event_reminder_outcome(value: &str) -> Result<atm_storage::ReminderOutcome, AtmError> {
-    match value {
-        "emitted" => Ok(atm_storage::ReminderOutcome::Emitted),
-        "unrenderable" => Ok(atm_storage::ReminderOutcome::Unrenderable),
-        "blocked" => Ok(atm_storage::ReminderOutcome::Blocked),
-        other => Err(AtmError::validation(format!(
-            "unknown reminder outcome {other}"
-        ))),
-    }
-}
-
-fn task_event_marker(value: &str) -> Result<TaskEventMarker, AtmError> {
-    match value {
-        "resend" => Ok(TaskEventMarker::Resend),
-        "assignment_missing" => Ok(TaskEventMarker::AssignmentMissing),
-        other => Err(AtmError::validation(format!(
-            "unknown task event marker {other}"
-        ))),
-    }
 }
 
 const fn task_state_tag_name(state: TaskStateTag) -> &'static str {
