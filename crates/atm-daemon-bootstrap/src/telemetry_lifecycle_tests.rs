@@ -20,8 +20,8 @@ use std::time::Duration;
 
 use atm_core::api::{ApiRequest, RequestDeadline};
 use atm_core::boundary::{
-    AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
-    PostSendEmissionPath, RosterEntry, TaskActor,
+    AsyncMessageReceivedHookEmitter, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch,
+    MessageReceivedHookSelector, PostSendEmissionPath, PromptTrigger, RosterEntry, TaskActor,
 };
 use atm_core::doctor::{DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
@@ -29,10 +29,10 @@ use atm_core::observability::{
     AtmTelemetryExportFailure, AtmTelemetryExportHealth, AtmTelemetryExportState,
 };
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
-use atm_core::send::{SendMessageSource, WriteRequest};
+use atm_core::send::{SendMessageSource, TemplateSendSource, WriteRequest};
 use atm_core::test_support::FakeEnvSource;
 use atm_core::types::{AgentName, IsoTimestamp, ModelName, TeamName};
-use atm_core::{DaemonApiClient, TaskTelemetryKind, TaskTelemetryRecord};
+use atm_core::{DaemonApiClient, TaskHandoffFacts, TaskTelemetryKind, TaskTelemetryRecord};
 use atm_core::{LocalServiceRuntime, SweepConfig};
 use atm_http_runtime::{
     DirectPeerTcpConfig, LoopbackTcpConfig, PeerPoolConfig, RuntimeHealth, StorageAndNudgeRouter,
@@ -91,6 +91,13 @@ impl MessageReceivedHookSelector for AcceptingSelector {
 
 fn endpoint_env(endpoint: &str) -> FakeEnvSource {
     FakeEnvSource::new([("ATM_OTEL_ENDPOINT", Some(endpoint))])
+}
+
+fn endpoint_env_with_auth(endpoint: &str, auth_header: &str) -> FakeEnvSource {
+    FakeEnvSource::new([
+        ("ATM_OTEL_ENDPOINT", Some(endpoint)),
+        ("ATM_OTEL_AUTH_HEADER", Some(auth_header)),
+    ])
 }
 
 pub(super) struct Daemon {
@@ -167,6 +174,7 @@ impl Daemon {
                 bare_cli: Default::default(),
                 herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                 herdr_process: Some(herdr.clone()),
+                daemon_home: root.path().join("home"),
             },
         )
         .expect("compose the replacement daemon handler");
@@ -469,6 +477,51 @@ fn histogram_count(capture: &Capture, name: &str) -> u64 {
         .unwrap_or(0)
 }
 
+/// Returns the wire-format debug rendering of every payload the in-process
+/// collector accepted. This deliberately covers span attributes/events, log
+/// bodies/attributes, and metric data points instead of only task spans.
+fn captured_export_text(capture: &Capture) -> String {
+    format!(
+        "{:?}\n{:?}\n{:?}",
+        capture.spans.lock().unwrap(),
+        capture.logs.lock().unwrap(),
+        capture.metrics.lock().unwrap(),
+    )
+}
+
+fn assert_export_excludes(capture: &Capture, sentinels: &[&str]) {
+    let exported = captured_export_text(capture);
+    for sentinel in sentinels {
+        assert!(
+            !exported.contains(sentinel),
+            "collector export leaked sentinel {sentinel:?}: {exported}"
+        );
+    }
+}
+
+fn prompt_handoff_record(task_id: &str) -> TaskTelemetryRecord {
+    TaskTelemetryRecord {
+        kind: TaskTelemetryKind::PromptHandoff,
+        team: TEAM.parse().expect("team"),
+        task_id: task_id.parse().expect("task id"),
+        assignee: "recipient".parse().expect("assignee"),
+        actor: TaskActor::Daemon,
+        seq: None,
+        at: "2026-10-08T00:00:00Z".parse().expect("timestamp"),
+        from_state: None,
+        to_state: None,
+        close_outcome: None,
+        message_id: None,
+        reminder_outcome: None,
+        marker: None,
+        handoff: Some(TaskHandoffFacts {
+            attempt: 1,
+            trigger: PromptTrigger::TaskPass,
+            template_kind: BuiltInNudgeTemplateKind::TaskReminder,
+        }),
+    }
+}
+
 fn export_health(doctor: &serde_json::Value) -> AtmTelemetryExportHealth {
     serde_json::from_value(doctor["observability"]["export"].clone())
         .expect("doctor JSON carries export health")
@@ -481,6 +534,32 @@ fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId
     outcome.message_id
 }
 
+/// Positive: composition consumes the telemetry setups of the owner it is
+/// handed. Negative: another bootstrapped owner in the same process keeps its
+/// setups, so no process-wide owner stands in for the supplied one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn composition_uses_only_the_supplied_observability_owner() {
+    let (_other_root, other) = Daemon::bootstrap(endpoint_env("http://127.0.0.1:9")).await;
+    let (root, supplied) = Daemon::bootstrap(endpoint_env("http://127.0.0.1:9")).await;
+
+    let _assembly = compose_daemon_assembly(
+        SqliteStorageFactory::at_path(root.path().join("runtime").join("mail.sqlite3")),
+        Some(&supplied),
+    )
+    .expect("compose daemon runtime");
+
+    let (task, workflow) = supplied.take_telemetry_setups();
+    assert!(
+        task.is_none() && workflow.is_none(),
+        "composition took the supplied owner's setups"
+    );
+    let (task, workflow) = other.take_telemetry_setups();
+    assert!(
+        task.is_some() && workflow.is_some(),
+        "an owner composition was not handed keeps its setups"
+    );
+}
+
 /// Positive: every router producer reachable over the daemon API (assign,
 /// reassign, start, terminal close, reopen, committed rejection audit and the
 /// newly inserted prompt handoff) reaches the collector as exactly its
@@ -490,6 +569,7 @@ fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId
 /// Reminder, lead notification and reminder reset come from the composed
 /// queue-wake pump and are proven in `queue_wake.rs`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::parallel(slo)]
 async fn running_daemon_exports_each_committed_task_event_to_the_collector() {
     let receiver = Receiver::start(false).await;
     let daemon = Daemon::start(endpoint_env(&receiver.endpoint)).await;
@@ -593,10 +673,141 @@ async fn running_daemon_exports_each_committed_task_event_to_the_collector() {
     receiver.stop().await;
 }
 
+/// A real template write crosses the daemon's HTTP boundary and reaches the
+/// live collector, but D1/D5 must project only typed ledger facts. The lower
+/// layer pins the record field set in `task_telemetry::record_field_set_is_pinned_and_payload_free`;
+/// this daemon proof catches a future composition path that bypasses it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn running_daemon_export_excludes_message_template_and_auth_sentinels() {
+    const BODY: &str = "BD6-F2-MESSAGE-BODY-SENTINEL";
+    const VARIABLE: &str = "BD6-F2-TEMPLATE-VARIABLE-SENTINEL";
+    const AUTH: &str = "Bearer BD6-F2-AUTH-SENTINEL";
+
+    let receiver = Receiver::start(false).await;
+    let daemon = Daemon::start(endpoint_env_with_auth(&receiver.endpoint, AUTH)).await;
+    let template_path = daemon.root.path().join("private-message.j2");
+    std::fs::write(&template_path, format!("{BODY}: {{{{ private_value }}}}"))
+        .expect("write private template fixture");
+    let mut request = daemon.request("sender", "recipient", "BD6-REDACT", None);
+    request.message_source = SendMessageSource::Template(TemplateSendSource {
+        canonical_template_path: std::fs::canonicalize(&template_path)
+            .expect("canonical template path"),
+        canonical_template_root: std::fs::canonicalize(daemon.root.path())
+            .expect("canonical template root"),
+        raw_file_bytes: std::fs::read(&template_path).expect("read template fixture"),
+        input_defaults: Map::new(),
+        var_file_values: Map::new(),
+        explicit_values: Map::from_iter([(
+            "private_value".to_owned(),
+            serde_json::Value::String(VARIABLE.to_owned()),
+        )]),
+        environment_values: Map::new(),
+    });
+    daemon.write(request).await.expect("template assignment");
+
+    receiver
+        .capture
+        .wait(EXPORT_WAIT, "the template assignment export", || {
+            exported_events(&receiver.capture)
+                .iter()
+                .any(|event| event.task_id == "BD6-REDACT" && event.kind == "assigned")
+        })
+        .await;
+    daemon.shutdown().await.expect("clean daemon shutdown");
+    // Negative control: each distinctive value was present at daemon ingress;
+    // any body, merged-var, or exporter-auth projection makes this fail.
+    assert_export_excludes(&receiver.capture, &[BODY, VARIABLE, AUTH]);
+
+    receiver.stop().await;
+}
+
+/// The router's SQLite replay proof lives in
+/// `storage_and_nudge_router/tests/bd3_task_telemetry.rs`; this composed
+/// daemon/exporter check proves the same immutable handoff cannot produce two
+/// OTLP task-event spans if it reaches the runtime twice.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn running_daemon_exports_duplicate_handoff_once() {
+    let receiver = Receiver::start(false).await;
+    let daemon = Daemon::start(endpoint_env(&receiver.endpoint)).await;
+    let handoff = prompt_handoff_record("BD6-DUPLICATE-HANDOFF");
+    daemon.workers.task_telemetry.try_emit(handoff.clone());
+    daemon.workers.task_telemetry.try_emit(handoff);
+
+    receiver
+        .capture
+        .wait(EXPORT_WAIT, "one deduplicated handoff export", || {
+            exported_events(&receiver.capture)
+                .iter()
+                .filter(|event| {
+                    event.task_id == "BD6-DUPLICATE-HANDOFF" && event.kind == "prompt_handoff"
+                })
+                .count()
+                == 1
+        })
+        .await;
+    // Drain the composed runtime before counting so a second queued projection
+    // cannot arrive after the first export made the wait condition true.
+    daemon.shutdown().await.expect("clean daemon shutdown");
+    assert_eq!(
+        exported_events(&receiver.capture)
+            .iter()
+            .filter(|event| {
+                event.task_id == "BD6-DUPLICATE-HANDOFF" && event.kind == "prompt_handoff"
+            })
+            .count(),
+        1,
+        "a duplicate handoff must not fabricate a second event"
+    );
+
+    receiver.stop().await;
+}
+
+/// Acked and migrated facts are state-neutral: they must be visible as facts,
+/// but must not invent time-to-start or time-to-close samples.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn running_daemon_export_has_no_duration_for_acked_or_migrated() {
+    let receiver = Receiver::start(false).await;
+    let daemon = Daemon::start(endpoint_env(&receiver.endpoint)).await;
+    let mut acked = task_record(1);
+    acked.task_id = "BD6-STATE-NEUTRAL".parse().expect("task id");
+    acked.kind = TaskTelemetryKind::Acked;
+    let mut migrated = acked.clone();
+    migrated.kind = TaskTelemetryKind::Migrated;
+    migrated.seq = Some(2);
+    daemon.workers.task_telemetry.try_emit(acked);
+    daemon.workers.task_telemetry.try_emit(migrated);
+
+    receiver
+        .capture
+        .wait(EXPORT_WAIT, "acked and migrated exports", || {
+            let events = exported_events(&receiver.capture);
+            ["acked", "migrated"].into_iter().all(|kind| {
+                events
+                    .iter()
+                    .any(|event| event.task_id == "BD6-STATE-NEUTRAL" && event.kind == kind)
+            })
+        })
+        .await;
+    daemon.shutdown().await.expect("clean daemon shutdown");
+    assert_eq!(
+        histogram_count(&receiver.capture, "atm.task.time_to_start_ms"),
+        0,
+        "Acked/Migrated must not invent a start duration"
+    );
+    assert_eq!(
+        histogram_count(&receiver.capture, "atm.task.time_to_close_ms"),
+        0,
+        "Acked/Migrated must not invent a close duration"
+    );
+
+    receiver.stop().await;
+}
+
 /// Positive: an absent endpoint composes no SDK provider, leaves both task
 /// and workflow runtimes disabled and reports `Inert`.
 /// Negative: task writes still succeed and nothing is admitted for export.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
 async fn absent_endpoint_composes_no_exporter_and_reports_inert() {
     let daemon = Daemon::start(FakeEnvSource::empty()).await;
     assert!(!daemon.observability.export_providers_present_for_test());
@@ -625,6 +836,7 @@ async fn absent_endpoint_composes_no_exporter_and_reports_inert() {
 /// file logging and `Unavailable`/`ConfigInvalid` health in doctor JSON.
 /// Negative: the rejected values never appear in the doctor report.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
 async fn invalid_export_configuration_keeps_the_daemon_operational() {
     let cases = [
         FakeEnvSource::new([
@@ -657,6 +869,41 @@ async fn invalid_export_configuration_keeps_the_daemon_operational() {
         assert_export_remediation(&doctor);
         daemon.shutdown().await.expect("clean daemon shutdown");
     }
+}
+
+/// Positive: a configuration that parses (it checks scheme and host, not full
+/// URI syntax) but that the SDK transport rejects during setup leaves
+/// the daemon serving with no exporter and reports `Unavailable`/
+/// `ConfigInvalid` health in doctor JSON, with the same remediation finding.
+/// Negative: this is the `setup_telemetry` failure branch, not the
+/// configuration-rejected one: the endpoint stays reported, and the daemon's
+/// task writes still succeed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
+async fn valid_configuration_with_failed_sdk_setup_reports_config_invalid() {
+    let endpoint = "http://bad<host:4317";
+    assert!(
+        atm_core::task_telemetry::TelemetryExportConfig::from_env(&endpoint_env(endpoint))
+            .is_ok_and(|config| config.is_some()),
+        "the configuration itself is valid"
+    );
+    let daemon = Daemon::start(endpoint_env(endpoint)).await;
+    assert!(!daemon.observability.export_providers_present_for_test());
+    daemon
+        .write(daemon.request("sender", "recipient", "BD6-SETUP-FAIL", None))
+        .await
+        .expect("assignment succeeds when SDK setup failed");
+    let doctor = daemon.doctor_json().await;
+    let health = export_health(&doctor);
+    assert_eq!(health.state, AtmTelemetryExportState::Unavailable);
+    assert_eq!(
+        health.last_failure,
+        Some(AtmTelemetryExportFailure::ConfigInvalid)
+    );
+    assert_eq!(health.endpoint.as_deref(), Some(endpoint));
+    assert_eq!(health.emitted, 0);
+    assert_export_remediation(&doctor);
+    daemon.shutdown().await.expect("clean daemon shutdown");
 }
 
 /// Exactly one export-related finding, raised above info.
@@ -767,6 +1014,7 @@ async fn doctor_until(
 /// dispatchers in tracing's per-callsite interest cache and can miss the SDK
 /// failure event entirely.
 #[test]
+#[serial_test::serial(slo)]
 fn unreachable_collector_degrades_health_without_changing_task_results() {
     exit::run_child_scenario(UNREACHABLE_CHILD);
 }
@@ -828,10 +1076,12 @@ fn unreachable_collector_child() {
             .expect("shutdown result is the listener's");
         assert!(
             started.elapsed() <= Duration::from_secs(5),
-            "{:?}",
+            "daemon shutdown took {:?}, over the 5s clean-stop SLO",
             started.elapsed()
         );
     });
+    drop(runtime);
+    println!("{}", exit::CHILD_SCENARIO_SENTINEL);
 }
 
 /// Positive: known runtime losses (a full task queue and a stuck emit) reach
@@ -876,6 +1126,7 @@ async fn runtime_losses_reach_doctor_json_as_one_degraded_finding() {
 /// task results unchanged, and daemon shutdown with a stalled exporter still
 /// returns within the clean-stop SLO, retaining the terminal export failure.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::serial(slo)]
 async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
     let stalled = Receiver::start(true).await;
     let daemon = Daemon::start(endpoint_env(&stalled.endpoint)).await;
@@ -904,7 +1155,10 @@ async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
         .await
         .expect("shutdown result is the listener's");
     let elapsed = started.elapsed();
-    assert!(elapsed <= Duration::from_secs(5), "{elapsed:?}");
+    assert!(
+        elapsed <= Duration::from_secs(5),
+        "daemon shutdown with a stalled exporter took {elapsed:?}, over the 5s clean-stop SLO"
+    );
     // The SDK's own 400ms export timeout or the 1s wait bound ends the step;
     // either way the terminal failure is retained.
     let health = observability.export_health_for_test();
@@ -913,11 +1167,9 @@ async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
     stalled.stop().await;
 }
 
-/// Positive: concurrent and cancelled `shutdown_export` callers share one
-/// outcome; every caller returns by its own deadline even when the
-/// collector never answers, and a later caller sees the retained failure.
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn concurrent_and_cancelled_export_shutdown_obey_their_deadlines() {
+/// A stalled collector with a non-empty export in flight, and the task
+/// runtime already stopped, so only the exporter step remains.
+async fn stalled_export_in_flight() -> (Receiver, tempfile::TempDir, DaemonObservability) {
     let stalled = Receiver::start(true).await;
     let root = tempfile::tempdir().expect("root");
     let observability =
@@ -943,6 +1195,21 @@ async fn concurrent_and_cancelled_export_shutdown_obey_their_deadlines() {
     runtime
         .shutdown(Instant::now() + Duration::from_millis(500))
         .await;
+    (stalled, root, observability)
+}
+
+/// Positive: concurrent and cancelled `shutdown_export` callers share one
+/// outcome. Proven by ordering and state, not elapsed time: a caller whose
+/// deadline has passed returns while the shared step is still running, a
+/// caller with a long deadline returns only after it, the first (cancelled)
+/// caller's outcome survives, and a later caller finds the stored outcome and
+/// completes on its first poll without new work.
+/// Negative: no wall-clock margin is asserted; the real-time bound is
+/// `shutdown_export_is_bounded_by_the_clean_stop_slo`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::parallel(slo)]
+async fn concurrent_and_cancelled_export_shutdown_share_one_ordered_outcome() {
+    let (stalled, _root, observability) = stalled_export_in_flight().await;
 
     // The first caller is cancelled right after it starts the shared work;
     // the outcome survives it.
@@ -955,41 +1222,62 @@ async fn concurrent_and_cancelled_export_shutdown_obey_their_deadlines() {
         cancelled.is_err(),
         "the stalled export outlives the first caller"
     );
-    let started = Instant::now();
-    let short = Instant::now() + Duration::from_millis(200);
-    let long = Instant::now() + Duration::from_secs(3);
+
+    let order = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let expired = Instant::now();
+    let long = Instant::now() + Duration::from_secs(30);
     let (a, b) = (observability.clone(), observability.clone());
-    let short_elapsed = tokio::spawn(async move {
-        a.shutdown_export(short).await;
-        started.elapsed()
+    let (order_a, order_b) = (Arc::clone(&order), Arc::clone(&order));
+    let short_done = tokio::spawn(async move {
+        a.shutdown_export(expired).await;
+        order_a.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     });
-    let long_elapsed = tokio::spawn(async move {
+    let long_done = tokio::spawn(async move {
         b.shutdown_export(long).await;
-        started.elapsed()
+        order_b.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     });
-    let short_elapsed = short_elapsed.await.unwrap();
-    let long_elapsed = long_elapsed.await.unwrap();
+    let short_position = short_done.await.expect("short caller");
     assert!(
-        short_elapsed < Duration::from_millis(400),
-        "{short_elapsed:?}"
+        !long_done.is_finished(),
+        "the expired caller returned while the shared step was still running"
     );
-    // The exporter step is bounded by 1s from its first caller.
-    assert!(
-        long_elapsed < Duration::from_millis(1500),
-        "{long_elapsed:?}"
+    let long_position = long_done.await.expect("long caller");
+    assert_eq!(
+        (short_position, long_position),
+        (0, 1),
+        "the expired caller returns before the caller that waits for the shared step"
     );
-    // The SDK's own 400ms export timeout or the 1s wait bound ends the step;
+
+    // The SDK's own export timeout or the exporter step bound ends the step;
     // either way the terminal failure is retained.
     let health = observability.export_health_for_test();
     assert!(health.last_failure.is_some(), "{health:?}");
     assert_ne!(health.state, AtmTelemetryExportState::Healthy, "{health:?}");
-    let again = Instant::now();
+
+    // A later caller finds the stored outcome: it is ready on its first poll
+    // (a zero timeout polls the future before its timer), so no work is done.
+    tokio::time::timeout(
+        Duration::ZERO,
+        observability.shutdown_export(Instant::now() + Duration::from_secs(5)),
+    )
+    .await
+    .expect("a later caller completes on its first poll");
+    stalled.stop().await;
+}
+
+/// Positive: with the collector stalled, a caller that waits for the shared
+/// exporter step returns inside the daemon's clean-stop SLO (5 s), the same
+/// real-time bound `stalled_collector_never_changes_task_results_or_blocks_shutdown`
+/// uses. The bound is the SLO itself, not a margin above a nominal 1 s step.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::serial(slo)]
+async fn shutdown_export_is_bounded_by_the_clean_stop_slo() {
+    let (stalled, _root, observability) = stalled_export_in_flight().await;
+    let started = Instant::now();
     observability
-        .shutdown_export(Instant::now() + Duration::from_secs(5))
+        .shutdown_export(Instant::now() + Duration::from_secs(30))
         .await;
-    assert!(
-        again.elapsed() < Duration::from_millis(100),
-        "outcome is stored"
-    );
+    let elapsed = started.elapsed();
+    assert!(elapsed <= Duration::from_secs(5), "{elapsed:?}");
     stalled.stop().await;
 }
