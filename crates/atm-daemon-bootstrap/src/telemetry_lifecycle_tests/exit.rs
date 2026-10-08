@@ -5,6 +5,7 @@
 //! the parent process, and stops on request: `shutdown_replacement_daemon`,
 //! runtime teardown (which releases abandoned SDK blocking calls), process
 //! exit. The parent times the stop request to the child's exit status.
+#![cfg(test)]
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
@@ -70,6 +71,41 @@ fn exit_proof_child() {
         daemon.shutdown().await.expect("child daemon shutdown");
     });
     drop(runtime);
+}
+
+const CHILD_SCENARIO: &str = "ATM_BD6_CHILD_SCENARIO";
+
+/// Whether this process is the child launched for `scenario`.
+pub(super) fn is_child_scenario(scenario: &str) -> bool {
+    std::env::var(CHILD_SCENARIO).is_ok_and(|value| value == scenario)
+}
+
+/// Runs the `scenario` child test in its own process, so it owns the
+/// process-global tracing bridge, and requires it to pass.
+pub(super) fn run_child_scenario(scenario: &str) {
+    let mut child = Command::new(std::env::current_exe().expect("test binary"))
+        .args(["--exact", scenario, "--nocapture", "--test-threads=1"])
+        .env(CHILD_SCENARIO, scenario)
+        .env_remove(CHILD_MODE)
+        .stdin(Stdio::null())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn scenario child");
+    let (exit_tx, exit_rx) = mpsc::channel();
+    let id = child.id();
+    std::thread::spawn(move || {
+        let _ = exit_tx.send(child.wait());
+    });
+    let Ok(status) = exit_rx.recv_timeout(Duration::from_secs(90)) else {
+        let _ = Command::new("kill").arg(id.to_string()).status();
+        panic!("scenario child {scenario} did not exit within 90s");
+    };
+    let status = status.expect("scenario child status");
+    assert!(
+        status.success(),
+        "scenario child {scenario} failed: {status}"
+    );
 }
 
 /// Launches the child, waits until it serves, requests the stop and returns

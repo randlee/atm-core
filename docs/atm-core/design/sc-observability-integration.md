@@ -89,6 +89,17 @@ built on the official OpenTelemetry Rust SDK with the tonic gRPC transport.
 `sc-observability-otlp` is not used: it is a synchronous wrapper over the
 official SDK (ruled out 2026-10-07). Configuration and the exact boundary are
 recorded in ADR-064.
+
+The daemon composes this once in `atm-daemon-bootstrap`
+(`DaemonObservability`), on the retained `sc-observability`,
+`sc-observability-log` and `sc-observability-types` 1.5.0 baseline and
+OpenTelemetry 0.33.0. Bootstrap holds only the standard providers' lifecycle
+handles. An absent endpoint composes nothing (`Inert`). Invalid configuration
+keeps the daemon serving with file logging (`ConfigInvalid`). The
+process-global tracing bridge turns SDK transport failures into `Unavailable`
+export health, and the providers shut down last within the daemon's cumulative
+shutdown deadline. ADR-064 D11 names the producers, the exporter bounds and
+the health semantics.
 Retained `send`, `read`, `ack`, `clear`, `log`, and `doctor` continue to use
 the original logging boundary independently of this task-telemetry seam.
 
@@ -244,7 +255,7 @@ Required mapping rules:
   `QueryHealthReport` into ATM findings
 - ATM-owned health detail must intentionally summarize the shared queue depth,
   queue high-water mark, queue-full drops, writer state, and maintenance state
-  rather than silently discarding the additional `1.2.0` logger runtime data
+  rather than silently discarding the additional `1.5.0` logger runtime data
 
 ## 8. Sink Policy
 

@@ -228,7 +228,7 @@ impl DaemonObservability {
     /// Registers this value as the process lifecycle owner. Called once by
     /// the daemon entrypoint, after the process-global tracing bridge exists.
     pub(crate) fn register_process_owner(&self) {
-        let _ = PROCESS_OWNER.set(self.clone());
+        PROCESS_OWNER.get_or_init(|| self.clone());
     }
 
     pub(crate) fn process_owner() -> Option<Self> {
@@ -255,7 +255,7 @@ impl DaemonObservability {
         task: Arc<TaskTelemetryDiagnostics>,
         workflow: Arc<WorkflowTelemetryDiagnostics>,
     ) {
-        let _ = self.export.runtime.set((task, workflow));
+        self.export.runtime.get_or_init(|| (task, workflow));
     }
 
     /// Shuts the three standard providers down concurrently on the blocking
@@ -277,12 +277,13 @@ impl DaemonObservability {
                     if let Some(providers) = providers {
                         shutdown_providers(providers, bound, &export.diagnostics).await;
                     }
-                    let _ = sender.send(true);
+                    sender.send_replace(true);
                 });
                 receiver
             })
             .clone();
-        let _ = tokio::time::timeout_at(deadline, done.wait_for(|done| *done)).await;
+        // Past its own deadline a caller stops waiting; the owner keeps the outcome.
+        drop(tokio::time::timeout_at(deadline, done.wait_for(|done| *done)).await);
     }
 
     pub(crate) fn install_tracing_bridge(&self) -> Result<(), AtmError> {
@@ -374,7 +375,7 @@ impl DaemonObservability {
             Ok(retained_logger) => retained_logger,
             Err(_) => panic!("test retained logger must have one owner"),
         };
-        let _ = retained_logger.shutdown();
+        drop(retained_logger.shutdown());
     }
 
     #[cfg(test)]
@@ -690,5 +691,132 @@ mod tests {
             !rotated_log_path.exists(),
             "background prune worker should remove expired rotated files"
         );
+    }
+
+    /// Positive: through the daemon's own bootstrap, each of
+    /// `ATM_LOG_DESTINATION=file|otel|both` delivers one record per selected
+    /// destination for a direct port record and a tracing-origin record, and
+    /// the standard logger provider still exports after the retained logger
+    /// is shut down.
+    /// Negative: a below-threshold record and a secret field value reach
+    /// neither destination, and SDK diagnostics never recurse into export.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn daemon_log_destinations_route_once_and_keep_the_provider() {
+        use crate::telemetry_lifecycle_tests::receiver::Receiver;
+        use atm_core::observability::{
+            CommandEvent, ObservabilityPort, action_name, outcome_label,
+        };
+        use opentelemetry::logs::{LogRecord as _, Logger as _, LoggerProvider as _};
+        use tracing_subscriber::layer::SubscriberExt as _;
+
+        fn count(records: &[String], needle: &str) -> usize {
+            records
+                .iter()
+                .filter(|record| record.contains(needle))
+                .count()
+        }
+
+        for destination in ["file", "otel", "both"] {
+            let receiver = Receiver::start(false).await;
+            let root = TempDir::new().expect("tempdir");
+            let log_dir = root.path().join("logs");
+            let env = atm_core::test_support::FakeEnvSource::new([
+                ("ATM_OTEL_ENDPOINT", Some(receiver.endpoint.as_str())),
+                ("ATM_LOG_DESTINATION", Some(destination)),
+            ]);
+            let observability = DaemonObservability::bootstrap_from(&env, log_dir.clone())
+                .await
+                .expect("bootstrap");
+            let dispatch = tracing::Dispatch::new(
+                tracing_subscriber::registry().with(observability.tracing_bridge_for_test()),
+            );
+            let subscriber = tracing::dispatcher::set_default(&dispatch);
+            observability
+                .emit(CommandEvent {
+                    command: "atm-daemon",
+                    action: action_name("bd6_direct_record"),
+                    outcome: outcome_label("ok"),
+                    team: "bd6-team".parse().expect("team"),
+                    agent: "sender".parse().expect("agent"),
+                    sender: "sender".parse().expect("agent"),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: None,
+                    error_message: None,
+                })
+                .expect("direct record");
+            tracing::warn!(target: "atm_daemon_bootstrap::bd6_tracing_record", token = "raw-secret", "bd6 tracing record");
+            tracing::debug!(target: "atm_daemon_bootstrap::bd6_below_threshold", "bd6 below threshold");
+            observability.flush_for_test();
+            let exported = |receiver: &Receiver| -> Vec<String> {
+                receiver
+                    .capture
+                    .logs
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .map(|record| format!("{record:?}"))
+                    .collect()
+            };
+            if destination != "file" {
+                receiver
+                    .capture
+                    .wait(Duration::from_secs(15), "both exported records", || {
+                        let logs = exported(&receiver);
+                        count(&logs, "bd6_direct_record") == 1
+                            && count(&logs, "bd6_tracing_record") == 1
+                    })
+                    .await;
+                let logs = exported(&receiver);
+                assert_eq!(logs.len(), 2, "{destination}: no recursion: {logs:#?}");
+                assert_eq!(count(&logs, "raw-secret"), 0);
+                assert_eq!(count(&logs, "below_threshold"), 0);
+            }
+            let file = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
+            if destination == "otel" {
+                assert!(!file.exists(), "otel-only writes no JSONL");
+            } else {
+                let lines: Vec<String> = std::fs::read_to_string(&file)
+                    .expect("jsonl")
+                    .lines()
+                    .map(str::to_owned)
+                    .collect();
+                assert_eq!(count(&lines, "bd6_direct_record"), 1, "{lines:#?}");
+                assert_eq!(count(&lines, "bd6_tracing_record"), 1, "{lines:#?}");
+                assert_eq!(count(&lines, "raw-secret"), 0);
+                assert_eq!(count(&lines, "below_threshold"), 0);
+            }
+            drop(subscriber);
+            drop(dispatch);
+            let export = Arc::clone(&observability.export);
+            let caller = export
+                .providers
+                .lock()
+                .unwrap()
+                .as_ref()
+                .expect("configured providers")
+                .1
+                .logger("bd6-caller");
+            observability.shutdown_for_test();
+            let mut record = caller.create_log_record();
+            record.set_body("bd6 after retained logger shutdown".into());
+            caller.emit(record);
+            drop(caller);
+            let providers = export.providers.lock().unwrap().take().expect("providers");
+            super::shutdown_providers(
+                providers,
+                tokio::time::Instant::now() + Duration::from_secs(1),
+                &export.diagnostics,
+            )
+            .await;
+            assert_eq!(
+                count(&exported(&receiver), "bd6 after retained logger shutdown"),
+                1,
+                "{destination}: the provider outlives the retained logger"
+            );
+            receiver.stop().await;
+        }
     }
 }
