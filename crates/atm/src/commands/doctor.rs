@@ -557,9 +557,8 @@ env = { ATM_TEAM = "other" }
         let Ok(state) = std::env::var(EXPORT_JSON_STATE) else {
             return;
         };
-        let fixture = crate::composition::tests::LoopbackFixture::new(
-            atm_core::test_support::TEST_RECIPIENT,
-        );
+        let fixture =
+            crate::composition::tests::LoopbackFixture::new(atm_core::test_support::TEST_RECIPIENT);
         let transport = atm_core::transport::testing::LoopbackClientTransport::new(
             std::sync::Arc::new(ExportHealthObservability(export_health(&state))),
         );
@@ -590,7 +589,12 @@ env = { ATM_TEAM = "other" }
     /// Runs the child in its own process and parses the JSON it printed.
     fn doctor_json_stdout(state: &str) -> serde_json::Value {
         let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
-            .args([EXPORT_JSON_CHILD, "--exact", "--nocapture", "--test-threads=1"])
+            .args([
+                EXPORT_JSON_CHILD,
+                "--exact",
+                "--nocapture",
+                "--test-threads=1",
+            ])
             .env(EXPORT_JSON_STATE, state)
             .output()
             .expect("run the doctor --json child");
