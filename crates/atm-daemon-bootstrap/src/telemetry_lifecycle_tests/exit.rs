@@ -390,15 +390,26 @@ async fn process_exits_within_five_seconds_when_clean() {
 
 const FINAL_RECORD_CHILD: &str = "telemetry_lifecycle_tests::exit::final_record_child";
 const CHILD_LOG_DIR: &str = "ATM_BD6_LOG_DIR";
+const CHILD_BACKLOG: &str = "ATM_BD6_BACKLOG";
 /// The bridge retains allowlisted fields only, never message text.
 const FINAL_RECORD: &str = "ATM_DAEMON_SHUTDOWN_DRAINED";
 const BACKLOG_RECORD: &str = "BD6_RETAINED_BACKLOG";
-/// Below the 1024-event logger queue, so every record is admitted, and long
-/// enough that the writer is still behind when the process exits undrained.
-const BACKLOG: usize = 512;
+/// Long enough that the retained writer is still behind when the process
+/// exits undrained (without the first flush the final record is lost), and
+/// small enough that it, the final record and the daemon's other lifecycle
+/// records fit the 256-record OpenTelemetry log queue (`atm_observability`
+/// `EXPORT_QUEUE`) with nothing drained, so delivery does not depend on how
+/// fast the collector answers. A 512-record backlog filled that queue while
+/// the first export was in flight and dropped the final record.
+const DELIVERED_BACKLOG: usize = 192;
+/// Below the 1024-event logger queue, so every record is admitted, and over
+/// the OpenTelemetry log queue plus one export batch, so a collector that
+/// never answers forces the SDK's log-dropping diagnostics.
+const OVERFLOW_BACKLOG: usize = 512;
 
-/// Child half of [`final_lifecycle_record_survives_process_exit`]; a no-op
-/// unless launched by it.
+/// Child half of [`final_lifecycle_record_survives_process_exit`] and
+/// [`provider_shutdown_diagnostics_reach_disk_after_the_final_record`]; a
+/// no-op unless launched by them.
 #[test]
 fn final_record_child() {
     if !is_child_scenario(FINAL_RECORD_CHILD) {
@@ -406,6 +417,10 @@ fn final_record_child() {
     }
     let log_dir = std::env::var(CHILD_LOG_DIR).expect("log dir");
     let endpoint = std::env::var(CHILD_ENDPOINT).expect("collector endpoint");
+    let backlog: usize = std::env::var(CHILD_BACKLOG)
+        .expect("backlog")
+        .parse()
+        .expect("backlog count");
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
         .enable_all()
@@ -425,7 +440,7 @@ fn final_record_child() {
             .expect("the child process owns the global tracing bridge");
         let root = tempfile::tempdir().expect("daemon root");
         let daemon = Daemon::compose(root, observability).await;
-        for seq in 0..BACKLOG {
+        for seq in 0..backlog {
             tracing::info!(target: "atm_daemon_bootstrap::lifecycle", code = BACKLOG_RECORD, attempt = seq, "backlog");
         }
         daemon.shutdown().await.expect("child daemon shutdown");
@@ -435,9 +450,10 @@ fn final_record_child() {
     println!("{CHILD_SCENARIO_SENTINEL}");
 }
 
-/// Runs [`final_record_child`] against `endpoint` and returns the retained
-/// JSONL lines left on disk after the child process exited.
-async fn final_record_lines(endpoint: String) -> Vec<String> {
+/// Runs [`final_record_child`] with `backlog` records against `endpoint` and
+/// returns the retained JSONL lines left on disk after the child process
+/// exited.
+async fn final_record_lines(endpoint: String, backlog: usize) -> Vec<String> {
     // The logger root is the log directory's parent, as for the host `logs`.
     let root = tempfile::tempdir().expect("log root");
     let logs = root.path().join("logs");
@@ -445,7 +461,11 @@ async fn final_record_lines(endpoint: String) -> Vec<String> {
     tokio::task::spawn_blocking(move || {
         run_child_scenario_with(
             FINAL_RECORD_CHILD,
-            &[(CHILD_LOG_DIR, &log_dir), (CHILD_ENDPOINT, &endpoint)],
+            &[
+                (CHILD_LOG_DIR, &log_dir),
+                (CHILD_ENDPOINT, &endpoint),
+                (CHILD_BACKLOG, &backlog.to_string()),
+            ],
         );
     })
     .await
@@ -457,15 +477,15 @@ async fn final_record_lines(endpoint: String) -> Vec<String> {
         .collect()
 }
 
-/// Index of the final lifecycle record, required to follow every backlog
-/// record on disk.
-fn final_record_index(lines: &[String]) -> usize {
-    let backlog: Vec<usize> = (0..lines.len())
+/// Index of the final lifecycle record, required to follow all `backlog`
+/// records on disk.
+fn final_record_index(lines: &[String], backlog: usize) -> usize {
+    let queued: Vec<usize> = (0..lines.len())
         .filter(|&index| lines[index].contains(BACKLOG_RECORD))
         .collect();
     assert_eq!(
-        backlog.len(),
-        BACKLOG,
+        queued.len(),
+        backlog,
         "every admitted backlog record is on disk; last lines: {:?}",
         lines.iter().rev().take(3).collect::<Vec<_>>()
     );
@@ -474,7 +494,7 @@ fn final_record_index(lines: &[String]) -> usize {
         .position(|line| line.contains(FINAL_RECORD))
         .unwrap_or_else(|| panic!("the final lifecycle record is on disk: {:?}", lines.last()));
     assert!(
-        backlog.iter().all(|&queued| queued < index),
+        queued.iter().all(|&queued| queued < index),
         "the final lifecycle record follows the backlog"
     );
     index
@@ -488,8 +508,8 @@ fn final_record_index(lines: &[String]) -> usize {
 #[serial_test::parallel(slo)]
 async fn final_lifecycle_record_survives_process_exit() {
     let healthy = Receiver::start(false).await;
-    let lines = final_record_lines(healthy.endpoint.clone()).await;
-    final_record_index(&lines);
+    let lines = final_record_lines(healthy.endpoint.clone(), DELIVERED_BACKLOG).await;
+    final_record_index(&lines, DELIVERED_BACKLOG);
     let exported: Vec<String> = healthy
         .capture
         .logs
@@ -511,15 +531,16 @@ async fn final_lifecycle_record_survives_process_exit() {
     healthy.stop().await;
 }
 
-/// Positive: against a collector that never answers, the SDK's
-/// provider-shutdown diagnostics reach disk after the final lifecycle record.
+/// Positive: against a collector that never answers, with a backlog over the
+/// export queue, the SDK's log-dropping diagnostics reach disk after the
+/// final lifecycle record.
 /// Delivery to the stalled collector is not asserted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::parallel(slo)]
 async fn provider_shutdown_diagnostics_reach_disk_after_the_final_record() {
     let stalled = Receiver::start(true).await;
-    let lines = final_record_lines(stalled.endpoint.clone()).await;
-    let index = final_record_index(&lines);
+    let lines = final_record_lines(stalled.endpoint.clone(), OVERFLOW_BACKLOG).await;
+    let index = final_record_index(&lines, OVERFLOW_BACKLOG);
     let sdk = lines[index + 1..]
         .iter()
         .filter(|line| line.contains("\"target\":\"opentelemetry_sdk\""))
