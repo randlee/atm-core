@@ -137,6 +137,10 @@ impl MemberStateTransitionSink for DrainOnTransitionSink {
 #[derive(Clone)]
 pub(crate) struct TransitionDrainTracker {
     cancel: watch::Sender<bool>,
+    // MUTEX: transition callbacks can add handles while shutdown or Drop
+    // consumes them. The lock protects only this short ownership transfer and
+    // is never held across an await; a poisoned guard still owns handles that
+    // must be aborted rather than silently abandoned.
     joins: Arc<Mutex<Vec<JoinHandle<()>>>>,
     blocking_bridge: BoundedBlockingBridge,
 }
@@ -162,13 +166,17 @@ impl TransitionDrainTracker {
     fn track(&self, join: JoinHandle<()>) {
         self.joins
             .lock()
-            .expect("transition tracker lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .push(join);
     }
 
     fn abort_all(&self) {
         let _ = self.cancel.send(true);
-        for join in self.joins.lock().expect("transition tracker lock").iter() {
+        let joins = self
+            .joins
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        for join in joins.iter() {
             join.abort();
         }
     }
@@ -176,7 +184,12 @@ impl TransitionDrainTracker {
     async fn shutdown(&self, deadline: Duration) {
         let _ = self.cancel.send(true);
         let deadline_at = tokio::time::Instant::now() + deadline;
-        let joins = std::mem::take(&mut *self.joins.lock().expect("transition tracker lock"));
+        let joins = std::mem::take(
+            &mut *self
+                .joins
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        );
         for mut join in joins {
             let remaining = deadline_at.saturating_duration_since(tokio::time::Instant::now());
             if tokio::time::timeout(remaining, &mut join).await.is_err() {
@@ -539,8 +552,8 @@ impl RecoverySweepHandle {
 #[cfg(test)]
 mod tests {
     use super::{
-        DrainOnTransitionSink, TransitionDrainTracker, drain_one, queue_drain_channel_allowed,
-        run_recovery_sweep_once,
+        DrainOnTransitionSink, RecoverySweepHandle, TransitionDrainTracker, drain_one,
+        queue_drain_channel_allowed, run_recovery_sweep_once,
     };
     use atm_core::RequestDeadline;
     use atm_core::boundary::{
@@ -561,7 +574,17 @@ mod tests {
     use std::pin::Pin;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
-    use tokio::sync::Notify;
+    use tokio::sync::{Notify, oneshot};
+
+    struct NotifyOnDrop(Option<oneshot::Sender<()>>);
+
+    impl Drop for NotifyOnDrop {
+        fn drop(&mut self) {
+            if let Some(done) = self.0.take() {
+                let _ = done.send(());
+            }
+        }
+    }
 
     fn test_blocking_bridge(
         runtime_health: &RuntimeHealth,
@@ -783,6 +806,34 @@ mod tests {
                 .is_some(),
             "shutdown must release a claim held by an interrupted transition drain"
         );
+    }
+
+    #[tokio::test]
+    async fn recovery_sweep_drop_aborts_tracked_handles_when_tracker_lock_is_poisoned() {
+        let tracker = TransitionDrainTracker::new(RuntimeHealth::default());
+        let (aborted, receiver) = oneshot::channel();
+        tracker.track(tokio::spawn(async move {
+            let _notify_on_abort = NotifyOnDrop(Some(aborted));
+            std::future::pending::<()>().await;
+        }));
+        tokio::task::yield_now().await;
+
+        let joins = Arc::clone(&tracker.joins);
+        let poisoner = std::thread::spawn(move || {
+            let _guard = joins.lock().expect("tracker lock");
+            panic!("poison tracker lock for Drop regression coverage");
+        });
+        assert!(poisoner.join().is_err(), "poisoner must panic");
+
+        drop(RecoverySweepHandle {
+            join: None,
+            tracker,
+        });
+
+        tokio::time::timeout(Duration::from_secs(1), receiver)
+            .await
+            .expect("Drop must abort the tracked handle despite lock poison")
+            .expect("aborted task must drop its sentinel");
     }
 
     #[tokio::test]

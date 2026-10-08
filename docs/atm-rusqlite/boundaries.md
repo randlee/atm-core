@@ -46,7 +46,7 @@ opens a direct SQLite search connection.
 
 AA.5 relock note:
 - `cargo test --package atm-architecture` is the second enforcement layer that
-detects policy widening and any reintroduced `atm-daemon -> atm-rusqlite`
+detects policy widening and any reintroduced `atm-daemon -> atm-storage-rusqlite`
 code edge before review closure
 
 ## SqliteAnalystQueryStore
