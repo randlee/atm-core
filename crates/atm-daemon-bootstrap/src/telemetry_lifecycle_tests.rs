@@ -698,9 +698,10 @@ async fn lossy_task_runtime() -> atm_runtime::TaskTelemetryRuntime {
         runtime.try_emit(task_record(seq));
     }
     let diagnostics = runtime.diagnostics();
+    let mut cadence = tokio::time::interval(Duration::from_millis(20));
     tokio::time::timeout(EXPORT_WAIT, async {
         while diagnostics.snapshot().dropped_timeout == 0 {
-            tokio::time::sleep(Duration::from_millis(20)).await;
+            cadence.tick().await;
         }
     })
     .await
