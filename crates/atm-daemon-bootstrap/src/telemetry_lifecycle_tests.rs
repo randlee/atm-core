@@ -477,6 +477,32 @@ fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId
     outcome.message_id
 }
 
+/// Positive: composition consumes the telemetry setups of the owner it is
+/// handed. Negative: another bootstrapped owner in the same process keeps its
+/// setups, so no process-wide owner stands in for the supplied one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn composition_uses_only_the_supplied_observability_owner() {
+    let (_other_root, other) = Daemon::bootstrap(endpoint_env("http://127.0.0.1:9")).await;
+    let (root, supplied) = Daemon::bootstrap(endpoint_env("http://127.0.0.1:9")).await;
+
+    let _assembly = compose_daemon_assembly(
+        SqliteStorageFactory::at_path(root.path().join("runtime").join("mail.sqlite3")),
+        Some(&supplied),
+    )
+    .expect("compose daemon runtime");
+
+    let (task, workflow) = supplied.take_telemetry_setups();
+    assert!(
+        task.is_none() && workflow.is_none(),
+        "composition took the supplied owner's setups"
+    );
+    let (task, workflow) = other.take_telemetry_setups();
+    assert!(
+        task.is_some() && workflow.is_some(),
+        "an owner composition was not handed keeps its setups"
+    );
+}
+
 /// Positive: every router producer reachable over the daemon API (assign,
 /// reassign, start, terminal close, reopen, committed rejection audit and the
 /// newly inserted prompt handoff) reaches the collector as exactly its
@@ -486,6 +512,7 @@ fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId
 /// Reminder, lead notification and reminder reset come from the composed
 /// queue-wake pump and are proven in `queue_wake.rs`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::parallel(slo)]
 async fn running_daemon_exports_each_committed_task_event_to_the_collector() {
     let receiver = Receiver::start(false).await;
     let daemon = Daemon::start(endpoint_env(&receiver.endpoint)).await;
@@ -593,6 +620,7 @@ async fn running_daemon_exports_each_committed_task_event_to_the_collector() {
 /// and workflow runtimes disabled and reports `Inert`.
 /// Negative: task writes still succeed and nothing is admitted for export.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
 async fn absent_endpoint_composes_no_exporter_and_reports_inert() {
     let daemon = Daemon::start(FakeEnvSource::empty()).await;
     assert!(!daemon.observability.export_providers_present_for_test());
@@ -621,6 +649,7 @@ async fn absent_endpoint_composes_no_exporter_and_reports_inert() {
 /// file logging and `Unavailable`/`ConfigInvalid` health in doctor JSON.
 /// Negative: the rejected values never appear in the doctor report.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
 async fn invalid_export_configuration_keeps_the_daemon_operational() {
     let cases = [
         FakeEnvSource::new([
@@ -738,6 +767,7 @@ async fn doctor_until(
 /// dispatchers in tracing's per-callsite interest cache and can miss the SDK
 /// failure event entirely.
 #[test]
+#[serial_test::serial(slo)]
 fn unreachable_collector_degrades_health_without_changing_task_results() {
     exit::run_child_scenario(UNREACHABLE_CHILD);
 }
@@ -792,7 +822,7 @@ fn unreachable_collector_child() {
             .expect("shutdown result is the listener's");
         assert!(
             started.elapsed() <= Duration::from_secs(5),
-            "{:?}",
+            "daemon shutdown took {:?}, over the 5s clean-stop SLO",
             started.elapsed()
         );
     });
@@ -804,6 +834,7 @@ fn unreachable_collector_child() {
 /// task results unchanged, and daemon shutdown with a stalled exporter still
 /// returns within the clean-stop SLO, retaining the terminal export failure.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::serial(slo)]
 async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
     let stalled = Receiver::start(true).await;
     let daemon = Daemon::start(endpoint_env(&stalled.endpoint)).await;
@@ -832,7 +863,10 @@ async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
         .await
         .expect("shutdown result is the listener's");
     let elapsed = started.elapsed();
-    assert!(elapsed <= Duration::from_secs(5), "{elapsed:?}");
+    assert!(
+        elapsed <= Duration::from_secs(5),
+        "daemon shutdown with a stalled exporter took {elapsed:?}, over the 5s clean-stop SLO"
+    );
     // The SDK's own 400ms export timeout or the 1s wait bound ends the step;
     // either way the terminal failure is retained.
     let health = observability.export_health_for_test();
@@ -841,11 +875,9 @@ async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
     stalled.stop().await;
 }
 
-/// Positive: concurrent and cancelled `shutdown_export` callers share one
-/// outcome; every caller returns by its own deadline even when the
-/// collector never answers, and a later caller sees the retained failure.
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn concurrent_and_cancelled_export_shutdown_obey_their_deadlines() {
+/// A stalled collector with a non-empty export in flight, and the task
+/// runtime already stopped, so only the exporter step remains.
+async fn stalled_export_in_flight() -> (Receiver, tempfile::TempDir, DaemonObservability) {
     let stalled = Receiver::start(true).await;
     let root = tempfile::tempdir().expect("root");
     let observability =
@@ -871,6 +903,21 @@ async fn concurrent_and_cancelled_export_shutdown_obey_their_deadlines() {
     runtime
         .shutdown(Instant::now() + Duration::from_millis(500))
         .await;
+    (stalled, root, observability)
+}
+
+/// Positive: concurrent and cancelled `shutdown_export` callers share one
+/// outcome. Proven by ordering and state, not elapsed time: a caller whose
+/// deadline has passed returns while the shared step is still running, a
+/// caller with a long deadline returns only after it, the first (cancelled)
+/// caller's outcome survives, and a later caller finds the stored outcome and
+/// completes on its first poll without new work.
+/// Negative: no wall-clock margin is asserted; the real-time bound is
+/// `shutdown_export_is_bounded_by_the_clean_stop_slo`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::parallel(slo)]
+async fn concurrent_and_cancelled_export_shutdown_share_one_ordered_outcome() {
+    let (stalled, _root, observability) = stalled_export_in_flight().await;
 
     // The first caller is cancelled right after it starts the shared work;
     // the outcome survives it.
@@ -883,41 +930,62 @@ async fn concurrent_and_cancelled_export_shutdown_obey_their_deadlines() {
         cancelled.is_err(),
         "the stalled export outlives the first caller"
     );
-    let started = Instant::now();
-    let short = Instant::now() + Duration::from_millis(200);
-    let long = Instant::now() + Duration::from_secs(3);
+
+    let order = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let expired = Instant::now();
+    let long = Instant::now() + Duration::from_secs(30);
     let (a, b) = (observability.clone(), observability.clone());
-    let short_elapsed = tokio::spawn(async move {
-        a.shutdown_export(short).await;
-        started.elapsed()
+    let (order_a, order_b) = (Arc::clone(&order), Arc::clone(&order));
+    let short_done = tokio::spawn(async move {
+        a.shutdown_export(expired).await;
+        order_a.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     });
-    let long_elapsed = tokio::spawn(async move {
+    let long_done = tokio::spawn(async move {
         b.shutdown_export(long).await;
-        started.elapsed()
+        order_b.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     });
-    let short_elapsed = short_elapsed.await.unwrap();
-    let long_elapsed = long_elapsed.await.unwrap();
+    let short_position = short_done.await.expect("short caller");
     assert!(
-        short_elapsed < Duration::from_millis(400),
-        "{short_elapsed:?}"
+        !long_done.is_finished(),
+        "the expired caller returned while the shared step was still running"
     );
-    // The exporter step is bounded by 1s from its first caller.
-    assert!(
-        long_elapsed < Duration::from_millis(1500),
-        "{long_elapsed:?}"
+    let long_position = long_done.await.expect("long caller");
+    assert_eq!(
+        (short_position, long_position),
+        (0, 1),
+        "the expired caller returns before the caller that waits for the shared step"
     );
-    // The SDK's own 400ms export timeout or the 1s wait bound ends the step;
+
+    // The SDK's own export timeout or the exporter step bound ends the step;
     // either way the terminal failure is retained.
     let health = observability.export_health_for_test();
     assert!(health.last_failure.is_some(), "{health:?}");
     assert_ne!(health.state, AtmTelemetryExportState::Healthy, "{health:?}");
-    let again = Instant::now();
+
+    // A later caller finds the stored outcome: it is ready on its first poll
+    // (a zero timeout polls the future before its timer), so no work is done.
+    tokio::time::timeout(
+        Duration::ZERO,
+        observability.shutdown_export(Instant::now() + Duration::from_secs(5)),
+    )
+    .await
+    .expect("a later caller completes on its first poll");
+    stalled.stop().await;
+}
+
+/// Positive: with the collector stalled, a caller that waits for the shared
+/// exporter step returns inside the daemon's clean-stop SLO (5 s), the same
+/// real-time bound `stalled_collector_never_changes_task_results_or_blocks_shutdown`
+/// uses. The bound is the SLO itself, not a margin above a nominal 1 s step.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::serial(slo)]
+async fn shutdown_export_is_bounded_by_the_clean_stop_slo() {
+    let (stalled, _root, observability) = stalled_export_in_flight().await;
+    let started = Instant::now();
     observability
-        .shutdown_export(Instant::now() + Duration::from_secs(5))
+        .shutdown_export(Instant::now() + Duration::from_secs(30))
         .await;
-    assert!(
-        again.elapsed() < Duration::from_millis(100),
-        "outcome is stored"
-    );
+    let elapsed = started.elapsed();
+    assert!(elapsed <= Duration::from_secs(5), "{elapsed:?}");
     stalled.stop().await;
 }
