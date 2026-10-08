@@ -472,14 +472,10 @@ fn print_doctor_summary(report: &DoctorReport) {
 }
 
 fn print_doctor_observability(report: &DoctorReport) {
-    print!("{}", render_doctor_observability(report));
+    print!("{}", render_doctor_observability(&report.observability));
 }
 
-fn render_doctor_observability(report: &DoctorReport) -> String {
-    render_observability_health(&report.observability)
-}
-
-fn render_observability_health(health: &atm_core::observability::AtmObservabilityHealth) -> String {
+fn render_doctor_observability(health: &atm_core::observability::AtmObservabilityHealth) -> String {
     let mut output = format!(
         "Active log path: {}\n",
         health
@@ -1133,8 +1129,8 @@ mod tests {
 
     use super::{
         render_bootstrap_trace_section, render_doctor_alias_mismatches, render_doctor_findings,
-        render_doctor_herdr, render_doctor_peer_config, render_doctor_rosters,
-        render_observability_health, render_send_stdout, render_warnings_to_stderr,
+        render_doctor_herdr, render_doctor_observability, render_doctor_peer_config,
+        render_doctor_rosters, render_send_stdout, render_warnings_to_stderr,
     };
 
     const CREDENTIAL_SENTINEL: &str = "Bearer doctor-fixture-secret";
@@ -1206,7 +1202,7 @@ mod tests {
             let finding = atm_core::doctor::health::observability_finding(&health);
             let rendered = format!(
                 "{}{}",
-                render_observability_health(&health),
+                render_doctor_observability(&health),
                 render_doctor_findings(&[finding])
             );
 
@@ -1228,7 +1224,7 @@ mod tests {
         }))
         .expect("1.10.0 doctor observability without export");
 
-        let rendered = render_observability_health(&health);
+        let rendered = render_doctor_observability(&health);
 
         assert!(!rendered.contains("observability.export"), "{rendered}");
     }
