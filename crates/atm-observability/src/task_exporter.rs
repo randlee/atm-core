@@ -128,10 +128,10 @@ impl State {
             return true;
         }
         self.order.push_back(id);
-        if self.order.len() > DEDUP_LIMIT {
-            if let Some(old) = self.order.pop_front() {
-                self.seen.remove(&old);
-            }
+        if self.order.len() > DEDUP_LIMIT
+            && let Some(old) = self.order.pop_front()
+        {
+            self.seen.remove(&old);
         }
         false
     }
@@ -204,17 +204,16 @@ impl TaskExporter {
             Vec::new(),
         );
         state.clock = state.clock.wrapping_add(1);
-        if !state.assignments.contains_key(&key) && state.assignments.len() >= ACTIVE_LIMIT {
-            if let Some(old) = state
+        if !state.assignments.contains_key(&key)
+            && state.assignments.len() >= ACTIVE_LIMIT
+            && let Some(old) = state
                 .assignments
                 .iter()
                 .min_by_key(|(_, assignment)| assignment.touched)
                 .map(|(key, _)| *key)
-            {
-                if let Some(assignment) = state.assignments.remove(&old) {
-                    self.finish_assignment(old, assignment, true);
-                }
-            }
+            && let Some(assignment) = state.assignments.remove(&old)
+        {
+            self.finish_assignment(old, assignment, true);
         }
         self.project_task(&mut state, key, &record, attributes, encoded.len());
         Ok(())
@@ -244,11 +243,9 @@ impl TaskExporter {
                 })
         });
         let mut next = Assignment::new(at, attributes.clone(), touched);
-        if replacement {
-            if let Some(mut assignment) = state.assignments.remove(&key) {
-                assignment.split_future(&mut next, record.seq, at);
-                self.finish_assignment(key, assignment, true);
-            }
+        if replacement && let Some(mut assignment) = state.assignments.remove(&key) {
+            assignment.split_future(&mut next, record.seq, at);
+            self.finish_assignment(key, assignment, true);
         }
         let assignment = state.assignments.entry(key).or_insert(next);
         self.record_assignment(key, assignment, record, attributes, bytes, touched);
@@ -324,11 +321,11 @@ impl TaskExporter {
         if let Some(assigned) = assignment.assigned {
             // Defer duration metrics until closure so a late assignment
             // row can associate an already-observed start correctly.
-            if let Some((_, started)) = assignment.started {
-                if let Ok(duration) = started.duration_since(assigned) {
-                    self.time_to_start
-                        .record(duration.as_secs_f64() * 1000., &[]);
-                }
+            if let Some((_, started)) = assignment.started
+                && let Ok(duration) = started.duration_since(assigned)
+            {
+                self.time_to_start
+                    .record(duration.as_secs_f64() * 1000., &[]);
             }
             if let Ok(duration) = at.duration_since(assigned) {
                 self.time_to_close

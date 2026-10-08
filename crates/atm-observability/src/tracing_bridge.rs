@@ -212,12 +212,11 @@ impl TracingBridgeLayer {
     }
 
     fn emit(&self, event: &Event<'_>) {
-        if crate::otel_logs::is_sdk_target(event.metadata().target()) {
-            if let Ok(slot) = self.export_diagnostics.read() {
-                if let Some(diagnostics) = slot.as_ref() {
-                    diagnostics.observe_sdk_event(event.metadata().name());
-                }
-            }
+        if crate::otel_logs::is_sdk_target(event.metadata().target())
+            && let Ok(slot) = self.export_diagnostics.read()
+            && let Some(diagnostics) = slot.as_ref()
+        {
+            diagnostics.observe_sdk_event(event.metadata().name());
         }
         if !should_retain(event.metadata().level(), event.metadata().target()) {
             return;
