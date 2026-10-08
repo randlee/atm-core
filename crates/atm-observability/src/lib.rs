@@ -18,14 +18,14 @@ use atm_core::observability::{
 use atm_core::types::IsoTimestamp;
 use atm_core::{EnvSource, ProcessEnvSource};
 use sc_observability_types::{
-    ActionName, DiagnosticInfo, Level, LogEvent, OutcomeLabel, ProcessIdentity, SchemaVersion,
-    ServiceName, TargetCategory, Timestamp,
+    ActionName, Level, LogEvent, OutcomeLabel, ProcessIdentity, SchemaVersion, ServiceName,
+    TargetCategory, Timestamp,
 };
 use serde_json::Map;
 
 /// Opaque shared retained logger handle. Its concrete backend is deliberately
 /// confined to this facade.
-pub struct RetainedLogger(sc_observability::Logger);
+pub struct RetainedLogger(sc_observability::v2::Logger);
 
 /// ATM-owned logging level for the retained logger bootstrap boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,8 +93,8 @@ impl RetainedLogger {
     }
 
     /// Flushes all events admitted before this call to the configured sinks.
-    pub fn flush(&self) -> Result<(), sc_observability_types::typed::FlushFailure> {
-        self.0.flush_typed()
+    pub fn flush(&self) -> Result<(), sc_observability_types::v2::FlushError> {
+        self.0.flush()
     }
 
     #[cfg(test)]
@@ -107,7 +107,8 @@ impl RetainedLogger {
 
     /// Drains the retained-log writer and returns its final health snapshot.
     pub fn shutdown(self) -> sc_observability_types::LoggingHealthReport {
-        self.0.shutdown().health()
+        let _ = self.0.shutdown();
+        self.0.health()
     }
 
     pub(crate) fn try_log(&self, event: LogEvent) -> RetainedLogOffer {
@@ -115,9 +116,13 @@ impl RetainedLogger {
         if queue_full_for_test() {
             return RetainedLogOffer::QueueFull;
         }
-        match self.0.try_log_typed(event) {
+        match self.0.try_log(event) {
             Ok(()) => RetainedLogOffer::Accepted,
-            Err(sc_observability::TryLogFailure::QueueFull(_)) => RetainedLogOffer::QueueFull,
+            Err(error)
+                if error.diagnostic().code == sc_observability::error_codes::LOGGER_QUEUE_FULL =>
+            {
+                RetainedLogOffer::QueueFull
+            }
             Err(error) => RetainedLogOffer::Rejected {
                 diagnostic_code: try_log_error_code(&error),
             },
@@ -249,9 +254,9 @@ pub fn build_retained_logger(
     };
     config.enable_console_sink = false;
     let builder =
-        sc_observability::Logger::builder_typed(config).map_err(map_retained_logger_error)?;
+        sc_observability::v2::Logger::builder(config).map_err(map_retained_logger_error)?;
     builder
-        .build_typed()
+        .build()
         .map(RetainedLogger)
         .map_err(map_retained_logger_error)
 }
@@ -298,20 +303,16 @@ fn queue_full_for_test() -> bool {
     QUEUE_FULL_FOR_TEST.with(std::cell::Cell::get)
 }
 
-fn try_log_error_code(error: &sc_observability::TryLogFailure) -> ErrorCode {
-    let code = match error {
-        sc_observability::TryLogFailure::InvalidEvent(error) => error.diagnostic().code.as_str(),
-        sc_observability::TryLogFailure::QueueFull(context)
-        | sc_observability::TryLogFailure::WriterDegraded(context)
-        | sc_observability::TryLogFailure::ShutdownTimedOut(context) => {
-            context.diagnostic().code.as_str()
-        }
-        _ => "SC_OBSERVABILITY_LOGGER_UNKNOWN_FAILURE",
-    };
+fn try_log_error_code(error: &sc_observability_types::v2::EventError) -> ErrorCode {
+    let code = error.diagnostic().code.as_str();
     ErrorCode::new_owned(code).expect("shared diagnostic codes must satisfy ATM validation")
 }
 
+mod export_diagnostics;
+mod otel_logs;
 pub mod tracing_bridge;
+pub use export_diagnostics::ExportDiagnostics;
+pub use otel_logs::OtelLogSink;
 
 pub use atm_core::observability::{
     CANONICAL_LOG_FILE_NAME, GRAFT_FALLBACK_LOG_FILE_NAME, RETAINED_FIELD_ALLOWLIST,
@@ -550,7 +551,7 @@ mod tests {
         RetainedLogger, build_retained_logger, logger_level_override_from, parse_logger_level,
         prepare_retained_log,
     };
-    use sc_observability::{Logger, LoggerConfig};
+    use sc_observability::LoggerConfig;
     use sc_observability_types::{LogQuery, ServiceName};
     use std::time::Duration;
 
@@ -677,12 +678,12 @@ mod tests {
         .expect("queue-full admission");
         assert_eq!(queue_full, RetainedLogOffer::QueueFull);
         let query_logger = RetainedLogger(
-            Logger::builder_typed(LoggerConfig::default_for(
+            sc_observability::v2::Logger::builder(LoggerConfig::default_for(
                 ServiceName::new("atm").expect("service"),
                 tempdir.path().join("query"),
             ))
-            .expect("published 1.4.0 builder")
-            .build_typed()
+            .expect("published canonical builder")
+            .build()
             .expect("typed query logger"),
         );
         query_logger
