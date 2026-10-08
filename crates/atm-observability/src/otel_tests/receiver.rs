@@ -13,6 +13,27 @@ use tokio_stream::wrappers::TcpListenerStream;
 use tonic::codec::CompressionEncoding;
 use tonic::{Request, Response, Status};
 
+/// The OTLP signal an export request belongs to.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Signal {
+    Trace,
+    Log,
+    Metric,
+}
+
+impl Signal {
+    pub const ALL: [Self; 3] = [Self::Trace, Self::Log, Self::Metric];
+
+    /// The OTLP client named in this signal's export error.
+    pub fn client(self) -> &'static str {
+        match self {
+            Self::Trace => "TonicTracesClient",
+            Self::Log => "TonicLogsClient",
+            Self::Metric => "TonicMetricsClient",
+        }
+    }
+}
+
 #[derive(Clone, Default)]
 pub(super) struct Capture {
     pub spans: Arc<Mutex<Vec<Span>>>,
@@ -20,8 +41,10 @@ pub(super) struct Capture {
     pub metrics: Arc<Mutex<Vec<Metric>>>,
     pub metadata: Arc<Mutex<Vec<tonic::metadata::MetadataMap>>>,
     pub resources: Arc<Mutex<Vec<opentelemetry_proto::tonic::resource::v1::Resource>>>,
-    pub started: Arc<AtomicUsize>,
-    pub finished: Arc<AtomicUsize>,
+    /// Exports begun and ended, per signal; an export ends when its
+    /// handler returns or its request is cancelled.
+    started: Arc<[AtomicUsize; 3]>,
+    finished: Arc<[AtomicUsize; 3]>,
     pub changed: Arc<Notify>,
     /// Releases one stalled export; a stalled export waits here until the
     /// test calls `release`, and never completes if the test does not.
@@ -30,20 +53,28 @@ pub(super) struct Capture {
 }
 
 impl Capture {
-    async fn response(&self) {
-        self.started.fetch_add(1, Ordering::SeqCst);
+    async fn response(&self, signal: Signal) {
+        self.started[signal as usize].fetch_add(1, Ordering::SeqCst);
         self.changed.notify_waiters();
-        struct Finished(Capture);
+        struct Finished(Capture, Signal);
         impl Drop for Finished {
             fn drop(&mut self) {
-                self.0.finished.fetch_add(1, Ordering::SeqCst);
+                self.0.finished[self.1 as usize].fetch_add(1, Ordering::SeqCst);
                 self.0.changed.notify_waiters();
             }
         }
-        let _finished = Finished(self.clone());
+        let _finished = Finished(self.clone(), signal);
         if self.stall {
             self.release.notified().await;
         }
+    }
+
+    pub fn started(&self, signal: Signal) -> usize {
+        self.started[signal as usize].load(Ordering::SeqCst)
+    }
+
+    pub fn finished(&self, signal: Signal) -> usize {
+        self.finished[signal as usize].load(Ordering::SeqCst)
     }
 
     pub fn release(&self) {
@@ -90,7 +121,7 @@ impl traces::trace_service_server::TraceService for Capture {
                 .flat_map(|resource| resource.scope_spans)
                 .flat_map(|scope| scope.spans),
         );
-        self.response().await;
+        self.response(Signal::Trace).await;
         Ok(Response::new(traces::ExportTraceServiceResponse::default()))
     }
 }
@@ -113,7 +144,7 @@ impl logs::logs_service_server::LogsService for Capture {
                 .flat_map(|resource| resource.scope_logs)
                 .flat_map(|scope| scope.log_records),
         );
-        self.response().await;
+        self.response(Signal::Log).await;
         Ok(Response::new(logs::ExportLogsServiceResponse::default()))
     }
 }
@@ -136,7 +167,7 @@ impl metrics::metrics_service_server::MetricsService for Capture {
                 .flat_map(|resource| resource.scope_metrics)
                 .flat_map(|scope| scope.metrics),
         );
-        self.response().await;
+        self.response(Signal::Metric).await;
         Ok(Response::new(
             metrics::ExportMetricsServiceResponse::default(),
         ))

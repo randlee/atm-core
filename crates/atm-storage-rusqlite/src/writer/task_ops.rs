@@ -105,6 +105,7 @@ pub(super) fn append_rejected_task_event(
     let row = load_task_row(connection, target, &team, &task_id)?;
     let assignee = row.as_ref().map_or(&requested, |row| &row.assignee);
     let state = row.as_ref().map(|row| row.state.tag());
+    let detail = format!("{}: {}", error.code(), error.message());
     append_task_event(
         connection,
         target,
@@ -121,7 +122,7 @@ pub(super) fn append_rejected_task_event(
             message_id,
             outcome: None,
             marker: None,
-            detail: Some(error.message()),
+            detail: Some(&detail),
         },
     )
     .map(Some)
