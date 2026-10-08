@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 mod bb5_closure;
+mod bd3_task_telemetry;
 mod herdr_nudge_invariant;
 mod herdr_queue_ephemeral;
 mod herdr_queue_no_delivery;
@@ -1506,6 +1507,7 @@ async fn task_linked_prompt_without_task_id_logs_storage_failure_and_records_not
         &dispatch,
         PromptTrigger::Steer,
         IsoTimestamp::now(),
+        &atm_runtime::TaskTelemetryRuntime::disabled(),
     )
     .await;
 
@@ -2744,6 +2746,15 @@ impl atm_storage::MessageStore for UnusedMailStore {
         unreachable!("herdr candidate test never touches the mail store boundary")
     }
 
+    fn admit_message_with_provenance(
+        &self,
+        _message: &atm_storage::Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        unreachable!("herdr candidate test never touches the mail store boundary")
+    }
+
     fn save_messages_atomically(&self, _messages: &[atm_storage::Message]) -> Result<(), AtmError> {
         unreachable!("herdr candidate test never touches the mail store boundary")
     }
@@ -2776,6 +2787,16 @@ impl atm_storage::contract::sealed::Sealed for CountingMessageStore {}
 impl atm_storage::MessageStore for CountingMessageStore {
     fn save_message(&self, message: &atm_storage::Message) -> Result<(), AtmError> {
         self.inner.save_message(message)
+    }
+
+    fn admit_message_with_provenance(
+        &self,
+        message: &atm_storage::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        self.inner
+            .admit_message_with_provenance(message, provenance)
     }
 
     fn save_messages_atomically(&self, messages: &[atm_storage::Message]) -> Result<(), AtmError> {

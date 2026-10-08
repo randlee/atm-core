@@ -1523,6 +1523,15 @@ mod tests {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
+        fn admit_message_with_provenance(
+            &self,
+            _message: &atm_storage::Message,
+            _provenance: atm_storage::MessageWriteOrigin,
+        ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+        {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
         fn save_messages_atomically(
             &self,
             _messages: &[atm_storage::Message],

@@ -72,6 +72,7 @@ pub struct StorageAndNudgeRouter {
     bare_cli_queue_full_drops: BareCliQueueFullDrops,
     member_state_transition_sink: Option<Arc<dyn crate::MemberStateTransitionSink>>,
     detached_received_hooks: DetachedReceivedHooks,
+    task_telemetry: atm_runtime::TaskTelemetryRuntime,
 }
 
 impl StorageAndNudgeRouter {
@@ -145,6 +146,7 @@ impl StorageAndNudgeRouter {
             bare_cli_queue_full_drops: Default::default(),
             member_state_transition_sink: None,
             detached_received_hooks: DetachedReceivedHooks::default(),
+            task_telemetry: atm_runtime::TaskTelemetryRuntime::disabled(),
         }
     }
 
@@ -272,6 +274,14 @@ impl StorageAndNudgeRouter {
         self
     }
 
+    /// Projects committed task-ledger rows through the bounded runtime handle;
+    /// the default is the disabled runtime.
+    #[must_use]
+    pub fn with_task_telemetry(mut self, runtime: atm_runtime::TaskTelemetryRuntime) -> Self {
+        self.task_telemetry = runtime;
+        self
+    }
+
     /// Drains retained authenticated peer connections after HTTP request
     /// admission has stopped, then the receiver-hook work that peer responses
     /// deliberately did not wait for. Individual request guards remain
@@ -300,6 +310,7 @@ impl StorageAndNudgeRouter {
             source_preflight,
         )
         .await?;
+        crate::task_telemetry::project_task_events(&self.task_telemetry, &execution.task_events);
         let mut prepared = execution.operation?;
         let newly_persisted = prepared.is_newly_persisted();
         let canonical_request = prepared.outbound_request();
@@ -499,6 +510,7 @@ impl StorageAndNudgeRouter {
                         &dispatch,
                         atm_core::boundary::PromptTrigger::Steer,
                         dispatch.event.message_id.timestamp(),
+                        &self.task_telemetry,
                     )
                     .await;
                 }
@@ -599,28 +611,35 @@ impl StorageAndNudgeRouter {
             ));
         }
         let runtime = self.service_runtime.clone();
-        self.control_path_sync_bridge
+        let task_id = request.task_id.clone();
+        let committed = self
+            .control_path_sync_bridge
             .run(deadline, move || {
-                let record = runtime
-                    .task_store()?
-                    .move_task(
-                        &request.caller_team,
-                        &request.task_id,
-                        &request.caller_identity,
-                        &request.target,
-                        atm_core::types::IsoTimestamp::now(),
-                    )?
-                    .operation?;
-                Ok(ApiResponse::new(ResponseEnvelope::TaskMove(
-                    TaskMoveOutcome {
-                        task_id: request.task_id,
-                        assignee: record.assignee,
-                        from: record.from,
-                        to: record.to,
-                    },
-                )))
+                runtime.task_store()?.move_task(
+                    &request.caller_team,
+                    &request.task_id,
+                    &request.caller_identity,
+                    &request.target,
+                    atm_core::types::IsoTimestamp::now(),
+                )
             })
-            .await
+            .await?;
+        // A successful move carries its row in the record; the carrier holds
+        // only a committed rejection audit.
+        let mut rows = committed.task_events;
+        if let Ok(record) = &committed.operation {
+            rows.push(record.event.clone());
+        }
+        crate::task_telemetry::project_task_events(&self.task_telemetry, &rows);
+        let record = committed.operation?;
+        Ok(ApiResponse::new(ResponseEnvelope::TaskMove(
+            TaskMoveOutcome {
+                task_id,
+                assignee: record.assignee,
+                from: record.from,
+                to: record.to,
+            },
+        )))
     }
 
     async fn doctor(
@@ -1100,6 +1119,8 @@ pub(crate) fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Resu
 
 #[cfg(test)]
 pub(crate) mod tests {
+    mod bd3_task_telemetry;
+
     use std::fs;
     use std::future::Future;
     use std::num::{NonZeroU16, NonZeroUsize};
@@ -2486,6 +2507,7 @@ pub(crate) mod tests {
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
+            &atm_runtime::TaskTelemetryRuntime::disabled(),
         )
         .await;
 
@@ -4576,6 +4598,7 @@ pub(crate) mod tests {
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
+            &atm_runtime::TaskTelemetryRuntime::disabled(),
         )
         .await;
 
@@ -4606,6 +4629,7 @@ pub(crate) mod tests {
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
+            &atm_runtime::TaskTelemetryRuntime::disabled(),
         )
         .await;
 
@@ -4659,6 +4683,7 @@ pub(crate) mod tests {
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
+            &atm_runtime::TaskTelemetryRuntime::disabled(),
         )
         .await;
         release.store(true, Ordering::Release);
@@ -4699,6 +4724,7 @@ pub(crate) mod tests {
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
+            &atm_runtime::TaskTelemetryRuntime::disabled(),
         )
         .await;
         timer.await.expect("independent timer joins");

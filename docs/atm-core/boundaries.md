@@ -500,6 +500,9 @@ Notes:
 - `atm-core` provides only `NoopTaskTelemetrySink`; `atm-runtime` composes
   through `TaskTelemetryRuntime::start` and is the sole holder and caller of the
   sink; `atm-observability` owns the OpenTelemetry exporting implementation.
+- `references.forbidden` rejects `NoopTaskTelemetrySink` outside `atm-core`
+  and the composition root: callers that want no export use
+  `TaskTelemetryRuntime::disabled`.
 - Records carry typed task-ledger and handoff facts only. Message bodies,
   template variables and free-form detail are forbidden.
 - Export is best effort. A full queue, timeout, rejection, exporter failure,

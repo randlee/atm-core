@@ -1065,6 +1065,17 @@ mod tests {
             unreachable!("task-store absence test does not write messages")
         }
 
+        fn admit_message_with_provenance(
+            &self,
+            _message: &atm_storage::Message,
+            _provenance: atm_storage::MessageWriteOrigin,
+        ) -> Result<
+            atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>,
+            crate::error::AtmError,
+        > {
+            unreachable!("task-store absence test does not admit messages")
+        }
+
         fn save_messages_atomically(
             &self,
             _messages: &[atm_storage::Message],
