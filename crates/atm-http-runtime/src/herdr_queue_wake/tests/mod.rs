@@ -2744,6 +2744,15 @@ impl atm_storage::MessageStore for UnusedMailStore {
         unreachable!("herdr candidate test never touches the mail store boundary")
     }
 
+    fn admit_message_with_provenance(
+        &self,
+        _message: &atm_storage::Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        unreachable!("herdr candidate test never touches the mail store boundary")
+    }
+
     fn save_messages_atomically(&self, _messages: &[atm_storage::Message]) -> Result<(), AtmError> {
         unreachable!("herdr candidate test never touches the mail store boundary")
     }
@@ -2776,6 +2785,16 @@ impl atm_storage::contract::sealed::Sealed for CountingMessageStore {}
 impl atm_storage::MessageStore for CountingMessageStore {
     fn save_message(&self, message: &atm_storage::Message) -> Result<(), AtmError> {
         self.inner.save_message(message)
+    }
+
+    fn admit_message_with_provenance(
+        &self,
+        message: &atm_storage::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        self.inner
+            .admit_message_with_provenance(message, provenance)
     }
 
     fn save_messages_atomically(&self, messages: &[atm_storage::Message]) -> Result<(), AtmError> {

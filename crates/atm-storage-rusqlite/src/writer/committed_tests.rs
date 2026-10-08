@@ -140,3 +140,95 @@ fn bd2_rejection_reply_is_not_sent_before_outer_commit() {
     .unwrap();
     assert_eq!(returned.task_events, persisted);
 }
+
+fn draft_names() -> (
+    atm_storage::TeamName,
+    atm_storage::TaskId,
+    atm_storage::AgentName,
+    atm_storage::IsoTimestamp,
+) {
+    (
+        "atm-test".parse().unwrap(),
+        "DRAFT".parse().unwrap(),
+        "alice".parse().unwrap(),
+        atm_storage::IsoTimestamp::now(),
+    )
+}
+
+#[test]
+fn task_event_draft_persists_typed_outcome_marker_and_detail_in_their_columns() {
+    let (target, connection, _cache) = fixture();
+    let (team, task_id, agent, at) = draft_names();
+    let row = task_ops::append_task_event(
+        &connection,
+        &target,
+        &task_ops::TaskEventDraft {
+            team: &team,
+            task_id: &task_id,
+            assignee: &agent,
+            at: &at,
+            event: atm_storage::TaskEventKind::Reminded,
+            from_state: Some(atm_storage::TaskStateTag::Assigned),
+            to_state: Some(atm_storage::TaskStateTag::Assigned),
+            close_outcome: None,
+            actor: &agent,
+            message_id: None,
+            outcome: Some(atm_storage::ReminderOutcome::Blocked),
+            marker: Some(atm_storage::TaskEventMarker::AssignmentMissing),
+            detail: Some("note"),
+        },
+    )
+    .unwrap();
+    assert_eq!(row.outcome, Some(atm_storage::ReminderOutcome::Blocked));
+    assert_eq!(
+        row.marker,
+        Some(atm_storage::TaskEventMarker::AssignmentMissing)
+    );
+    assert_eq!(row.detail.as_deref(), Some("note"));
+    let stored: (String, String, String) = connection
+        .query_row(
+            "SELECT outcome, marker, detail FROM task_events WHERE task_id = 'DRAFT'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        stored,
+        (
+            "blocked".to_owned(),
+            "assignment_missing".to_owned(),
+            "note".to_owned()
+        )
+    );
+}
+
+#[test]
+fn task_event_draft_rejects_an_invalid_state_before_inserting() {
+    let (target, connection, _cache) = fixture();
+    let (team, task_id, agent, at) = draft_names();
+    let error = task_ops::append_task_event(
+        &connection,
+        &target,
+        &task_ops::TaskEventDraft {
+            team: &team,
+            task_id: &task_id,
+            assignee: &agent,
+            at: &at,
+            event: atm_storage::TaskEventKind::Completed,
+            from_state: Some(atm_storage::TaskStateTag::Active),
+            to_state: Some(atm_storage::TaskStateTag::Complete),
+            close_outcome: None,
+            actor: &agent,
+            message_id: None,
+            outcome: None,
+            marker: None,
+            detail: None,
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+    let count: i64 = connection
+        .query_row("SELECT COUNT(*) FROM task_events", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(count, 0, "no row is written for a rejected state");
+}

@@ -2,8 +2,8 @@
 
 use super::stmt_cache::WriterStatementCache;
 use super::task_ops::{
-    TaskMessageResult, acknowledge_assignment, append_task_event, load_task_row, queue_order,
-    renumber_queue,
+    TaskEventDraft, TaskMessageResult, acknowledge_assignment, append_task_event, load_task_row,
+    queue_order, renumber_queue,
 };
 use super::task_rejection::{task_not_found, task_stale_counterparty};
 use super::task_report::drop_task_link_from_mail;
@@ -97,19 +97,21 @@ fn deliver_rejected_close_report(
     let event = append_task_event(
         connection,
         target,
-        &record.team,
-        task_id,
-        &row.assignee,
-        &IsoTimestamp::now(),
-        TaskEventKind::Rejected,
-        Some(row.state.tag()),
-        Some(row.state.tag()),
-        row.state.close_outcome(),
-        &record.envelope.from,
-        record.envelope.message_id,
-        None,
-        None,
-        Some(error.message()),
+        &TaskEventDraft {
+            team: &record.team,
+            task_id,
+            assignee: &row.assignee,
+            at: &IsoTimestamp::now(),
+            event: TaskEventKind::Rejected,
+            from_state: Some(row.state.tag()),
+            to_state: Some(row.state.tag()),
+            close_outcome: row.state.close_outcome(),
+            actor: &record.envelope.from,
+            message_id: record.envelope.message_id,
+            outcome: None,
+            marker: None,
+            detail: Some(error.message()),
+        },
     )?;
     Ok(TaskMessageResult::RejectedReportDelivered {
         error: AtmError::new(
@@ -151,19 +153,21 @@ fn persist_task_close(
     append_task_event(
         connection,
         target,
-        &record.team,
-        task_id,
-        &row.assignee,
-        &record.envelope.timestamp,
-        close_event_kind(outcome),
-        Some(row.state.tag()),
-        Some(next_state.tag()),
-        Some(outcome),
-        &record.envelope.from,
-        record.envelope.message_id,
-        None,
-        None,
-        reason,
+        &TaskEventDraft {
+            team: &record.team,
+            task_id,
+            assignee: &row.assignee,
+            at: &record.envelope.timestamp,
+            event: close_event_kind(outcome),
+            from_state: Some(row.state.tag()),
+            to_state: Some(next_state.tag()),
+            close_outcome: Some(outcome),
+            actor: &record.envelope.from,
+            message_id: record.envelope.message_id,
+            outcome: None,
+            marker: None,
+            detail: reason,
+        },
     )
 }
 
