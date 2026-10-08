@@ -608,23 +608,27 @@ fn print_doctor_environment(report: &DoctorReport) {
 }
 
 fn print_doctor_findings(report: &DoctorReport) {
-    if report.findings.is_empty() {
-        return;
+    print!("{}", render_doctor_findings(&report.findings));
+}
+
+fn render_doctor_findings(findings: &[atm_core::doctor::DoctorFinding]) -> String {
+    if findings.is_empty() {
+        return String::new();
     }
 
-    println!();
-    println!("Findings:");
-    for finding in &report.findings {
-        println!(
-            "  [{}] {} {}",
+    let mut output = String::from("\nFindings:\n");
+    for finding in findings {
+        output.push_str(&format!(
+            "  [{}] {} {}\n",
             render_finding_severity(finding.severity),
             finding.code,
             finding.message
-        );
+        ));
         if let Some(remediation) = &finding.remediation {
-            println!("    remediation: {remediation}");
+            output.push_str(&format!("    remediation: {remediation}\n"));
         }
     }
+    output
 }
 
 fn print_doctor_escalation_recipients(report: &DoctorReport) {
@@ -1120,10 +1124,7 @@ mod tests {
         PeerConfigDoctorReport,
     };
     use atm_core::error_codes::AtmErrorCode;
-    use atm_core::observability::{
-        AtmObservabilityHealth, AtmObservabilityHealthState, AtmTelemetryExportHealth,
-        AtmTelemetryExportState,
-    };
+    use atm_core::observability::AtmObservabilityHealth;
     use atm_core::team_admin::MembersList;
     use atm_core::types::HostName;
     use serde_json::json;
@@ -1131,38 +1132,105 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        render_bootstrap_trace_section, render_doctor_alias_mismatches, render_doctor_herdr,
-        render_doctor_peer_config, render_doctor_rosters, render_observability_health,
-        render_send_stdout, render_warnings_to_stderr,
+        render_bootstrap_trace_section, render_doctor_alias_mismatches, render_doctor_findings,
+        render_doctor_herdr, render_doctor_peer_config, render_doctor_rosters,
+        render_observability_health, render_send_stdout, render_warnings_to_stderr,
     };
 
+    const CREDENTIAL_SENTINEL: &str = "Bearer doctor-fixture-secret";
+
+    /// Doctor observability JSON whose export object also carries a credential
+    /// sentinel, so every assertion that it is absent checks a real input.
+    fn doctor_observability_with_export(export: serde_json::Value) -> AtmObservabilityHealth {
+        let mut export = export;
+        export["authorization"] = json!(CREDENTIAL_SENTINEL);
+        serde_json::from_value(json!({
+            "active_log_path": null,
+            "logging_state": "healthy",
+            "query_state": "healthy",
+            "maintenance": null,
+            "diagnostic": null,
+            "detail": null,
+            "export": export,
+        }))
+        .expect("doctor observability fixture")
+    }
+
     #[test]
-    fn doctor_export_rendering_includes_nonzero_counters_without_credentials() {
-        let health = AtmObservabilityHealth {
-            active_log_path: None,
-            logging_state: AtmObservabilityHealthState::Healthy,
-            query_state: Some(AtmObservabilityHealthState::Healthy),
-            maintenance: None,
-            diagnostic: None,
-            jsonl: Default::default(),
-            timeline: Default::default(),
-            degraded: Vec::new(),
-            detail: None,
-            export: Some(AtmTelemetryExportHealth {
-                state: AtmTelemetryExportState::Degraded,
-                endpoint: Some("https://collector.example:4317".into()),
-                protocol: Some(atm_core::TelemetryExportProtocol::Grpc),
-                emitted: 2,
-                dropped_full: 1,
-                dropped_timeout: 0,
-                dropped_failure: 0,
-                dropped_shutdown: 0,
-                last_failure: None,
-            }),
-        };
+    fn doctor_text_snapshot_for_each_export_state_renders_core_finding_without_credentials() {
+        const PREAMBLE: &str = "Active log path: <unavailable>\n\
+            Observability: jsonl forwarded=0 queue_full_dropped=0 reentrant_dropped=0; \
+            timeline written=0 queue_full_dropped=0 persist_error_dropped=0\n";
+        const OK_FINDING: &str = "\nFindings:\n  [info] ATM_OBSERVABILITY_HEALTH_OK \
+            shared observability active at <unavailable>; logging health is healthy \
+            and query readiness is healthy.\n";
+        const EXPORT_FINDING: &str = "\nFindings:\n  [warning] ATM_OBSERVABILITY_HEALTH_OK \
+            shared observability active at <unavailable>; logging health is healthy \
+            and query readiness is healthy.\n    remediation: Confirm ATM_OTEL_ENDPOINT \
+            is reachable; see docs/user-documents/doctor-and-log.md.\n";
+        let cases = [
+            (
+                json!({"state": "inert", "endpoint": null, "protocol": null,
+                    "emitted": 0, "dropped_full": 0, "dropped_timeout": 0,
+                    "dropped_failure": 0, "dropped_shutdown": 0, "last_failure": null}),
+                "observability.export: state=inert endpoint=<none> protocol=<none>\n",
+                OK_FINDING,
+            ),
+            (
+                json!({"state": "healthy", "endpoint": "https://collector.example:4317",
+                    "protocol": "grpc", "emitted": 0, "dropped_full": 0, "dropped_timeout": 0,
+                    "dropped_failure": 0, "dropped_shutdown": 0, "last_failure": null}),
+                "observability.export: state=healthy endpoint=https://collector.example:4317 protocol=grpc\n",
+                OK_FINDING,
+            ),
+            (
+                json!({"state": "degraded", "endpoint": "https://collector.example:4317",
+                    "protocol": "grpc", "emitted": 2, "dropped_full": 1, "dropped_timeout": 0,
+                    "dropped_failure": 0, "dropped_shutdown": 0, "last_failure": "rejected"}),
+                "observability.export: state=degraded endpoint=https://collector.example:4317 protocol=grpc emitted=2 dropped_full=1 dropped_timeout=0 dropped_failure=0 dropped_shutdown=0 last_failure=rejected\n",
+                EXPORT_FINDING,
+            ),
+            (
+                json!({"state": "unavailable", "endpoint": "https://collector.example:4317",
+                    "protocol": "grpc", "emitted": 2, "dropped_full": 1, "dropped_timeout": 3,
+                    "dropped_failure": 5, "dropped_shutdown": 7, "last_failure": "timed_out"}),
+                "observability.export: state=unavailable endpoint=https://collector.example:4317 protocol=grpc emitted=2 dropped_full=1 dropped_timeout=3 dropped_failure=5 dropped_shutdown=7 last_failure=timed_out\n",
+                EXPORT_FINDING,
+            ),
+        ];
+
+        for (export, export_line, findings) in cases {
+            let health = doctor_observability_with_export(export);
+            // The finding is atm-core's single observability finding; the CLI
+            // only renders it.
+            let finding = atm_core::doctor::health::observability_finding(&health);
+            let rendered = format!(
+                "{}{}",
+                render_observability_health(&health),
+                render_doctor_findings(&[finding])
+            );
+
+            assert_eq!(rendered, format!("{PREAMBLE}{export_line}{findings}"));
+            assert!(!rendered.contains(CREDENTIAL_SENTINEL), "{rendered}");
+            assert!(!rendered.contains("authorization"), "{rendered}");
+        }
+    }
+
+    #[test]
+    fn doctor_text_without_export_renders_no_export_line() {
+        let health: AtmObservabilityHealth = serde_json::from_value(json!({
+            "active_log_path": null,
+            "logging_state": "healthy",
+            "query_state": "healthy",
+            "maintenance": null,
+            "diagnostic": null,
+            "detail": null,
+        }))
+        .expect("1.10.0 doctor observability without export");
+
         let rendered = render_observability_health(&health);
-        assert!(rendered.contains("observability.export: state=degraded endpoint=https://collector.example:4317 protocol=grpc emitted=2 dropped_full=1"));
-        assert!(!rendered.contains("AUTH_HEADER"));
+
+        assert!(!rendered.contains("observability.export"), "{rendered}");
     }
 
     #[test]

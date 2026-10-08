@@ -10,6 +10,7 @@ pub mod doctor_projection;
 mod legacy_storage_adapters;
 pub mod mailbox_runtime;
 pub mod task_telemetry;
+mod telemetry_limits;
 pub mod workflow_telemetry;
 
 pub use atm_storage::{

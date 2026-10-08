@@ -147,6 +147,92 @@ fn bd2_rejection_reply_is_not_sent_before_outer_commit() {
     );
 }
 
+fn assignment(key: &str, task: &str) -> atm_storage::Message {
+    let mut message = super::tests::message(key);
+    message.envelope.task_id = Some(task.parse().unwrap());
+    message.envelope.message_id = Some(AtmMessageId::new());
+    message
+}
+
+/// Runs one writer batch and returns each reply in submission order.
+fn replies(
+    target: &SharedDbTarget,
+    connection: &mut SqliteConnection,
+    cache: &mut stmt_cache::WriterStatementCache,
+    messages: Vec<atm_storage::Message>,
+) -> Vec<atm_storage::CommittedTaskWrite<WriteOpResult>> {
+    let (queued, receivers): (Vec<_>, Vec<_>) = messages
+        .into_iter()
+        .map(super::tests::queued_upsert)
+        .unzip();
+    process_batch(target, connection, cache, queued);
+    receivers
+        .into_iter()
+        .map(|receiver| receiver.recv().unwrap().unwrap())
+        .collect()
+}
+
+/// The admission rows a successful upsert carries in its own result.
+fn admitted_rows(committed: &atm_storage::CommittedTaskWrite<WriteOpResult>) -> usize {
+    match &committed.operation {
+        Ok(WriteOpResult::UpsertMessage { task_events, .. }) => task_events.len(),
+        Ok(other) => panic!("unexpected upsert result: {other:?}"),
+        Err(_) => 0,
+    }
+}
+
+/// Positive: on every writer path (single admission, shared-savepoint group,
+/// group replayed after a member's rejection) a successful admission returns
+/// its rows only in `UpsertMessage::task_events` and a rejected one only in
+/// the outer carrier, so the two carriers are never both non-empty.
+/// Negative: the rejected close returns exactly its one committed audit row.
+/// No-Claim: covers message admissions only; the move and direct-audit owners
+/// are pinned by `tests/task_identity/committed_outcomes.rs`.
+#[test]
+fn committed_rows_have_exactly_one_owner_on_every_admission_path() {
+    let (target, mut connection, mut cache) = fixture();
+    let single = replies(
+        &target,
+        &mut connection,
+        &mut cache,
+        vec![assignment("atm:f10-single", "SINGLE")],
+    );
+    let group = replies(
+        &target,
+        &mut connection,
+        &mut cache,
+        vec![
+            assignment("atm:f10-group-a", "GROUP-A"),
+            assignment("atm:f10-group-b", "GROUP-B"),
+        ],
+    );
+    let replayed = replies(
+        &target,
+        &mut connection,
+        &mut cache,
+        vec![assignment("atm:f10-replayed", "REPLAYED"), missing_close()],
+    );
+    for committed in single.iter().chain(&group).chain(&replayed[..1]) {
+        assert!(committed.operation.is_ok());
+        assert!(
+            committed.task_events.is_empty(),
+            "success rows have one owner"
+        );
+        assert!(admitted_rows(committed) > 0, "assignment rows are carried");
+    }
+    let rejected = &replayed[1];
+    assert_eq!(
+        rejected.operation.as_ref().unwrap_err().code(),
+        AtmErrorCode::TaskNotFound
+    );
+    assert_eq!(admitted_rows(rejected), 0);
+    assert_eq!(rejected.task_events.len(), 1);
+    assert_eq!(
+        rejected.task_events[0].event,
+        atm_storage::TaskEventKind::Rejected
+    );
+}
+
 fn draft_names() -> (
     atm_storage::TeamName,
     atm_storage::TaskId,

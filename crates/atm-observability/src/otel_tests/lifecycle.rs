@@ -83,7 +83,11 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
             .with(ExportFailureObserved(observed.clone())),
     );
     let _subscriber = tracing::dispatcher::set_default(&dispatch);
-    let setup = setup_with_limits(&config(&endpoint), 64, Duration::from_millis(50)).unwrap();
+    // A one-span batch exports the first span at once through the SDK's
+    // full-batch path. The scheduled path first fires at 2x EXPORT_INTERVAL
+    // (the SDK interval sleeps before its first tick, then skips it), which
+    // a loaded runner can push past the deadline below.
+    let setup = setup_with_limits(&config(&endpoint), 1, Duration::from_millis(50)).unwrap();
     setup
         .0
         .sink
@@ -230,8 +234,10 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
 #[tokio::test]
 async fn abandoning_shutdown_wait_does_not_abort_blocking_call_or_clear_terminal_timeout() {
     let receiver = Receiver::start(true).await;
+    // The export timeout outlives the test's hold, so only the receiver's
+    // release signal lets the blocking shutdown finish.
     let setup =
-        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_secs(30)).unwrap();
     for _ in 0..64 {
         setup.2.tracer("abandoned-wait").start("nonempty").end();
     }
@@ -249,20 +255,27 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_call_or_clear_terminal
         evidence.observe_result(traces.shutdown());
         let _ = finished.send(());
     });
+    // The export is held by the receiver, so shutdown cannot complete yet.
     assert!(
-        tokio::time::timeout(Duration::from_millis(1), &mut call)
+        tokio::time::timeout(Duration::from_millis(200), &mut call)
             .await
             .is_err()
     );
+    assert_eq!(receiver.capture.finished.load(Ordering::SeqCst), 0);
     diagnostics.shutdown_wait_timed_out();
     // Cancelling the caller's wait cannot abort spawn_blocking. Retain and
     // eventually join its handle; BD6 separately proves actual process exit.
     call.abort();
-    tokio::time::timeout(Duration::from_secs(1), finished_rx)
+    receiver.capture.release();
+    tokio::time::timeout(Duration::from_secs(10), finished_rx)
         .await
         .unwrap()
         .unwrap();
     call.await.unwrap();
+    receiver
+        .capture
+        .wait(|| receiver.capture.finished.load(Ordering::SeqCst) >= 1)
+        .await;
     let mut snapshot = health();
     diagnostics.project(&mut snapshot);
     assert_eq!(

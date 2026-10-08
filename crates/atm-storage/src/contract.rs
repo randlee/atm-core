@@ -248,7 +248,9 @@ pub struct MessageAdmissionOutcome {
     /// ordinary mail. Callers must complete ordinary post-write handling
     /// before surfacing this error to the sender.
     pub task_rejection: Option<AtmError>,
-    /// Task-ledger rows appended atomically with this message admission.
+    /// Task-ledger rows appended atomically with this successful admission.
+    /// The enclosing `CommittedTaskWrite::task_events` is then empty; it holds
+    /// rows only for a rejected operation.
     pub task_events: Vec<TaskEventRow>,
 }
 
@@ -730,14 +732,7 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         &self,
         message: &Message,
         provenance: MessageWriteOrigin,
-    ) -> Result<crate::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
-        let _ = provenance;
-        self.save_message_if_absent(message)
-            .map(|existing| crate::CommittedTaskWrite {
-                operation: Ok(MessageAdmissionOutcome::passive(existing)),
-                task_events: Vec::new(),
-            })
-    }
+    ) -> Result<crate::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError>;
     /// Commits related immutable mailbox records as one durable unit.
     ///
     /// AI.31 uses this for an acknowledgement reply plus the acknowledged
@@ -810,15 +805,7 @@ pub trait AsyncMessageStore: MessageStore {
         &self,
         message: Message,
         provenance: MessageWriteOrigin,
-    ) -> Result<crate::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
-        let _ = provenance;
-        self.save_message_if_absent_async(message)
-            .await
-            .map(|existing| crate::CommittedTaskWrite {
-                operation: Ok(MessageAdmissionOutcome::passive(existing)),
-                task_events: Vec::new(),
-            })
-    }
+    ) -> Result<crate::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError>;
 
     /// Atomically admits a mailbox record and its template decomposition on
     /// the backend-owned async writer lane.
@@ -1425,6 +1412,14 @@ mod tests {
     impl MessageStore for DummyStore {
         fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
             Ok(())
+        }
+
+        fn admit_message_with_provenance(
+            &self,
+            _message: &Message,
+            _provenance: crate::MessageWriteOrigin,
+        ) -> Result<crate::CommittedTaskWrite<crate::MessageAdmissionOutcome>, AtmError> {
+            unreachable!("contract test double does not admit messages")
         }
 
         fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
