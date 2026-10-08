@@ -194,6 +194,7 @@ fn stop_to_exit(mode: &str, endpoint: Option<&str>) -> Duration {
 /// Positive: with the task queue full and a collector that never answers,
 /// the daemon process exits within the 10s force SLO.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::serial(slo)]
 async fn process_exits_within_ten_seconds_with_full_queue_and_stalled_collector() {
     let stalled = Receiver::start(true).await;
     let endpoint = stalled.endpoint.clone();
@@ -218,6 +219,7 @@ async fn process_exits_within_ten_seconds_with_full_queue_and_stalled_collector(
 /// Positive: with a healthy collector the daemon process exits within the
 /// 5s clean-stop SLO, after flushing its export.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::serial(slo)]
 async fn process_exits_within_five_seconds_when_clean() {
     let healthy = Receiver::start(false).await;
     let endpoint = healthy.endpoint.clone();
@@ -293,6 +295,7 @@ fn final_record_child() {
 /// the collector received it before the logger provider stopped. Omitting the
 /// retained-logger drain loses it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
 async fn final_lifecycle_record_survives_process_exit() {
     let healthy = Receiver::start(false).await;
     // The logger root is the log directory's parent, as for the host `logs`.

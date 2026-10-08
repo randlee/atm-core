@@ -486,6 +486,7 @@ fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId
 /// Reminder, lead notification and reminder reset come from the composed
 /// queue-wake pump and are proven in `queue_wake.rs`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::parallel(slo)]
 async fn running_daemon_exports_each_committed_task_event_to_the_collector() {
     let receiver = Receiver::start(false).await;
     let daemon = Daemon::start(endpoint_env(&receiver.endpoint)).await;
@@ -593,6 +594,7 @@ async fn running_daemon_exports_each_committed_task_event_to_the_collector() {
 /// and workflow runtimes disabled and reports `Inert`.
 /// Negative: task writes still succeed and nothing is admitted for export.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
 async fn absent_endpoint_composes_no_exporter_and_reports_inert() {
     let daemon = Daemon::start(FakeEnvSource::empty()).await;
     assert!(!daemon.observability.export_providers_present_for_test());
@@ -621,6 +623,7 @@ async fn absent_endpoint_composes_no_exporter_and_reports_inert() {
 /// file logging and `Unavailable`/`ConfigInvalid` health in doctor JSON.
 /// Negative: the rejected values never appear in the doctor report.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
 async fn invalid_export_configuration_keeps_the_daemon_operational() {
     let cases = [
         FakeEnvSource::new([
@@ -703,6 +706,7 @@ async fn doctor_until(
 /// dispatchers in tracing's per-callsite interest cache and can miss the SDK
 /// failure event entirely.
 #[test]
+#[serial_test::serial(slo)]
 fn unreachable_collector_degrades_health_without_changing_task_results() {
     exit::run_child_scenario(UNREACHABLE_CHILD);
 }
@@ -757,7 +761,7 @@ fn unreachable_collector_child() {
             .expect("shutdown result is the listener's");
         assert!(
             started.elapsed() <= Duration::from_secs(5),
-            "{:?}",
+            "daemon shutdown took {:?}, over the 5s clean-stop SLO",
             started.elapsed()
         );
     });
@@ -769,6 +773,7 @@ fn unreachable_collector_child() {
 /// task results unchanged, and daemon shutdown with a stalled exporter still
 /// returns within the clean-stop SLO, retaining the terminal export failure.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::serial(slo)]
 async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
     let stalled = Receiver::start(true).await;
     let daemon = Daemon::start(endpoint_env(&stalled.endpoint)).await;
@@ -797,7 +802,10 @@ async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
         .await
         .expect("shutdown result is the listener's");
     let elapsed = started.elapsed();
-    assert!(elapsed <= Duration::from_secs(5), "{elapsed:?}");
+    assert!(
+        elapsed <= Duration::from_secs(5),
+        "daemon shutdown with a stalled exporter took {elapsed:?}, over the 5s clean-stop SLO"
+    );
     // The SDK's own 400ms export timeout or the 1s wait bound ends the step;
     // either way the terminal failure is retained.
     let health = observability.export_health_for_test();
@@ -810,6 +818,7 @@ async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
 /// outcome; every caller returns by its own deadline even when the
 /// collector never answers, and a later caller sees the retained failure.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::parallel(slo)]
 async fn concurrent_and_cancelled_export_shutdown_obey_their_deadlines() {
     let stalled = Receiver::start(true).await;
     let root = tempfile::tempdir().expect("root");
