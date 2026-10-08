@@ -26,7 +26,7 @@ pub(super) fn policy() -> RetainedLogPolicy {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_alive() {
     for destination in [
         LogDestination::File,
@@ -64,7 +64,7 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
         let bridge = TracingBridgeLayer::new(logger.clone());
         let dispatch = tracing::Dispatch::new(tracing_subscriber::registry().with(bridge));
         let subscriber = tracing::dispatcher::set_default(&dispatch);
-        sc_observability_log::info!(target: "fixture.direct", "one direct macro");
+        sc_observability_log::event!(name: "fixture.direct", target: "fixture.direct", sc_observability_log::Level::INFO, token = "raw-secret", "one direct macro");
         sc_observability_log::debug!(target: "fixture.filtered", "must not be exported");
         sc_observability_log::event!(name: "fixture.secret", target: "fixture.secret", sc_observability_log::Level::DEBUG, token = "raw-secret");
         tracing::warn!(target: "fixture.tracing", code = "FIXTURE_TRACING", token = "raw-secret", "one tracing input");

@@ -159,3 +159,105 @@ async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() 
     assert!(trace.unwrap().is_err() || log.unwrap().is_err() || metric.unwrap().is_err());
     receiver.stop().await;
 }
+
+#[tokio::test]
+async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabricated_losses() {
+    let receiver = Receiver::start(true).await;
+    let setup =
+        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+    let tracer = setup.2.tracer("full-backlog");
+    let logger = setup.3.logger("full-backlog");
+    // No yield: saturate each SDK bounded queue before its worker can consume.
+    for _ in 0..1024 {
+        tracer.start("queued").end();
+        let mut log = logger.create_log_record();
+        log.set_body("queued".into());
+        logger.emit(log);
+    }
+    let diagnostics = Arc::new(ExportDiagnostics::default());
+    let (task, workflow, traces, logs, metrics) = setup;
+    drop(task);
+    drop(workflow);
+    let duplicate = traces.clone();
+    let started = std::time::Instant::now();
+    let results = tokio::join!(
+        tokio::task::spawn_blocking(move || traces.shutdown()),
+        tokio::task::spawn_blocking(move || duplicate.shutdown()),
+        tokio::task::spawn_blocking(move || logs.shutdown()),
+        tokio::task::spawn_blocking(move || metrics.shutdown())
+    );
+    assert!(started.elapsed() < Duration::from_secs(1));
+    let results = [
+        results.0.unwrap(),
+        results.1.unwrap(),
+        results.2.unwrap(),
+        results.3.unwrap(),
+    ];
+    assert!(results.iter().any(Result::is_err));
+    for result in results {
+        diagnostics.observe_result(result);
+    }
+    diagnostics.observe_result(Ok(()));
+    let mut snapshot = health();
+    diagnostics.project(&mut snapshot);
+    assert!(snapshot.last_failure.is_some());
+    assert_eq!(
+        (
+            snapshot.dropped_full,
+            snapshot.dropped_failure,
+            snapshot.dropped_shutdown
+        ),
+        (0, 0, 0),
+        "SDK quantities are unknown, never copied from synthetic estimates"
+    );
+    receiver.stop().await;
+}
+
+#[tokio::test]
+async fn abandoning_shutdown_wait_does_not_abort_blocking_call_or_clear_terminal_timeout() {
+    let receiver = Receiver::start(true).await;
+    let setup =
+        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+    for _ in 0..64 {
+        setup.2.tracer("abandoned-wait").start("nonempty").end();
+    }
+    receiver
+        .capture
+        .wait(|| receiver.capture.started.load(Ordering::SeqCst) >= 1)
+        .await;
+    let (task, workflow, traces, logs, metrics) = setup;
+    drop(task);
+    drop(workflow);
+    let diagnostics = Arc::new(ExportDiagnostics::default());
+    let evidence = diagnostics.clone();
+    let (finished, finished_rx) = tokio::sync::oneshot::channel();
+    let mut call = tokio::task::spawn_blocking(move || {
+        evidence.observe_result(traces.shutdown());
+        let _ = finished.send(());
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(1), &mut call)
+            .await
+            .is_err()
+    );
+    diagnostics.shutdown_wait_timed_out();
+    // Cancelling the caller's wait cannot abort spawn_blocking. Retain and
+    // eventually join its handle; BD6 separately proves actual process exit.
+    call.abort();
+    tokio::time::timeout(Duration::from_secs(1), finished_rx)
+        .await
+        .unwrap()
+        .unwrap();
+    call.await.unwrap();
+    let mut snapshot = health();
+    diagnostics.project(&mut snapshot);
+    assert_eq!(
+        snapshot.last_failure,
+        Some(AtmTelemetryExportFailure::ShutdownTimedOut)
+    );
+    let _ = tokio::join!(
+        tokio::task::spawn_blocking(move || logs.shutdown()),
+        tokio::task::spawn_blocking(move || metrics.shutdown())
+    );
+    receiver.stop().await;
+}

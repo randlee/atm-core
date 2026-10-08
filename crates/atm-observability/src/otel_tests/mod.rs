@@ -1,3 +1,4 @@
+mod ambient;
 mod lifecycle;
 mod receiver;
 mod routing;
@@ -24,7 +25,20 @@ fn config(endpoint: &str) -> TelemetryExportConfig {
     .unwrap()
 }
 
-fn record(task: &str, kind: TaskTelemetryKind, seq: u64, second: u64) -> TaskTelemetryRecord {
+#[test]
+fn setup_without_tokio_returns_safe_error_instead_of_panicking() {
+    let diagnostics = crate::ExportDiagnostics::default();
+    let result = crate::setup_telemetry(&config("http://127.0.0.1:4317"), &diagnostics);
+    assert!(result.is_err());
+    assert!(!result.err().unwrap().to_string().contains("fixture-auth"));
+}
+
+pub(crate) fn record(
+    task: &str,
+    kind: TaskTelemetryKind,
+    seq: u64,
+    second: u64,
+) -> TaskTelemetryRecord {
     serde_json::from_value(serde_json::json!({
         "kind": kind, "team": "telemetry-fixture", "task_id": task,
         "assignee": "worker", "actor": "daemon", "seq": seq,
@@ -47,6 +61,47 @@ async fn shutdown(setup: TelemetrySetup) {
     results.0.unwrap().unwrap();
     results.1.unwrap().unwrap();
     results.2.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn workflow_uses_durable_native_spans_without_inventing_incomplete_duration() {
+    let receiver = Receiver::start(false).await;
+    let setup =
+        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+    for completed in [true, false] {
+        let record = serde_json::from_value(serde_json::json!({
+            "observation": if completed { "Completed" } else { "Incomplete" },
+            "scope_kind": "sprint", "scope_id": "bd-fixture", "state": "done",
+            "stage": "dev", "transition": "complete", "iteration": null,
+            "start_message_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+            "start_timestamp": "2026-01-01T00:00:01Z",
+            "end_message_id": completed.then_some("01ARZ3NDEKTSV4RRFFQ69G5FAW"),
+            "end_timestamp": completed.then_some("2026-01-01T00:00:04Z"),
+            "duration_millis": completed.then_some(3000)
+        }))
+        .unwrap();
+        setup.1.sink.emit(record).await.unwrap();
+    }
+    shutdown(setup).await;
+    {
+        let spans = receiver.capture.spans.lock().unwrap();
+        assert_eq!(spans.len(), 2);
+        assert!(spans.iter().all(|span| span.name == "atm.workflow"));
+        assert_eq!(
+            spans[0].end_time_unix_nano - spans[0].start_time_unix_nano,
+            3_000_000_000
+        );
+        assert_eq!(spans[1].end_time_unix_nano, spans[1].start_time_unix_nano);
+        assert_eq!(spans[0].trace_id, spans[1].trace_id);
+        assert_ne!(spans[0].span_id, spans[1].span_id);
+        assert!(
+            spans[0]
+                .attributes
+                .iter()
+                .any(|attribute| attribute.key == "atm.workflow.scope_id")
+        );
+    }
+    receiver.stop().await;
 }
 
 #[tokio::test]
@@ -198,9 +253,9 @@ async fn late_old_close_never_closes_new_assignment_and_missing_start_is_partial
     for (kind, seq, second) in [
         (TaskTelemetryKind::Started, 2, 2),
         (TaskTelemetryKind::Assigned, 1, 1),
+        (TaskTelemetryKind::Started, 5, 5),
         (TaskTelemetryKind::Reassigned, 4, 4),
         (TaskTelemetryKind::Completed, 3, 3),
-        (TaskTelemetryKind::Started, 5, 5),
         (TaskTelemetryKind::Completed, 6, 6),
     ] {
         setup

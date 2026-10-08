@@ -18,7 +18,6 @@ opentelemetry-otlp.workspace = true
 sha2.workspace = true
 tokio.workspace = true
 tonic = { version = "0.14", default-features = false, features = ["transport", "tls-native-roots"] }
-time = { version = "0.3", features = ["parsing"] }
 sc-observability.workspace = true
 sc-observability-types.workspace = true
 serde_json.workspace = true
@@ -26,6 +25,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+tonic = { version = "0.14", default-features = false, features = ["router"] }
 atm-core = { workspace = true, features = ["test-utils"] }
 sc-observability-log.workspace = true
 serial_test = "3"

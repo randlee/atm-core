@@ -45,13 +45,19 @@ pub type TelemetrySetup = (
 /// only runtime teardown drops the SDK tasks and releases blocked receivers.
 ///
 /// # Errors
-/// Native configuration/transport errors retain their concrete source type.
-/// Callers must report a safe configuration diagnostic, never format these
-/// sources into logs because native errors may contain credential values.
+/// Returns the existing safe ATM configuration error. Native source types are
+/// retained privately in diagnostics because they may contain credentials.
 pub fn setup_telemetry(
     config: &TelemetryExportConfig,
-) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
-    setup_with_limits(config, EXPORT_BATCH, EXPORT_TIMEOUT)
+    diagnostics: &crate::ExportDiagnostics,
+) -> Result<TelemetrySetup, atm_core::error::AtmError> {
+    setup_with_limits(config, EXPORT_BATCH, EXPORT_TIMEOUT).map_err(|source| {
+        diagnostics.setup_failed(source);
+        atm_core::error::AtmError::new(
+            atm_core::error::AtmErrorCode::TelemetryExportConfigInvalid,
+            "native OpenTelemetry setup failed; check ATM_OTEL_ENDPOINT and ATM_OTEL_AUTH_HEADER",
+        )
+    })
 }
 
 pub(crate) fn setup_with_limits(
@@ -59,6 +65,7 @@ pub(crate) fn setup_with_limits(
     batch: usize,
     timeout: Duration,
 ) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
+    tokio::runtime::Handle::try_current()?;
     let mut endpoint = Endpoint::from_shared(config.endpoint().to_owned())?.timeout(timeout);
     if config.endpoint().starts_with("https://") {
         endpoint = endpoint.tls_config(ClientTlsConfig::new().with_native_roots())?;
@@ -95,9 +102,51 @@ pub(crate) fn setup_with_limits(
     let resource = Resource::builder_empty()
         .with_service_name(config.service_name().to_owned())
         .build();
-    let tracer = SdkTracerProvider::builder()
-        .with_id_generator(crate::task_exporter::DurableIds)
+    let tracer = tracer_provider(spans, resource.clone(), batch, timeout);
+    let logger = SdkLoggerProvider::builder()
         .with_resource(resource.clone())
+        .with_log_processor(
+            BatchLogProcessor::builder(logs, Tokio)
+                .with_batch_config(
+                    LogBatchConfigBuilder::default()
+                        .with_max_queue_size(EXPORT_QUEUE)
+                        .with_max_export_batch_size(batch)
+                        .with_max_export_timeout(timeout)
+                        .with_scheduled_delay(EXPORT_INTERVAL)
+                        .build(),
+                )
+                .build(),
+        )
+        .build();
+    let meter = meter_provider(metrics, resource, timeout);
+    let sink = Arc::new(crate::task_exporter::TaskExporter::new(
+        tracer.tracer("atm.task"),
+        meter.meter("atm.task"),
+    ));
+    Ok((
+        TaskTelemetrySetup {
+            config: TaskTelemetryConfig::default(),
+            sink: sink.clone(),
+        },
+        WorkflowTelemetrySetup {
+            config: WorkflowTelemetryConfig::default(),
+            sink,
+        },
+        tracer,
+        logger,
+        meter,
+    ))
+}
+
+fn tracer_provider(
+    spans: opentelemetry_otlp::SpanExporter,
+    resource: Resource,
+    batch: usize,
+    timeout: Duration,
+) -> SdkTracerProvider {
+    SdkTracerProvider::builder()
+        .with_id_generator(crate::task_exporter::DurableIds)
+        .with_resource(resource)
         .with_sampler(Sampler::AlwaysOn)
         .with_max_events_per_span(64)
         .with_max_attributes_per_span(32)
@@ -117,23 +166,15 @@ pub(crate) fn setup_with_limits(
                 )
                 .build(),
         )
-        .build();
-    let logger = SdkLoggerProvider::builder()
-        .with_resource(resource.clone())
-        .with_log_processor(
-            BatchLogProcessor::builder(logs, Tokio)
-                .with_batch_config(
-                    LogBatchConfigBuilder::default()
-                        .with_max_queue_size(EXPORT_QUEUE)
-                        .with_max_export_batch_size(batch)
-                        .with_max_export_timeout(timeout)
-                        .with_scheduled_delay(EXPORT_INTERVAL)
-                        .build(),
-                )
-                .build(),
-        )
-        .build();
-    let meter = SdkMeterProvider::builder()
+        .build()
+}
+
+fn meter_provider(
+    metrics: opentelemetry_otlp::MetricExporter,
+    resource: Resource,
+    timeout: Duration,
+) -> SdkMeterProvider {
+    SdkMeterProvider::builder()
         .with_resource(resource)
         .with_view(|instrument: &opentelemetry_sdk::metrics::Instrument| {
             instrument.name().starts_with("atm.task.").then(|| {
@@ -149,22 +190,5 @@ pub(crate) fn setup_with_limits(
                 .with_timeout(timeout)
                 .build(),
         )
-        .build();
-    let sink = Arc::new(crate::task_exporter::TaskExporter::new(
-        tracer.tracer("atm.task"),
-        meter.meter("atm.task"),
-    ));
-    Ok((
-        TaskTelemetrySetup {
-            config: TaskTelemetryConfig::default(),
-            sink: sink.clone(),
-        },
-        WorkflowTelemetrySetup {
-            config: WorkflowTelemetryConfig::default(),
-            sink,
-        },
-        tracer,
-        logger,
-        meter,
-    ))
+        .build()
 }

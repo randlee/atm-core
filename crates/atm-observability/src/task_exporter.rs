@@ -33,6 +33,9 @@ const HISTOGRAM_BUCKETS: &[f64] = &[
 
 /// Native SDK identity policy for durable ATM projections. Context values are
 /// native OTel ids and are scoped synchronously around span construction.
+/// SDK 0.33's SpanBuilder has no id override: build_with_context synchronously
+/// calls both generator methods for a root span. The attach guard below restores
+/// ambient context before returning (and is never held across an await).
 #[derive(Debug)]
 pub(crate) struct DurableIds;
 
@@ -50,17 +53,65 @@ impl IdGenerator for DurableIds {
 struct Assignment {
     generation: Option<u64>,
     assigned: Option<SystemTime>,
-    started: Option<SystemTime>,
+    started: Option<(Option<u64>, SystemTime)>,
     first: SystemTime,
     last: SystemTime,
     highest_seq: Option<u64>,
     closed_through: Option<u64>,
     closed: bool,
-    events: Vec<Event>,
+    events: Vec<(Option<u64>, Event)>,
     bytes: usize,
     attributes: Vec<KeyValue>,
-    start_metric_recorded: bool,
     touched: u64,
+}
+
+impl Assignment {
+    fn new(at: SystemTime, attributes: Vec<KeyValue>, touched: u64) -> Self {
+        Self {
+            generation: None,
+            assigned: None,
+            started: None,
+            first: at,
+            last: at,
+            highest_seq: None,
+            closed_through: None,
+            closed: false,
+            events: Vec::new(),
+            bytes: 0,
+            attributes,
+            touched,
+        }
+    }
+    fn split_future(&mut self, next: &mut Self, generation: Option<u64>, at: SystemTime) {
+        // The new assignment row itself can arrive after its start.
+        // Move only sequence-proven future events into that generation.
+        let (future, previous) = std::mem::take(&mut self.events)
+            .into_iter()
+            .partition(|(seq, _)| seq.is_some() && *seq >= generation);
+        next.events = future;
+        self.events = previous;
+        if self
+            .started
+            .is_some_and(|(seq, _)| seq.is_some() && seq >= generation)
+        {
+            next.started = self.started.take();
+        }
+        next.bytes = self.bytes; // conservative bound after splitting
+        next.last = next
+            .events
+            .iter()
+            .map(|(_, event)| event.timestamp)
+            .max()
+            .unwrap_or(at)
+            .max(at);
+        next.highest_seq = next.events.iter().filter_map(|(seq, _)| *seq).max();
+        self.last = self
+            .events
+            .iter()
+            .map(|(_, event)| event.timestamp)
+            .max()
+            .unwrap_or(self.first);
+    }
 }
 
 #[derive(Default)]
@@ -153,7 +204,6 @@ impl TaskExporter {
             Vec::new(),
         );
         state.clock = state.clock.wrapping_add(1);
-        let touched = state.clock;
         if !state.assignments.contains_key(&key) && state.assignments.len() >= ACTIVE_LIMIT {
             if let Some(old) = state
                 .assignments
@@ -166,53 +216,58 @@ impl TaskExporter {
                 }
             }
         }
+        self.project_task(&mut state, key, &record, attributes, encoded.len());
+        Ok(())
+    }
+
+    fn project_task(
+        &self,
+        state: &mut State,
+        key: [u8; 32],
+        record: &TaskTelemetryRecord,
+        attributes: Vec<KeyValue>,
+        bytes: usize,
+    ) {
+        let at: SystemTime = record.at.into_inner().into();
+        let touched = state.clock;
         let begins = matches!(
             record.kind,
             Kind::Assigned | Kind::Reassigned | Kind::Reopened
         );
-        let ends = match record.kind {
-            Kind::Completed | Kind::Refused | Kind::Cancelled => true,
-            Kind::Assigned
-            | Kind::Acked
-            | Kind::Started
-            | Kind::Reassigned
-            | Kind::Reopened
-            | Kind::Rejected
-            | Kind::Reminded
-            | Kind::LeadNotified
-            | Kind::Moved
-            | Kind::Migrated
-            | Kind::RemindersReset
-            | Kind::PromptHandoff => false,
-        };
         let replacement = state.assignments.get(&key).is_some_and(|assignment| {
             begins
                 && record.seq.is_some_and(|seq| {
                     assignment
                         .generation
                         .is_some_and(|generation| seq > generation)
+                        && assignment.closed_through.is_none_or(|closed| seq > closed)
                 })
         });
+        let mut next = Assignment::new(at, attributes.clone(), touched);
         if replacement {
-            if let Some(assignment) = state.assignments.remove(&key) {
+            if let Some(mut assignment) = state.assignments.remove(&key) {
+                assignment.split_future(&mut next, record.seq, at);
                 self.finish_assignment(key, assignment, true);
             }
         }
-        let assignment = state.assignments.entry(key).or_insert_with(|| Assignment {
-            generation: None,
-            assigned: None,
-            started: None,
-            first: at,
-            last: at,
-            highest_seq: None,
-            closed_through: None,
-            closed: false,
-            events: Vec::new(),
-            bytes: 0,
-            attributes: attributes.clone(),
-            start_metric_recorded: false,
-            touched,
-        });
+        let assignment = state.assignments.entry(key).or_insert(next);
+        self.record_assignment(key, assignment, record, attributes, bytes, touched);
+    }
+
+    fn record_assignment(
+        &self,
+        key: [u8; 32],
+        assignment: &mut Assignment,
+        record: &TaskTelemetryRecord,
+        attributes: Vec<KeyValue>,
+        bytes: usize,
+        touched: u64,
+    ) {
+        let at: SystemTime = record.at.into_inner().into();
+        let begins = matches!(
+            record.kind,
+            Kind::Assigned | Kind::Reassigned | Kind::Reopened
+        );
         assignment.touched = touched;
         // Neither old assignments nor old terminal rows may mutate the current
         // generation. The event itself is still observable above.
@@ -224,83 +279,81 @@ impl TaskExporter {
                     .closed_through
                     .is_some_and(|closed| seq <= closed)
         }) {
-            return Ok(());
+            return;
         }
         if assignment.closed {
             if !begins || at <= assignment.last {
-                return Ok(());
+                return;
             }
-            *assignment = Assignment {
-                generation: record.seq,
-                assigned: Some(at),
-                started: None,
-                first: at,
-                last: at,
-                highest_seq: record.seq,
-                closed_through: None,
-                closed: false,
-                events: Vec::new(),
-                bytes: 0,
-                attributes: attributes.clone(),
-                start_metric_recorded: false,
-                touched,
-            };
+            *assignment = Assignment::new(at, attributes.clone(), touched);
         }
         if begins {
             assignment.generation = record.seq;
             assignment.assigned = Some(at);
         }
         if record.kind == Kind::Started {
-            assignment.started = Some(at);
+            assignment.started = Some((record.seq, at));
         }
         assignment.first = assignment.first.min(at);
         assignment.last = assignment.last.max(at);
         assignment.highest_seq = assignment.highest_seq.max(record.seq);
-        if assignment.events.len() < EVENT_LIMIT && assignment.bytes + encoded.len() <= BYTE_LIMIT {
-            assignment.bytes += encoded.len();
-            assignment
-                .events
-                .push(Event::new(record.kind.as_str(), at, attributes, 0));
+        if assignment.events.len() < EVENT_LIMIT && assignment.bytes + bytes <= BYTE_LIMIT {
+            assignment.bytes += bytes;
+            assignment.events.push((
+                record.seq,
+                Event::new(record.kind.as_str(), at, attributes, 0),
+            ));
         }
-        if !assignment.start_metric_recorded {
-            if let (Some(assigned), Some(started)) = (assignment.assigned, assignment.started) {
+        if ends_assignment(record.kind) {
+            self.close_assignment(key, assignment, record);
+        }
+    }
+
+    fn close_assignment(
+        &self,
+        key: [u8; 32],
+        assignment: &mut Assignment,
+        record: &TaskTelemetryRecord,
+    ) {
+        let at: SystemTime = record.at.into_inner().into();
+        // A delayed close before an already observed later row cannot end
+        // that row's assignment, even if its assignment row was lost.
+        if record.seq < assignment.highest_seq {
+            return;
+        }
+        if let Some(assigned) = assignment.assigned {
+            // Defer duration metrics until closure so a late assignment
+            // row can associate an already-observed start correctly.
+            if let Some((_, started)) = assignment.started {
                 if let Ok(duration) = started.duration_since(assigned) {
                     self.time_to_start
                         .record(duration.as_secs_f64() * 1000., &[]);
-                    assignment.start_metric_recorded = true;
                 }
             }
-        }
-        if ends {
-            // A delayed close before an already observed later row cannot end
-            // that row's assignment, even if its assignment row was lost.
-            if record.seq < assignment.highest_seq {
-                return Ok(());
+            if let Ok(duration) = at.duration_since(assigned) {
+                self.time_to_close
+                    .record(duration.as_secs_f64() * 1000., &[]);
             }
-            if let Some(assigned) = assignment.assigned {
-                if let Ok(duration) = at.duration_since(assigned) {
-                    self.time_to_close
-                        .record(duration.as_secs_f64() * 1000., &[]);
-                }
-            }
-            let partial = assignment.assigned.is_none();
-            let span_id = assignment_identity(key, assignment);
-            let mut attributes = assignment.attributes.clone();
-            attributes.push(KeyValue::new("atm.partial", partial));
-            self.span(
-                "atm.task",
-                key,
-                span_id,
-                assignment.assigned.unwrap_or(assignment.first),
-                at,
-                attributes,
-                std::mem::take(&mut assignment.events),
-            );
-            assignment.closed_through = record.seq.or(assignment.highest_seq);
-            assignment.closed = true;
-            assignment.bytes = 0;
         }
-        Ok(())
+        let partial = assignment.assigned.is_none();
+        let span_id = assignment_identity(key, assignment);
+        let mut attributes = assignment.attributes.clone();
+        attributes.push(KeyValue::new("atm.partial", partial));
+        self.span(
+            "atm.task",
+            key,
+            span_id,
+            assignment.assigned.unwrap_or(assignment.first),
+            at,
+            attributes,
+            std::mem::take(&mut assignment.events)
+                .into_iter()
+                .map(|(_, event)| event)
+                .collect(),
+        );
+        assignment.closed_through = record.seq.or(assignment.highest_seq);
+        assignment.closed = true;
+        assignment.bytes = 0;
     }
 
     fn finish_assignment(&self, key: [u8; 32], assignment: Assignment, partial: bool) {
@@ -317,7 +370,11 @@ impl TaskExporter {
             assignment.assigned.unwrap_or(assignment.first),
             assignment.last,
             attributes,
-            assignment.events,
+            assignment
+                .events
+                .into_iter()
+                .map(|(_, event)| event)
+                .collect(),
         );
     }
 
@@ -349,8 +406,10 @@ impl TaskExporter {
             .with_value(SpanId::from_bytes(
                 id[..8].try_into().expect("digest prefix"),
             ));
-        let _guard = context.clone().attach();
-        let mut span = self.tracer.build_with_context(builder, &context);
+        let mut span = {
+            let _guard = context.clone().attach();
+            self.tracer.build_with_context(builder, &context)
+        };
         span.end_with_timestamp(end.max(start));
     }
 
@@ -386,10 +445,38 @@ impl TaskExporter {
             end,
             vec![
                 KeyValue::new("atm.workflow.scope_kind", record.scope_kind.to_string()),
-                KeyValue::new("atm.workflow.scope_id", record.scope_id.to_string()),
+                KeyValue::new("atm.workflow.scope_id", record.scope_id.as_str().to_owned()),
                 KeyValue::new("atm.workflow.state", record.state.to_string()),
                 KeyValue::new("atm.workflow.stage", record.stage.to_string()),
                 KeyValue::new("atm.workflow.transition", record.transition.to_string()),
+                KeyValue::new(
+                    "atm.workflow.start_message_id",
+                    record.start_message_id.to_string(),
+                ),
+                KeyValue::new(
+                    "atm.workflow.end_message_id",
+                    record
+                        .end_message_id
+                        .as_ref()
+                        .map(ToString::to_string)
+                        .unwrap_or_default(),
+                ),
+                KeyValue::new(
+                    "atm.workflow.iteration",
+                    record
+                        .iteration
+                        .map(|iteration| {
+                            serde_json::to_string(&iteration).expect("typed iteration")
+                        })
+                        .unwrap_or_default(),
+                ),
+                KeyValue::new(
+                    "atm.workflow.observation",
+                    match record.observation {
+                        atm_core::WorkflowTelemetryObservation::Completed => "completed",
+                        atm_core::WorkflowTelemetryObservation::Incomplete => "incomplete",
+                    },
+                ),
                 KeyValue::new("atm.partial", record.end_timestamp.is_none()),
             ],
             Vec::new(),
@@ -485,4 +572,81 @@ fn task_attributes(record: &TaskTelemetryRecord) -> Vec<KeyValue> {
         }
     }
     attributes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opentelemetry::{metrics::MeterProvider, trace::TracerProvider};
+
+    #[test]
+    fn assignment_event_byte_and_dedup_state_remain_bounded() {
+        let tracer = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+            .with_id_generator(DurableIds)
+            .build();
+        let meter = opentelemetry_sdk::metrics::SdkMeterProvider::builder().build();
+        let exporter = TaskExporter::new(tracer.tracer("bounds"), meter.meter("bounds"));
+        for seq in 1..=128 {
+            exporter
+                .task(crate::otel_tests::record(
+                    "large-history",
+                    Kind::Reminded,
+                    seq,
+                    1,
+                ))
+                .unwrap();
+        }
+        {
+            let state = exporter.state.lock().unwrap();
+            let assignment = state.assignments.values().next().unwrap();
+            assert_eq!(assignment.events.len(), EVENT_LIMIT);
+            assert!(assignment.bytes <= BYTE_LIMIT);
+        }
+        for n in 0..=DEDUP_LIMIT {
+            exporter
+                .task(crate::otel_tests::record(
+                    &format!("task-{n}"),
+                    Kind::Assigned,
+                    1,
+                    1,
+                ))
+                .unwrap();
+        }
+        {
+            let state = exporter.state.lock().unwrap();
+            assert_eq!(state.assignments.len(), ACTIVE_LIMIT);
+            assert_eq!(state.seen.len(), DEDUP_LIMIT);
+            assert_eq!(state.order.len(), DEDUP_LIMIT);
+        }
+    }
+
+    #[test]
+    fn dedup_guarantee_expires_only_after_retained_window() {
+        let mut state = State::default();
+        let first = identity(&[b"first"]);
+        assert!(!state.duplicate(first));
+        assert!(state.duplicate(first));
+        for n in 0..DEDUP_LIMIT {
+            assert!(!state.duplicate(identity(&[&n.to_be_bytes()])));
+        }
+        assert!(!state.duplicate(first));
+    }
+}
+
+fn ends_assignment(kind: Kind) -> bool {
+    match kind {
+        Kind::Completed | Kind::Refused | Kind::Cancelled => true,
+        Kind::Assigned
+        | Kind::Acked
+        | Kind::Started
+        | Kind::Reassigned
+        | Kind::Reopened
+        | Kind::Rejected
+        | Kind::Reminded
+        | Kind::LeadNotified
+        | Kind::Moved
+        | Kind::Migrated
+        | Kind::RemindersReset
+        | Kind::PromptHandoff => false,
+    }
 }

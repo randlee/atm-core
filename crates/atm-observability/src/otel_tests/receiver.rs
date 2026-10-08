@@ -17,6 +17,7 @@ pub(super) struct Capture {
     pub logs: Arc<Mutex<Vec<LogRecord>>>,
     pub metrics: Arc<Mutex<Vec<Metric>>>,
     pub metadata: Arc<Mutex<Vec<tonic::metadata::MetadataMap>>>,
+    pub resources: Arc<Mutex<Vec<opentelemetry_proto::tonic::resource::v1::Resource>>>,
     pub started: Arc<AtomicUsize>,
     pub finished: Arc<AtomicUsize>,
     pub changed: Arc<Notify>,
@@ -61,6 +62,13 @@ impl traces::trace_service_server::TraceService for Capture {
         &self,
         request: Request<traces::ExportTraceServiceRequest>,
     ) -> Result<Response<traces::ExportTraceServiceResponse>, Status> {
+        self.resources.lock().unwrap().extend(
+            request
+                .get_ref()
+                .resource_spans
+                .iter()
+                .filter_map(|resource| resource.resource.clone()),
+        );
         self.metadata
             .lock()
             .unwrap()

@@ -277,6 +277,22 @@ pub fn build_routed_retained_logger(
     };
     config.enable_console_sink = false;
     config.enable_file_sink = destination != atm_core::LogDestination::Otel;
+    // The native logger applies this once before fan-out, including direct
+    // sc-log macros which do not pass through ATM's tracing field allowlist.
+    config.redaction.denylist_keys.extend(
+        [
+            "token",
+            "password",
+            "secret",
+            "authorization",
+            "auth_header",
+            "api_key",
+            "credential",
+            "payload",
+            "body",
+        ]
+        .map(str::to_owned),
+    );
     let mut builder =
         sc_observability::v2::Logger::builder(config).map_err(map_retained_logger_error)?;
     if destination != atm_core::LogDestination::File {

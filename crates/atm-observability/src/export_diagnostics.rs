@@ -12,7 +12,7 @@ struct Failure {
     kind: Option<AtmTelemetryExportFailure>,
     // Preserve typed SDK context privately. It can contain credentials or
     // collector-supplied text and is never formatted into retained/OTel logs.
-    source: Option<OTelSdkError>,
+    source: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 
 /// Failure evidence shared by the existing tracing bridge and bootstrap.
@@ -48,7 +48,7 @@ impl ExportDiagnostics {
                     AtmTelemetryExportFailure::Unavailable
                 }
             };
-            self.record(kind, Some(source));
+            self.record(kind, Some(Box::new(source)));
         }
     }
 
@@ -58,7 +58,15 @@ impl ExportDiagnostics {
         self.record(AtmTelemetryExportFailure::ShutdownTimedOut, None);
     }
 
-    fn record(&self, kind: AtmTelemetryExportFailure, source: Option<OTelSdkError>) {
+    pub(crate) fn setup_failed(&self, source: Box<dyn std::error::Error + Send + Sync>) {
+        self.record(AtmTelemetryExportFailure::ConfigInvalid, Some(source));
+    }
+
+    fn record(
+        &self,
+        kind: AtmTelemetryExportFailure,
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    ) {
         if let Ok(mut failure) = self.failure.lock() {
             if failure.kind != Some(AtmTelemetryExportFailure::ShutdownTimedOut) {
                 failure.kind = Some(kind);
