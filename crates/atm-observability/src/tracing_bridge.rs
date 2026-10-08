@@ -168,6 +168,7 @@ pub struct TracingBridgeLayer {
     logger: Arc<RetainedLogger>,
     stats: Arc<TracingBridgeStats>,
     sink: Arc<RwLock<Option<Arc<dyn DiagnosticSink>>>>,
+    export_diagnostics: Arc<RwLock<Option<Arc<crate::ExportDiagnostics>>>>,
 }
 
 impl TracingBridgeLayer {
@@ -176,6 +177,7 @@ impl TracingBridgeLayer {
             logger,
             stats: Arc::new(TracingBridgeStats::default()),
             sink: Arc::new(RwLock::new(None)),
+            export_diagnostics: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -186,6 +188,13 @@ impl TracingBridgeLayer {
     pub fn set_diagnostic_sink(&self, sink: Arc<dyn DiagnosticSink>) {
         if let Ok(mut slot) = self.sink.write() {
             *slot = Some(sink);
+        }
+    }
+
+    /// Connects observable SDK transport failures to the existing health owner.
+    pub fn set_export_diagnostics(&self, diagnostics: Arc<crate::ExportDiagnostics>) {
+        if let Ok(mut slot) = self.export_diagnostics.write() {
+            *slot = Some(diagnostics);
         }
     }
 
@@ -203,6 +212,13 @@ impl TracingBridgeLayer {
     }
 
     fn emit(&self, event: &Event<'_>) {
+        if crate::otel_logs::is_sdk_target(event.metadata().target()) {
+            if let Ok(slot) = self.export_diagnostics.read() {
+                if let Some(diagnostics) = slot.as_ref() {
+                    diagnostics.observe_sdk_event(event.metadata().name());
+                }
+            }
+        }
         if !should_retain(event.metadata().level(), event.metadata().target()) {
             return;
         }
@@ -228,7 +244,14 @@ impl TracingBridgeLayer {
         }
         let _reset = Reset;
 
-        let retained = RetainedTracingEvent::from_event(event);
+        let mut retained = RetainedTracingEvent::from_event(event);
+        if crate::otel_logs::is_sdk_target(event.metadata().target()) {
+            // Keep safe local evidence, never collector text or auth headers.
+            retained.fields.clear();
+            retained
+                .fields
+                .push(("code", Value::String(event.metadata().name().to_owned())));
+        }
         self.forward_retained(retained);
     }
 
@@ -331,7 +354,12 @@ impl RetainedTracingEvent {
             timestamp: self.timestamp,
             level: self.level,
             service: ServiceName::new("atm").expect("literal service name"),
-            target: TargetCategory::new("atm.tracing").expect("literal target category"),
+            target: TargetCategory::new(if crate::otel_logs::is_sdk_target(&self.component) {
+                "opentelemetry_sdk"
+            } else {
+                "atm.tracing"
+            })
+            .expect("literal target category"),
             action: ActionName::new("tracing.event").expect("literal action"),
             message: (!self.message.is_empty()).then_some(self.message.clone()),
             identity: ProcessIdentity::default(),
