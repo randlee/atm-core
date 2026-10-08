@@ -547,6 +547,18 @@ impl RecoverySweepHandle {
             .shutdown(deadline_at.saturating_duration_since(tokio::time::Instant::now()))
             .await;
     }
+
+    /// A handle whose sweep and one tracked transition drain never finish;
+    /// the production drains cancel cooperatively, so only this stalls them.
+    #[cfg(test)]
+    pub(crate) fn stalled_for_test(runtime_health: RuntimeHealth) -> Self {
+        let tracker = TransitionDrainTracker::new(runtime_health);
+        tracker.track(tokio::spawn(std::future::pending()));
+        Self {
+            join: Some(tokio::spawn(std::future::pending())),
+            tracker,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -813,12 +825,7 @@ mod tests {
     /// what remains, never a fresh budget.
     #[tokio::test(start_paused = true)]
     async fn recovery_sweep_shutdown_spends_one_deadline_across_sweep_and_transitions() {
-        let tracker = TransitionDrainTracker::new(RuntimeHealth::default());
-        tracker.track(tokio::spawn(std::future::pending()));
-        let handle = super::RecoverySweepHandle {
-            join: Some(tokio::spawn(std::future::pending())),
-            tracker,
-        };
+        let handle = RecoverySweepHandle::stalled_for_test(RuntimeHealth::default());
         let started = tokio::time::Instant::now();
         // Shorter than any step's own budget, so a fresh one shows.
         let deadline = Duration::from_secs(3);
