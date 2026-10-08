@@ -194,9 +194,21 @@ fn wrong_scenario_name_does_not_prove_child_execution() {
     );
 }
 
-/// Launches the child, waits until it serves, requests the stop and returns
-/// the time from the request to the child's successful exit.
-fn stop_to_exit(mode: &str, endpoint: Option<&str>) -> Duration {
+/// Waits for proof that an export reached the collector before a stop request.
+fn wait_for_pre_stop_export(
+    collector_started: &mpsc::Receiver<()>,
+) -> Result<(), mpsc::RecvTimeoutError> {
+    collector_started.recv_timeout(EXPORT_WAIT)
+}
+
+/// Launches the child, waits until it serves, verifies an optional collector
+/// export is already stalled, requests the stop and returns the time from the
+/// request to the child's successful exit.
+fn stop_to_exit(
+    mode: &str,
+    endpoint: Option<&str>,
+    collector_started: Option<mpsc::Receiver<()>>,
+) -> Duration {
     let mut command = Command::new(std::env::current_exe().expect("test binary"));
     command
         .args(["--exact", CHILD_TEST, "--nocapture", "--test-threads=1"])
@@ -224,6 +236,12 @@ fn stop_to_exit(mode: &str, endpoint: Option<&str>) -> Duration {
     if ready_rx.recv_timeout(Duration::from_secs(60)).is_err() {
         kill_and_reap(&mut child);
         panic!("exit-proof child never became ready");
+    }
+    if let Some(collector_started) = collector_started {
+        wait_for_pre_stop_export(&collector_started).unwrap_or_else(|error| {
+            kill_and_reap(&mut child);
+            panic!("stalled collector export did not start before stop: {error}");
+        });
     }
     let mut stdin = child.stdin.take().expect("child stdin");
     let started = Instant::now();
@@ -289,6 +307,19 @@ fn timed_out_child_is_killed_and_reaped_before_the_failure() {
     assert!(!status.success(), "the child was killed: {status}");
 }
 
+#[test]
+fn pre_stop_export_gate_rejects_a_missing_export() {
+    let (collector_started, gate) = mpsc::channel();
+    drop(collector_started);
+    assert!(
+        matches!(
+            wait_for_pre_stop_export(&gate),
+            Err(mpsc::RecvTimeoutError::Disconnected)
+        ),
+        "the stop gate must reject a missing collector export"
+    );
+}
+
 /// Positive: with the task queue full and a collector that never answers,
 /// the daemon process exits within the 10s force SLO.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -296,9 +327,25 @@ fn timed_out_child_is_killed_and_reaped_before_the_failure() {
 async fn process_exits_within_ten_seconds_with_full_queue_and_stalled_collector() {
     let stalled = Receiver::start(true).await;
     let endpoint = stalled.endpoint.clone();
-    let elapsed = tokio::task::spawn_blocking(move || stop_to_exit("full", Some(&endpoint)))
-        .await
-        .expect("parent driver");
+    let capture = stalled.capture.clone();
+    let (collector_started, gate) = mpsc::channel();
+    let export_started = tokio::spawn(async move {
+        capture
+            .wait(
+                EXPORT_WAIT,
+                "a stalled collector export before stop",
+                || capture.started.load(Ordering::SeqCst) > 0,
+            )
+            .await;
+        collector_started
+            .send(())
+            .expect("parent driver waits for the collector export");
+    });
+    let elapsed =
+        tokio::task::spawn_blocking(move || stop_to_exit("full", Some(&endpoint), Some(gate)))
+            .await
+            .expect("parent driver");
+    export_started.await.expect("collector observation");
     assert!(
         elapsed <= Duration::from_secs(10),
         "stop to exit took {elapsed:?}"
@@ -321,7 +368,7 @@ async fn process_exits_within_ten_seconds_with_full_queue_and_stalled_collector(
 async fn process_exits_within_five_seconds_when_clean() {
     let healthy = Receiver::start(false).await;
     let endpoint = healthy.endpoint.clone();
-    let elapsed = tokio::task::spawn_blocking(move || stop_to_exit("clean", Some(&endpoint)))
+    let elapsed = tokio::task::spawn_blocking(move || stop_to_exit("clean", Some(&endpoint), None))
         .await
         .expect("parent driver");
     assert!(
