@@ -299,10 +299,8 @@ Historical Phase R boundary direction (retired by Phase AI):
   - `atm-daemon` consumes storage-neutral runtime inputs and stops
     constructing SQLite-backed adapters directly in production composition
   - relocked boundary records forbid a direct
-    `atm-daemon -> atm-storage-rusqlite` edge; any reintroduction must fail the Rust
-    `crates/atm-architecture/` dependency guard (`cargo test --package
-    atm-architecture`), which is the sole code-driven boundary enforcement
-    layer
+    `atm-daemon -> atm-storage-rusqlite` edge; the dependency guard in
+    `crates/atm-architecture/tests/boundary_enforcement.rs` fails on that edge
 
 Current Phase R lint partition direction:
 - extend the existing `sc-portability` analyzer for reusable platform-gating
