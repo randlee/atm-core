@@ -356,5 +356,86 @@ async fn late_old_close_never_closes_new_assignment_and_missing_start_is_partial
                 .all(|event| event.time_unix_nano >= tasks[1].start_time_unix_nano)
         );
     }
+    {
+        let metrics = receiver.capture.metrics.lock().unwrap();
+        for (name, count, sum) in [
+            ("atm.task.time_to_start_ms", 1, 1_000.),
+            ("atm.task.time_to_close_ms", 1, 2_000.),
+        ] {
+            let metric = metrics.iter().find(|metric| metric.name == name).unwrap();
+            let Some(Data::Histogram(histogram)) = &metric.data else {
+                panic!("{name} must be a histogram");
+            };
+            assert_eq!(histogram.data_points.len(), 1);
+            assert_eq!(histogram.data_points[0].count, count);
+            assert_eq!(histogram.data_points[0].sum, Some(sum));
+            assert!(histogram.data_points[0].attributes.is_empty());
+        }
+    }
+    receiver.stop().await;
+}
+
+#[tokio::test]
+async fn receiver_metrics_cap_series_without_identity_labels() {
+    let receiver = Receiver::start(false).await;
+    let setup =
+        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+    for index in 0..40 {
+        let task = format!("distinct-task-{index}");
+        for (kind, seq, second) in [
+            (TaskTelemetryKind::Assigned, 1, 1),
+            (TaskTelemetryKind::Started, 2, 2),
+            (TaskTelemetryKind::Completed, 3, 3),
+        ] {
+            setup
+                .0
+                .sink
+                .emit(record(&task, kind, seq, second))
+                .await
+                .unwrap();
+        }
+    }
+    shutdown(setup).await;
+    {
+        let metrics = receiver.capture.metrics.lock().unwrap();
+        for metric in metrics
+            .iter()
+            .filter(|metric| metric.name.starts_with("atm.task."))
+        {
+            match &metric.data {
+                Some(Data::Sum(sum)) => {
+                    assert!(
+                        sum.data_points.len() <= 32,
+                        "{} exceeded series cap",
+                        metric.name
+                    );
+                    assert!(
+                        sum.data_points
+                            .iter()
+                            .all(|point| point.attributes.iter().all(|attribute| {
+                                !matches!(
+                                    attribute.key.as_str(),
+                                    "task_id" | "actor" | "message_id"
+                                )
+                            }))
+                    );
+                }
+                Some(Data::Histogram(histogram)) => {
+                    assert!(
+                        histogram.data_points.len() <= 32,
+                        "{} exceeded series cap",
+                        metric.name
+                    );
+                    assert!(
+                        histogram
+                            .data_points
+                            .iter()
+                            .all(|point| point.attributes.is_empty())
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
     receiver.stop().await;
 }
