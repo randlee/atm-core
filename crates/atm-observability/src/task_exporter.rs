@@ -194,10 +194,12 @@ impl TaskExporter {
         // Only a finite kind enum is a metric dimension (15 series maximum).
         let labels = [KeyValue::new("kind", record.kind.as_str())];
         self.events.add(1, &labels);
+        let trace_id = trace_id_from_digest(key);
+        let span_id = span_id_from_digest(id);
         self.span(
             "atm.task.event",
-            key,
-            id,
+            trace_id,
+            span_id,
             at,
             at,
             attributes.clone(),
@@ -334,12 +336,14 @@ impl TaskExporter {
             }
         }
         let partial = assignment.assigned.is_none();
-        let span_id = assignment_identity(key, assignment);
+        let span_digest = assignment_identity(key, assignment);
+        let trace_id = trace_id_from_digest(key);
+        let span_id = span_id_from_digest(span_digest);
         let mut attributes = assignment.attributes.clone();
         attributes.push(KeyValue::new("atm.partial", partial));
         self.span(
             "atm.task",
-            key,
+            trace_id,
             span_id,
             assignment.assigned.unwrap_or(assignment.first),
             at,
@@ -358,13 +362,15 @@ impl TaskExporter {
         if assignment.events.is_empty() {
             return;
         }
-        let id = assignment_identity(key, &assignment);
+        let span_digest = assignment_identity(key, &assignment);
+        let trace_id = trace_id_from_digest(key);
+        let span_id = span_id_from_digest(span_digest);
         let mut attributes = assignment.attributes;
         attributes.push(KeyValue::new("atm.partial", partial));
         self.span(
             "atm.task",
-            key,
-            id,
+            trace_id,
+            span_id,
             assignment.assigned.unwrap_or(assignment.first),
             assignment.last,
             attributes,
@@ -383,8 +389,8 @@ impl TaskExporter {
     fn span(
         &self,
         name: &'static str,
-        trace: [u8; 32],
-        id: [u8; 32],
+        trace_id: TraceId,
+        span_id: SpanId,
         start: SystemTime,
         end: SystemTime,
         attributes: Vec<KeyValue>,
@@ -397,13 +403,7 @@ impl TaskExporter {
             .with_start_time(start)
             .with_attributes(attributes)
             .with_events(events);
-        let context = Context::new()
-            .with_value(TraceId::from_bytes(
-                trace[..16].try_into().expect("digest prefix"),
-            ))
-            .with_value(SpanId::from_bytes(
-                id[..8].try_into().expect("digest prefix"),
-            ));
+        let context = Context::new().with_value(trace_id).with_value(span_id);
         let mut span = {
             let _guard = context.clone().attach();
             self.tracer.build_with_context(builder, &context)
@@ -435,10 +435,12 @@ impl TaskExporter {
             .end_timestamp
             .map(|at| at.into_inner().into())
             .unwrap_or(start);
+        let trace_id = trace_id_from_digest(key);
+        let span_id = span_id_from_digest(id);
         self.span(
             "atm.workflow",
-            key,
-            id,
+            trace_id,
+            span_id,
             start,
             end,
             vec![
@@ -527,6 +529,18 @@ fn identity(parts: &[&[u8]]) -> [u8; 32] {
         hash.update(part);
     }
     hash.finalize().into()
+}
+
+fn trace_id_from_digest(digest: [u8; 32]) -> TraceId {
+    let mut bytes = [0; 16];
+    bytes.copy_from_slice(&digest[..16]);
+    TraceId::from_bytes(bytes)
+}
+
+fn span_id_from_digest(digest: [u8; 32]) -> SpanId {
+    let mut bytes = [0; 8];
+    bytes.copy_from_slice(&digest[..8]);
+    SpanId::from_bytes(bytes)
 }
 
 fn assignment_identity(key: [u8; 32], assignment: &Assignment) -> [u8; 32] {
