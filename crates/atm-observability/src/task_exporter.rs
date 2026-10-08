@@ -571,6 +571,24 @@ fn task_attributes(record: &TaskTelemetryRecord) -> Vec<KeyValue> {
     attributes
 }
 
+fn ends_assignment(kind: Kind) -> bool {
+    match kind {
+        Kind::Completed | Kind::Refused | Kind::Cancelled => true,
+        Kind::Assigned
+        | Kind::Acked
+        | Kind::Started
+        | Kind::Reassigned
+        | Kind::Reopened
+        | Kind::Rejected
+        | Kind::Reminded
+        | Kind::LeadNotified
+        | Kind::Moved
+        | Kind::Migrated
+        | Kind::RemindersReset
+        | Kind::PromptHandoff => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -627,23 +645,5 @@ mod tests {
             assert!(!state.duplicate(identity(&[&n.to_be_bytes()])));
         }
         assert!(!state.duplicate(first));
-    }
-}
-
-fn ends_assignment(kind: Kind) -> bool {
-    match kind {
-        Kind::Completed | Kind::Refused | Kind::Cancelled => true,
-        Kind::Assigned
-        | Kind::Acked
-        | Kind::Started
-        | Kind::Reassigned
-        | Kind::Reopened
-        | Kind::Rejected
-        | Kind::Reminded
-        | Kind::LeadNotified
-        | Kind::Moved
-        | Kind::Migrated
-        | Kind::RemindersReset
-        | Kind::PromptHandoff => false,
     }
 }

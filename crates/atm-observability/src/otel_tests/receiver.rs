@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

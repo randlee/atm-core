@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use super::*;
 use crate::{
     RetainedLogLevel, RetainedLogPolicy, TracingBridgeLayer, build_routed_retained_logger,

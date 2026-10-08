@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use super::*;
 use crate::{ExportDiagnostics, TracingBridgeLayer, build_retained_logger};
 use atm_core::observability::{

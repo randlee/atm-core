@@ -22,7 +22,7 @@ io_forbidden = ["database_io", "daemon_lifecycle"]
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm"]
 allowed_dependencies = ["atm-core", "atm-runtime", "opentelemetry", "opentelemetry_sdk", "opentelemetry-otlp", "sc-observability", "sc-observability-types", "serde_json", "sha2", "tokio", "tonic", "tracing", "tracing-subscriber"]
-allowed_dev_dependencies = ["atm-core", "opentelemetry-proto", "sc-observability-log", "serial_test", "tempfile", "tokio-stream", "trybuild"]
+allowed_dev_dependencies = ["atm-core", "opentelemetry-proto", "sc-observability-log", "serial_test", "tempfile", "tokio-stream", "tonic", "trybuild"]
 forbidden_edges = ["atm-core -> opentelemetry", "atm-runtime -> opentelemetry", "atm-http-runtime -> opentelemetry", "atm-storage -> opentelemetry", "atm-storage-rusqlite -> opentelemetry", "atm-observability -> sc-observability-otlp"]
 
 [references]
