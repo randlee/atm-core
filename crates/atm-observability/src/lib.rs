@@ -9,6 +9,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::{fs, fs::OpenOptions};
 
+use crate::otel_logs::OtelLogSink;
 use atm_core::error::AtmError;
 use atm_core::observability::{
     AtmMaintenanceHealthReport, AtmMaintenanceWorkerState, AtmObservabilityDiagnostic,
@@ -302,7 +303,7 @@ pub fn build_routed_retained_logger(
             )
         })?;
         builder.register_sink(sc_observability::SinkRegistration::typed(
-            std::sync::Arc::new(OtelLogSink(logger)),
+            std::sync::Arc::new(OtelLogSink::new(logger)),
         ));
     }
     builder
@@ -364,10 +365,7 @@ mod otel_setup;
 mod task_exporter;
 pub mod tracing_bridge;
 pub use export_diagnostics::ExportDiagnostics;
-pub use otel_logs::OtelLogSink;
-pub use otel_setup::{
-    EXPORT_BATCH, EXPORT_INTERVAL, EXPORT_QUEUE, EXPORT_TIMEOUT, TelemetrySetup, setup_telemetry,
-};
+pub use otel_setup::{TelemetrySetup, setup_telemetry};
 
 pub use atm_core::observability::{
     CANONICAL_LOG_FILE_NAME, GRAFT_FALLBACK_LOG_FILE_NAME, RETAINED_FIELD_ALLOWLIST,

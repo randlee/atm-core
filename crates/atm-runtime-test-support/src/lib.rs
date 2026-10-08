@@ -367,6 +367,11 @@ pub fn install_sqlite_message_write_failure(path: impl AsRef<Path>) -> Result<()
     atm_storage_rusqlite::install_message_write_failure_for_test(path)
 }
 
+/// Configure the isolated SQLite fixture to reject every prompt-handoff insert.
+pub fn install_sqlite_prompt_handoff_write_failure(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    atm_storage_rusqlite::install_prompt_handoff_write_failure_for_test(path)
+}
+
 /// Inspects a SQLite fixture through test support, never from the replacement
 /// HTTP runtime itself. Production callers must use storage contracts.
 pub fn inspect_template_admission_for_test(
