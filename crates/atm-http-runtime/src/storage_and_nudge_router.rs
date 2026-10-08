@@ -1126,6 +1126,7 @@ pub(crate) fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Resu
 #[cfg(test)]
 pub(crate) mod tests {
     mod bd3_task_telemetry;
+    mod self_task_assignment;
 
     use std::fs;
     use std::future::Future;

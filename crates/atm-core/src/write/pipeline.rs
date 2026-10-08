@@ -638,6 +638,9 @@ fn prepare_persisted_write<
     crate::send::validate_task_request(&mut request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
+    let self_task = mark_self_task(&mut request, &context);
+    let is_ack = acknowledgement.is_some();
+    let delivery_mode = delivery_mode_for(self_task, delivery_mode);
     let requires_ack = request_requires_ack(&request, &task_id);
     let body = resolve_message_body(
         &request.message_source,
@@ -669,13 +672,11 @@ fn prepare_persisted_write<
             task_events,
         });
     }
-    let received_hook = prepare_received_hook(
-        runtime,
-        &context,
-        &persistence,
-        requires_ack,
-        acknowledgement.is_some(),
-    );
+    let received_hook = if self_task {
+        Ok(None)
+    } else {
+        prepare_received_hook(runtime, &context, &persistence, requires_ack, is_ack)
+    };
     let outcome = finalize_send_outcome(
         runtime,
         observability,
@@ -704,6 +705,29 @@ fn prepare_persisted_write<
     })
 }
 
+/// A task-linked write from a member to itself records the task and nothing
+/// else: the nudge is never built and no delivery is planned for the caller.
+fn mark_self_task(request: &mut SendRequest, context: &crate::send::SendExecutionContext) -> bool {
+    let self_task = crate::send::is_task_write(request)
+        && crate::send::is_same_member(
+            &context.canonical_sender,
+            &request.caller_team,
+            &context.recipient,
+        );
+    if self_task {
+        request.nudge_mode = NudgeMode::Immediate;
+    }
+    self_task
+}
+
+fn delivery_mode_for(self_task: bool, mode: DeliveryExecutionMode) -> DeliveryExecutionMode {
+    if self_task {
+        DeliveryExecutionMode::Deferred
+    } else {
+        mode
+    }
+}
+
 /// Prepares the canonical write after its one asynchronous durable admission.
 async fn prepare_persisted_write_async(
     mut request: SendRequest,
@@ -716,6 +740,8 @@ async fn prepare_persisted_write_async(
     crate::send::validate_task_request(&mut request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
+    let self_task = mark_self_task(&mut request, &context);
+    let is_ack = acknowledgement.is_some();
     let requires_ack = request_requires_ack(&request, &task_id);
     let (body, verified_template) =
         crate::send::async_persistence::resolve_async_body(&request, source_preflight)?;
@@ -743,13 +769,11 @@ async fn prepare_persisted_write_async(
             task_events,
         });
     }
-    let received_hook = prepare_received_hook(
-        runtime,
-        &context,
-        &persistence,
-        requires_ack,
-        acknowledgement.is_some(),
-    );
+    let received_hook = if self_task {
+        Ok(None)
+    } else {
+        prepare_received_hook(runtime, &context, &persistence, requires_ack, is_ack)
+    };
     let outcome = finalize_send_outcome(
         runtime,
         observability,
