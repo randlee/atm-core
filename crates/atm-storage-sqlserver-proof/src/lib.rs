@@ -12,8 +12,8 @@
 //! `atm-core` dependency or another storage-architecture reset.
 
 use atm_storage::{
-    AtmError, AtmErrorCode, Message, MessageKey, MessageQuery, MessageStore, RosterSnapshot,
-    RosterStore, TeamName,
+    AtmError, AtmErrorCode, CommittedTaskWrite, Message, MessageAdmissionOutcome, MessageKey,
+    MessageQuery, MessageStore, MessageWriteOrigin, RosterSnapshot, RosterStore, TeamName,
 };
 
 fn compile_only_error(surface: &str) -> AtmError {
@@ -31,6 +31,16 @@ impl atm_storage::contract::sealed::Sealed for SqlServerMessageStore {}
 impl MessageStore for SqlServerMessageStore {
     fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
         Err(compile_only_error("SqlServerMessageStore::save_message"))
+    }
+
+    fn admit_message_with_provenance(
+        &self,
+        _message: &Message,
+        _provenance: MessageWriteOrigin,
+    ) -> Result<CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
+        Err(compile_only_error(
+            "SqlServerMessageStore::admit_message_with_provenance",
+        ))
     }
 
     fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
