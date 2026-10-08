@@ -14,7 +14,7 @@ use tonic::codec::CompressionEncoding;
 use tonic::{Request, Response, Status};
 
 #[derive(Clone, Default)]
-pub(super) struct Capture {
+pub(crate) struct Capture {
     pub spans: Arc<Mutex<Vec<Span>>>,
     pub logs: Arc<Mutex<Vec<LogRecord>>>,
     pub metrics: Arc<Mutex<Vec<Metric>>>,
@@ -111,7 +111,7 @@ impl metrics::metrics_service_server::MetricsService for Capture {
     }
 }
 
-pub(super) struct Receiver {
+pub(crate) struct Receiver {
     pub endpoint: String,
     pub capture: Capture,
     stop: oneshot::Sender<()>,

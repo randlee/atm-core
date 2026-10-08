@@ -9,7 +9,7 @@
 //! recorded without a tmux pane), and Herdr is the trait-boundary fake.
 
 mod exit;
-mod receiver;
+pub(crate) mod receiver;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
