@@ -6,7 +6,7 @@
 | Status | Accepted |
 | Date | 2026-09-26 |
 | Scope | Task-ledger telemetry projection and OpenTelemetry export |
-| Relates to | ADR-014, ADR-032, ADR-046, ADR-061, ADR-062 |
+| Relates to | ADR-011, ADR-014, ADR-020, ADR-032, ADR-046, ADR-055, ADR-061, ADR-062 |
 
 ## Context
 
@@ -115,10 +115,52 @@ contracts, following the accepted ADR-046 design. One exporter implements
 both and maps their identical error sets through one table. This decision
 adds no generic telemetry framework.
 
+### D11. Daemon composition
+
+The retained-log baseline is `sc-observability`, `sc-observability-log` and
+`sc-observability-types` 1.5.0. Export uses the official
+`opentelemetry`/`opentelemetry_sdk`/`opentelemetry-otlp` 0.33.0 crates over
+gRPC (tonic). No other observability facade or HTTP exporter is composed.
+
+- `DaemonObservability` (bootstrap) resolves configuration once at startup.
+  Absent `ATM_OTEL_ENDPOINT`: no exporter, worker or provider, and `Inert`
+  health. Invalid configuration or failed SDK setup: the daemon keeps
+  serving with file logging, export disabled and `ConfigInvalid` health.
+  Rejected values are never echoed.
+- Bootstrap holds only the lifecycle handles of the three standard providers
+  (traces, logs, metrics), and composition hands one task and one workflow
+  runtime handle to the router and the queue-wake pump. Producers call the
+  non-blocking `try_emit`.
+- Actual task producers: the router (assigned, reassigned, started, closed,
+  reopened, rejected, prompt handoff) and the queue-wake pump (reminded,
+  reminders reset, lead notified, reminder prompt handoff). Acknowledgement
+  produces no row and no record.
+- Bounds are the exporter constants: SDK queue `EXPORT_QUEUE` 256, batch
+  `EXPORT_BATCH` 256, interval `EXPORT_INTERVAL` 1s and per-export
+  `EXPORT_TIMEOUT` 400 ms (`otel_setup.rs`). The task projection keeps at
+  most `ACTIVE_LIMIT` 4096 open assignments, `EVENT_LIMIT` 64 events and
+  `BYTE_LIMIT` 64 KiB per assignment, drops a record over `RECORD_LIMIT`
+  16 KiB, and deduplicates within a `DEDUP_LIMIT` 8192-entry window only
+  (`task_exporter.rs`). A close seen before its start exports a partial
+  span; nothing is replayed, backfilled or stored across an outage.
+- Shutdown uses one cumulative deadline (`REPLACEMENT_DRAIN_DEADLINE`, 5s):
+  listeners, recovery sweep, peers, then the task and workflow drains, then
+  the providers, bounded by `min(1s, remaining)`. The first shutdown caller
+  owns provider shutdown, so a cancelled or concurrent caller waits for the
+  same stored outcome until its own deadline. A timeout abandons the wait,
+  not the SDK call, and process exit releases it.
+- Health: `Inert` with no endpoint; `Healthy` when configured and no loss or
+  failure has been observed; `Degraded` when the runtime counted
+  `dropped_full`, `dropped_timeout` or `dropped_failure`; `Unavailable` with
+  `last_failure` set when the SDK reported a transport failure through the
+  process-global tracing bridge, a provider shutdown failed or timed out, or
+  configuration was invalid. An observed failure is not cleared by later
+  success. SDK-private queue losses are unknown and never invented.
+
 ## Consequences
 
 - every later task exporter compiles against one typed, payload-free contract
 - export outages are visible without reducing daemon availability
-- runtime emission, exporter implementation, rendering, and composition land
-  in later Phase BD sprints
+- the daemon exports every committed task fact while it serves, and an
+  export outage changes only health, never a task result or shutdown bound
 - new task-event kinds require an explicit telemetry-kind decision

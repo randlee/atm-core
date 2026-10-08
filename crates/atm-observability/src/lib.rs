@@ -28,6 +28,17 @@ use serde_json::Map;
 /// confined to this facade.
 pub struct RetainedLogger(std::sync::Arc<sc_observability::v2::Logger>);
 
+struct AdmitDirectScRecords;
+
+impl sc_observability_log::BridgeEventPolicy for AdmitDirectScRecords {
+    fn decide(
+        &self,
+        _: &sc_observability_types::LogEvent,
+    ) -> sc_observability_log::BridgeEventDecision {
+        sc_observability_log::BridgeEventDecision::Admit
+    }
+}
+
 /// ATM-owned logging level for the retained logger bootstrap boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RetainedLogLevel {
@@ -70,6 +81,24 @@ pub struct RetainedCommandEvent<'a> {
 }
 
 impl RetainedLogger {
+    /// Attaches the process-local `sc_observability_log` facade to this
+    /// existing retained logger. The caller owns the returned non-owning
+    /// attachment and must detach it before the logger is shut down.
+    pub fn attach_sc_log_facade(
+        &self,
+    ) -> Result<sc_observability_log::LogAttachment, sc_observability_log::DetachError> {
+        sc_observability_log::attach_logger(
+            std::sync::Arc::clone(&self.0),
+            sc_observability_log::AttachmentOptions::new(
+                sc_observability_log::BridgeOptions {
+                    default_action: sc_observability_types::ActionName::new("atm.direct_sc")
+                        .expect("literal direct-sc action"),
+                    parse_bracket_action: true,
+                },
+                std::sync::Arc::new(AdmitDirectScRecords),
+            ),
+        )
+    }
     /// Projects backend health onto ATM's public doctor contract.
     pub fn health_at(&self, active_log_path: PathBuf) -> Result<AtmObservabilityHealth, AtmError> {
         let report = self.0.health();
