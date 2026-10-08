@@ -290,6 +290,7 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
     tokio::time::timeout(Duration::from_secs(60), in_flight)
         .await
         .expect("the listener drain never ended the held request")
-        .expect("the held request's client task joins without panicking");
+        .expect("the held request's client task joins without panicking")
+        .expect("the held local write completes once the drain releases it");
     stalled.stop().await;
 }

@@ -126,11 +126,8 @@ fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recovery() {
     );
 }
 
-async fn unreachable_collector_scenario() {
-    // The collector accepts each connection and closes it at once, so every
-    // export fails immediately on every OS. A closed port is not equivalent:
-    // a refused connect is OS-timed, and on Windows CI no span or log export
-    // failure surfaced within 30 s.
+/// A collector that accepts each connection and closes it at once.
+async fn start_closing_collector() -> (String, tokio::task::JoinHandle<()>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
     let collector = tokio::spawn(async move {
@@ -138,6 +135,34 @@ async fn unreachable_collector_scenario() {
             drop(connection);
         }
     });
+    (endpoint, collector)
+}
+
+fn assert_each_sdk_event_projects(observed: &ExportFailureObserved) {
+    // Each real SDK event name must independently project as a failure, so a
+    // misnamed log or metric mapping cannot hide behind the span events.
+    for prefix in ["BatchSpanProcessor", "BatchLogProcessor", "PeriodicReader"] {
+        let name = observed.first_with_prefix(prefix).unwrap();
+        let alone = ExportDiagnostics::default();
+        alone.observe_sdk_event(&name);
+        let mut projected = health();
+        alone.project(&mut projected);
+        assert_eq!(
+            projected.last_failure,
+            Some(AtmTelemetryExportFailure::Unavailable),
+            "{name} is not mapped by ExportDiagnostics"
+        );
+        assert_eq!(projected.state, AtmTelemetryExportState::Unavailable);
+    }
+}
+
+/// Installs the child process's global subscriber: the production tracing
+/// bridge feeding `ExportDiagnostics`, plus a recorder of SDK event names.
+fn install_global_subscriber() -> (
+    tempfile::TempDir,
+    Arc<ExportDiagnostics>,
+    ExportFailureObserved,
+) {
     let root = tempfile::tempdir().unwrap();
     let logger = Arc::new(
         build_retained_logger(
@@ -149,7 +174,7 @@ async fn unreachable_collector_scenario() {
         .unwrap(),
     );
     let diagnostics = Arc::new(ExportDiagnostics::default());
-    let bridge = TracingBridgeLayer::new(logger.clone());
+    let bridge = TracingBridgeLayer::new(logger);
     bridge.set_export_diagnostics(diagnostics.clone());
     let observed = ExportFailureObserved::default();
     let dispatch = tracing::Dispatch::new(
@@ -158,6 +183,16 @@ async fn unreachable_collector_scenario() {
             .with(observed.clone()),
     );
     tracing::dispatcher::set_global_default(dispatch).expect("child owns the global subscriber");
+    (root, diagnostics, observed)
+}
+
+async fn unreachable_collector_scenario() {
+    // The collector accepts each connection and closes it at once, so every
+    // export fails immediately on every OS. A closed port is not equivalent:
+    // a refused connect is OS-timed, and on Windows CI no span or log export
+    // failure surfaced within 30 s.
+    let (endpoint, collector) = start_closing_collector().await;
+    let (_root, diagnostics, observed) = install_global_subscriber();
     // A one-span batch exports the first span at once through the SDK's
     // full-batch path. The scheduled path first fires at 2x EXPORT_INTERVAL
     // (the SDK interval sleeps before its first tick, then skips it), which
@@ -219,21 +254,7 @@ async fn unreachable_collector_scenario() {
         evidence.last_failure,
         Some(AtmTelemetryExportFailure::Unavailable)
     );
-    // Each real SDK event name must independently project as a failure, so a
-    // misnamed log or metric mapping cannot hide behind the span events.
-    for prefix in ["BatchSpanProcessor", "BatchLogProcessor", "PeriodicReader"] {
-        let name = observed.first_with_prefix(prefix).unwrap();
-        let alone = ExportDiagnostics::default();
-        alone.observe_sdk_event(&name);
-        let mut projected = health();
-        alone.project(&mut projected);
-        assert_eq!(
-            projected.last_failure,
-            Some(AtmTelemetryExportFailure::Unavailable),
-            "{name} is not mapped by ExportDiagnostics"
-        );
-        assert_eq!(projected.state, AtmTelemetryExportState::Unavailable);
-    }
+    assert_each_sdk_event_projects(&observed);
 }
 
 #[tokio::test]
