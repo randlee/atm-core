@@ -64,17 +64,19 @@ fn task_rows(fixture: &Fixture, task_id: &str) -> Vec<atm_core::boundary::TaskEv
         .expect("durable task events")
 }
 
+type ExpectedTaskEventFields = (
+    u64,
+    &'static str,
+    Option<atm_core::boundary::TaskState>,
+    Option<atm_core::boundary::TaskState>,
+    Option<atm_storage::TaskCloseOutcome>,
+    atm_core::boundary::TaskActor,
+    Option<&'static str>,
+);
+
 fn assert_literal_row_fields(
     row: &atm_core::boundary::TaskEventRow,
-    expected: (
-        u64,
-        &str,
-        Option<atm_core::boundary::TaskState>,
-        Option<atm_core::boundary::TaskState>,
-        Option<atm_storage::TaskCloseOutcome>,
-        atm_core::boundary::TaskActor,
-        Option<&str>,
-    ),
+    expected: ExpectedTaskEventFields,
 ) {
     assert_eq!(row.seq, expected.0);
     assert_eq!(row.at, expected.1.parse().expect("literal timestamp"));

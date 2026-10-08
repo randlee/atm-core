@@ -20,17 +20,19 @@ fn set_clock(now: &Arc<Mutex<IsoTimestamp>>, value: &str) {
     *now.lock().expect("clock") = IsoTimestamp::from_str(value).expect("timestamp");
 }
 
+type ExpectedTaskEventFields = (
+    u64,
+    &'static str,
+    Option<atm_core::boundary::TaskState>,
+    Option<atm_core::boundary::TaskState>,
+    Option<atm_storage::TaskCloseOutcome>,
+    atm_core::boundary::TaskActor,
+    Option<&'static str>,
+);
+
 fn assert_literal_row_fields(
     row: &atm_core::boundary::TaskEventRow,
-    expected: (
-        u64,
-        &str,
-        Option<atm_core::boundary::TaskState>,
-        Option<atm_core::boundary::TaskState>,
-        Option<atm_storage::TaskCloseOutcome>,
-        atm_core::boundary::TaskActor,
-        Option<&str>,
-    ),
+    expected: ExpectedTaskEventFields,
 ) {
     assert_eq!(row.seq, expected.0);
     assert_eq!(row.at, expected.1.parse().expect("literal timestamp"));
