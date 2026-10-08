@@ -88,21 +88,21 @@ pub(super) fn append_rejected_task_event(
     connection: &Connection,
     target: &SharedDbTarget,
     error: &AtmError,
-) -> Result<(), AtmError> {
+) -> Result<Option<atm_storage::TaskEventRow>, AtmError> {
     if !is_task_rejection(error.code()) {
-        return Ok(());
+        return Ok(None);
     }
     if is_pre_admission_reassignment_refusal(op, error) {
         // A refused reassignment is an authorization failure before task
         // admission. Keep the attempted message and task ledger unchanged.
-        return Ok(());
+        return Ok(None);
     }
     let (team, task_id, requested, actor, message_id) = match op {
         WriteOp::UpsertMessage { record, provenance }
             if *provenance == MessageWriteOrigin::Local =>
         {
             let Some(task_id) = record.envelope.task_id.as_ref() else {
-                return Ok(());
+                return Ok(None);
             };
             (
                 record.team.clone(),
@@ -115,7 +115,7 @@ pub(super) fn append_rejected_task_event(
         WriteOp::Acknowledge { source, .. } => {
             let source = load_pending_ack_source(source, connection, target)?;
             let Some(task_id) = source.envelope.task_id.clone() else {
-                return Ok(());
+                return Ok(None);
             };
             (
                 source.team,
@@ -137,7 +137,7 @@ pub(super) fn append_rejected_task_event(
             actor.clone(),
             None,
         ),
-        _ => return Ok(()),
+        _ => return Ok(None),
     };
     let row = load_task_row(connection, target, &team, &task_id)?;
     let assignee = row.as_ref().map_or(&requested, |row| &row.assignee);
@@ -159,7 +159,7 @@ pub(super) fn append_rejected_task_event(
         None,
         Some(error.message()),
     )
-    .map(|_| ())
+    .map(Some)
 }
 
 fn is_pre_admission_reassignment_refusal(op: &WriteOp, error: &AtmError) -> bool {
@@ -373,6 +373,14 @@ fn persist_task_assignment(
     )?;
     renumber_previous_assignment(record, row, connection, target)?;
     renumber_queue(&record.team, &record.agent, &order, connection, target)?;
+    let final_position = order
+        .iter()
+        .position(|id| id == task_id)
+        .and_then(|index| u32::try_from(index + 1).ok())
+        .ok_or_else(|| task_move_invalid("assigned task is absent from its normalized queue"))?;
+    let event = append_assignment_event(
+        record, task_id, row, was_closed, message_id, at, next_state, connection, target,
+    )?;
     let moved = placement
         .map(|_| {
             append_task_event(
@@ -394,19 +402,15 @@ fn persist_task_assignment(
                     "{}→{}",
                     row.and_then(|row| row.position)
                         .map_or(0, QueuePosition::get),
-                    temporary
+                    final_position
                 )),
             )
         })
         .transpose()?;
-    let event = append_assignment_event(
-        record, task_id, row, was_closed, message_id, at, next_state, connection, target,
-    )?;
-    let mut events = Vec::new();
+    let mut events = vec![event];
     if let Some(moved) = moved {
         events.push(moved);
     }
-    events.push(event);
     Ok((order, events))
 }
 

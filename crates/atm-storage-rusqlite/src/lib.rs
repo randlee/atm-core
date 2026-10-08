@@ -304,7 +304,8 @@ impl MessageStore for SqliteMessageStore {
         &self,
         message: &Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
         self.db
             .submit_message_admission(message.clone(), provenance)
     }
@@ -578,7 +579,8 @@ impl AsyncMessageStore for SqliteMessageStore {
         &self,
         message: Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
         self.db
             .submit_message_admission_async(message, provenance)
             .await
@@ -587,7 +589,8 @@ impl AsyncMessageStore for SqliteMessageStore {
     async fn admit_template_message_async(
         &self,
         admission: atm_storage::TemplateMessageAdmission,
-    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
         self.db
             .submit_template_message_admission_async(admission)
             .await
@@ -1084,6 +1087,8 @@ mod tests {
         let admission = backend
             .message_store()
             .admit_message_with_provenance(&start, MessageWriteOrigin::Local)
+            .expect("start commit")
+            .operation
             .expect("start task");
         assert_eq!(admission.task_assignee, Some(agent()));
     }
@@ -1244,6 +1249,8 @@ mod tests {
         let first_admission = backend
             .message_store()
             .admit_message_with_provenance(&first_close, MessageWriteOrigin::Local)
+            .expect("close commit")
+            .operation
             .expect("first close");
         assert_eq!(first_admission.task_assignee, Some(agent()));
 
@@ -1287,6 +1294,8 @@ mod tests {
         let admission = backend
             .message_store()
             .admit_message_with_provenance(&report, MessageWriteOrigin::Local)
+            .expect("report commit")
+            .operation
             .expect("already-closed report is ordinary mail");
 
         assert!(admission.existing.is_none());
@@ -2908,6 +2917,8 @@ mod tests {
                 .admit_template_message_async(admission.clone())
                 .await
                 .expect("first admission")
+                .operation
+                .unwrap()
                 .existing
                 .is_none()
         );
@@ -2917,6 +2928,8 @@ mod tests {
                 .admit_template_message_async(admission)
                 .await
                 .expect("idempotent admission")
+                .operation
+                .unwrap()
                 .existing
                 .is_some()
         );
@@ -2979,7 +2992,9 @@ mod tests {
                 },
             })
             .await
-            .expect("rejected report admission commits");
+            .expect("rejected report admission commits")
+            .operation
+            .expect("report retained");
         assert!(outcome.task_rejection.is_some());
         assert_eq!(outcome.task_assignee, None);
 

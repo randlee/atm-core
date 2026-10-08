@@ -293,13 +293,14 @@ impl StorageAndNudgeRouter {
             .write_source_preflight_bridge
             .preflight(deadline, self.service_runtime.clone(), request.clone())
             .await?;
-        let mut prepared = prepare_write_with_preflight_async_runtime(
+        let execution = prepare_write_with_preflight_async_runtime(
             request,
             self.observability.as_ref(),
             &self.service_runtime,
             source_preflight,
         )
         .await?;
+        let mut prepared = execution.operation?;
         let newly_persisted = prepared.is_newly_persisted();
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
@@ -600,13 +601,16 @@ impl StorageAndNudgeRouter {
         let runtime = self.service_runtime.clone();
         self.control_path_sync_bridge
             .run(deadline, move || {
-                let record = runtime.task_store()?.move_task(
-                    &request.caller_team,
-                    &request.task_id,
-                    &request.caller_identity,
-                    &request.target,
-                    atm_core::types::IsoTimestamp::now(),
-                )?;
+                let record = runtime
+                    .task_store()?
+                    .move_task(
+                        &request.caller_team,
+                        &request.task_id,
+                        &request.caller_identity,
+                        &request.target,
+                        atm_core::types::IsoTimestamp::now(),
+                    )?
+                    .operation?;
                 Ok(ApiResponse::new(ResponseEnvelope::TaskMove(
                     TaskMoveOutcome {
                         task_id: request.task_id,
@@ -1718,6 +1722,50 @@ pub(crate) mod tests {
                 .expect("task-ledger reader list")
                 .is_empty()
         );
+    }
+
+    #[tokio::test]
+    async fn bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows() {
+        let fixture = fixture(true, None, None);
+        for rejected in [false, true] {
+            let task_id = if rejected { "MISSING" } else { "ASSIGNED" };
+            let mut request = task_write_request(&fixture, task_id);
+            if rejected {
+                request.task_op = Some(atm_storage::TaskOp::Close {
+                    outcome: atm_storage::TaskCloseOutcome::Completed,
+                    reason: None,
+                });
+            }
+            let runtime = &fixture.router.service_runtime;
+            let preflight =
+                atm_core::send::preflight_write_source_request(runtime, &request).unwrap();
+            let execution = atm_core::send::prepare_write_with_preflight_async_runtime(
+                request,
+                &NullObservability,
+                runtime,
+                preflight,
+            )
+            .await
+            .unwrap();
+            if rejected {
+                assert_eq!(
+                    execution.operation.err().unwrap().code(),
+                    atm_storage::AtmErrorCode::TaskNotFound
+                );
+            } else {
+                assert!(execution.operation.is_ok());
+            }
+            let rows = fixture
+                .task_store
+                .list_task_events(
+                    &"test-team".parse().unwrap(),
+                    &task_id.parse().unwrap(),
+                    None,
+                )
+                .unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(execution.task_events, rows);
+        }
     }
 
     fn pending_store_with_failures(

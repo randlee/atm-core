@@ -30,10 +30,19 @@ impl WriteOutcome {
     }
 }
 
+/// A committed operation result and its exact task-ledger audit rows.
+pub type WriteExecution = atm_storage::CommittedTaskWrite<PreparedWrite>;
+
+fn retain_successful_execution(execution: WriteExecution) -> Result<PreparedWrite, AtmError> {
+    let mut prepared = execution.operation?;
+    prepared.task_events = execution.task_events;
+    Ok(prepared)
+}
+
 /// A durable write awaiting post-commit notification scheduling.
 ///
 /// Acknowledgement state completes before any post-commit notification or peer
-/// work.  Delivery is never a prerequisite for an admitted local write.
+/// work. Delivery is never a prerequisite for an admitted local write.
 pub struct PreparedWrite {
     outcome: SendOutcome,
     outbound_request: WriteRequest,
@@ -43,9 +52,15 @@ pub struct PreparedWrite {
     received_hook: Result<Option<PreparedReceivedHook>, AtmError>,
     acknowledgement: Option<ResolvedAcknowledgement>,
     task_rejection: Option<AtmError>,
+    task_events: Vec<atm_storage::TaskEventRow>,
 }
 
 impl PreparedWrite {
+    /// Takes the exact task-ledger rows committed by this successful write.
+    pub fn take_task_events(&mut self) -> Vec<atm_storage::TaskEventRow> {
+        std::mem::take(&mut self.task_events)
+    }
+
     /// Returns the immutable identifier persisted by the canonical writer.
     #[must_use]
     pub fn persisted_message_id(&self) -> AtmMessageId {
@@ -357,7 +372,8 @@ pub fn write_mail_with_runtime(
         observability,
         runtime,
         DeliveryExecutionMode::Inline,
-    )?;
+    )?
+    .operation?;
     prepared.finish_and_mark(runtime, observability)
 }
 
@@ -372,6 +388,7 @@ pub fn send_mail_with_runtime(
         runtime,
         DeliveryExecutionMode::Inline,
     )?
+    .operation?
     .finish_and_mark(runtime, observability)?
     {
         WriteOutcome::Sent(outcome) => Ok(outcome),
@@ -398,12 +415,13 @@ pub fn prepare_write_with_runtime(
         runtime,
         DeliveryExecutionMode::Deferred,
     )
+    .and_then(retain_successful_execution)
 }
 
 /// Prepares one canonical write through the Tokio durable-admission boundary.
 ///
-/// Core validation and response construction remain shared with the legacy
-/// path. The immutable storage transition is the only await: it enqueues work
+/// Core validation and response construction remain shared with blocking
+/// library callers. The immutable storage transition enqueues work
 /// to the backend's bounded writer lane and receives that lane's durable
 /// result without a blocking task in the HTTP runtime.
 pub async fn prepare_write_with_preflight_async_runtime(
@@ -411,7 +429,7 @@ pub async fn prepare_write_with_preflight_async_runtime(
     observability: &(dyn ObservabilityPort + Send + Sync),
     runtime: &LocalServiceRuntime,
     source_preflight: WriteSourcePreflight,
-) -> Result<PreparedWrite, AtmError> {
+) -> Result<WriteExecution, AtmError> {
     validate_write_provenance(
         WriteIngress::Canonical,
         WriteProvenance {
@@ -447,7 +465,12 @@ pub async fn prepare_write_with_preflight_async_runtime(
         .await;
     }
     let acknowledgement = admit_acknowledgement_write_async(request, runtime).await?;
-    prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
+    prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime).map(|prepared| {
+        WriteExecution {
+            operation: Ok(prepared),
+            task_events: Vec::new(),
+        }
+    })
 }
 
 /// The sole write pipeline. `acknowledges_message_id` selects only an
@@ -460,7 +483,7 @@ fn write_mail_with_runtime_impl_with_mode<
     observability: &dyn ObservabilityPort,
     runtime: &R,
     delivery_mode: DeliveryExecutionMode,
-) -> Result<PreparedWrite, AtmError> {
+) -> Result<WriteExecution, AtmError> {
     validate_write_provenance(
         WriteIngress::Canonical,
         WriteProvenance {
@@ -488,7 +511,12 @@ fn write_mail_with_runtime_impl_with_mode<
         return prepare_persisted_write(request, observability, runtime, None, delivery_mode);
     }
     let acknowledgement = admit_acknowledgement_write(request, runtime)?;
-    prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
+    prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime).map(|prepared| {
+        WriteExecution {
+            operation: Ok(prepared),
+            task_events: Vec::new(),
+        }
+    })
 }
 
 #[cfg(test)]
@@ -505,6 +533,7 @@ pub(crate) fn write_mail_with_runtime_impl<
         runtime,
         DeliveryExecutionMode::Inline,
     )
+    .and_then(retain_successful_execution)
 }
 
 fn prepare_atomic_acknowledgement_write<
@@ -568,6 +597,7 @@ fn prepare_atomic_acknowledgement_write<
         received_hook,
         acknowledgement: Some(acknowledgement.acknowledgement),
         task_rejection: None,
+        task_events: Vec::new(),
     })
 }
 
@@ -579,7 +609,7 @@ fn prepare_persisted_write<
     runtime: &R,
     acknowledgement: Option<ResolvedAcknowledgement>,
     delivery_mode: DeliveryExecutionMode,
-) -> Result<PreparedWrite, AtmError> {
+) -> Result<WriteExecution, AtmError> {
     let mut context = prepare_send_context(runtime, &mut request)?;
     crate::send::validate_task_request(&mut request)?;
     let task_id = request.task_id.clone();
@@ -597,7 +627,7 @@ fn prepare_persisted_write<
     let message_id = request.origin_message_id.unwrap_or_default();
     let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
     let acknowledgement_source_update = None;
-    let persistence = persist_send_message(
+    let mut persistence = persist_send_message(
         runtime,
         &request,
         &context,
@@ -609,6 +639,13 @@ fn prepare_persisted_write<
         task_id.clone(),
         acknowledgement_source_update,
     )?;
+    let task_events = std::mem::take(&mut persistence.task_events);
+    if let Err(error) = &persistence.operation {
+        return Ok(WriteExecution {
+            operation: Err(error.clone()),
+            task_events,
+        });
+    }
     let received_hook = prepare_received_hook(
         runtime,
         &context,
@@ -618,7 +655,7 @@ fn prepare_persisted_write<
     );
     // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
     // skips its duplicate row and the receiver-only hook is likewise skipped.
-    let outcome = finalize_send_outcome(
+    let outcome = match finalize_send_outcome(
         runtime,
         observability,
         &request,
@@ -630,17 +667,29 @@ fn prepare_persisted_write<
         task_id,
         &persistence,
         delivery_mode,
-    )?;
-    Ok(PreparedWrite {
-        outcome,
-        outbound_request: request,
-        persisted_timestamp: timestamp,
-        post_write_needed: persistence.requires_post_write(),
-        same_store_peer_receipt: persistence.duplicate_disposition
-            == DuplicateWriteDisposition::SameStorePeerReceipt,
-        received_hook,
-        acknowledgement,
-        task_rejection: persistence.task_rejection.clone(),
+    ) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            return Ok(WriteExecution {
+                operation: Err(error),
+                task_events,
+            });
+        }
+    };
+    Ok(WriteExecution {
+        operation: Ok(PreparedWrite {
+            outcome,
+            outbound_request: request,
+            persisted_timestamp: timestamp,
+            post_write_needed: persistence.requires_post_write(),
+            same_store_peer_receipt: persistence.duplicate_disposition
+                == DuplicateWriteDisposition::SameStorePeerReceipt,
+            received_hook,
+            acknowledgement,
+            task_rejection: persistence.task_rejection.clone(),
+            task_events: Vec::new(),
+        }),
+        task_events,
     })
 }
 
@@ -651,7 +700,7 @@ async fn prepare_persisted_write_async(
     runtime: &LocalServiceRuntime,
     acknowledgement: Option<ResolvedAcknowledgement>,
     source_preflight: WriteSourcePreflight,
-) -> Result<PreparedWrite, AtmError> {
+) -> Result<WriteExecution, AtmError> {
     let mut context = prepare_send_context(runtime, &mut request)?;
     crate::send::validate_task_request(&mut request)?;
     let task_id = request.task_id.clone();
@@ -663,7 +712,7 @@ async fn prepare_persisted_write_async(
     let summary = crate::send::summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();
     let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
-    let persistence = crate::send::async_persistence::persist_send_message_async(
+    let mut persistence = crate::send::async_persistence::persist_send_message_async(
         runtime,
         &request,
         &context,
@@ -676,6 +725,13 @@ async fn prepare_persisted_write_async(
         verified_template.as_ref(),
     )
     .await?;
+    let task_events = std::mem::take(&mut persistence.task_events);
+    if let Err(error) = &persistence.operation {
+        return Ok(WriteExecution {
+            operation: Err(error.clone()),
+            task_events,
+        });
+    }
     let received_hook = prepare_received_hook(
         runtime,
         &context,
@@ -683,7 +739,7 @@ async fn prepare_persisted_write_async(
         requires_ack,
         acknowledgement.is_some(),
     );
-    let outcome = finalize_send_outcome(
+    let outcome = match finalize_send_outcome(
         runtime,
         observability,
         &request,
@@ -695,17 +751,29 @@ async fn prepare_persisted_write_async(
         task_id,
         &persistence,
         DeliveryExecutionMode::Deferred,
-    )?;
-    Ok(PreparedWrite {
-        outcome,
-        outbound_request: request,
-        persisted_timestamp: timestamp,
-        post_write_needed: persistence.requires_post_write(),
-        same_store_peer_receipt: persistence.duplicate_disposition
-            == DuplicateWriteDisposition::SameStorePeerReceipt,
-        received_hook,
-        acknowledgement,
-        task_rejection: persistence.task_rejection.clone(),
+    ) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            return Ok(WriteExecution {
+                operation: Err(error),
+                task_events,
+            });
+        }
+    };
+    Ok(WriteExecution {
+        operation: Ok(PreparedWrite {
+            outcome,
+            outbound_request: request,
+            persisted_timestamp: timestamp,
+            post_write_needed: persistence.requires_post_write(),
+            same_store_peer_receipt: persistence.duplicate_disposition
+                == DuplicateWriteDisposition::SameStorePeerReceipt,
+            received_hook,
+            acknowledgement,
+            task_rejection: persistence.task_rejection.clone(),
+            task_events: Vec::new(),
+        }),
+        task_events,
     })
 }
 

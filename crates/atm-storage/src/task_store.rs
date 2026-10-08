@@ -50,6 +50,33 @@ pub const TASK_CONSECUTIVE_REFUSAL_THRESHOLD: u32 = 3;
 /// Maximum recipients retained for one daemon or team escalation scope.
 pub const MAX_ESCALATION_RECIPIENTS: usize = 8;
 
+/// The operation result and audit rows made durable by a committed transaction.
+///
+/// An operation may fail while its rejection audit commits. An outer `Err`
+/// means commitment was not confirmed and never carries task-event rows.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommittedTaskWrite<T> {
+    pub operation: Result<T, AtmError>,
+    pub task_events: Vec<TaskEventRow>,
+}
+
+impl<T> CommittedTaskWrite<T> {
+    /// Converts the operation value without discarding committed audit rows.
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> CommittedTaskWrite<U> {
+        CommittedTaskWrite {
+            operation: self.operation.map(f),
+            task_events: self.task_events,
+        }
+    }
+}
+
+/// Whether a prompt handoff was inserted or already existed durably.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PromptHandoffWrite {
+    Inserted(PromptHandoff),
+    Existing(PromptHandoff),
+}
+
 /// Persisted result of moving a task in the ordered ledger.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskMoveRecord {
@@ -201,7 +228,10 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         task_id: &TaskId,
         assignee: Option<&AgentName>,
     ) -> Result<Vec<TaskEventRow>, AtmError>;
-    fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<PromptHandoff, AtmError>;
+    fn record_prompt_handoff(
+        &self,
+        handoff: &PromptHandoff,
+    ) -> Result<PromptHandoffWrite, AtmError>;
     fn move_task(
         &self,
         _team: &TeamName,
@@ -209,7 +239,7 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         _actor: &AgentName,
         _target: &MoveTarget,
         _at: IsoTimestamp,
-    ) -> Result<TaskMoveRecord, AtmError> {
+    ) -> Result<CommittedTaskWrite<TaskMoveRecord>, AtmError> {
         Err(AtmError::daemon_unavailable(
             "task store does not implement ordered task movement",
         ))
@@ -523,7 +553,10 @@ impl TaskStore for DummyTaskStore {
         Ok(Vec::new())
     }
 
-    fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<PromptHandoff, AtmError> {
+    fn record_prompt_handoff(
+        &self,
+        handoff: &PromptHandoff,
+    ) -> Result<PromptHandoffWrite, AtmError> {
         if self.fail_prompt_handoffs.load(Ordering::SeqCst) {
             return Err(AtmError::mailbox_write(
                 "injected prompt-handoff bookkeeping failure",
@@ -540,15 +573,17 @@ impl TaskStore for DummyTaskStore {
             .prompt_handoffs
             .lock()
             .map_err(|_| AtmError::mailbox_write("dummy prompt handoffs lock poisoned"))?;
-        if !rows.iter().any(|row| {
+        if let Some(existing) = rows.iter().find(|row| {
             row.team == handoff.team
                 && row.agent == handoff.agent
                 && row.message_key == handoff.message_key
+                && row.kind == handoff.kind
                 && row.attempt == handoff.attempt
         }) {
-            rows.push(handoff.clone());
+            return Ok(PromptHandoffWrite::Existing(existing.clone()));
         }
-        Ok(handoff.clone())
+        rows.push(handoff.clone());
+        Ok(PromptHandoffWrite::Inserted(handoff.clone()))
     }
 
     fn record_reminder(

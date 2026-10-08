@@ -602,7 +602,8 @@ impl LocalServiceRuntime {
         &self,
         message: crate::boundary::Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
         let store = self.async_message_store.as_ref().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "Tokio durable message admission was not installed in this runtime",
@@ -617,7 +618,8 @@ impl LocalServiceRuntime {
     pub async fn admit_template_message_async(
         &self,
         admission: atm_storage::TemplateMessageAdmission,
-    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
         let store = self.async_message_store.as_ref().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "Tokio template message admission was not installed in this runtime",

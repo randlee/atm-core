@@ -86,12 +86,16 @@ impl SerialWriterQueue {
 }
 
 pub(crate) enum ReplyTx {
-    Sync(SyncSender<Result<WriteOpResult, AtmError>>),
-    Async(tokio::sync::oneshot::Sender<Result<WriteOpResult, AtmError>>),
+    Sync(SyncSender<Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>>),
+    Async(
+        tokio::sync::oneshot::Sender<
+            Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>,
+        >,
+    ),
 }
 
 impl ReplyTx {
-    fn send(self, result: Result<WriteOpResult, AtmError>) {
+    fn send(self, result: Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>) {
         match self {
             Self::Sync(sender) => {
                 let _ = sender.send(result);
@@ -289,6 +293,13 @@ impl SqliteWriter {
     }
 
     pub(crate) fn submit(&self, op: WriteOp) -> Result<WriteOpResult, AtmError> {
+        self.submit_committed(op)?.operation
+    }
+
+    pub(crate) fn submit_committed(
+        &self,
+        op: WriteOp,
+    ) -> Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError> {
         let sender = self.sender.as_ref().ok_or_else(|| {
             let error = writer_channel_closed_error();
             self.observability
@@ -368,6 +379,13 @@ impl SqliteWriter {
     /// Enqueues one operation without blocking the Tokio executor, then awaits
     /// the reply from the single synchronous SQLite writer thread.
     pub(crate) async fn submit_async(&self, op: WriteOp) -> Result<WriteOpResult, AtmError> {
+        self.submit_committed_async(op).await?.operation
+    }
+
+    pub(crate) async fn submit_committed_async(
+        &self,
+        op: WriteOp,
+    ) -> Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError> {
         let sender = self.sender.as_ref().ok_or_else(|| {
             let error = writer_channel_closed_error();
             self.observability
@@ -569,6 +587,9 @@ pub(crate) use batch::{
     WriterWork, collect_batch, process_batch, process_diagnostic_batch, receive_next_work,
 };
 #[cfg(test)]
+mod committed_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::observability::NullSqliteObservability;
@@ -691,7 +712,10 @@ mod tests {
 
         assert!(matches!(
             reply.recv().expect("primary mailbox reply"),
-            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+            Ok(atm_storage::CommittedTaskWrite {
+                operation: Ok(WriteOpResult::UpsertMessage { inserted: true, .. }),
+                ..
+            })
         ));
         let persisted: i64 = connection
             .query_row(
@@ -763,7 +787,10 @@ mod tests {
         );
         assert!(matches!(
             reply.recv().expect("primary mailbox reply"),
-            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+            Ok(atm_storage::CommittedTaskWrite {
+                operation: Ok(WriteOpResult::UpsertMessage { inserted: true, .. }),
+                ..
+            })
         ));
     }
 
@@ -846,7 +873,7 @@ mod tests {
 
     static NEXT_TEST_DB_ID: AtomicU64 = AtomicU64::new(1);
 
-    fn message(key: &str) -> Message {
+    pub(super) fn message(key: &str) -> Message {
         let team: TeamName = "writer-test-team".parse().expect("team");
         let agent: AgentName = "writer-test-agent".parse().expect("agent");
         Message {
@@ -879,9 +906,12 @@ mod tests {
         }
     }
 
-    fn queued_upsert(
+    pub(super) fn queued_upsert(
         message: Message,
-    ) -> (QueuedWrite, mpsc::Receiver<Result<WriteOpResult, AtmError>>) {
+    ) -> (
+        QueuedWrite,
+        mpsc::Receiver<Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>>,
+    ) {
         let (reply, receiver) = mpsc::sync_channel(1);
         (
             QueuedWrite {
@@ -1142,12 +1172,25 @@ mod tests {
 
         assert!(matches!(
             first_reply.recv().expect("first reply"),
-            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+            Ok(atm_storage::CommittedTaskWrite {
+                operation: Ok(WriteOpResult::UpsertMessage { inserted: true, .. }),
+                ..
+            })
         ));
-        assert!(invalid_reply.recv().expect("invalid reply").is_err());
+        assert!(
+            invalid_reply
+                .recv()
+                .expect("invalid reply")
+                .unwrap()
+                .operation
+                .is_err()
+        );
         assert!(matches!(
             last_reply.recv().expect("last reply"),
-            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+            Ok(atm_storage::CommittedTaskWrite {
+                operation: Ok(WriteOpResult::UpsertMessage { inserted: true, .. }),
+                ..
+            })
         ));
         let persisted: i64 = connection
             .query_row(

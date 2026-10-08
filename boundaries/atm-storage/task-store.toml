@@ -29,9 +29,11 @@ forbidden = ["rusqlite::Connection"]
 
 [contracts]
 request_types = ["MemberKey", "TaskId", "IsoTimestamp", "ReminderOutcome", "MessageWriteOrigin", "EscalationScope", "PromptHandoff"]
-response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>", "Vec<PromptHandoff>", "Vec<String>", "bool", "TaskMoveRecord", "TaskReminderRecord"]
+response_types = ["Option<TaskRow>", "Vec<TaskRow>", "Vec<TaskEventRow>", "Vec<PromptHandoff>", "Vec<String>", "bool", "CommittedTaskWrite<TaskMoveRecord>", "TaskReminderRecord", "TaskEventRow", "PromptHandoffWrite"]
 error_types = ["AtmError"]
 notes = [
+  "committed outcomes preserve failed operations alongside committed Rejected rows; outer transaction failure exposes no rows",
+  "PromptHandoffWrite::Inserted and Existing both carry the actual persisted row; only Inserted is eligible for projection",
   "state change: only the message writer transaction applies Assigned/Started/Reassigned/Reopened/Completed; no TaskStore method changes tasks.state",
   "audit: task_events is append-only; every accepted transition, rejection, reminder, and lead notification is one row in the acting transaction",
   "prompt handoffs: record_prompt_handoff appends one best-effort task-linked emission observation; list_prompt_handoffs reads them ordered by timestamp then insertion rowid",

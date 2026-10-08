@@ -306,7 +306,9 @@ impl SharedDb {
         record: Message,
         provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<bool, AtmError> {
-        let outcome = self.submit_message_admission(record, provenance)?;
+        let outcome = self
+            .submit_message_admission(record, provenance)?
+            .operation?;
         match outcome.task_rejection {
             Some(error) => Err(error),
             None => Ok(outcome.existing.is_none()),
@@ -317,13 +319,13 @@ impl SharedDb {
         &self,
         record: Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
         validate_upsert_message_request(&record)?;
-        let result = self.writer.submit(WriteOp::UpsertMessage {
+        let committed = self.writer.submit_committed(WriteOp::UpsertMessage {
             record: Box::new(record),
             provenance,
         })?;
-        match result {
+        let operation = committed.operation.and_then(|result| match result {
             WriteOpResult::UpsertMessage {
                 inserted: true,
                 already_closed,
@@ -365,13 +367,24 @@ impl SharedDb {
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for message upsert",
             )),
-        }
+        });
+        Ok(atm_storage::CommittedTaskWrite {
+            operation,
+            task_events: committed.task_events,
+        })
     }
 
     /// Submits a feature-owned writer operation without exposing the writer
     /// handle or its transaction lifecycle outside this state root.
     pub(crate) fn submit_writer_op(&self, operation: WriteOp) -> Result<WriteOpResult, AtmError> {
         self.writer.submit(operation)
+    }
+
+    pub(crate) fn submit_committed_writer_op(
+        &self,
+        operation: WriteOp,
+    ) -> Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError> {
+        self.writer.submit_committed(operation)
     }
 
     pub(crate) fn submit_search(
@@ -414,7 +427,8 @@ impl SharedDb {
         provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<Option<Message>, AtmError> {
         self.submit_message_admission_async(record, provenance)
-            .await
+            .await?
+            .operation
             .map(|outcome| outcome.existing)
     }
 
@@ -422,16 +436,16 @@ impl SharedDb {
         &self,
         record: Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
         validate_upsert_message_request(&record)?;
-        match self
+        let committed = self
             .writer
-            .submit_async(WriteOp::UpsertMessage {
+            .submit_committed_async(WriteOp::UpsertMessage {
                 record: Box::new(record),
                 provenance,
             })
-            .await?
-        {
+            .await?;
+        let operation = committed.operation.and_then(|result| match result {
             WriteOpResult::UpsertMessage {
                 inserted: true,
                 already_closed,
@@ -473,7 +487,11 @@ impl SharedDb {
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async message upsert",
             )),
-        }
+        });
+        Ok(atm_storage::CommittedTaskWrite {
+            operation,
+            task_events: committed.task_events,
+        })
     }
 
     pub(crate) async fn submit_read_display_state_async(
@@ -501,13 +519,13 @@ impl SharedDb {
     pub(crate) async fn submit_template_message_admission_async(
         &self,
         admission: TemplateMessageAdmission,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
         admission.validate()?;
-        match self
+        let committed = self
             .writer
-            .submit_async(WriteOp::AdmitTemplateMessage(Box::new(admission)))
-            .await?
-        {
+            .submit_committed_async(WriteOp::AdmitTemplateMessage(Box::new(admission)))
+            .await?;
+        let operation = committed.operation.and_then(|result| match result {
             WriteOpResult::TemplateMessageAdmission {
                 inserted: true,
                 task_assignee,
@@ -540,7 +558,11 @@ impl SharedDb {
             other => Err(AtmError::daemon_unavailable(format!(
                 "sqlite writer returned the wrong result for async template message admission: {other:?}"
             ))),
-        }
+        });
+        Ok(atm_storage::CommittedTaskWrite {
+            operation,
+            task_events: committed.task_events,
+        })
     }
 
     pub(crate) fn submit_upsert_messages_atomically(

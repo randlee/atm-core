@@ -364,14 +364,17 @@ impl TaskStore for SqliteTaskStore {
         })
     }
 
-    fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<PromptHandoff, AtmError> {
-        self.db.with_connection(|connection| {
+    fn record_prompt_handoff(
+        &self,
+        handoff: &PromptHandoff,
+    ) -> Result<atm_storage::PromptHandoffWrite, AtmError> {
+        self.db.with_transaction(|connection| {
             let sql = format!(
                 "INSERT OR IGNORE INTO prompt_handoffs({})
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 task_sql::PROMPT_HANDOFF_COLUMNS
             );
-            connection
+            let inserted = connection
                 .execute(
                     &sql,
                     params![
@@ -385,8 +388,32 @@ impl TaskStore for SqliteTaskStore {
                         handoff.at.to_string(),
                     ],
                 )
-                .map(|_| handoff.clone())
-                .map_err(|error| self.db.error("failed to record prompt handoff", error))
+                .map_err(|error| self.db.error("failed to record prompt handoff", error))?;
+            if inserted != 0 {
+                return Ok(atm_storage::PromptHandoffWrite::Inserted(handoff.clone()));
+            }
+            let sql = format!(
+                "SELECT {} FROM prompt_handoffs WHERE team=?1 AND agent=?2
+                 AND message_key=?3 AND kind=?4 AND attempt=?5",
+                task_sql::PROMPT_HANDOFF_COLUMNS
+            );
+            connection
+                .query_row(
+                    &sql,
+                    params![
+                        handoff.team.as_str(),
+                        handoff.agent.as_str(),
+                        handoff.message_key.as_str(),
+                        handoff.kind.as_str(),
+                        handoff.attempt
+                    ],
+                    Self::decode_prompt_handoff,
+                )
+                .map(atm_storage::PromptHandoffWrite::Existing)
+                .map_err(|error| {
+                    self.db
+                        .error("failed to load existing prompt handoff", error)
+                })
         })
     }
 
@@ -397,19 +424,26 @@ impl TaskStore for SqliteTaskStore {
         actor: &AgentName,
         target: &MoveTarget,
         at: IsoTimestamp,
-    ) -> Result<atm_storage::TaskMoveRecord, AtmError> {
-        match self.db.submit_writer_op(crate::writer::WriteOp::TaskMove {
-            team: team.clone(),
-            task_id: task_id.clone(),
-            actor: actor.clone(),
-            target: target.clone(),
-            at,
-        })? {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::TaskMoveRecord>, AtmError> {
+        let committed = self
+            .db
+            .submit_committed_writer_op(crate::writer::WriteOp::TaskMove {
+                team: team.clone(),
+                task_id: task_id.clone(),
+                actor: actor.clone(),
+                target: target.clone(),
+                at,
+            })?;
+        let operation = committed.operation.and_then(|result| match result {
             crate::writer::WriteOpResult::TaskMoved(outcome) => Ok(outcome),
             _ => Err(AtmError::mailbox_write(
                 "task move writer returned an unexpected result",
             )),
-        }
+        });
+        Ok(atm_storage::CommittedTaskWrite {
+            operation,
+            task_events: committed.task_events,
+        })
     }
 
     fn record_reminder(

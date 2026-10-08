@@ -730,10 +730,13 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         &self,
         message: &Message,
         provenance: MessageWriteOrigin,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
+    ) -> Result<crate::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
         let _ = provenance;
         self.save_message_if_absent(message)
-            .map(MessageAdmissionOutcome::passive)
+            .map(|existing| crate::CommittedTaskWrite {
+                operation: Ok(MessageAdmissionOutcome::passive(existing)),
+                task_events: Vec::new(),
+            })
     }
     /// Commits related immutable mailbox records as one durable unit.
     ///
@@ -807,11 +810,14 @@ pub trait AsyncMessageStore: MessageStore {
         &self,
         message: Message,
         provenance: MessageWriteOrigin,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
+    ) -> Result<crate::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
         let _ = provenance;
         self.save_message_if_absent_async(message)
             .await
-            .map(MessageAdmissionOutcome::passive)
+            .map(|existing| crate::CommittedTaskWrite {
+                operation: Ok(MessageAdmissionOutcome::passive(existing)),
+                task_events: Vec::new(),
+            })
     }
 
     /// Atomically admits a mailbox record and its template decomposition on
@@ -819,7 +825,7 @@ pub trait AsyncMessageStore: MessageStore {
     async fn admit_template_message_async(
         &self,
         _admission: crate::TemplateMessageAdmission,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
+    ) -> Result<crate::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
         Err(AtmError::daemon_unavailable(
             "message store does not implement async template-message admission",
         ))

@@ -153,10 +153,15 @@ pub(crate) trait RetainedMailboxRuntime {
         home_dir: &Path,
         record: boundary::Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
         let _ = provenance;
-        self.admit_message_record(home_dir, record)
-            .map(atm_storage::MessageAdmissionOutcome::passive)
+        self.admit_message_record(home_dir, record).map(|existing| {
+            atm_storage::CommittedTaskWrite {
+                operation: Ok(atm_storage::MessageAdmissionOutcome::passive(existing)),
+                task_events: Vec::new(),
+            }
+        })
     }
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError>;
     fn persist_message_records_atomically(
@@ -264,7 +269,8 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         _home_dir: &Path,
         record: boundary::Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
         self.message_store
             .admit_message_with_provenance(&record, provenance)
     }

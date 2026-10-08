@@ -14,6 +14,132 @@ use rusqlite::{Connection, params};
 use serde_json::Map;
 use tempfile::TempDir;
 
+#[path = "task_identity/committed_outcomes.rs"]
+mod committed_outcomes;
+
+#[test]
+fn bd2_unknown_close_returns_committed_rejection() {
+    let h = Harness::new();
+    let mut message = h.message("lead", "alice", "unknown close");
+    message.envelope.task_id = Some("MISSING".parse().unwrap());
+    message.envelope.task_op = Some(TaskOp::Close {
+        outcome: TaskCloseOutcome::Completed,
+        reason: None,
+    });
+    let result = h
+        .backend
+        .message_store()
+        .admit_message_with_provenance(&message, MessageWriteOrigin::Local);
+    let result = result.expect("audit transaction committed");
+    assert_eq!(
+        result.operation.as_ref().unwrap_err().code(),
+        AtmErrorCode::TaskNotFound
+    );
+    let persisted = h.events("MISSING");
+    assert_eq!(persisted.len(), 1);
+    assert_eq!(persisted[0].event, TaskEventKind::Rejected);
+    let returned = result.task_events;
+    assert_eq!(returned, persisted);
+}
+
+#[test]
+fn bd2_rejected_move_returns_committed_rejection() {
+    let h = Harness::new();
+    let result = h.backend.task_store().move_task(
+        &h.team,
+        &"MISSING".parse().unwrap(),
+        &"alice".parse().unwrap(),
+        &MoveTarget::Head,
+        IsoTimestamp::now(),
+    );
+    let result = result.expect("audit transaction committed");
+    assert_eq!(
+        result.operation.as_ref().unwrap_err().code(),
+        AtmErrorCode::TaskNotFound
+    );
+    let persisted = h.events("MISSING");
+    assert_eq!(persisted.len(), 1);
+    assert_eq!(persisted[0].event, TaskEventKind::Rejected);
+    let returned = result.task_events;
+    assert_eq!(returned, persisted);
+}
+
+#[test]
+fn bd2_assignment_placement_events_follow_state_transition() {
+    for prior in [None, Some(false), Some(true)] {
+        for placement in [
+            MoveTarget::Head,
+            MoveTarget::Before {
+                task_id: "SECOND".parse().unwrap(),
+            },
+            MoveTarget::End,
+        ] {
+            let h = Harness::new();
+            h.assign("FIRST", "alice", "lead", None);
+            h.assign("SECOND", "alice", "lead", None);
+            if let Some(closed) = prior {
+                h.assign("TARGET", "bob", "lead", None);
+                if closed {
+                    h.close("TARGET", "lead", "bob", TaskCloseOutcome::Completed)
+                        .unwrap();
+                }
+            }
+            let before = h.events("TARGET").len();
+            let (_, outcome) = h.assign_with_outcome("TARGET", "alice", "lead", Some(placement));
+            let events = h.events("TARGET");
+            assert_eq!(outcome.task_events, events[before..]);
+            let expected = match prior {
+                None => TaskEventKind::Assigned,
+                Some(false) => TaskEventKind::Reassigned,
+                Some(true) => TaskEventKind::Reopened,
+            };
+            assert_eq!(
+                outcome
+                    .task_events
+                    .iter()
+                    .map(|row| row.event)
+                    .collect::<Vec<_>>(),
+                vec![expected, TaskEventKind::Moved]
+            );
+            assert!(outcome.task_events[0].seq < outcome.task_events[1].seq);
+        }
+    }
+}
+
+#[test]
+fn bd2_assignment_placement_records_final_position() {
+    for prior in [None, Some(false), Some(true)] {
+        for placement in [
+            MoveTarget::Head,
+            MoveTarget::Before {
+                task_id: "SECOND".parse().unwrap(),
+            },
+            MoveTarget::End,
+        ] {
+            let h = Harness::new();
+            h.assign("FIRST", "alice", "lead", None);
+            h.assign("SECOND", "alice", "lead", None);
+            if let Some(closed) = prior {
+                h.assign("TARGET", "bob", "lead", None);
+                if closed {
+                    h.close("TARGET", "lead", "bob", TaskCloseOutcome::Completed)
+                        .unwrap();
+                }
+            }
+            let from = prior.map_or(0, |closed| if closed { 0 } else { 1 });
+            let (_, outcome) = h.assign_with_outcome("TARGET", "alice", "lead", Some(placement));
+            let actual = h.row("TARGET").position.unwrap().get();
+            assert_eq!(outcome.queued_position, Some(actual));
+            let moved = outcome
+                .task_events
+                .iter()
+                .find(|row| row.event == TaskEventKind::Moved)
+                .unwrap();
+            assert_eq!(moved.detail, Some(format!("{from}→{actual}")));
+        }
+    }
+}
+
 struct Harness {
     _dir: TempDir,
     path: std::path::PathBuf,
@@ -66,6 +192,8 @@ impl Harness {
             .backend
             .message_store()
             .admit_message_with_provenance(&message, MessageWriteOrigin::Local)
+            .expect("assignment commit")
+            .operation
             .expect("assign");
         (message, outcome)
     }
@@ -175,6 +303,8 @@ impl Harness {
                 &target,
                 IsoTimestamp::now(),
             )
+            .expect("move commit")
+            .operation
             .expect("move task");
     }
 }
@@ -242,6 +372,8 @@ pub(crate) fn assignee_task_report_is_plain_message_and_leaves_task_unchanged() 
         .backend
         .message_store()
         .admit_message_with_provenance(&report, MessageWriteOrigin::Local)
+        .expect("commit task-linked report")
+        .operation
         .expect("admit task-linked report");
 
     assert_eq!(h.row("T1"), before);
@@ -296,8 +428,15 @@ fn reassign_inserts_closed_reassigned_message_to_old_assignee_in_same_transactio
         "alice"
     );
     assert_eq!(
-        h.events("T1").last().unwrap().event,
-        TaskEventKind::Reassigned
+        h.events("T1")
+            .into_iter()
+            .map(|event| event.event)
+            .collect::<Vec<_>>(),
+        vec![
+            TaskEventKind::Assigned,
+            TaskEventKind::Reassigned,
+            TaskEventKind::Moved,
+        ]
     );
     assert!(
         h.backend
@@ -863,6 +1002,8 @@ pub(crate) fn move_of_complete_task_appends_rejected_row() {
             &MoveTarget::Head,
             IsoTimestamp::now(),
         )
+        .expect("rejection committed")
+        .operation
         .expect_err("complete task cannot move");
     assert_eq!(error.code(), AtmErrorCode::TaskAlreadyClosed);
     let event = h.events("T1").pop().expect("rejected event");
