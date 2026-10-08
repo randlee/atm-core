@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use super::*;
+use crate::otel_setup::{EXPORT_BATCH, EXPORT_INTERVAL, EXPORT_QUEUE, EXPORT_TIMEOUT};
 use crate::{ExportDiagnostics, TracingBridgeLayer, build_retained_logger};
 use atm_core::observability::{
     AtmTelemetryExportFailure, AtmTelemetryExportHealth, AtmTelemetryExportState,
@@ -70,10 +71,10 @@ fn health() -> AtmTelemetryExportHealth {
 
 #[test]
 fn production_limits_are_distinct_from_test_deadlines_and_terminal_failure_is_retained() {
-    assert_eq!(crate::EXPORT_QUEUE, 256);
-    assert_eq!(crate::EXPORT_BATCH, 256);
-    assert_eq!(crate::EXPORT_TIMEOUT, Duration::from_millis(400));
-    assert_eq!(crate::EXPORT_INTERVAL, Duration::from_secs(1));
+    assert_eq!(EXPORT_QUEUE, 256);
+    assert_eq!(EXPORT_BATCH, 256);
+    assert_eq!(EXPORT_TIMEOUT, Duration::from_millis(400));
+    assert_eq!(EXPORT_INTERVAL, Duration::from_secs(1));
     let diagnostics = ExportDiagnostics::default();
     diagnostics.shutdown_wait_timed_out();
     diagnostics.observe_result(Ok(()));
