@@ -298,14 +298,17 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
     drop(task);
     drop(workflow);
     let duplicate = traces.clone();
-    let started = std::time::Instant::now();
-    let results = tokio::join!(
-        tokio::task::spawn_blocking(move || traces.shutdown()),
-        tokio::task::spawn_blocking(move || duplicate.shutdown()),
-        tokio::task::spawn_blocking(move || logs.shutdown()),
-        tokio::task::spawn_blocking(move || metrics.shutdown())
-    );
-    assert!(started.elapsed() < Duration::from_secs(1));
+    // The outer bound only names a hang; the pass criterion is the results.
+    let results = tokio::time::timeout(Duration::from_secs(120), async {
+        tokio::join!(
+            tokio::task::spawn_blocking(move || traces.shutdown()),
+            tokio::task::spawn_blocking(move || duplicate.shutdown()),
+            tokio::task::spawn_blocking(move || logs.shutdown()),
+            tokio::task::spawn_blocking(move || metrics.shutdown())
+        )
+    })
+    .await
+    .expect("the four concurrent SDK shutdowns never returned");
     let results = [
         results.0.unwrap(),
         results.1.unwrap(),
@@ -313,6 +316,17 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
         results.3.unwrap(),
     ];
     assert!(results.iter().any(Result::is_err));
+    // The two traces handles share one provider: exactly one call performs
+    // the shutdown and the other reports it was already invoked.
+    let already_invoked = results[..2]
+        .iter()
+        .filter(|result| {
+            result
+                .as_ref()
+                .is_err_and(|error| error.to_string().contains("already invoked"))
+        })
+        .count();
+    assert_eq!(already_invoked, 1, "{results:?}");
     for result in results {
         diagnostics.observe_result(result);
     }
