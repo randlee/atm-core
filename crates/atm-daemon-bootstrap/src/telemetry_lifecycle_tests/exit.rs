@@ -8,6 +8,7 @@
 #![cfg(test)]
 
 use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -83,10 +84,16 @@ pub(super) fn is_child_scenario(scenario: &str) -> bool {
 /// Runs the `scenario` child test in its own process, so it owns the
 /// process-global tracing bridge, and requires it to pass.
 pub(super) fn run_child_scenario(scenario: &str) {
+    run_child_scenario_with(scenario, &[]);
+}
+
+/// [`run_child_scenario`] with `envs` set in the child process only.
+pub(super) fn run_child_scenario_with(scenario: &str, envs: &[(&str, &Path)]) {
     let mut child = Command::new(std::env::current_exe().expect("test binary"))
         .args(["--exact", scenario, "--nocapture", "--test-threads=1"])
         .env(CHILD_SCENARIO, scenario)
         .env_remove(CHILD_MODE)
+        .envs(envs.iter().copied())
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
