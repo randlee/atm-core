@@ -18,6 +18,7 @@ pub(crate) async fn record_prompt_handoff(
     dispatch: &BuiltInPostSendDispatch,
     trigger: PromptTrigger,
     at: IsoTimestamp,
+    telemetry: &atm_runtime::TaskTelemetryRuntime,
 ) {
     let Some(transition) = dispatch.event.task_transition else {
         return;
@@ -56,12 +57,15 @@ pub(crate) async fn record_prompt_handoff(
         trigger,
         at,
     };
-    if let Err(error) = bridge
+    match bridge
         .run(deadline, move || store.record_prompt_handoff(&handoff))
         .await
     {
-        let reason = failure_reason(&error);
-        log_failure(dispatch, kind, trigger, reason, &error);
+        Ok(write) => crate::task_telemetry::project_handoff(telemetry, &write),
+        Err(error) => {
+            let reason = failure_reason(&error);
+            log_failure(dispatch, kind, trigger, reason, &error);
+        }
     }
 }
 

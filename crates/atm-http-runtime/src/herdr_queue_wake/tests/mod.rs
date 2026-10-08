@@ -1506,6 +1506,7 @@ async fn task_linked_prompt_without_task_id_logs_storage_failure_and_records_not
         &dispatch,
         PromptTrigger::Steer,
         IsoTimestamp::now(),
+        &atm_runtime::TaskTelemetryRuntime::disabled(),
     )
     .await;
 
