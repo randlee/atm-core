@@ -624,7 +624,13 @@ impl StorageAndNudgeRouter {
                 )
             })
             .await?;
-        crate::task_telemetry::project_task_events(&self.task_telemetry, &committed.task_events);
+        // A successful move carries its row in the record; the carrier holds
+        // only a committed rejection audit.
+        let mut rows = committed.task_events;
+        if let Ok(record) = &committed.operation {
+            rows.push(record.event.clone());
+        }
+        crate::task_telemetry::project_task_events(&self.task_telemetry, &rows);
         let record = committed.operation?;
         Ok(ApiResponse::new(ResponseEnvelope::TaskMove(
             TaskMoveOutcome {
@@ -1113,6 +1119,8 @@ pub(crate) fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Resu
 
 #[cfg(test)]
 pub(crate) mod tests {
+    mod bd3_task_telemetry;
+
     use std::fs;
     use std::future::Future;
     use std::num::{NonZeroU16, NonZeroUsize};
