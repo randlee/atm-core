@@ -1129,9 +1129,9 @@ async fn cancel_inflight_prompt() -> (
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let sender_clone = shutdown_tx.clone();
     let task = pump.clone().start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(1), prompt_started.notified())
-        .await
-        .expect("the fake prompt is in flight before shutdown");
+    // The gate stores a permit (`notify_one`), so this wait cannot miss it and
+    // needs no wall-clock bound racing the pump's progress.
+    prompt_started.notified().await;
     shutdown_tx.send(()).expect("shutdown notification");
     tokio::time::timeout(Duration::from_secs(1), task)
         .await
@@ -2481,9 +2481,9 @@ async fn ac11_claim_drop_guard_release_is_joined_before_pump_shutdown() {
     let prompt_started = pump.install_prompt_started_test_gate();
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.clone().start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(1), prompt_started.notified())
-        .await
-        .expect("the fake prompt is in flight before shutdown");
+    // The gate stores a permit (`notify_one`), so this wait cannot miss it and
+    // needs no wall-clock bound racing the pump's progress.
+    prompt_started.notified().await;
 
     shutdown_tx.send(()).expect("shutdown notification");
     task.await.expect("poll task joins after shutdown");
@@ -2587,9 +2587,9 @@ async fn ac11_successful_prompt_cancellation_cannot_rerelease_claim() {
     let (clear_started, _allow_clear) = pump.install_handoff_cleanup_test_gate();
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.clone().start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(1), clear_started.notified())
-        .await
-        .expect("marker cleanup completes before cancellation");
+    // Marker cleanup has completed once the gate is entered; the gate stores a
+    // permit, so waiting on it cannot race the pump's progress.
+    clear_started.notified().await;
 
     shutdown_tx.send(()).expect("shutdown notification");
     task.await.expect("poll task join");
