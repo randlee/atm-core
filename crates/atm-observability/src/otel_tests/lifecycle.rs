@@ -153,28 +153,37 @@ async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() 
     let mut log = logger.create_log_record();
     log.set_body("nonempty".into());
     logger.emit(log);
+    setup
+        .4
+        .meter("stalled")
+        .u64_counter("fixture.count")
+        .build()
+        .add(1, &[]);
+    let (task, workflow, traces, logs, metrics) = setup;
+    drop(task);
+    drop(workflow);
+    let trace = tokio::task::spawn_blocking(move || traces.shutdown());
+    let log = tokio::task::spawn_blocking(move || logs.shutdown());
+    let metric = tokio::task::spawn_blocking(move || metrics.shutdown());
     receiver
         .capture
         .wait(|| receiver.capture.started.load(Ordering::SeqCst) >= 3)
         .await;
+    assert!(!receiver.capture.spans.lock().unwrap().is_empty());
+    assert!(!receiver.capture.logs.lock().unwrap().is_empty());
+    assert!(!receiver.capture.metrics.lock().unwrap().is_empty());
+    let (trace, log, metric) = tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::join!(trace, log, metric)
+    })
+    .await
+    .expect("all configured shutdown timeouts return before the test deadline");
+    assert!(trace.unwrap().is_err(), "trace shutdown must time out");
+    assert!(log.unwrap().is_err(), "log shutdown must time out");
+    assert!(metric.unwrap().is_err(), "metric shutdown must time out");
     receiver
         .capture
         .wait(|| receiver.capture.finished.load(Ordering::SeqCst) >= 3)
         .await;
-    assert!(!receiver.capture.spans.lock().unwrap().is_empty());
-    assert!(!receiver.capture.logs.lock().unwrap().is_empty());
-    assert!(!receiver.capture.metrics.lock().unwrap().is_empty());
-    let (task, workflow, traces, logs, metrics) = setup;
-    drop(task);
-    drop(workflow);
-    let started = std::time::Instant::now();
-    let (trace, log, metric) = tokio::join!(
-        tokio::task::spawn_blocking(move || traces.shutdown()),
-        tokio::task::spawn_blocking(move || logs.shutdown()),
-        tokio::task::spawn_blocking(move || metrics.shutdown())
-    );
-    assert!(started.elapsed() < Duration::from_secs(1));
-    assert!(trace.unwrap().is_err() || log.unwrap().is_err() || metric.unwrap().is_err());
     receiver.stop().await;
 }
 
@@ -232,7 +241,7 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
 }
 
 #[tokio::test]
-async fn abandoning_shutdown_wait_does_not_abort_blocking_call_or_clear_terminal_timeout() {
+async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_terminal_timeout() {
     let receiver = Receiver::start(true).await;
     // The export timeout outlives the test's hold, so only the receiver's
     // release signal lets the blocking shutdown finish.
@@ -241,50 +250,73 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_call_or_clear_terminal
     for _ in 0..64 {
         setup.2.tracer("abandoned-wait").start("nonempty").end();
     }
-    receiver
-        .capture
-        .wait(|| receiver.capture.started.load(Ordering::SeqCst) >= 1)
-        .await;
+    let logger = setup.3.logger("abandoned-wait");
+    let mut log = logger.create_log_record();
+    log.set_body("nonempty".into());
+    logger.emit(log);
+    setup
+        .4
+        .meter("abandoned-wait")
+        .u64_counter("fixture.count")
+        .build()
+        .add(1, &[]);
     let (task, workflow, traces, logs, metrics) = setup;
     drop(task);
     drop(workflow);
     let diagnostics = Arc::new(ExportDiagnostics::default());
     let evidence = diagnostics.clone();
-    let (finished, finished_rx) = tokio::sync::oneshot::channel();
-    let mut call = tokio::task::spawn_blocking(move || {
+    let mut trace_call = tokio::task::spawn_blocking(move || {
         evidence.observe_result(traces.shutdown());
-        let _ = finished.send(());
     });
-    // The export is held by the receiver, so shutdown cannot complete yet.
+    let mut log_call = tokio::task::spawn_blocking(move || logs.shutdown());
+    let mut metric_call = tokio::task::spawn_blocking(move || metrics.shutdown());
+    receiver
+        .capture
+        .wait(|| receiver.capture.started.load(Ordering::SeqCst) >= 3)
+        .await;
+    // Each export is held by the receiver, so no shutdown can complete yet.
     assert!(
-        tokio::time::timeout(Duration::from_millis(200), &mut call)
+        tokio::time::timeout(Duration::from_millis(200), &mut trace_call)
+            .await
+            .is_err()
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), &mut log_call)
+            .await
+            .is_err()
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), &mut metric_call)
             .await
             .is_err()
     );
     assert_eq!(receiver.capture.finished.load(Ordering::SeqCst), 0);
     diagnostics.shutdown_wait_timed_out();
-    // Cancelling the caller's wait cannot abort spawn_blocking. Retain and
-    // eventually join its handle; BD6 separately proves actual process exit.
-    call.abort();
-    receiver.capture.release();
-    tokio::time::timeout(Duration::from_secs(10), finished_rx)
-        .await
-        .unwrap()
-        .unwrap();
-    call.await.unwrap();
+    // Cancelling caller waits cannot abort spawn_blocking. Retain and
+    // eventually join each handle; BD6 separately proves actual process exit.
+    trace_call.abort();
+    log_call.abort();
+    metric_call.abort();
+    for _ in 0..3 {
+        receiver.capture.release();
+    }
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let (trace, log, metric) = tokio::join!(trace_call, log_call, metric_call);
+        trace.unwrap();
+        log.unwrap().unwrap();
+        metric.unwrap().unwrap();
+    })
+    .await
+    .expect("all abandoned shutdown calls finish after release");
     receiver
         .capture
-        .wait(|| receiver.capture.finished.load(Ordering::SeqCst) >= 1)
+        .wait(|| receiver.capture.finished.load(Ordering::SeqCst) >= 3)
         .await;
     let mut snapshot = health();
     diagnostics.project(&mut snapshot);
     assert_eq!(
         snapshot.last_failure,
         Some(AtmTelemetryExportFailure::ShutdownTimedOut)
-    );
-    let _ = tokio::join!(
-        tokio::task::spawn_blocking(move || logs.shutdown()),
-        tokio::task::spawn_blocking(move || metrics.shutdown())
     );
     receiver.stop().await;
 }
