@@ -224,6 +224,7 @@ dependencies = [
  "chrono",
  "fs4",
  "opentelemetry",
+ "opentelemetry-proto",
  "opentelemetry_sdk",
  "peer-tls",
  "serde",
@@ -231,8 +232,11 @@ dependencies = [
  "serial_test",
  "tempfile",
  "tokio",
+ "tokio-stream",
  "toml 0.8.23",
+ "tonic",
  "tracing",
+ "tracing-subscriber",
  "ulid",
 ]
 

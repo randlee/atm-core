@@ -238,10 +238,19 @@ pub fn assemble_daemon_runtime() -> Result<RuntimeAssembly, AtmError> {
     let storage_factory = SqliteStorageFactory::host_scoped()
         .with_observability(Arc::new(sqlite_observability::DaemonSqliteObservability))
         .with_timeline_observer(Arc::new(diagnostic_timeline::attach_timeline));
-    let owner = daemon_observability::DaemonObservability::process_owner();
-    let telemetry = owner
-        .as_ref()
-        .map_or((None, None), |owner| owner.take_telemetry_setups());
+    compose_daemon_assembly(
+        storage_factory,
+        daemon_observability::DaemonObservability::process_owner().as_ref(),
+    )
+}
+
+/// Assembles the daemon runtime from `owner`'s telemetry setups and attaches
+/// the assembled runtimes' known-loss counters back to its export health.
+fn compose_daemon_assembly(
+    storage_factory: SqliteStorageFactory,
+    owner: Option<&daemon_observability::DaemonObservability>,
+) -> Result<RuntimeAssembly, AtmError> {
+    let telemetry = owner.map_or((None, None), |owner| owner.take_telemetry_setups());
     let assembly = assemble_host_runtime_with_storage_factory(
         PathBuf::new(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
@@ -982,6 +991,8 @@ pub fn with_default_peer_address_stores<T>(
 
 #[cfg(test)]
 mod herdr_lifecycle_tests;
+#[cfg(test)]
+mod telemetry_lifecycle_tests;
 
 #[cfg(test)]
 mod replacement_runtime_tests {
