@@ -90,8 +90,43 @@ fn production_limits_are_distinct_from_test_deadlines_and_terminal_failure_is_re
     );
 }
 
-#[tokio::test]
-async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recovery() {
+const UNREACHABLE_CHILD: &str = "ATM_OTEL_UNREACHABLE_COLLECTOR_CHILD";
+const UNREACHABLE_TEST: &str = "otel_tests::lifecycle::real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recovery";
+
+/// The scenario captures SDK failure events through a tracing subscriber. A
+/// thread-scoped dispatcher races sibling tests in tracing's per-callsite
+/// interest cache and can miss the event, so the scenario runs in a child
+/// process of this test binary that owns the global subscriber, as the
+/// production bridge does.
+#[test]
+fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recovery() {
+    if std::env::var_os(UNREACHABLE_CHILD).is_some() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(unreachable_collector_scenario());
+        return;
+    }
+    let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        .args([
+            "--exact",
+            UNREACHABLE_TEST,
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(UNREACHABLE_CHILD, "1")
+        .output()
+        .expect("spawn the unreachable-collector child");
+    assert!(
+        output.status.success(),
+        "child scenario failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+async fn unreachable_collector_scenario() {
     // The collector accepts each connection and closes it at once, so every
     // export fails immediately on every OS. A closed port is not equivalent:
     // a refused connect is OS-timed, and on Windows CI no span or log export
@@ -122,7 +157,7 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
             .with(bridge)
             .with(observed.clone()),
     );
-    let _subscriber = tracing::dispatcher::set_default(&dispatch);
+    tracing::dispatcher::set_global_default(dispatch).expect("child owns the global subscriber");
     // A one-span batch exports the first span at once through the SDK's
     // full-batch path. The scheduled path first fires at 2x EXPORT_INTERVAL
     // (the SDK interval sleeps before its first tick, then skips it), which
