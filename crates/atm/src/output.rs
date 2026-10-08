@@ -478,16 +478,19 @@ fn print_doctor_observability(report: &DoctorReport) {
 }
 
 fn render_doctor_observability(report: &DoctorReport) -> String {
+    render_observability_health(&report.observability)
+}
+
+fn render_observability_health(health: &atm_core::observability::AtmObservabilityHealth) -> String {
     let mut output = format!(
         "Active log path: {}\n",
-        report
-            .observability
+        health
             .active_log_path
             .as_ref()
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "<unavailable>".to_string())
     );
-    if let Some(maintenance) = &report.observability.maintenance {
+    if let Some(maintenance) = &health.maintenance {
         output.push_str(&format!(
             "Maintenance: {} | Rotated: {} | Pruned: {} | Last pass: {}",
             render_maintenance_state(maintenance.state),
@@ -502,14 +505,10 @@ fn render_doctor_observability(report: &DoctorReport) -> String {
     }
     output.push_str(&format!(
         "Observability: jsonl forwarded={} queue_full_dropped={} reentrant_dropped={}; timeline written={} queue_full_dropped={} persist_error_dropped={}\n",
-        report.observability.jsonl.forwarded_total,
-        report.observability.jsonl.dropped_queue_full_total,
-        report.observability.jsonl.dropped_reentrant_total,
-        report.observability.timeline.written_total,
-        report.observability.timeline.dropped_queue_full_total,
-        report.observability.timeline.dropped_persist_error_total,
+        health.jsonl.forwarded_total, health.jsonl.dropped_queue_full_total, health.jsonl.dropped_reentrant_total,
+        health.timeline.written_total, health.timeline.dropped_queue_full_total, health.timeline.dropped_persist_error_total,
     ));
-    if let Some(export) = &report.observability.export {
+    if let Some(export) = &health.export {
         output.push_str(&format!(
             "observability.export: state={} endpoint={} protocol={}",
             render_export_state(export.state),
@@ -532,10 +531,10 @@ fn render_doctor_observability(report: &DoctorReport) -> String {
         }
         output.push('\n');
     }
-    if !report.observability.degraded.is_empty() {
+    if !health.degraded.is_empty() {
         output.push_str(&format!(
             "WARN: Retained observability degraded: {}\n",
-            report.observability.degraded.join(", ")
+            health.degraded.join(", ")
         ));
     }
     output
@@ -1141,6 +1140,10 @@ mod tests {
         PeerConfigDoctorReport,
     };
     use atm_core::error_codes::AtmErrorCode;
+    use atm_core::observability::{
+        AtmObservabilityHealth, AtmObservabilityHealthState, AtmTelemetryExportHealth,
+        AtmTelemetryExportState,
+    };
     use atm_core::team_admin::MembersList;
     use atm_core::types::HostName;
     use serde_json::json;
@@ -1149,9 +1152,38 @@ mod tests {
 
     use super::{
         render_bootstrap_trace_section, render_doctor_alias_mismatches, render_doctor_herdr,
-        render_doctor_peer_config, render_doctor_rosters, render_send_stdout,
-        render_warnings_to_stderr,
+        render_doctor_peer_config, render_doctor_rosters, render_observability_health,
+        render_send_stdout, render_warnings_to_stderr,
     };
+
+    #[test]
+    fn doctor_export_rendering_includes_nonzero_counters_without_credentials() {
+        let health = AtmObservabilityHealth {
+            active_log_path: None,
+            logging_state: AtmObservabilityHealthState::Healthy,
+            query_state: Some(AtmObservabilityHealthState::Healthy),
+            maintenance: None,
+            diagnostic: None,
+            jsonl: Default::default(),
+            timeline: Default::default(),
+            degraded: Vec::new(),
+            detail: None,
+            export: Some(AtmTelemetryExportHealth {
+                state: AtmTelemetryExportState::Degraded,
+                endpoint: Some("https://collector.example:4317".into()),
+                protocol: Some(atm_core::TelemetryExportProtocol::Grpc),
+                emitted: 2,
+                dropped_full: 1,
+                dropped_timeout: 0,
+                dropped_failure: 0,
+                dropped_shutdown: 0,
+                last_failure: None,
+            }),
+        };
+        let rendered = render_observability_health(&health);
+        assert!(rendered.contains("observability.export: state=degraded endpoint=https://collector.example:4317 protocol=grpc emitted=2 dropped_full=1"));
+        assert!(!rendered.contains("AUTH_HEADER"));
+    }
 
     #[test]
     fn herdr_doctor_rendering_exposes_typed_state_and_remedy_without_raw_endpoint() {
