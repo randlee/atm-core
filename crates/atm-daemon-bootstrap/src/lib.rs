@@ -800,8 +800,9 @@ const LISTENER_ABORT_GRACE: Duration = Duration::from_millis(250);
 
 /// Drains every supervised subsystem under one cumulative deadline fixed at
 /// shutdown entry (ADR-055, REQ-DAEMON-RUNTIME-003): listener, recovery sweep,
-/// peer connections, task/workflow telemetry drains, exporter shutdown and the
-/// `$ATM_TEMP` sweeper each get only the remaining time, never a fresh budget.
+/// peer connections, task/workflow telemetry drains, the `$ATM_TEMP` sweeper,
+/// the retained-logger drain and exporter shutdown each get only the
+/// remaining time, never a fresh budget.
 /// Every terminal daemon path uses this sequence, so a failed ready handshake
 /// cannot leave a subsystem alive after the listener is gone. The returned
 /// result is the listener's; telemetry outcomes are retained as health.
@@ -828,10 +829,13 @@ async fn shutdown_replacement_daemon(
         workers.task_telemetry.shutdown(deadline),
         workers.workflow_telemetry.shutdown(deadline),
     );
+    // The sweeper emits through the retained logger, so it stops first.
+    workers.atm_temp_sweeper.shutdown(deadline).await;
     if let Some(observability) = &workers.observability {
+        tracing::info!(target: "atm_daemon_bootstrap::lifecycle", code = "ATM_DAEMON_SHUTDOWN_DRAINED", "replacement ATM daemon drained its subsystems; closing retained logs");
+        observability.shutdown_logger(deadline).await;
         observability.shutdown_export(deadline).await;
     }
-    workers.atm_temp_sweeper.shutdown(deadline).await;
     diagnostic_timeline::stop_flush_worker();
     let _stopped = stopped?;
     Ok(())

@@ -229,12 +229,10 @@ fn tree(root: &Path) -> BTreeSet<PathBuf> {
 #[test]
 fn composed_daemon_home_is_injected_not_ambient() {
     let sentinel = tempfile::tempdir().expect("sentinel home");
+    let sentinel_path = sentinel.path().to_str().expect("utf-8 sentinel home");
     super::exit::run_child_scenario_with(
         ISOLATED_HOME_CHILD,
-        &[
-            ("ATM_HOME", sentinel.path()),
-            (SENTINEL_HOME, sentinel.path()),
-        ],
+        &[("ATM_HOME", sentinel_path), (SENTINEL_HOME, sentinel_path)],
     );
     assert_eq!(
         tree(sentinel.path()),
