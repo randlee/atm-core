@@ -297,6 +297,11 @@ fn parse_endpoint(endpoint: &str) -> Result<EndpointTarget, AtmError> {
     if endpoint.is_empty() {
         return Err(config_invalid("ATM_OTEL_ENDPOINT must not be empty"));
     }
+    if endpoint.contains('?') || endpoint.contains('#') {
+        return Err(config_invalid(
+            "ATM_OTEL_ENDPOINT must not contain a query or fragment",
+        ));
+    }
     let Some((scheme, rest)) = endpoint.split_once("://") else {
         return Err(config_invalid(
             "ATM_OTEL_ENDPOINT must be an http:// or https:// URL",
@@ -509,6 +514,8 @@ mod tests {
             "http://:4317",
             "https://user:pass@collector:4317",
             "http://token@localhost:4317",
+            "https://collector:4317/v1?api_key=secret",
+            "https://collector:4317/v1#access_token=secret",
         ] {
             rejects(&[(ATM_OTEL_ENDPOINT, endpoint)]);
         }
