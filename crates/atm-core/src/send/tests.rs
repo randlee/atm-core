@@ -1309,33 +1309,33 @@ fn self_addressed_plain_send_is_rejected_before_persistence() {
 
 #[test]
 #[serial_test::serial(env)]
-fn self_addressed_task_send_is_rejected_before_persistence() {
+fn self_addressed_task_assignment_is_persisted_without_delivery() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let mut request = self_addressed_send_request(tempdir.path());
+    request.task_id = Some("SELF-1".parse().expect("task id"));
 
-    let error = super::send_mail_with_runtime_impl(
-        self_addressed_send_request(tempdir.path()),
-        &observability,
-        &runtime,
-        None,
-    )
-    .expect_err("self-addressed task send must fail");
+    let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect("self-addressed task assignment is accepted");
 
-    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
-    assert!(
+    assert!(outcome.task_id.is_some(), "the assignment creates a task");
+    assert_eq!(
         runtime
-            .appended_messages
+            .persisted_records
             .lock()
-            .expect("append lock")
-            .is_empty()
+            .expect("records lock")
+            .len(),
+        1,
+        "the task record is persisted"
     );
     assert!(
         runtime
             .non_claude_deliveries
             .lock()
             .expect("non-claude deliveries lock")
-            .is_empty()
+            .is_empty(),
+        "nothing is delivered to the caller's own pane"
     );
 }
 

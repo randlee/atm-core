@@ -54,7 +54,10 @@ pub(crate) use peer_routing::direct_peer_destination;
 #[cfg(test)]
 pub(crate) use persistence::persist_message;
 pub(crate) use received_hook::{PreparedReceivedHook, prepare_received_hook};
-pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
+pub(crate) use recipient::{
+    ResolvedRecipient, is_same_member, is_task_write, resolve_recipient,
+    validate_non_self_recipient,
+};
 use request::prepare_threaded_message;
 pub(crate) use request::resolve_message_body;
 use template::{requires_plain_template_fallback, verify_template_send};
