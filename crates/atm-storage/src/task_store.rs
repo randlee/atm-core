@@ -54,6 +54,7 @@ pub const MAX_ESCALATION_RECIPIENTS: usize = 8;
 /// An operation may fail while its rejection audit commits. An outer `Err`
 /// means commitment was not confirmed and never carries task-event rows.
 #[derive(Debug, Clone, PartialEq)]
+#[must_use]
 pub struct CommittedTaskWrite<T> {
     pub operation: Result<T, AtmError>,
     /// Committed rejection-audit rows, non-empty only when `operation` is

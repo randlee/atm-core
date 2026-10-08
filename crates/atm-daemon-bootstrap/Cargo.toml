@@ -26,6 +26,9 @@ atm-runtime.workspace = true
 atm-storage.workspace = true
 atm-storage-rusqlite.workspace = true
 atm-template-sc-compose.workspace = true
+# Lifecycle-only standard SDK provider handles (ADR-064); construction stays in atm-observability.
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
 peer-tls.workspace = true
 tokio.workspace = true
 tracing.workspace = true

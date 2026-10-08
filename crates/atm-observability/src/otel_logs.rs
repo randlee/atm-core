@@ -9,7 +9,13 @@ use sc_observability_types::{Level, LogEvent, SinkHealth, SinkHealthState, SinkN
 /// Receives already-filtered and redacted retained events. This sink owns no
 /// provider lifecycle: dropping or flushing it never shuts down or flushes the
 /// caller's provider. `emit` is SDK admission, not a collector acknowledgement.
-pub struct OtelLogSink(pub SdkLogger);
+pub(crate) struct OtelLogSink(SdkLogger);
+
+impl OtelLogSink {
+    pub(crate) fn new(logger: SdkLogger) -> Self {
+        Self(logger)
+    }
+}
 
 impl LogSink for OtelLogSink {
     fn write(&self, event: &LogEvent) -> Result<(), LogSinkError> {

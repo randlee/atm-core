@@ -223,6 +223,8 @@ dependencies = [
  "atm-template-sc-compose",
  "chrono",
  "fs4",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "peer-tls",
  "serde",
  "serde_json",

@@ -278,6 +278,7 @@ fn compose_storage_router(
         .clone()
         .with_state_handoff(HandoffConfig::default())?;
     let doctor_projection = build_doctor_projection(&assembly, Arc::clone(&observability))?;
+    let task_telemetry = assembly.task_telemetry.clone();
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
@@ -299,7 +300,8 @@ fn compose_storage_router(
         http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
         peer_wire_security: Some(peer_wire_mode.security().into()),
     })
-    .with_shared_direct_peer_client(shared_direct_peer_client()?);
+    .with_shared_direct_peer_client(shared_direct_peer_client()?)
+    .with_task_telemetry(task_telemetry);
     Ok(add_peer_connection_pool(handler, peer_adapter_selection))
 }
 
@@ -316,7 +318,8 @@ fn build_queue_wake_pump(
             runtime_health,
             herdr_process,
         )
-        .with_daemon_home(atm_core::home::atm_home()?),
+        .with_daemon_home(atm_core::home::atm_home()?)
+        .with_task_telemetry(assembly.task_telemetry.clone()),
     ))
 }
 
