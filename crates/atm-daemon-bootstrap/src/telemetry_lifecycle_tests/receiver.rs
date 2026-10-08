@@ -1,7 +1,7 @@
 //! In-process OTLP gRPC collector for the daemon lifecycle proofs.
 #![cfg(test)]
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -22,16 +22,21 @@ pub(crate) struct Capture {
     pub started: Arc<AtomicUsize>,
     changed: Arc<Notify>,
     /// A stalled export never answers; the test drops the receiver instead.
-    stall: bool,
+    stall: Arc<AtomicBool>,
 }
 
 impl Capture {
     async fn respond(&self) {
         self.started.fetch_add(1, Ordering::SeqCst);
         self.changed.notify_waiters();
-        if self.stall {
+        if self.stall.load(Ordering::SeqCst) {
             std::future::pending::<()>().await;
         }
+    }
+
+    /// Every export that arrives from now on stalls.
+    pub fn begin_stall(&self) {
+        self.stall.store(true, Ordering::SeqCst);
     }
 
     /// Waits until `condition` holds, panicking with `what` at `limit`.
@@ -124,7 +129,7 @@ impl Receiver {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let endpoint = format!("http://{}", listener.local_addr().unwrap());
         let capture = Capture {
-            stall,
+            stall: Arc::new(AtomicBool::new(stall)),
             ..Capture::default()
         };
         let (stop, stopped) = oneshot::channel();
