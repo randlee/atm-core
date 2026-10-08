@@ -475,4 +475,188 @@ env = { ATM_TEAM = "other" }
             "hermetic local doctor must not report live daemon runtime status"
         );
     }
+
+    const EXPORT_JSON_CHILD: &str = "commands::doctor::tests::doctor_json_export_health_child";
+    const EXPORT_JSON_STATE: &str = "ATM_DOCTOR_EXPORT_JSON_STATE";
+    const JSON_BEGIN: &str = "--- atm doctor --json begin ---";
+    const JSON_END: &str = "--- atm doctor --json end ---";
+
+    /// The daemon's observability port as doctor reads it: healthy logging
+    /// with the given OpenTelemetry export health, if any.
+    struct ExportHealthObservability(Option<atm_core::observability::AtmTelemetryExportHealth>);
+
+    impl atm_core::boundary::sealed::Sealed for ExportHealthObservability {}
+
+    impl atm_core::observability::ObservabilityPort for ExportHealthObservability {
+        fn emit(&self, _event: atm_core::observability::CommandEvent) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn query(
+            &self,
+            _req: atm_core::observability::AtmLogQuery,
+        ) -> Result<atm_core::observability::AtmLogSnapshot, AtmError> {
+            Ok(Default::default())
+        }
+
+        fn follow(
+            &self,
+            _req: atm_core::observability::AtmLogQuery,
+        ) -> Result<atm_core::observability::LogTailSession, AtmError> {
+            Ok(atm_core::observability::LogTailSession::empty())
+        }
+
+        fn health(&self) -> Result<atm_core::observability::AtmObservabilityHealth, AtmError> {
+            let mut health = atm_core::transport::testing::HealthyObservability.health()?;
+            health.export = self.0.clone();
+            Ok(health)
+        }
+    }
+
+    fn export_health(state: &str) -> Option<atm_core::observability::AtmTelemetryExportHealth> {
+        use atm_core::observability::{
+            AtmTelemetryExportFailure, AtmTelemetryExportHealth, AtmTelemetryExportState,
+        };
+        match state {
+            // An invalid ATM_OTEL_ENDPOINT, as the daemon classifies it.
+            "unavailable" => Some(AtmTelemetryExportHealth {
+                state: AtmTelemetryExportState::Unavailable,
+                endpoint: None,
+                protocol: None,
+                emitted: 0,
+                dropped_full: 0,
+                dropped_timeout: 0,
+                dropped_failure: 0,
+                dropped_shutdown: 0,
+                last_failure: Some(AtmTelemetryExportFailure::ConfigInvalid),
+            }),
+            // A configured collector that refused one batch.
+            "degraded" => Some(AtmTelemetryExportHealth {
+                state: AtmTelemetryExportState::Degraded,
+                endpoint: Some("http://127.0.0.1:4317".to_owned()),
+                protocol: Some(atm_core::task_telemetry::TelemetryExportProtocol::Grpc),
+                emitted: 3,
+                dropped_full: 0,
+                dropped_timeout: 0,
+                dropped_failure: 2,
+                dropped_shutdown: 0,
+                last_failure: Some(AtmTelemetryExportFailure::Unavailable),
+            }),
+            // No ATM_OTEL_ENDPOINT: the daemon reports no export block.
+            "none" => None,
+            other => panic!("unknown export state {other}"),
+        }
+    }
+
+    /// Child half of [`doctor_json_reports_unavailable_and_degraded_export`]:
+    /// the CLI's daemon-routed doctor request, its pane-alias merge and
+    /// `print_doctor_result(.., json = true)` on this process's real stdout.
+    #[test]
+    #[serial(env)]
+    fn doctor_json_export_health_child() {
+        let Ok(state) = std::env::var(EXPORT_JSON_STATE) else {
+            return;
+        };
+        let fixture = crate::composition::tests::LoopbackFixture::new(
+            atm_core::test_support::TEST_RECIPIENT,
+        );
+        let transport = atm_core::transport::testing::LoopbackClientTransport::new(
+            std::sync::Arc::new(ExportHealthObservability(export_health(&state))),
+        );
+        let observability = CliObservability::fallback();
+        let composition = crate::composition::CliComposition::from_loopback_transport(
+            std::sync::Arc::new(transport),
+            &observability,
+        );
+        let query = atm_core::doctor::DoctorQuery {
+            home_dir: fixture.home_dir.clone(),
+            current_dir: fixture.current_dir.clone(),
+            team_override: Some(atm_core::test_support::TEST_TEAM.parse().expect("team")),
+            ..atm_core::doctor::DoctorQuery::default()
+        };
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("child runtime");
+        let mut report = runtime
+            .block_on(composition.doctor(query.clone()))
+            .expect("daemon-routed doctor report");
+        super::append_pane_alias_mismatches(&mut report, &query);
+        println!("\n{JSON_BEGIN}");
+        crate::output::print_doctor_result(&report, true).expect("doctor --json output");
+        println!("{JSON_END}");
+    }
+
+    /// Runs the child in its own process and parses the JSON it printed.
+    fn doctor_json_stdout(state: &str) -> serde_json::Value {
+        let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args([EXPORT_JSON_CHILD, "--exact", "--nocapture", "--test-threads=1"])
+            .env(EXPORT_JSON_STATE, state)
+            .output()
+            .expect("run the doctor --json child");
+        let stdout = String::from_utf8(output.stdout).expect("utf-8 stdout");
+        assert!(
+            output.status.success(),
+            "doctor --json child failed\nstdout:\n{stdout}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let json = stdout
+            .split_once(JSON_BEGIN)
+            .and_then(|(_, rest)| rest.split_once(JSON_END))
+            .map(|(json, _)| json)
+            .unwrap_or_else(|| panic!("no doctor --json block in child stdout:\n{stdout}"));
+        serde_json::from_str(json).unwrap_or_else(|error| panic!("{error}: {json}"))
+    }
+
+    fn observability_finding(report: &serde_json::Value) -> &serde_json::Value {
+        report["findings"]
+            .as_array()
+            .expect("findings")
+            .iter()
+            .find(|finding| {
+                finding["message"]
+                    .as_str()
+                    .is_some_and(|message| message.starts_with("shared observability"))
+            })
+            .unwrap_or_else(|| panic!("no observability finding: {report:#}"))
+    }
+
+    /// Positive: `atm doctor --json` stdout carries the daemon's Unavailable
+    /// and Degraded export health with its counters and last failure, and the
+    /// observability finding becomes a warning naming ATM_OTEL_ENDPOINT.
+    /// Negative: with no export configured the stdout has no export block and
+    /// the finding stays informational.
+    #[test]
+    fn doctor_json_reports_unavailable_and_degraded_export() {
+        let unavailable = doctor_json_stdout("unavailable");
+        let export = &unavailable["observability"]["export"];
+        assert_eq!(export["state"], "unavailable", "{unavailable:#}");
+        assert_eq!(export["last_failure"], "config_invalid");
+        assert_eq!(export["endpoint"], serde_json::Value::Null);
+        let finding = observability_finding(&unavailable);
+        assert_eq!(finding["severity"], "warning", "{finding:#}");
+        assert!(
+            finding["remediation"]
+                .as_str()
+                .is_some_and(|text| text.contains("ATM_OTEL_ENDPOINT")),
+            "{finding:#}"
+        );
+
+        let degraded = doctor_json_stdout("degraded");
+        let export = &degraded["observability"]["export"];
+        assert_eq!(export["state"], "degraded", "{degraded:#}");
+        assert_eq!(export["endpoint"], "http://127.0.0.1:4317");
+        assert_eq!(export["protocol"], "grpc");
+        assert_eq!(export["emitted"], 3);
+        assert_eq!(export["dropped_failure"], 2);
+        assert_eq!(export["last_failure"], "unavailable");
+        assert_eq!(observability_finding(&degraded)["severity"], "warning");
+
+        let unconfigured = doctor_json_stdout("none");
+        assert!(
+            unconfigured["observability"].get("export").is_none(),
+            "{unconfigured:#}"
+        );
+        assert_eq!(observability_finding(&unconfigured)["severity"], "info");
+    }
 }
