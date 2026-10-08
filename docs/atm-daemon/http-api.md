@@ -9,10 +9,15 @@
 | Field | Value |
 | --- | --- |
 | Status | Current — Phase BA |
-| HTTP API SemVer | `1.8.0`; major is `/v1/atm` |
+| HTTP API SemVer | `1.11.0`; major is `/v1/atm` |
 | Authoritative ADR | ADR-033 |
 | Machine-readable publication | checked-in OpenAPI 3.1 and `atm api spec` |
 
+Version 1.11.0 adds the optional `DoctorReport.observability.export`
+OpenTelemetry export health; payloads without it decode unchanged. Its state
+is `Inert` (no endpoint), `Healthy`, `Degraded` (runtime-counted losses) or
+`Unavailable` with a typed `last_failure`; it never carries the auth header or
+a free-form exporter error (ADR-064 D6, D11).
 Version 1.8.0 adds the optional `PostSendHookEvent.task_transition` field;
 older payloads default it to absent and older same-major consumers ignore it.
 Version 1.7.0 adds stable task-rejection error codes without changing response
@@ -159,10 +164,11 @@ OpenAPI document against route schemas and tests every documented route. The
 embedded document is published by `atm api spec --format json|yaml`; no daemon
 network endpoint is needed merely to retrieve documentation.
 
-The v1 resource paths are durable. The current baseline is `1.8.0`.
+The v1 resource paths are durable. The current baseline is `1.11.0`.
 
 | Version | Phase / date | Additive HTTP surface |
 | --- | --- | --- |
+| `1.11.0` | Phase BD.1, 2026-10-07 | Optional `AtmObservabilityHealth.export` (`AtmTelemetryExportHealth`) in the doctor report; closed enums, absent when the daemon predates it. See ADR-061 and ADR-064. |
 | `1.8.0` | Phase BB.1, 2026-09-12 | Optional `PostSendHookEvent.task_transition`; omitted values default to `None` and same-major consumers tolerate the additive field. |
 | `1.7.0` | Phase BA closure review, 2026-09-12 | Stable task-rejection error codes for not-found, already-closed, third-party, stale-counterparty, and invalid-move families; envelope shapes and detail text are unchanged. |
 | `1.6.0` | Phase BA.4, 2026-09-12 | Local-only `TaskMove` request/response and `/v1/atm/tasks/move` route; peer ingress rejects the operation. |

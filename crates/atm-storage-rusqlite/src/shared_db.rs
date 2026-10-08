@@ -306,7 +306,9 @@ impl SharedDb {
         record: Message,
         provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<bool, AtmError> {
-        let outcome = self.submit_message_admission(record, provenance)?;
+        let outcome = self
+            .submit_message_admission(record, provenance)?
+            .operation?;
         match outcome.task_rejection {
             Some(error) => Err(error),
             None => Ok(outcome.existing.is_none()),
@@ -317,59 +319,26 @@ impl SharedDb {
         &self,
         record: Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
         validate_upsert_message_request(&record)?;
-        let result = self.writer.submit(WriteOp::UpsertMessage {
+        let committed = self.writer.submit_committed(WriteOp::UpsertMessage {
             record: Box::new(record),
             provenance,
         })?;
-        match result {
-            WriteOpResult::UpsertMessage {
-                inserted: true,
-                already_closed,
-                task_assignee,
-                queued_position,
-                reassign_notice,
-                task_rejection,
-                ..
-            } => Ok(MessageAdmissionOutcome {
-                existing: None,
-                already_closed,
-                task_assignee,
-                queued_position,
-                reassign_notice: reassign_notice.map(|notice| *notice),
-                task_rejection,
-            }),
-            WriteOpResult::UpsertMessage {
-                inserted: false,
-                existing: Some(existing),
-                ..
-            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
-            WriteOpResult::UpsertMessage {
-                inserted: false,
-                existing: None,
-                ..
-            } => Err(AtmError::daemon_unavailable(
-                "sqlite writer reported a duplicate without its retained record",
-            )),
-            WriteOpResult::ReadDisplayStateApplied
-            | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_)
-            | WriteOpResult::TemplateRegistration(_)
-            | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. }
-            | WriteOpResult::TaskMoved(_)
-            | WriteOpResult::DiagnosticsRecorded
-            | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
-                "sqlite writer returned the wrong result for message upsert",
-            )),
-        }
+        Ok(committed.and_then(admission_from_upsert_result))
     }
 
     /// Submits a feature-owned writer operation without exposing the writer
     /// handle or its transaction lifecycle outside this state root.
     pub(crate) fn submit_writer_op(&self, operation: WriteOp) -> Result<WriteOpResult, AtmError> {
         self.writer.submit(operation)
+    }
+
+    pub(crate) fn submit_committed_writer_op(
+        &self,
+        operation: WriteOp,
+    ) -> Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError> {
+        self.writer.submit_committed(operation)
     }
 
     pub(crate) fn submit_search(
@@ -412,7 +381,8 @@ impl SharedDb {
         provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<Option<Message>, AtmError> {
         self.submit_message_admission_async(record, provenance)
-            .await
+            .await?
+            .operation
             .map(|outcome| outcome.existing)
     }
 
@@ -420,56 +390,16 @@ impl SharedDb {
         &self,
         record: Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
         validate_upsert_message_request(&record)?;
-        match self
+        let committed = self
             .writer
-            .submit_async(WriteOp::UpsertMessage {
+            .submit_committed_async(WriteOp::UpsertMessage {
                 record: Box::new(record),
                 provenance,
             })
-            .await?
-        {
-            WriteOpResult::UpsertMessage {
-                inserted: true,
-                already_closed,
-                task_assignee,
-                queued_position,
-                reassign_notice,
-                task_rejection,
-                ..
-            } => Ok(MessageAdmissionOutcome {
-                existing: None,
-                already_closed,
-                task_assignee,
-                queued_position,
-                reassign_notice: reassign_notice.map(|notice| *notice),
-                task_rejection,
-            }),
-            WriteOpResult::UpsertMessage {
-                inserted: false,
-                existing: Some(existing),
-                ..
-            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
-            WriteOpResult::UpsertMessage {
-                inserted: false,
-                existing: None,
-                ..
-            } => Err(AtmError::daemon_unavailable(
-                "sqlite writer reported a duplicate without its retained record",
-            )),
-            WriteOpResult::ReadDisplayStateApplied
-            | WriteOpResult::UpsertMessages
-            | WriteOpResult::Acknowledged(_)
-            | WriteOpResult::TemplateRegistration(_)
-            | WriteOpResult::DecomposedMessageAdmission(_)
-            | WriteOpResult::TemplateMessageAdmission { .. }
-            | WriteOpResult::TaskMoved(_)
-            | WriteOpResult::DiagnosticsRecorded
-            | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
-                "sqlite writer returned the wrong result for async message upsert",
-            )),
-        }
+            .await?;
+        Ok(committed.and_then(admission_from_upsert_result))
     }
 
     pub(crate) async fn submit_read_display_state_async(
@@ -497,44 +427,13 @@ impl SharedDb {
     pub(crate) async fn submit_template_message_admission_async(
         &self,
         admission: TemplateMessageAdmission,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
         admission.validate()?;
-        match self
+        let committed = self
             .writer
-            .submit_async(WriteOp::AdmitTemplateMessage(Box::new(admission)))
-            .await?
-        {
-            WriteOpResult::TemplateMessageAdmission {
-                inserted: true,
-                task_assignee,
-                queued_position,
-                reassign_notice,
-                task_rejection,
-                ..
-            } => Ok(MessageAdmissionOutcome {
-                existing: None,
-                already_closed: None,
-                task_assignee,
-                queued_position,
-                reassign_notice: reassign_notice.map(|message| *message),
-                task_rejection,
-            }),
-            WriteOpResult::TemplateMessageAdmission {
-                inserted: false,
-                existing: Some(existing),
-                ..
-            } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
-            WriteOpResult::TemplateMessageAdmission {
-                inserted: false,
-                existing: None,
-                ..
-            } => Err(AtmError::daemon_unavailable(
-                "sqlite writer reported a duplicate template admission without its retained record",
-            )),
-            other => Err(AtmError::daemon_unavailable(format!(
-                "sqlite writer returned the wrong result for async template message admission: {other:?}"
-            ))),
-        }
+            .submit_committed_async(WriteOp::AdmitTemplateMessage(Box::new(admission)))
+            .await?;
+        Ok(committed.and_then(admission_from_template_result))
     }
 
     pub(crate) fn submit_upsert_messages_atomically(
@@ -997,6 +896,89 @@ pub(crate) fn sqlite_thread_mode(mode: Option<ThreadMode>) -> Option<&'static st
     }
 }
 
+/// Maps the writer's committed `UpsertMessage` result to the admission outcome
+/// shared by the sync and async entry points.
+fn admission_from_upsert_result(
+    result: WriteOpResult,
+) -> Result<MessageAdmissionOutcome, AtmError> {
+    match result {
+        WriteOpResult::UpsertMessage {
+            inserted: true,
+            already_closed,
+            task_assignee,
+            queued_position,
+            reassign_notice,
+            task_rejection,
+            task_events,
+            ..
+        } => Ok(MessageAdmissionOutcome {
+            existing: None,
+            already_closed,
+            task_assignee,
+            queued_position,
+            reassign_notice: reassign_notice.map(|notice| *notice),
+            task_rejection,
+            task_events,
+        }),
+        WriteOpResult::UpsertMessage {
+            inserted: false,
+            existing: Some(existing),
+            ..
+        } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
+        WriteOpResult::UpsertMessage {
+            inserted: false,
+            existing: None,
+            ..
+        } => Err(AtmError::daemon_unavailable(
+            "sqlite writer reported a duplicate without its retained record",
+        )),
+        other => Err(AtmError::daemon_unavailable(format!(
+            "sqlite writer returned the wrong result for message upsert: {other:?}"
+        ))),
+    }
+}
+
+/// Maps the writer's committed template admission result to the admission
+/// outcome.
+fn admission_from_template_result(
+    result: WriteOpResult,
+) -> Result<MessageAdmissionOutcome, AtmError> {
+    match result {
+        WriteOpResult::TemplateMessageAdmission {
+            inserted: true,
+            task_assignee,
+            queued_position,
+            reassign_notice,
+            task_rejection,
+            task_events,
+            ..
+        } => Ok(MessageAdmissionOutcome {
+            existing: None,
+            already_closed: None,
+            task_assignee,
+            queued_position,
+            reassign_notice: reassign_notice.map(|message| *message),
+            task_rejection,
+            task_events,
+        }),
+        WriteOpResult::TemplateMessageAdmission {
+            inserted: false,
+            existing: Some(existing),
+            ..
+        } => Ok(MessageAdmissionOutcome::passive(Some(*existing))),
+        WriteOpResult::TemplateMessageAdmission {
+            inserted: false,
+            existing: None,
+            ..
+        } => Err(AtmError::daemon_unavailable(
+            "sqlite writer reported a duplicate template admission without its retained record",
+        )),
+        other => Err(AtmError::daemon_unavailable(format!(
+            "sqlite writer returned the wrong result for template message admission: {other:?}"
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -1006,6 +988,88 @@ mod tests {
     use atm_storage::AtmErrorCode;
 
     const SERIAL_WRITER_BORROWS: usize = 32;
+
+    fn committed_task_event() -> atm_storage::TaskEventRow {
+        atm_storage::TaskEventRow {
+            team: "admission-team".parse().expect("team"),
+            task_id: "admission-task".parse().expect("task id"),
+            assignee: "admission-agent".parse().expect("agent"),
+            seq: 1,
+            at: atm_storage::IsoTimestamp::now(),
+            event: atm_storage::TaskEventKind::Assigned,
+            from_state: None,
+            to_state: None,
+            actor: atm_storage::TaskActor::Daemon,
+            message_id: None,
+            outcome: None,
+            marker: None,
+            detail: None,
+        }
+    }
+
+    fn committed(result: WriteOpResult) -> atm_storage::CommittedTaskWrite<WriteOpResult> {
+        atm_storage::CommittedTaskWrite {
+            operation: Ok(result),
+            task_events: vec![committed_task_event()],
+        }
+    }
+
+    /// No-Claim: proves the shared admission mappers and `and_then` carry the
+    /// committed audit rows; it does not prove the writer emits those rows.
+    #[test]
+    fn admission_mappers_keep_committed_task_events_on_success_and_error() {
+        let inserted = committed(WriteOpResult::UpsertMessage {
+            inserted: true,
+            existing: None,
+            already_closed: None,
+            task_assignee: Some("admission-agent".parse().expect("agent")),
+            queued_position: Some(2),
+            reassign_notice: None,
+            task_rejection: None,
+            task_events: vec![committed_task_event()],
+        })
+        .and_then(admission_from_upsert_result);
+        assert_eq!(inserted.task_events.len(), 1);
+        let outcome = inserted.operation.expect("inserted admission");
+        assert!(outcome.existing.is_none());
+        assert_eq!(outcome.queued_position, Some(2));
+        assert_eq!(outcome.task_events.len(), 1);
+
+        let template = committed(WriteOpResult::TemplateMessageAdmission {
+            inserted: false,
+            existing: None,
+            task_assignee: None,
+            queued_position: None,
+            reassign_notice: None,
+            task_rejection: None,
+            task_events: Vec::new(),
+        })
+        .and_then(admission_from_template_result);
+        assert_eq!(template.task_events.len(), 1);
+        assert!(
+            template
+                .operation
+                .expect_err("duplicate without retained record")
+                .message()
+                .contains("duplicate template admission without its retained record")
+        );
+
+        let wrong_upsert =
+            committed(WriteOpResult::DiagnosticsRecorded).and_then(admission_from_upsert_result);
+        assert_eq!(wrong_upsert.task_events.len(), 1);
+        assert!(
+            wrong_upsert
+                .operation
+                .expect_err("wrong result")
+                .message()
+                .contains("wrong result for message upsert")
+        );
+
+        let wrong_template =
+            committed(WriteOpResult::UpsertMessages).and_then(admission_from_template_result);
+        assert_eq!(wrong_template.task_events.len(), 1);
+        assert!(wrong_template.operation.is_err());
+    }
 
     fn count_probe_rows(db: &SharedDb) -> Result<i64, AtmError> {
         db.with_connection(|connection| {

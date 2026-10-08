@@ -10,20 +10,43 @@ pub(crate) struct ResolvedRecipient {
     pub(crate) team: TeamName,
 }
 
+/// Whether the sender and the resolved recipient are the same local member.
+pub(crate) fn is_same_member(
+    sender: &AgentName,
+    sender_team: &TeamName,
+    recipient: &ResolvedRecipient,
+) -> bool {
+    sender
+        .as_str()
+        .eq_ignore_ascii_case(recipient.agent.as_str())
+        && sender_team
+            .as_str()
+            .eq_ignore_ascii_case(recipient.team.as_str())
+}
+
+/// A task-linked write (assignment, start or close: `--task-id`, a task
+/// operation or the legacy completion carrier) is the one self-addressed write
+/// ATM accepts: a lead dispatching to itself still needs a task record and its
+/// history. It carries no delivery. Acknowledgements are excluded.
+pub(crate) fn is_task_write(request: &crate::send::WriteRequest) -> bool {
+    (request.task_id.is_some() || request.task_complete.is_some())
+        && request.acknowledges_message_id.is_none()
+}
+
 pub(crate) fn validate_non_self_recipient(
     sender: &AgentName,
     sender_team: &TeamName,
     recipient: &ResolvedRecipient,
     target: &AgentAddress,
     provenance: ValidatedWriteProvenance,
+    task_assignment: bool,
 ) -> Result<(), AtmError> {
-    let same_identity = sender
-        .as_str()
-        .eq_ignore_ascii_case(recipient.agent.as_str())
-        && sender_team
-            .as_str()
-            .eq_ignore_ascii_case(recipient.team.as_str());
-    if same_identity && target.host().is_none() && !provenance.is_authenticated_peer() {
+    let same_identity = is_same_member(sender, sender_team, recipient);
+    if same_identity
+        && !task_assignment
+        && target.host().is_none()
+        && !provenance.is_authenticated_peer()
+    {
         return Err(AtmError::self_addressed_send_invalid(format!(
             "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
         )));
@@ -160,6 +183,7 @@ mod tests {
                 .parse::<AgentAddress>()
                 .expect("target"),
             provenance,
+            false,
         )
         .expect_err("case-variant self target must be rejected");
 
@@ -190,6 +214,7 @@ mod tests {
             },
             &target,
             provenance,
+            false,
         )
         .expect("host-qualified self target must use the ordinary peer route");
     }
@@ -219,6 +244,7 @@ mod tests {
             },
             &target,
             provenance,
+            false,
         )
         .expect("authenticated peer receipt must not become a local self-send");
     }

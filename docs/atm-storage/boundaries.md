@@ -8,9 +8,22 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-storage/task-store.toml](../../boundaries/atm-storage/task-store.toml)
 
 `TaskStore` is the sealed, backend-neutral task-ledger read and audit
-capability. It reads `TaskRow` and append-only `TaskEventRow` values, and only
-appends reminder or lead-notification audit rows. The backend message-writer
-transaction alone applies `Assigned`, `Acked`, and `Completed` state changes.
+capability. It reads `TaskRow` and append-only `TaskEventRow` values and returns
+persisted `TaskReminderRecord` and `TaskEventRow` audit results. Queue movement
+returns `CommittedTaskWrite<TaskMoveRecord>`; message admission returns
+`CommittedTaskWrite<MessageAdmissionOutcome>`. The inner operation may fail
+while rejection audit rows commit. An outer error exposes no rows. Successful
+admissions retain their existing `task_events` field; failed operations own
+rows in the committed carrier, never in both places.
+
+`PromptHandoffWrite::Inserted` and `Existing` both carry the stored row;
+ignored unique-key collisions return the original timestamp, trigger and task.
+Only `Inserted` is eligible for projection. Assignment transitions precede
+placement `Moved` events, whose destination is the final normalized position.
+The backend message-writer transaction alone applies `Assigned`, `Started`,
+`Reassigned`, `Reopened`, and close state changes. Acknowledgement is message
+hygiene and creates no new task events; `Acked` and `Migrated` are historical
+decode values.
 `MessageWriteOrigin::Peer` deliberately persists a peer receipt without
 changing the local task ledger.
 

@@ -24,11 +24,13 @@ daemon/SQLite runtime it bootstraps and talks to:
 - `atm-daemon` — the retained same-host daemon runtime used by `send`, `read`,
   `ack`, and `doctor`
 
-This release line continues to consume the published `sc-observability` family
-for retained logging and health reporting:
+This release line consumes the published `sc-observability` family 1.5.0 for
+retained logging and health reporting, and the official OpenTelemetry 0.33
+crates for optional OTLP gRPC export:
 - `sc-observability`
+- `sc-observability-log`
 - `sc-observability-types`
-- `sc-observability-otlp`
+- `opentelemetry`, `opentelemetry_sdk`, `opentelemetry-otlp`
 
 This repo does not publish the retired Claude-compatibility runtime, MCP, TUI,
 or CI-monitor artifacts as part of the retained ATM surface.

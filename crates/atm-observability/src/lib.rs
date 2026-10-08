@@ -9,6 +9,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::{fs, fs::OpenOptions};
 
+use crate::otel_logs::OtelLogSink;
 use atm_core::error::AtmError;
 use atm_core::observability::{
     AtmMaintenanceHealthReport, AtmMaintenanceWorkerState, AtmObservabilityDiagnostic,
@@ -18,14 +19,25 @@ use atm_core::observability::{
 use atm_core::types::IsoTimestamp;
 use atm_core::{EnvSource, ProcessEnvSource};
 use sc_observability_types::{
-    ActionName, DiagnosticInfo, Level, LogEvent, OutcomeLabel, ProcessIdentity, SchemaVersion,
-    ServiceName, TargetCategory, Timestamp,
+    ActionName, Level, LogEvent, OutcomeLabel, ProcessIdentity, SchemaVersion, ServiceName,
+    TargetCategory, Timestamp,
 };
 use serde_json::Map;
 
 /// Opaque shared retained logger handle. Its concrete backend is deliberately
 /// confined to this facade.
-pub struct RetainedLogger(sc_observability::Logger);
+pub struct RetainedLogger(std::sync::Arc<sc_observability::v2::Logger>);
+
+struct AdmitDirectScRecords;
+
+impl sc_observability_log::BridgeEventPolicy for AdmitDirectScRecords {
+    fn decide(
+        &self,
+        _: &sc_observability_types::LogEvent,
+    ) -> sc_observability_log::BridgeEventDecision {
+        sc_observability_log::BridgeEventDecision::Admit
+    }
+}
 
 /// ATM-owned logging level for the retained logger bootstrap boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +81,24 @@ pub struct RetainedCommandEvent<'a> {
 }
 
 impl RetainedLogger {
+    /// Attaches the process-local `sc_observability_log` facade to this
+    /// existing retained logger. The caller owns the returned non-owning
+    /// attachment and must detach it before the logger is shut down.
+    pub fn attach_sc_log_facade(
+        &self,
+    ) -> Result<sc_observability_log::LogAttachment, sc_observability_log::DetachError> {
+        sc_observability_log::attach_logger(
+            std::sync::Arc::clone(&self.0),
+            sc_observability_log::AttachmentOptions::new(
+                sc_observability_log::BridgeOptions {
+                    default_action: sc_observability_types::ActionName::new("atm.direct_sc")
+                        .expect("literal direct-sc action"),
+                    parse_bracket_action: true,
+                },
+                std::sync::Arc::new(AdmitDirectScRecords),
+            ),
+        )
+    }
     /// Projects backend health onto ATM's public doctor contract.
     pub fn health_at(&self, active_log_path: PathBuf) -> Result<AtmObservabilityHealth, AtmError> {
         let report = self.0.health();
@@ -87,13 +117,14 @@ impl RetainedLogger {
             jsonl: Default::default(),
             timeline: Default::default(),
             degraded: Vec::new(),
+            export: None,
             detail,
         })
     }
 
     /// Flushes all events admitted before this call to the configured sinks.
-    pub fn flush(&self) -> Result<(), sc_observability_types::typed::FlushFailure> {
-        self.0.flush_typed()
+    pub fn flush(&self) -> Result<(), sc_observability_types::v2::FlushError> {
+        self.0.flush()
     }
 
     #[cfg(test)]
@@ -106,7 +137,14 @@ impl RetainedLogger {
 
     /// Drains the retained-log writer and returns its final health snapshot.
     pub fn shutdown(self) -> sc_observability_types::LoggingHealthReport {
-        self.0.shutdown().health()
+        self.shutdown_shared()
+    }
+
+    /// `shutdown` for a logger other owners (the process tracing bridge) still
+    /// hold: later records from those owners are rejected, not written.
+    pub fn shutdown_shared(&self) -> sc_observability_types::LoggingHealthReport {
+        let _ = self.0.shutdown();
+        self.0.health()
     }
 
     pub(crate) fn try_log(&self, event: LogEvent) -> RetainedLogOffer {
@@ -114,9 +152,13 @@ impl RetainedLogger {
         if queue_full_for_test() {
             return RetainedLogOffer::QueueFull;
         }
-        match self.0.try_log_typed(event) {
+        match self.0.try_log(event) {
             Ok(()) => RetainedLogOffer::Accepted,
-            Err(sc_observability::TryLogFailure::QueueFull(_)) => RetainedLogOffer::QueueFull,
+            Err(error)
+                if error.diagnostic().code == sc_observability::error_codes::LOGGER_QUEUE_FULL =>
+            {
+                RetainedLogOffer::QueueFull
+            }
             Err(error) => RetainedLogOffer::Rejected {
                 diagnostic_code: try_log_error_code(&error),
             },
@@ -219,7 +261,30 @@ pub fn build_retained_logger(
     retained_log_policy: RetainedLogPolicy,
     level_override: Option<RetainedLogLevel>,
 ) -> Result<RetainedLogger, AtmError> {
-    prepare_retained_log(log_dir)?;
+    build_routed_retained_logger(
+        service_name,
+        log_dir,
+        retained_log_policy,
+        level_override,
+        atm_core::LogDestination::File,
+        None,
+    )
+}
+
+/// Builds one retained pipeline with a validated file/OTel destination.
+/// File construction and lifecycle remain synchronous; bootstrap must call
+/// this on its blocking boundary, never inside a Tokio request handler.
+pub fn build_routed_retained_logger(
+    service_name: &str,
+    log_dir: &Path,
+    retained_log_policy: RetainedLogPolicy,
+    level_override: Option<RetainedLogLevel>,
+    destination: atm_core::LogDestination,
+    otel: Option<opentelemetry_sdk::logs::SdkLogger>,
+) -> Result<RetainedLogger, AtmError> {
+    if destination != atm_core::LogDestination::Otel {
+        prepare_retained_log(log_dir)?;
+    }
     let service_name = ServiceName::new(service_name.to_owned()).map_err(|_| {
         AtmError::observability_bootstrap("failed to validate retained logger service name")
     })?;
@@ -247,11 +312,38 @@ pub fn build_retained_logger(
         maintenance_max_work_per_pass: retained_log_policy.maintenance_max_work_per_pass,
     };
     config.enable_console_sink = false;
-    let builder =
-        sc_observability::Logger::builder_typed(config).map_err(map_retained_logger_error)?;
+    config.enable_file_sink = destination != atm_core::LogDestination::Otel;
+    // The native logger applies this once before fan-out, including direct
+    // sc-log macros which do not pass through ATM's tracing field allowlist.
+    config.redaction.denylist_keys.extend(
+        [
+            "token",
+            "password",
+            "secret",
+            "authorization",
+            "auth_header",
+            "api_key",
+            "credential",
+            "payload",
+            "body",
+        ]
+        .map(str::to_owned),
+    );
+    let mut builder =
+        sc_observability::v2::Logger::builder(config).map_err(map_retained_logger_error)?;
+    if destination != atm_core::LogDestination::File {
+        let logger = otel.ok_or_else(|| {
+            AtmError::observability_bootstrap(
+                "OTel log destination requires a configured SDK logger",
+            )
+        })?;
+        builder.register_sink(sc_observability::SinkRegistration::typed(
+            std::sync::Arc::new(OtelLogSink::new(logger)),
+        ));
+    }
     builder
-        .build_typed()
-        .map(RetainedLogger)
+        .build()
+        .map(|logger| RetainedLogger(std::sync::Arc::new(logger)))
         .map_err(map_retained_logger_error)
 }
 
@@ -297,20 +389,18 @@ fn queue_full_for_test() -> bool {
     QUEUE_FULL_FOR_TEST.with(std::cell::Cell::get)
 }
 
-fn try_log_error_code(error: &sc_observability::TryLogFailure) -> ErrorCode {
-    let code = match error {
-        sc_observability::TryLogFailure::InvalidEvent(error) => error.diagnostic().code.as_str(),
-        sc_observability::TryLogFailure::QueueFull(context)
-        | sc_observability::TryLogFailure::WriterDegraded(context)
-        | sc_observability::TryLogFailure::ShutdownTimedOut(context) => {
-            context.diagnostic().code.as_str()
-        }
-        _ => "SC_OBSERVABILITY_LOGGER_UNKNOWN_FAILURE",
-    };
+fn try_log_error_code(error: &sc_observability_types::v2::EventError) -> ErrorCode {
+    let code = error.diagnostic().code.as_str();
     ErrorCode::new_owned(code).expect("shared diagnostic codes must satisfy ATM validation")
 }
 
+mod export_diagnostics;
+mod otel_logs;
+mod otel_setup;
+mod task_exporter;
 pub mod tracing_bridge;
+pub use export_diagnostics::ExportDiagnostics;
+pub use otel_setup::{TelemetrySetup, setup_telemetry};
 
 pub use atm_core::observability::{
     CANONICAL_LOG_FILE_NAME, GRAFT_FALLBACK_LOG_FILE_NAME, RETAINED_FIELD_ALLOWLIST,
@@ -538,228 +628,6 @@ pub fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmEr
 }
 
 #[cfg(test)]
-mod tests {
-    use atm_core::error::AtmError;
-    use atm_core::test_support::FakeEnvSource;
-    use tempfile::TempDir;
-
-    use super::{
-        ATM_LOG_LEVEL_ENV, AtmObservabilityHealthState, CANONICAL_LOG_FILE_NAME,
-        RetainedCommandEvent, RetainedLogLevel, RetainedLogOffer, RetainedLogPolicy,
-        RetainedLogger, build_retained_logger, logger_level_override_from, parse_logger_level,
-        prepare_retained_log,
-    };
-    use sc_observability::{Logger, LoggerConfig};
-    use sc_observability_types::{LogQuery, ServiceName};
-    use std::time::Duration;
-
-    #[test]
-    fn prepares_the_active_log_file() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let log_dir = tempdir.path().join("logs");
-
-        let active_log_path = prepare_retained_log(&log_dir).expect("prepare retained log");
-
-        assert_eq!(active_log_path, log_dir.join("atm.log.jsonl"));
-        assert!(active_log_path.is_file());
-    }
-
-    #[test]
-    fn retained_logger_bootstrap_error_preserves_historical_json_without_cause() {
-        let daemon_error = super::map_retained_logger_error("synthetic initialization failure");
-        let historical = AtmError::observability_bootstrap(
-            "failed to initialize shared daemon observability logger",
-        );
-
-        assert_eq!(daemon_error.cause(), None);
-        assert_eq!(
-            serde_json::to_string(&daemon_error).expect("daemon error JSON"),
-            serde_json::to_string(&historical).expect("historical error JSON")
-        );
-    }
-
-    #[test]
-    fn rejects_invalid_log_levels_with_the_exact_override_name() {
-        let error = parse_logger_level("loud").expect_err("invalid level");
-
-        assert!(error.is_observability_bootstrap());
-        assert!(error.message().contains("invalid ATM_LOG value `loud`"));
-    }
-
-    #[test]
-    fn parses_every_supported_level_case_insensitively() {
-        let cases = [
-            ("TRACE", RetainedLogLevel::Trace),
-            ("debug", RetainedLogLevel::Debug),
-            (" info ", RetainedLogLevel::Info),
-            ("Warn", RetainedLogLevel::Warn),
-            ("error", RetainedLogLevel::Error),
-            ("off", RetainedLogLevel::Off),
-        ];
-
-        for (value, expected) in cases {
-            assert_eq!(
-                parse_logger_level(value).expect("supported level"),
-                Some(expected),
-                "value={value}"
-            );
-        }
-    }
-
-    #[test]
-    fn treats_blank_overrides_as_absent() {
-        assert_eq!(parse_logger_level("   ").expect("blank override"), None);
-    }
-
-    #[test]
-    fn reads_the_override_from_the_supplied_environment() {
-        let env = FakeEnvSource::new([(ATM_LOG_LEVEL_ENV, Some("debug"))]);
-
-        assert_eq!(
-            logger_level_override_from(&env).expect("override"),
-            Some(RetainedLogLevel::Debug)
-        );
-        assert_eq!(
-            logger_level_override_from(&FakeEnvSource::empty()).expect("no override"),
-            None
-        );
-    }
-
-    #[test]
-    fn atm_adapter_logger_contract_includes_query_records() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let log_dir = tempdir.path().join("logs");
-        let policy = RetainedLogPolicy {
-            rotation_max_bytes: 4096,
-            rotation_max_files: 2,
-            retention_max_age: Duration::from_secs(60),
-            maintenance_cadence: Duration::from_secs(60),
-            writer_shutdown_timeout: Duration::from_secs(2),
-            maintenance_max_work_per_pass: Some(4),
-        };
-        let logger = build_retained_logger("atm", &log_dir, policy, None)
-            .expect("published 1.4.0 logger configuration");
-
-        let health = logger
-            .health_at(log_dir.join(CANONICAL_LOG_FILE_NAME))
-            .expect("health projection");
-        assert!(matches!(
-            health.logging_state,
-            AtmObservabilityHealthState::Healthy
-        ));
-        assert!(
-            health
-                .detail
-                .as_deref()
-                .is_some_and(|detail| detail.contains("writer_state=running"))
-        );
-
-        let accepted = logger
-            .try_log_command(RetainedCommandEvent {
-                target: "atm.test",
-                action: "qualification",
-                outcome: "ok",
-                code: None,
-            })
-            .expect("log admission");
-        assert_eq!(accepted, RetainedLogOffer::Accepted);
-        logger.flush().expect("flush");
-
-        let queue_full = RetainedLogger::force_queue_full_for_test(|| {
-            logger.try_log_command(RetainedCommandEvent {
-                target: "atm.test",
-                action: "qualification",
-                outcome: "ok",
-                code: None,
-            })
-        })
-        .expect("queue-full admission");
-        assert_eq!(queue_full, RetainedLogOffer::QueueFull);
-        let query_logger = RetainedLogger(
-            Logger::builder_typed(LoggerConfig::default_for(
-                ServiceName::new("atm").expect("service"),
-                tempdir.path().join("query"),
-            ))
-            .expect("published 1.4.0 builder")
-            .build_typed()
-            .expect("typed query logger"),
-        );
-        query_logger
-            .try_log_command(RetainedCommandEvent {
-                target: "atm.query",
-                action: "qualification",
-                outcome: "ok",
-                code: Some("ATM_QUERY_CONTRACT"),
-            })
-            .expect("query record admission");
-        query_logger.flush().expect("query record flush");
-        let snapshot = (0..20)
-            .find_map(|_| {
-                let snapshot = query_logger.query(&LogQuery::default()).ok()?;
-                if snapshot.events.is_empty() {
-                    std::thread::yield_now();
-                    None
-                } else {
-                    Some(snapshot)
-                }
-            })
-            .expect("query record");
-        assert_eq!(snapshot.events.len(), 1);
-        assert_eq!(
-            snapshot.events[0]
-                .fields
-                .get("code")
-                .and_then(|value| value.as_str()),
-            Some("ATM_QUERY_CONTRACT")
-        );
-        let _ = query_logger.shutdown();
-    }
-
-    #[test]
-    fn typed_facade_rejects_invalid_admission_and_keeps_queue_full_distinct() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let policy = RetainedLogPolicy {
-            rotation_max_bytes: 4096,
-            rotation_max_files: 2,
-            retention_max_age: Duration::from_secs(60),
-            maintenance_cadence: Duration::from_secs(60),
-            writer_shutdown_timeout: Duration::from_secs(2),
-            maintenance_max_work_per_pass: Some(4),
-        };
-        let logger = build_retained_logger("atm", tempdir.path(), policy, None).expect("logger");
-        let invalid = logger
-            .try_log_command(RetainedCommandEvent {
-                target: "atm.test",
-                action: "",
-                outcome: "ok",
-                code: None,
-            })
-            .expect_err("invalid action must be rejected");
-        assert_eq!(
-            invalid.code(),
-            atm_core::error::AtmErrorCode::ObservabilityEmitFailed
-        );
-        let queue_full = RetainedLogger::force_queue_full_for_test(|| {
-            logger.try_log_command(RetainedCommandEvent {
-                target: "atm.test",
-                action: "qualification",
-                outcome: "ok",
-                code: None,
-            })
-        })
-        .expect("queue-full admission");
-        assert_eq!(queue_full, RetainedLogOffer::QueueFull);
-        let _ = logger.shutdown();
-    }
-
-    #[test]
-    fn rejected_offer_surfaces_a_validated_diagnostic_code() {
-        let diagnostic_code =
-            atm_core::observability::diagnostic_code("SC_TEST_REJECTED").expect("valid code");
-        let offer = RetainedLogOffer::Rejected { diagnostic_code };
-        let RetainedLogOffer::Rejected { diagnostic_code } = offer else {
-            panic!("expected rejected offer");
-        };
-        assert_eq!(diagnostic_code.as_str(), "SC_TEST_REJECTED");
-    }
-}
+mod otel_tests;
+#[cfg(test)]
+mod tests;

@@ -2,8 +2,8 @@
 
 use super::stmt_cache::WriterStatementCache;
 use super::task_ops::{
-    TaskMessageResult, acknowledge_assignment, append_task_event, load_task_row, queue_order,
-    renumber_queue,
+    TaskEventDraft, TaskMessageResult, acknowledge_assignment, append_task_event, load_task_row,
+    queue_order, renumber_queue,
 };
 use super::task_rejection::{task_not_found, task_stale_counterparty};
 use super::task_report::drop_task_link_from_mail;
@@ -39,6 +39,7 @@ pub(super) fn apply_task_close(
             task_assignee: None,
             queued_position: None,
             reassign_notice: None,
+            task_events: Vec::new(),
         });
     }
     if let Err(error) = admit(
@@ -72,7 +73,7 @@ pub(super) fn apply_task_close(
         ));
         return deliver_rejected_close_report(record, task_id, &row, error, connection, target);
     }
-    persist_task_close(
+    let event = persist_task_close(
         record, task_id, outcome, reason, &row, next_state, connection, cache, target,
     )?;
     Ok(TaskMessageResult::Applied {
@@ -80,6 +81,7 @@ pub(super) fn apply_task_close(
         task_assignee: Some(row.assignee),
         queued_position: None,
         reassign_notice: None,
+        task_events: vec![event],
     })
 }
 
@@ -92,27 +94,33 @@ fn deliver_rejected_close_report(
     target: &SharedDbTarget,
 ) -> Result<TaskMessageResult, AtmError> {
     drop_task_link_from_mail(record, connection, target)?;
-    append_task_event(
+    let detail = format!("{}: {}", error.code(), error.message());
+    let event = append_task_event(
         connection,
         target,
-        &record.team,
-        task_id,
-        &row.assignee,
-        &IsoTimestamp::now(),
-        TaskEventKind::Rejected,
-        Some(row.state.tag()),
-        Some(row.state.tag()),
-        row.state.close_outcome(),
-        &record.envelope.from,
-        record.envelope.message_id,
-        None,
-        None,
-        Some(error.message()),
+        &TaskEventDraft {
+            team: &record.team,
+            task_id,
+            assignee: &row.assignee,
+            at: &IsoTimestamp::now(),
+            event: TaskEventKind::Rejected,
+            from_state: Some(row.state.tag()),
+            to_state: Some(row.state.tag()),
+            close_outcome: row.state.close_outcome(),
+            actor: &record.envelope.from,
+            message_id: record.envelope.message_id,
+            outcome: None,
+            marker: None,
+            detail: Some(&detail),
+        },
     )?;
-    Ok(TaskMessageResult::RejectedReportDelivered(AtmError::new(
-        error.code(),
-        format!("{}; report delivered", error.detail()),
-    )))
+    Ok(TaskMessageResult::RejectedReportDelivered {
+        error: AtmError::new(
+            error.code(),
+            format!("{}; report delivered", error.detail()),
+        ),
+        event,
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -126,7 +134,7 @@ fn persist_task_close(
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
-) -> Result<(), AtmError> {
+) -> Result<atm_storage::TaskEventRow, AtmError> {
     acknowledge_assignment(connection, cache, target, record, row)?;
     connection
         .execute(
@@ -146,19 +154,21 @@ fn persist_task_close(
     append_task_event(
         connection,
         target,
-        &record.team,
-        task_id,
-        &row.assignee,
-        &record.envelope.timestamp,
-        close_event_kind(outcome),
-        Some(row.state.tag()),
-        Some(next_state.tag()),
-        Some(outcome),
-        &record.envelope.from,
-        record.envelope.message_id,
-        None,
-        None,
-        reason,
+        &TaskEventDraft {
+            team: &record.team,
+            task_id,
+            assignee: &row.assignee,
+            at: &record.envelope.timestamp,
+            event: close_event_kind(outcome),
+            from_state: Some(row.state.tag()),
+            to_state: Some(next_state.tag()),
+            close_outcome: Some(outcome),
+            actor: &record.envelope.from,
+            message_id: record.envelope.message_id,
+            outcome: None,
+            marker: None,
+            detail: reason,
+        },
     )
 }
 

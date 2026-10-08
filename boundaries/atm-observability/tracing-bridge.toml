@@ -21,8 +21,8 @@ io_forbidden = ["daemon_lifecycle", "database_io"]
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm"]
-allowed_dependencies = ["atm-core", "sc-observability", "sc-observability-types", "serde_json", "tracing", "tracing-subscriber"]
-allowed_dev_dependencies = ["atm-core", "sc-observability-log", "serial_test", "tempfile", "tokio", "trybuild"]
+allowed_dependencies = ["atm-core", "atm-runtime", "opentelemetry", "opentelemetry_sdk", "opentelemetry-otlp", "sc-observability", "sc-observability-log", "sc-observability-types", "serde_json", "sha2", "tokio", "tonic", "tracing", "tracing-subscriber"]
+allowed_dev_dependencies = ["atm-core", "opentelemetry-proto", "serial_test", "tempfile", "tokio-stream", "tonic", "trybuild"]
 forbidden_edges = [
   "atm-daemon -> atm-observability",
   "atm-observability -> atm-daemon-bootstrap",
@@ -49,4 +49,4 @@ review_gates = ["allowlist_redaction", "single_global_install", "non_blocking_qu
 
 [status]
 state = "active"
-notes = ["Only atm-daemon-bootstrap installs the process-global tracing bridge; atm-observability is the sole sanctioned library owner of sc-observability backend types.", "sc-observability-log, tokio, and trybuild are dev-only qualification dependencies for the isolated macro fixture; they authorize no production dependency or second global logger."]
+notes = ["Only atm-daemon-bootstrap installs the process-global tracing bridge; atm-observability is the sole sanctioned library owner of sc-observability backend types.", "The canonical logger fans out redacted events once to its selected file/OTel sinks. SDK diagnostics stay local and project only observable failure evidence. Native SDK and Tokio dependencies belong to the exporter (ADR-064); no official tracing appender is installed."]

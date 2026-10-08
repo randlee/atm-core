@@ -249,7 +249,14 @@ async fn admit_verified_template(
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     let admission =
         build_template_admission(request, context, &envelope, message_id, timestamp, verified)?;
-    let admission = runtime.admit_template_message_async(admission).await?;
+    let committed = runtime.admit_template_message_async(admission).await?;
+    let admission = match committed.operation {
+        Ok(admission) => admission,
+        Err(error) => {
+            return Ok(DeliveryPersistenceResult::persisted(envelope)
+                .with_committed_task_write(Err(error), committed.task_events));
+        }
+    };
     if let Some(existing) = admission.existing {
         if existing.envelope != envelope {
             return Err(AtmError::message_id_conflict(format!(
@@ -261,7 +268,8 @@ async fn admit_verified_template(
     Ok(DeliveryPersistenceResult::persisted(envelope)
         .with_task_assignee(admission.task_assignee)
         .with_task_rejection(admission.task_rejection)
-        .with_assignment_metadata(admission.queued_position, admission.reassign_notice))
+        .with_assignment_metadata(admission.queued_position, admission.reassign_notice)
+        .with_committed_task_write(Ok(()), admission.task_events))
 }
 
 fn build_template_admission(

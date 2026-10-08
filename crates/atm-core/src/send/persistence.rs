@@ -20,9 +20,19 @@ struct MessageAdmissionSnapshot {
     queued_position: Option<u32>,
     reassign_notice: Option<atm_storage::Message>,
     task_rejection: Option<AtmError>,
+    operation: Result<(), AtmError>,
+    task_events: Vec<atm_storage::TaskEventRow>,
 }
 
 impl MessageAdmissionSnapshot {
+    fn rejected(error: AtmError, task_events: Vec<atm_storage::TaskEventRow>) -> Self {
+        Self {
+            operation: Err(error),
+            task_events,
+            ..Self::passive(DuplicateWriteDisposition::NotDuplicate)
+        }
+    }
+
     fn passive(duplicate: DuplicateWriteDisposition) -> Self {
         Self {
             duplicate,
@@ -31,6 +41,8 @@ impl MessageAdmissionSnapshot {
             queued_position: None,
             reassign_notice: None,
             task_rejection: None,
+            operation: Ok(()),
+            task_events: Vec::new(),
         }
     }
 
@@ -42,6 +54,8 @@ impl MessageAdmissionSnapshot {
             queued_position: admission.queued_position,
             reassign_notice: admission.reassign_notice,
             task_rejection: admission.task_rejection,
+            operation: Ok(()),
+            task_events: admission.task_events,
         }
     }
 }
@@ -106,6 +120,8 @@ pub(crate) fn persist_message_with_ack_update(
         queued_position,
         reassign_notice,
         task_rejection,
+        operation,
+        task_events,
     } = mirror_message_to_store(
         runtime,
         home_dir,
@@ -129,7 +145,8 @@ pub(crate) fn persist_message_with_ack_update(
         .with_already_closed(already_closed)
         .with_task_assignee(task_assignee)
         .with_assignment_metadata(queued_position, reassign_notice)
-        .with_task_rejection(task_rejection))
+        .with_task_rejection(task_rejection)
+        .with_committed_task_write(operation, task_events))
 }
 
 async fn load_store_backed_mailbox_projection_async(
@@ -201,6 +218,8 @@ pub(crate) async fn persist_message_with_async_admission(
         queued_position,
         reassign_notice,
         task_rejection,
+        operation,
+        task_events,
     } = mirror_message_to_store_async(
         runtime,
         &recipient.team,
@@ -223,7 +242,8 @@ pub(crate) async fn persist_message_with_async_admission(
         .with_already_closed(already_closed)
         .with_task_assignee(task_assignee)
         .with_assignment_metadata(queued_position, reassign_notice)
-        .with_task_rejection(task_rejection))
+        .with_task_rejection(task_rejection)
+        .with_committed_task_write(operation, task_events))
 }
 
 fn load_store_backed_mailbox_projection(
@@ -296,7 +316,16 @@ fn mirror_message_to_store(
         }
         runtime.persist_message_records_atomically(vec![record, source_update])?;
     } else {
-        let admission = runtime.admit_message_record_with_outcome(home_dir, record, provenance)?;
+        let committed = runtime.admit_message_record_with_outcome(home_dir, record, provenance)?;
+        let admission = match committed.operation {
+            Ok(admission) => admission,
+            Err(error) => {
+                return Ok(MessageAdmissionSnapshot::rejected(
+                    error,
+                    committed.task_events,
+                ));
+            }
+        };
         if let Some(existing) = admission.existing {
             return classify_existing_message(
                 existing,
@@ -335,9 +364,18 @@ async fn mirror_message_to_store_async(
         message_key,
         envelope: envelope.clone(),
     };
-    let admission = runtime
+    let committed = runtime
         .admit_message_with_provenance_async(record, provenance)
         .await?;
+    let admission = match committed.operation {
+        Ok(admission) => admission,
+        Err(error) => {
+            return Ok(MessageAdmissionSnapshot::rejected(
+                error,
+                committed.task_events,
+            ));
+        }
+    };
     if let Some(existing) = admission.existing {
         return classify_existing_message(
             existing,

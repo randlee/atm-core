@@ -21,7 +21,7 @@ io_owns = ["best_effort_telemetry_export"]
 io_forbidden = ["database_io", "socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm-runtime"]
+allowed_dependents = ["atm-runtime", "atm-observability"]
 allowed_dependencies = []
 forbidden_edges = ["atm -> telemetry-implementation", "atm-http-runtime -> telemetry-implementation", "atm-storage -> telemetry-implementation", "atm-storage-rusqlite -> telemetry-implementation"]
 
@@ -44,4 +44,4 @@ review_gates = ["first_party_only", "no_payload_or_vars", "best_effort_only"]
 
 [status]
 state = "concrete_landed"
-notes = ["atm-core owns the no-op implementation; atm-runtime is the sole allowed out-of-owner implementation and composition site."]
+notes = ["atm-core owns the no-op implementation; atm-runtime composes and calls the sink, while atm-observability owns the OpenTelemetry exporting implementation (ADR-064)."]

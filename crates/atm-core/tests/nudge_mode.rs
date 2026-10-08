@@ -32,6 +32,21 @@ impl atm_storage::MessageStore for InMemoryAsyncStore {
         Ok(())
     }
 
+    fn admit_message_with_provenance(
+        &self,
+        _message: &atm_storage::Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        // This fixture deliberately models a successful, non-persisting
+        // admission. It cannot create task-ledger rows, so task-linked async
+        // writes have no queue position to project into their dispatch.
+        Ok(atm_storage::CommittedTaskWrite {
+            operation: Ok(atm_storage::MessageAdmissionOutcome::passive(None)),
+            task_events: Vec::new(),
+        })
+    }
+
     fn save_messages_atomically(&self, _messages: &[atm_storage::Message]) -> Result<(), AtmError> {
         Ok(())
     }
@@ -56,7 +71,16 @@ impl atm_storage::MessageStore for InMemoryAsyncStore {
 }
 
 #[async_trait::async_trait]
-impl atm_storage::AsyncMessageStore for InMemoryAsyncStore {}
+impl atm_storage::AsyncMessageStore for InMemoryAsyncStore {
+    async fn admit_message_with_provenance_async(
+        &self,
+        message: atm_storage::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        atm_storage::MessageStore::admit_message_with_provenance(self, &message, provenance)
+    }
+}
 
 /// Minimal executor matching the core's async admission tests. This fixture's
 /// in-memory async store never yields, so no Tokio runtime is needed.
@@ -587,6 +611,8 @@ fn task_tagged_async_prepare_forces_immediate_mode() {
         &runtime,
         source_preflight,
     ))
+    .expect("commit async write")
+    .operation
     .expect("prepare async write");
     // BB.5: the async prepare path selects the same immediate mode (crates/atm-core/src/send/mod.rs:381)
     assert_eq!(
@@ -898,6 +924,8 @@ fn assert_graft_assignment_dispatch(async_path: bool) {
             &runtime,
             source_preflight,
         ))
+        .expect("commit async graft task write")
+        .operation
         .expect("prepare async graft task write")
     } else {
         prepare_write_with_runtime(request, &NullObservability, &runtime)
@@ -929,13 +957,13 @@ fn assert_graft_assignment_dispatch(async_path: bool) {
     );
     // BB.5: the position is attached from the durable admission result
     // (crates/atm-core/src/delivery_plan.rs:87). This fixture's async store
-    // (`InMemoryAsyncStore`) admits nothing, so only the synchronous path
-    // lands an assignment row a position can come from; the async path proves
-    // the write mode and the dispatch kind.
+    // (`InMemoryAsyncStore`) returns a passive outcome and commits no task
+    // row, so only the synchronous path lands an assignment row a position
+    // can come from; the async path proves the write mode and dispatch kind.
     if async_path {
         assert_eq!(
             dispatches[0].event.task_transition, None,
-            "this fixture's async store admits no assignment row to take a position from"
+            "this fixture's async store commits no assignment row to take a position from"
         );
     } else {
         // BB.5: every assignment carries its landed queue position

@@ -76,6 +76,7 @@ mod runtime_listener;
 mod runtime_maintenance;
 mod runtime_setup;
 mod storage_and_nudge_router;
+mod task_telemetry;
 #[cfg(unix)]
 mod unix_socket;
 
@@ -121,8 +122,8 @@ pub use peer_stream::{
 };
 pub use router_support::BoundedBlockingBridge;
 pub use runtime_health::{MemberStateTransitionSink, RuntimeHealth};
+use runtime_maintenance::{ABORT_JOIN_GRACE, ENDPOINT_CLEANUP_RESERVE, join_aborted};
 pub use runtime_maintenance::{Draining, Running, RuntimeMaintenance, Stopped};
-use runtime_maintenance::{abort_and_join, finish_maintenance};
 pub use storage_and_nudge_router::StorageAndNudgeRouter;
 
 /// Validated configuration for the maintained Tokio HTTP runtime.
@@ -909,23 +910,56 @@ impl HttpRuntime<Running> {
 }
 
 impl HttpRuntime<Draining> {
-    /// Completes the drain transition.
+    /// Completes the drain transition by `deadline`.
     ///
-    /// The runtime waits only for its actual Axum task. A shutdown deadline
-    /// aborts that task and gives cancellation one short, bounded join grace
-    /// before endpoint cleanup proceeds.
+    /// The server and maintenance tasks, already signalled, drain until one
+    /// shared point before `deadline`; any still running are then both
+    /// aborted before either is joined, and endpoint cleanup gets the last
+    /// [`ENDPOINT_CLEANUP_RESERVE`]. No step starts a fresh budget. The
+    /// record removal is blocking file I/O: if it outlasts `deadline` the
+    /// call returns an error while the removal finishes on the blocking pool.
     ///
     /// # Errors
     ///
-    /// Returns `AtmError` when the server fails while draining or exceeds the
-    /// configured shutdown bound.
-    pub async fn finish(self) -> Result<HttpRuntime<Stopped>, AtmError> {
+    /// Returns `AtmError` when the server fails while draining, exceeds the
+    /// shutdown deadline, or endpoint cleanup fails or is not finished by it.
+    pub async fn finish(
+        self,
+        deadline: tokio::time::Instant,
+    ) -> Result<HttpRuntime<Stopped>, AtmError> {
         let Draining {
             mut server_task,
             mut maintenance_task,
             endpoint_record,
         } = self.state;
-        let finished = tokio::time::timeout(self.config.timeouts.shutdown, &mut server_task).await;
+        let join_deadline = deadline
+            .checked_sub(ENDPOINT_CLEANUP_RESERVE)
+            .unwrap_or(deadline);
+        let drain_end = join_deadline
+            .checked_sub(ABORT_JOIN_GRACE)
+            .unwrap_or(join_deadline);
+        let finished = tokio::time::timeout_at(drain_end, &mut server_task).await;
+        let mut pending_maintenance = match maintenance_task.take() {
+            Some(mut task) => tokio::time::timeout_at(drain_end, &mut task)
+                .await
+                .is_err()
+                .then_some(task),
+            None => None,
+        };
+        // Cancel every task still running before joining either, so both
+        // share the one remaining join window.
+        if finished.is_err() {
+            server_task.abort();
+        }
+        if let Some(task) = &pending_maintenance {
+            task.abort();
+        }
+        if finished.is_err() {
+            join_aborted(&mut server_task, join_deadline).await;
+        }
+        if let Some(task) = &mut pending_maintenance {
+            join_aborted(task, join_deadline).await;
+        }
         let server_result = match finished {
             Ok(Ok(Ok(()))) => Ok(()),
             Ok(Ok(Err(source))) => Err(AtmError::daemon_unavailable(
@@ -936,17 +970,18 @@ impl HttpRuntime<Draining> {
                 "replacement HTTP runtime task ended unexpectedly",
             )
             .with_cause(source)),
-            Err(_) => {
-                abort_and_join(&mut server_task).await;
-                Err(AtmError::daemon_unavailable(
-                    "replacement HTTP runtime exceeded its shutdown deadline",
-                ))
-            }
+            Err(_) => Err(AtmError::daemon_unavailable(
+                "replacement HTTP runtime exceeded its shutdown deadline",
+            )),
         };
-        if let Some(task) = maintenance_task.take() {
-            finish_maintenance(task, self.config.timeouts.shutdown).await;
-        }
-        let cleanup_result = cleanup_loopback_endpoint_record(endpoint_record).await;
+        let cleanup_result =
+            tokio::time::timeout_at(deadline, cleanup_loopback_endpoint_record(endpoint_record))
+                .await
+                .unwrap_or_else(|_| {
+                    Err(AtmError::daemon_unavailable(
+                        "replacement loopback endpoint cleanup missed the shutdown deadline; the blocking removal continues",
+                    ))
+                });
         let result = server_result.and(cleanup_result);
         self.health.mark_stopped();
         result?;
@@ -1495,7 +1530,7 @@ mod tests {
         }
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("runtime shuts down cleanly");
     }
@@ -1551,7 +1586,7 @@ mod tests {
         );
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("runtime shuts down cleanly");
     }
@@ -1637,7 +1672,10 @@ mod tests {
             health.snapshot().readiness,
             RuntimeReadinessState::Unavailable
         );
-        draining.finish().await.expect("runtime drains");
+        draining
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
+            .await
+            .expect("runtime drains");
         assert_eq!(
             health.snapshot().readiness,
             RuntimeReadinessState::Unavailable
@@ -1777,7 +1815,7 @@ mod tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("UDS request drains with the runtime");
         assert!(
@@ -1866,7 +1904,7 @@ mod tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("UDS response-parity runtime drains");
     }
@@ -1890,7 +1928,12 @@ mod tests {
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
 
         handler.wait_until_entered().await;
-        let drain = tokio::spawn(async move { running.begin_shutdown().finish().await });
+        let drain = tokio::spawn(async move {
+            running
+                .begin_shutdown()
+                .finish(tokio::time::Instant::now() + Duration::from_secs(1))
+                .await
+        });
         tokio::task::yield_now().await;
         assert!(
             !drain.is_finished(),
@@ -2041,7 +2084,11 @@ mod tests {
             "a daemon without its server is never Ready"
         );
 
-        let error = match running.begin_shutdown().finish().await {
+        let error = match running
+            .begin_shutdown()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
+            .await
+        {
             Ok(_) => panic!("an aborted server task reports a typed runtime failure"),
             Err(error) => error,
         };
@@ -2096,7 +2143,10 @@ mod tests {
         .expect("valid configuration");
         let running = configured.start().await.expect("AL.1 start transition");
         let draining = running.begin_shutdown();
-        let _stopped = draining.finish().await.expect("runtime must drain");
+        let _stopped = draining
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
+            .await
+            .expect("runtime must drain");
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -2129,7 +2179,7 @@ mod tests {
         assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("replacement server joins after shutdown");
     }
@@ -2215,7 +2265,7 @@ mod tests {
         }
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("replacement server joins after HTTP fuzz probe");
     }
@@ -2251,7 +2301,7 @@ mod tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("runtime drains after publishing its selected port");
     }
@@ -2293,7 +2343,7 @@ mod tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("runtime shuts down after header deadline test");
     }
@@ -2346,10 +2396,15 @@ mod tests {
             .await
             .expect("first request task joins")
             .expect("first request receives its canonical response");
-        tokio::time::timeout(Duration::from_secs(1), running.begin_shutdown().finish())
-            .await
-            .expect("runtime must drain rather than wait on an unadmitted connection")
-            .expect("runtime shuts down after connection-admission test");
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            running
+                .begin_shutdown()
+                .finish(tokio::time::Instant::now() + Duration::from_secs(1)),
+        )
+        .await
+        .expect("runtime must drain rather than wait on an unadmitted connection")
+        .expect("runtime shuts down after connection-admission test");
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -2385,7 +2440,7 @@ mod tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("loopback runtime drains");
         assert!(
@@ -2443,7 +2498,7 @@ mod tests {
         // record path, exactly as a managed `atm daemon restart` does.
         first_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("first loopback runtime drains");
 
@@ -2489,7 +2544,7 @@ mod tests {
 
         second_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("second loopback runtime drains");
     }
@@ -2609,7 +2664,7 @@ mod tests {
         );
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("loopback runtime drains");
     }
@@ -2732,7 +2787,7 @@ mod tests {
         );
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("parity runtime drains");
     }
@@ -2786,7 +2841,7 @@ mod tests {
         assert_eq!(handler.calls.load(Ordering::SeqCst), 0);
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("body-limit runtime drains");
     }
@@ -2817,7 +2872,12 @@ mod tests {
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
 
         handler.wait_until_entered().await;
-        let drain = tokio::spawn(async move { running.begin_shutdown().finish().await });
+        let drain = tokio::spawn(async move {
+            running
+                .begin_shutdown()
+                .finish(tokio::time::Instant::now() + Duration::from_secs(1))
+                .await
+        });
         tokio::task::yield_now().await;
         assert!(
             !drain.is_finished(),
@@ -2873,10 +2933,14 @@ mod tests {
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
 
         handler.wait_until_entered().await;
-        let shutdown =
-            tokio::time::timeout(Duration::from_secs(1), running.begin_shutdown().finish())
-                .await
-                .expect("forced-abort shutdown completes within a bounded test window");
+        let shutdown = tokio::time::timeout(
+            Duration::from_secs(1),
+            running
+                .begin_shutdown()
+                .finish(tokio::time::Instant::now() + Duration::from_millis(250)),
+        )
+        .await
+        .expect("forced-abort shutdown completes within a bounded test window");
         let error = match shutdown {
             Ok(_) => panic!("an in-flight request exceeds the configured shutdown deadline"),
             Err(error) => error,
@@ -2930,7 +2994,7 @@ mod tests {
         ));
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("Windows drain");
     }
@@ -3076,5 +3140,156 @@ mod tests {
         // is released; drop it before issuing the next request so this test
         // measures recovery after a completed health exchange.
         drop(recovered_health);
+    }
+
+    /// Maintenance double: `cooperative` returns on the shutdown signal;
+    /// otherwise it ignores it and only cancellation ends it. `ended` is set
+    /// when the task finishes or its future is dropped by an abort.
+    struct ShutdownProbeMaintenance {
+        cooperative: bool,
+        ended: Arc<AtomicBool>,
+        aborted: Arc<AtomicBool>,
+    }
+
+    struct EndedOnDrop {
+        ended: Arc<AtomicBool>,
+        aborted: Arc<AtomicBool>,
+        returned: bool,
+    }
+
+    impl Drop for EndedOnDrop {
+        fn drop(&mut self) {
+            self.aborted.store(!self.returned, Ordering::SeqCst);
+            self.ended.store(true, Ordering::SeqCst);
+        }
+    }
+
+    impl super::RuntimeMaintenance for ShutdownProbeMaintenance {
+        fn start(
+            &self,
+            mut shutdown: tokio::sync::watch::Receiver<()>,
+        ) -> tokio::task::JoinHandle<()> {
+            let guard = EndedOnDrop {
+                ended: Arc::clone(&self.ended),
+                aborted: Arc::clone(&self.aborted),
+                returned: false,
+            };
+            let cooperative = self.cooperative;
+            tokio::spawn(async move {
+                // Move the whole guard in; capturing only its field would drop it here.
+                let mut guard = guard;
+                if cooperative {
+                    let _ = shutdown.changed().await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+                guard.returned = true;
+            })
+        }
+    }
+
+    const PROBE_SHUTDOWN: Duration = Duration::from_secs(1);
+    /// Timer wake-up latency allowed past a deadline; not a shutdown budget.
+    const TIMER_WAKE_SLACK: Duration = Duration::from_millis(20);
+
+    /// Starts a loopback runtime with a [`ShutdownProbeMaintenance`] and the
+    /// holding [`CountingLoopbackRouter`]; `(ended, aborted)` observe the
+    /// maintenance task.
+    async fn probe_runtime(
+        record_path: &std::path::Path,
+        handler: Arc<CountingLoopbackRouter>,
+        cooperative: bool,
+    ) -> (
+        super::HttpRuntime<super::Running>,
+        Arc<AtomicBool>,
+        Arc<AtomicBool>,
+    ) {
+        let instance_id = Ulid::new();
+        write_owner_record(record_path, instance_id);
+        let ended = Arc::new(AtomicBool::new(false));
+        let aborted = Arc::new(AtomicBool::new(false));
+        let running = HttpRuntimeBuilder::new(
+            HttpRuntimeConfig::new(
+                loopback_tcp_with_instance(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    record_path.to_path_buf(),
+                    instance_id,
+                ),
+                None,
+                limits(1024, 8),
+                timeouts(Duration::from_secs(5), PROBE_SHUTDOWN),
+            ),
+            handler,
+        )
+        .with_maintenance(Arc::new(ShutdownProbeMaintenance {
+            cooperative,
+            ended: Arc::clone(&ended),
+            aborted: Arc::clone(&aborted),
+        }))
+        .build()
+        .expect("valid probe runtime configuration")
+        .start()
+        .await
+        .expect("probe runtime starts");
+        (running, ended, aborted)
+    }
+
+    /// Positive: with the server held by an in-flight request and maintenance
+    /// ignoring the shutdown signal, `finish` cancels and joins both and
+    /// removes the endpoint record within one shutdown bound, never a second
+    /// fresh budget for maintenance.
+    #[tokio::test(flavor = "current_thread")]
+    async fn stuck_server_and_maintenance_share_one_shutdown_bound() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let handler = Arc::new(CountingLoopbackRouter::new());
+        let (running, ended, aborted) =
+            probe_runtime(&record_path, Arc::clone(&handler), false).await;
+        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(5))
+            .expect("shared loopback client");
+        let request =
+            tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
+        handler.wait_until_entered().await;
+
+        let deadline = tokio::time::Instant::now() + PROBE_SHUTDOWN;
+        let result = running.begin_shutdown().finish(deadline).await;
+        let overrun = tokio::time::Instant::now().saturating_duration_since(deadline);
+        assert!(
+            overrun <= TIMER_WAKE_SLACK,
+            "shutdown including endpoint cleanup overran the deadline by {overrun:?}"
+        );
+        assert_eq!(
+            result.err().map(|error| error.code().as_str().to_owned()),
+            Some("ATM_DAEMON_UNAVAILABLE".to_owned()),
+            "the held server is a typed shutdown failure"
+        );
+        assert!(ended.load(Ordering::SeqCst), "maintenance was joined");
+        assert!(aborted.load(Ordering::SeqCst), "maintenance was cancelled");
+        assert!(!record_path.exists(), "the endpoint record is removed");
+        request.abort();
+    }
+
+    /// Negative: an idle server and cooperative maintenance drain on the
+    /// signal, well inside the bound, without being cancelled.
+    #[tokio::test(flavor = "current_thread")]
+    async fn cooperative_shutdown_drains_without_cancellation() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let record_path = temporary_directory.path().join("local-http.json");
+        let (running, ended, aborted) =
+            probe_runtime(&record_path, Arc::new(CountingLoopbackRouter::new()), true).await;
+
+        let started = tokio::time::Instant::now();
+        running
+            .begin_shutdown()
+            .finish(started + PROBE_SHUTDOWN)
+            .await
+            .expect("cooperative shutdown succeeds");
+        assert!(started.elapsed() < PROBE_SHUTDOWN / 2);
+        assert!(ended.load(Ordering::SeqCst), "maintenance returned");
+        assert!(
+            !aborted.load(Ordering::SeqCst),
+            "maintenance was not cancelled"
+        );
+        assert!(!record_path.exists(), "the endpoint record is removed");
     }
 }

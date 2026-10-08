@@ -56,6 +56,10 @@ path = "tests/command_error_log.rs"
 name = "task_ledger_cli"
 path = "tests/task_ledger_cli.rs"
 
+[[test]]
+name = "doctor_telemetry"
+path = "tests/doctor_telemetry.rs"
+
 [[example]]
 name = "gen_cli_docs"
 path = "examples/gen_cli_docs.rs"

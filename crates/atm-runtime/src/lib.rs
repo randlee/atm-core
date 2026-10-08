@@ -9,6 +9,8 @@ mod composition;
 pub mod doctor_projection;
 mod legacy_storage_adapters;
 pub mod mailbox_runtime;
+pub mod task_telemetry;
+mod telemetry_limits;
 pub mod workflow_telemetry;
 
 pub use atm_storage::{
@@ -26,6 +28,10 @@ pub use doctor_projection::{
 pub use mailbox_runtime::{
     AsyncMailboxRuntime, HandoffConfig, StateHandoffDiagnostics, StateHandoffSupervisor,
     SupervisorState, read_deadline,
+};
+pub use task_telemetry::{
+    TaskTelemetryConfig, TaskTelemetryDiagnostics, TaskTelemetryDiagnosticsSnapshot,
+    TaskTelemetryRuntime, TaskTelemetrySetup,
 };
 pub use workflow_telemetry::{
     WorkflowTelemetryConfig, WorkflowTelemetryDiagnostics, WorkflowTelemetryRuntime,

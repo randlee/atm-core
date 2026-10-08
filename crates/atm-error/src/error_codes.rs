@@ -113,6 +113,8 @@ pub enum AtmErrorCode {
     WorkflowQueryInvalid,
     /// Runtime telemetry configuration failed validation and was disabled.
     WorkflowTelemetryConfigInvalid,
+    /// OpenTelemetry export configuration failed validation and was disabled.
+    TelemetryExportConfigInvalid,
     /// A best-effort workflow telemetry record was dropped.
     WorkflowTelemetryDropped,
     SerializationFailed,
@@ -295,6 +297,7 @@ impl AtmErrorCode {
             Self::TemplateTagReserved => "TEMPLATE_TAG_RESERVED",
             Self::WorkflowQueryInvalid => "ATM_WORKFLOW_QUERY_INVALID",
             Self::WorkflowTelemetryConfigInvalid => "ATM_WORKFLOW_TELEMETRY_CONFIG_INVALID",
+            Self::TelemetryExportConfigInvalid => "ATM_TELEMETRY_EXPORT_CONFIG_INVALID",
             Self::WorkflowTelemetryDropped => "ATM_WORKFLOW_TELEMETRY_DROPPED",
             Self::SerializationFailed => "ATM_SERIALIZATION_FAILED",
             Self::FilePolicyRejected => "ATM_FILE_POLICY_REJECTED",
@@ -490,6 +493,7 @@ fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
         "TEMPLATE_TAG_RESERVED" => AtmErrorCode::TemplateTagReserved,
         "ATM_WORKFLOW_QUERY_INVALID" => AtmErrorCode::WorkflowQueryInvalid,
         "ATM_WORKFLOW_TELEMETRY_CONFIG_INVALID" => AtmErrorCode::WorkflowTelemetryConfigInvalid,
+        "ATM_TELEMETRY_EXPORT_CONFIG_INVALID" => AtmErrorCode::TelemetryExportConfigInvalid,
         "ATM_WORKFLOW_TELEMETRY_DROPPED" => AtmErrorCode::WorkflowTelemetryDropped,
         "ATM_SERIALIZATION_FAILED" => AtmErrorCode::SerializationFailed,
         "ATM_FILE_POLICY_REJECTED" => AtmErrorCode::FilePolicyRejected,

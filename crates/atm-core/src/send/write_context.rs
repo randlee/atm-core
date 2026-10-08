@@ -133,6 +133,7 @@ pub(crate) fn prepare_send_context<
         &recipient,
         target,
         provenance,
+        super::is_task_write(request),
     )?;
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();

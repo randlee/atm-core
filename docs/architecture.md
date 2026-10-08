@@ -179,31 +179,43 @@ Phase-AA simplification note:
 
 ## 2. Crate Boundaries
 
-The post-Q product runtime is implemented by five crates:
+The current product runtime is implemented by these crates:
 
 - `atm-core`
 - `atm`
 - `atm-daemon`
+- `atm-daemon-bootstrap`
+- `atm-http-runtime`
 - `atm-runtime`
-- `atm-rusqlite`
+- `atm-storage`
+- `atm-storage-rusqlite`
+- `atm-observability`
+- `atm-daemon-client`
 
 Product-level boundary rules:
 
 - `atm-core` owns ATM business logic and the strict I/O boundaries that the current SQLite/daemon architecture
   routes through a daemon runtime.
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
-- `atm-daemon` owns transport adapters, singleton enforcement, live-status
-  runtime state, request routing, and daemon-owned runtime projection.
+- `atm-daemon` is only the shipped binary entrypoint plus its retained
+  observability adapter.
+- `atm-daemon-bootstrap` owns lifecycle and composition.
+- `atm-http-runtime` owns the maintained Axum server.
 - `atm-runtime` owns concrete runtime/store composition and storage-neutral
   doctor/runtime assembly for daemon and direct CLI doctor callers.
-- `atm-rusqlite` owns the first concrete SQLite implementation of the durable
+- `atm-storage` owns backend-neutral durable DTOs and storage traits.
+- `atm-storage-rusqlite` owns the concrete SQLite implementation of durable
   store boundaries.
+- `atm-observability` owns concrete shared-observability adapters and telemetry
+  exporters.
+- `atm-daemon-client` is retained only for narrow non-write compatibility
+  calls.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
 - `atm-daemon` must not become a second business-logic crate.
 - `atm-runtime` must remain a thin composition crate rather than a second
   daemon or workflow host.
-- `atm-rusqlite` must not absorb workflow or command logic; it implements store
+- `atm-storage-rusqlite` must not absorb workflow or command logic; it implements store
   contracts only.
 - crate-local boundary records in `docs/<crate>/boundaries.md` are the
   machine-readable contract used to drive architectural linting and review
@@ -286,11 +298,9 @@ Historical Phase R boundary direction (retired by Phase AI):
   - `atm-runtime` becomes the concrete runtime/store composition root
   - `atm-daemon` consumes storage-neutral runtime inputs and stops
     constructing SQLite-backed adapters directly in production composition
-  - relocked boundary records forbid a direct `atm-daemon -> atm-rusqlite`
-    edge; any reintroduction must fail the Rust
-    `crates/atm-architecture/` dependency guard (`cargo test --package
-    atm-architecture`), which is the sole code-driven boundary enforcement
-    layer
+  - relocked boundary records forbid a direct
+    `atm-daemon -> atm-storage-rusqlite` edge; the dependency guard in
+    `crates/atm-architecture/tests/boundary_enforcement.rs` fails on that edge
 
 Current Phase R lint partition direction:
 - extend the existing `sc-portability` analyzer for reusable platform-gating
@@ -441,9 +451,12 @@ Initial retained-command integration scope:
 - `sc-observability-types`
 - `sc-observability`
 
-Deferred from the initial retained-command integration scope:
+Outside the initial retained-command integration scope:
 - `sc-observe`
-- `sc-observability-otlp`
+- Phase BD integrates task telemetry with OpenTelemetry 0.33 through the
+  ATM-owned `TaskTelemetrySink`; `atm-core` remains independent of exporter
+  crates, and `atm-daemon-bootstrap` composes the exporter once and owns only
+  the provider lifecycle (ADR-064 D11).
 
 Phase W typed observability migration note:
 - `DaemonSubsystem` and the typed `emit_subsystem_event(...)` boundary are
@@ -697,6 +710,10 @@ Architectural rules:
 - the current sealed-trait pattern remains acceptable for initial release
 - `DoctorCommand` injectability is explicitly deferred unless implementation
   surfaces a concrete need
+- Phase BD adds the separate sealed `TaskTelemetrySink` contract in `atm-core`.
+  `atm-runtime` alone composes and calls the sink, while `atm-observability`
+  owns the exporting implementation. Export is best effort and cannot affect
+  durable task behavior.
 
 ### 4.6 Identity And Alias Projection
 
@@ -2282,7 +2299,7 @@ Phase U removed weak round-trip provenance from the durable mailbox contract.
 Current executed rule:
 - `imported_from` is removed from `MailStoreMessageRecord` durable truth and is
   no longer part of the mailbox-row schema
-- `recorded_at` remains SQLite-owned ingest timing in `atm-rusqlite`, not
+- `recorded_at` remains SQLite-owned ingest timing in `atm-storage-rusqlite`, not
   caller-supplied message data
 
 Governing ADR:

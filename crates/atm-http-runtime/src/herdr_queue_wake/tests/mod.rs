@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 mod bb5_closure;
+mod bd3_task_telemetry;
 mod herdr_nudge_invariant;
 mod herdr_queue_ephemeral;
 mod herdr_queue_no_delivery;
@@ -139,6 +140,11 @@ async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
     assert_eq!(error.code(), AtmErrorCode::BlockingBridgeDeadlineAfterStart);
     assert!(error.detail().contains("timed out"));
 }
+
+/// Failure-only bound on permit-based gate waits and joins: far above normal
+/// progress, it exists so a lost gate fails with a message naming it instead of
+/// hanging until the CI job timeout.
+const GATE_WAIT_LIMIT: Duration = Duration::from_secs(60);
 
 #[test]
 fn herdr_list_failure_reaches_the_tracing_bridge_with_its_error_code() {
@@ -1128,13 +1134,15 @@ async fn cancel_inflight_prompt() -> (
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let sender_clone = shutdown_tx.clone();
     let task = pump.clone().start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(1), prompt_started.notified())
+    // The gate stores a permit (`notify_one`), so this wait cannot miss it and
+    // needs no wall-clock bound racing the pump's progress.
+    tokio::time::timeout(GATE_WAIT_LIMIT, prompt_started.notified())
         .await
-        .expect("the fake prompt is in flight before shutdown");
+        .expect("prompt-started gate never fired");
     shutdown_tx.send(()).expect("shutdown notification");
-    tokio::time::timeout(Duration::from_secs(1), task)
+    tokio::time::timeout(GATE_WAIT_LIMIT, task)
         .await
-        .expect("pump joins after shutdown notification")
+        .expect("pump never joined after shutdown notification")
         .expect("poll task join");
     drop(prompt_gate);
     drop(sender_clone);
@@ -1506,6 +1514,7 @@ async fn task_linked_prompt_without_task_id_logs_storage_failure_and_records_not
         &dispatch,
         PromptTrigger::Steer,
         IsoTimestamp::now(),
+        &atm_runtime::TaskTelemetryRuntime::disabled(),
     )
     .await;
 
@@ -2082,9 +2091,9 @@ async fn ac13_herdr_wake_pending_ephemeral_state_tracks_the_in_flight_claim() {
 
     drop(prompt_gate);
     shutdown_tx.send(()).expect("shutdown notification");
-    tokio::time::timeout(Duration::from_secs(1), task)
+    tokio::time::timeout(GATE_WAIT_LIMIT, task)
         .await
-        .expect("pump joins after shutdown notification")
+        .expect("pump never joined after shutdown notification")
         .expect("poll task join");
 
     assert!(
@@ -2479,12 +2488,17 @@ async fn ac11_claim_drop_guard_release_is_joined_before_pump_shutdown() {
     let prompt_started = pump.install_prompt_started_test_gate();
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.clone().start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(1), prompt_started.notified())
+    // The gate stores a permit (`notify_one`), so this wait cannot miss it and
+    // needs no wall-clock bound racing the pump's progress.
+    tokio::time::timeout(GATE_WAIT_LIMIT, prompt_started.notified())
         .await
-        .expect("the fake prompt is in flight before shutdown");
+        .expect("prompt-started gate never fired");
 
     shutdown_tx.send(()).expect("shutdown notification");
-    task.await.expect("poll task joins after shutdown");
+    tokio::time::timeout(GATE_WAIT_LIMIT, task)
+        .await
+        .expect("pump never joined after shutdown")
+        .expect("poll task joins after shutdown");
 
     assert!(
         pump.release_handles
@@ -2585,12 +2599,17 @@ async fn ac11_successful_prompt_cancellation_cannot_rerelease_claim() {
     let (clear_started, _allow_clear) = pump.install_handoff_cleanup_test_gate();
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.clone().start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(1), clear_started.notified())
+    // Marker cleanup has completed once the gate is entered; the gate stores a
+    // permit, so waiting on it cannot race the pump's progress.
+    tokio::time::timeout(GATE_WAIT_LIMIT, clear_started.notified())
         .await
-        .expect("marker cleanup completes before cancellation");
+        .expect("handoff-cleanup gate never entered");
 
     shutdown_tx.send(()).expect("shutdown notification");
-    task.await.expect("poll task join");
+    tokio::time::timeout(GATE_WAIT_LIMIT, task)
+        .await
+        .expect("pump never joined after shutdown")
+        .expect("poll task join");
     assert!(
         runtime
             .pending_nudge_store()
@@ -2744,6 +2763,15 @@ impl atm_storage::MessageStore for UnusedMailStore {
         unreachable!("herdr candidate test never touches the mail store boundary")
     }
 
+    fn admit_message_with_provenance(
+        &self,
+        _message: &atm_storage::Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        unreachable!("herdr candidate test never touches the mail store boundary")
+    }
+
     fn save_messages_atomically(&self, _messages: &[atm_storage::Message]) -> Result<(), AtmError> {
         unreachable!("herdr candidate test never touches the mail store boundary")
     }
@@ -2776,6 +2804,16 @@ impl atm_storage::contract::sealed::Sealed for CountingMessageStore {}
 impl atm_storage::MessageStore for CountingMessageStore {
     fn save_message(&self, message: &atm_storage::Message) -> Result<(), AtmError> {
         self.inner.save_message(message)
+    }
+
+    fn admit_message_with_provenance(
+        &self,
+        message: &atm_storage::Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        self.inner
+            .admit_message_with_provenance(message, provenance)
     }
 
     fn save_messages_atomically(&self, messages: &[atm_storage::Message]) -> Result<(), AtmError> {
