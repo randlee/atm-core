@@ -110,7 +110,7 @@ pub fn observability_finding(health: &AtmObservabilityHealth) -> DoctorFinding {
             finding.severity = DoctorSeverity::Warning;
         }
         let export_remediation =
-            "Confirm ATM_OTEL_ENDPOINT is reachable; see docs/user/doctor-and-log.md.";
+            "Confirm ATM_OTEL_ENDPOINT is reachable; see docs/user-documents/doctor-and-log.md.";
         finding.remediation = Some(match finding.remediation {
             Some(existing) => format!("{existing} {export_remediation}"),
             None => export_remediation.to_string(),
@@ -206,7 +206,9 @@ mod tests {
 
         let finding = observability_finding(&health);
         assert_eq!(finding.severity, DoctorSeverity::Warning);
-        assert!(finding.remediation.unwrap().contains("ATM_OTEL_ENDPOINT"));
+        let remediation = finding.remediation.unwrap();
+        assert!(remediation.contains("ATM_OTEL_ENDPOINT"));
+        assert!(remediation.contains("docs/user-documents/doctor-and-log.md"));
     }
 
     #[test]
