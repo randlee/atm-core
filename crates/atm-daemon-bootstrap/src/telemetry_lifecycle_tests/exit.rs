@@ -88,7 +88,7 @@ pub(super) fn run_child_scenario(scenario: &str) {
 }
 
 /// [`run_child_scenario`] with extra child environment.
-fn run_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) {
+pub(super) fn run_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) {
     let output = spawn_child_scenario_with(scenario, envs);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(

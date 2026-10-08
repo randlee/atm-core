@@ -1364,10 +1364,10 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
     let reset = task_store
         .reset_reminders(&member, &task_id, reset_at)
         .expect("reset reminders");
-    assert_eq!(reset.reminder_count, 0);
-    assert_eq!(reset.lead_notified_count, 0);
-    assert!(reset.last_reminded_at.is_none());
-    assert_eq!(reset.updated_at, reset_at);
+    assert_eq!(reset.row.reminder_count, 0);
+    assert_eq!(reset.row.lead_notified_count, 0);
+    assert!(reset.row.last_reminded_at.is_none());
+    assert_eq!(reset.row.updated_at, reset_at);
     assert_eq!(
         h.events("T1").last().map(|event| event.event),
         Some(TaskEventKind::RemindersReset)
@@ -1382,5 +1382,5 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
             ReminderOutcome::Emitted,
         )
         .expect("record reminder after reset");
-    assert_eq!(after_reset.reminder_count, 1);
+    assert_eq!(after_reset.row.reminder_count, 1);
 }

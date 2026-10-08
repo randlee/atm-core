@@ -167,6 +167,7 @@ impl Daemon {
                 bare_cli: Default::default(),
                 herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                 herdr_process: Some(herdr.clone()),
+                daemon_home: root.path().join("home"),
             },
         )
         .expect("compose the replacement daemon handler");
