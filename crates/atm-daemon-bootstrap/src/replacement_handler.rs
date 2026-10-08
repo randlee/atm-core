@@ -9,6 +9,7 @@
 //! plus the peer connection pool and daemon execution context, into the
 //! router the runtime serves.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use atm_core::api::RequestDeadline;
@@ -53,6 +54,9 @@ pub(crate) struct ReplacementHandlerConfig<F> {
     pub(crate) bare_cli: BareCliRuntime,
     pub(crate) herdr_config: DaemonHerdrConfig,
     pub(crate) herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
+    /// ATM home for daemon-originated writes: the router's normalized request
+    /// roots and the queue-wake pump's escalation mail.
+    pub(crate) daemon_home: PathBuf,
 }
 
 fn compose_queue_workers<F>(
@@ -219,6 +223,7 @@ pub(crate) fn build_replacement_handler(
         bare_cli,
         herdr_config,
         herdr_process,
+        daemon_home,
     } = config;
     let herdr_process = resolve_herdr_process(&mut assembly, herdr_process, herdr_config.client);
     let queue_wake_process = Arc::clone(&herdr_process);
@@ -240,9 +245,11 @@ pub(crate) fn build_replacement_handler(
         selector.clone(),
         runtime_health.clone(),
         queue_wake_process,
+        daemon_home.clone(),
     )?;
     let handler = compose_storage_router(
         assembly,
+        daemon_home,
         observability,
         selector,
         runtime_health,
@@ -260,6 +267,7 @@ pub(crate) fn build_replacement_handler(
 #[allow(clippy::too_many_arguments)]
 fn compose_storage_router(
     assembly: RuntimeAssembly,
+    daemon_home: PathBuf,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     selector: Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     runtime_health: RuntimeHealth,
@@ -283,7 +291,7 @@ fn compose_storage_router(
         assembly.service_runtime,
         observability,
         selector,
-        atm_core::home::atm_home()?,
+        daemon_home,
     )
     .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime))
     .with_doctor_projection(Arc::new(doctor_projection))
@@ -310,6 +318,7 @@ fn build_queue_wake_pump(
     selector: Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     runtime_health: RuntimeHealth,
     herdr_process: Arc<dyn HerdrProcessAdapter>,
+    daemon_home: PathBuf,
 ) -> Result<Arc<HerdrQueueWakePump>, AtmError> {
     let pump = HerdrQueueWakePump::new(
         assembly.service_runtime.clone(),
@@ -317,7 +326,7 @@ fn build_queue_wake_pump(
         runtime_health,
         herdr_process,
     )
-    .with_daemon_home(atm_core::home::atm_home()?)
+    .with_daemon_home(daemon_home)
     .with_task_telemetry(assembly.task_telemetry.clone());
     #[cfg(test)]
     let pump = queue_wake_probe::attach(pump);

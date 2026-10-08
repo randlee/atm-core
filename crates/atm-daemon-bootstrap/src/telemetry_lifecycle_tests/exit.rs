@@ -87,7 +87,7 @@ pub(super) fn run_child_scenario(scenario: &str) {
 }
 
 /// [`run_child_scenario`] with extra child environment.
-fn run_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) {
+pub(super) fn run_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) {
     let mut child = Command::new(std::env::current_exe().expect("test binary"))
         .args(["--exact", scenario, "--nocapture", "--test-threads=1"])
         .env(CHILD_SCENARIO, scenario)
