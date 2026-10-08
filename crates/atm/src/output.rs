@@ -8,9 +8,7 @@ use atm_core::doctor::{
     BootstrapTraceReport, DoctorReport, DoctorSeverity, DoctorStatus,
 };
 use atm_core::list::ListOutcome;
-use atm_core::observability::{
-    AtmLogRecord, AtmLogSnapshot, AtmTelemetryExportFailure, AtmTelemetryExportState,
-};
+use atm_core::observability::{AtmLogRecord, AtmLogSnapshot};
 use atm_core::protocol::{RuntimeLivenessState, RuntimeReadinessState, RuntimeStatusSnapshot};
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
@@ -511,12 +509,12 @@ fn render_observability_health(health: &atm_core::observability::AtmObservabilit
     if let Some(export) = &health.export {
         output.push_str(&format!(
             "observability.export: state={} endpoint={} protocol={}",
-            render_export_state(export.state),
+            render_json_enum(export.state),
             export.endpoint.as_deref().unwrap_or("<none>"),
             export
                 .protocol
-                .map(render_export_protocol)
-                .unwrap_or("<none>"),
+                .map(render_json_enum)
+                .unwrap_or_else(|| "<none>".to_owned()),
         ));
         if export.emitted != 0
             || export.dropped_full != 0
@@ -527,7 +525,7 @@ fn render_observability_health(health: &atm_core::observability::AtmObservabilit
             output.push_str(&format!(" emitted={} dropped_full={} dropped_timeout={} dropped_failure={} dropped_shutdown={}", export.emitted, export.dropped_full, export.dropped_timeout, export.dropped_failure, export.dropped_shutdown));
         }
         if let Some(failure) = export.last_failure {
-            output.push_str(&format!(" last_failure={}", render_export_failure(failure)));
+            output.push_str(&format!(" last_failure={}", render_json_enum(failure)));
         }
         output.push('\n');
     }
@@ -540,29 +538,11 @@ fn render_observability_health(health: &atm_core::observability::AtmObservabilit
     output
 }
 
-fn render_export_state(state: AtmTelemetryExportState) -> &'static str {
-    match state {
-        AtmTelemetryExportState::Inert => "inert",
-        AtmTelemetryExportState::Healthy => "healthy",
-        AtmTelemetryExportState::Degraded => "degraded",
-        AtmTelemetryExportState::Unavailable => "unavailable",
-    }
-}
-
-fn render_export_protocol(protocol: atm_core::TelemetryExportProtocol) -> &'static str {
-    match protocol {
-        atm_core::TelemetryExportProtocol::Grpc => "grpc",
-    }
-}
-
-fn render_export_failure(failure: AtmTelemetryExportFailure) -> &'static str {
-    match failure {
-        AtmTelemetryExportFailure::ConfigInvalid => "config_invalid",
-        AtmTelemetryExportFailure::Unavailable => "unavailable",
-        AtmTelemetryExportFailure::Rejected => "rejected",
-        AtmTelemetryExportFailure::TimedOut => "timed_out",
-        AtmTelemetryExportFailure::ShutdownTimedOut => "shutdown_timed_out",
-    }
+fn render_json_enum(value: impl serde::Serialize) -> String {
+    serde_json::to_string(&value)
+        .expect("closed doctor enum always serializes")
+        .trim_matches('"')
+        .to_owned()
 }
 
 fn print_doctor_environment(report: &DoctorReport) {
