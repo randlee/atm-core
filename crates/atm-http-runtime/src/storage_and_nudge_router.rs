@@ -6576,4 +6576,133 @@ pub(crate) mod tests {
             "the hook begins before its dedicated timeout expires"
         );
     }
+
+    /// Holds an authenticated stream open after the client closes: its
+    /// shutdown never completes, so the pooled driver stalls.
+    struct StallOnCloseAdapter;
+
+    struct StallOnClose(tokio::net::TcpStream);
+
+    impl tokio::io::AsyncRead for StallOnClose {
+        fn poll_read(
+            mut self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            Pin::new(&mut self.0).poll_read(cx, buf)
+        }
+    }
+
+    impl tokio::io::AsyncWrite for StallOnClose {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<std::io::Result<usize>> {
+            Pin::new(&mut self.0).poll_write(cx, buf)
+        }
+
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            Pin::new(&mut self.0).poll_flush(cx)
+        }
+
+        fn poll_shutdown(
+            self: Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            std::task::Poll::Pending
+        }
+    }
+
+    impl PeerStreamAdapter for StallOnCloseAdapter {
+        fn connect<'a>(
+            &'a self,
+            stream: tokio::net::TcpStream,
+            _peer: &'a atm_core::types::HostName,
+        ) -> PeerStreamFuture<'a, EstablishedPeerStream> {
+            Box::pin(async move { Ok(Box::new(StallOnClose(stream)) as EstablishedPeerStream) })
+        }
+
+        fn accept<'a>(
+            &'a self,
+            _stream: tokio::net::TcpStream,
+        ) -> PeerStreamFuture<'a, AcceptedPeerStream> {
+            Box::pin(async { Err(AtmError::config("test accepts no peers")) })
+        }
+    }
+
+    /// The pooled-driver drain and the detached-hook drain share the caller's
+    /// one absolute deadline: a stalled driver leaves the hooks only what
+    /// remains, never a fresh budget.
+    #[tokio::test]
+    async fn shutdown_peer_connections_spends_one_deadline_across_pool_and_hooks() {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("test peer binds");
+        let port = listener.local_addr().expect("test peer address").port();
+        tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("peer accepts");
+            let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(());
+            let router = axum::Router::new().route(
+                "/v1/atm/messages",
+                axum::routing::post(|| async { StatusCode::CREATED }),
+            );
+            let _ = crate::http1_server::serve_connection(
+                hyper_util::rt::TokioIo::new(stream),
+                router,
+                Duration::from_secs(30),
+                shutdown_rx,
+            )
+            .await;
+        });
+        let pool =
+            PeerConnectionPool::new(PeerPoolConfig::default(), Arc::new(StallOnCloseAdapter));
+        let mut connection = pool
+            .acquire(
+                &"127.0.0.1".parse().expect("peer authority"),
+                NonZeroU16::new(port).expect("non-zero test port"),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("pooled peer connection");
+        let response = connection
+            .exchange(
+                atm_core::api::HttpRequest {
+                    method: "POST".to_owned(),
+                    path: "/v1/atm/messages".to_owned(),
+                    headers: Vec::new(),
+                    body: Vec::new(),
+                },
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("peer request succeeds");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        drop(connection);
+        assert_eq!(pool.pooled_count(), 1, "the connection is retained idle");
+        let fixture = fixture(true, None, None);
+        let router = fixture.router.clone().with_peer_connection_pool(pool);
+        router.detached_received_hooks.observe(
+            fixture.runtime_health.clone(),
+            atm_core::protocol::next_request_id(),
+            std::future::pending(),
+        );
+        // Real I/O set the stall up; virtual time measures the drain.
+        tokio::time::pause();
+        let started = tokio::time::Instant::now();
+        // Shorter than any step's own budget, so a fresh one shows.
+        let deadline = Duration::from_secs(3);
+
+        router.shutdown_peer_connections(started + deadline).await;
+
+        // Timer registrations round up to the 1ms wheel tick.
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= deadline && elapsed <= deadline + Duration::from_millis(10),
+            "{elapsed:?}"
+        );
+    }
 }

@@ -808,6 +808,26 @@ mod tests {
         );
     }
 
+    /// The sweep join and the tracked transition drains share the caller's
+    /// one absolute deadline: a stalled sweep leaves the transitions only
+    /// what remains, never a fresh budget.
+    #[tokio::test(start_paused = true)]
+    async fn recovery_sweep_shutdown_spends_one_deadline_across_sweep_and_transitions() {
+        let tracker = TransitionDrainTracker::new(RuntimeHealth::default());
+        tracker.track(tokio::spawn(std::future::pending()));
+        let handle = super::RecoverySweepHandle {
+            join: Some(tokio::spawn(std::future::pending())),
+            tracker,
+        };
+        let started = tokio::time::Instant::now();
+        // Shorter than any step's own budget, so a fresh one shows.
+        let deadline = Duration::from_secs(3);
+
+        handle.shutdown(started + deadline).await;
+
+        assert_eq!(started.elapsed(), deadline);
+    }
+
     #[tokio::test]
     async fn recovery_sweep_drop_aborts_tracked_handles_when_tracker_lock_is_poisoned() {
         let tracker = TransitionDrainTracker::new(RuntimeHealth::default());

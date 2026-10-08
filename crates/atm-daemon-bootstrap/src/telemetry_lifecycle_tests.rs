@@ -12,6 +12,7 @@
 mod exit;
 mod queue_wake;
 pub(crate) mod receiver;
+mod stalled_shutdown;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -140,6 +141,18 @@ impl Daemon {
         observability: DaemonObservability,
         clock: Option<crate::replacement_handler::queue_wake_probe::Clock>,
     ) -> Self {
+        let selector = Arc::new(AcceptingSelector(AcceptingHook));
+        Self::compose_with_selector(root, observability, clock, selector).await
+    }
+
+    /// [`Self::compose_with`] with the received-hook `selector` the router
+    /// and queue workers use.
+    pub async fn compose_with_selector(
+        root: tempfile::TempDir,
+        observability: DaemonObservability,
+        clock: Option<crate::replacement_handler::queue_wake_probe::Clock>,
+        selector: Arc<dyn MessageReceivedHookSelector>,
+    ) -> Self {
         let assembly = compose_daemon_assembly(
             SqliteStorageFactory::at_path(root.path().join("runtime").join("mail.sqlite3")),
             Some(&observability),
@@ -159,10 +172,7 @@ impl Daemon {
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(observability.clone()),
-                selector_factory: |_, _, _, _| {
-                    Arc::new(AcceptingSelector(AcceptingHook))
-                        as Arc<dyn MessageReceivedHookSelector>
-                },
+                selector_factory: move |_, _, _, _| selector,
                 daemon_launch_identity: DaemonLaunchIdentity::default(),
                 peer_wire_mode: atm_core::peer_wire::PeerWireMode::plaintext_test(),
                 peer_adapter_selection: SelectedPeerAdapterSelection {
