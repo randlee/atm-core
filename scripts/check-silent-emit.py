@@ -8,8 +8,7 @@ import sys
 
 
 PATTERN = re.compile(
-    r"let\s*_\s*=\s*.*?\.(?:emit|emit_event|emit_subsystem_event)\s*\(",
-    re.DOTALL,
+    r"let\s*_\s*=\s*[^;]*?\.(?:emit|emit_event|emit_subsystem_event)\s*\(",
 )
 
 
