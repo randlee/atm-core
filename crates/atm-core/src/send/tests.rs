@@ -1331,6 +1331,15 @@ fn self_addressed_task_assignment_is_persisted_without_delivery() {
     );
     assert!(
         runtime
+            .persisted_records
+            .lock()
+            .expect("records lock")
+            .iter()
+            .all(|record| record.envelope.read),
+        "the self-task carrier is born read, so it is never unread"
+    );
+    assert!(
+        runtime
             .non_claude_deliveries
             .lock()
             .expect("non-claude deliveries lock")

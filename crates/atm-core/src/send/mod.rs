@@ -623,7 +623,14 @@ fn build_send_envelope(
         source_chat_id: request.caller_chat_id.clone(),
         text: body.to_string(),
         timestamp,
-        read: false,
+        // A member's task addressed to itself keeps its body and record but is
+        // born read: it never enters the caller's own unread bucket.
+        read: is_task_write(request)
+            && is_same_member(
+                &context.canonical_sender,
+                &request.caller_team,
+                &context.recipient,
+            ),
         source_team: Some(request.caller_team.clone()),
         destination_chat_id: request
             .to
