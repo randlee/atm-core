@@ -5,10 +5,14 @@ use std::time::Duration;
 
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use tokio::time::Instant;
 
 use crate::loopback_tcp::LoopbackEndpointRecordGuard;
 
+/// Final slice of the shutdown deadline in which cancelled tasks are joined.
 pub(crate) const ABORT_JOIN_GRACE: Duration = Duration::from_millis(100);
+/// Last slice of the shutdown deadline, kept for endpoint-record cleanup.
+pub(crate) const ENDPOINT_CLEANUP_RESERVE: Duration = Duration::from_millis(100);
 
 /// A runtime-owned maintenance task that follows the server shutdown signal.
 pub trait RuntimeMaintenance: Send + Sync {
@@ -33,21 +37,13 @@ pub struct Draining {
 
 pub struct Stopped;
 
-pub(crate) async fn abort_and_join<T>(task: &mut JoinHandle<T>) {
-    task.abort();
-    if tokio::time::timeout(ABORT_JOIN_GRACE, task).await.is_err() {
+/// Joins an already-aborted task until `deadline`; a task that is still
+/// running then (blocked in synchronous code) is reported and detached.
+pub(crate) async fn join_aborted<T>(task: &mut JoinHandle<T>, deadline: Instant) {
+    if tokio::time::timeout_at(deadline, task).await.is_err() {
         tracing::warn!(
             abort_join_grace_ms = ABORT_JOIN_GRACE.as_millis(),
             "runtime task exceeded the bounded abort-join grace"
         );
-    }
-}
-
-pub(crate) async fn finish_maintenance(mut task: JoinHandle<()>, shutdown_timeout: Duration) {
-    if tokio::time::timeout(shutdown_timeout, &mut task)
-        .await
-        .is_err()
-    {
-        abort_and_join(&mut task).await;
     }
 }

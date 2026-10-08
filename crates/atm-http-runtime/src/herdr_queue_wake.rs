@@ -140,9 +140,10 @@ impl HerdrQueueWakePump {
         self
     }
 
-    #[cfg(test)]
+    /// Replaces the pump clock; for workspace tests that age the task ledger.
+    #[cfg(any(test, feature = "test-support"))]
     #[must_use]
-    fn with_clock(mut self, clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>) -> Self {
+    pub fn with_clock(mut self, clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>) -> Self {
         self.clock = clock;
         self
     }

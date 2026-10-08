@@ -162,21 +162,41 @@ fn adapter_availability_guard_scans_code_branches_not_comment_wording() {
 }
 
 #[test]
+fn daemon_observability_owner_is_passed_not_process_global() {
+    let root = workspace_root();
+    let composition = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let owner = read_source(&root.join("crates/atm-daemon-bootstrap/src/daemon_observability.rs"));
+    for source in [&composition, &owner] {
+        assert!(
+            !source.contains("OnceLock<DaemonObservability>") && !source.contains("process_owner"),
+            "the daemon observability owner must be threaded through composition, not read from a process global"
+        );
+    }
+    assert!(
+        composition.contains("assemble_daemon_runtime(obs_owner.as_ref())?")
+            && composition.contains(
+                "DaemonWorkers::for_process(telemetry, recovery_sweep, atm_temp_sweeper, obs_owner)"
+            ),
+        "runtime assembly and the shutdown workers must receive the supplied owner"
+    );
+}
+
+#[test]
 fn daemon_must_not_read_caller_workspace_config() {
     let root = workspace_root();
     let composition = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
     assert!(
-        composition.contains("assemble_daemon_runtime()?"),
+        composition.contains("assemble_daemon_runtime(obs_owner.as_ref())?"),
         "replacement daemon composition must select the daemon-only runtime assembly"
     );
     assert!(
-        composition.contains("pub fn assemble_daemon_runtime()")
+        composition.contains("pub fn assemble_daemon_runtime(")
             && composition.contains(".map(RuntimeAssembly::for_daemon)"),
         "daemon-only assembly must discard the workspace-backed configuration view"
     );
     assert!(
         !composition
-            .split("pub fn assemble_daemon_runtime()")
+            .split("pub fn assemble_daemon_runtime(")
             .nth(1)
             .unwrap_or_default()
             .split("/// Starts the replacement Tokio/Axum daemon")
