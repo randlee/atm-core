@@ -405,19 +405,21 @@ async fn receiver_metrics_cap_series_without_identity_labels() {
             match &metric.data {
                 Some(Data::Sum(sum)) => {
                     assert!(
-                        sum.data_points.len() <= 32,
+                        sum.data_points.len() <= 15,
                         "{} exceeded series cap",
+                        metric.name
+                    );
+                    assert_eq!(
+                        sum.data_points.len(),
+                        3,
+                        "{} must contain one series for each emitted kind",
                         metric.name
                     );
                     assert!(
                         sum.data_points
                             .iter()
-                            .all(|point| point.attributes.iter().all(|attribute| {
-                                !matches!(
-                                    attribute.key.as_str(),
-                                    "task_id" | "actor" | "message_id"
-                                )
-                            }))
+                            .all(|point| point.attributes.len() == 1
+                                && point.attributes[0].key.as_str() == "kind")
                     );
                 }
                 Some(Data::Histogram(histogram)) => {
