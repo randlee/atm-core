@@ -2188,7 +2188,7 @@ pub(crate) mod tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("task lifecycle daemon shuts down");
     }
@@ -2223,7 +2223,7 @@ pub(crate) mod tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("task lifecycle daemon shuts down");
     }
@@ -5311,7 +5311,7 @@ pub(crate) mod tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("UDS runtime drains");
         assert!(
@@ -5413,7 +5413,7 @@ pub(crate) mod tests {
         );
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("search runtime drains");
     }
@@ -5496,7 +5496,7 @@ pub(crate) mod tests {
         );
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("UDS runtime drains");
     }
@@ -5594,7 +5594,7 @@ pub(crate) mod tests {
         }
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("direct peer runtime drains");
     }
@@ -5689,7 +5689,7 @@ pub(crate) mod tests {
         );
         remote_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("remote runtime drains");
         assert_eq!(
@@ -5776,7 +5776,7 @@ pub(crate) mod tests {
         pool.shutdown(Duration::from_secs(1)).await;
         remote_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("remote runtime drains");
     }
@@ -5941,12 +5941,12 @@ pub(crate) mod tests {
 
         local_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("local direct peer runtime drains");
         remote_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("remote direct peer runtime drains");
     }
@@ -6004,7 +6004,7 @@ pub(crate) mod tests {
 
         remote_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("remote direct peer runtime drains before acknowledgement");
 
@@ -6047,7 +6047,7 @@ pub(crate) mod tests {
 
         local_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("local direct peer runtime drains");
     }
@@ -6104,7 +6104,7 @@ pub(crate) mod tests {
         );
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("direct peer runtime drains");
     }

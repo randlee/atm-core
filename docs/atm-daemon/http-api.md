@@ -14,7 +14,10 @@
 | Machine-readable publication | checked-in OpenAPI 3.1 and `atm api spec` |
 
 Version 1.11.0 adds the optional `DoctorReport.observability.export`
-OpenTelemetry export health; payloads without it decode unchanged.
+OpenTelemetry export health; payloads without it decode unchanged. Its state
+is `Inert` (no endpoint), `Healthy`, `Degraded` (runtime-counted losses) or
+`Unavailable` with a typed `last_failure`; it never carries the auth header or
+a free-form exporter error (ADR-064 D6, D11).
 Version 1.8.0 adds the optional `PostSendHookEvent.task_transition` field;
 older payloads default it to absent and older same-major consumers ignore it.
 Version 1.7.0 adds stable task-rejection error codes without changing response
