@@ -695,40 +695,55 @@ async fn delivered_export_then_full_backlog_behind_stall() {
     let (lines, eof) = forward_lines(child.stdout.take().expect("child stdout"));
     let lines = Arc::new(Mutex::new(lines));
 
-    let delivering = line_with(&lines, "BD6-DELIVERING").await;
-    let committed: usize = delivering
-        .rsplit(' ')
-        .next()
-        .and_then(|count| count.parse().ok())
-        .expect("committed row count");
-    capture
-        .wait(EXPORT_WAIT, "delivered traces, metrics and logs", || {
-            let spans = capture.spans.lock().unwrap();
-            spans
-                .iter()
-                .filter(|span| span.name == "atm.task.event")
-                .count()
-                >= committed
-                && exported_counts(&capture).get("assigned") == Some(&3)
-                && capture
-                    .logs
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .any(|record| format!("{record:?}").contains(COMBINED_LOG))
-        })
-        .await;
-    capture.begin_stall();
-    let before = capture.started.load(Ordering::SeqCst);
-    writeln!(stdin, "flood").expect("request flood");
-    line_with(&lines, "BD6-READY").await;
-    capture
-        .wait(EXPORT_WAIT, "an export stalled in flight", || {
-            capture.started.load(Ordering::SeqCst) > before
-        })
-        .await;
+    // The driving steps run in their own task so a panicking or timed-out
+    // step cannot leave `child` running: the test keeps ownership of `child`
+    // and kills and reaps it before re-raising that panic.
+    let driven = tokio::spawn({
+        let (capture, lines) = (capture.clone(), Arc::clone(&lines));
+        async move {
+            let delivering = line_with(&lines, "BD6-DELIVERING").await;
+            let committed: usize = delivering
+                .rsplit(' ')
+                .next()
+                .and_then(|count| count.parse().ok())
+                .expect("committed row count");
+            capture
+                .wait(EXPORT_WAIT, "delivered traces, metrics and logs", || {
+                    let spans = capture.spans.lock().unwrap();
+                    spans
+                        .iter()
+                        .filter(|span| span.name == "atm.task.event")
+                        .count()
+                        >= committed
+                        && exported_counts(&capture).get("assigned") == Some(&3)
+                        && capture
+                            .logs
+                            .lock()
+                            .unwrap()
+                            .iter()
+                            .any(|record| format!("{record:?}").contains(COMBINED_LOG))
+                })
+                .await;
+            capture.begin_stall();
+            let before = capture.started.load(Ordering::SeqCst);
+            writeln!(stdin, "flood").expect("request flood");
+            line_with(&lines, "BD6-READY").await;
+            capture
+                .wait(EXPORT_WAIT, "an export stalled in flight", || {
+                    capture.started.load(Ordering::SeqCst) > before
+                })
+                .await;
 
-    let started = Instant::now();
+            (stdin, Instant::now())
+        }
+    });
+    let (mut stdin, started) = match driven.await {
+        Ok(driven) => driven,
+        Err(error) => {
+            kill_and_reap(&mut child);
+            std::panic::resume_unwind(error.into_panic());
+        }
+    };
     writeln!(stdin, "stop").expect("request stop");
     drop(stdin);
     // The test owns `child`; the bounded blocking wait runs in place.
