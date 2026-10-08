@@ -20,6 +20,7 @@ They are not developer architecture notes.
 - [Mailbox Workflows](./mailbox-workflows.md)
 - [Tasks](./tasks.md)
 - [Doctor And Log](./doctor-and-log.md)
+  - [OpenTelemetry Export](./doctor-and-log.md#opentelemetry-export)
 - [Herdr Integration](./herdr.md)
 - [Hooks](./hooks.md)
 - [Hermes Gateway Integration](./hermes-atm.md)
