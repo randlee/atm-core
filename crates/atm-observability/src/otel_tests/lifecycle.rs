@@ -9,16 +9,48 @@ use opentelemetry::metrics::MeterProvider;
 use std::sync::atomic::Ordering;
 use tracing_subscriber::prelude::*;
 
-struct ExportFailureObserved(Arc<tokio::sync::Notify>);
+/// Records every SDK event name so the test can prove which real export
+/// failure events the span, log and metric pipelines emit.
+#[derive(Clone, Default)]
+struct ExportFailureObserved {
+    seen: Arc<std::sync::Mutex<Vec<String>>>,
+    changed: Arc<tokio::sync::Notify>,
+}
+
+impl ExportFailureObserved {
+    fn names(&self) -> Vec<String> {
+        self.seen.lock().unwrap().clone()
+    }
+
+    fn first_with_prefix(&self, prefix: &str) -> Option<String> {
+        self.names().into_iter().find(|name| {
+            name.starts_with(prefix)
+                && name.contains("Export")
+                && (name.contains("Error") || name.contains("Fail"))
+        })
+    }
+
+    async fn all_signals_failed(&self) {
+        loop {
+            let changed = self.changed.notified();
+            if ["BatchSpanProcessor", "BatchLogProcessor", "PeriodicReader"]
+                .iter()
+                .all(|prefix| self.first_with_prefix(prefix).is_some())
+            {
+                return;
+            }
+            changed.await;
+        }
+    }
+}
 
 impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for ExportFailureObserved {
     fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-        if matches!(
-            event.metadata().name(),
-            "BatchSpanProcessor.Export.Error" | "BatchSpanProcessor.Flush.ExportError"
-        ) {
-            self.0.notify_one();
-        }
+        self.seen
+            .lock()
+            .unwrap()
+            .push(event.metadata().name().to_owned());
+        self.changed.notify_waiters();
     }
 }
 
@@ -76,11 +108,11 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
     let diagnostics = Arc::new(ExportDiagnostics::default());
     let bridge = TracingBridgeLayer::new(logger.clone());
     bridge.set_export_diagnostics(diagnostics.clone());
-    let observed = Arc::new(tokio::sync::Notify::new());
+    let observed = ExportFailureObserved::default();
     let dispatch = tracing::Dispatch::new(
         tracing_subscriber::registry()
             .with(bridge)
-            .with(ExportFailureObserved(observed.clone())),
+            .with(observed.clone()),
     );
     let _subscriber = tracing::dispatcher::set_default(&dispatch);
     // A one-span batch exports the first span at once through the SDK's
@@ -104,7 +136,10 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
         .u64_counter("fixture.count")
         .build()
         .add(1, &[]);
-    let observed_failure = tokio::time::timeout(Duration::from_secs(4), observed.notified()).await;
+    // 30 s is a hang diagnostic only; the periodic metric reader first fires
+    // at 2x EXPORT_INTERVAL, so success is far earlier than this ceiling.
+    let observed_failure =
+        tokio::time::timeout(Duration::from_secs(30), observed.all_signals_failed()).await;
     let mut evidence = health();
     diagnostics.project(&mut evidence);
     // The sink is still nonblocking even though transport failed.
@@ -131,11 +166,30 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
     }
     // Assert after explicit shutdown, so fixture failure cannot deadlock the
     // current-thread runtime by dropping live native providers during unwind.
-    observed_failure.unwrap();
+    assert!(
+        observed_failure.is_ok(),
+        "real span, log and metric export failures expected; SDK emitted {:?}",
+        observed.names()
+    );
     assert_eq!(
         evidence.last_failure,
         Some(AtmTelemetryExportFailure::Unavailable)
     );
+    // Each real SDK event name must independently project as a failure, so a
+    // misnamed log or metric mapping cannot hide behind the span events.
+    for prefix in ["BatchSpanProcessor", "BatchLogProcessor", "PeriodicReader"] {
+        let name = observed.first_with_prefix(prefix).unwrap();
+        let alone = ExportDiagnostics::default();
+        alone.observe_sdk_event(&name);
+        let mut projected = health();
+        alone.project(&mut projected);
+        assert_eq!(
+            projected.last_failure,
+            Some(AtmTelemetryExportFailure::Unavailable),
+            "{name} is not mapped by ExportDiagnostics"
+        );
+        assert_eq!(projected.state, AtmTelemetryExportState::Unavailable);
+    }
 }
 
 #[tokio::test]
