@@ -256,7 +256,10 @@ impl Daemon {
         request
     }
 
-    /// The daemon's own `doctor --json` report, through its API.
+    /// The daemon's `doctor --json` report, through its API, as the exact
+    /// text `atm doctor --json` prints: `print_doctor_result` emits
+    /// `serde_json::to_string_pretty(report)` (crates/atm/src/output.rs), so
+    /// the report is rendered to that text and parsed back.
     pub async fn doctor_json(&self) -> serde_json::Value {
         let query = DoctorQuery {
             home_dir: self.root.path().join("home"),
@@ -272,7 +275,9 @@ impl Daemon {
         let ResponseEnvelope::Doctor(report) = response else {
             panic!("doctor must return a report: {response:?}");
         };
-        serde_json::to_value::<&DoctorReport>(&*report).expect("doctor report json")
+        let printed =
+            serde_json::to_string_pretty::<DoctorReport>(&report).expect("doctor --json text");
+        serde_json::from_str(&printed).expect("doctor --json text parses")
     }
 
     /// Every committed ledger row and inserted handoff of `tasks`, as
@@ -654,14 +659,73 @@ async fn invalid_export_configuration_keeps_the_daemon_operational() {
     }
 }
 
+/// Exactly one export-related finding, raised above info.
 fn assert_export_remediation(doctor: &serde_json::Value) {
     let findings = doctor["findings"].as_array().expect("doctor findings");
-    assert!(
-        findings.iter().any(|finding| finding["severity"] != "info"
-            && finding["remediation"]
+    let export: Vec<&serde_json::Value> = findings
+        .iter()
+        .filter(|finding| {
+            finding["remediation"]
                 .as_str()
-                .is_some_and(|text| text.contains("ATM_OTEL_ENDPOINT"))),
-        "doctor raises export failure above info: {doctor:#}"
+                .is_some_and(|text| text.contains("ATM_OTEL_ENDPOINT"))
+        })
+        .collect();
+    assert_eq!(
+        export.len(),
+        1,
+        "doctor raises exactly one export finding: {doctor:#}"
+    );
+    assert_ne!(
+        export[0]["severity"], "info",
+        "export failure is above info: {doctor:#}"
+    );
+}
+
+/// A task runtime whose sink never completes, with a one-record queue and a
+/// short emit timeout, so a burst leaves real `dropped_full` (queue) and
+/// `dropped_timeout` (stuck emit) counts. Attach it before composing the daemon.
+async fn lossy_task_runtime() -> atm_runtime::TaskTelemetryRuntime {
+    let runtime = atm_runtime::TaskTelemetryRuntime::start(
+        atm_runtime::TaskTelemetryConfig {
+            queue_capacity: 1,
+            emit_timeout: Duration::from_millis(200),
+            ..Default::default()
+        },
+        Arc::new(atm_runtime_test_support::StalledTaskTelemetrySink),
+    );
+    // One record in flight and one queued at most; the rest must drop full.
+    for seq in 1..=6 {
+        runtime.try_emit(task_record(seq));
+    }
+    let diagnostics = runtime.diagnostics();
+    tokio::time::timeout(EXPORT_WAIT, async {
+        while diagnostics.snapshot().dropped_timeout == 0 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("a stuck emit times out");
+    let snapshot = diagnostics.snapshot();
+    assert!(snapshot.dropped_full > 0, "{snapshot:?}");
+    runtime
+}
+
+/// Doctor reports exactly the runtime's known losses, disjoint per cause.
+fn assert_doctor_reports_losses(
+    doctor: &serde_json::Value,
+    losses: atm_runtime::TaskTelemetryDiagnosticsSnapshot,
+) {
+    let health = export_health(doctor);
+    assert!(
+        losses.dropped_full > 0 && losses.dropped_timeout > 0,
+        "{losses:?}"
+    );
+    assert_eq!(health.dropped_full, losses.dropped_full);
+    assert_eq!(health.dropped_timeout, losses.dropped_timeout);
+    assert_eq!(
+        (health.dropped_failure, health.dropped_shutdown),
+        (0, 0),
+        "no loss is invented for an SDK failure or shutdown"
     );
 }
 
@@ -729,6 +793,11 @@ fn unreachable_collector_child() {
         observability
             .install_tracing_bridge()
             .expect("the child process owns the global tracing bridge");
+        let lossy = lossy_task_runtime().await;
+        observability.attach_runtime_telemetry(
+            lossy.diagnostics(),
+            Arc::new(atm_runtime::WorkflowTelemetryDiagnostics::default()),
+        );
         let daemon = Daemon::compose(root, observability).await;
         for task in ["BD6-U1", "BD6-U2", "BD6-U3"] {
             sent_message_id(
@@ -749,6 +818,8 @@ fn unreachable_collector_child() {
         );
         assert_eq!(health.dropped_failure, 0);
         assert_export_remediation(&doctor);
+        // Runtime losses and the SDK failure are reported together, disjointly.
+        assert_doctor_reports_losses(&doctor, lossy.diagnostics().snapshot());
         let started = Instant::now();
         daemon
             .shutdown()
@@ -760,6 +831,44 @@ fn unreachable_collector_child() {
             started.elapsed()
         );
     });
+}
+
+/// Positive: known runtime losses (a full task queue and a stuck emit) reach
+/// `doctor --json` as `Degraded` with exactly the runtime's `dropped_full` and
+/// `dropped_timeout`, as one export finding, with no SDK failure and no invented
+/// failure or shutdown loss.
+/// Negative: the daemon keeps serving and the task write keeps its result.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn runtime_losses_reach_doctor_json_as_one_degraded_finding() {
+    let collector = Receiver::start(false).await;
+    let (root, observability) = Daemon::bootstrap(endpoint_env(&collector.endpoint)).await;
+    let lossy = lossy_task_runtime().await;
+    observability.attach_runtime_telemetry(
+        lossy.diagnostics(),
+        Arc::new(atm_runtime::WorkflowTelemetryDiagnostics::default()),
+    );
+    let daemon = Daemon::compose(root, observability).await;
+    sent_message_id(
+        daemon
+            .write(daemon.request("sender", "recipient", "BD6-LOSS", None))
+            .await
+            .expect("assignment result is independent of runtime losses"),
+    );
+    let doctor = daemon.doctor_json().await;
+    let health = export_health(&doctor);
+    assert_eq!(
+        health.state,
+        AtmTelemetryExportState::Degraded,
+        "{health:?}"
+    );
+    assert_eq!(health.last_failure, None, "{health:?}");
+    assert_doctor_reports_losses(&doctor, lossy.diagnostics().snapshot());
+    assert_export_remediation(&doctor);
+    daemon.shutdown().await.expect("clean daemon shutdown");
+    lossy
+        .shutdown(Instant::now() + Duration::from_secs(5))
+        .await;
+    collector.stop().await;
 }
 
 /// Positive: a collector that accepts connections but never answers leaves
