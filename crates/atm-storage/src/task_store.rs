@@ -10,7 +10,6 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use std::ops::Deref;
 
 use crate::contract::{ReadDeadline, ReadLaneError, sealed};
 use crate::error::AtmError;
@@ -103,14 +102,6 @@ pub struct TaskMoveRecord {
 pub struct TaskReminderRecord {
     pub row: TaskRow,
     pub event: TaskEventRow,
-}
-
-impl Deref for TaskReminderRecord {
-    type Target = TaskRow;
-
-    fn deref(&self) -> &Self::Target {
-        &self.row
-    }
 }
 
 impl EscalationScope {
