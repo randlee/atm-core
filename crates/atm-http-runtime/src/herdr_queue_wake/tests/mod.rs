@@ -1140,9 +1140,9 @@ async fn cancel_inflight_prompt() -> (
         .await
         .expect("prompt-started gate never fired");
     shutdown_tx.send(()).expect("shutdown notification");
-    tokio::time::timeout(Duration::from_secs(1), task)
+    tokio::time::timeout(GATE_WAIT_LIMIT, task)
         .await
-        .expect("pump joins after shutdown notification")
+        .expect("pump never joined after shutdown notification")
         .expect("poll task join");
     drop(prompt_gate);
     drop(sender_clone);
@@ -2091,9 +2091,9 @@ async fn ac13_herdr_wake_pending_ephemeral_state_tracks_the_in_flight_claim() {
 
     drop(prompt_gate);
     shutdown_tx.send(()).expect("shutdown notification");
-    tokio::time::timeout(Duration::from_secs(1), task)
+    tokio::time::timeout(GATE_WAIT_LIMIT, task)
         .await
-        .expect("pump joins after shutdown notification")
+        .expect("pump never joined after shutdown notification")
         .expect("poll task join");
 
     assert!(
