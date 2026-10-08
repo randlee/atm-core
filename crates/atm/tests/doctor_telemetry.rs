@@ -64,24 +64,49 @@ fn export_fixture() -> Value {
 }
 
 #[test]
-fn pinned_1_10_doctor_json_renders_without_an_export_object() {
-    let report: DoctorReport = serde_json::from_value(doctor_1_10_fixture()).expect("1.10 fixture");
+fn doctor_json_1_10_0_without_export_renders() {
+    let fixture = doctor_1_10_fixture();
+    let report: DoctorReport = serde_json::from_value(fixture.clone()).expect("1.10.0 fixture");
 
     let rendered = serde_json::to_value(report).expect("doctor JSON");
     assert!(
         rendered.pointer("/observability/export").is_none(),
         "the compatibility fixture must not invent an export object: {rendered}"
     );
+    assert_eq!(rendered["observability"], fixture["observability"]);
+    assert_eq!(rendered["summary"], fixture["summary"]);
 }
 
 #[test]
-fn current_doctor_json_preserves_every_export_field_without_credentials() {
+fn doctor_json_with_export_round_trips() {
+    let mut export = export_fixture();
+    export["authorization"] = json!(CREDENTIAL_SENTINEL);
     let mut fixture = doctor_1_10_fixture();
-    fixture["observability"]["export"] = export_fixture();
+    fixture["observability"]["export"] = export;
     let report: DoctorReport = serde_json::from_value(fixture).expect("current doctor fixture");
 
     let rendered = serde_json::to_value(report).expect("doctor JSON");
     assert_eq!(rendered["observability"]["export"], export_fixture());
+    let fields: Vec<&str> = rendered["observability"]["export"]
+        .as_object()
+        .expect("export object")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        fields,
+        [
+            "dropped_failure",
+            "dropped_full",
+            "dropped_shutdown",
+            "dropped_timeout",
+            "emitted",
+            "endpoint",
+            "last_failure",
+            "protocol",
+            "state",
+        ]
+    );
     assert!(
         !rendered.to_string().contains(CREDENTIAL_SENTINEL),
         "doctor JSON must never expose telemetry credentials"
