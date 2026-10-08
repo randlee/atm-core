@@ -228,7 +228,7 @@ impl DaemonObservability {
     /// Registers this value as the process lifecycle owner. Called once by
     /// the daemon entrypoint, after the process-global tracing bridge exists.
     pub(crate) fn register_process_owner(&self) {
-        let _ = PROCESS_OWNER.set(self.clone());
+        PROCESS_OWNER.get_or_init(|| self.clone());
     }
 
     pub(crate) fn process_owner() -> Option<Self> {
@@ -255,7 +255,7 @@ impl DaemonObservability {
         task: Arc<TaskTelemetryDiagnostics>,
         workflow: Arc<WorkflowTelemetryDiagnostics>,
     ) {
-        let _ = self.export.runtime.set((task, workflow));
+        self.export.runtime.get_or_init(|| (task, workflow));
     }
 
     /// Shuts the three standard providers down concurrently on the blocking
@@ -277,12 +277,13 @@ impl DaemonObservability {
                     if let Some(providers) = providers {
                         shutdown_providers(providers, bound, &export.diagnostics).await;
                     }
-                    let _ = sender.send(true);
+                    sender.send_replace(true);
                 });
                 receiver
             })
             .clone();
-        let _ = tokio::time::timeout_at(deadline, done.wait_for(|done| *done)).await;
+        // Past its own deadline a caller stops waiting; the owner keeps the outcome.
+        drop(tokio::time::timeout_at(deadline, done.wait_for(|done| *done)).await);
     }
 
     pub(crate) fn install_tracing_bridge(&self) -> Result<(), AtmError> {
@@ -374,7 +375,7 @@ impl DaemonObservability {
             Ok(retained_logger) => retained_logger,
             Err(_) => panic!("test retained logger must have one owner"),
         };
-        let _ = retained_logger.shutdown();
+        drop(retained_logger.shutdown());
     }
 
     #[cfg(test)]
