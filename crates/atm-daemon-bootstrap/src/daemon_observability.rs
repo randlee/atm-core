@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::Duration;
 
 use atm_core::atm_temp::ProcessEnvSource;
@@ -66,6 +66,9 @@ struct Export {
     selection: ExportSelection,
     diagnostics: Arc<ExportDiagnostics>,
     // MUTEX: runtime assembly takes the setups once; shutdown takes providers once.
+    // Each guards a single Option that is only ever read or `take`n, so a
+    // panic while it is held cannot leave it half-updated: poison is recovered
+    // with `into_inner` so telemetry setup and shutdown still run.
     setups: Mutex<Option<(TaskTelemetrySetup, WorkflowTelemetrySetup)>>,
     providers: Mutex<Option<Providers>>,
     runtime: OnceLock<(
@@ -196,8 +199,9 @@ impl DaemonObservability {
             .export
             .providers
             .lock()
-            .ok()
-            .and_then(|providers| providers.as_ref().map(|p| p.1.logger(ATM_SERVICE_NAME)));
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+            .map(|p| p.1.logger(ATM_SERVICE_NAME));
         let (logger, active_log_path) = tokio::task::spawn_blocking(move || {
             let level = logger_level_override()?;
             let active_log_path = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
@@ -231,8 +235,8 @@ impl DaemonObservability {
         self.export
             .setups
             .lock()
-            .ok()
-            .and_then(|mut setups| setups.take())
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
             .map_or((None, None), |(task, workflow)| {
                 (Some(task), Some(workflow))
             })
@@ -262,7 +266,11 @@ impl DaemonObservability {
                 let (sender, receiver) = watch::channel(false);
                 let bound = deadline.min(Instant::now() + EXPORT_SHUTDOWN_BOUND);
                 tokio::spawn(async move {
-                    let providers = export.providers.lock().ok().and_then(|mut p| p.take());
+                    let providers = export
+                        .providers
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .take();
                     if let Some(providers) = providers {
                         shutdown_providers(providers, bound, &export.diagnostics).await;
                     }
@@ -287,9 +295,15 @@ impl DaemonObservability {
         if bound <= Instant::now() {
             return;
         }
-        let Ok(logger) = self.logger.lock().map(|logger| Arc::clone(&logger.0)) else {
-            return;
-        };
+        // The guarded value is an immutable `Arc`, so a poisoned lock still
+        // holds a valid logger to flush.
+        let logger = Arc::clone(
+            &self
+                .logger
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .0,
+        );
         let flush = tokio::task::spawn_blocking(move || logger.flush());
         // Sink flush failures are recorded in logger health by the canonical
         // logger; an abandoned wait leaves nothing further to report.
@@ -352,7 +366,7 @@ impl DaemonObservability {
         self.export
             .providers
             .lock()
-            .expect("providers lock")
+            .unwrap_or_else(PoisonError::into_inner)
             .is_some()
     }
 
@@ -859,5 +873,98 @@ mod tests {
             );
             receiver.stop().await;
         }
+    }
+
+    /// Runs `hold`, which locks a mutex and panics while holding the guard,
+    /// the way a panicking holder poisons it.
+    fn poison(hold: impl FnOnce() + Send + 'static) {
+        std::thread::spawn(hold)
+            .join()
+            .expect_err("the holder panicked");
+    }
+
+    /// A bootstrapped owner with a configured exporter (lazy connection, no
+    /// collector needed) so setups and providers are present.
+    async fn configured() -> (TempDir, DaemonObservability) {
+        let root = TempDir::new().expect("tempdir");
+        let env = atm_core::test_support::FakeEnvSource::new([(
+            "ATM_OTEL_ENDPOINT",
+            Some("http://127.0.0.1:4317"),
+        )]);
+        let observability = DaemonObservability::bootstrap_from(&env, root.path().join("logs"))
+            .await
+            .expect("bootstrap");
+        (root, observability)
+    }
+
+    /// Positive: a poisoned setups lock still hands the setups to runtime
+    /// assembly. Negative: it does not read as "no setups", which would
+    /// silently disable telemetry.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn poisoned_setups_lock_still_hands_over_the_setups() {
+        let (_root, observability) = configured().await;
+        let export = Arc::clone(&observability.export);
+        poison(move || {
+            let _guard = export.setups.lock().expect("lock before poisoning");
+            panic!("deliberate poison");
+        });
+        assert!(observability.export.setups.is_poisoned());
+        let (task, workflow) = observability.take_telemetry_setups();
+        assert!(task.is_some() && workflow.is_some());
+        let (again, _) = observability.take_telemetry_setups();
+        assert!(again.is_none(), "the setups are handed over once");
+    }
+
+    /// Positive: a poisoned providers lock still shuts the providers down.
+    /// Negative: they are not left installed.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn poisoned_providers_lock_still_shuts_the_providers_down() {
+        let (_root, observability) = configured().await;
+        assert!(observability.export_providers_present_for_test());
+        let export = Arc::clone(&observability.export);
+        poison(move || {
+            let _guard = export.providers.lock().expect("lock before poisoning");
+            panic!("deliberate poison");
+        });
+        assert!(observability.export.providers.is_poisoned());
+        observability
+            .shutdown_export(tokio::time::Instant::now() + Duration::from_secs(5))
+            .await;
+        assert!(!observability.export_providers_present_for_test());
+    }
+
+    /// Positive: a poisoned logger lock still drains the retained logger, so
+    /// an admitted event is on disk after `flush_logger`.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn poisoned_logger_lock_still_drains_the_retained_logger() {
+        use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
+        let (_root, observability) = configured().await;
+        observability
+            .emit(CommandEvent {
+                command: "atm",
+                action: action_name("poison_drain"),
+                outcome: outcome_label("ok"),
+                team: "bd6-team".parse().expect("team"),
+                agent: "sender".parse().expect("agent"),
+                sender: "sender".parse().expect("agent"),
+                message_id: None,
+                requires_ack: false,
+                dry_run: false,
+                task_id: None,
+                error_code: None,
+                error_message: None,
+            })
+            .expect("admitted before the poison");
+        let logger = Arc::clone(&observability.logger);
+        poison(move || {
+            let _guard = logger.lock().expect("lock before poisoning");
+            panic!("deliberate poison");
+        });
+        assert!(observability.logger.is_poisoned());
+        observability
+            .flush_logger(tokio::time::Instant::now() + Duration::from_secs(5))
+            .await;
+        let lines = std::fs::read_to_string(&observability.active_log_path).expect("log file");
+        assert!(lines.contains("poison_drain"), "{lines}");
     }
 }
