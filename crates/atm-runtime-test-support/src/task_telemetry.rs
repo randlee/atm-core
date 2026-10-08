@@ -74,3 +74,21 @@ impl TaskTelemetrySink for RecordingTaskTelemetrySink {
         Box::pin(async move { result })
     }
 }
+
+/// Never completes an emit, so the runtime's emit timeout and bounded queue
+/// are what a stalled exporter leaves the producer with.
+#[derive(Debug, Default)]
+pub struct StalledTaskTelemetrySink;
+
+impl atm_core::boundary::sealed::Sealed for StalledTaskTelemetrySink {}
+
+impl TaskTelemetrySink for StalledTaskTelemetrySink {
+    fn emit(
+        &self,
+        _record: TaskTelemetryRecord,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<(), TaskTelemetryError>> + Send + '_>,
+    > {
+        Box::pin(std::future::pending())
+    }
+}
