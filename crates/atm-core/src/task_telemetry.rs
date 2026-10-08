@@ -426,9 +426,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn record_round_trips_every_typed_field() {
-        let record = TaskTelemetryRecord {
+    fn full_record() -> TaskTelemetryRecord {
+        TaskTelemetryRecord {
             kind: TaskTelemetryKind::PromptHandoff,
             team: TEST_TEAM.parse().unwrap(),
             task_id: "atm-bd-1".parse().unwrap(),
@@ -447,11 +446,76 @@ mod tests {
                 trigger: PromptTrigger::TaskPass,
                 template_kind: BuiltInNudgeTemplateKind::TaskReminder,
             }),
-        };
+        }
+    }
+
+    #[test]
+    fn record_round_trips_every_typed_field() {
+        let record = full_record();
         let encoded = serde_json::to_string(&record).unwrap();
         assert_eq!(
             serde_json::from_str::<TaskTelemetryRecord>(&encoded).unwrap(),
             record
+        );
+    }
+
+    /// Pins the payload-free field set (ADR-064). The exhaustive destructure
+    /// fails to compile when a field is added, and the key-set check fails
+    /// when a serialized key changes, so a payload, template variable or
+    /// free-form detail field cannot be added without editing this test.
+    #[test]
+    fn record_field_set_is_pinned_and_payload_free() {
+        let record = full_record();
+        let TaskTelemetryRecord {
+            kind: _,
+            team: _,
+            task_id: _,
+            assignee: _,
+            actor: _,
+            seq: _,
+            at: _,
+            from_state: _,
+            to_state: _,
+            close_outcome: _,
+            message_id: _,
+            reminder_outcome: _,
+            marker: _,
+            handoff,
+        } = record.clone();
+        let TaskHandoffFacts {
+            attempt: _,
+            trigger: _,
+            template_kind: _,
+        } = handoff.unwrap();
+
+        let encoded = serde_json::to_value(&record).unwrap();
+        let keys = |value: &serde_json::Value| -> Vec<String> {
+            let mut keys: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
+            keys.sort();
+            keys
+        };
+        assert_eq!(
+            keys(&encoded),
+            [
+                "actor",
+                "assignee",
+                "at",
+                "close_outcome",
+                "from_state",
+                "handoff",
+                "kind",
+                "marker",
+                "message_id",
+                "reminder_outcome",
+                "seq",
+                "task_id",
+                "team",
+                "to_state",
+            ]
+        );
+        assert_eq!(
+            keys(&encoded["handoff"]),
+            ["attempt", "template_kind", "trigger"]
         );
     }
 

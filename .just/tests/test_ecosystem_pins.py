@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from unittest import mock
 
@@ -45,9 +46,12 @@ class EcosystemPinTests(unittest.TestCase):
 
     def test_workspace_dependencies_are_visible_to_currency_inventory(self) -> None:
         dependencies = VALIDATE_RELEASE.direct_registry_dependencies(REPO_ROOT)
-        self.assertEqual(dependencies["sc-observability"], "=1.4.1")
-        self.assertEqual(dependencies["sc-observability-log"], "=1.4.1")
-        self.assertEqual(dependencies["sc-observability-types"], "=1.4.1")
+        self.assertEqual(dependencies["sc-observability"], "=1.5.0")
+        self.assertEqual(dependencies["sc-observability-log"], "=1.5.0")
+        self.assertEqual(dependencies["sc-observability-types"], "=1.5.0")
+        for package in ("opentelemetry", "opentelemetry_sdk", "opentelemetry-otlp"):
+            self.assertEqual(dependencies[package], "=0.33.0")
+        self.assertNotIn("sc-observability-otlp", dependencies)
 
     @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0")
     @mock.patch.object(VALIDATE_RELEASE, "latest_registry_version")
@@ -60,9 +64,9 @@ class EcosystemPinTests(unittest.TestCase):
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
             "sc-composer": "1.6.1",
-            "sc-observability": "1.4.1",
-            "sc-observability-log": "1.4.1",
-            "sc-observability-types": "1.4.1",
+            "sc-observability": "1.5.0",
+            "sc-observability-log": "1.5.0",
+            "sc-observability-types": "1.5.0",
         }[dependency]
         findings: list[VALIDATE_RELEASE.Finding] = []
 
@@ -86,9 +90,9 @@ class EcosystemPinTests(unittest.TestCase):
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
             "sc-composer": "1.6.1",
-            "sc-observability": "1.5.0",
-            "sc-observability-log": "1.5.0",
-            "sc-observability-types": "1.5.0",
+            "sc-observability": "1.6.0",
+            "sc-observability-log": "1.6.0",
+            "sc-observability-types": "1.6.0",
         }[dependency]
         findings: list[VALIDATE_RELEASE.Finding] = []
 
@@ -98,9 +102,9 @@ class EcosystemPinTests(unittest.TestCase):
         file_issue.assert_any_call(
             REPO_ROOT,
             [
-                ("sc-observability", "=1.4.1", "1.5.0"),
-                ("sc-observability-log", "=1.4.1", "1.5.0"),
-                ("sc-observability-types", "=1.4.1", "1.5.0"),
+                ("sc-observability", "=1.5.0", "1.6.0"),
+                ("sc-observability-log", "=1.5.0", "1.6.0"),
+                ("sc-observability-types", "=1.5.0", "1.6.0"),
             ],
         )
 
@@ -133,9 +137,9 @@ class EcosystemPinTests(unittest.TestCase):
             evidence = root / "evidence.md"
             latest_registry.side_effect = lambda _root, dependency: {
                 "sc-composer": "1.6.1",
-                "sc-observability": "1.4.1",
-                "sc-observability-log": "1.4.1",
-                "sc-observability-types": "1.4.1",
+                "sc-observability": "1.5.0",
+                "sc-observability-log": "1.5.0",
+                "sc-observability-types": "1.5.0",
             }[dependency]
             findings: list[VALIDATE_RELEASE.Finding] = []
             with (
@@ -172,8 +176,11 @@ class EcosystemPinTests(unittest.TestCase):
             self.assertIn('WYVERN_PIN="0.5.0"', (root / VALIDATE_RELEASE.WYVERN_PIN_FILES[0]).read_text())
             self.assertIn('$wyvernPin = "0.5.0"', (root / VALIDATE_RELEASE.WYVERN_PIN_FILES[1]).read_text())
             cargo_text = (root / "Cargo.toml").read_text()
-            self.assertIn('sc-observability = "=1.1.0"', cargo_text)
-            self.assertIn('sc-observability-types = "=1.1.0"', cargo_text)
+            dependencies = tomllib.loads(cargo_text)["workspace"]["dependencies"]
+            self.assertEqual(dependencies["sc-observability"]["version"], "=1.1.0")
+            self.assertEqual(dependencies["sc-observability-types"]["version"], "=1.1.0")
+            self.assertFalse(dependencies["sc-observability"]["default-features"])
+            self.assertEqual(dependencies["opentelemetry_sdk"]["version"], "=0.33.0")
             compose_text = (root / "crates/atm-template-sc-compose/Cargo.toml").read_text()
             self.assertIn('sc-composer = "=1.4.1"', compose_text)
             self.assertIn('sc-sha = "=1.4.1"', compose_text)
@@ -193,9 +200,9 @@ class EcosystemPinTests(unittest.TestCase):
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
             "sc-composer": "1.6.1",
-            "sc-observability": "1.4.1",
-            "sc-observability-types": "1.4.1",
-            "sc-observability-log": "1.4.1",
+            "sc-observability": "1.5.0",
+            "sc-observability-types": "1.5.0",
+            "sc-observability-log": "1.5.0",
         }[dependency]
         before = {
             path: path.read_text(encoding="utf-8")
@@ -213,7 +220,7 @@ class EcosystemPinTests(unittest.TestCase):
                 VALIDATE_RELEASE.ECOSYSTEM_KNOWN_GOOD_ENV: json.dumps(
                     # Historical rollback fixture: the known-good map intentionally
                     # models the pre-1.4.1 recovery pin.
-                    {"sc-composer": "1.4.1", "sc-observability": "1.1.0", "wyvern": "0.4.0"}
+                    {"sc-composer": "1.5.0", "sc-observability": "1.1.0", "wyvern": "0.4.0"}
                 ),
             },
             clear=False,
@@ -245,9 +252,9 @@ class EcosystemPinTests(unittest.TestCase):
             }
             latest_registry = {
                 "sc-composer": "1.6.1",
-                "sc-observability": "1.4.1",
-                "sc-observability-log": "1.4.1",
-                "sc-observability-types": "1.4.1",
+                "sc-observability": "1.5.0",
+                "sc-observability-log": "1.5.0",
+                "sc-observability-types": "1.5.0",
             }
             findings: list[VALIDATE_RELEASE.Finding] = []
             with (

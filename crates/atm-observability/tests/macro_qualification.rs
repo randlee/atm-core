@@ -107,7 +107,7 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
     );
     config.level = sc_observability_log::LevelFilter::Trace;
     config.redaction.denylist_keys.push("token".to_owned());
-    let guard = sc_observability_log::init(
+    let guard = sc_observability_log::v2::init(
         config,
         BridgeOptions {
             default_action: ActionName::new("fixture.default").expect("action"),
@@ -138,7 +138,9 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
     cancellation.abort();
     let _ = cancellation.await;
 
-    guard.flush(Duration::from_secs(5)).expect("bounded flush");
+    guard
+        .flush_with_timeout(Duration::from_secs(5))
+        .expect("bounded flush");
     let events = read_events(&path);
     assert_eq!(events.len(), 13, "fixture event cardinality changed");
     let actions: HashSet<_> = events
@@ -256,7 +258,7 @@ async fn macros_and_instrument_preserve_bounded_retained_contracts() {
     }
     assert_eq!(guard.dropped_events().total(), 0);
     guard
-        .shutdown(Duration::from_secs(5))
+        .shutdown_with_timeout(Duration::from_secs(5))
         .expect("bounded shutdown");
 }
 
