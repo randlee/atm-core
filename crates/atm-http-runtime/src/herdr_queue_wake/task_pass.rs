@@ -413,18 +413,21 @@ impl HerdrQueueWakePump {
             .await
         {
             Ok(_) => {
-                self.record_task_outcome(&context, &row, now, ReminderOutcome::Emitted, stats)
+                if self
+                    .record_task_outcome(&context, &row, now, ReminderOutcome::Emitted, stats)
+                    .await
+                {
+                    crate::prompt_handoff_record::record_prompt_handoff(
+                        &self.blocking_bridge,
+                        herdr_request_deadline(),
+                        Ok(Arc::clone(task_store)),
+                        &dispatch,
+                        atm_core::boundary::PromptTrigger::TaskPass,
+                        now,
+                        &self.task_telemetry,
+                    )
                     .await;
-                crate::prompt_handoff_record::record_prompt_handoff(
-                    &self.blocking_bridge,
-                    herdr_request_deadline(),
-                    Ok(Arc::clone(task_store)),
-                    &dispatch,
-                    atm_core::boundary::PromptTrigger::TaskPass,
-                    now,
-                    &self.task_telemetry,
-                )
-                .await;
+                }
             }
             Err(error) if error.code() == AtmErrorCode::HerdrUnavailable => stats.breaker_open += 1,
             Err(error) => {
@@ -441,7 +444,7 @@ impl HerdrQueueWakePump {
         now: IsoTimestamp,
         outcome: ReminderOutcome,
         stats: &mut HerdrQueueWakeStats,
-    ) {
+    ) -> bool {
         let recorded_row = self
             .record_task_reminder(context.task_store, context.member, row, now, outcome)
             .await;
@@ -455,7 +458,9 @@ impl HerdrQueueWakePump {
             // runtime no longer produces a blocked reminder outcome.
             ReminderOutcome::Blocked => {}
         }
+        let succeeded = recorded_row.is_ok();
         self.warn_failed_reminder_record(context, row, recorded_row);
+        succeeded
     }
 
     fn warn_failed_reminder_record(
