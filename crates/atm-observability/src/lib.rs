@@ -137,6 +137,12 @@ impl RetainedLogger {
 
     /// Drains the retained-log writer and returns its final health snapshot.
     pub fn shutdown(self) -> sc_observability_types::LoggingHealthReport {
+        self.shutdown_shared()
+    }
+
+    /// `shutdown` for a logger other owners (the process tracing bridge) still
+    /// hold: later records from those owners are rejected, not written.
+    pub fn shutdown_shared(&self) -> sc_observability_types::LoggingHealthReport {
         let _ = self.0.shutdown();
         self.0.health()
     }

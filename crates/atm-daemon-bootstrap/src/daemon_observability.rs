@@ -379,6 +379,22 @@ impl DaemonObservability {
             .record_shutdown_step("logger.flush", started, bound);
     }
 
+    /// Stops the retained-log writer after the final flush, on the blocking
+    /// pool, bounded by `min(1s, deadline)` like `flush_logger`. The process
+    /// tracing bridge keeps its clone of the logger, so this shuts the shared
+    /// writer down rather than dropping the last owner; records the bridge
+    /// emits afterwards are rejected. Past the deadline nothing is attempted,
+    /// and an abandoned wait leaves the blocking call running.
+    pub(crate) async fn shutdown_logger(&self, deadline: Instant) {
+        let bound = deadline.min(Instant::now() + RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT);
+        if bound <= Instant::now() {
+            return;
+        }
+        let logger = Arc::clone(&self.logger.lock().unwrap_or_else(PoisonError::into_inner).0);
+        let shutdown = tokio::task::spawn_blocking(move || logger.shutdown_shared());
+        drop(tokio::time::timeout_at(bound, shutdown).await);
+    }
+
     pub(crate) fn install_tracing_bridge(&self) -> Result<(), AtmError> {
         // The replacement daemon deliberately owns this process-global
         // subscriber. A pre-installed subscriber is a bootstrap configuration
@@ -1094,5 +1110,67 @@ mod tests {
             .matches("poison_drain")
             .count();
         assert_eq!(written, BURST, "the flush drained every admitted event");
+    }
+
+    /// Positive: `shutdown_logger` drains every admitted event and leaves the
+    /// shared writer `Stopped` although the bridge's clone is still held.
+    /// Negative control: without the call the writer stays `running`.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn shutdown_logger_stops_the_shared_retained_writer() {
+        use atm_core::observability::{
+            CommandEvent, ObservabilityPort, action_name, outcome_label,
+        };
+        let (_root, observability) = configured().await;
+        let bridge_clone = tokio::task::spawn_blocking({
+            let logger = Arc::clone(&observability.logger);
+            move || Arc::clone(&logger.lock().expect("logger lock").0)
+        })
+        .await
+        .expect("clone the logger as the bridge does");
+        let health = |observability: &DaemonObservability| {
+            observability
+                .logger
+                .lock()
+                .expect("logger lock")
+                .health(observability.active_log_path.clone())
+                .expect("logger health")
+                .detail
+                .unwrap_or_default()
+        };
+        assert!(
+            health(&observability).contains("writer_state=running"),
+            "{}",
+            health(&observability)
+        );
+        observability
+            .emit(CommandEvent {
+                command: "atm",
+                action: action_name("shutdown_logger"),
+                outcome: outcome_label("ok"),
+                team: "bd6-team".parse().expect("team"),
+                agent: "sender".parse().expect("agent"),
+                sender: "sender".parse().expect("agent"),
+                message_id: None,
+                requires_ack: false,
+                dry_run: false,
+                task_id: None,
+                error_code: None,
+                error_message: None,
+            })
+            .expect("admitted");
+        observability
+            .shutdown_logger(tokio::time::Instant::now() + Duration::from_secs(5))
+            .await;
+        assert!(
+            health(&observability).contains("writer_state=stopped"),
+            "{}",
+            health(&observability)
+        );
+        let written = std::fs::read_to_string(&observability.active_log_path)
+            .expect("log file")
+            .matches("shutdown_logger")
+            .count();
+        assert_eq!(written, 1, "shutdown drained the admitted event");
+        drop(bridge_clone);
     }
 }

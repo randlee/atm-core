@@ -885,6 +885,10 @@ async fn shutdown_replacement_daemon(
         observability.flush_logger(deadline).await;
     }
     diagnostic_timeline::stop_flush_worker();
+    if let Some(observability) = &workers.observability {
+        // Last: the timeline worker and the flushes above still log through it.
+        observability.shutdown_logger(deadline).await;
+    }
     let _stopped = stopped?;
     Ok(())
 }
