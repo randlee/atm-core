@@ -9,11 +9,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
-const DEFAULT_CAPACITY: usize = 256;
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(1);
-const DEFAULT_DRAIN: Duration = Duration::from_secs(2);
-const MIN_DURATION: Duration = Duration::from_millis(1);
-const MAX_DURATION: Duration = Duration::from_secs(30);
+use crate::telemetry_limits::{DEFAULT_CAPACITY, DEFAULT_DRAIN, DEFAULT_TIMEOUT, within_limits};
 
 /// Validated worker limits. Invalid configuration is intentionally converted
 /// to a disabled runtime rather than making ATM admission unavailable.
@@ -45,10 +41,7 @@ impl Default for WorkflowTelemetryConfig {
 
 impl WorkflowTelemetryConfig {
     pub fn validate(&self) -> Result<(), AtmErrorCode> {
-        if !(1..=4096).contains(&self.queue_capacity)
-            || !(MIN_DURATION..=MAX_DURATION).contains(&self.emit_timeout)
-            || !(MIN_DURATION..=MAX_DURATION).contains(&self.drain_timeout)
-        {
+        if !within_limits(self.queue_capacity, self.emit_timeout, self.drain_timeout) {
             return Err(AtmErrorCode::WorkflowTelemetryConfigInvalid);
         }
         Ok(())
@@ -274,6 +267,7 @@ impl WorkflowTelemetrySink for WorkflowTelemetryRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::telemetry_limits::MAX_DURATION;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
