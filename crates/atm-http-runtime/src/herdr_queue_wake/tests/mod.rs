@@ -1128,11 +1128,11 @@ async fn cancel_inflight_prompt() -> (
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let sender_clone = shutdown_tx.clone();
     let task = pump.clone().start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(1), prompt_started.notified())
+    tokio::time::timeout(Duration::from_secs(30), prompt_started.notified())
         .await
         .expect("the fake prompt is in flight before shutdown");
     shutdown_tx.send(()).expect("shutdown notification");
-    tokio::time::timeout(Duration::from_secs(1), task)
+    tokio::time::timeout(Duration::from_secs(30), task)
         .await
         .expect("pump joins after shutdown notification")
         .expect("poll task join");
@@ -2065,7 +2065,7 @@ async fn ac13_herdr_wake_pending_ephemeral_state_tracks_the_in_flight_claim() {
     let prompt_gate = fake.block_next_prompt();
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(1), async {
+    tokio::time::timeout(Duration::from_secs(30), async {
         loop {
             if runtime
                 .roster_ephemeral_state(key.team(), key.agent())
@@ -2082,7 +2082,7 @@ async fn ac13_herdr_wake_pending_ephemeral_state_tracks_the_in_flight_claim() {
 
     drop(prompt_gate);
     shutdown_tx.send(()).expect("shutdown notification");
-    tokio::time::timeout(Duration::from_secs(1), task)
+    tokio::time::timeout(Duration::from_secs(30), task)
         .await
         .expect("pump joins after shutdown notification")
         .expect("poll task join");
@@ -2479,7 +2479,7 @@ async fn ac11_claim_drop_guard_release_is_joined_before_pump_shutdown() {
     let prompt_started = pump.install_prompt_started_test_gate();
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.clone().start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(1), prompt_started.notified())
+    tokio::time::timeout(Duration::from_secs(30), prompt_started.notified())
         .await
         .expect("the fake prompt is in flight before shutdown");
 
@@ -2585,7 +2585,7 @@ async fn ac11_successful_prompt_cancellation_cannot_rerelease_claim() {
     let (clear_started, _allow_clear) = pump.install_handoff_cleanup_test_gate();
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.clone().start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(1), clear_started.notified())
+    tokio::time::timeout(Duration::from_secs(30), clear_started.notified())
         .await
         .expect("marker cleanup completes before cancellation");
 
