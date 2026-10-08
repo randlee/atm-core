@@ -290,4 +290,5 @@ fn composed_daemon_home_child() {
         parked.notify_one();
         daemon.shutdown().await.expect("daemon shutdown");
     });
+    println!("{}", super::exit::CHILD_SCENARIO_SENTINEL);
 }
