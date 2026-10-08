@@ -287,6 +287,7 @@ impl TaskExporter {
         if begins {
             assignment.generation = record.seq;
             assignment.assigned = Some(at);
+            assignment.attributes = attributes.clone();
         }
         if record.kind == Kind::Started {
             assignment.started = Some((record.seq, at));
@@ -564,7 +565,11 @@ fn task_attributes(record: &TaskTelemetryRecord) -> Vec<KeyValue> {
             "handoff",
         ] {
             if let Some(value) = facts.get(name).filter(|value| !value.is_null()) {
-                attributes.push(KeyValue::new(format!("atm.task.{name}"), value.to_string()));
+                let value = match value {
+                    serde_json::Value::String(text) => text.clone(),
+                    value => value.to_string(),
+                };
+                attributes.push(KeyValue::new(format!("atm.task.{name}"), value));
             }
         }
     }

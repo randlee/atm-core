@@ -11,7 +11,6 @@ fn explicit_atm_configuration_ignores_ambient_otel_settings() {
             "otel_tests::ambient::ambient_child",
             "--nocapture",
         ])
-        .env("ATM_OTEL_AMBIENT_TEST_CHILD", "1")
         .env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
         .env("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://127.0.0.1:1")
         .env(
@@ -47,7 +46,8 @@ fn explicit_atm_configuration_ignores_ambient_otel_settings() {
 
 #[tokio::test]
 async fn ambient_child() {
-    if std::env::var_os("ATM_OTEL_AMBIENT_TEST_CHILD").is_none() {
+    // The parent invokes this exact libtest filter in a separate process.
+    if !std::env::args().any(|argument| argument == "otel_tests::ambient::ambient_child") {
         return;
     }
     let receiver = Receiver::start(false).await;
