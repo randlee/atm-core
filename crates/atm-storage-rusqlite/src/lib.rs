@@ -187,6 +187,30 @@ pub fn install_prompt_handoff_write_failure_for_test(
         })
 }
 
+/// Installs a test-only SQLite trigger that rejects task-row updates.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+pub fn install_task_update_failure_for_test(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
+        AtmError::daemon_unavailable("failed to open sqlite task-update failure test connection")
+            .with_cause(error)
+    })?;
+    connection
+        .execute_batch(
+            r#"
+            CREATE TRIGGER fail_test_task_update
+            BEFORE UPDATE ON tasks
+            BEGIN
+                SELECT RAISE(FAIL, 'test task update failure');
+            END;
+            "#,
+        )
+        .map_err(|error| {
+            AtmError::daemon_unavailable("failed to install sqlite task-update failure trigger")
+                .with_cause(error)
+        })
+}
+
 #[cfg(test)]
 pub(crate) use mailbox_metadata_types::SqliteMailboxMetadataRow;
 

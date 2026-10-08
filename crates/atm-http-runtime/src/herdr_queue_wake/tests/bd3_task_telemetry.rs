@@ -90,3 +90,41 @@ async fn queue_wake_producers_project_exactly_their_committed_rows() {
         records.len() as u64
     );
 }
+
+#[tokio::test]
+async fn failed_sqlite_reminder_update_emits_nothing_and_keeps_the_prompt_result() {
+    let (root, runtime, fake, pump, key, tasks, _now) = build_real_task_pump(&["BD3-FAIL"]);
+    let sink = RecordingTaskTelemetrySink::new();
+    let setup = RecordingTaskTelemetrySink::setup(&sink);
+    let telemetry = TaskTelemetryRuntime::start(setup.config, setup.sink);
+    let pump = pump.with_task_telemetry(telemetry.clone());
+    atm_runtime_test_support::install_sqlite_task_update_failure(
+        root.path().join("runtime").join("mail.sqlite3"),
+    )
+    .expect("install deterministic task update failure");
+
+    pump.tick_once().await;
+
+    telemetry
+        .shutdown(tokio::time::Instant::now() + Duration::from_secs(5))
+        .await;
+    let row = runtime
+        .task_store()
+        .expect("task store")
+        .load_task(key.team(), &tasks[0])
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(
+        row.reminder_count, 0,
+        "failed update leaves the durable row unchanged"
+    );
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        1,
+        "the caller still emitted its prompt"
+    );
+    assert!(
+        sink.records().is_empty(),
+        "failed persistence emits no telemetry record"
+    );
+}
