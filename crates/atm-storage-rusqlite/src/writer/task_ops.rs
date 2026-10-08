@@ -911,50 +911,15 @@ pub(super) fn append_task_event(
             ],
         )
         .map_err(|error| sqlite_error(target, "failed to append task event", error))?;
-    let from_state = from_tag
-        .map(|tag| {
-            TaskState::from_parts(
-                tag,
-                (tag == TaskStateTag::Complete)
-                    .then_some(close_outcome)
-                    .flatten(),
-            )
-        })
-        .transpose()?;
-    let to_state = to_tag
-        .map(|tag| {
-            TaskState::from_parts(
-                tag,
-                (tag == TaskStateTag::Complete)
-                    .then_some(close_outcome)
-                    .flatten(),
-            )
-        })
-        .transpose()?;
+    let from_state = task_event_state(from_tag, close_outcome)?;
+    let to_state = task_event_state(to_tag, close_outcome)?;
     let actor = if actor.as_str() == atm_storage::DAEMON_ACTOR_NAME {
         TaskActor::Daemon
     } else {
         TaskActor::Member(actor.clone())
     };
-    let outcome = outcome
-        .map(|value| match value {
-            "emitted" => Ok(atm_storage::ReminderOutcome::Emitted),
-            "unrenderable" => Ok(atm_storage::ReminderOutcome::Unrenderable),
-            "blocked" => Ok(atm_storage::ReminderOutcome::Blocked),
-            other => Err(AtmError::validation(format!(
-                "unknown reminder outcome {other}"
-            ))),
-        })
-        .transpose()?;
-    let marker = marker
-        .map(|value| match value {
-            "resend" => Ok(TaskEventMarker::Resend),
-            "assignment_missing" => Ok(TaskEventMarker::AssignmentMissing),
-            other => Err(AtmError::validation(format!(
-                "unknown task event marker {other}"
-            ))),
-        })
-        .transpose()?;
+    let outcome = outcome.map(task_event_reminder_outcome).transpose()?;
+    let marker = marker.map(task_event_marker).transpose()?;
     Ok(atm_storage::TaskEventRow {
         team: team.clone(),
         task_id: task_id.clone(),
@@ -970,6 +935,42 @@ pub(super) fn append_task_event(
         marker,
         detail: detail.map(str::to_owned),
     })
+}
+
+fn task_event_state(
+    tag: Option<TaskStateTag>,
+    close_outcome: Option<TaskCloseOutcome>,
+) -> Result<Option<TaskState>, AtmError> {
+    tag.map(|tag| {
+        TaskState::from_parts(
+            tag,
+            (tag == TaskStateTag::Complete)
+                .then_some(close_outcome)
+                .flatten(),
+        )
+    })
+    .transpose()
+}
+
+fn task_event_reminder_outcome(value: &str) -> Result<atm_storage::ReminderOutcome, AtmError> {
+    match value {
+        "emitted" => Ok(atm_storage::ReminderOutcome::Emitted),
+        "unrenderable" => Ok(atm_storage::ReminderOutcome::Unrenderable),
+        "blocked" => Ok(atm_storage::ReminderOutcome::Blocked),
+        other => Err(AtmError::validation(format!(
+            "unknown reminder outcome {other}"
+        ))),
+    }
+}
+
+fn task_event_marker(value: &str) -> Result<TaskEventMarker, AtmError> {
+    match value {
+        "resend" => Ok(TaskEventMarker::Resend),
+        "assignment_missing" => Ok(TaskEventMarker::AssignmentMissing),
+        other => Err(AtmError::validation(format!(
+            "unknown task event marker {other}"
+        ))),
+    }
 }
 
 const fn task_state_tag_name(state: TaskStateTag) -> &'static str {

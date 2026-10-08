@@ -1727,9 +1727,33 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows() {
         let fixture = fixture(true, None, None);
+        assert_async_committed_rows(&fixture, false).await;
+    }
+
+    #[tokio::test]
+    async fn bd2_template_async_pipeline_retains_success_and_rejected_committed_rows() {
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for("template body")),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        assert_async_committed_rows(&fixture, true).await;
+    }
+
+    async fn assert_async_committed_rows(fixture: &Fixture, template: bool) {
         for rejected in [false, true] {
             let task_id = if rejected { "MISSING" } else { "ASSIGNED" };
-            let mut request = task_write_request(&fixture, task_id);
+            let mut request = task_write_request(fixture, task_id);
+            if template {
+                request.message_source =
+                    template_write_request(fixture, "template body").message_source;
+            }
             if rejected {
                 request.task_op = Some(atm_storage::TaskOp::Close {
                     outcome: atm_storage::TaskCloseOutcome::Completed,
@@ -1763,7 +1787,9 @@ pub(crate) mod tests {
                     None,
                 )
                 .unwrap();
-            assert_eq!(rows.len(), 1);
+            // Template rejection has no preexisting audit producer. Preserve
+            // that behavior while returning every row that actually commits.
+            assert_eq!(rows.len(), usize::from(!(template && rejected)));
             assert_eq!(execution.task_events, rows);
         }
     }

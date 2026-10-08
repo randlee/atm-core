@@ -308,18 +308,28 @@ pub(crate) fn process_batch(
         )
     });
     for (reply, result) in replies {
-        let final_result = if let Some(error) = &commit_error {
-            match result {
-                Ok(committed) => Err(committed
-                    .operation
-                    .err()
-                    .unwrap_or_else(|| copy_error(target, error))),
-                Err(existing) => Err(existing),
-            }
-        } else {
-            result
-        };
-        reply.send(final_result);
+        reply.send(finalize_committed_reply(
+            target,
+            result,
+            commit_error.as_ref(),
+        ));
+    }
+}
+
+fn finalize_committed_reply(
+    target: &SharedDbTarget,
+    result: Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>,
+    commit_error: Option<&AtmError>,
+) -> Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError> {
+    let Some(error) = commit_error else {
+        return result;
+    };
+    match result {
+        Ok(committed) => Err(committed
+            .operation
+            .err()
+            .unwrap_or_else(|| copy_error(target, error))),
+        Err(existing) => Err(existing),
     }
 }
 
