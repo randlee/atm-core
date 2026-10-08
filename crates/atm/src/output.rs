@@ -540,9 +540,8 @@ fn render_observability_health(health: &atm_core::observability::AtmObservabilit
 
 fn render_json_enum(value: impl serde::Serialize) -> String {
     serde_json::to_string(&value)
-        .expect("closed doctor enum always serializes")
-        .trim_matches('"')
-        .to_owned()
+        .map(|rendered| rendered.trim_matches('"').to_owned())
+        .unwrap_or_else(|_| "<unavailable>".to_owned())
 }
 
 fn print_doctor_environment(report: &DoctorReport) {
@@ -1133,7 +1132,7 @@ mod tests {
 
     use super::{
         render_bootstrap_trace_section, render_doctor_alias_mismatches, render_doctor_findings,
-        render_doctor_herdr, render_doctor_peer_config, render_doctor_rosters,
+        render_doctor_herdr, render_doctor_peer_config, render_doctor_rosters, render_json_enum,
         render_observability_health, render_send_stdout, render_warnings_to_stderr,
     };
 
@@ -1154,6 +1153,28 @@ mod tests {
             "export": export,
         }))
         .expect("doctor observability fixture")
+    }
+
+    #[test]
+    fn doctor_enum_rendering_falls_back_when_serialization_fails() {
+        struct FailingSerialization;
+
+        impl serde::Serialize for FailingSerialization {
+            fn serialize<S>(&self, _serializer: S) -> std::result::Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                Err(<S::Error as serde::ser::Error>::custom(
+                    "intentional test failure",
+                ))
+            }
+        }
+
+        assert_eq!(render_json_enum(FailingSerialization), "<unavailable>");
+        assert_eq!(
+            render_json_enum(atm_core::observability::AtmTelemetryExportState::Unavailable),
+            "unavailable"
+        );
     }
 
     #[test]
