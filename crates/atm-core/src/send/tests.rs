@@ -389,6 +389,24 @@ impl RetainedMailboxRuntime for TestRuntime {
         })
     }
 
+    fn admit_message_record_with_outcome(
+        &self,
+        home_dir: &Path,
+        record: Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        let existing =
+            self.load_message_record(home_dir, &record.team, &record.agent, &record.message_key)?;
+        if existing.is_none() {
+            self.persist_message_record(record)?;
+        }
+        Ok(atm_storage::CommittedTaskWrite {
+            operation: Ok(atm_storage::MessageAdmissionOutcome::passive(existing)),
+            task_events: Vec::new(),
+        })
+    }
+
     fn query_mailbox_metadata_rows(
         &self,
         _home_dir: &Path,
