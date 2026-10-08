@@ -183,8 +183,15 @@ impl DaemonObservability {
     /// blocking pool. Invalid export configuration never fails the daemon: it
     /// selects file logging and reports `Unavailable`/`ConfigInvalid` health.
     pub(crate) async fn bootstrap() -> Result<Self, AtmError> {
-        let export = resolve_export(&ProcessEnvSource);
-        let log_dir = home::host_log_dir()?;
+        Self::bootstrap_from(&ProcessEnvSource, home::host_log_dir()?).await
+    }
+
+    /// [`Self::bootstrap`] over an explicit environment and log directory.
+    pub(crate) async fn bootstrap_from(
+        env: &dyn atm_core::atm_temp::EnvSource,
+        log_dir: PathBuf,
+    ) -> Result<Self, AtmError> {
+        let export = resolve_export(env);
         let destination = export.destination;
         let otel_logger = export
             .export
@@ -327,6 +334,30 @@ impl DaemonObservability {
             active_log_path,
             export: Arc::new(Export::inert()),
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn export_providers_present_for_test(&self) -> bool {
+        self.export
+            .providers
+            .lock()
+            .expect("providers lock")
+            .is_some()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn export_health_for_test(&self) -> AtmTelemetryExportHealth {
+        self.export.health()
+    }
+
+    /// The same bridge `install_tracing_bridge` installs process-wide, for a
+    /// test-scoped dispatcher.
+    #[cfg(test)]
+    pub(crate) fn tracing_bridge_for_test(&self) -> atm_observability::TracingBridgeLayer {
+        let logger = self.logger.lock().expect("logger lock");
+        let bridge = atm_observability::TracingBridgeLayer::new(Arc::clone(&logger.0));
+        bridge.set_export_diagnostics(Arc::clone(&self.export.diagnostics));
+        bridge
     }
 
     #[cfg(test)]
