@@ -97,7 +97,47 @@ pub(super) fn append_rejected_task_event(
         // admission. Keep the attempted message and task ledger unchanged.
         return Ok(None);
     }
-    let (team, task_id, requested, actor, message_id) = match op {
+    let Some((team, task_id, requested, actor, message_id)) =
+        rejected_event_subject(op, connection, target)?
+    else {
+        return Ok(None);
+    };
+    let row = load_task_row(connection, target, &team, &task_id)?;
+    let assignee = row.as_ref().map_or(&requested, |row| &row.assignee);
+    let state = row.as_ref().map(|row| row.state.tag());
+    append_task_event(
+        connection,
+        target,
+        &TaskEventDraft {
+            team: &team,
+            task_id: &task_id,
+            assignee,
+            at: &IsoTimestamp::now(),
+            event: TaskEventKind::Rejected,
+            from_state: state,
+            to_state: state,
+            close_outcome: row.as_ref().and_then(|row| row.state.close_outcome()),
+            actor: &actor,
+            message_id,
+            outcome: None,
+            marker: None,
+            detail: Some(error.message()),
+        },
+    )
+    .map(Some)
+}
+
+/// Team, task, requested assignee, actor and message of a rejected task write.
+type RejectedSubject = (TeamName, TaskId, AgentName, AgentName, Option<AtmMessageId>);
+
+/// The team, task, requested assignee, actor and message a rejected task
+/// write is audited against, or `None` when the operation carries no task.
+fn rejected_event_subject(
+    op: &WriteOp,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<Option<RejectedSubject>, AtmError> {
+    Ok(Some(match op {
         WriteOp::UpsertMessage { record, provenance }
             if *provenance == MessageWriteOrigin::Local =>
         {
@@ -138,30 +178,7 @@ pub(super) fn append_rejected_task_event(
             None,
         ),
         _ => return Ok(None),
-    };
-    let row = load_task_row(connection, target, &team, &task_id)?;
-    let assignee = row.as_ref().map_or(&requested, |row| &row.assignee);
-    let state = row.as_ref().map(|row| row.state.tag());
-    append_task_event(
-        connection,
-        target,
-        &TaskEventDraft {
-            team: &team,
-            task_id: &task_id,
-            assignee,
-            at: &IsoTimestamp::now(),
-            event: TaskEventKind::Rejected,
-            from_state: state,
-            to_state: state,
-            close_outcome: row.as_ref().and_then(|row| row.state.close_outcome()),
-            actor: &actor,
-            message_id,
-            outcome: None,
-            marker: None,
-            detail: Some(error.message()),
-        },
-    )
-    .map(Some)
+    }))
 }
 
 fn is_pre_admission_reassignment_refusal(op: &WriteOp, error: &AtmError) -> bool {
