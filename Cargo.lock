@@ -227,6 +227,7 @@ dependencies = [
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "peer-tls",
+ "sc-observability-log",
  "serde",
  "serde_json",
  "serial_test",

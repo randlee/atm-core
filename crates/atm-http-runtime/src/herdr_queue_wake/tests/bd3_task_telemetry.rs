@@ -20,6 +20,36 @@ fn set_clock(now: &Arc<Mutex<IsoTimestamp>>, value: &str) {
     *now.lock().expect("clock") = IsoTimestamp::from_str(value).expect("timestamp");
 }
 
+type ExpectedTaskEventFields = (
+    u64,
+    &'static str,
+    Option<atm_core::boundary::TaskState>,
+    Option<atm_core::boundary::TaskState>,
+    Option<atm_storage::TaskCloseOutcome>,
+    atm_core::boundary::TaskActor,
+    Option<&'static str>,
+);
+
+fn assert_literal_row_fields(
+    row: &atm_core::boundary::TaskEventRow,
+    expected: ExpectedTaskEventFields,
+) {
+    assert_eq!(row.seq, expected.0);
+    assert_eq!(row.at, expected.1.parse().expect("literal timestamp"));
+    assert_eq!(row.from_state, expected.2);
+    assert_eq!(row.to_state, expected.3);
+    assert_eq!(
+        row.to_state
+            .and_then(atm_core::boundary::TaskState::close_outcome),
+        expected.4
+    );
+    assert_eq!(row.actor, expected.5);
+    assert_eq!(
+        row.message_id,
+        expected.6.map(|id| id.parse().expect("literal message id"))
+    );
+}
+
 /// Positive: reminders, their task-pass handoffs, the lead notification and
 /// the reminder reset each reach the sink as exactly their durable rows.
 /// The assignment was committed before the runtime was attached, so it is the
@@ -70,6 +100,34 @@ async fn queue_wake_producers_project_exactly_their_committed_rows() {
         .await
         .expect("prompt handoffs");
     assert_eq!(rows[0].event, atm_storage::TaskEventKind::Assigned);
+    assert_literal_row_fields(
+        &rows[1],
+        (
+            2,
+            "2030-01-01T00:00:00Z",
+            Some(atm_core::boundary::TaskState::Assigned),
+            Some(atm_core::boundary::TaskState::Assigned),
+            None,
+            atm_core::boundary::TaskActor::Daemon,
+            None,
+        ),
+    );
+    let reminders_reset = rows
+        .iter()
+        .find(|row| row.event == atm_storage::TaskEventKind::RemindersReset)
+        .expect("literal reminders-reset row");
+    assert_literal_row_fields(
+        reminders_reset,
+        (
+            13,
+            "2030-01-01T00:11:30Z",
+            Some(atm_core::boundary::TaskState::Assigned),
+            Some(atm_core::boundary::TaskState::Assigned),
+            None,
+            atm_core::boundary::TaskActor::Daemon,
+            None,
+        ),
+    );
     let mut expected: Vec<TaskTelemetryRecord> = rows[1..].iter().map(record_from_event).collect();
     expected.extend(handoffs.iter().map(record_from_handoff));
     assert_eq!(canonical(&records), canonical(&expected));
