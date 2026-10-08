@@ -42,10 +42,6 @@ const RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
 /// limits need at most two 400ms exports per quiescent signal.
 const EXPORT_SHUTDOWN_BOUND: Duration = Duration::from_secs(1);
 
-/// The one daemon process owner, registered by `bootstrap_replacement_observability`
-/// like the process-global tracing bridge it installs.
-static PROCESS_OWNER: OnceLock<DaemonObservability> = OnceLock::new();
-
 struct LoggerLifecycle(Arc<RetainedLogger>);
 
 impl LoggerLifecycle {
@@ -151,7 +147,10 @@ impl Export {
     }
 }
 
-pub(crate) struct DaemonObservability {
+/// The daemon process's observability owner: the retained logger and the
+/// standard SDK providers. The entrypoint bootstraps it once and passes it
+/// into daemon composition, which drains and shuts it down.
+pub struct DaemonObservability {
     // Keep one shared logger lifecycle behind a mutex so emit/health paths and
     // shutdown can coordinate a single transition into the stopped state.
     logger: Arc<Mutex<LoggerLifecycle>>,
@@ -223,16 +222,6 @@ impl DaemonObservability {
             active_log_path,
             export: Arc::new(export.export),
         })
-    }
-
-    /// Registers this value as the process lifecycle owner. Called once by
-    /// the daemon entrypoint, after the process-global tracing bridge exists.
-    pub(crate) fn register_process_owner(&self) {
-        PROCESS_OWNER.get_or_init(|| self.clone());
-    }
-
-    pub(crate) fn process_owner() -> Option<Self> {
-        PROCESS_OWNER.get().cloned()
     }
 
     /// Hands the existing task/workflow setups to runtime assembly once.
