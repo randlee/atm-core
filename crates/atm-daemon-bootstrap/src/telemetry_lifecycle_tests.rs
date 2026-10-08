@@ -1009,18 +1009,26 @@ async fn lossy_task_runtime() -> atm_runtime::TaskTelemetryRuntime {
         Arc::new(atm_runtime_test_support::StalledTaskTelemetrySink),
     );
     // One record in flight and one queued at most; the rest must drop full.
-    for seq in 1..=6 {
+    const RECORDS: u64 = 6;
+    for seq in 1..=RECORDS {
         runtime.try_emit(task_record(seq));
     }
     let diagnostics = runtime.diagnostics();
     let mut cadence = tokio::time::interval(Duration::from_millis(20));
+    // The sink never succeeds, so every record ends as exactly one loss. Wait
+    // for that quiescent state: afterwards no emit timer is left to move a
+    // counter between the doctor read and the diagnostics snapshot.
     tokio::time::timeout(EXPORT_WAIT, async {
-        while diagnostics.snapshot().dropped_timeout == 0 {
+        loop {
+            let snapshot = diagnostics.snapshot();
+            if snapshot.dropped_full + snapshot.dropped_timeout == RECORDS {
+                break;
+            }
             cadence.tick().await;
         }
     })
     .await
-    .expect("a stuck emit times out");
+    .expect("every emitted record ends as a full or timed-out loss");
     let snapshot = diagnostics.snapshot();
     assert!(snapshot.dropped_full > 0, "{snapshot:?}");
     runtime

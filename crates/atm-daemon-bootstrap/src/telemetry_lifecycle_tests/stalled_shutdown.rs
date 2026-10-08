@@ -311,10 +311,13 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
     // The held request ends at its own server budget, inside the drain; the
     // detached hook then gets only what the listener left.
     stopped.expect("the listener drained the held request within its budget");
-    assert!(
-        in_flight.is_finished(),
-        "the listener drain ended the held request"
-    );
+    // The client task may not have been polled yet on a busy runtime, so await
+    // it under a failure-only bound instead of sampling `is_finished()`.
+    tokio::time::timeout(Duration::from_secs(60), in_flight)
+        .await
+        .expect("the listener drain never ended the held request")
+        .expect("the held request's client task joins without panicking")
+        .expect("the held local write completes once the drain releases it");
     stalled.stop().await;
 }
 

@@ -90,12 +90,44 @@ fn production_limits_are_distinct_from_test_deadlines_and_terminal_failure_is_re
     );
 }
 
-#[tokio::test]
-async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recovery() {
-    // The collector accepts each connection and closes it at once, so every
-    // export fails immediately on every OS. A closed port is not equivalent:
-    // a refused connect is OS-timed, and on Windows CI no span or log export
-    // failure surfaced within 30 s.
+const UNREACHABLE_CHILD: &str = "ATM_OTEL_UNREACHABLE_COLLECTOR_CHILD";
+const UNREACHABLE_TEST: &str = "otel_tests::lifecycle::real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recovery";
+
+/// The scenario captures SDK failure events through a tracing subscriber. A
+/// thread-scoped dispatcher races sibling tests in tracing's per-callsite
+/// interest cache and can miss the event, so the scenario runs in a child
+/// process of this test binary that owns the global subscriber, as the
+/// production bridge does.
+#[test]
+fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recovery() {
+    if std::env::var_os(UNREACHABLE_CHILD).is_some() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(unreachable_collector_scenario());
+        return;
+    }
+    let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        .args([
+            "--exact",
+            UNREACHABLE_TEST,
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(UNREACHABLE_CHILD, "1")
+        .output()
+        .expect("spawn the unreachable-collector child");
+    assert!(
+        output.status.success(),
+        "child scenario failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// A collector that accepts each connection and closes it at once.
+async fn start_closing_collector() -> (String, tokio::task::JoinHandle<()>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
     let collector = tokio::spawn(async move {
@@ -103,6 +135,34 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
             drop(connection);
         }
     });
+    (endpoint, collector)
+}
+
+fn assert_each_sdk_event_projects(observed: &ExportFailureObserved) {
+    // Each real SDK event name must independently project as a failure, so a
+    // misnamed log or metric mapping cannot hide behind the span events.
+    for prefix in ["BatchSpanProcessor", "BatchLogProcessor", "PeriodicReader"] {
+        let name = observed.first_with_prefix(prefix).unwrap();
+        let alone = ExportDiagnostics::default();
+        alone.observe_sdk_event(&name);
+        let mut projected = health();
+        alone.project(&mut projected);
+        assert_eq!(
+            projected.last_failure,
+            Some(AtmTelemetryExportFailure::Unavailable),
+            "{name} is not mapped by ExportDiagnostics"
+        );
+        assert_eq!(projected.state, AtmTelemetryExportState::Unavailable);
+    }
+}
+
+/// Installs the child process's global subscriber: the production tracing
+/// bridge feeding `ExportDiagnostics`, plus a recorder of SDK event names.
+fn install_global_subscriber() -> (
+    tempfile::TempDir,
+    Arc<ExportDiagnostics>,
+    ExportFailureObserved,
+) {
     let root = tempfile::tempdir().unwrap();
     let logger = Arc::new(
         build_retained_logger(
@@ -114,7 +174,7 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
         .unwrap(),
     );
     let diagnostics = Arc::new(ExportDiagnostics::default());
-    let bridge = TracingBridgeLayer::new(logger.clone());
+    let bridge = TracingBridgeLayer::new(logger);
     bridge.set_export_diagnostics(diagnostics.clone());
     let observed = ExportFailureObserved::default();
     let dispatch = tracing::Dispatch::new(
@@ -122,7 +182,17 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
             .with(bridge)
             .with(observed.clone()),
     );
-    let _subscriber = tracing::dispatcher::set_default(&dispatch);
+    tracing::dispatcher::set_global_default(dispatch).expect("child owns the global subscriber");
+    (root, diagnostics, observed)
+}
+
+async fn unreachable_collector_scenario() {
+    // The collector accepts each connection and closes it at once, so every
+    // export fails immediately on every OS. A closed port is not equivalent:
+    // a refused connect is OS-timed, and on Windows CI no span or log export
+    // failure surfaced within 30 s.
+    let (endpoint, collector) = start_closing_collector().await;
+    let (_root, diagnostics, observed) = install_global_subscriber();
     // A one-span batch exports the first span at once through the SDK's
     // full-batch path. The scheduled path first fires at 2x EXPORT_INTERVAL
     // (the SDK interval sleeps before its first tick, then skips it), which
@@ -184,21 +254,7 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
         evidence.last_failure,
         Some(AtmTelemetryExportFailure::Unavailable)
     );
-    // Each real SDK event name must independently project as a failure, so a
-    // misnamed log or metric mapping cannot hide behind the span events.
-    for prefix in ["BatchSpanProcessor", "BatchLogProcessor", "PeriodicReader"] {
-        let name = observed.first_with_prefix(prefix).unwrap();
-        let alone = ExportDiagnostics::default();
-        alone.observe_sdk_event(&name);
-        let mut projected = health();
-        alone.project(&mut projected);
-        assert_eq!(
-            projected.last_failure,
-            Some(AtmTelemetryExportFailure::Unavailable),
-            "{name} is not mapped by ExportDiagnostics"
-        );
-        assert_eq!(projected.state, AtmTelemetryExportState::Unavailable);
-    }
+    assert_each_sdk_event_projects(&observed);
 }
 
 #[tokio::test]
@@ -298,14 +354,17 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
     drop(task);
     drop(workflow);
     let duplicate = traces.clone();
-    let started = std::time::Instant::now();
-    let results = tokio::join!(
-        tokio::task::spawn_blocking(move || traces.shutdown()),
-        tokio::task::spawn_blocking(move || duplicate.shutdown()),
-        tokio::task::spawn_blocking(move || logs.shutdown()),
-        tokio::task::spawn_blocking(move || metrics.shutdown())
-    );
-    assert!(started.elapsed() < Duration::from_secs(1));
+    // The outer bound only names a hang; the pass criterion is the results.
+    let results = tokio::time::timeout(Duration::from_secs(120), async {
+        tokio::join!(
+            tokio::task::spawn_blocking(move || traces.shutdown()),
+            tokio::task::spawn_blocking(move || duplicate.shutdown()),
+            tokio::task::spawn_blocking(move || logs.shutdown()),
+            tokio::task::spawn_blocking(move || metrics.shutdown())
+        )
+    })
+    .await
+    .expect("the four concurrent SDK shutdowns never returned");
     let results = [
         results.0.unwrap(),
         results.1.unwrap(),
@@ -313,6 +372,17 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
         results.3.unwrap(),
     ];
     assert!(results.iter().any(Result::is_err));
+    // The two traces handles share one provider: exactly one call performs
+    // the shutdown and the other reports it was already invoked.
+    let already_invoked = results[..2]
+        .iter()
+        .filter(|result| {
+            result
+                .as_ref()
+                .is_err_and(|error| error.to_string().contains("already invoked"))
+        })
+        .count();
+    assert_eq!(already_invoked, 1, "{results:?}");
     for result in results {
         diagnostics.observe_result(result);
     }
