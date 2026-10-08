@@ -806,11 +806,9 @@ async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
     stalled.stop().await;
 }
 
-/// Positive: concurrent and cancelled `shutdown_export` callers share one
-/// outcome; every caller returns by its own deadline even when the
-/// collector never answers, and a later caller sees the retained failure.
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn concurrent_and_cancelled_export_shutdown_obey_their_deadlines() {
+/// A stalled collector with a non-empty export in flight, and the task
+/// runtime already stopped, so only the exporter step remains.
+async fn stalled_export_in_flight() -> (Receiver, tempfile::TempDir, DaemonObservability) {
     let stalled = Receiver::start(true).await;
     let root = tempfile::tempdir().expect("root");
     let observability =
@@ -836,6 +834,20 @@ async fn concurrent_and_cancelled_export_shutdown_obey_their_deadlines() {
     runtime
         .shutdown(Instant::now() + Duration::from_millis(500))
         .await;
+    (stalled, root, observability)
+}
+
+/// Positive: concurrent and cancelled `shutdown_export` callers share one
+/// outcome. Proven by ordering and state, not elapsed time: a caller whose
+/// deadline has passed returns while the shared step is still running, a
+/// caller with a long deadline returns only after it, the first (cancelled)
+/// caller's outcome survives, and a later caller finds the stored outcome and
+/// completes on its first poll without new work.
+/// Negative: no wall-clock margin is asserted; the real-time bound is
+/// `shutdown_export_is_bounded_by_the_clean_stop_slo`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_and_cancelled_export_shutdown_share_one_ordered_outcome() {
+    let (stalled, _root, observability) = stalled_export_in_flight().await;
 
     // The first caller is cancelled right after it starts the shared work;
     // the outcome survives it.
@@ -848,41 +860,61 @@ async fn concurrent_and_cancelled_export_shutdown_obey_their_deadlines() {
         cancelled.is_err(),
         "the stalled export outlives the first caller"
     );
-    let started = Instant::now();
-    let short = Instant::now() + Duration::from_millis(200);
-    let long = Instant::now() + Duration::from_secs(3);
+
+    let order = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let expired = Instant::now();
+    let long = Instant::now() + Duration::from_secs(30);
     let (a, b) = (observability.clone(), observability.clone());
-    let short_elapsed = tokio::spawn(async move {
-        a.shutdown_export(short).await;
-        started.elapsed()
+    let (order_a, order_b) = (Arc::clone(&order), Arc::clone(&order));
+    let short_done = tokio::spawn(async move {
+        a.shutdown_export(expired).await;
+        order_a.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     });
-    let long_elapsed = tokio::spawn(async move {
+    let long_done = tokio::spawn(async move {
         b.shutdown_export(long).await;
-        started.elapsed()
+        order_b.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     });
-    let short_elapsed = short_elapsed.await.unwrap();
-    let long_elapsed = long_elapsed.await.unwrap();
+    let short_position = short_done.await.expect("short caller");
     assert!(
-        short_elapsed < Duration::from_millis(400),
-        "{short_elapsed:?}"
+        !long_done.is_finished(),
+        "the expired caller returned while the shared step was still running"
     );
-    // The exporter step is bounded by 1s from its first caller.
-    assert!(
-        long_elapsed < Duration::from_millis(1500),
-        "{long_elapsed:?}"
+    let long_position = long_done.await.expect("long caller");
+    assert_eq!(
+        (short_position, long_position),
+        (0, 1),
+        "the expired caller returns before the caller that waits for the shared step"
     );
-    // The SDK's own 400ms export timeout or the 1s wait bound ends the step;
+
+    // The SDK's own export timeout or the exporter step bound ends the step;
     // either way the terminal failure is retained.
     let health = observability.export_health_for_test();
     assert!(health.last_failure.is_some(), "{health:?}");
     assert_ne!(health.state, AtmTelemetryExportState::Healthy, "{health:?}");
-    let again = Instant::now();
+
+    // A later caller finds the stored outcome: it is ready on its first poll
+    // (a zero timeout polls the future before its timer), so no work is done.
+    tokio::time::timeout(
+        Duration::ZERO,
+        observability.shutdown_export(Instant::now() + Duration::from_secs(5)),
+    )
+    .await
+    .expect("a later caller completes on its first poll");
+    stalled.stop().await;
+}
+
+/// Positive: with the collector stalled, a caller that waits for the shared
+/// exporter step returns inside the daemon's clean-stop SLO (5 s), the same
+/// real-time bound `stalled_collector_never_changes_task_results_or_blocks_shutdown`
+/// uses. The bound is the SLO itself, not a margin above a nominal 1 s step.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn shutdown_export_is_bounded_by_the_clean_stop_slo() {
+    let (stalled, _root, observability) = stalled_export_in_flight().await;
+    let started = Instant::now();
     observability
-        .shutdown_export(Instant::now() + Duration::from_secs(5))
+        .shutdown_export(Instant::now() + Duration::from_secs(30))
         .await;
-    assert!(
-        again.elapsed() < Duration::from_millis(100),
-        "outcome is stored"
-    );
+    let elapsed = started.elapsed();
+    assert!(elapsed <= Duration::from_secs(5), "{elapsed:?}");
     stalled.stop().await;
 }

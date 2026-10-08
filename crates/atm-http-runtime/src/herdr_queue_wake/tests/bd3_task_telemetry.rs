@@ -229,7 +229,7 @@ async fn failed_sqlite_lead_notification_update_emits_nothing() {
 
 #[tokio::test]
 async fn failed_sqlite_reminder_reset_update_emits_nothing() {
-    let (root, _runtime, fake, pump, key, _tasks, now) = build_real_task_pump(&["BD3-RESET-FAIL"]);
+    let (root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["BD3-RESET-FAIL"]);
     advance_to_lead_notification(&pump, &fake, &key, &now).await;
     set_clock(&now, "2030-01-01T00:10:00Z");
     queue_idle_result(&fake, &key);
@@ -243,12 +243,32 @@ async fn failed_sqlite_reminder_reset_update_emits_nothing() {
     )
     .expect("install deterministic task update failure");
 
-    set_clock(&now, "2030-01-01T00:10:30Z");
-    queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
-    pump.tick_once().await;
+    let before = runtime
+        .task_store()
+        .expect("task store")
+        .load_task(key.team(), &tasks[0])
+        .expect("load task")
+        .expect("task row");
+    // A reset needs two consecutive Working observations a reminder apart.
+    for at in ["2030-01-01T00:10:30Z", "2030-01-01T00:11:30Z"] {
+        set_clock(&now, at);
+        queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
+        pump.tick_once().await;
+    }
     telemetry
         .shutdown(tokio::time::Instant::now() + Duration::from_secs(5))
         .await;
+    let after = runtime
+        .task_store()
+        .expect("task store")
+        .load_task(key.team(), &tasks[0])
+        .expect("load task")
+        .expect("task row");
+    assert_eq!(
+        (after.reminder_count, after.lead_notified_count),
+        (before.reminder_count, before.lead_notified_count),
+        "failed reset leaves the durable row unchanged"
+    );
     assert!(
         sink.records().is_empty(),
         "failed reminder reset emits no telemetry"
