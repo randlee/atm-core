@@ -933,28 +933,33 @@ mod tests {
         assert!(!observability.export_providers_present_for_test());
     }
 
-    /// Positive: a poisoned logger lock still drains the retained logger, so
-    /// an admitted event is on disk after `flush_logger`.
+    /// Positive: a poisoned logger lock still drains the retained logger: every
+    /// event admitted before the call is on disk when `flush_logger` returns.
+    /// Negative: a burst this size is still queued behind the writer when the
+    /// last `emit` returns, so a skipped flush leaves lines missing.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn poisoned_logger_lock_still_drains_the_retained_logger() {
         use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
+        const BURST: usize = 64;
         let (_root, observability) = configured().await;
-        observability
-            .emit(CommandEvent {
-                command: "atm",
-                action: action_name("poison_drain"),
-                outcome: outcome_label("ok"),
-                team: "bd6-team".parse().expect("team"),
-                agent: "sender".parse().expect("agent"),
-                sender: "sender".parse().expect("agent"),
-                message_id: None,
-                requires_ack: false,
-                dry_run: false,
-                task_id: None,
-                error_code: None,
-                error_message: None,
-            })
-            .expect("admitted before the poison");
+        for _ in 0..BURST {
+            observability
+                .emit(CommandEvent {
+                    command: "atm",
+                    action: action_name("poison_drain"),
+                    outcome: outcome_label("ok"),
+                    team: "bd6-team".parse().expect("team"),
+                    agent: "sender".parse().expect("agent"),
+                    sender: "sender".parse().expect("agent"),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: None,
+                    error_message: None,
+                })
+                .expect("admitted before the poison");
+        }
         let logger = Arc::clone(&observability.logger);
         poison(move || {
             let _guard = logger.lock().expect("lock before poisoning");
@@ -964,7 +969,10 @@ mod tests {
         observability
             .flush_logger(tokio::time::Instant::now() + Duration::from_secs(5))
             .await;
-        let lines = std::fs::read_to_string(&observability.active_log_path).expect("log file");
-        assert!(lines.contains("poison_drain"), "{lines}");
+        let written = std::fs::read_to_string(&observability.active_log_path)
+            .expect("log file")
+            .matches("poison_drain")
+            .count();
+        assert_eq!(written, BURST, "the flush drained every admitted event");
     }
 }
