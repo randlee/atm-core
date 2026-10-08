@@ -477,6 +477,32 @@ fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId
     outcome.message_id
 }
 
+/// Positive: composition consumes the telemetry setups of the owner it is
+/// handed. Negative: another bootstrapped owner in the same process keeps its
+/// setups, so no process-wide owner stands in for the supplied one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn composition_uses_only_the_supplied_observability_owner() {
+    let (_other_root, other) = Daemon::bootstrap(endpoint_env("http://127.0.0.1:9")).await;
+    let (root, supplied) = Daemon::bootstrap(endpoint_env("http://127.0.0.1:9")).await;
+
+    let _assembly = compose_daemon_assembly(
+        SqliteStorageFactory::at_path(root.path().join("runtime").join("mail.sqlite3")),
+        Some(&supplied),
+    )
+    .expect("compose daemon runtime");
+
+    let (task, workflow) = supplied.take_telemetry_setups();
+    assert!(
+        task.is_none() && workflow.is_none(),
+        "composition took the supplied owner's setups"
+    );
+    let (task, workflow) = other.take_telemetry_setups();
+    assert!(
+        task.is_some() && workflow.is_some(),
+        "an owner composition was not handed keeps its setups"
+    );
+}
+
 /// Positive: every router producer reachable over the daemon API (assign,
 /// reassign, start, terminal close, reopen, committed rejection audit and the
 /// newly inserted prompt handoff) reaches the collector as exactly its
