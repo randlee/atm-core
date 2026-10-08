@@ -1121,8 +1121,8 @@ mod tests {
     };
     use atm_core::error_codes::AtmErrorCode;
     use atm_core::observability::{
-        AtmObservabilityHealth, AtmObservabilityHealthState, AtmTelemetryExportHealth,
-        AtmTelemetryExportState,
+        AtmObservabilityHealth, AtmObservabilityHealthState, AtmTelemetryExportFailure,
+        AtmTelemetryExportHealth, AtmTelemetryExportState,
     };
     use atm_core::team_admin::MembersList;
     use atm_core::types::HostName;
@@ -1137,7 +1137,7 @@ mod tests {
     };
 
     #[test]
-    fn doctor_export_rendering_includes_nonzero_counters_without_credentials() {
+    fn doctor_export_text_snapshots_cover_every_state_without_credentials() {
         let health = AtmObservabilityHealth {
             active_log_path: None,
             logging_state: AtmObservabilityHealthState::Healthy,
@@ -1148,21 +1148,58 @@ mod tests {
             timeline: Default::default(),
             degraded: Vec::new(),
             detail: None,
-            export: Some(AtmTelemetryExportHealth {
-                state: AtmTelemetryExportState::Degraded,
-                endpoint: Some("https://collector.example:4317".into()),
-                protocol: Some(atm_core::TelemetryExportProtocol::Grpc),
-                emitted: 2,
-                dropped_full: 1,
+            export: None,
+        };
+        let cases = [
+            (
+                AtmTelemetryExportState::Inert,
+                0,
+                None,
+                "observability.export: state=inert endpoint=<none> protocol=<none>\n",
+            ),
+            (
+                AtmTelemetryExportState::Healthy,
+                0,
+                None,
+                "observability.export: state=healthy endpoint=https://collector.example:4317 protocol=grpc\n",
+            ),
+            (
+                AtmTelemetryExportState::Degraded,
+                2,
+                Some(AtmTelemetryExportFailure::Rejected),
+                "observability.export: state=degraded endpoint=https://collector.example:4317 protocol=grpc emitted=2 dropped_full=1 dropped_timeout=0 dropped_failure=0 dropped_shutdown=0 last_failure=rejected\n",
+            ),
+            (
+                AtmTelemetryExportState::Unavailable,
+                2,
+                Some(AtmTelemetryExportFailure::TimedOut),
+                "observability.export: state=unavailable endpoint=https://collector.example:4317 protocol=grpc emitted=2 dropped_full=1 dropped_timeout=0 dropped_failure=0 dropped_shutdown=0 last_failure=timed_out\n",
+            ),
+        ];
+
+        for (state, emitted, last_failure, expected_export) in cases {
+            let mut health = health.clone();
+            health.export = Some(AtmTelemetryExportHealth {
+                state,
+                endpoint: (state != AtmTelemetryExportState::Inert)
+                    .then(|| "https://collector.example:4317".into()),
+                protocol: (state != AtmTelemetryExportState::Inert)
+                    .then_some(atm_core::TelemetryExportProtocol::Grpc),
+                emitted,
+                dropped_full: u64::from(emitted != 0),
                 dropped_timeout: 0,
                 dropped_failure: 0,
                 dropped_shutdown: 0,
-                last_failure: None,
-            }),
-        };
-        let rendered = render_observability_health(&health);
-        assert!(rendered.contains("observability.export: state=degraded endpoint=https://collector.example:4317 protocol=grpc emitted=2 dropped_full=1"));
-        assert!(!rendered.contains("AUTH_HEADER"));
+                last_failure,
+            });
+            let rendered = render_observability_health(&health);
+            assert!(
+                rendered.ends_with(expected_export),
+                "state={state:?}: {rendered}"
+            );
+            assert!(!rendered.contains("AUTH_HEADER"));
+            assert!(!rendered.contains("Bearer doctor-fixture-secret"));
+        }
     }
 
     #[test]
