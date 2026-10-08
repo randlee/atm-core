@@ -68,6 +68,14 @@ impl<T> CommittedTaskWrite<T> {
             task_events: self.task_events,
         }
     }
+
+    /// Converts a fallible operation value without discarding committed audit rows.
+    pub fn and_then<U>(self, f: impl FnOnce(T) -> Result<U, AtmError>) -> CommittedTaskWrite<U> {
+        CommittedTaskWrite {
+            operation: self.operation.and_then(f),
+            task_events: self.task_events,
+        }
+    }
 }
 
 /// Whether a prompt handoff was inserted or already existed durably.
