@@ -218,10 +218,11 @@ impl TaskTelemetryRuntime {
         let drain_deadline = *lifecycle
             .drain_deadline
             .get_or_insert_with(|| deadline.min(Instant::now() + self.drain_timeout));
-        if let Some(stop) = lifecycle.stop.take() {
-            // The worker has exited already if the receiver is gone; the join
-            // below observes that.
-            let _ = stop.send(drain_deadline);
+        if let Some(stop) = lifecycle.stop.take()
+            && stop.send(drain_deadline).is_err()
+        {
+            // The worker has exited already; the join below observes that.
+            tracing::debug!("task telemetry worker stopped before shutdown signal");
         }
         let wait_until = drain_deadline.min(deadline);
         let Some(worker) = lifecycle.worker.as_mut() else {
@@ -334,7 +335,7 @@ pub(crate) mod tests {
     pub(crate) fn record(kind: TaskTelemetryKind) -> TaskTelemetryRecord {
         TaskTelemetryRecord {
             kind,
-            team: "atm-dev".parse().expect("team"),
+            team: "test-team".parse().expect("team"),
             task_id: "atm-bd-7".parse().expect("task id"),
             assignee: "fenix".parse().expect("assignee"),
             actor: TaskActor::Member("solar".parse().expect("actor")),

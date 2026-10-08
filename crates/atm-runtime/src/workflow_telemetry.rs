@@ -117,11 +117,8 @@ impl WorkflowTelemetryRuntime {
                     stop = &mut shutdown_receiver => {
                         receiver.close();
                         let deadline = stop.unwrap_or_else(|_| Instant::now() + config.drain_timeout);
-                        loop {
-                            match tokio::time::timeout_at(deadline, receiver.recv()).await {
-                                Ok(Some(record)) => emit_one(&*sink, record, config.emit_timeout, &worker_diagnostics).await,
-                                Ok(None) | Err(_) => break,
-                            }
+                        while let Ok(Some(record)) = tokio::time::timeout_at(deadline, receiver.recv()).await {
+                            emit_one(&*sink, record, config.emit_timeout, &worker_diagnostics).await;
                         }
                         while receiver.try_recv().is_ok() { worker_diagnostics.dropped_shutdown.fetch_add(1, std::sync::atomic::Ordering::Relaxed); }
                         break;
