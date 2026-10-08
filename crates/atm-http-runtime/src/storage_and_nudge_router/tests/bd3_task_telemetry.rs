@@ -482,3 +482,106 @@ async fn concurrent_commits_keep_their_durable_seq_and_timestamp() {
         durable_records(&fixture, &tasks).await
     );
 }
+
+/// Commits an assignment (seq 1) and then a start (seq 2) on one task through
+/// the real router with no telemetry attached, and returns the durable rows.
+async fn committed_assignment_then_start(
+    fixture: &Fixture,
+    task: &str,
+) -> (
+    atm_core::boundary::TaskEventRow,
+    atm_core::boundary::TaskEventRow,
+) {
+    write(
+        &fixture.router,
+        assignment_request(fixture, "sender", "recipient", task),
+    )
+    .await
+    .expect("assign");
+    write(
+        &fixture.router,
+        task_op_request(
+            fixture,
+            "recipient",
+            "sender",
+            task,
+            atm_storage::TaskOp::Start,
+        ),
+    )
+    .await
+    .expect("start");
+    let rows = task_rows(fixture, task);
+    assert_eq!(rows.len(), 2, "assignment then start: {rows:?}");
+    (rows[0].clone(), rows[1].clone())
+}
+
+/// Enqueue reversal: B commits after A but its rows reach the runtime first.
+/// The sink sees B before A, and each record still carries its own durable
+/// seq and timestamp; none is renumbered, re-timestamped or dropped.
+#[tokio::test]
+async fn reversed_enqueue_order_keeps_each_records_own_seq_and_timestamp() {
+    let fixture = fixture(true, None, None);
+    let (a, b) = committed_assignment_then_start(&fixture, "BD3-REV").await;
+    assert!(a.seq < b.seq, "A committed before B");
+    let sink = RecordingTaskTelemetrySink::new();
+    let runtime = recording_runtime(&sink);
+    crate::task_telemetry::project_task_events(&runtime, std::slice::from_ref(&b));
+    crate::task_telemetry::project_task_events(&runtime, std::slice::from_ref(&a));
+    settle(&runtime).await;
+    let records = sink.records();
+    assert_eq!(
+        records,
+        vec![record_from_event(&b), record_from_event(&a)],
+        "delivery order is the reversed enqueue order, one record per row"
+    );
+    assert_eq!(
+        records.iter().map(|record| record.seq).collect::<Vec<_>>(),
+        vec![Some(b.seq), Some(a.seq)]
+    );
+    assert_eq!(
+        records.iter().map(|record| record.at).collect::<Vec<_>>(),
+        vec![b.at, a.at]
+    );
+}
+
+/// Missing delivery: a committed row that never reaches the runtime leaves a
+/// visible gap. The delivered records keep their own seq; nothing is
+/// renumbered to close the gap and the absent row is not fabricated.
+#[tokio::test]
+async fn a_missing_seq_stays_a_gap_and_survivors_are_not_renumbered() {
+    let fixture = fixture(true, None, None);
+    let task = "BD3-GAP";
+    let (a, b) = committed_assignment_then_start(&fixture, task).await;
+    write(
+        &fixture.router,
+        task_op_request(
+            &fixture,
+            "recipient",
+            "sender",
+            task,
+            close(atm_storage::TaskCloseOutcome::Completed),
+        ),
+    )
+    .await
+    .expect("close");
+    let rows = task_rows(&fixture, task);
+    assert_eq!(rows.len(), 3);
+    let c = rows[2].clone();
+    assert_eq!((a.seq, b.seq, c.seq), (1, 2, 3));
+    let sink = RecordingTaskTelemetrySink::new();
+    let runtime = recording_runtime(&sink);
+    // B's projection is lost: only A and C are delivered.
+    crate::task_telemetry::project_task_events(&runtime, &[a.clone(), c.clone()]);
+    settle(&runtime).await;
+    let records = sink.records();
+    assert_eq!(records, vec![record_from_event(&a), record_from_event(&c)]);
+    assert_eq!(
+        records.iter().map(|record| record.seq).collect::<Vec<_>>(),
+        vec![Some(1), Some(3)],
+        "the gap at seq 2 is preserved, not renumbered"
+    );
+    assert_eq!(
+        records.iter().map(|record| record.at).collect::<Vec<_>>(),
+        vec![a.at, c.at]
+    );
+}
