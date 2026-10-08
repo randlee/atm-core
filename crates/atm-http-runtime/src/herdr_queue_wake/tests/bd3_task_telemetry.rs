@@ -128,3 +128,71 @@ async fn failed_sqlite_reminder_update_emits_nothing_and_keeps_the_prompt_result
         "failed persistence emits no telemetry record"
     );
 }
+
+async fn advance_to_lead_notification(
+    pump: &HerdrQueueWakePump,
+    fake: &Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+    key: &atm_storage::MemberKey,
+    now: &Arc<Mutex<IsoTimestamp>>,
+) {
+    for minute in 0..10 {
+        set_clock(now, &format!("2030-01-01T00:{minute:02}:00Z"));
+        if minute > 0 {
+            queue_idle_result(fake, key);
+        }
+        pump.tick_once().await;
+    }
+}
+
+#[tokio::test]
+async fn failed_sqlite_lead_notification_update_emits_nothing() {
+    let (root, _runtime, fake, pump, key, _tasks, now) = build_real_task_pump(&["BD3-LEAD-FAIL"]);
+    advance_to_lead_notification(&pump, &fake, &key, &now).await;
+    let sink = RecordingTaskTelemetrySink::new();
+    let setup = RecordingTaskTelemetrySink::setup(&sink);
+    let telemetry = TaskTelemetryRuntime::start(setup.config, setup.sink);
+    let pump = pump.with_task_telemetry(telemetry.clone());
+    atm_runtime_test_support::install_sqlite_task_update_failure(
+        root.path().join("runtime").join("mail.sqlite3"),
+    )
+    .expect("install deterministic task update failure");
+
+    set_clock(&now, "2030-01-01T00:10:00Z");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    telemetry
+        .shutdown(tokio::time::Instant::now() + Duration::from_secs(5))
+        .await;
+    assert!(
+        sink.records().is_empty(),
+        "failed lead notification emits no telemetry"
+    );
+}
+
+#[tokio::test]
+async fn failed_sqlite_reminder_reset_update_emits_nothing() {
+    let (root, _runtime, fake, pump, key, _tasks, now) = build_real_task_pump(&["BD3-RESET-FAIL"]);
+    advance_to_lead_notification(&pump, &fake, &key, &now).await;
+    set_clock(&now, "2030-01-01T00:10:00Z");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    let sink = RecordingTaskTelemetrySink::new();
+    let setup = RecordingTaskTelemetrySink::setup(&sink);
+    let telemetry = TaskTelemetryRuntime::start(setup.config, setup.sink);
+    let pump = pump.with_task_telemetry(telemetry.clone());
+    atm_runtime_test_support::install_sqlite_task_update_failure(
+        root.path().join("runtime").join("mail.sqlite3"),
+    )
+    .expect("install deterministic task update failure");
+
+    set_clock(&now, "2030-01-01T00:10:30Z");
+    queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
+    pump.tick_once().await;
+    telemetry
+        .shutdown(tokio::time::Instant::now() + Duration::from_secs(5))
+        .await;
+    assert!(
+        sink.records().is_empty(),
+        "failed reminder reset emits no telemetry"
+    );
+}
