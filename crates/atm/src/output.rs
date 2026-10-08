@@ -8,7 +8,9 @@ use atm_core::doctor::{
     BootstrapTraceReport, DoctorReport, DoctorSeverity, DoctorStatus,
 };
 use atm_core::list::ListOutcome;
-use atm_core::observability::{AtmLogRecord, AtmLogSnapshot};
+use atm_core::observability::{
+    AtmLogRecord, AtmLogSnapshot, AtmTelemetryExportFailure, AtmTelemetryExportState,
+};
 use atm_core::protocol::{RuntimeLivenessState, RuntimeReadinessState, RuntimeStatusSnapshot};
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
@@ -507,6 +509,29 @@ fn render_doctor_observability(report: &DoctorReport) -> String {
         report.observability.timeline.dropped_queue_full_total,
         report.observability.timeline.dropped_persist_error_total,
     ));
+    if let Some(export) = &report.observability.export {
+        output.push_str(&format!(
+            "observability.export: state={} endpoint={} protocol={}",
+            render_export_state(export.state),
+            export.endpoint.as_deref().unwrap_or("<none>"),
+            export
+                .protocol
+                .map(render_export_protocol)
+                .unwrap_or("<none>"),
+        ));
+        if export.emitted != 0
+            || export.dropped_full != 0
+            || export.dropped_timeout != 0
+            || export.dropped_failure != 0
+            || export.dropped_shutdown != 0
+        {
+            output.push_str(&format!(" emitted={} dropped_full={} dropped_timeout={} dropped_failure={} dropped_shutdown={}", export.emitted, export.dropped_full, export.dropped_timeout, export.dropped_failure, export.dropped_shutdown));
+        }
+        if let Some(failure) = export.last_failure {
+            output.push_str(&format!(" last_failure={}", render_export_failure(failure)));
+        }
+        output.push('\n');
+    }
     if !report.observability.degraded.is_empty() {
         output.push_str(&format!(
             "WARN: Retained observability degraded: {}\n",
@@ -514,6 +539,31 @@ fn render_doctor_observability(report: &DoctorReport) -> String {
         ));
     }
     output
+}
+
+fn render_export_state(state: AtmTelemetryExportState) -> &'static str {
+    match state {
+        AtmTelemetryExportState::Inert => "inert",
+        AtmTelemetryExportState::Healthy => "healthy",
+        AtmTelemetryExportState::Degraded => "degraded",
+        AtmTelemetryExportState::Unavailable => "unavailable",
+    }
+}
+
+fn render_export_protocol(protocol: atm_core::TelemetryExportProtocol) -> &'static str {
+    match protocol {
+        atm_core::TelemetryExportProtocol::Grpc => "grpc",
+    }
+}
+
+fn render_export_failure(failure: AtmTelemetryExportFailure) -> &'static str {
+    match failure {
+        AtmTelemetryExportFailure::ConfigInvalid => "config_invalid",
+        AtmTelemetryExportFailure::Unavailable => "unavailable",
+        AtmTelemetryExportFailure::Rejected => "rejected",
+        AtmTelemetryExportFailure::TimedOut => "timed_out",
+        AtmTelemetryExportFailure::ShutdownTimedOut => "shutdown_timed_out",
+    }
 }
 
 fn print_doctor_environment(report: &DoctorReport) {
