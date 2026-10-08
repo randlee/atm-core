@@ -3105,7 +3105,15 @@ Product requirement ID:
 - `REQ-CORE-TASK-TELEMETRY-001` `atm-core` must expose one typed task telemetry
   record and sealed best-effort sink. The record may contain typed ledger and
   handoff facts only; message bodies, template variables, and free-form event
-  detail are forbidden.
+  detail are forbidden. Telemetry is non-authoritative: a dropped, rejected or
+  timed-out export never fails or rolls back the task operation. Export is
+  configured only through `ATM_OTEL_ENDPOINT` (absent = inert),
+  `ATM_OTEL_PROTOCOL` (`grpc` only, the default), `ATM_OTEL_AUTH_HEADER` and
+  `ATM_OTEL_SERVICE_NAME` (default `atm-daemon`), and log routing through
+  `ATM_LOG_DESTINATION` (`file` default, `otel`, `both`; `otel`/`both` require
+  an endpoint). Invalid values return `ATM_TELEMETRY_EXPORT_CONFIG_INVALID` and
+  ATM continues with export disabled. The auth header is redacted from debug
+  output and never appears in doctor health.
 
 Satisfied by:
 - `REQ-ATM-OBS-001` for CLI bootstrap/injection aspects

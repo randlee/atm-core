@@ -276,6 +276,33 @@
         "message"
       ]
     },
+    "AtmObservabilityHealth": {
+      "properties": [
+        "export"
+      ],
+      "required": []
+    },
+    "AtmTelemetryExportHealth": {
+      "properties": [
+        "dropped_failure",
+        "dropped_full",
+        "dropped_shutdown",
+        "dropped_timeout",
+        "emitted",
+        "endpoint",
+        "last_failure",
+        "protocol",
+        "state"
+      ],
+      "required": [
+        "dropped_failure",
+        "dropped_full",
+        "dropped_shutdown",
+        "dropped_timeout",
+        "emitted",
+        "state"
+      ]
+    },
     "BucketCounts": {
       "properties": [
         "history",
@@ -347,6 +374,7 @@
     "DoctorResponse": {
       "properties": [
         "herdr",
+        "observability",
         "runtime_status"
       ],
       "required": []

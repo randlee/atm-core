@@ -712,6 +712,16 @@ Required ATM-owned projected surfaces:
 The exact design is owned by:
 - [`design/sc-observability-integration.md`](./design/sc-observability-integration.md)
 
+Task telemetry (`REQ-CORE-TASK-TELEMETRY-001`, ADR-064):
+
+- `atm-core` owns the task telemetry record, the sealed `TaskTelemetrySink`
+  with its no-op default, `TelemetryExportConfig`, `LogDestination` and the
+  export health projection on `AtmObservabilityHealth.export`
+- `atm-runtime` composes and is the sole holder and caller of the sink;
+  `atm-observability` owns the OpenTelemetry exporter that implements it
+- `TaskTelemetrySink` and `WorkflowTelemetrySink` remain separate domain
+  contracts; the exporter implements both
+
 ## 6. Error-Code Registry Boundary
 
 `atm-error` owns the dependency-light source registry of ATM-owned error codes;

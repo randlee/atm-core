@@ -475,6 +475,32 @@ Detailed design and implementation shape is owned by:
   for the active Phase L release-alignment decisions, including the L.4 public
   boundary cleanup
 
+## 8.1 Task Telemetry Boundary
+
+Requirement ID:
+- `REQ-CORE-TASK-TELEMETRY-001`
+
+Required rules:
+- `atm-core` owns `TaskTelemetryRecord`, `TaskTelemetryKind`,
+  `TaskHandoffFacts`, the sealed `TaskTelemetrySink`, `NoopTaskTelemetrySink`,
+  `TelemetryExportConfig`, `LogDestination` and the `AtmTelemetryExportHealth`
+  projection without importing `sc-observability` or OpenTelemetry crates
+- records carry typed ledger and handoff facts only; no message body, template
+  variable or free-form detail
+- `TelemetryExportConfig::from_env` and `LogDestination::from_env` read only
+  through the injected `EnvSource`; they are the single parsers shared by the
+  CLI and the daemon
+- only the `grpc` protocol is accepted; endpoint scheme, authority, embedded
+  credentials, auth header syntax/size and plain-http credentials to a
+  non-loopback host are validated and rejected with
+  `ATM_TELEMETRY_EXPORT_CONFIG_INVALID`
+- configuration fields are private behind one validated constructor; `Debug`
+  redacts the auth header
+- export is a non-authoritative best-effort projection of durable rows
+
+Detailed decisions are owned by
+[`../adr/ADR-064-task-telemetry-opentelemetry-export.md`](../adr/ADR-064-task-telemetry-opentelemetry-export.md).
+
 ## 9. Config And Team Baseline Semantics
 
 Requirement ID:

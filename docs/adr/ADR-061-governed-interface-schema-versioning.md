@@ -104,8 +104,9 @@ migration functions directly.
   moves from `1.10.0` to `1.11.0`. `AtmObservabilityHealth` gains the additive
   optional `export` projection. It defaults to `None` when omitted, so a
   pinned pre-1.11 `DoctorReport` payload still decodes; a current payload with
-  export health round-trips without loss. This is a minor,
-  backward-compatible bump.
+  export health round-trips without loss. Its state, protocol and failure
+  enums are closed: an unknown value is a typed decode error, never a panic
+  or a silent `healthy`. This is a minor, backward-compatible bump.
 - **2026-09-26 — issue #1599 (`atm task history`):** `HTTP_API_VERSION`
   moves from `1.9.0` to `1.10.0`. `TaskLedgerQuery` gains the additive
   `History { member, limit }` request variant, dispatched through the same

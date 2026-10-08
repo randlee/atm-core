@@ -329,7 +329,7 @@ fn parse_endpoint(endpoint: &str) -> Result<EndpointTarget, AtmError> {
     }
     let loopback = host.eq_ignore_ascii_case("localhost")
         || host
-            .parse::<std::net::IpAddr>()
+            .parse::<core::net::IpAddr>()
             .is_ok_and(|ip| ip.is_loopback());
     Ok(EndpointTarget { https, loopback })
 }

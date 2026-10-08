@@ -84,7 +84,11 @@ The initial retained-command integration did not require:
 Phase BD now adds OpenTelemetry task export through the ATM-owned,
 payload-free `TaskTelemetrySink`. `atm-core` continues to have no direct
 `sc-observability` dependency: `atm-runtime` owns bounded composition and
-best-effort emission, and `atm-observability` owns the concrete exporter.
+best-effort emission, and `atm-observability` owns the concrete exporter,
+built on the official OpenTelemetry Rust SDK with the tonic gRPC transport.
+`sc-observability-otlp` is not used: it is a synchronous wrapper over the
+official SDK (ruled out 2026-10-07). Configuration and the exact boundary are
+recorded in ADR-064.
 Retained `send`, `read`, `ack`, `clear`, `log`, and `doctor` continue to use
 the original logging boundary independently of this task-telemetry seam.
 
