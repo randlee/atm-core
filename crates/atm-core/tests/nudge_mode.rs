@@ -38,7 +38,13 @@ impl atm_storage::MessageStore for InMemoryAsyncStore {
         _provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
     {
-        unreachable!("nudge-mode test store does not admit messages")
+        // This fixture deliberately models a successful, non-persisting
+        // admission. It cannot create task-ledger rows, so task-linked async
+        // writes have no queue position to project into their dispatch.
+        Ok(atm_storage::CommittedTaskWrite {
+            operation: Ok(atm_storage::MessageAdmissionOutcome::passive(None)),
+            task_events: Vec::new(),
+        })
     }
 
     fn save_messages_atomically(&self, _messages: &[atm_storage::Message]) -> Result<(), AtmError> {
@@ -68,11 +74,11 @@ impl atm_storage::MessageStore for InMemoryAsyncStore {
 impl atm_storage::AsyncMessageStore for InMemoryAsyncStore {
     async fn admit_message_with_provenance_async(
         &self,
-        _message: atm_storage::Message,
-        _provenance: atm_storage::MessageWriteOrigin,
+        message: atm_storage::Message,
+        provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
     {
-        unreachable!("nudge-mode test store does not admit messages")
+        atm_storage::MessageStore::admit_message_with_provenance(self, &message, provenance)
     }
 }
 
@@ -951,13 +957,13 @@ fn assert_graft_assignment_dispatch(async_path: bool) {
     );
     // BB.5: the position is attached from the durable admission result
     // (crates/atm-core/src/delivery_plan.rs:87). This fixture's async store
-    // (`InMemoryAsyncStore`) admits nothing, so only the synchronous path
-    // lands an assignment row a position can come from; the async path proves
-    // the write mode and the dispatch kind.
+    // (`InMemoryAsyncStore`) returns a passive outcome and commits no task
+    // row, so only the synchronous path lands an assignment row a position
+    // can come from; the async path proves the write mode and dispatch kind.
     if async_path {
         assert_eq!(
             dispatches[0].event.task_transition, None,
-            "this fixture's async store admits no assignment row to take a position from"
+            "this fixture's async store commits no assignment row to take a position from"
         );
     } else {
         // BB.5: every assignment carries its landed queue position
