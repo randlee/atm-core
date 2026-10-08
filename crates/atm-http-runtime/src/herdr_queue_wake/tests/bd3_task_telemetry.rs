@@ -22,27 +22,29 @@ fn set_clock(now: &Arc<Mutex<IsoTimestamp>>, value: &str) {
 
 fn assert_literal_row_fields(
     row: &atm_core::boundary::TaskEventRow,
-    seq: u64,
-    at: &str,
-    from_state: Option<atm_core::boundary::TaskState>,
-    to_state: Option<atm_core::boundary::TaskState>,
-    close_outcome: Option<atm_storage::TaskCloseOutcome>,
-    actor: atm_core::boundary::TaskActor,
-    message_id: Option<&str>,
+    expected: (
+        u64,
+        &str,
+        Option<atm_core::boundary::TaskState>,
+        Option<atm_core::boundary::TaskState>,
+        Option<atm_storage::TaskCloseOutcome>,
+        atm_core::boundary::TaskActor,
+        Option<&str>,
+    ),
 ) {
-    assert_eq!(row.seq, seq);
-    assert_eq!(row.at, at.parse().expect("literal timestamp"));
-    assert_eq!(row.from_state, from_state);
-    assert_eq!(row.to_state, to_state);
+    assert_eq!(row.seq, expected.0);
+    assert_eq!(row.at, expected.1.parse().expect("literal timestamp"));
+    assert_eq!(row.from_state, expected.2);
+    assert_eq!(row.to_state, expected.3);
     assert_eq!(
         row.to_state
             .and_then(atm_core::boundary::TaskState::close_outcome),
-        close_outcome
+        expected.4
     );
-    assert_eq!(row.actor, actor);
+    assert_eq!(row.actor, expected.5);
     assert_eq!(
         row.message_id,
-        message_id.map(|id| id.parse().expect("literal message id"))
+        expected.6.map(|id| id.parse().expect("literal message id"))
     );
 }
 
@@ -98,13 +100,15 @@ async fn queue_wake_producers_project_exactly_their_committed_rows() {
     assert_eq!(rows[0].event, atm_storage::TaskEventKind::Assigned);
     assert_literal_row_fields(
         &rows[1],
-        2,
-        "2030-01-01T00:00:00Z",
-        Some(atm_core::boundary::TaskState::Assigned),
-        Some(atm_core::boundary::TaskState::Assigned),
-        None,
-        atm_core::boundary::TaskActor::Daemon,
-        None,
+        (
+            2,
+            "2030-01-01T00:00:00Z",
+            Some(atm_core::boundary::TaskState::Assigned),
+            Some(atm_core::boundary::TaskState::Assigned),
+            None,
+            atm_core::boundary::TaskActor::Daemon,
+            None,
+        ),
     );
     let reminders_reset = rows
         .iter()
@@ -112,13 +116,15 @@ async fn queue_wake_producers_project_exactly_their_committed_rows() {
         .expect("literal reminders-reset row");
     assert_literal_row_fields(
         reminders_reset,
-        13,
-        "2030-01-01T00:11:30Z",
-        Some(atm_core::boundary::TaskState::Assigned),
-        Some(atm_core::boundary::TaskState::Assigned),
-        None,
-        atm_core::boundary::TaskActor::Daemon,
-        None,
+        (
+            13,
+            "2030-01-01T00:11:30Z",
+            Some(atm_core::boundary::TaskState::Assigned),
+            Some(atm_core::boundary::TaskState::Assigned),
+            None,
+            atm_core::boundary::TaskActor::Daemon,
+            None,
+        ),
     );
     let mut expected: Vec<TaskTelemetryRecord> = rows[1..].iter().map(record_from_event).collect();
     expected.extend(handoffs.iter().map(record_from_handoff));

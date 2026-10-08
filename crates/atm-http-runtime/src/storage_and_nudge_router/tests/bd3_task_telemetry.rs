@@ -66,27 +66,29 @@ fn task_rows(fixture: &Fixture, task_id: &str) -> Vec<atm_core::boundary::TaskEv
 
 fn assert_literal_row_fields(
     row: &atm_core::boundary::TaskEventRow,
-    seq: u64,
-    at: &str,
-    from_state: Option<atm_core::boundary::TaskState>,
-    to_state: Option<atm_core::boundary::TaskState>,
-    close_outcome: Option<atm_storage::TaskCloseOutcome>,
-    actor: atm_core::boundary::TaskActor,
-    message_id: Option<&str>,
+    expected: (
+        u64,
+        &str,
+        Option<atm_core::boundary::TaskState>,
+        Option<atm_core::boundary::TaskState>,
+        Option<atm_storage::TaskCloseOutcome>,
+        atm_core::boundary::TaskActor,
+        Option<&str>,
+    ),
 ) {
-    assert_eq!(row.seq, seq);
-    assert_eq!(row.at, at.parse().expect("literal timestamp"));
-    assert_eq!(row.from_state, from_state);
-    assert_eq!(row.to_state, to_state);
+    assert_eq!(row.seq, expected.0);
+    assert_eq!(row.at, expected.1.parse().expect("literal timestamp"));
+    assert_eq!(row.from_state, expected.2);
+    assert_eq!(row.to_state, expected.3);
     assert_eq!(
         row.to_state
             .and_then(atm_core::boundary::TaskState::close_outcome),
-        close_outcome
+        expected.4
     );
-    assert_eq!(row.actor, actor);
+    assert_eq!(row.actor, expected.5);
     assert_eq!(
         row.message_id,
-        message_id.map(|id| id.parse().expect("literal message id"))
+        expected.6.map(|id| id.parse().expect("literal message id"))
     );
 }
 
@@ -289,57 +291,67 @@ async fn router_producers_project_exactly_their_committed_rows() {
     let t1_rows = task_rows(&fixture, "BD3-T1");
     assert_literal_row_fields(
         &t1_rows[0],
-        1,
-        "2030-01-01T00:00:01Z",
-        None,
-        Some(atm_core::boundary::TaskState::Assigned),
-        None,
-        atm_core::boundary::TaskActor::Member("sender".parse().expect("actor")),
-        Some("00000000000000000000000001"),
+        (
+            1,
+            "2030-01-01T00:00:01Z",
+            None,
+            Some(atm_core::boundary::TaskState::Assigned),
+            None,
+            atm_core::boundary::TaskActor::Member("sender".parse().expect("actor")),
+            Some("00000000000000000000000001"),
+        ),
     );
     assert_literal_row_fields(
         &t1_rows[1],
-        2,
-        "2030-01-01T00:00:02Z",
-        Some(atm_core::boundary::TaskState::Assigned),
-        Some(atm_core::boundary::TaskState::Assigned),
-        None,
-        atm_core::boundary::TaskActor::Member("sender".parse().expect("actor")),
-        Some("00000000000000000000000002"),
+        (
+            2,
+            "2030-01-01T00:00:02Z",
+            Some(atm_core::boundary::TaskState::Assigned),
+            Some(atm_core::boundary::TaskState::Assigned),
+            None,
+            atm_core::boundary::TaskActor::Member("sender".parse().expect("actor")),
+            Some("00000000000000000000000002"),
+        ),
     );
     assert_literal_row_fields(
         &t1_rows[2],
-        3,
-        "2030-01-01T00:00:03Z",
-        Some(atm_core::boundary::TaskState::Assigned),
-        Some(atm_core::boundary::TaskState::Active),
-        None,
-        atm_core::boundary::TaskActor::Member("third".parse().expect("actor")),
-        Some("00000000000000000000000003"),
+        (
+            3,
+            "2030-01-01T00:00:03Z",
+            Some(atm_core::boundary::TaskState::Assigned),
+            Some(atm_core::boundary::TaskState::Active),
+            None,
+            atm_core::boundary::TaskActor::Member("third".parse().expect("actor")),
+            Some("00000000000000000000000003"),
+        ),
     );
     assert_literal_row_fields(
         &t1_rows[3],
-        4,
-        "2030-01-01T00:00:04Z",
-        Some(atm_core::boundary::TaskState::Active),
-        Some(atm_core::boundary::TaskState::Complete(
-            atm_storage::TaskCloseOutcome::Completed,
-        )),
-        Some(atm_storage::TaskCloseOutcome::Completed),
-        atm_core::boundary::TaskActor::Member("third".parse().expect("actor")),
-        Some("00000000000000000000000004"),
+        (
+            4,
+            "2030-01-01T00:00:04Z",
+            Some(atm_core::boundary::TaskState::Active),
+            Some(atm_core::boundary::TaskState::Complete(
+                atm_storage::TaskCloseOutcome::Completed,
+            )),
+            Some(atm_storage::TaskCloseOutcome::Completed),
+            atm_core::boundary::TaskActor::Member("third".parse().expect("actor")),
+            Some("00000000000000000000000004"),
+        ),
     );
     assert_literal_row_fields(
         &t1_rows[4],
-        5,
-        "2030-01-01T00:00:05Z",
-        Some(atm_core::boundary::TaskState::Complete(
-            atm_storage::TaskCloseOutcome::Completed,
-        )),
-        Some(atm_core::boundary::TaskState::Assigned),
-        None,
-        atm_core::boundary::TaskActor::Member("sender".parse().expect("actor")),
-        Some("00000000000000000000000005"),
+        (
+            5,
+            "2030-01-01T00:00:05Z",
+            Some(atm_core::boundary::TaskState::Complete(
+                atm_storage::TaskCloseOutcome::Completed,
+            )),
+            Some(atm_core::boundary::TaskState::Assigned),
+            None,
+            atm_core::boundary::TaskActor::Member("sender".parse().expect("actor")),
+            Some("00000000000000000000000005"),
+        ),
     );
     assert_eq!(canonical(&records), durable_records(&fixture, &tasks).await);
     assert_eq!(
