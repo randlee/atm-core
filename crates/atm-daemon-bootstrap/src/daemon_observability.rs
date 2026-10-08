@@ -59,6 +59,10 @@ enum ExportSelection {
 
 type Providers = (SdkTracerProvider, SdkLoggerProvider, SdkMeterProvider);
 
+/// Test-installed work run on the blocking pool before each logger flush.
+#[cfg(test)]
+type FlushStall = Arc<OnceLock<Box<dyn Fn() + Send + Sync>>>;
+
 /// Export state owned by the process lifecycle: the standard SDK providers
 /// (retained only for shutdown), the setups handed once to runtime assembly,
 /// and the runtime counters attached after assembly.
@@ -159,6 +163,8 @@ pub struct DaemonObservability {
     logger: Arc<Mutex<LoggerLifecycle>>,
     active_log_path: PathBuf,
     export: Arc<Export>,
+    #[cfg(test)]
+    flush_stall: FlushStall,
 }
 
 impl std::fmt::Debug for DaemonObservability {
@@ -175,6 +181,8 @@ impl Clone for DaemonObservability {
             logger: Arc::clone(&self.logger),
             active_log_path: self.active_log_path.clone(),
             export: Arc::clone(&self.export),
+            #[cfg(test)]
+            flush_stall: Arc::clone(&self.flush_stall),
         }
     }
 }
@@ -225,6 +233,8 @@ impl DaemonObservability {
             logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
             active_log_path,
             export: Arc::new(export.export),
+            #[cfg(test)]
+            flush_stall: FlushStall::default(),
         })
     }
 
@@ -298,7 +308,15 @@ impl DaemonObservability {
         // The guarded value is an immutable `Arc`, so a poisoned lock still
         // holds a valid logger to flush.
         let logger = Arc::clone(&self.logger.lock().unwrap_or_else(PoisonError::into_inner).0);
-        let flush = tokio::task::spawn_blocking(move || logger.flush());
+        #[cfg(test)]
+        let stall = Arc::clone(&self.flush_stall);
+        let flush = tokio::task::spawn_blocking(move || {
+            #[cfg(test)]
+            if let Some(stall) = stall.get() {
+                stall();
+            }
+            logger.flush()
+        });
         // Sink flush failures are recorded in logger health by the canonical
         // logger; an abandoned wait leaves nothing further to report.
         drop(tokio::time::timeout_at(bound, flush).await);
@@ -352,7 +370,16 @@ impl DaemonObservability {
             logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
             active_log_path,
             export: Arc::new(Export::inert()),
+            flush_stall: FlushStall::default(),
         })
+    }
+
+    /// Runs `stall` on the blocking pool before every later logger flush of
+    /// this owner and its clones, so a test can hold the flush step open; the
+    /// retained logger itself exposes no flush seam. First install wins.
+    #[cfg(test)]
+    pub(crate) fn stall_logger_flush_for_test(&self, stall: impl Fn() + Send + Sync + 'static) {
+        let _ = self.flush_stall.set(Box::new(stall));
     }
 
     #[cfg(test)]
