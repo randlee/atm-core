@@ -252,7 +252,11 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   bounded reload/rebind via the runtime reload path
 - graceful shutdown finalization must remain bounded; best-effort SQLite WAL
   checkpoint and observability flush steps must time out rather than block
-  daemon exit indefinitely
+  daemon exit indefinitely. Shutdown shares one cumulative deadline
+  (`REPLACEMENT_DRAIN_DEADLINE`, 5s): listeners, recovery sweep, peers, the
+  task and workflow telemetry drains, then the OpenTelemetry providers within
+  `min(1s, remaining)`. The first caller owns provider shutdown, so concurrent
+  or cancelled callers observe the same stored outcome (ADR-064 D11)
 - startup does not run a replay-resume sweep or require a SQLite-backed replay
   store. ADR-038's explicitly requested, bounded canonical record scan is the
   only reconciliation behavior and uses storage traits after peer success.
