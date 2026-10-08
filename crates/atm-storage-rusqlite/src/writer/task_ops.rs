@@ -40,39 +40,6 @@ pub(super) enum TaskMessageResult {
     },
 }
 
-impl TaskMessageResult {
-    pub(super) fn into_admission_parts(self) -> TaskAdmissionParts {
-        match self {
-            Self::Applied {
-                already_closed,
-                task_assignee,
-                queued_position,
-                reassign_notice,
-                task_events,
-            } => (
-                already_closed,
-                task_assignee,
-                queued_position,
-                reassign_notice,
-                None,
-                task_events,
-            ),
-            Self::RejectedReportDelivered { error, event } => {
-                (None, None, None, None, Some(error), vec![event])
-            }
-        }
-    }
-}
-
-type TaskAdmissionParts = (
-    Option<TaskCloseOutcome>,
-    Option<AgentName>,
-    Option<u32>,
-    Option<Box<Message>>,
-    Option<AtmError>,
-    Vec<atm_storage::TaskEventRow>,
-);
-
 pub(super) fn load_task_row(
     connection: &Connection,
     target: &SharedDbTarget,
