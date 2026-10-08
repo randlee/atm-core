@@ -935,8 +935,12 @@ mod tests {
 
     /// Positive: a poisoned logger lock still drains the retained logger: every
     /// event admitted before the call is on disk when `flush_logger` returns.
-    /// Negative: a burst this size is still queued behind the writer when the
-    /// last `emit` returns, so a skipped flush leaves lines missing.
+    /// Negative control (scheduler-dependent, not deterministic): no writer
+    /// barrier exists, so a burst this size is usually still queued behind the
+    /// writer when the last `emit` returns and a skipped flush then leaves
+    /// lines missing (0 of 30 mutant runs passed). A schedule where the writer
+    /// drains first would let the mutant pass; the setups and providers
+    /// regressions are the deterministic controls.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn poisoned_logger_lock_still_drains_the_retained_logger() {
         use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
