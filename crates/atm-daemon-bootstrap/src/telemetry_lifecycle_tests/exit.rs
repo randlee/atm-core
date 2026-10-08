@@ -288,18 +288,13 @@ fn final_record_child() {
     println!("{CHILD_SCENARIO_SENTINEL}");
 }
 
-/// Positive: after `shutdown_replacement_daemon` and a real process exit, the
-/// final lifecycle record is the last line on disk behind a full backlog, and
-/// the collector received it before the logger provider stopped. Omitting the
-/// retained-logger drain loses it.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn final_lifecycle_record_survives_process_exit() {
-    let healthy = Receiver::start(false).await;
+/// Runs [`final_record_child`] against `endpoint` and returns the retained
+/// JSONL lines left on disk after the child process exited.
+async fn final_record_lines(endpoint: String) -> Vec<String> {
     // The logger root is the log directory's parent, as for the host `logs`.
     let root = tempfile::tempdir().expect("log root");
     let logs = root.path().join("logs");
     let log_dir = logs.to_str().expect("utf-8 log dir").to_owned();
-    let endpoint = healthy.endpoint.clone();
     tokio::task::spawn_blocking(move || {
         run_child_scenario_with(
             FINAL_RECORD_CHILD,
@@ -308,32 +303,82 @@ async fn final_lifecycle_record_survives_process_exit() {
     })
     .await
     .expect("parent driver");
-    let jsonl = std::fs::read_to_string(logs.join(atm_observability::CANONICAL_LOG_FILE_NAME))
-        .expect("retained log file");
-    let lines: Vec<&str> = jsonl.lines().collect();
+    std::fs::read_to_string(logs.join(atm_observability::CANONICAL_LOG_FILE_NAME))
+        .expect("retained log file")
+        .lines()
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Index of the final lifecycle record, required to follow every backlog
+/// record on disk.
+fn final_record_index(lines: &[String]) -> usize {
+    let backlog: Vec<usize> = (0..lines.len())
+        .filter(|&index| lines[index].contains(BACKLOG_RECORD))
+        .collect();
     assert_eq!(
-        lines
-            .iter()
-            .filter(|line| line.contains(BACKLOG_RECORD))
-            .count(),
+        backlog.len(),
         BACKLOG,
         "every admitted backlog record is on disk; last lines: {:?}",
         lines.iter().rev().take(3).collect::<Vec<_>>()
     );
+    let index = lines
+        .iter()
+        .position(|line| line.contains(FINAL_RECORD))
+        .unwrap_or_else(|| panic!("the final lifecycle record is on disk: {:?}", lines.last()));
     assert!(
-        lines.last().is_some_and(|line| line.contains(FINAL_RECORD)),
-        "the final lifecycle record is the last line on disk: {:?}",
-        lines.last()
+        backlog.iter().all(|&queued| queued < index),
+        "the final lifecycle record follows the backlog"
     );
+    index
+}
+
+/// Positive: after `shutdown_replacement_daemon` and a real process exit, the
+/// final lifecycle record is on disk behind a full backlog, and the collector
+/// received it before the logger provider stopped. SDK diagnostics are never
+/// exported back to the collector. Omitting the first flush loses it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn final_lifecycle_record_survives_process_exit() {
+    let healthy = Receiver::start(false).await;
+    let lines = final_record_lines(healthy.endpoint.clone()).await;
+    final_record_index(&lines);
+    let exported: Vec<String> = healthy
+        .capture
+        .logs
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|record| format!("{record:?}"))
+        .collect();
     assert!(
-        healthy
-            .capture
-            .logs
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|record| format!("{record:?}").contains(FINAL_RECORD)),
+        exported.iter().any(|record| record.contains(FINAL_RECORD)),
         "the collector received the final lifecycle record"
     );
+    assert!(
+        !exported
+            .iter()
+            .any(|record| record.contains("opentelemetry") || record.contains("tonic")),
+        "SDK diagnostics are never exported to the collector"
+    );
     healthy.stop().await;
+}
+
+/// Positive: against a collector that never answers, the SDK's
+/// provider-shutdown diagnostics reach disk after the final lifecycle record.
+/// Delivery to the stalled collector is not asserted.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn provider_shutdown_diagnostics_reach_disk_after_the_final_record() {
+    let stalled = Receiver::start(true).await;
+    let lines = final_record_lines(stalled.endpoint.clone()).await;
+    let index = final_record_index(&lines);
+    let sdk = lines[index + 1..]
+        .iter()
+        .filter(|line| line.contains("\"target\":\"opentelemetry_sdk\""))
+        .count();
+    assert!(
+        sdk >= 1,
+        "provider-shutdown diagnostics follow the final record on disk: {:?}",
+        &lines[index..]
+    );
+    stalled.stop().await;
 }

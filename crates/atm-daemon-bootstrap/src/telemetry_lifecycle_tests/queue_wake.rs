@@ -16,7 +16,6 @@ use std::time::Duration;
 use atm_core::send::SendMessageSource;
 use atm_core::test_support::FakeEnvSource;
 use atm_core::types::IsoTimestamp;
-use atm_herdr::testing::{FakeHerdrCall, FakeHerdrProcessAdapter};
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus, HerdrListOutcome};
 
 use super::receiver::Receiver;
@@ -28,14 +27,6 @@ use atm_core::observability::AtmTelemetryExportState;
 
 const TASK: &str = "BD6-R1";
 const MINUTE_MS: i64 = 60_000;
-
-fn list_calls(herdr: &FakeHerdrProcessAdapter) -> usize {
-    herdr
-        .calls()
-        .iter()
-        .filter(|call| matches!(call, FakeHerdrCall::List { .. }))
-        .count()
-}
 
 fn worker_status(status: HerdrAgentStatus) -> HerdrListOutcome {
     HerdrListOutcome {
@@ -115,16 +106,10 @@ async fn drive_through_lead_notification_and_reset(
     );
 
     // Park the polling task at its next list call (at most one 5s interval).
-    let baseline = list_calls(&daemon.herdr);
-    let parked = daemon.herdr.block_next_list();
-    let mut cadence = tokio::time::interval(Duration::from_millis(50));
-    tokio::time::timeout(Duration::from_secs(15), async {
-        while list_calls(&daemon.herdr) == baseline {
-            cadence.tick().await;
-        }
-    })
-    .await
-    .expect("the running pump reaches its next Herdr list call");
+    let (list_gate, parked) = daemon.herdr.block_next_list();
+    tokio::time::timeout(Duration::from_secs(15), parked.notified())
+        .await
+        .expect("the running pump reaches its next Herdr list call");
 
     let driver = Driver { daemon, offset_ms };
     let mut minute = 0;
@@ -151,7 +136,7 @@ async fn drive_through_lead_notification_and_reset(
             HerdrAgentStatus::Working,
         )
         .await;
-    parked
+    list_gate
 }
 
 /// Positive: the daemon-composed queue-wake pump commits reminders, the
