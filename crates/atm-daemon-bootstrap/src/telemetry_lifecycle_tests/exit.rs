@@ -398,9 +398,9 @@ const BACKLOG_RECORD: &str = "BD6_RETAINED_BACKLOG";
 /// exits undrained (without the first flush the final record is lost), and
 /// small enough that it, the final record and the daemon's other lifecycle
 /// records fit the 256-record OpenTelemetry log queue (`atm_observability`
-/// `EXPORT_QUEUE`) with nothing drained, so delivery does not depend on how
-/// fast the collector answers. A 512-record backlog filled that queue while
-/// the first export was in flight and dropped the final record.
+/// `EXPORT_QUEUE`) with nothing drained, so the SDK never drops the final
+/// record as queue-full. A 512-record backlog filled that queue while the
+/// first export was in flight and dropped it.
 const DELIVERED_BACKLOG: usize = 192;
 /// Below the 1024-event logger queue, so every record is admitted, and over
 /// the OpenTelemetry log queue plus one export batch, so a collector that
@@ -510,6 +510,21 @@ async fn final_lifecycle_record_survives_process_exit() {
     let healthy = Receiver::start(false).await;
     let lines = final_record_lines(healthy.endpoint.clone(), DELIVERED_BACKLOG).await;
     final_record_index(&lines, DELIVERED_BACKLOG);
+    // Read only once the receiver holds the final record. It stores each
+    // export before acknowledging it, so an acknowledged final export is
+    // already here; a record still missing means the child stopped waiting at
+    // its export bound and its exit cancelled the receiver's handler.
+    let capture = &healthy.capture;
+    capture
+        .wait(EXPORT_WAIT, "the final lifecycle record", || {
+            capture
+                .logs
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|record| format!("{record:?}").contains(FINAL_RECORD))
+        })
+        .await;
     let exported: Vec<String> = healthy
         .capture
         .logs
