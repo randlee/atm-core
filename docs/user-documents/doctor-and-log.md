@@ -47,6 +47,31 @@ documented nullable fields. Use the endpoint `state` and `remedy` rather than
 guessing from a daemon log. See [Herdr Integration](./herdr.md) for the
 endpoint and unique-name model.
 
+## OpenTelemetry export
+
+Task and prompt-handoff telemetry can be exported through the official
+OpenTelemetry SDK's gRPC transport. It is a best-effort, non-authoritative
+projection: ATM continues to persist and route durable work when a collector
+is unavailable. Local retained-log persistence is separate from SDK admission
+and collector delivery.
+
+Export is inert unless `ATM_OTEL_ENDPOINT` is set. Configure it with
+`ATM_OTEL_PROTOCOL=grpc` (the only supported protocol), optionally
+`ATM_OTEL_AUTH_HEADER`, and `ATM_OTEL_SERVICE_NAME` (default: `atm-daemon`).
+`ATM_LOG_DESTINATION` defaults to `file`; `otel` and `both` require an export
+endpoint. Do not place credentials in an endpoint URL.
+
+ATM exports the typed task-ledger and prompt-handoff facts listed in ADR-064,
+including the two latency histograms. It never exports message bodies,
+template variables, or free-form event detail. Historical Acked/Migrated test
+fixtures are not evidence of live producers.
+
+`atm doctor` prints `observability.export` with its state (`inert`, `healthy`,
+`degraded`, or `unavailable`), endpoint, protocol, and non-zero counters.
+`atm doctor --json` exposes the same `observability.export` object. Doctor
+findings describe degraded or unavailable export; use their remediation rather
+than treating telemetry delivery as a reason to retry a task operation.
+
 ## Log
 
 Use the ATM log surface when you need structured evidence for a failure,

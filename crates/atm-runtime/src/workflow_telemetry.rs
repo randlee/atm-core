@@ -7,6 +7,7 @@ use atm_core::{WorkflowTelemetryError, WorkflowTelemetryRecord, WorkflowTelemetr
 use atm_storage::AtmErrorCode;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
+use tokio::time::Instant;
 
 const DEFAULT_CAPACITY: usize = 256;
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(1);
@@ -64,13 +65,21 @@ pub struct WorkflowTelemetryDiagnostics {
     pub config_invalid: std::sync::atomic::AtomicBool,
 }
 
+/// Worker ownership. The join handle stays here until its join completes, so
+/// a cancelled `shutdown` call never detaches the worker.
+#[derive(Default)]
+struct Lifecycle {
+    stop: Option<oneshot::Sender<Instant>>,
+    worker: Option<JoinHandle<()>>,
+    drain_deadline: Option<Instant>,
+}
+
 #[derive(Clone)]
 pub struct WorkflowTelemetryRuntime {
     sender: Arc<std::sync::Mutex<Option<mpsc::Sender<WorkflowTelemetryRecord>>>>,
     diagnostics: Arc<WorkflowTelemetryDiagnostics>,
-    shutdown: Arc<std::sync::Mutex<Option<oneshot::Sender<()>>>>,
-    worker: Arc<std::sync::Mutex<Option<JoinHandle<()>>>>,
-    shutdown_timeout: Duration,
+    lifecycle: Arc<tokio::sync::Mutex<Lifecycle>>,
+    drain_timeout: Duration,
 }
 
 impl WorkflowTelemetryRuntime {
@@ -85,9 +94,8 @@ impl WorkflowTelemetryRuntime {
             return Self {
                 sender: Arc::new(std::sync::Mutex::new(None)),
                 diagnostics,
-                shutdown: Arc::new(std::sync::Mutex::new(None)),
-                worker: Arc::new(std::sync::Mutex::new(None)),
-                shutdown_timeout: DEFAULT_DRAIN,
+                lifecycle: Arc::new(tokio::sync::Mutex::new(Lifecycle::default())),
+                drain_timeout: DEFAULT_DRAIN,
             };
         }
         // `assemble_runtime` is deliberately synchronous. Telemetry is
@@ -97,7 +105,7 @@ impl WorkflowTelemetryRuntime {
             return Self::disabled();
         };
         let (sender, mut receiver) = mpsc::channel(config.queue_capacity);
-        let (shutdown_sender, mut shutdown_receiver) = oneshot::channel::<()>();
+        let (shutdown_sender, mut shutdown_receiver) = oneshot::channel::<Instant>();
         let worker_diagnostics = Arc::clone(&diagnostics);
         let worker = runtime.spawn(async move {
             loop {
@@ -106,15 +114,11 @@ impl WorkflowTelemetryRuntime {
                         Some(record) => emit_one(&*sink, record, config.emit_timeout, &worker_diagnostics).await,
                         None => break,
                     },
-                    _ = &mut shutdown_receiver => {
-                        let deadline = tokio::time::Instant::now() + config.drain_timeout;
-                        loop {
-                            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-                            if remaining.is_zero() { break; }
-                            match tokio::time::timeout(remaining, receiver.recv()).await {
-                                Ok(Some(record)) => emit_one(&*sink, record, config.emit_timeout, &worker_diagnostics).await,
-                                Ok(None) | Err(_) => break,
-                            }
+                    stop = &mut shutdown_receiver => {
+                        receiver.close();
+                        let deadline = stop.unwrap_or_else(|_| Instant::now() + config.drain_timeout);
+                        while let Ok(Some(record)) = tokio::time::timeout_at(deadline, receiver.recv()).await {
+                            emit_one(&*sink, record, config.emit_timeout, &worker_diagnostics).await;
                         }
                         while receiver.try_recv().is_ok() { worker_diagnostics.dropped_shutdown.fetch_add(1, std::sync::atomic::Ordering::Relaxed); }
                         break;
@@ -125,9 +129,12 @@ impl WorkflowTelemetryRuntime {
         Self {
             sender: Arc::new(std::sync::Mutex::new(Some(sender))),
             diagnostics,
-            shutdown: Arc::new(std::sync::Mutex::new(Some(shutdown_sender))),
-            worker: Arc::new(std::sync::Mutex::new(Some(worker))),
-            shutdown_timeout: config.drain_timeout,
+            lifecycle: Arc::new(tokio::sync::Mutex::new(Lifecycle {
+                stop: Some(shutdown_sender),
+                worker: Some(worker),
+                drain_deadline: None,
+            })),
+            drain_timeout: config.drain_timeout,
         }
     }
 
@@ -136,9 +143,8 @@ impl WorkflowTelemetryRuntime {
         Self {
             sender: Arc::new(std::sync::Mutex::new(None)),
             diagnostics: Arc::new(WorkflowTelemetryDiagnostics::default()),
-            shutdown: Arc::new(std::sync::Mutex::new(None)),
-            worker: Arc::new(std::sync::Mutex::new(None)),
-            shutdown_timeout: DEFAULT_DRAIN,
+            lifecycle: Arc::new(tokio::sync::Mutex::new(Lifecycle::default())),
+            drain_timeout: DEFAULT_DRAIN,
         }
     }
 
@@ -166,26 +172,33 @@ impl WorkflowTelemetryRuntime {
         &self.diagnostics
     }
 
-    /// Closes intake, drains through the configured deadline, and joins the
-    /// supervised worker. No exporter task is left detached after this returns.
-    pub async fn shutdown(&self) {
+    /// Closes intake, drains until `min(now + drain_timeout, deadline)`, then
+    /// aborts and joins the supervised worker. The first call fixes the drain
+    /// deadline; a repeated call, or one that follows a cancelled call, joins
+    /// the same worker against that deadline. No exporter task is left
+    /// detached after this returns.
+    pub async fn shutdown(&self, deadline: Instant) {
         if let Ok(mut sender) = self.sender.lock() {
             sender.take();
         }
-        if let Ok(mut sender) = self.shutdown.lock()
-            && let Some(sender) = sender.take()
-            && sender.send(()).is_err()
+        let mut lifecycle = self.lifecycle.lock().await;
+        let drain_deadline = *lifecycle
+            .drain_deadline
+            .get_or_insert_with(|| deadline.min(Instant::now() + self.drain_timeout));
+        if let Some(stop) = lifecycle.stop.take()
+            && stop.send(drain_deadline).is_err()
         {
             self.diagnostics
                 .dropped_shutdown
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             tracing::warn!("workflow telemetry worker shutdown receiver was already closed");
         }
-        let worker = self.worker.lock().ok().and_then(|mut worker| worker.take());
-        if let Some(mut worker) = worker
-            && tokio::time::timeout(self.shutdown_timeout, &mut worker)
-                .await
-                .is_err()
+        let Some(worker) = lifecycle.worker.as_mut() else {
+            return;
+        };
+        if tokio::time::timeout_at(drain_deadline.min(deadline), &mut *worker)
+            .await
+            .is_err()
         {
             // The worker is supervised by this runtime. Abort only after its
             // bounded drain window expires, then join the cancellation so no
@@ -194,10 +207,13 @@ impl WorkflowTelemetryRuntime {
                 .dropped_shutdown
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             worker.abort();
-            if let Err(error) = worker.await {
+            if let Err(error) = (&mut *worker).await
+                && !error.is_cancelled()
+            {
                 tracing::warn!(%error, "workflow telemetry worker abort join failed");
             }
         }
+        lifecycle.worker = None;
     }
 }
 
@@ -206,22 +222,14 @@ impl Drop for WorkflowTelemetryRuntime {
         // A clone may be dropped while another handle is still admitting
         // records, so only the final owner performs a fail-closed abort. The
         // normal daemon path calls the async `shutdown` method and drains.
-        if Arc::strong_count(&self.worker) != 1 {
+        if Arc::strong_count(&self.lifecycle) != 1 {
             return;
         }
         if let Ok(mut sender) = self.sender.lock() {
             sender.take();
         }
-        if let Ok(mut shutdown) = self.shutdown.lock()
-            && let Some(shutdown) = shutdown.take()
-            && shutdown.send(()).is_err()
-        {
-            tracing::warn!(
-                "workflow telemetry worker shutdown receiver was already closed during drop"
-            );
-        }
-        if let Ok(mut worker) = self.worker.lock()
-            && let Some(worker) = worker.take()
+        if let Ok(mut lifecycle) = self.lifecycle.try_lock()
+            && let Some(worker) = lifecycle.worker.take()
         {
             worker.abort();
         }
@@ -270,6 +278,7 @@ mod tests {
     use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
     const DIAGNOSTIC_WAIT_TIMEOUT: Duration = Duration::from_secs(1);
+    const WAIT: Duration = Duration::from_secs(5);
 
     async fn wait_for_diagnostic_count(counter: &AtomicU64, expected: u64, counter_name: &str) {
         let observed = tokio::time::timeout(DIAGNOSTIC_WAIT_TIMEOUT, async {
@@ -381,7 +390,7 @@ mod tests {
             Arc::new(FailingSink),
         );
         assert!(runtime.diagnostics().config_invalid.load(Ordering::Relaxed));
-        runtime.shutdown().await;
+        runtime.shutdown(Instant::now() + WAIT).await;
     }
 
     #[test]
@@ -414,7 +423,7 @@ mod tests {
             0,
             "disabled telemetry does not attempt an export"
         );
-        runtime.shutdown().await;
+        runtime.shutdown(Instant::now() + WAIT).await;
     }
     #[tokio::test]
     async fn timeout_and_failure_remain_best_effort() {
@@ -428,7 +437,7 @@ mod tests {
         runtime.try_emit(record());
         wait_for_diagnostic_count(&runtime.diagnostics().dropped_timeout, 1, "dropped_timeout")
             .await;
-        runtime.shutdown().await;
+        runtime.shutdown(Instant::now() + WAIT).await;
     }
 
     #[tokio::test]
@@ -447,7 +456,7 @@ mod tests {
             runtime.diagnostics().dropped_full.load(Ordering::Relaxed) > 0,
             "a bounded telemetry queue must drop rather than delay producers"
         );
-        runtime.shutdown().await;
+        runtime.shutdown(Instant::now() + WAIT).await;
     }
 
     #[tokio::test]
@@ -459,7 +468,7 @@ mod tests {
         runtime.try_emit(record());
         wait_for_diagnostic_count(&runtime.diagnostics().dropped_failure, 1, "dropped_failure")
             .await;
-        runtime.shutdown().await;
+        runtime.shutdown(Instant::now() + WAIT).await;
     }
 
     #[tokio::test]
@@ -487,7 +496,7 @@ mod tests {
                 );
             }
         }
-        runtime.shutdown().await;
+        runtime.shutdown(Instant::now() + WAIT).await;
     }
 
     #[tokio::test]
@@ -509,15 +518,115 @@ mod tests {
             tokio::task::yield_now().await;
         }
         assert_eq!(sink.0.load(Ordering::Relaxed), 1, "worker started emit");
-        tokio::time::timeout(Duration::from_millis(100), runtime.shutdown())
-            .await
-            .expect("shutdown must honor the drain deadline");
+        tokio::time::timeout(
+            Duration::from_millis(100),
+            runtime.shutdown(Instant::now() + WAIT),
+        )
+        .await
+        .expect("shutdown must honor the drain deadline");
         assert!(
             runtime
                 .diagnostics()
                 .dropped_shutdown
                 .load(Ordering::Relaxed)
                 > 0
+        );
+    }
+
+    fn has_worker(runtime: &WorkflowTelemetryRuntime) -> bool {
+        runtime
+            .lifecycle
+            .try_lock()
+            .expect("no shutdown in progress")
+            .worker
+            .is_some()
+    }
+
+    fn stuck_runtime(sink: &Arc<BlockingSink>) -> WorkflowTelemetryRuntime {
+        WorkflowTelemetryRuntime::start(
+            WorkflowTelemetryConfig {
+                emit_timeout: MAX_DURATION,
+                drain_timeout: MAX_DURATION,
+                ..Default::default()
+            },
+            Arc::clone(sink) as Arc<dyn WorkflowTelemetrySink>,
+        )
+    }
+
+    async fn wait_started(sink: &BlockingSink) {
+        tokio::time::timeout(WAIT, async {
+            while sink.0.load(Ordering::Relaxed) == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("worker started emit");
+    }
+
+    #[tokio::test]
+    async fn caller_deadline_bounds_shutdown_below_the_drain_timeout() {
+        let sink = Arc::new(BlockingSink(AtomicUsize::new(0)));
+        let runtime = stuck_runtime(&sink);
+        runtime.try_emit(record());
+        wait_started(&sink).await;
+        tokio::time::timeout(
+            WAIT,
+            runtime.shutdown(Instant::now() + Duration::from_millis(20)),
+        )
+        .await
+        .expect("shutdown obeys the caller deadline, not the 30 s drain");
+        assert!(!has_worker(&runtime));
+        assert_eq!(
+            Arc::strong_count(&sink),
+            1,
+            "aborted worker released the sink"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_shutdown_leaves_the_worker_for_the_next_call() {
+        let sink = Arc::new(BlockingSink(AtomicUsize::new(0)));
+        let runtime = stuck_runtime(&sink);
+        runtime.try_emit(record());
+        wait_started(&sink).await;
+        let cancelled = tokio::time::timeout(
+            Duration::from_millis(5),
+            runtime.shutdown(Instant::now() + WAIT),
+        )
+        .await;
+        assert!(
+            cancelled.is_err(),
+            "first shutdown is cancelled by its caller"
+        );
+        assert!(
+            has_worker(&runtime),
+            "cancellation must not detach the worker"
+        );
+        assert_eq!(
+            Arc::strong_count(&sink),
+            2,
+            "worker still owns its sink clone"
+        );
+
+        runtime
+            .shutdown(Instant::now() + Duration::from_millis(5))
+            .await;
+        assert!(!has_worker(&runtime));
+        assert_eq!(Arc::strong_count(&sink), 1, "worker joined, not detached");
+        let terminal = runtime
+            .diagnostics()
+            .dropped_shutdown
+            .load(Ordering::Relaxed);
+        assert_eq!(terminal, 1);
+
+        runtime.shutdown(Instant::now() + WAIT).await;
+        assert_eq!(
+            runtime
+                .diagnostics()
+                .dropped_shutdown
+                .load(Ordering::Relaxed),
+            terminal,
+            "repeated shutdown keeps the terminal result"
         );
     }
 }

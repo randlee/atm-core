@@ -20,6 +20,7 @@ use crate::legacy_storage_adapters::{
     StorageBackends, boundary_mail_store_view, boundary_roster_store_view, runtime_doctor_ports,
 };
 use crate::mailbox_runtime::StorageAsyncMailboxRuntime;
+use crate::task_telemetry::{TaskTelemetryRuntime, TaskTelemetrySetup};
 use crate::workflow_telemetry::{
     WorkflowTelemetryDiagnostics, WorkflowTelemetryRuntime, WorkflowTelemetrySetup,
 };
@@ -36,6 +37,9 @@ pub struct RuntimeAssemblyInputs {
     /// Optional bootstrap-owned telemetry exporter. `None` selects the core
     /// no-op sink; invalid supplied limits degrade doctor only.
     pub workflow_telemetry: Option<WorkflowTelemetrySetup>,
+    /// Optional bootstrap-owned task telemetry exporter. `None` keeps task
+    /// telemetry disabled: no queue and no worker.
+    pub task_telemetry: Option<TaskTelemetrySetup>,
 }
 
 impl fmt::Debug for RuntimeAssemblyInputs {
@@ -59,6 +63,10 @@ impl fmt::Debug for RuntimeAssemblyInputs {
                     .as_ref()
                     .map(|_| "configured exporter"),
             )
+            .field(
+                "task_telemetry",
+                &self.task_telemetry.as_ref().map(|_| "configured exporter"),
+            )
             .finish()
     }
 }
@@ -77,6 +85,8 @@ pub struct RuntimeAssembly {
     pub doctor_ports: RuntimeDoctorPorts,
     pub reader_lanes: Option<ReaderPoolDoctorReport>,
     pub workflow_telemetry: WorkflowTelemetryRuntime,
+    /// Sole holder of the task telemetry sink; handlers call `try_emit`.
+    pub task_telemetry: TaskTelemetryRuntime,
     template_composer: Option<Arc<dyn TemplateComposer>>,
 }
 
@@ -95,6 +105,7 @@ impl fmt::Debug for RuntimeAssembly {
             .field("doctor_ports", &self.doctor_ports)
             .field("reader_lanes", &self.reader_lanes)
             .field("workflow_telemetry", &"WorkflowTelemetryRuntime")
+            .field("task_telemetry", &"TaskTelemetryRuntime")
             .field(
                 "template_composer",
                 &self
@@ -181,6 +192,11 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         .map_or_else(WorkflowTelemetryRuntime::disabled, |setup| {
             WorkflowTelemetryRuntime::start(setup.config, setup.sink)
         });
+    let task_telemetry = inputs
+        .task_telemetry
+        .map_or_else(TaskTelemetryRuntime::disabled, |setup| {
+            TaskTelemetryRuntime::start(setup.config, setup.sink)
+        });
     let storage = inputs
         .storage_factory
         .open(inputs.host_runtime_scope.durable_state_root.as_ref())?;
@@ -231,6 +247,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         doctor_ports,
         reader_lanes,
         workflow_telemetry,
+        task_telemetry,
         template_composer,
     })
 }
@@ -379,6 +396,64 @@ mod tests {
             .expect("compose sqlite runtime");
 
         assert!(assembly.service_runtime.task_store().is_ok());
+        drop(assembly);
+        std::fs::remove_dir_all(root).expect("remove tempdir");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn composition_exports_task_telemetry_through_the_supplied_sink() {
+        let root = std::env::temp_dir().join(format!(
+            "atm-runtime-task-telemetry-{}",
+            atm_storage::AtmMessageId::new()
+        ));
+        std::fs::create_dir_all(&root).expect("tempdir");
+        let sink = atm_runtime_test_support::RecordingTaskTelemetrySink::new();
+        let assembly = atm_runtime_test_support::open_sqlite_boundary_with_task_telemetry(
+            root.join("runtime").join("mail.sqlite3"),
+            Some(atm_runtime_test_support::RecordingTaskTelemetrySink::setup(
+                &sink,
+            )),
+        )
+        .expect("compose sqlite runtime");
+
+        assembly
+            .task_telemetry
+            .try_emit(crate::task_telemetry::tests::record(
+                atm_core::TaskTelemetryKind::Assigned,
+            ));
+        assembly
+            .task_telemetry
+            .shutdown(tokio::time::Instant::now() + std::time::Duration::from_secs(5))
+            .await;
+
+        assert_eq!(sink.records().len(), 1);
+        assert_eq!(assembly.task_telemetry.diagnostics().snapshot().emitted, 1);
+        drop(assembly);
+        std::fs::remove_dir_all(root).expect("remove tempdir");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn composition_without_task_telemetry_is_disabled() {
+        let root = std::env::temp_dir().join(format!(
+            "atm-runtime-task-telemetry-off-{}",
+            atm_storage::AtmMessageId::new()
+        ));
+        std::fs::create_dir_all(&root).expect("tempdir");
+        let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(&root)
+            .expect("compose sqlite runtime");
+
+        assembly
+            .task_telemetry
+            .try_emit(crate::task_telemetry::tests::record(
+                atm_core::TaskTelemetryKind::Assigned,
+            ));
+
+        let snapshot = assembly.task_telemetry.diagnostics().snapshot();
+        assert_eq!(
+            snapshot.emitted + snapshot.dropped_full + snapshot.dropped_shutdown,
+            0
+        );
+        assert!(!snapshot.config_invalid);
         drop(assembly);
         std::fs::remove_dir_all(root).expect("remove tempdir");
     }

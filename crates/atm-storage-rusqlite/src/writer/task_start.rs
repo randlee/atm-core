@@ -1,6 +1,8 @@
 //! Task-start mutations in the serial SQLite writer lane.
 
-use super::task_ops::{append_task_event, load_task_row, queue_order, renumber_queue};
+use super::task_ops::{
+    TaskEventDraft, append_task_event, load_task_row, queue_order, renumber_queue,
+};
 use super::task_rejection::{
     task_already_active, task_already_closed, task_move_invalid, task_not_counterparty,
     task_not_found,
@@ -56,19 +58,21 @@ pub(super) fn apply_task_start(
     let event = append_task_event(
         connection,
         target,
-        &record.team,
-        task_id,
-        &row.assignee,
-        &record.envelope.timestamp,
-        TaskEventKind::Started,
-        Some(row.state.tag()),
-        Some(next_state.tag()),
-        None,
-        &record.envelope.from,
-        record.envelope.message_id,
-        None,
-        None,
-        None,
+        &TaskEventDraft {
+            team: &record.team,
+            task_id,
+            assignee: &row.assignee,
+            at: &record.envelope.timestamp,
+            event: TaskEventKind::Started,
+            from_state: Some(row.state.tag()),
+            to_state: Some(next_state.tag()),
+            close_outcome: None,
+            actor: &record.envelope.from,
+            message_id: record.envelope.message_id,
+            outcome: None,
+            marker: None,
+            detail: None,
+        },
     )?;
     Ok((row.assignee, event))
 }
