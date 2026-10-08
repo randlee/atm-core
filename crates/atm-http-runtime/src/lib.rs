@@ -76,6 +76,7 @@ mod runtime_listener;
 mod runtime_maintenance;
 mod runtime_setup;
 mod storage_and_nudge_router;
+mod task_telemetry;
 #[cfg(unix)]
 mod unix_socket;
 

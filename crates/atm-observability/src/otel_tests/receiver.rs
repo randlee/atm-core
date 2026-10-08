@@ -23,6 +23,9 @@ pub(super) struct Capture {
     pub started: Arc<AtomicUsize>,
     pub finished: Arc<AtomicUsize>,
     pub changed: Arc<Notify>,
+    /// Releases one stalled export; a stalled export waits here until the
+    /// test calls `release`, and never completes if the test does not.
+    pub release: Arc<Notify>,
     pub stall: bool,
 }
 
@@ -39,8 +42,12 @@ impl Capture {
         }
         let _finished = Finished(self.clone());
         if self.stall {
-            std::future::pending::<()>().await;
+            self.release.notified().await;
         }
+    }
+
+    pub fn release(&self) {
+        self.release.notify_one();
     }
 
     pub async fn wait(&self, condition: impl Fn() -> bool) {
