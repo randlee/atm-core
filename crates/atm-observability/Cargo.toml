@@ -19,6 +19,7 @@ sha2.workspace = true
 tokio.workspace = true
 tonic = { version = "0.14", default-features = false, features = ["transport", "tls-native-roots"] }
 sc-observability.workspace = true
+sc-observability-log.workspace = true
 sc-observability-types.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

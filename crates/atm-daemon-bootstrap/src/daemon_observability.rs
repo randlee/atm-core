@@ -716,7 +716,8 @@ mod tests {
 
     /// Positive: through the daemon's own bootstrap, each of
     /// `ATM_LOG_DESTINATION=file|otel|both` delivers one record per selected
-    /// destination for a direct port record and a tracing-origin record, and
+    /// destination for a CLI-startup port record, a direct `sc` macro record,
+    /// and a tracing-origin record, and
     /// the standard logger provider still exports after the retained logger
     /// is shut down.
     /// Negative: a below-threshold record and a secret field value reach
@@ -748,14 +749,21 @@ mod tests {
             let observability = DaemonObservability::bootstrap_from(&env, log_dir.clone())
                 .await
                 .expect("bootstrap");
+            let mut direct_sc_attachment = observability
+                .logger
+                .lock()
+                .expect("logger lock")
+                .0
+                .attach_sc_log_facade()
+                .expect("attach direct sc logger");
             let dispatch = tracing::Dispatch::new(
                 tracing_subscriber::registry().with(observability.tracing_bridge_for_test()),
             );
             let subscriber = tracing::dispatcher::set_default(&dispatch);
             observability
                 .emit(CommandEvent {
-                    command: "atm-daemon",
-                    action: action_name("bd6_direct_record"),
+                    command: "atm",
+                    action: action_name("cli_startup"),
                     outcome: outcome_label("ok"),
                     team: "bd6-team".parse().expect("team"),
                     agent: "sender".parse().expect("agent"),
@@ -767,7 +775,13 @@ mod tests {
                     error_code: None,
                     error_message: None,
                 })
-                .expect("direct record");
+                .expect("CLI startup record");
+            sc_observability_log::event!(
+                name: "bd6.direct_sc_macro",
+                target: "atm_daemon_bootstrap::bd6_direct_sc_macro",
+                sc_observability_log::Level::INFO,
+                "bd6 direct sc macro record"
+            );
             tracing::warn!(target: "atm_daemon_bootstrap::bd6_tracing_record", token = "raw-secret", "bd6 tracing record");
             tracing::debug!(target: "atm_daemon_bootstrap::bd6_below_threshold", "bd6 below threshold");
             observability.flush_for_test();
@@ -786,14 +800,23 @@ mod tests {
                     .capture
                     .wait(Duration::from_secs(15), "both exported records", || {
                         let logs = exported(&receiver);
-                        count(&logs, "bd6_direct_record") == 1
+                        count(&logs, "cli_startup") == 1
+                            && count(&logs, "bd6.direct_sc_macro") == 1
                             && count(&logs, "bd6_tracing_record") == 1
                     })
                     .await;
                 let logs = exported(&receiver);
-                assert_eq!(logs.len(), 2, "{destination}: no recursion: {logs:#?}");
+                assert_eq!(logs.len(), 3, "{destination}: no recursion: {logs:#?}");
                 assert_eq!(count(&logs, "raw-secret"), 0);
                 assert_eq!(count(&logs, "below_threshold"), 0);
+            } else {
+                // Negative control: file-only owns the retained JSONL sink,
+                // so every collector record would be an unintended export.
+                assert!(
+                    exported(&receiver).is_empty(),
+                    "file-only must not export OTLP logs: {:#?}",
+                    exported(&receiver)
+                );
             }
             let file = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
             if destination == "otel" {
@@ -804,13 +827,17 @@ mod tests {
                     .lines()
                     .map(str::to_owned)
                     .collect();
-                assert_eq!(count(&lines, "bd6_direct_record"), 1, "{lines:#?}");
+                assert_eq!(count(&lines, "cli_startup"), 1, "{lines:#?}");
+                assert_eq!(count(&lines, "bd6.direct_sc_macro"), 1, "{lines:#?}");
                 assert_eq!(count(&lines, "bd6_tracing_record"), 1, "{lines:#?}");
                 assert_eq!(count(&lines, "raw-secret"), 0);
                 assert_eq!(count(&lines, "below_threshold"), 0);
             }
             drop(subscriber);
             drop(dispatch);
+            direct_sc_attachment
+                .detach(Duration::from_secs(1))
+                .expect("detach direct sc logger");
             let export = Arc::clone(&observability.export);
             let caller = export
                 .providers
