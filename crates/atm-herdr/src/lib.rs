@@ -702,7 +702,7 @@ pub mod testing {
         wait_results: VecDeque<Result<HerdrWaitOutcome, HerdrError>>,
         get_results: VecDeque<Result<HerdrGetOutcome, HerdrError>>,
         list_results: VecDeque<Result<HerdrListOutcome, HerdrError>>,
-        list_gate: Option<Arc<tokio::sync::Notify>>,
+        list_gate: Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>,
         breaker_retry_after: Option<Duration>,
     }
 
@@ -806,13 +806,14 @@ pub mod testing {
             }
         }
 
-        /// Blocks the next list call until the returned notifier is woken.
-        pub fn block_next_list(&self) -> Arc<tokio::sync::Notify> {
+        /// Blocks the next list call until released and signals when it parks.
+        pub fn block_next_list(&self) -> (Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>) {
             let gate = Arc::new(tokio::sync::Notify::new());
+            let parked = Arc::new(tokio::sync::Notify::new());
             if let Ok(mut state) = self.state.lock() {
-                state.list_gate = Some(Arc::clone(&gate));
+                state.list_gate = Some((Arc::clone(&gate), Arc::clone(&parked)));
             }
-            gate
+            (gate, parked)
         }
     }
 
@@ -943,7 +944,8 @@ pub mod testing {
                 .unwrap_or((None, None));
             let result = result.unwrap_or_else(|| Ok(HerdrListOutcome { agents: Vec::new() }));
             Box::pin(async move {
-                if let Some(gate) = gate {
+                if let Some((gate, parked)) = gate {
+                    parked.notify_one();
                     gate.notified().await;
                 }
                 result

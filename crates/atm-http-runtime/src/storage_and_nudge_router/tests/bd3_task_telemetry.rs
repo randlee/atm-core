@@ -64,6 +64,36 @@ fn task_rows(fixture: &Fixture, task_id: &str) -> Vec<atm_core::boundary::TaskEv
         .expect("durable task events")
 }
 
+type ExpectedTaskEventFields = (
+    u64,
+    &'static str,
+    Option<atm_core::boundary::TaskState>,
+    Option<atm_core::boundary::TaskState>,
+    Option<atm_storage::TaskCloseOutcome>,
+    atm_core::boundary::TaskActor,
+    Option<&'static str>,
+);
+
+fn assert_literal_row_fields(
+    row: &atm_core::boundary::TaskEventRow,
+    expected: ExpectedTaskEventFields,
+) {
+    assert_eq!(row.seq, expected.0);
+    assert_eq!(row.at, expected.1.parse().expect("literal timestamp"));
+    assert_eq!(row.from_state, expected.2);
+    assert_eq!(row.to_state, expected.3);
+    assert_eq!(
+        row.to_state
+            .and_then(atm_core::boundary::TaskState::close_outcome),
+        expected.4
+    );
+    assert_eq!(row.actor, expected.5);
+    assert_eq!(
+        row.message_id,
+        expected.6.map(|id| id.parse().expect("literal message id"))
+    );
+}
+
 /// The records every committed row and inserted handoff of `tasks` must have
 /// produced, in a stable order for comparison.
 async fn durable_records(fixture: &Fixture, tasks: &[&str]) -> Vec<String> {
@@ -118,13 +148,19 @@ async fn router_producers_project_exactly_their_committed_rows() {
 
     write(
         &router,
-        assignment_request(&fixture, "sender", "recipient", "BD3-T1"),
+        assignment_request(&fixture, "sender", "recipient", "BD3-T1").with_origin_metadata(
+            "00000000000000000000000001".parse().expect("message id"),
+            "2030-01-01T00:00:01Z".parse().expect("timestamp"),
+        ),
     )
     .await
     .expect("assign");
     write(
         &router,
-        assignment_request(&fixture, "sender", "third", "BD3-T1"),
+        assignment_request(&fixture, "sender", "third", "BD3-T1").with_origin_metadata(
+            "00000000000000000000000002".parse().expect("message id"),
+            "2030-01-01T00:00:02Z".parse().expect("timestamp"),
+        ),
     )
     .await
     .expect("reassign");
@@ -136,6 +172,10 @@ async fn router_producers_project_exactly_their_committed_rows() {
             "sender",
             "BD3-T1",
             atm_storage::TaskOp::Start,
+        )
+        .with_origin_metadata(
+            "00000000000000000000000003".parse().expect("message id"),
+            "2030-01-01T00:00:03Z".parse().expect("timestamp"),
         ),
     )
     .await
@@ -148,13 +188,20 @@ async fn router_producers_project_exactly_their_committed_rows() {
             "sender",
             "BD3-T1",
             close(atm_storage::TaskCloseOutcome::Completed),
+        )
+        .with_origin_metadata(
+            "00000000000000000000000004".parse().expect("message id"),
+            "2030-01-01T00:00:04Z".parse().expect("timestamp"),
         ),
     )
     .await
     .expect("close");
     write(
         &router,
-        assignment_request(&fixture, "sender", "third", "BD3-T1"),
+        assignment_request(&fixture, "sender", "third", "BD3-T1").with_origin_metadata(
+            "00000000000000000000000005".parse().expect("message id"),
+            "2030-01-01T00:00:05Z".parse().expect("timestamp"),
+        ),
     )
     .await
     .expect("reopen");
@@ -167,6 +214,10 @@ async fn router_producers_project_exactly_their_committed_rows() {
             "sender",
             "BD3-MISSING",
             close(atm_storage::TaskCloseOutcome::Completed),
+        )
+        .with_origin_metadata(
+            "00000000000000000000000006".parse().expect("message id"),
+            "2030-01-01T00:00:06Z".parse().expect("timestamp"),
         ),
     )
     .await
@@ -239,6 +290,71 @@ async fn router_producers_project_exactly_their_committed_rows() {
         "BD3-T4",
         "BD3-NO-MOVE",
     ];
+    let t1_rows = task_rows(&fixture, "BD3-T1");
+    assert_literal_row_fields(
+        &t1_rows[0],
+        (
+            1,
+            "2030-01-01T00:00:01Z",
+            None,
+            Some(atm_core::boundary::TaskState::Assigned),
+            None,
+            atm_core::boundary::TaskActor::Member("sender".parse().expect("actor")),
+            Some("00000000000000000000000001"),
+        ),
+    );
+    assert_literal_row_fields(
+        &t1_rows[1],
+        (
+            2,
+            "2030-01-01T00:00:02Z",
+            Some(atm_core::boundary::TaskState::Assigned),
+            Some(atm_core::boundary::TaskState::Assigned),
+            None,
+            atm_core::boundary::TaskActor::Member("sender".parse().expect("actor")),
+            Some("00000000000000000000000002"),
+        ),
+    );
+    assert_literal_row_fields(
+        &t1_rows[2],
+        (
+            3,
+            "2030-01-01T00:00:03Z",
+            Some(atm_core::boundary::TaskState::Assigned),
+            Some(atm_core::boundary::TaskState::Active),
+            None,
+            atm_core::boundary::TaskActor::Member("third".parse().expect("actor")),
+            Some("00000000000000000000000003"),
+        ),
+    );
+    assert_literal_row_fields(
+        &t1_rows[3],
+        (
+            4,
+            "2030-01-01T00:00:04Z",
+            Some(atm_core::boundary::TaskState::Active),
+            Some(atm_core::boundary::TaskState::Complete(
+                atm_storage::TaskCloseOutcome::Completed,
+            )),
+            Some(atm_storage::TaskCloseOutcome::Completed),
+            atm_core::boundary::TaskActor::Member("third".parse().expect("actor")),
+            Some("00000000000000000000000004"),
+        ),
+    );
+    assert_literal_row_fields(
+        &t1_rows[4],
+        (
+            5,
+            "2030-01-01T00:00:05Z",
+            Some(atm_core::boundary::TaskState::Complete(
+                atm_storage::TaskCloseOutcome::Completed,
+            )),
+            Some(atm_core::boundary::TaskState::Assigned),
+            None,
+            atm_core::boundary::TaskActor::Member("sender".parse().expect("actor")),
+            Some("00000000000000000000000005"),
+        ),
+    );
     assert_eq!(canonical(&records), durable_records(&fixture, &tasks).await);
     assert_eq!(
         runtime.diagnostics().snapshot().emitted,
@@ -322,51 +438,37 @@ async fn replayed_router_handoff_emits_nothing_for_the_existing_sqlite_key() {
     );
 }
 
-/// A real SQLite handoff failure is observational only: the already-committed
-/// dispatch still reports success, while no failed handoff is projected.
+/// A real SQLite handoff failure is observational only: the committed
+/// assignment still succeeds, while no handoff row or handoff record exists.
+/// The failure is installed before the first dispatch so the insert is reached
+/// (a replayed existing key never attempts one).
 #[tokio::test]
-async fn router_handoff_sqlite_failure_emits_nothing_and_keeps_the_hook_successful() {
+async fn router_handoff_sqlite_failure_emits_nothing_and_keeps_the_write_successful() {
     let fixture = fixture(true, None, None);
-    write(
-        &fixture.router,
-        assignment_request(&fixture, "sender", "recipient", "BD3-HANDOFF-FAIL"),
-    )
-    .await
-    .expect("initial assignment succeeds before telemetry is attached");
-    let dispatch = fixture
-        .received_hook
-        .dispatches
-        .lock()
-        .expect("recorded dispatch")
-        .last()
-        .cloned()
-        .expect("assignment emitted a task-linked dispatch");
     atm_runtime_test_support::install_sqlite_prompt_handoff_write_failure(&fixture.database_path)
         .expect("install deterministic prompt-handoff failure");
-
     let sink = RecordingTaskTelemetrySink::new();
     let runtime = recording_runtime(&sink);
     let router = fixture.router.clone().with_task_telemetry(runtime.clone());
-    let warnings = router
-        .emit_received_hook(
-            Ok(vec![dispatch]),
-            RequestDeadline::after(Duration::from_secs(10)),
-        )
-        .await;
-    assert!(
-        warnings.is_empty(),
-        "handoff recording failure does not change the caller result"
-    );
+
+    write(
+        &router,
+        assignment_request(&fixture, "sender", "recipient", "BD3-HANDOFF-FAIL"),
+    )
+    .await
+    .expect("handoff recording failure does not change the caller result");
 
     settle(&runtime).await;
-    assert_eq!(
-        prompt_handoffs(&fixture, "BD3-HANDOFF-FAIL").await.len(),
-        1,
-        "the failed replay adds no durable handoff"
-    );
     assert!(
-        sink.records().is_empty(),
-        "failed SQLite handoff emits no projection"
+        prompt_handoffs(&fixture, "BD3-HANDOFF-FAIL")
+            .await
+            .is_empty(),
+        "the failed insert leaves no durable handoff"
+    );
+    assert_eq!(
+        kinds(&sink.records(), "BD3-HANDOFF-FAIL"),
+        ["assigned"],
+        "only the committed assignment projects; the failed handoff emits nothing"
     );
 }
 

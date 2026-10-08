@@ -63,6 +63,7 @@ use replacement_handler::{
 };
 use singleton_guard::SingletonGuards;
 
+pub use daemon_observability::DaemonObservability;
 pub use owner_gate::DaemonOwnerGuard;
 pub use peer_launch_config::{
     parse_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
@@ -87,13 +88,11 @@ const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
 /// at the active Tokio/Axum composition boundary. The SDK providers are built
 /// on this runtime; filesystem readiness is synchronous, so the retained
 /// logger is built off a runtime worker and joined before the daemon starts.
-pub async fn bootstrap_replacement_observability()
--> Result<Arc<dyn ObservabilityPort + Send + Sync>, AtmError> {
-    let observability = daemon_observability::DaemonObservability::bootstrap().await?;
+pub async fn bootstrap_replacement_observability() -> Result<DaemonObservability, AtmError> {
+    let observability = DaemonObservability::bootstrap().await?;
     observability.install_tracing_bridge()?;
     observability.report_export_config();
-    observability.register_process_owner();
-    Ok(Arc::new(observability))
+    Ok(observability)
 }
 
 /// Identity values captured once at the daemon bootstrap boundary.
@@ -231,17 +230,25 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 /// must not depend on that directory: [`RuntimeAssembly::for_daemon`] removes
 /// the workspace-backed config doctor before requests can be served.
 ///
-/// The process observability owner forwards its task/workflow telemetry
+/// The supplied observability `owner` forwards its task/workflow telemetry
 /// setups here once; without an owner (or without an endpoint) both runtimes
 /// are inert.
-pub fn assemble_daemon_runtime() -> Result<RuntimeAssembly, AtmError> {
+pub fn assemble_daemon_runtime(
+    owner: Option<&DaemonObservability>,
+) -> Result<RuntimeAssembly, AtmError> {
     let storage_factory = SqliteStorageFactory::host_scoped()
         .with_observability(Arc::new(sqlite_observability::DaemonSqliteObservability))
         .with_timeline_observer(Arc::new(diagnostic_timeline::attach_timeline));
-    let owner = daemon_observability::DaemonObservability::process_owner();
-    let telemetry = owner
-        .as_ref()
-        .map_or((None, None), |owner| owner.take_telemetry_setups());
+    compose_daemon_assembly(storage_factory, owner)
+}
+
+/// Assembles the daemon runtime from `owner`'s telemetry setups and attaches
+/// the assembled runtimes' known-loss counters back to its export health.
+fn compose_daemon_assembly(
+    storage_factory: SqliteStorageFactory,
+    owner: Option<&DaemonObservability>,
+) -> Result<RuntimeAssembly, AtmError> {
+    let telemetry = owner.map_or((None, None), |owner| owner.take_telemetry_setups());
     let assembly = assemble_host_runtime_with_storage_factory(
         PathBuf::new(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
@@ -266,13 +273,19 @@ pub fn assemble_daemon_runtime() -> Result<RuntimeAssembly, AtmError> {
 /// harness selection. No legacy daemon server, dispatcher, worker, or framing
 /// module is referenced from this path.
 pub async fn run_replacement_daemon() -> Result<(), AtmError> {
-    run_replacement_daemon_with_observability(Arc::new(NullObservability)).await
+    run_replacement_daemon_with_owner(None).await
 }
 
-/// Starts the shipped replacement daemon with the process-owned observability
-/// adapter supplied by its binary entrypoint.
+/// Starts the shipped replacement daemon with the observability owner
+/// bootstrapped by its binary entrypoint.
 pub async fn run_replacement_daemon_with_observability(
-    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    observability: DaemonObservability,
+) -> Result<(), AtmError> {
+    run_replacement_daemon_with_owner(Some(observability)).await
+}
+
+async fn run_replacement_daemon_with_owner(
+    observability: Option<DaemonObservability>,
 ) -> Result<(), AtmError> {
     let peer_wire_mode = parse_peer_wire_mode(std::env::args_os())?;
     let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;
@@ -308,7 +321,7 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
     let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
-        Arc::new(NullObservability),
+        None,
         move |service_runtime, herdr_process, runtime_health, bare_cli| {
             received_hook_selector::benchmark_received_hook_selector_with_health_and_fifo(
                 service_runtime,
@@ -438,7 +451,7 @@ fn record_peer_wire_mode_selection(
 }
 
 async fn run_replacement_daemon_with_selector(
-    observability: Arc<dyn ObservabilityPort + Send + Sync>,
+    obs_owner: Option<DaemonObservability>,
     selector_factory: impl FnOnce(
         atm_core::LocalServiceRuntime,
         Arc<dyn HerdrProcessAdapter>,
@@ -451,15 +464,18 @@ async fn run_replacement_daemon_with_selector(
     peer_pool_config: PeerPoolConfig,
     herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 ) -> Result<(), AtmError> {
+    let observability = observability_port(obs_owner.as_ref());
     let (scope, owner, singleton_guards) = acquire_verified_singleton_scope()?;
     let runtime_health = RuntimeHealth::with_owner(std::process::id());
     let bare_cli = BareCliRuntime::default();
     let atm_temp_sweeper =
         start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
     let herdr_config = daemon_herdr_config(&ProcessEnvSource)?;
-    let assembly = assemble_daemon_runtime()?;
-    let workflow_telemetry = assembly.workflow_telemetry.clone();
-    let task_telemetry = assembly.task_telemetry.clone();
+    let assembly = assemble_daemon_runtime(obs_owner.as_ref())?;
+    let telemetry = (
+        assembly.workflow_telemetry.clone(),
+        assembly.task_telemetry.clone(),
+    );
     let diagnostic_timeline = Arc::clone(&assembly.diagnostic_timeline);
     let diagnostic_counters = diagnostic_timeline::active_counters();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
@@ -479,6 +495,7 @@ async fn run_replacement_daemon_with_selector(
             bare_cli,
             herdr_config,
             herdr_process,
+            daemon_home: atm_core::home::atm_home()?,
         },
     )?;
     let config = replacement_runtime_config(
@@ -505,17 +522,21 @@ async fn run_replacement_daemon_with_selector(
     run_until_shutdown(
         running,
         handler,
-        DaemonWorkers {
-            workflow_telemetry,
-            task_telemetry,
-            recovery_sweep,
-            atm_temp_sweeper,
-            observability: daemon_observability::DaemonObservability::process_owner(),
-        },
+        DaemonWorkers::for_process(telemetry, recovery_sweep, atm_temp_sweeper, obs_owner),
         owner,
         singleton_guards,
     )
     .await
+}
+
+/// The daemon's event port: the supplied owner, else the null adapter.
+fn observability_port(
+    owner: Option<&DaemonObservability>,
+) -> Arc<dyn ObservabilityPort + Send + Sync> {
+    match owner {
+        Some(owner) => Arc::new(owner.clone()),
+        None => Arc::new(NullObservability),
+    }
 }
 
 /// The supervised subsystems every terminal daemon path drains exactly once.
@@ -527,6 +548,28 @@ struct DaemonWorkers {
     /// The process owner of the standard SDK providers; absent for the
     /// benchmark and null-observability daemons.
     observability: Option<daemon_observability::DaemonObservability>,
+}
+
+impl DaemonWorkers {
+    /// The workers of the process daemon, with the supplied observability
+    /// owner of the standard SDK providers.
+    fn for_process(
+        (workflow_telemetry, task_telemetry): (
+            atm_runtime::WorkflowTelemetryRuntime,
+            atm_runtime::TaskTelemetryRuntime,
+        ),
+        recovery_sweep: queue_drain::RecoverySweepHandle,
+        atm_temp_sweeper: AtmTempSweeperRuntime,
+        observability: Option<DaemonObservability>,
+    ) -> Self {
+        Self {
+            workflow_telemetry,
+            task_telemetry,
+            recovery_sweep,
+            atm_temp_sweeper,
+            observability,
+        }
+    }
 }
 
 fn acquire_verified_singleton_scope() -> Result<
@@ -766,15 +809,11 @@ fn legacy_literal_ip_policy_from_value(value: Option<String>) -> LegacyLiteralIp
     }
 }
 
-/// Bounded wait for the listener step beyond the cumulative deadline: the
-/// runtime's own shutdown timeout starts a moment after the deadline, so this
-/// lets its abort-and-join run instead of detaching the Axum task.
-const LISTENER_ABORT_GRACE: Duration = Duration::from_millis(250);
-
 /// Drains every supervised subsystem under one cumulative deadline fixed at
 /// shutdown entry (ADR-055, REQ-DAEMON-RUNTIME-003): listener, recovery sweep,
-/// peer connections, task/workflow telemetry drains, exporter shutdown and the
-/// `$ATM_TEMP` sweeper each get only the remaining time, never a fresh budget.
+/// peer connections, task/workflow telemetry drains, the `$ATM_TEMP` sweeper,
+/// the retained-logger flushes around exporter shutdown each get only the
+/// remaining time, never a fresh budget.
 /// Every terminal daemon path uses this sequence, so a failed ready handshake
 /// cannot leave a subsystem alive after the listener is gone. The returned
 /// result is the listener's; telemetry outcomes are retained as health.
@@ -784,16 +823,9 @@ async fn shutdown_replacement_daemon(
     workers: DaemonWorkers,
 ) -> Result<(), AtmError> {
     let deadline = tokio::time::Instant::now() + REPLACEMENT_DRAIN_DEADLINE;
-    let stopped = tokio::time::timeout_at(
-        deadline + LISTENER_ABORT_GRACE,
-        running.begin_shutdown().finish(),
-    )
-    .await
-    .unwrap_or_else(|_| {
-        Err(AtmError::daemon_unavailable(
-            "replacement HTTP runtime exceeded the cumulative daemon shutdown deadline",
-        ))
-    });
+    // The runtime bounds its own drain, cancellation and cleanup by
+    // `deadline`, so it is awaited to completion rather than dropped.
+    let stopped = running.begin_shutdown().finish(deadline).await;
     workers.recovery_sweep.shutdown(deadline).await;
     handler.shutdown_peer_connections(deadline).await;
     // Both drains feed the SDK, so they finish (or abort) before the exporter.
@@ -801,10 +833,16 @@ async fn shutdown_replacement_daemon(
         workers.task_telemetry.shutdown(deadline),
         workers.workflow_telemetry.shutdown(deadline),
     );
-    if let Some(observability) = &workers.observability {
-        observability.shutdown_export(deadline).await;
-    }
+    // The sweeper emits through the retained logger, so it stops first.
     workers.atm_temp_sweeper.shutdown(deadline).await;
+    if let Some(observability) = &workers.observability {
+        tracing::info!(target: "atm_daemon_bootstrap::lifecycle", code = "ATM_DAEMON_SHUTDOWN_DRAINED", "replacement ATM daemon drained its subsystems; closing retained logs");
+        // Routed records reach the SDK logger before its provider stops; the
+        // second flush puts provider-shutdown diagnostics on disk.
+        observability.flush_logger(deadline).await;
+        observability.shutdown_export(deadline).await;
+        observability.flush_logger(deadline).await;
+    }
     diagnostic_timeline::stop_flush_worker();
     let _stopped = stopped?;
     Ok(())
@@ -982,6 +1020,8 @@ pub fn with_default_peer_address_stores<T>(
 
 #[cfg(test)]
 mod herdr_lifecycle_tests;
+#[cfg(test)]
+mod telemetry_lifecycle_tests;
 
 #[cfg(test)]
 mod replacement_runtime_tests {
@@ -1259,6 +1299,7 @@ mod replacement_runtime_tests {
                 bare_cli: Default::default(),
                 herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                 herdr_process: None,
+                daemon_home: temporary_root.path().join("home"),
             },
         )
         .expect("compose the replacement daemon handler");
@@ -1320,7 +1361,7 @@ mod replacement_runtime_tests {
         );
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + super::REPLACEMENT_DRAIN_DEADLINE)
             .await
             .expect("plaintext bootstrap runtime drains");
     }
@@ -1459,6 +1500,7 @@ mod replacement_runtime_tests {
                 bare_cli: Default::default(),
                 herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                 herdr_process: Some(fake.clone()),
+                daemon_home: temporary_root.path().join("home"),
             },
         )
         .expect("compose the replacement daemon handler");
@@ -1506,7 +1548,7 @@ mod replacement_runtime_tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + super::REPLACEMENT_DRAIN_DEADLINE)
             .await
             .expect("replacement runtime drains");
 

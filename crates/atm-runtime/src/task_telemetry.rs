@@ -114,6 +114,20 @@ struct Lifecycle {
     drain_deadline: Option<Instant>,
 }
 
+/// Runtime producer handle for best-effort task telemetry.
+///
+/// Producers use [`TaskTelemetryRuntime::try_emit`]; this handle intentionally
+/// does not implement [`TaskTelemetrySink`], whose implementation belongs to
+/// the exporter provided when the runtime starts.
+///
+/// ```compile_fail
+/// use atm_core::TaskTelemetrySink;
+/// use atm_runtime::TaskTelemetryRuntime;
+///
+/// fn runtime_is_not_a_sink(runtime: TaskTelemetryRuntime) -> Box<dyn TaskTelemetrySink> {
+///     Box::new(runtime)
+/// }
+/// ```
 #[derive(Clone)]
 pub struct TaskTelemetryRuntime {
     sender: Arc<std::sync::Mutex<Option<mpsc::Sender<TaskTelemetryRecord>>>>,
@@ -299,20 +313,6 @@ async fn emit_one(
     diagnostics.resolve(counter);
 }
 
-impl atm_core::boundary::sealed::Sealed for TaskTelemetryRuntime {}
-
-impl TaskTelemetrySink for TaskTelemetryRuntime {
-    fn emit(
-        &self,
-        record: TaskTelemetryRecord,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<(), TaskTelemetryError>> + Send + '_>,
-    > {
-        self.try_emit(record);
-        Box::pin(async { Ok(()) })
-    }
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -430,6 +430,30 @@ pub(crate) mod tests {
             .expect("lifecycle unlocked")
             .worker
             .is_some()
+    }
+
+    #[test]
+    fn diagnostics_snapshot_is_payload_free() {
+        let TaskTelemetryDiagnosticsSnapshot {
+            emitted,
+            dropped_full,
+            dropped_timeout,
+            dropped_failure,
+            dropped_shutdown,
+            config_invalid,
+        } = TaskTelemetryDiagnosticsSnapshot::default();
+
+        assert_eq!(
+            [
+                emitted,
+                dropped_full,
+                dropped_timeout,
+                dropped_failure,
+                dropped_shutdown,
+            ],
+            [0; 5]
+        );
+        assert!(!config_invalid);
     }
 
     #[test]
@@ -741,21 +765,5 @@ pub(crate) mod tests {
             terminal,
             "repeated shutdown keeps the terminal result"
         );
-    }
-
-    #[tokio::test]
-    async fn runtime_is_usable_as_the_sink_trait_object() {
-        let sink = GatedSink::open(Ok(()));
-        let runtime = TaskTelemetryRuntime::start(
-            TaskTelemetryConfig::default(),
-            Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>,
-        );
-        let as_sink: Arc<dyn TaskTelemetrySink> = Arc::new(runtime.clone());
-        as_sink
-            .emit(record(TaskTelemetryKind::LeadNotified))
-            .await
-            .expect("admission is best effort");
-        wait_for(&runtime, |s| s.emitted == 1).await;
-        runtime.shutdown(Instant::now() + WAIT).await;
     }
 }
