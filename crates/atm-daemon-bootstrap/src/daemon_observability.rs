@@ -286,22 +286,25 @@ impl DaemonObservability {
         drop(tokio::time::timeout_at(deadline, done.wait_for(|done| *done)).await);
     }
 
-    /// Drains the retained logger, file and routed OpenTelemetry sinks, on the
-    /// blocking pool, bounded by `min(1s, deadline)`. It runs before
-    /// [`Self::shutdown_export`] so routed records reach the SDK logger before
-    /// its provider stops. The process-owner static and the tracing bridge keep
-    /// clones that are never dropped, so this is the only drain on exit. A
-    /// timeout abandons the wait; the stopping logger admits nothing new.
-    pub(crate) async fn shutdown_logger(&self, deadline: Instant) {
+    /// Flushes every retained event admitted before the call, file and routed
+    /// OpenTelemetry sinks, through the existing canonical `flush` on the
+    /// blocking pool. The wait is bounded by `min(1s, deadline)` and consumes
+    /// the caller's cumulative deadline; past it nothing is attempted. The
+    /// canonical flush keeps its own configured 1s bound, so a timeout
+    /// abandons the wait, not the call. The logger stays live: this does not
+    /// stop the writer thread, which process exit ends.
+    pub(crate) async fn flush_logger(&self, deadline: Instant) {
+        let bound = deadline.min(Instant::now() + RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT);
+        if bound <= Instant::now() {
+            return;
+        }
         let Ok(logger) = self.logger.lock().map(|logger| Arc::clone(&logger.0)) else {
             return;
         };
-        let bound = deadline.min(Instant::now() + RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT);
-        let budget = bound.saturating_duration_since(Instant::now());
-        let drain = tokio::task::spawn_blocking(move || logger.shutdown_with_timeout(budget));
-        // Writer errors land in logger health; a writer timeout has no sink
-        // left to report to once the logger stops, so the outcome is dropped.
-        drop(tokio::time::timeout_at(bound, drain).await);
+        let flush = tokio::task::spawn_blocking(move || logger.flush());
+        // Sink flush failures are recorded in logger health by the canonical
+        // logger; an abandoned wait leaves nothing further to report.
+        drop(tokio::time::timeout_at(bound, flush).await);
     }
 
     pub(crate) fn install_tracing_bridge(&self) -> Result<(), AtmError> {
@@ -713,11 +716,16 @@ mod tests {
 
     /// Positive: through the daemon's own bootstrap, each of
     /// `ATM_LOG_DESTINATION=file|otel|both` delivers one record per selected
-    /// destination for a direct port record and a tracing-origin record, and
+    /// destination for a CLI-startup port record, a direct `sc` macro record,
+    /// and a tracing-origin record, and
     /// the standard logger provider still exports after the retained logger
     /// is shut down.
     /// Negative: a below-threshold record and a secret field value reach
     /// neither destination, and SDK diagnostics never recurse into export.
+    /// Query/follow and CLI-error behavior remain covered by
+    /// `concrete_adapter_emits_queries_follows_and_reports_health` and
+    /// `run_snapshot_surfaces_observability_query_error`; rotation retention
+    /// remains covered by `retained_log_prune_runs_on_a_background_worker`.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn daemon_log_destinations_route_once_and_keep_the_provider() {
         use crate::telemetry_lifecycle_tests::receiver::Receiver;
@@ -745,14 +753,21 @@ mod tests {
             let observability = DaemonObservability::bootstrap_from(&env, log_dir.clone())
                 .await
                 .expect("bootstrap");
+            let mut direct_sc_attachment = observability
+                .logger
+                .lock()
+                .expect("logger lock")
+                .0
+                .attach_sc_log_facade()
+                .expect("attach direct sc logger");
             let dispatch = tracing::Dispatch::new(
                 tracing_subscriber::registry().with(observability.tracing_bridge_for_test()),
             );
             let subscriber = tracing::dispatcher::set_default(&dispatch);
             observability
                 .emit(CommandEvent {
-                    command: "atm-daemon",
-                    action: action_name("bd6_direct_record"),
+                    command: "atm",
+                    action: action_name("cli_startup"),
                     outcome: outcome_label("ok"),
                     team: "bd6-team".parse().expect("team"),
                     agent: "sender".parse().expect("agent"),
@@ -764,7 +779,13 @@ mod tests {
                     error_code: None,
                     error_message: None,
                 })
-                .expect("direct record");
+                .expect("CLI startup record");
+            sc_observability_log::event!(
+                name: "bd6.direct_sc_macro",
+                target: "atm_daemon_bootstrap::bd6_direct_sc_macro",
+                sc_observability_log::Level::INFO,
+                "bd6 direct sc macro record"
+            );
             tracing::warn!(target: "atm_daemon_bootstrap::bd6_tracing_record", token = "raw-secret", "bd6 tracing record");
             tracing::debug!(target: "atm_daemon_bootstrap::bd6_below_threshold", "bd6 below threshold");
             observability.flush_for_test();
@@ -783,14 +804,23 @@ mod tests {
                     .capture
                     .wait(Duration::from_secs(15), "both exported records", || {
                         let logs = exported(&receiver);
-                        count(&logs, "bd6_direct_record") == 1
+                        count(&logs, "cli_startup") == 1
+                            && count(&logs, "bd6.direct_sc_macro") == 1
                             && count(&logs, "bd6_tracing_record") == 1
                     })
                     .await;
                 let logs = exported(&receiver);
-                assert_eq!(logs.len(), 2, "{destination}: no recursion: {logs:#?}");
+                assert_eq!(logs.len(), 3, "{destination}: no recursion: {logs:#?}");
                 assert_eq!(count(&logs, "raw-secret"), 0);
                 assert_eq!(count(&logs, "below_threshold"), 0);
+            } else {
+                // Negative control: file-only owns the retained JSONL sink,
+                // so every collector record would be an unintended export.
+                assert!(
+                    exported(&receiver).is_empty(),
+                    "file-only must not export OTLP logs: {:#?}",
+                    exported(&receiver)
+                );
             }
             let file = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
             if destination == "otel" {
@@ -801,13 +831,17 @@ mod tests {
                     .lines()
                     .map(str::to_owned)
                     .collect();
-                assert_eq!(count(&lines, "bd6_direct_record"), 1, "{lines:#?}");
+                assert_eq!(count(&lines, "cli_startup"), 1, "{lines:#?}");
+                assert_eq!(count(&lines, "bd6.direct_sc_macro"), 1, "{lines:#?}");
                 assert_eq!(count(&lines, "bd6_tracing_record"), 1, "{lines:#?}");
                 assert_eq!(count(&lines, "raw-secret"), 0);
                 assert_eq!(count(&lines, "below_threshold"), 0);
             }
             drop(subscriber);
             drop(dispatch);
+            direct_sc_attachment
+                .detach(Duration::from_secs(1))
+                .expect("detach direct sc logger");
             let export = Arc::clone(&observability.export);
             let caller = export
                 .providers
