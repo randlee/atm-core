@@ -58,8 +58,8 @@ remote collector requires `https`. Every invalid value returns
 `ATM_TELEMETRY_EXPORT_CONFIG_INVALID` without a panic, and ATM continues with
 export disabled.
 
-Validated-newtype wrappers rejected; private fields + single validated
-constructor. `TelemetryExportConfig` has private fields, read-only accessors
+Validated-newtype wrappers rejected; private fields + single validated constructor.
+`TelemetryExportConfig` has private fields, read-only accessors
 and `from_env` as its only constructor; it has no `Default`, `Deserialize` or
 `Display`, and its `Debug` redacts the auth header. Health carries only the
 already-validated endpoint, never the auth header.
