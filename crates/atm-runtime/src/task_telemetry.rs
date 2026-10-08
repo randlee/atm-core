@@ -116,6 +116,8 @@ struct Lifecycle {
 
 #[derive(Clone)]
 pub struct TaskTelemetryRuntime {
+    /// This mutex only protects synchronous sender clone/take operations and
+    /// is never held across an `.await` point.
     sender: Arc<std::sync::Mutex<Option<mpsc::Sender<TaskTelemetryRecord>>>>,
     diagnostics: Arc<TaskTelemetryDiagnostics>,
     lifecycle: Arc<tokio::sync::Mutex<Lifecycle>>,
@@ -173,7 +175,12 @@ impl TaskTelemetryRuntime {
 
     /// Non-blocking producer path: telemetry never delays task processing.
     pub fn try_emit(&self, record: TaskTelemetryRecord) {
-        let Some(sender) = self.sender.lock().ok().and_then(|sender| sender.clone()) else {
+        let sender = self
+            .sender
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let Some(sender) = sender else {
             if self.diagnostics.closed.load(Ordering::Relaxed) {
                 self.diagnostics
                     .dropped_shutdown
@@ -202,10 +209,14 @@ impl TaskTelemetryRuntime {
     /// aborts and joins the worker. Repeated calls are no-ops once the worker
     /// is joined; a cancelled call leaves the worker for the next caller.
     pub async fn shutdown(&self, deadline: Instant) {
-        if let Ok(mut sender) = self.sender.lock()
-            && sender.take().is_some()
         {
-            self.diagnostics.closed.store(true, Ordering::Relaxed);
+            let mut sender = self
+                .sender
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if sender.take().is_some() {
+                self.diagnostics.closed.store(true, Ordering::Relaxed);
+            }
         }
         let mut lifecycle = self.lifecycle.lock().await;
         let drain_deadline = *lifecycle
@@ -551,6 +562,36 @@ pub(crate) mod tests {
             }
         );
         runtime.shutdown(Instant::now() + WAIT).await;
+    }
+
+    #[tokio::test]
+    async fn poisoned_sender_mutex_is_recovered_for_emit_and_shutdown() {
+        let sink = GatedSink::open(Ok(()));
+        let runtime = TaskTelemetryRuntime::start(
+            TaskTelemetryConfig::default(),
+            Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>,
+        );
+        let sender = Arc::clone(&runtime.sender);
+        let poison_result = std::thread::spawn(move || {
+            let _guard = sender.lock().expect("sender mutex before poison");
+            panic!("poison sender mutex");
+        })
+        .join();
+        assert!(poison_result.is_err(), "test thread must poison the mutex");
+
+        runtime.try_emit(record(TaskTelemetryKind::Assigned));
+        wait_for(&runtime, |snapshot| snapshot.emitted == 1).await;
+        runtime.shutdown(Instant::now() + WAIT).await;
+        runtime.try_emit(record(TaskTelemetryKind::Started));
+
+        assert_eq!(
+            runtime.diagnostics().snapshot(),
+            TaskTelemetryDiagnosticsSnapshot {
+                emitted: 1,
+                dropped_shutdown: 1,
+                ..Default::default()
+            }
+        );
     }
 
     #[tokio::test]
