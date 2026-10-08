@@ -398,12 +398,14 @@ async fn receiver_metrics_cap_series_without_identity_labels() {
     shutdown(setup).await;
     {
         let metrics = receiver.capture.metrics.lock().unwrap();
+        let (mut sums, mut histograms) = (0, 0);
         for metric in metrics
             .iter()
             .filter(|metric| metric.name.starts_with("atm.task."))
         {
             match &metric.data {
                 Some(Data::Sum(sum)) => {
+                    sums += 1;
                     assert!(
                         sum.data_points.len() <= 15,
                         "{} exceeded series cap",
@@ -423,9 +425,11 @@ async fn receiver_metrics_cap_series_without_identity_labels() {
                     );
                 }
                 Some(Data::Histogram(histogram)) => {
-                    assert!(
-                        histogram.data_points.len() <= 32,
-                        "{} exceeded series cap",
+                    histograms += 1;
+                    assert_eq!(
+                        histogram.data_points.len(),
+                        1,
+                        "{} must be one unlabeled series",
                         metric.name
                     );
                     assert!(
@@ -438,6 +442,8 @@ async fn receiver_metrics_cap_series_without_identity_labels() {
                 _ => {}
             }
         }
+        assert!(sums > 0, "the receiver captured the per-kind task counter");
+        assert!(histograms > 0, "the receiver captured the task histograms");
     }
     receiver.stop().await;
 }
