@@ -477,6 +477,32 @@ fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId
     outcome.message_id
 }
 
+/// Positive: composition consumes the telemetry setups of the owner it is
+/// handed. Negative: another bootstrapped owner in the same process keeps its
+/// setups, so no process-wide owner stands in for the supplied one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn composition_uses_only_the_supplied_observability_owner() {
+    let (_other_root, other) = Daemon::bootstrap(endpoint_env("http://127.0.0.1:9")).await;
+    let (root, supplied) = Daemon::bootstrap(endpoint_env("http://127.0.0.1:9")).await;
+
+    let _assembly = compose_daemon_assembly(
+        SqliteStorageFactory::at_path(root.path().join("runtime").join("mail.sqlite3")),
+        Some(&supplied),
+    )
+    .expect("compose daemon runtime");
+
+    let (task, workflow) = supplied.take_telemetry_setups();
+    assert!(
+        task.is_none() && workflow.is_none(),
+        "composition took the supplied owner's setups"
+    );
+    let (task, workflow) = other.take_telemetry_setups();
+    assert!(
+        task.is_some() && workflow.is_some(),
+        "an owner composition was not handed keeps its setups"
+    );
+}
+
 /// Positive: every router producer reachable over the daemon API (assign,
 /// reassign, start, terminal close, reopen, committed rejection audit and the
 /// newly inserted prompt handoff) reaches the collector as exactly its
@@ -486,6 +512,7 @@ fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId
 /// Reminder, lead notification and reminder reset come from the composed
 /// queue-wake pump and are proven in `queue_wake.rs`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::parallel(slo)]
 async fn running_daemon_exports_each_committed_task_event_to_the_collector() {
     let receiver = Receiver::start(false).await;
     let daemon = Daemon::start(endpoint_env(&receiver.endpoint)).await;
@@ -593,6 +620,7 @@ async fn running_daemon_exports_each_committed_task_event_to_the_collector() {
 /// and workflow runtimes disabled and reports `Inert`.
 /// Negative: task writes still succeed and nothing is admitted for export.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
 async fn absent_endpoint_composes_no_exporter_and_reports_inert() {
     let daemon = Daemon::start(FakeEnvSource::empty()).await;
     assert!(!daemon.observability.export_providers_present_for_test());
@@ -621,6 +649,7 @@ async fn absent_endpoint_composes_no_exporter_and_reports_inert() {
 /// file logging and `Unavailable`/`ConfigInvalid` health in doctor JSON.
 /// Negative: the rejected values never appear in the doctor report.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
 async fn invalid_export_configuration_keeps_the_daemon_operational() {
     let cases = [
         FakeEnvSource::new([
@@ -703,6 +732,7 @@ async fn doctor_until(
 /// dispatchers in tracing's per-callsite interest cache and can miss the SDK
 /// failure event entirely.
 #[test]
+#[serial_test::serial(slo)]
 fn unreachable_collector_degrades_health_without_changing_task_results() {
     exit::run_child_scenario(UNREACHABLE_CHILD);
 }
@@ -757,7 +787,7 @@ fn unreachable_collector_child() {
             .expect("shutdown result is the listener's");
         assert!(
             started.elapsed() <= Duration::from_secs(5),
-            "{:?}",
+            "daemon shutdown took {:?}, over the 5s clean-stop SLO",
             started.elapsed()
         );
     });
@@ -769,6 +799,7 @@ fn unreachable_collector_child() {
 /// task results unchanged, and daemon shutdown with a stalled exporter still
 /// returns within the clean-stop SLO, retaining the terminal export failure.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::serial(slo)]
 async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
     let stalled = Receiver::start(true).await;
     let daemon = Daemon::start(endpoint_env(&stalled.endpoint)).await;
@@ -797,7 +828,10 @@ async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
         .await
         .expect("shutdown result is the listener's");
     let elapsed = started.elapsed();
-    assert!(elapsed <= Duration::from_secs(5), "{elapsed:?}");
+    assert!(
+        elapsed <= Duration::from_secs(5),
+        "daemon shutdown with a stalled exporter took {elapsed:?}, over the 5s clean-stop SLO"
+    );
     // The SDK's own 400ms export timeout or the 1s wait bound ends the step;
     // either way the terminal failure is retained.
     let health = observability.export_health_for_test();
@@ -846,6 +880,7 @@ async fn stalled_export_in_flight() -> (Receiver, tempfile::TempDir, DaemonObser
 /// Negative: no wall-clock margin is asserted; the real-time bound is
 /// `shutdown_export_is_bounded_by_the_clean_stop_slo`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::parallel(slo)]
 async fn concurrent_and_cancelled_export_shutdown_share_one_ordered_outcome() {
     let (stalled, _root, observability) = stalled_export_in_flight().await;
 
@@ -908,6 +943,7 @@ async fn concurrent_and_cancelled_export_shutdown_share_one_ordered_outcome() {
 /// real-time bound `stalled_collector_never_changes_task_results_or_blocks_shutdown`
 /// uses. The bound is the SLO itself, not a margin above a nominal 1 s step.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::serial(slo)]
 async fn shutdown_export_is_bounded_by_the_clean_stop_slo() {
     let (stalled, _root, observability) = stalled_export_in_flight().await;
     let started = Instant::now();

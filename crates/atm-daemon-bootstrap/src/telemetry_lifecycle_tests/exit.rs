@@ -9,11 +9,16 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use super::receiver::Receiver;
-use super::{Daemon, DaemonObservability, endpoint_env, sent_message_id, task_record};
+use super::{
+    Daemon, DaemonObservability, EXPORT_WAIT, endpoint_env, exported_counts, sent_message_id,
+    task_record,
+};
+use atm_core::observability::AtmTelemetryExportState;
 use atm_core::test_support::FakeEnvSource;
 
 const CHILD_MODE: &str = "ATM_BD6_EXIT_CHILD";
@@ -194,6 +199,7 @@ fn stop_to_exit(mode: &str, endpoint: Option<&str>) -> Duration {
 /// Positive: with the task queue full and a collector that never answers,
 /// the daemon process exits within the 10s force SLO.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::serial(slo)]
 async fn process_exits_within_ten_seconds_with_full_queue_and_stalled_collector() {
     let stalled = Receiver::start(true).await;
     let endpoint = stalled.endpoint.clone();
@@ -218,6 +224,7 @@ async fn process_exits_within_ten_seconds_with_full_queue_and_stalled_collector(
 /// Positive: with a healthy collector the daemon process exits within the
 /// 5s clean-stop SLO, after flushing its export.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::serial(slo)]
 async fn process_exits_within_five_seconds_when_clean() {
     let healthy = Receiver::start(false).await;
     let endpoint = healthy.endpoint.clone();
@@ -338,6 +345,7 @@ fn final_record_index(lines: &[String]) -> usize {
 /// received it before the logger provider stopped. SDK diagnostics are never
 /// exported back to the collector. Omitting the first flush loses it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
 async fn final_lifecycle_record_survives_process_exit() {
     let healthy = Receiver::start(false).await;
     let lines = final_record_lines(healthy.endpoint.clone()).await;
@@ -367,6 +375,7 @@ async fn final_lifecycle_record_survives_process_exit() {
 /// provider-shutdown diagnostics reach disk after the final lifecycle record.
 /// Delivery to the stalled collector is not asserted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
 async fn provider_shutdown_diagnostics_reach_disk_after_the_final_record() {
     let stalled = Receiver::start(true).await;
     let lines = final_record_lines(stalled.endpoint.clone()).await;
@@ -381,4 +390,221 @@ async fn provider_shutdown_diagnostics_reach_disk_after_the_final_record() {
         &lines[index..]
     );
     stalled.stop().await;
+}
+
+const COMBINED_CHILD: &str = "telemetry_lifecycle_tests::exit::combined_lifecycle_child";
+const COMBINED_LOG: &str = "BD6_COMBINED_DELIVERED";
+const COMBINED_TASKS: [&str; 3] = ["BD6-C1", "BD6-C2", "BD6-C3"];
+/// Far above the task queue capacity, so admission must reject some.
+const FLOOD: u64 = 4096;
+
+/// Prints `marker` and waits for the parent's next stdin line.
+async fn handshake(marker: String) {
+    println!("{marker}");
+    std::io::stdout().flush().expect("flush marker");
+    tokio::task::spawn_blocking(|| std::io::stdin().read_line(&mut String::new()))
+        .await
+        .expect("stdin reader")
+        .expect("parent line");
+}
+
+/// Child half of [`delivered_export_then_full_backlog_behind_stall`]; a no-op
+/// unless launched by it.
+#[test]
+fn combined_lifecycle_child() {
+    if !is_child_scenario(COMBINED_CHILD) {
+        return;
+    }
+    let endpoint = std::env::var(CHILD_ENDPOINT).expect("collector endpoint");
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .build()
+        .expect("child runtime");
+    runtime.block_on(async {
+        let env = FakeEnvSource::new([
+            ("ATM_OTEL_ENDPOINT", Some(endpoint.as_str())),
+            ("ATM_LOG_DESTINATION", Some("both")),
+        ]);
+        // Production order: bootstrap, install the global bridge, compose.
+        let (root, observability) = Daemon::bootstrap(env).await;
+        observability
+            .install_tracing_bridge()
+            .expect("the child process owns the global tracing bridge");
+        let daemon = Daemon::compose(root, observability).await;
+        for task in COMBINED_TASKS {
+            sent_message_id(
+                daemon
+                    .write(daemon.request("sender", "recipient", task, None))
+                    .await
+                    .expect("assignment"),
+            );
+        }
+        tracing::info!(target: "atm_daemon_bootstrap::lifecycle", code = COMBINED_LOG, "delivered");
+        let committed = daemon.committed(&COMBINED_TASKS).await.len() as u64;
+        handshake(format!("BD6-DELIVERING {committed}")).await;
+
+        // The collector now stalls: fill the task queue behind it.
+        for seq in 1..=FLOOD {
+            daemon.workers.task_telemetry.try_emit(task_record(seq));
+        }
+        let task = daemon.workers.task_telemetry.diagnostics();
+        let workflow = Arc::clone(daemon.workers.workflow_telemetry.diagnostics());
+        assert!(task.snapshot().dropped_full > 0, "the task queue is full");
+        let observability = daemon.observability.clone();
+        handshake("BD6-READY".to_owned()).await;
+        daemon.shutdown().await.expect("child daemon shutdown");
+
+        let counts = task.snapshot();
+        assert_eq!(
+            counts.emitted
+                + counts.dropped_full
+                + counts.dropped_timeout
+                + counts.dropped_failure
+                + counts.dropped_shutdown,
+            committed + FLOOD,
+            "every task record is counted exactly once: {counts:?}"
+        );
+        // Runtime queue loss and SDK transport failure are both present and
+        // disjoint: doctor's loss counts are exactly the runtime's, and the
+        // stalled export shows only as the failure state.
+        let health = observability.export_health_for_test();
+        assert_ne!(health.state, AtmTelemetryExportState::Healthy, "{health:?}");
+        assert!(health.last_failure.is_some(), "{health:?}");
+        let load = |counter: &std::sync::atomic::AtomicU64| counter.load(Ordering::Relaxed);
+        assert_eq!(
+            (
+                health.emitted,
+                health.dropped_full,
+                health.dropped_timeout,
+                health.dropped_failure,
+                health.dropped_shutdown,
+            ),
+            (
+                counts.emitted,
+                counts.dropped_full + load(&workflow.dropped_full),
+                counts.dropped_timeout + load(&workflow.dropped_timeout),
+                counts.dropped_failure + load(&workflow.dropped_failure),
+                counts.dropped_shutdown + load(&workflow.dropped_shutdown),
+            ),
+            "{health:?}"
+        );
+    });
+    drop(runtime);
+    println!("{CHILD_SCENARIO_SENTINEL}");
+}
+
+/// Forwards each child stdout line.
+fn forward_lines(stdout: std::process::ChildStdout) -> mpsc::Receiver<String> {
+    let (lines_tx, lines) = mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if lines_tx.send(line).is_err() {
+                return;
+            }
+        }
+    });
+    lines
+}
+
+/// The first child line containing `marker`.
+async fn line_with(lines: &Arc<Mutex<mpsc::Receiver<String>>>, marker: &'static str) -> String {
+    let lines = Arc::clone(lines);
+    tokio::task::spawn_blocking(move || {
+        let lines = lines.lock().expect("child lines");
+        loop {
+            let line = lines
+                .recv_timeout(Duration::from_secs(60))
+                .unwrap_or_else(|_| panic!("child never printed {marker}"));
+            if line.contains(marker) {
+                return line;
+            }
+        }
+    })
+    .await
+    .expect("line reader")
+}
+
+/// Positive: one daemon process delivers task traces, metrics and a bridged
+/// log to the collector; the collector then stalls with an export in flight
+/// and the task queue fills behind it. Together: every task record is counted
+/// exactly once in the runtime counters, doctor's loss counts equal those
+/// runtime counts while the stalled export shows only as the SDK failure
+/// state, and the stop request to process exit stays within the 10s force SLO.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::serial(slo)]
+async fn delivered_export_then_full_backlog_behind_stall() {
+    let receiver = Receiver::start(false).await;
+    let capture = receiver.capture.clone();
+    let mut child = Command::new(std::env::current_exe().expect("test binary"))
+        .args(["--exact", COMBINED_CHILD, "--nocapture", "--test-threads=1"])
+        .env(CHILD_SCENARIO, COMBINED_CHILD)
+        .env(CHILD_ENDPOINT, &receiver.endpoint)
+        .env_remove(CHILD_MODE)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn combined child");
+    let mut stdin = child.stdin.take().expect("child stdin");
+    let lines = Arc::new(Mutex::new(forward_lines(
+        child.stdout.take().expect("child stdout"),
+    )));
+
+    let delivering = line_with(&lines, "BD6-DELIVERING").await;
+    let committed: usize = delivering
+        .rsplit(' ')
+        .next()
+        .and_then(|count| count.parse().ok())
+        .expect("committed row count");
+    capture
+        .wait(EXPORT_WAIT, "delivered traces, metrics and logs", || {
+            let spans = capture.spans.lock().unwrap();
+            spans
+                .iter()
+                .filter(|span| span.name == "atm.task.event")
+                .count()
+                >= committed
+                && exported_counts(&capture).get("assigned") == Some(&3)
+                && capture
+                    .logs
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|record| format!("{record:?}").contains(COMBINED_LOG))
+        })
+        .await;
+    capture.begin_stall();
+    let before = capture.started.load(Ordering::SeqCst);
+    writeln!(stdin, "flood").expect("request flood");
+    line_with(&lines, "BD6-READY").await;
+    capture
+        .wait(EXPORT_WAIT, "an export stalled in flight", || {
+            capture.started.load(Ordering::SeqCst) > before
+        })
+        .await;
+
+    let started = std::time::Instant::now();
+    writeln!(stdin, "stop").expect("request stop");
+    drop(stdin);
+    let id = child.id();
+    let status = tokio::time::timeout(
+        Duration::from_secs(30),
+        tokio::task::spawn_blocking(move || child.wait()),
+    )
+    .await
+    .unwrap_or_else(|_| {
+        let _ = Command::new("kill").arg(id.to_string()).status();
+        panic!("combined child did not exit within 30s");
+    })
+    .expect("child waiter")
+    .expect("child status");
+    let elapsed = started.elapsed();
+    assert!(status.success(), "child exit status {status}");
+    line_with(&lines, CHILD_SCENARIO_SENTINEL).await;
+    assert!(
+        elapsed <= Duration::from_secs(10),
+        "stop to exit took {elapsed:?}"
+    );
+    receiver.stop().await;
 }
