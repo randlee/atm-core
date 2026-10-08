@@ -7,11 +7,11 @@
 //! exit. The parent times the stop request to the child's exit status.
 #![cfg(test)]
 
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Command, Stdio};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::receiver::Receiver;
 use super::{
@@ -104,7 +104,7 @@ pub(super) fn run_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) {
 }
 
 fn spawn_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) -> std::process::Output {
-    let child = Command::new(std::env::current_exe().expect("test binary"))
+    let mut child = Command::new(std::env::current_exe().expect("test binary"))
         .args(["--exact", scenario, "--nocapture", "--test-threads=1"])
         .env(CHILD_SCENARIO, scenario)
         .env_remove(CHILD_MODE)
@@ -114,18 +114,61 @@ fn spawn_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) -> std::proc
         .stderr(Stdio::inherit())
         .spawn()
         .expect("spawn scenario child");
-    let id = child.id();
-    let (exit_tx, exit_rx) = mpsc::channel();
+    let mut stdout = child.stdout.take().expect("scenario child stdout");
+    let (stdout_tx, stdout_rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let _ = exit_tx.send(child.wait_with_output());
+        let mut bytes = Vec::new();
+        let _ = stdout.read_to_end(&mut bytes);
+        let _ = stdout_tx.send(bytes);
     });
-    exit_rx
-        .recv_timeout(Duration::from_secs(90))
-        .unwrap_or_else(|_| {
-            let _ = Command::new("kill").arg(id.to_string()).status();
-            panic!("scenario child {scenario} did not exit within 90s");
-        })
-        .expect("scenario child output")
+    let (bytes, status) = await_eof_then_exit(
+        &mut child,
+        &stdout_rx,
+        Instant::now() + Duration::from_secs(90),
+        &format!("scenario child {scenario}"),
+    );
+    std::process::Output {
+        status,
+        stdout: bytes.expect("scenario child stdout bytes"),
+        stderr: Vec::new(),
+    }
+}
+
+/// Kills and reaps a child that outlived its deadline, so no failing test
+/// leaves a process behind.
+fn kill_and_reap(child: &mut Child) {
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+/// Waits for the child's stdout reader to finish (`eof` carries its result or
+/// is dropped at EOF), then confirms the exit, all inside one absolute
+/// `deadline`. Stdout EOF alone does not prove exit. On any timeout the child
+/// is killed and reaped before the failure.
+fn await_eof_then_exit<T>(
+    child: &mut Child,
+    eof: &mpsc::Receiver<T>,
+    deadline: Instant,
+    what: &str,
+) -> (Option<T>, ExitStatus) {
+    let carried = match eof.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+        Ok(value) => Some(value),
+        Err(mpsc::RecvTimeoutError::Disconnected) => None,
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            kill_and_reap(child);
+            panic!("{what} did not close stdout before its deadline");
+        }
+    };
+    loop {
+        if let Some(status) = child.try_wait().expect("poll child exit") {
+            return (carried, status);
+        }
+        if Instant::now() >= deadline {
+            kill_and_reap(child);
+            panic!("{what} closed stdout but did not exit before its deadline");
+        }
+        std::thread::yield_now();
+    }
 }
 
 fn child_execution_is_proven(output: &std::process::Output) -> bool {
@@ -151,9 +194,21 @@ fn wrong_scenario_name_does_not_prove_child_execution() {
     );
 }
 
-/// Launches the child, waits until it serves, requests the stop and returns
-/// the time from the request to the child's successful exit.
-fn stop_to_exit(mode: &str, endpoint: Option<&str>) -> Duration {
+/// Waits for proof that an export reached the collector before a stop request.
+fn wait_for_pre_stop_export(
+    collector_started: &mpsc::Receiver<()>,
+) -> Result<(), mpsc::RecvTimeoutError> {
+    collector_started.recv_timeout(EXPORT_WAIT)
+}
+
+/// Launches the child, waits until it serves, verifies an optional collector
+/// export is already stalled, requests the stop and returns the time from the
+/// request to the child's successful exit.
+fn stop_to_exit(
+    mode: &str,
+    endpoint: Option<&str>,
+    collector_started: Option<mpsc::Receiver<()>>,
+) -> Duration {
     let mut command = Command::new(std::env::current_exe().expect("test binary"));
     command
         .args(["--exact", CHILD_TEST, "--nocapture", "--test-threads=1"])
@@ -168,7 +223,10 @@ fn stop_to_exit(mode: &str, endpoint: Option<&str>) -> Duration {
     let mut child = command.spawn().expect("spawn exit-proof child");
     let stdout = child.stdout.take().expect("child stdout");
     let (ready_tx, ready_rx) = mpsc::channel();
+    let (eof_tx, eof_rx) = mpsc::channel::<()>();
     std::thread::spawn(move || {
+        // Dropped at stdout EOF, which is the reader's completion signal.
+        let _eof = eof_tx;
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             if line.contains("BD6-READY") {
                 let _ = ready_tx.send(());
@@ -176,24 +234,90 @@ fn stop_to_exit(mode: &str, endpoint: Option<&str>) -> Duration {
         }
     });
     if ready_rx.recv_timeout(Duration::from_secs(60)).is_err() {
-        let _ = child.kill();
+        kill_and_reap(&mut child);
         panic!("exit-proof child never became ready");
     }
+    if let Some(collector_started) = collector_started {
+        wait_for_pre_stop_export(&collector_started).unwrap_or_else(|error| {
+            kill_and_reap(&mut child);
+            panic!("stalled collector export did not start before stop: {error}");
+        });
+    }
     let mut stdin = child.stdin.take().expect("child stdin");
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     writeln!(stdin, "stop").expect("request stop");
     drop(stdin);
-    let (exit_tx, exit_rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = exit_tx.send(child.wait());
-    });
-    let status = exit_rx
-        .recv_timeout(Duration::from_secs(30))
-        .expect("child exits")
-        .expect("child status");
+    let (_, status) = await_eof_then_exit(
+        &mut child,
+        &eof_rx,
+        started + Duration::from_secs(30),
+        "exit-proof child",
+    );
     let elapsed = started.elapsed();
     assert!(status.success(), "child exit status {status}");
     elapsed
+}
+
+/// Positive: a child still serving when its deadline passes is killed and
+/// reaped by the timeout path itself, before the failure is raised.
+/// Negative: the child is never left running; its status is already collected
+/// (a non-success kill status) when the panic reaches the caller.
+#[test]
+#[serial_test::parallel(slo)]
+fn timed_out_child_is_killed_and_reaped_before_the_failure() {
+    let mut child = Command::new(std::env::current_exe().expect("test binary"))
+        .args(["--exact", CHILD_TEST, "--nocapture", "--test-threads=1"])
+        .env(CHILD_MODE, "clean")
+        .env_remove(CHILD_ENDPOINT)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn serving child");
+    let stdout = child.stdout.take().expect("child stdout");
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let (eof_tx, eof_rx) = mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        let _eof = eof_tx;
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if line.contains("BD6-READY") {
+                let _ = ready_tx.send(());
+            }
+        }
+    });
+    if ready_rx.recv_timeout(Duration::from_secs(60)).is_err() {
+        kill_and_reap(&mut child);
+        panic!("serving child never became ready");
+    }
+    // Stdin stays open, so the child keeps serving past the deadline.
+    let _stdin = child.stdin.take().expect("child stdin");
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        await_eof_then_exit(
+            &mut child,
+            &eof_rx,
+            Instant::now() + Duration::from_secs(2),
+            "serving child",
+        )
+    }));
+    assert!(outcome.is_err(), "a serving child must time out");
+    let status = child
+        .try_wait()
+        .expect("poll child")
+        .expect("the timeout path reaped the child before failing");
+    assert!(!status.success(), "the child was killed: {status}");
+}
+
+#[test]
+fn pre_stop_export_gate_rejects_a_missing_export() {
+    let (collector_started, gate) = mpsc::channel();
+    drop(collector_started);
+    assert!(
+        matches!(
+            wait_for_pre_stop_export(&gate),
+            Err(mpsc::RecvTimeoutError::Disconnected)
+        ),
+        "the stop gate must reject a missing collector export"
+    );
 }
 
 /// Positive: with the task queue full and a collector that never answers,
@@ -203,9 +327,25 @@ fn stop_to_exit(mode: &str, endpoint: Option<&str>) -> Duration {
 async fn process_exits_within_ten_seconds_with_full_queue_and_stalled_collector() {
     let stalled = Receiver::start(true).await;
     let endpoint = stalled.endpoint.clone();
-    let elapsed = tokio::task::spawn_blocking(move || stop_to_exit("full", Some(&endpoint)))
-        .await
-        .expect("parent driver");
+    let capture = stalled.capture.clone();
+    let (collector_started, gate) = mpsc::channel();
+    let export_started = tokio::spawn(async move {
+        capture
+            .wait(
+                EXPORT_WAIT,
+                "a stalled collector export before stop",
+                || capture.started.load(Ordering::SeqCst) > 0,
+            )
+            .await;
+        collector_started
+            .send(())
+            .expect("parent driver waits for the collector export");
+    });
+    let elapsed =
+        tokio::task::spawn_blocking(move || stop_to_exit("full", Some(&endpoint), Some(gate)))
+            .await
+            .expect("parent driver");
+    export_started.await.expect("collector observation");
     assert!(
         elapsed <= Duration::from_secs(10),
         "stop to exit took {elapsed:?}"
@@ -228,7 +368,7 @@ async fn process_exits_within_ten_seconds_with_full_queue_and_stalled_collector(
 async fn process_exits_within_five_seconds_when_clean() {
     let healthy = Receiver::start(false).await;
     let endpoint = healthy.endpoint.clone();
-    let elapsed = tokio::task::spawn_blocking(move || stop_to_exit("clean", Some(&endpoint)))
+    let elapsed = tokio::task::spawn_blocking(move || stop_to_exit("clean", Some(&endpoint), None))
         .await
         .expect("parent driver");
     assert!(
@@ -494,17 +634,22 @@ fn combined_lifecycle_child() {
     println!("{CHILD_SCENARIO_SENTINEL}");
 }
 
-/// Forwards each child stdout line.
-fn forward_lines(stdout: std::process::ChildStdout) -> mpsc::Receiver<String> {
+/// Forwards each child stdout line; the second receiver disconnects at stdout
+/// EOF.
+fn forward_lines(
+    stdout: std::process::ChildStdout,
+) -> (mpsc::Receiver<String>, mpsc::Receiver<()>) {
     let (lines_tx, lines) = mpsc::channel();
+    let (eof_tx, eof) = mpsc::channel();
     std::thread::spawn(move || {
+        let _eof = eof_tx;
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             if lines_tx.send(line).is_err() {
                 return;
             }
         }
     });
-    lines
+    (lines, eof)
 }
 
 /// The first child line containing `marker`.
@@ -547,9 +692,8 @@ async fn delivered_export_then_full_backlog_behind_stall() {
         .spawn()
         .expect("spawn combined child");
     let mut stdin = child.stdin.take().expect("child stdin");
-    let lines = Arc::new(Mutex::new(forward_lines(
-        child.stdout.take().expect("child stdout"),
-    )));
+    let (lines, eof) = forward_lines(child.stdout.take().expect("child stdout"));
+    let lines = Arc::new(Mutex::new(lines));
 
     let delivering = line_with(&lines, "BD6-DELIVERING").await;
     let committed: usize = delivering
@@ -584,21 +728,18 @@ async fn delivered_export_then_full_backlog_behind_stall() {
         })
         .await;
 
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     writeln!(stdin, "stop").expect("request stop");
     drop(stdin);
-    let id = child.id();
-    let status = tokio::time::timeout(
-        Duration::from_secs(30),
-        tokio::task::spawn_blocking(move || child.wait()),
-    )
-    .await
-    .unwrap_or_else(|_| {
-        let _ = Command::new("kill").arg(id.to_string()).status();
-        panic!("combined child did not exit within 30s");
-    })
-    .expect("child waiter")
-    .expect("child status");
+    // The test owns `child`; the bounded blocking wait runs in place.
+    let (_, status) = tokio::task::block_in_place(|| {
+        await_eof_then_exit(
+            &mut child,
+            &eof,
+            started + Duration::from_secs(30),
+            "combined child",
+        )
+    });
     let elapsed = started.elapsed();
     assert!(status.success(), "child exit status {status}");
     line_with(&lines, CHILD_SCENARIO_SENTINEL).await;

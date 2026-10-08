@@ -684,6 +684,41 @@ async fn invalid_export_configuration_keeps_the_daemon_operational() {
     }
 }
 
+/// Positive: a configuration that parses (it checks scheme and host, not full
+/// URI syntax) but that the SDK transport rejects during setup leaves
+/// the daemon serving with no exporter and reports `Unavailable`/
+/// `ConfigInvalid` health in doctor JSON, with the same remediation finding.
+/// Negative: this is the `setup_telemetry` failure branch, not the
+/// configuration-rejected one: the endpoint stays reported, and the daemon's
+/// task writes still succeed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::parallel(slo)]
+async fn valid_configuration_with_failed_sdk_setup_reports_config_invalid() {
+    let endpoint = "http://bad<host:4317";
+    assert!(
+        atm_core::task_telemetry::TelemetryExportConfig::from_env(&endpoint_env(endpoint))
+            .is_ok_and(|config| config.is_some()),
+        "the configuration itself is valid"
+    );
+    let daemon = Daemon::start(endpoint_env(endpoint)).await;
+    assert!(!daemon.observability.export_providers_present_for_test());
+    daemon
+        .write(daemon.request("sender", "recipient", "BD6-SETUP-FAIL", None))
+        .await
+        .expect("assignment succeeds when SDK setup failed");
+    let doctor = daemon.doctor_json().await;
+    let health = export_health(&doctor);
+    assert_eq!(health.state, AtmTelemetryExportState::Unavailable);
+    assert_eq!(
+        health.last_failure,
+        Some(AtmTelemetryExportFailure::ConfigInvalid)
+    );
+    assert_eq!(health.endpoint.as_deref(), Some(endpoint));
+    assert_eq!(health.emitted, 0);
+    assert_export_remediation(&doctor);
+    daemon.shutdown().await.expect("clean daemon shutdown");
+}
+
 fn assert_export_remediation(doctor: &serde_json::Value) {
     let findings = doctor["findings"].as_array().expect("doctor findings");
     assert!(
