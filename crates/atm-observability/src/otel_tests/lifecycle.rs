@@ -9,6 +9,19 @@ use opentelemetry::metrics::MeterProvider;
 use std::sync::atomic::Ordering;
 use tracing_subscriber::prelude::*;
 
+struct ExportFailureObserved(Arc<tokio::sync::Notify>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for ExportFailureObserved {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        if matches!(
+            event.metadata().name(),
+            "BatchSpanProcessor.Export.Error" | "BatchSpanProcessor.Flush.ExportError"
+        ) {
+            self.0.notify_one();
+        }
+    }
+}
+
 fn health() -> AtmTelemetryExportHealth {
     AtmTelemetryExportHealth {
         state: AtmTelemetryExportState::Healthy,
@@ -63,7 +76,12 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
     let diagnostics = Arc::new(ExportDiagnostics::default());
     let bridge = TracingBridgeLayer::new(logger.clone());
     bridge.set_export_diagnostics(diagnostics.clone());
-    let dispatch = tracing::Dispatch::new(tracing_subscriber::registry().with(bridge));
+    let observed = Arc::new(tokio::sync::Notify::new());
+    let dispatch = tracing::Dispatch::new(
+        tracing_subscriber::registry()
+            .with(bridge)
+            .with(ExportFailureObserved(observed.clone())),
+    );
     let _subscriber = tracing::dispatcher::set_default(&dispatch);
     let setup = setup_with_limits(&config(&endpoint), 64, Duration::from_millis(50)).unwrap();
     setup
@@ -82,22 +100,9 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
         .u64_counter("fixture.count")
         .build()
         .add(1, &[]);
-    tokio::time::timeout(Duration::from_secs(4), async {
-        loop {
-            let mut health = health();
-            diagnostics.project(&mut health);
-            if health.last_failure.is_some() {
-                assert_eq!(
-                    health.last_failure,
-                    Some(AtmTelemetryExportFailure::Unavailable)
-                );
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .unwrap();
+    let observed_failure = tokio::time::timeout(Duration::from_secs(4), observed.notified()).await;
+    let mut evidence = health();
+    diagnostics.project(&mut evidence);
     // The sink is still nonblocking even though transport failed.
     setup
         .0
@@ -120,6 +125,13 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
     for result in [trace, log, metric] {
         diagnostics.observe_result(result.unwrap());
     }
+    // Assert after explicit shutdown, so fixture failure cannot deadlock the
+    // current-thread runtime by dropping live native providers during unwind.
+    observed_failure.unwrap();
+    assert_eq!(
+        evidence.last_failure,
+        Some(AtmTelemetryExportFailure::Unavailable)
+    );
 }
 
 #[tokio::test]
