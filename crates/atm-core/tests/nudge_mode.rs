@@ -587,6 +587,8 @@ fn task_tagged_async_prepare_forces_immediate_mode() {
         &runtime,
         source_preflight,
     ))
+    .expect("commit async write")
+    .operation
     .expect("prepare async write");
     // BB.5: the async prepare path selects the same immediate mode (crates/atm-core/src/send/mod.rs:381)
     assert_eq!(
@@ -898,6 +900,8 @@ fn assert_graft_assignment_dispatch(async_path: bool) {
             &runtime,
             source_preflight,
         ))
+        .expect("commit async graft task write")
+        .operation
         .expect("prepare async graft task write")
     } else {
         prepare_write_with_runtime(request, &NullObservability, &runtime)
