@@ -123,9 +123,33 @@ async fn failed_sqlite_reminder_update_emits_nothing_and_keeps_the_prompt_result
         1,
         "the caller still emitted its prompt"
     );
+    let records = sink.records();
     assert!(
-        sink.records().is_empty(),
-        "failed persistence emits no telemetry record"
+        records
+            .iter()
+            .all(|record| record.kind.as_str() != "reminded"),
+        "the failed reminder update projects no reminded record"
+    );
+    let handoffs = runtime
+        .async_task_ledger_reader()
+        .expect("task-ledger reader")
+        .list_prompt_handoffs(
+            key.team().clone(),
+            tasks[0].clone(),
+            atm_storage::ReadDeadline::new(Duration::from_secs(1)).expect("deadline"),
+        )
+        .await
+        .expect("prompt handoffs");
+    assert_eq!(
+        handoffs.len(),
+        1,
+        "the delivered prompt's handoff persists independently of the reminder row"
+    );
+    let expected: Vec<TaskTelemetryRecord> = handoffs.iter().map(record_from_handoff).collect();
+    assert_eq!(
+        canonical(&records),
+        canonical(&expected),
+        "records are exactly the separately committed handoff rows"
     );
 }
 
@@ -146,7 +170,7 @@ async fn advance_to_lead_notification(
 
 #[tokio::test]
 async fn failed_sqlite_lead_notification_update_emits_nothing() {
-    let (root, _runtime, fake, pump, key, _tasks, now) = build_real_task_pump(&["BD3-LEAD-FAIL"]);
+    let (root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["BD3-LEAD-FAIL"]);
     advance_to_lead_notification(&pump, &fake, &key, &now).await;
     let sink = RecordingTaskTelemetrySink::new();
     let setup = RecordingTaskTelemetrySink::setup(&sink);
@@ -157,9 +181,24 @@ async fn failed_sqlite_lead_notification_update_emits_nothing() {
     )
     .expect("install deterministic task update failure");
 
+    let load = || {
+        let row = runtime
+            .task_store()
+            .expect("task store")
+            .load_task(key.team(), &tasks[0])
+            .expect("load task")
+            .expect("task row");
+        (row.reminder_count, row.lead_notified_count)
+    };
+    let before = load();
     set_clock(&now, "2030-01-01T00:10:00Z");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
+    assert_eq!(
+        load(),
+        before,
+        "failed lead notification leaves both durable counters unchanged"
+    );
     telemetry
         .shutdown(tokio::time::Instant::now() + Duration::from_secs(5))
         .await;
