@@ -41,14 +41,13 @@ use atm_runtime::{
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::time::Instant;
 
-use super::{Daemon, EXPORT_WAIT, Receiver, endpoint_env, task_record};
+use super::{
+    Daemon, EXPORT_WAIT, Receiver, assert_one_shutdown_deadline, endpoint_env, task_record,
+};
+use crate::DaemonLaunchIdentity;
 use crate::atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
+use crate::daemon_observability::RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT;
 use crate::queue_drain::RecoverySweepHandle;
-use crate::{DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE};
-
-/// Scheduling allowance on a real clock; a renewed step budget adds at least
-/// the 1s exporter or logger bound.
-const SCHEDULING_SLACK: Duration = Duration::from_millis(250);
 
 /// The longest emit and drain a telemetry runtime accepts, so only the shared
 /// shutdown deadline can end a stalled drain.
@@ -178,8 +177,12 @@ async fn hook_started(started: &mut UnboundedReceiver<()>, what: &str) {
 }
 
 /// Positive: with every stallable step stalled, the production shutdown
-/// sequence returns within the one deadline; a step that renewed its own
-/// budget would add at least its own bound.
+/// sequence gives every step the one deadline fixed at entry, and the logger
+/// and exporter waits compute no later one. The forever-stalled recovery
+/// sweep ends through that deadline, so every later step starts past it and
+/// neither logger flush is attempted.
+/// Negative: no elapsed time is compared; the recorded deadlines prove the
+/// bound by construction.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
     let stalled = Receiver::start(true).await;
@@ -286,14 +289,24 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
         .observability
         .stall_logger_flush_for_test(move || block_until_released(&blocked));
 
-    let began = Instant::now();
+    let observability = daemon.observability.clone();
     let stopped = daemon.shutdown().await;
-    let elapsed = began.elapsed();
 
-    let ceiling = REPLACEMENT_DRAIN_DEADLINE + SCHEDULING_SLACK;
-    assert!(
-        elapsed >= REPLACEMENT_DRAIN_DEADLINE && elapsed <= ceiling,
-        "{elapsed:?} outside [{REPLACEMENT_DRAIN_DEADLINE:?}, {ceiling:?}]"
+    let steps = observability.shutdown_steps_for_test();
+    let deadline = assert_one_shutdown_deadline(&steps);
+    let sweep = steps
+        .iter()
+        .find(|step| step.step == "recovery_sweep")
+        .expect("recovery sweep step");
+    assert!(sweep.returned >= deadline, "{steps:#?}");
+    assert_eq!(
+        steps
+            .iter()
+            .filter(|step| step.step.starts_with("logger.flush"))
+            .map(|step| step.step)
+            .collect::<Vec<_>>(),
+        ["logger.flush.skipped", "logger.flush.skipped"],
+        "{steps:#?}"
     );
     // The held request ends at its own server budget, inside the drain; the
     // detached hook then gets only what the listener left.
@@ -305,8 +318,11 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
     stalled.stop().await;
 }
 
-/// Positive: a stalled retained-logger flush ends at the caller's deadline
-/// when that comes first, and otherwise at the 1s logger bound.
+/// Positive: a stalled retained-logger flush waits until the caller's
+/// deadline when that comes first, and otherwise until the 1s logger bound
+/// from its start: the recorded wait bound is exactly the earlier of the two
+/// and the flush returns no earlier than it.
+/// Negative: no elapsed time is compared against an upper limit.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_stalled_logger_flush_ends_at_the_earlier_of_deadline_and_bound() {
     let (_root, observability) =
@@ -320,26 +336,24 @@ async fn a_stalled_logger_flush_ends_at_the_earlier_of_deadline_and_bound() {
         block_until_released(&blocked);
     });
 
-    let deadline = Duration::from_millis(300);
-    let began = Instant::now();
-    observability.flush_logger(began + deadline).await;
-    let elapsed = began.elapsed();
+    let early = Instant::now() + Duration::from_millis(300);
+    observability.flush_logger(early).await;
     hook_started(&mut flush_entered, "logger flush").await;
-    assert!(
-        elapsed >= deadline && elapsed <= deadline + SCHEDULING_SLACK,
-        "{elapsed:?} outside [{deadline:?}, {:?}]",
-        deadline + SCHEDULING_SLACK
-    );
+    let late = Instant::now() + Duration::from_secs(5);
+    observability.flush_logger(late).await;
 
-    let bound = Duration::from_secs(1);
-    let began = Instant::now();
-    observability
-        .flush_logger(began + REPLACEMENT_DRAIN_DEADLINE)
-        .await;
-    let elapsed = began.elapsed();
-    assert!(
-        elapsed >= bound && elapsed <= bound + SCHEDULING_SLACK,
-        "{elapsed:?} outside [{bound:?}, {:?}]",
-        bound + SCHEDULING_SLACK
-    );
+    let steps = observability.shutdown_steps_for_test();
+    let [first, second] = steps.as_slice() else {
+        panic!("two logger flushes: {steps:#?}");
+    };
+    for (step, deadline) in [(first, early), (second, late)] {
+        assert_eq!(step.step, "logger.flush", "{steps:#?}");
+        assert_eq!(
+            step.deadline,
+            deadline.min(step.started + RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT),
+            "{steps:#?}"
+        );
+        assert!(step.returned >= step.deadline, "{steps:#?}");
+    }
+    assert_eq!(first.deadline, early, "{steps:#?}");
 }

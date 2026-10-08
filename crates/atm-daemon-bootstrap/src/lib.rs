@@ -822,25 +822,66 @@ async fn shutdown_replacement_daemon(
     handler: &StorageAndNudgeRouter,
     workers: DaemonWorkers,
 ) -> Result<(), AtmError> {
-    let deadline = tokio::time::Instant::now() + REPLACEMENT_DRAIN_DEADLINE;
+    let entered = tokio::time::Instant::now();
+    let deadline = entered + REPLACEMENT_DRAIN_DEADLINE;
+    // Test builds record each step's start, the shared deadline and its return.
+    #[cfg(test)]
+    let spy = workers.observability.clone();
+    macro_rules! step {
+        ($name:literal, $started:expr, $step:expr) => {{
+            #[cfg(test)]
+            let started = $started;
+            let output = $step;
+            #[cfg(test)]
+            if let Some(spy) = &spy {
+                spy.record_shutdown_step_for_test($name, started, deadline);
+            }
+            output
+        }};
+    }
+    step!("entry", entered, ());
     // The runtime bounds its own drain, cancellation and cleanup by
     // `deadline`, so it is awaited to completion rather than dropped.
-    let stopped = running.begin_shutdown().finish(deadline).await;
-    workers.recovery_sweep.shutdown(deadline).await;
-    handler.shutdown_peer_connections(deadline).await;
+    let stopped = step!(
+        "listener",
+        tokio::time::Instant::now(),
+        running.begin_shutdown().finish(deadline).await
+    );
+    step!(
+        "recovery_sweep",
+        tokio::time::Instant::now(),
+        workers.recovery_sweep.shutdown(deadline).await
+    );
+    step!(
+        "peer_connections",
+        tokio::time::Instant::now(),
+        handler.shutdown_peer_connections(deadline).await
+    );
     // Both drains feed the SDK, so they finish (or abort) before the exporter.
-    tokio::join!(
-        workers.task_telemetry.shutdown(deadline),
-        workers.workflow_telemetry.shutdown(deadline),
+    step!(
+        "telemetry_drains",
+        tokio::time::Instant::now(),
+        tokio::join!(
+            workers.task_telemetry.shutdown(deadline),
+            workers.workflow_telemetry.shutdown(deadline),
+        )
     );
     // The sweeper emits through the retained logger, so it stops first.
-    workers.atm_temp_sweeper.shutdown(deadline).await;
+    step!(
+        "atm_temp_sweeper",
+        tokio::time::Instant::now(),
+        workers.atm_temp_sweeper.shutdown(deadline).await
+    );
     if let Some(observability) = &workers.observability {
         tracing::info!(target: "atm_daemon_bootstrap::lifecycle", code = "ATM_DAEMON_SHUTDOWN_DRAINED", "replacement ATM daemon drained its subsystems; closing retained logs");
         // Routed records reach the SDK logger before its provider stops; the
         // second flush puts provider-shutdown diagnostics on disk.
         observability.flush_logger(deadline).await;
-        observability.shutdown_export(deadline).await;
+        step!(
+            "export",
+            tokio::time::Instant::now(),
+            observability.shutdown_export(deadline).await
+        );
         observability.flush_logger(deadline).await;
     }
     diagnostic_timeline::stop_flush_worker();

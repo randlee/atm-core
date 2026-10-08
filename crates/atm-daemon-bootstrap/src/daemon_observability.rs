@@ -37,10 +37,10 @@ const RETAINED_LOG_MAINTENANCE_CADENCE: Duration = Duration::from_secs(60);
 // daemon stop into a long blocking operation. This stays below the outer 2s
 // graceful drain budget so retained-log shutdown cannot consume the entire
 // daemon stop window by itself.
-const RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
+pub(crate) const RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
 /// Upper bound on the exporter step of daemon shutdown. The bd-5 production
 /// limits need at most two 400ms exports per quiescent signal.
-const EXPORT_SHUTDOWN_BOUND: Duration = Duration::from_secs(1);
+pub(crate) const EXPORT_SHUTDOWN_BOUND: Duration = Duration::from_secs(1);
 
 struct LoggerLifecycle(Arc<RetainedLogger>);
 
@@ -63,6 +63,17 @@ type Providers = (SdkTracerProvider, SdkLoggerProvider, SdkMeterProvider);
 #[cfg(test)]
 type FlushStall = Arc<OnceLock<Box<dyn Fn() + Send + Sync>>>;
 
+/// One bounded shutdown step as a test observed it: when it started, the
+/// absolute deadline it was given or computed, and when it returned.
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ShutdownStep {
+    pub(crate) step: &'static str,
+    pub(crate) started: Instant,
+    pub(crate) deadline: Instant,
+    pub(crate) returned: Instant,
+}
+
 /// Export state owned by the process lifecycle: the standard SDK providers
 /// (retained only for shutdown), the setups handed once to runtime assembly,
 /// and the runtime counters attached after assembly.
@@ -80,6 +91,13 @@ struct Export {
         Arc<WorkflowTelemetryDiagnostics>,
     )>,
     shutdown: OnceLock<watch::Receiver<bool>>,
+    /// Test-installed gate the shared shutdown step awaits after the provider
+    /// shutdowns, before it publishes its outcome.
+    #[cfg(test)]
+    shutdown_gate: Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+    /// Test record of every shutdown step's deadline, in call order.
+    #[cfg(test)]
+    shutdown_steps: Mutex<Vec<ShutdownStep>>,
 }
 
 impl Export {
@@ -105,7 +123,24 @@ impl Export {
             providers: Mutex::new(providers),
             runtime: OnceLock::new(),
             shutdown: OnceLock::new(),
+            #[cfg(test)]
+            shutdown_gate: Mutex::default(),
+            #[cfg(test)]
+            shutdown_steps: Mutex::default(),
         }
+    }
+
+    #[cfg(test)]
+    fn record_shutdown_step(&self, step: &'static str, started: Instant, deadline: Instant) {
+        self.shutdown_steps
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(ShutdownStep {
+                step,
+                started,
+                deadline,
+                returned: Instant::now(),
+            });
     }
 
     fn health(&self) -> AtmTelemetryExportHealth {
@@ -274,7 +309,8 @@ impl DaemonObservability {
             .shutdown
             .get_or_init(|| {
                 let (sender, receiver) = watch::channel(false);
-                let bound = deadline.min(Instant::now() + EXPORT_SHUTDOWN_BOUND);
+                let started = Instant::now();
+                let bound = deadline.min(started + EXPORT_SHUTDOWN_BOUND);
                 tokio::spawn(async move {
                     let providers = export
                         .providers
@@ -283,6 +319,20 @@ impl DaemonObservability {
                         .take();
                     if let Some(providers) = providers {
                         shutdown_providers(providers, bound, &export.diagnostics).await;
+                    }
+                    #[cfg(test)]
+                    export.record_shutdown_step("export.providers", started, bound);
+                    #[cfg(test)]
+                    {
+                        let gate = export
+                            .shutdown_gate
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .take();
+                        if let Some(gate) = gate {
+                            // Released by a send or by the sender's drop.
+                            drop(gate.await);
+                        }
                     }
                     sender.send_replace(true);
                 });
@@ -301,8 +351,12 @@ impl DaemonObservability {
     /// abandons the wait, not the call. The logger stays live: this does not
     /// stop the writer thread, which process exit ends.
     pub(crate) async fn flush_logger(&self, deadline: Instant) {
-        let bound = deadline.min(Instant::now() + RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT);
+        let started = Instant::now();
+        let bound = deadline.min(started + RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT);
         if bound <= Instant::now() {
+            #[cfg(test)]
+            self.export
+                .record_shutdown_step("logger.flush.skipped", started, bound);
             return;
         }
         // The guarded value is an immutable `Arc`, so a poisoned lock still
@@ -320,6 +374,9 @@ impl DaemonObservability {
         // Sink flush failures are recorded in logger health by the canonical
         // logger; an abandoned wait leaves nothing further to report.
         drop(tokio::time::timeout_at(bound, flush).await);
+        #[cfg(test)]
+        self.export
+            .record_shutdown_step("logger.flush", started, bound);
     }
 
     pub(crate) fn install_tracing_bridge(&self) -> Result<(), AtmError> {
@@ -380,6 +437,42 @@ impl DaemonObservability {
     #[cfg(test)]
     pub(crate) fn stall_logger_flush_for_test(&self, stall: impl Fn() + Send + Sync + 'static) {
         let _ = self.flush_stall.set(Box::new(stall));
+    }
+
+    /// Holds the shared export-shutdown step open after its provider
+    /// shutdowns until the returned sender is used or dropped, so a test
+    /// decides when the step ends instead of a timer.
+    #[cfg(test)]
+    pub(crate) fn hold_export_shutdown_for_test(&self) -> tokio::sync::oneshot::Sender<()> {
+        let (release, gate) = tokio::sync::oneshot::channel();
+        *self
+            .export
+            .shutdown_gate
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(gate);
+        release
+    }
+
+    /// Records a daemon shutdown step that was given `deadline` at `started`
+    /// and returned now.
+    #[cfg(test)]
+    pub(crate) fn record_shutdown_step_for_test(
+        &self,
+        step: &'static str,
+        started: Instant,
+        deadline: Instant,
+    ) {
+        self.export.record_shutdown_step(step, started, deadline);
+    }
+
+    /// Every shutdown step this owner and its clones recorded, in call order.
+    #[cfg(test)]
+    pub(crate) fn shutdown_steps_for_test(&self) -> Vec<ShutdownStep> {
+        self.export
+            .shutdown_steps
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     #[cfg(test)]

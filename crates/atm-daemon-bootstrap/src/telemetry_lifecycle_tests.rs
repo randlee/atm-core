@@ -49,7 +49,7 @@ use serde_json::Map;
 use tokio::time::Instant;
 
 use super::atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
-use super::daemon_observability::DaemonObservability;
+use super::daemon_observability::{DaemonObservability, ShutdownStep};
 use super::{
     DaemonLaunchIdentity, DaemonWorkers, ReplacementHandlerConfig, SelectedPeerAdapterSelection,
     build_replacement_handler, compose_daemon_assembly,
@@ -535,6 +535,64 @@ fn prompt_handoff_record(task_id: &str) -> TaskTelemetryRecord {
 fn export_health(doctor: &serde_json::Value) -> AtmTelemetryExportHealth {
     serde_json::from_value(doctor["observability"]["export"].clone())
         .expect("doctor JSON carries export health")
+}
+
+/// The daemon shutdown steps, in call order, each given the shared deadline.
+const SHUTDOWN_STEPS: [&str; 7] = [
+    "entry",
+    "listener",
+    "recovery_sweep",
+    "peer_connections",
+    "telemetry_drains",
+    "atm_temp_sweeper",
+    "export",
+];
+
+/// Proves the shutdown bound by construction from the recorded steps, never
+/// from elapsed time: the deadline is fixed once at entry
+/// `REPLACEMENT_DRAIN_DEADLINE` ahead, every step receives exactly that
+/// deadline and starts only after the previous one returned, and the logger
+/// and exporter waits compute bounds no later than it and no later than their
+/// own 1 s bound from their start. Returns the shared deadline.
+fn assert_one_shutdown_deadline(steps: &[ShutdownStep]) -> Instant {
+    let entry = steps.first().expect("the shutdown recorded its entry");
+    assert_eq!(entry.step, "entry", "{steps:#?}");
+    assert_eq!(
+        entry.deadline,
+        entry.started + super::REPLACEMENT_DRAIN_DEADLINE,
+        "{steps:#?}"
+    );
+    let called: Vec<&ShutdownStep> = steps
+        .iter()
+        .filter(|step| SHUTDOWN_STEPS.contains(&step.step))
+        .collect();
+    assert_eq!(
+        called.iter().map(|step| step.step).collect::<Vec<_>>(),
+        SHUTDOWN_STEPS,
+        "{steps:#?}"
+    );
+    for pair in called.windows(2) {
+        assert_eq!(pair[1].deadline, entry.deadline, "{steps:#?}");
+        assert!(pair[1].started >= pair[0].returned, "{steps:#?}");
+    }
+    for inner in steps
+        .iter()
+        .filter(|step| !SHUTDOWN_STEPS.contains(&step.step))
+    {
+        let own = match inner.step {
+            "export.providers" => super::daemon_observability::EXPORT_SHUTDOWN_BOUND,
+            "logger.flush" | "logger.flush.skipped" => {
+                super::daemon_observability::RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT
+            }
+            other => panic!("unexpected shutdown step {other}: {steps:#?}"),
+        };
+        assert_eq!(
+            inner.deadline,
+            entry.deadline.min(inner.started + own),
+            "{steps:#?}"
+        );
+    }
+    entry.deadline
 }
 
 fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId {
@@ -1079,16 +1137,14 @@ fn unreachable_collector_child() {
         assert_export_remediation(&doctor);
         // Runtime losses and the SDK failure are reported together, disjointly.
         assert_doctor_reports_losses(&doctor, lossy.diagnostics().snapshot());
-        let started = Instant::now();
+        let observability = daemon.observability.clone();
         daemon
             .shutdown()
             .await
             .expect("shutdown result is the listener's");
-        assert!(
-            started.elapsed() <= Duration::from_secs(5),
-            "daemon shutdown took {:?}, over the 5s clean-stop SLO",
-            started.elapsed()
-        );
+        // The 5s clean-stop SLO holds by construction: every step shares the
+        // one deadline fixed at shutdown entry.
+        assert_one_shutdown_deadline(&observability.shutdown_steps_for_test());
     });
     drop(runtime);
     println!("{}", exit::CHILD_SCENARIO_SENTINEL);
@@ -1133,8 +1189,10 @@ async fn runtime_losses_reach_doctor_json_as_one_degraded_finding() {
 }
 
 /// Positive: a collector that accepts connections but never answers leaves
-/// task results unchanged, and daemon shutdown with a stalled exporter still
-/// returns within the clean-stop SLO, retaining the terminal export failure.
+/// task results unchanged, and daemon shutdown with a stalled exporter keeps
+/// the clean-stop SLO by construction (every step shares the one deadline
+/// fixed at entry), retaining the terminal export failure.
+/// Negative: no elapsed time is compared.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[serial_test::serial(slo)]
 async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
@@ -1159,16 +1217,11 @@ async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
         })
         .await;
     let observability = daemon.observability.clone();
-    let started = Instant::now();
     daemon
         .shutdown()
         .await
         .expect("shutdown result is the listener's");
-    let elapsed = started.elapsed();
-    assert!(
-        elapsed <= Duration::from_secs(5),
-        "daemon shutdown with a stalled exporter took {elapsed:?}, over the 5s clean-stop SLO"
-    );
+    assert_one_shutdown_deadline(&observability.shutdown_steps_for_test());
     // The SDK's own 400ms export timeout or the 1s wait bound ends the step;
     // either way the terminal failure is retained.
     let health = observability.export_health_for_test();
@@ -1209,20 +1262,22 @@ async fn stalled_export_in_flight() -> (Receiver, tempfile::TempDir, DaemonObser
 }
 
 /// Positive: concurrent and cancelled `shutdown_export` callers share one
-/// outcome. Proven by ordering and state, not elapsed time: a caller whose
-/// deadline has passed returns while the shared step is still running, a
-/// caller with a long deadline returns only after it, the first (cancelled)
-/// caller's outcome survives, and a later caller finds the stored outcome and
+/// outcome. Proven by ordering and state, not elapsed time: the test holds
+/// the shared step open with an explicit gate, so a caller whose deadline has
+/// passed returns while the step is still running, a caller with a long
+/// deadline returns only after the release, the first (cancelled) caller's
+/// outcome survives, and a later caller finds the stored outcome and
 /// completes on its first poll without new work.
-/// Negative: no wall-clock margin is asserted; the real-time bound is
-/// `shutdown_export_is_bounded_by_the_clean_stop_slo`.
+/// Negative: no wall-clock margin is asserted and no timer decides an
+/// ordering; the long caller's 30s deadline is a failure-only hang bound.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[serial_test::parallel(slo)]
 async fn concurrent_and_cancelled_export_shutdown_share_one_ordered_outcome() {
     let (stalled, _root, observability) = stalled_export_in_flight().await;
+    let release = observability.hold_export_shutdown_for_test();
 
     // The first caller is cancelled right after it starts the shared work;
-    // the outcome survives it.
+    // the gate keeps the step open, and the outcome survives the caller.
     let cancelled = tokio::time::timeout(
         Duration::from_millis(1),
         observability.shutdown_export(Instant::now() + Duration::from_secs(5)),
@@ -1230,7 +1285,7 @@ async fn concurrent_and_cancelled_export_shutdown_share_one_ordered_outcome() {
     .await;
     assert!(
         cancelled.is_err(),
-        "the stalled export outlives the first caller"
+        "the gated export outlives the first caller"
     );
 
     let order = Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -1249,17 +1304,22 @@ async fn concurrent_and_cancelled_export_shutdown_share_one_ordered_outcome() {
     let short_position = short_done.await.expect("short caller");
     assert!(
         !long_done.is_finished(),
-        "the expired caller returned while the shared step was still running"
+        "the expired caller returned while the gated step was still running"
     );
+    release.send(()).expect("the shared step awaits the gate");
     let long_position = long_done.await.expect("long caller");
+    assert!(
+        Instant::now() < long,
+        "the long caller returned at its own deadline, not at the step's release"
+    );
     assert_eq!(
         (short_position, long_position),
         (0, 1),
         "the expired caller returns before the caller that waits for the shared step"
     );
 
-    // The SDK's own export timeout or the exporter step bound ends the step;
-    // either way the terminal failure is retained.
+    // The SDK's own export timeout or the exporter step bound ends the
+    // provider shutdowns; either way the terminal failure is retained.
     let health = observability.export_health_for_test();
     assert!(health.last_failure.is_some(), "{health:?}");
     assert_ne!(health.state, AtmTelemetryExportState::Healthy, "{health:?}");
@@ -1276,18 +1336,30 @@ async fn concurrent_and_cancelled_export_shutdown_share_one_ordered_outcome() {
 }
 
 /// Positive: with the collector stalled, a caller that waits for the shared
-/// exporter step returns inside the daemon's clean-stop SLO (5 s), the same
-/// real-time bound `stalled_collector_never_changes_task_results_or_blocks_shutdown`
-/// uses. The bound is the SLO itself, not a margin above a nominal 1 s step.
+/// exporter step returns once the step ends, and the step's wait was bounded
+/// by construction at the 1 s exporter bound from its start, well inside the
+/// daemon's 5 s clean-stop SLO, never at the caller's later deadline.
+/// Negative: no elapsed time is compared; the caller's 30 s deadline is a
+/// failure-only hang bound.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[serial_test::serial(slo)]
 async fn shutdown_export_is_bounded_by_the_clean_stop_slo() {
     let (stalled, _root, observability) = stalled_export_in_flight().await;
-    let started = Instant::now();
-    observability
-        .shutdown_export(Instant::now() + Duration::from_secs(30))
-        .await;
-    let elapsed = started.elapsed();
-    assert!(elapsed <= Duration::from_secs(5), "{elapsed:?}");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    observability.shutdown_export(deadline).await;
+    let steps = observability.shutdown_steps_for_test();
+    let [step] = steps.as_slice() else {
+        panic!("one exporter step: {steps:#?}");
+    };
+    assert_eq!(step.step, "export.providers", "{steps:#?}");
+    assert_eq!(
+        step.deadline,
+        step.started + super::daemon_observability::EXPORT_SHUTDOWN_BOUND,
+        "{steps:#?}"
+    );
+    assert!(
+        step.returned < deadline,
+        "the exporter step ended before the caller's deadline"
+    );
     stalled.stop().await;
 }
