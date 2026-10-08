@@ -83,7 +83,11 @@ async fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recover
             .with(ExportFailureObserved(observed.clone())),
     );
     let _subscriber = tracing::dispatcher::set_default(&dispatch);
-    let setup = setup_with_limits(&config(&endpoint), 64, Duration::from_millis(50)).unwrap();
+    // A one-span batch exports the first span at once through the SDK's
+    // full-batch path. The scheduled path first fires at 2x EXPORT_INTERVAL
+    // (the SDK interval sleeps before its first tick, then skips it), which
+    // a loaded runner can push past the deadline below.
+    let setup = setup_with_limits(&config(&endpoint), 1, Duration::from_millis(50)).unwrap();
     setup
         .0
         .sink
