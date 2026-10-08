@@ -1499,6 +1499,15 @@ impl atm_storage::MessageStore for TestOnlyWriterLane {
         unreachable!("reader-port test double must not use the writer lane")
     }
 
+    fn admit_message_with_provenance(
+        &self,
+        _message: &Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        unreachable!("reader-port test double must not use the writer lane")
+    }
+
     fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
         unreachable!("reader-port test double must not use the writer lane")
     }
@@ -1517,4 +1526,14 @@ impl atm_storage::MessageStore for TestOnlyWriterLane {
 }
 
 #[cfg(test)]
-impl AsyncMessageStore for TestOnlyWriterLane {}
+#[async_trait::async_trait]
+impl AsyncMessageStore for TestOnlyWriterLane {
+    async fn admit_message_with_provenance_async(
+        &self,
+        _message: Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        unreachable!("reader-port test double must not use the writer lane")
+    }
+}

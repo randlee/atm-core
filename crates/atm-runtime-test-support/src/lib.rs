@@ -131,6 +131,15 @@ impl MessageStore for RecordingWriter {
         unreachable!("recording writer receives only read-display transitions")
     }
 
+    fn admit_message_with_provenance(
+        &self,
+        _message: &Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        unreachable!("recording writer receives only read-display transitions")
+    }
+
     fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
         unreachable!("recording writer receives only read-display transitions")
     }
@@ -150,6 +159,15 @@ impl MessageStore for RecordingWriter {
 
 #[async_trait::async_trait]
 impl AsyncMessageStore for RecordingWriter {
+    async fn admit_message_with_provenance_async(
+        &self,
+        _message: Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        unreachable!("recording writer receives only read-display transitions")
+    }
+
     async fn apply_read_display_state_async(
         &self,
         _scope: MailboxScope,

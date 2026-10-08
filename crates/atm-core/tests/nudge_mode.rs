@@ -32,6 +32,15 @@ impl atm_storage::MessageStore for InMemoryAsyncStore {
         Ok(())
     }
 
+    fn admit_message_with_provenance(
+        &self,
+        _message: &atm_storage::Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        unreachable!("nudge-mode test store does not admit messages")
+    }
+
     fn save_messages_atomically(&self, _messages: &[atm_storage::Message]) -> Result<(), AtmError> {
         Ok(())
     }
@@ -56,7 +65,16 @@ impl atm_storage::MessageStore for InMemoryAsyncStore {
 }
 
 #[async_trait::async_trait]
-impl atm_storage::AsyncMessageStore for InMemoryAsyncStore {}
+impl atm_storage::AsyncMessageStore for InMemoryAsyncStore {
+    async fn admit_message_with_provenance_async(
+        &self,
+        _message: atm_storage::Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        unreachable!("nudge-mode test store does not admit messages")
+    }
+}
 
 /// Minimal executor matching the core's async admission tests. This fixture's
 /// in-memory async store never yields, so no Tokio runtime is needed.

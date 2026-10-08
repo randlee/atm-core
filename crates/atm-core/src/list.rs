@@ -912,6 +912,16 @@ mod tests {
             unreachable!("list roster-truth tests do not admit acknowledgements")
         }
 
+        fn admit_message_record_with_outcome(
+            &self,
+            _home_dir: &Path,
+            _record: boundary::Message,
+            _provenance: atm_storage::MessageWriteOrigin,
+        ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+        {
+            unreachable!("list roster-truth tests do not admit messages")
+        }
+
         fn query_mailbox_metadata_rows(
             &self,
             _home_dir: &Path,
