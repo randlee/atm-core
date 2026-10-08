@@ -6,9 +6,9 @@
 //! sweep and transition drain that never finish, a peer write whose detached
 //! hook never finishes (peer-connection drain), task and workflow telemetry
 //! sinks that never answer, a `$ATM_TEMP` sweep pass blocked in its
-//! observability emit, and an OTLP export to a collector that never answers
-//! (exporter shutdown). The retained-logger flush is not stalled here; that
-//! step is carried by BD6 F6. The clock stays real: the exporter step shuts
+//! observability emit, an OTLP export to a collector that never answers
+//! (exporter shutdown), and a retained-logger flush held on the blocking
+//! pool (both logger flush steps). The clock stays real: the exporter step shuts
 //! the SDK providers down in `spawn_blocking`, which stops a paused clock from
 //! advancing while their exports wait on its timers. Exact virtual-time
 //! deadline tests of the recovery sweep and the peer pool live beside those
@@ -110,15 +110,25 @@ impl WorkflowTelemetrySink for StallingSink {
     }
 }
 
+/// Blocks the calling thread until the paired [`Release`] is dropped.
+type Blocked = Arc<Mutex<std::sync::mpsc::Receiver<()>>>;
+
+fn block_until_released(blocked: &Blocked) {
+    let _ = blocked
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .recv();
+}
+
 /// An observability port whose `emit` reports entry, then blocks its thread
 /// until the paired [`Release`] is dropped.
 struct BlockingEmit {
     entered: UnboundedSender<()>,
-    release: Mutex<std::sync::mpsc::Receiver<()>>,
+    release: Blocked,
 }
 
-/// Unblocks every [`BlockingEmit`] when dropped, so the test runtime's
-/// shutdown can join the blocked sweep thread.
+/// Unblocks every blocked thread when dropped, so the test runtime's
+/// shutdown can join the blocked sweep and flush threads.
 struct Release(#[allow(dead_code)] std::sync::mpsc::Sender<()>);
 
 impl atm_core::boundary::sealed::Sealed for BlockingEmit {}
@@ -126,11 +136,7 @@ impl atm_core::boundary::sealed::Sealed for BlockingEmit {}
 impl ObservabilityPort for BlockingEmit {
     fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
         let _ = self.entered.send(());
-        let _ = self
-            .release
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .recv();
+        block_until_released(&self.release);
         Ok(())
     }
 
@@ -254,6 +260,7 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
     let (entered, mut emit_entered) = unbounded_channel();
     let (release, blocked) = std::sync::mpsc::channel();
     let _release = Release(release);
+    let blocked: Blocked = Arc::new(Mutex::new(blocked));
     let sweep_root = daemon.root.path().join("atm-temp-stalled");
     std::fs::create_dir_all(&sweep_root).expect("sweep root");
     daemon.workers.atm_temp_sweeper = AtmTempSweeperRuntime::start(
@@ -264,7 +271,7 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
         },
         Arc::new(BlockingEmit {
             entered,
-            release: Mutex::new(blocked),
+            release: Arc::clone(&blocked),
         }),
         DaemonLaunchIdentity {
             team: Some(super::TEAM.parse().expect("team")),
@@ -272,6 +279,12 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
         },
     );
     hook_started(&mut emit_entered, "temp sweep emit").await;
+
+    // Retained logger: every flush blocks until released. Earlier steps use
+    // the whole deadline, so a flush that honours it is never attempted.
+    daemon
+        .observability
+        .stall_logger_flush_for_test(move || block_until_released(&blocked));
 
     let began = Instant::now();
     let stopped = daemon.shutdown().await;
@@ -293,4 +306,43 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
         .expect("the held request's client task joins without panicking")
         .expect("the held local write completes once the drain releases it");
     stalled.stop().await;
+}
+
+/// Positive: a stalled retained-logger flush ends at the caller's deadline
+/// when that comes first, and otherwise at the 1s logger bound.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_stalled_logger_flush_ends_at_the_earlier_of_deadline_and_bound() {
+    let (_root, observability) =
+        Daemon::bootstrap(atm_core::test_support::FakeEnvSource::new([])).await;
+    let (entered, mut flush_entered) = unbounded_channel();
+    let (release, blocked) = std::sync::mpsc::channel();
+    let _release = Release(release);
+    let blocked: Blocked = Arc::new(Mutex::new(blocked));
+    observability.stall_logger_flush_for_test(move || {
+        let _ = entered.send(());
+        block_until_released(&blocked);
+    });
+
+    let deadline = Duration::from_millis(300);
+    let began = Instant::now();
+    observability.flush_logger(began + deadline).await;
+    let elapsed = began.elapsed();
+    hook_started(&mut flush_entered, "logger flush").await;
+    assert!(
+        elapsed >= deadline && elapsed <= deadline + SCHEDULING_SLACK,
+        "{elapsed:?} outside [{deadline:?}, {:?}]",
+        deadline + SCHEDULING_SLACK
+    );
+
+    let bound = Duration::from_secs(1);
+    let began = Instant::now();
+    observability
+        .flush_logger(began + REPLACEMENT_DRAIN_DEADLINE)
+        .await;
+    let elapsed = began.elapsed();
+    assert!(
+        elapsed >= bound && elapsed <= bound + SCHEDULING_SLACK,
+        "{elapsed:?} outside [{bound:?}, {:?}]",
+        bound + SCHEDULING_SLACK
+    );
 }
