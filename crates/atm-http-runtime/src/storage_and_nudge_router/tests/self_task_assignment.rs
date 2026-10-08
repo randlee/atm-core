@@ -41,6 +41,52 @@ async fn self_addressed_task_assignment_is_tracked_without_delivery() {
     write(&fixture.router, self_task_request(&fixture, "SELF-1", None))
         .await
         .expect("self-addressed task assignment is accepted");
+    let assembly = open_sqlite_boundary(&fixture.database_path).expect("reopen async boundary");
+    let mailbox_runtime = assembly
+        .async_mailbox_runtime
+        .with_state_handoff(HandoffConfig::default())
+        .expect("start async mailbox handoff");
+    let reader = fixture
+        .router
+        .clone()
+        .with_async_mailbox_runtime(Arc::new(mailbox_runtime));
+    let listed = reader
+        .dispatch(
+            ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
+                atm_core::list::ListQuery::new(
+                    fixture.home_dir.clone(),
+                    fixture.current_dir.clone(),
+                    "sender".parse().expect("caller"),
+                    None,
+                    TEAM.parse().expect("team"),
+                    atm_core::types::ReadSelection::All,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("list query"),
+            ))),
+            AuthenticatedIngress::Local,
+            RequestDeadline::after(Duration::from_secs(10)),
+        )
+        .await
+        .expect("list the caller's own inbox")
+        .into_inner();
+    let ResponseEnvelope::List(inbox) = listed else {
+        panic!("list response");
+    };
+    assert_eq!(
+        inbox.bucket_counts.unread, 0,
+        "the self-task carrier never enters the caller's unread bucket: {inbox:?}"
+    );
+    assert_eq!(inbox.bucket_counts.pending_ack, 0);
+    assert!(
+        inbox.rows.len() == 1 && inbox.rows[0].read && inbox.rows[0].message_id.is_some(),
+        "the task body survives as an already-read record: {inbox:?}"
+    );
     write(
         &fixture.router,
         self_task_request(&fixture, "SELF-1", Some(atm_storage::TaskOp::Start)),
