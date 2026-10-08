@@ -467,8 +467,10 @@ async fn run_replacement_daemon_with_selector(
         start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
     let herdr_config = daemon_herdr_config(&ProcessEnvSource)?;
     let assembly = assemble_daemon_runtime()?;
-    let workflow_telemetry = assembly.workflow_telemetry.clone();
-    let task_telemetry = assembly.task_telemetry.clone();
+    let telemetry = (
+        assembly.workflow_telemetry.clone(),
+        assembly.task_telemetry.clone(),
+    );
     let diagnostic_timeline = Arc::clone(&assembly.diagnostic_timeline);
     let diagnostic_counters = diagnostic_timeline::active_counters();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
@@ -514,13 +516,7 @@ async fn run_replacement_daemon_with_selector(
     run_until_shutdown(
         running,
         handler,
-        DaemonWorkers {
-            workflow_telemetry,
-            task_telemetry,
-            recovery_sweep,
-            atm_temp_sweeper,
-            observability: daemon_observability::DaemonObservability::process_owner(),
-        },
+        DaemonWorkers::for_process(telemetry, recovery_sweep, atm_temp_sweeper),
         owner,
         singleton_guards,
     )
@@ -536,6 +532,27 @@ struct DaemonWorkers {
     /// The process owner of the standard SDK providers; absent for the
     /// benchmark and null-observability daemons.
     observability: Option<daemon_observability::DaemonObservability>,
+}
+
+impl DaemonWorkers {
+    /// The workers of the process daemon, with the registered observability
+    /// owner of the standard SDK providers.
+    fn for_process(
+        (workflow_telemetry, task_telemetry): (
+            atm_runtime::WorkflowTelemetryRuntime,
+            atm_runtime::TaskTelemetryRuntime,
+        ),
+        recovery_sweep: queue_drain::RecoverySweepHandle,
+        atm_temp_sweeper: AtmTempSweeperRuntime,
+    ) -> Self {
+        Self {
+            workflow_telemetry,
+            task_telemetry,
+            recovery_sweep,
+            atm_temp_sweeper,
+            observability: daemon_observability::DaemonObservability::process_owner(),
+        }
+    }
 }
 
 fn acquire_verified_singleton_scope() -> Result<
