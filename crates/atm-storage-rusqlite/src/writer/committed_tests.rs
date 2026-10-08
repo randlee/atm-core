@@ -139,6 +139,12 @@ fn bd2_rejection_reply_is_not_sent_before_outer_commit() {
     )
     .unwrap();
     assert_eq!(returned.task_events, persisted);
+    assert!(
+        persisted[0]
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.starts_with("ATM_TASK_NOT_FOUND: "))
+    );
 }
 
 fn draft_names() -> (
