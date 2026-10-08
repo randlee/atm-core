@@ -11,6 +11,13 @@ homepage.workspace = true
 
 [dependencies]
 atm-core.workspace = true
+atm-runtime.workspace = true
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-otlp.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+tonic = { version = "0.14", default-features = false, features = ["transport", "tls-native-roots"] }
 sc-observability.workspace = true
 sc-observability-types.workspace = true
 serde_json.workspace = true
@@ -18,9 +25,11 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+tonic = { version = "0.14", default-features = false, features = ["router"] }
 atm-core = { workspace = true, features = ["test-utils"] }
 sc-observability-log.workspace = true
 serial_test = "3"
 tempfile = "3"
-tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+opentelemetry-proto = { version = "=0.33.0", default-features = false, features = ["gen-tonic", "trace", "logs", "metrics"] }
+tokio-stream = { version = "0.1", features = ["net"] }
 trybuild = "1"
