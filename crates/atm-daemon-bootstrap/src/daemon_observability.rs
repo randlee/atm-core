@@ -722,6 +722,10 @@ mod tests {
     /// is shut down.
     /// Negative: a below-threshold record and a secret field value reach
     /// neither destination, and SDK diagnostics never recurse into export.
+    /// Query/follow and CLI-error behavior remain covered by
+    /// `concrete_adapter_emits_queries_follows_and_reports_health` and
+    /// `run_snapshot_surfaces_observability_query_error`; rotation retention
+    /// remains covered by `retained_log_prune_runs_on_a_background_worker`.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn daemon_log_destinations_route_once_and_keep_the_provider() {
         use crate::telemetry_lifecycle_tests::receiver::Receiver;
