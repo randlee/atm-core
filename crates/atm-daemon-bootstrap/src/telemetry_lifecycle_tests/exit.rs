@@ -18,7 +18,7 @@ use super::{
     Daemon, DaemonObservability, EXPORT_WAIT, endpoint_env, exported_counts, sent_message_id,
     task_record,
 };
-use atm_core::observability::AtmTelemetryExportState;
+use atm_core::observability::{AtmTelemetryExportHealth, AtmTelemetryExportState};
 use atm_core::test_support::FakeEnvSource;
 
 const CHILD_MODE: &str = "ATM_BD6_EXIT_CHILD";
@@ -391,6 +391,14 @@ async fn process_exits_within_five_seconds_when_clean() {
 const FINAL_RECORD_CHILD: &str = "telemetry_lifecycle_tests::exit::final_record_child";
 const CHILD_LOG_DIR: &str = "ATM_BD6_LOG_DIR";
 const CHILD_BACKLOG: &str = "ATM_BD6_BACKLOG";
+/// Set when the parent will confirm on stdin that its collector stored the
+/// final record; the child keeps its runtime, and so the SDK export tasks,
+/// running until then.
+const CHILD_HOLD: &str = "ATM_BD6_HOLD";
+/// Failure-only bound on the held child's wait for the parent.
+const PARENT_CONFIRMATION_LIMIT: Duration = Duration::from_secs(30);
+/// Prefixes the child's export health, printed after daemon shutdown.
+const EXPORT_HEALTH_MARKER: &str = "BD6-EXPORT-HEALTH ";
 /// The bridge retains allowlisted fields only, never message text.
 const FINAL_RECORD: &str = "ATM_DAEMON_SHUTDOWN_DRAINED";
 const BACKLOG_RECORD: &str = "BD6_RETAINED_BACKLOG";
@@ -407,7 +415,7 @@ const DELIVERED_BACKLOG: usize = 192;
 /// never answers forces the SDK's log-dropping diagnostics.
 const OVERFLOW_BACKLOG: usize = 512;
 
-/// Child half of [`final_lifecycle_record_survives_process_exit`] and
+/// Child half of [`final_lifecycle_record_reaches_disk_and_collector`] and
 /// [`provider_shutdown_diagnostics_reach_disk_after_the_final_record`]; a
 /// no-op unless launched by them.
 #[test]
@@ -426,7 +434,7 @@ fn final_record_child() {
         .enable_all()
         .build()
         .expect("child runtime");
-    runtime.block_on(async {
+    let observability = runtime.block_on(async {
         let env = FakeEnvSource::new([
             ("ATM_OTEL_ENDPOINT", Some(endpoint.as_str())),
             ("ATM_LOG_DESTINATION", Some("both")),
@@ -439,42 +447,157 @@ fn final_record_child() {
             .install_tracing_bridge()
             .expect("the child process owns the global tracing bridge");
         let root = tempfile::tempdir().expect("daemon root");
-        let daemon = Daemon::compose(root, observability).await;
+        let daemon = Daemon::compose(root, observability.clone()).await;
         for seq in 0..backlog {
             tracing::info!(target: "atm_daemon_bootstrap::lifecycle", code = BACKLOG_RECORD, attempt = seq, "backlog");
         }
         daemon.shutdown().await.expect("child daemon shutdown");
+        observability
     });
+    if std::env::var_os(CHILD_HOLD).is_some() {
+        // Shutdown may have abandoned its 1s wait on the final export, not the
+        // export: the live runtime still delivers it.
+        await_parent_confirmation();
+    }
+    let health = serde_json::to_string(&observability.export_health_for_test())
+        .expect("export health json");
+    println!("{EXPORT_HEALTH_MARKER}{health}");
     // Process exit follows; nothing in the child flushes the logger itself.
     drop(runtime);
     println!("{CHILD_SCENARIO_SENTINEL}");
 }
 
-/// Runs [`final_record_child`] with `backlog` records against `endpoint` and
-/// returns the retained JSONL lines left on disk after the child process
-/// exited.
-async fn final_record_lines(endpoint: String, backlog: usize) -> Vec<String> {
+/// Blocks until the parent writes a line on stdin, failing at
+/// [`PARENT_CONFIRMATION_LIMIT`]. The reader thread is detached, so a failed
+/// wait does not hold the process.
+fn await_parent_confirmation() {
+    let (sender, confirmed) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut line = String::new();
+        let _ = sender.send(std::io::stdin().read_line(&mut line));
+    });
+    confirmed
+        .recv_timeout(PARENT_CONFIRMATION_LIMIT)
+        .expect("the parent confirmed that its collector stored the final record")
+        .expect("read the parent's confirmation");
+}
+
+/// The retained JSONL lines in `logs` after the child exited.
+fn retained_lines(logs: &std::path::Path) -> Vec<String> {
+    std::fs::read_to_string(logs.join(atm_observability::CANONICAL_LOG_FILE_NAME))
+        .expect("retained log file")
+        .lines()
+        .map(str::to_owned)
+        .collect()
+}
+
+/// The export health the child printed after its daemon shutdown.
+fn child_export_health(stdout: &str) -> AtmTelemetryExportHealth {
+    let line = stdout
+        .lines()
+        // libtest's progress text can share the line.
+        .find_map(|line| line.split_once(EXPORT_HEALTH_MARKER).map(|(_, json)| json))
+        .unwrap_or_else(|| panic!("the child printed its export health:\n{stdout}"));
+    serde_json::from_str(line).expect("child export health parses")
+}
+
+/// Runs [`final_record_child`] with `backlog` records against `endpoint`, the
+/// child exiting right after shutdown, and returns the retained JSONL lines
+/// left on disk and the child's export health.
+async fn final_record_exit(
+    endpoint: String,
+    backlog: usize,
+) -> (Vec<String>, AtmTelemetryExportHealth) {
     // The logger root is the log directory's parent, as for the host `logs`.
     let root = tempfile::tempdir().expect("log root");
     let logs = root.path().join("logs");
     let log_dir = logs.to_str().expect("utf-8 log dir").to_owned();
-    tokio::task::spawn_blocking(move || {
-        run_child_scenario_with(
+    let output = tokio::task::spawn_blocking(move || {
+        spawn_child_scenario_with(
             FINAL_RECORD_CHILD,
             &[
                 (CHILD_LOG_DIR, &log_dir),
                 (CHILD_ENDPOINT, &endpoint),
                 (CHILD_BACKLOG, &backlog.to_string()),
             ],
-        );
+        )
     })
     .await
     .expect("parent driver");
-    std::fs::read_to_string(logs.join(atm_observability::CANONICAL_LOG_FILE_NAME))
-        .expect("retained log file")
-        .lines()
-        .map(str::to_owned)
-        .collect()
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        child_execution_is_proven(&output),
+        "final-record child did not complete successfully: {}\noutput:\n{stdout}",
+        output.status
+    );
+    (retained_lines(&logs), child_export_health(&stdout))
+}
+
+/// Runs [`final_record_child`] holding after shutdown until `receiver` stored
+/// the final record, then confirms on stdin, and returns the retained JSONL
+/// lines left on disk after the child exited.
+async fn final_record_held(receiver: &Receiver, backlog: usize) -> Vec<String> {
+    let root = tempfile::tempdir().expect("log root");
+    let logs = root.path().join("logs");
+    let mut child = Command::new(std::env::current_exe().expect("test binary"))
+        .args(["--exact", FINAL_RECORD_CHILD, "--nocapture", "--test-threads=1"])
+        .env(CHILD_SCENARIO, FINAL_RECORD_CHILD)
+        .env_remove(CHILD_MODE)
+        .env(CHILD_LOG_DIR, &logs)
+        .env(CHILD_ENDPOINT, &receiver.endpoint)
+        .env(CHILD_BACKLOG, backlog.to_string())
+        .env(CHILD_HOLD, "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn final-record child");
+    let mut stdin = child.stdin.take().expect("final-record child stdin");
+    let mut stdout = child.stdout.take().expect("final-record child stdout");
+    let (stdout_tx, stdout_rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = stdout.read_to_end(&mut bytes);
+        let _ = stdout_tx.send(bytes);
+    });
+    // Failure-only: a child that never delivers the record exits at its own
+    // confirmation limit.
+    let capture = &receiver.capture;
+    capture
+        .wait(EXPORT_WAIT, "the final lifecycle record", || {
+            capture
+                .logs
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|record| format!("{record:?}").contains(FINAL_RECORD))
+        })
+        .await;
+    writeln!(stdin, "stored").expect("confirm to the child");
+    drop(stdin);
+    let (bytes, status) = tokio::task::spawn_blocking(move || {
+        // Hang diagnostic only; no elapsed time is asserted.
+        await_eof_then_exit(
+            &mut child,
+            &stdout_rx,
+            Instant::now() + Duration::from_secs(30),
+            "held final-record child",
+        )
+    })
+    .await
+    .expect("parent driver");
+    let output = std::process::Output {
+        status,
+        stdout: bytes.expect("final-record child stdout bytes"),
+        stderr: Vec::new(),
+    };
+    assert!(
+        child_execution_is_proven(&output),
+        "held final-record child did not complete successfully: {}\noutput:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout)
+    );
+    retained_lines(&logs)
 }
 
 /// Index of the final lifecycle record, required to follow all `backlog`
@@ -502,29 +625,15 @@ fn final_record_index(lines: &[String], backlog: usize) -> usize {
 
 /// Positive: after `shutdown_replacement_daemon` and a real process exit, the
 /// final lifecycle record is on disk behind a full backlog, and the collector
-/// received it before the logger provider stopped. SDK diagnostics are never
-/// exported back to the collector. Omitting the first flush loses it.
+/// holds it. The child exits only once the parent saw the record stored, so
+/// no real-time delivery bound is asserted. SDK diagnostics are never exported
+/// back to the collector. Omitting the first flush loses it from disk.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::parallel(slo)]
-async fn final_lifecycle_record_survives_process_exit() {
+async fn final_lifecycle_record_reaches_disk_and_collector() {
     let healthy = Receiver::start(false).await;
-    let lines = final_record_lines(healthy.endpoint.clone(), DELIVERED_BACKLOG).await;
+    let lines = final_record_held(&healthy, DELIVERED_BACKLOG).await;
     final_record_index(&lines, DELIVERED_BACKLOG);
-    // Read only once the receiver holds the final record. It stores each
-    // export before acknowledging it, so an acknowledged final export is
-    // already here; a record still missing means the child stopped waiting at
-    // its export bound and its exit cancelled the receiver's handler.
-    let capture = &healthy.capture;
-    capture
-        .wait(EXPORT_WAIT, "the final lifecycle record", || {
-            capture
-                .logs
-                .lock()
-                .unwrap()
-                .iter()
-                .any(|record| format!("{record:?}").contains(FINAL_RECORD))
-        })
-        .await;
     let exported: Vec<String> = healthy
         .capture
         .logs
@@ -535,7 +644,7 @@ async fn final_lifecycle_record_survives_process_exit() {
         .collect();
     assert!(
         exported.iter().any(|record| record.contains(FINAL_RECORD)),
-        "the collector received the final lifecycle record"
+        "the collector holds the final lifecycle record"
     );
     assert!(
         !exported
@@ -546,15 +655,18 @@ async fn final_lifecycle_record_survives_process_exit() {
     healthy.stop().await;
 }
 
-/// Positive: against a collector that never answers, with a backlog over the
-/// export queue, the SDK's log-dropping diagnostics reach disk after the
-/// final lifecycle record.
-/// Delivery to the stalled collector is not asserted.
+/// Positive: against a collector that never acknowledges, the child exits
+/// (the scenario runner's deadline is a hang diagnostic only), its export
+/// health reports the abandoned export, and, with a backlog over the export
+/// queue, the SDK's log-dropping diagnostics reach disk after the final
+/// lifecycle record. Delivery to the stalled collector is not asserted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::parallel(slo)]
 async fn provider_shutdown_diagnostics_reach_disk_after_the_final_record() {
     let stalled = Receiver::start(true).await;
-    let lines = final_record_lines(stalled.endpoint.clone(), OVERFLOW_BACKLOG).await;
+    let (lines, health) = final_record_exit(stalled.endpoint.clone(), OVERFLOW_BACKLOG).await;
+    assert!(health.last_failure.is_some(), "{health:?}");
+    assert_ne!(health.state, AtmTelemetryExportState::Healthy, "{health:?}");
     let index = final_record_index(&lines, OVERFLOW_BACKLOG);
     let sdk = lines[index + 1..]
         .iter()
