@@ -775,7 +775,9 @@ async fn shutdown_replacement_daemon(
     handler
         .shutdown_peer_connections(REPLACEMENT_DRAIN_DEADLINE)
         .await;
-    workflow_telemetry.shutdown().await;
+    workflow_telemetry
+        .shutdown(tokio::time::Instant::now() + REPLACEMENT_DRAIN_DEADLINE)
+        .await;
     atm_temp_sweeper.shutdown().await;
     diagnostic_timeline::stop_flush_worker();
     let _stopped = stopped?;
