@@ -1059,8 +1059,8 @@ mod tests {
     fn telemetry_export_health_round_trips() {
         let health = AtmTelemetryExportHealth {
             state: AtmTelemetryExportState::Unavailable,
-            endpoint: Some("http://collector:4318".to_string()),
-            protocol: Some(crate::task_telemetry::TelemetryExportProtocol::HttpJson),
+            endpoint: Some("http://collector:4317".to_string()),
+            protocol: Some(crate::task_telemetry::TelemetryExportProtocol::Grpc),
             emitted: 8,
             dropped_full: 1,
             dropped_timeout: 2,
@@ -1073,6 +1073,37 @@ mod tests {
             serde_json::from_str::<AtmTelemetryExportHealth>(&encoded).unwrap(),
             health
         );
+    }
+
+    #[test]
+    fn telemetry_export_health_rejects_unknown_enum_values() {
+        let valid = json!({
+            "state": "degraded",
+            "endpoint": "http://collector:4317",
+            "protocol": "grpc",
+            "emitted": 1,
+            "dropped_full": 0,
+            "dropped_timeout": 0,
+            "dropped_failure": 0,
+            "dropped_shutdown": 0,
+            "last_failure": "rejected"
+        });
+        let decoded: AtmTelemetryExportHealth = serde_json::from_value(valid.clone()).unwrap();
+        assert_eq!(decoded.state, AtmTelemetryExportState::Degraded);
+
+        for (field, value) in [
+            ("state", "exploded"),
+            ("protocol", "http/json"),
+            ("last_failure", "mystery"),
+        ] {
+            let mut payload = valid.clone();
+            payload[field] = json!(value);
+            let error = serde_json::from_value::<AtmTelemetryExportHealth>(payload).unwrap_err();
+            assert!(
+                error.to_string().contains("unknown variant"),
+                "{field}: {error}"
+            );
+        }
     }
 
     #[test]

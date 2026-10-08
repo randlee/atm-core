@@ -203,7 +203,7 @@ pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
 };
 pub use task_telemetry::{
-    NoopTaskTelemetrySink, TaskHandoffFacts, TaskTelemetryError, TaskTelemetryKind,
+    LogDestination, NoopTaskTelemetrySink, TaskHandoffFacts, TaskTelemetryError, TaskTelemetryKind,
     TaskTelemetryRecord, TaskTelemetrySink, TelemetryExportConfig, TelemetryExportProtocol,
 };
 pub use transfer_script::{

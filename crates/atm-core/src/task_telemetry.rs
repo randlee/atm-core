@@ -127,21 +127,44 @@ impl TaskTelemetrySink for NoopTaskTelemetrySink {
     }
 }
 
+const ATM_LOG_DESTINATION: &str = "ATM_LOG_DESTINATION";
+const MAX_AUTH_HEADER_BYTES: usize = 8192;
+
 /// Wire protocol used by the configured OpenTelemetry export endpoint.
+///
+/// Only gRPC is supported: the exporter uses the official OpenTelemetry tonic
+/// transport.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TelemetryExportProtocol {
-    HttpJson,
     Grpc,
 }
 
 /// Validated environment configuration for the task telemetry exporter.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Fields are private and [`TelemetryExportConfig::from_env`] is the only
+/// constructor, so every value reachable through the accessors has been
+/// validated. `Debug` redacts the auth header; there is no `Display`.
+#[derive(Clone, PartialEq, Eq)]
 pub struct TelemetryExportConfig {
-    pub endpoint: String,
-    pub protocol: TelemetryExportProtocol,
-    pub auth_header: Option<String>,
-    pub service_name: String,
+    endpoint: String,
+    protocol: TelemetryExportProtocol,
+    auth_header: Option<String>,
+    service_name: String,
+}
+
+impl std::fmt::Debug for TelemetryExportConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TelemetryExportConfig")
+            .field("endpoint", &self.endpoint)
+            .field("protocol", &self.protocol)
+            .field(
+                "auth_header",
+                &self.auth_header.as_ref().map(|_| "<redacted>"),
+            )
+            .field("service_name", &self.service_name)
+            .finish()
+    }
 }
 
 impl TelemetryExportConfig {
@@ -149,35 +172,186 @@ impl TelemetryExportConfig {
     ///
     /// # Errors
     ///
-    /// Returns a stable configuration error when a configured endpoint is
-    /// empty or the protocol value is unsupported.
+    /// Returns [`AtmErrorCode::TelemetryExportConfigInvalid`] when the
+    /// endpoint is empty, not `http`/`https`, has no authority or embeds
+    /// credentials; when the protocol is not `grpc`; when the auth header is
+    /// malformed or longer than 8192 bytes; when an auth header would be sent
+    /// over plain `http` to a non-loopback host; or when the service name is
+    /// empty.
     pub fn from_env(env: &dyn EnvSource) -> Result<Option<Self>, AtmError> {
         let Some(endpoint) = env.var(ATM_OTEL_ENDPOINT) else {
             return Ok(None);
         };
-        if endpoint.trim().is_empty() {
-            return Err(config_invalid("ATM_OTEL_ENDPOINT must not be empty"));
-        }
+        let endpoint = endpoint.trim().to_string();
+        let target = parse_endpoint(&endpoint)?;
 
-        let protocol = match env.var(ATM_OTEL_PROTOCOL).as_deref() {
+        let protocol = match env.var(ATM_OTEL_PROTOCOL).as_deref().map(str::trim) {
             None | Some("grpc") => TelemetryExportProtocol::Grpc,
-            Some("http/json") => TelemetryExportProtocol::HttpJson,
             Some(value) => {
                 return Err(config_invalid(format!(
-                    "ATM_OTEL_PROTOCOL must be 'grpc' or 'http/json', got '{value}'"
+                    "ATM_OTEL_PROTOCOL '{value}' is not supported; set ATM_OTEL_PROTOCOL=grpc \
+                     (or unset it) and point ATM_OTEL_ENDPOINT at the collector's OTLP gRPC port"
                 )));
             }
+        };
+
+        let auth_header = env.var(ATM_OTEL_AUTH_HEADER);
+        if let Some(header) = auth_header.as_deref() {
+            validate_auth_header(header)?;
+            if !target.https && !target.loopback {
+                return Err(config_invalid(
+                    "ATM_OTEL_AUTH_HEADER requires an https ATM_OTEL_ENDPOINT for a non-loopback \
+                     collector; use https:// or remove the auth header",
+                ));
+            }
+        }
+
+        let service_name = match env.var(ATM_OTEL_SERVICE_NAME) {
+            None => DEFAULT_SERVICE_NAME.to_string(),
+            Some(name) if name.trim().is_empty() => {
+                return Err(config_invalid(
+                    "ATM_OTEL_SERVICE_NAME must not be empty; unset it to use 'atm-daemon'",
+                ));
+            }
+            Some(name) => name.trim().to_string(),
         };
 
         Ok(Some(Self {
             endpoint,
             protocol,
-            auth_header: env.var(ATM_OTEL_AUTH_HEADER),
-            service_name: env
-                .var(ATM_OTEL_SERVICE_NAME)
-                .unwrap_or_else(|| DEFAULT_SERVICE_NAME.to_string()),
+            auth_header,
+            service_name,
         }))
     }
+
+    /// The validated collector endpoint.
+    #[must_use]
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
+
+    /// The export wire protocol.
+    #[must_use]
+    pub const fn protocol(&self) -> TelemetryExportProtocol {
+        self.protocol
+    }
+
+    /// The validated auth header value, when configured.
+    #[must_use]
+    pub fn auth_header(&self) -> Option<&str> {
+        self.auth_header.as_deref()
+    }
+
+    /// The OpenTelemetry `service.name` resource value.
+    #[must_use]
+    pub fn service_name(&self) -> &str {
+        &self.service_name
+    }
+}
+
+/// Where structured log events are written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogDestination {
+    File,
+    Otel,
+    Both,
+}
+
+impl LogDestination {
+    /// Reads `ATM_LOG_DESTINATION` (`file` default, `otel`, `both`).
+    ///
+    /// This is the single parser shared by the CLI and the daemon.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AtmErrorCode::TelemetryExportConfigInvalid`] for an unknown
+    /// value, when `otel` or `both` is selected without `ATM_OTEL_ENDPOINT`, or
+    /// when the export configuration itself is invalid.
+    pub fn from_env(env: &dyn EnvSource) -> Result<Self, AtmError> {
+        let destination = match env.var(ATM_LOG_DESTINATION).as_deref().map(str::trim) {
+            None | Some("file") => return Ok(Self::File),
+            Some("otel") => Self::Otel,
+            Some("both") => Self::Both,
+            Some(value) => {
+                return Err(config_invalid(format!(
+                    "ATM_LOG_DESTINATION '{value}' is not supported; use file, otel or both"
+                )));
+            }
+        };
+        if TelemetryExportConfig::from_env(env)?.is_none() {
+            return Err(config_invalid(
+                "ATM_LOG_DESTINATION=otel|both requires ATM_OTEL_ENDPOINT; set the collector \
+                 endpoint or use ATM_LOG_DESTINATION=file",
+            ));
+        }
+        Ok(destination)
+    }
+}
+
+struct EndpointTarget {
+    https: bool,
+    loopback: bool,
+}
+
+fn parse_endpoint(endpoint: &str) -> Result<EndpointTarget, AtmError> {
+    if endpoint.is_empty() {
+        return Err(config_invalid("ATM_OTEL_ENDPOINT must not be empty"));
+    }
+    let Some((scheme, rest)) = endpoint.split_once("://") else {
+        return Err(config_invalid(
+            "ATM_OTEL_ENDPOINT must be an http:// or https:// URL",
+        ));
+    };
+    let https = match scheme.to_ascii_lowercase().as_str() {
+        "https" => true,
+        "http" => false,
+        _ => {
+            return Err(config_invalid(format!(
+                "ATM_OTEL_ENDPOINT scheme '{scheme}' is not supported; use http:// or https://"
+            )));
+        }
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    if authority.contains('@') {
+        return Err(config_invalid(
+            "ATM_OTEL_ENDPOINT must not embed credentials; use ATM_OTEL_AUTH_HEADER",
+        ));
+    }
+    let host = if let Some(bracketed) = authority.strip_prefix('[') {
+        bracketed.split(']').next().unwrap_or_default()
+    } else {
+        authority.split(':').next().unwrap_or_default()
+    };
+    if host.is_empty() || authority.chars().any(char::is_whitespace) {
+        return Err(config_invalid(
+            "ATM_OTEL_ENDPOINT must name a host, for example http://localhost:4317",
+        ));
+    }
+    let loopback = host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback());
+    Ok(EndpointTarget { https, loopback })
+}
+
+fn validate_auth_header(header: &str) -> Result<(), AtmError> {
+    if header.len() > MAX_AUTH_HEADER_BYTES {
+        return Err(config_invalid(format!(
+            "ATM_OTEL_AUTH_HEADER is {} bytes; the maximum is {MAX_AUTH_HEADER_BYTES}",
+            header.len()
+        )));
+    }
+    let valid = !header.trim().is_empty()
+        && header
+            .bytes()
+            .all(|byte| byte == b'\t' || (0x20..=0x7e).contains(&byte));
+    if !valid {
+        return Err(config_invalid(
+            "ATM_OTEL_AUTH_HEADER must be a non-empty header value of visible ASCII characters, \
+             spaces or tabs",
+        ));
+    }
+    Ok(())
 }
 
 fn config_invalid(detail: impl Into<String>) -> AtmError {
@@ -276,6 +450,16 @@ mod tests {
         );
     }
 
+    fn env(pairs: &[(&'static str, &str)]) -> FakeEnvSource {
+        FakeEnvSource::from_pairs(pairs.iter().map(|(key, value)| (*key, value.to_string())))
+    }
+
+    fn rejects(pairs: &[(&'static str, &str)]) -> String {
+        let error = TelemetryExportConfig::from_env(&env(pairs)).unwrap_err();
+        assert_eq!(error.code(), AtmErrorCode::TelemetryExportConfigInvalid);
+        error.to_string()
+    }
+
     #[test]
     fn export_config_from_env_table() {
         assert_eq!(
@@ -283,35 +467,161 @@ mod tests {
             None
         );
 
-        let grpc = TelemetryExportConfig::from_env(&FakeEnvSource::from_pairs([(
-            ATM_OTEL_ENDPOINT,
-            "http://collector:4317",
-        )]))
-        .unwrap()
-        .unwrap();
-        assert_eq!(grpc.protocol, TelemetryExportProtocol::Grpc);
-        assert_eq!(grpc.service_name, DEFAULT_SERVICE_NAME);
+        let grpc =
+            TelemetryExportConfig::from_env(&env(&[(ATM_OTEL_ENDPOINT, "http://collector:4317")]))
+                .unwrap()
+                .unwrap();
+        assert_eq!(grpc.protocol(), TelemetryExportProtocol::Grpc);
+        assert_eq!(grpc.endpoint(), "http://collector:4317");
+        assert_eq!(grpc.auth_header(), None);
+        assert_eq!(grpc.service_name(), DEFAULT_SERVICE_NAME);
 
-        let http = TelemetryExportConfig::from_env(&FakeEnvSource::from_pairs([
-            (ATM_OTEL_ENDPOINT, "http://collector:4318"),
-            (ATM_OTEL_PROTOCOL, "http/json"),
-            (ATM_OTEL_AUTH_HEADER, "Bearer redacted"),
+        let authed = TelemetryExportConfig::from_env(&env(&[
+            (ATM_OTEL_ENDPOINT, "https://collector.example:4317"),
+            (ATM_OTEL_PROTOCOL, "grpc"),
+            (ATM_OTEL_AUTH_HEADER, "Bearer s3cret-token"),
             (ATM_OTEL_SERVICE_NAME, "atm-test"),
         ]))
         .unwrap()
         .unwrap();
-        assert_eq!(http.protocol, TelemetryExportProtocol::HttpJson);
-        assert_eq!(http.auth_header.as_deref(), Some("Bearer redacted"));
-        assert_eq!(http.service_name, "atm-test");
+        assert_eq!(authed.auth_header(), Some("Bearer s3cret-token"));
+        assert_eq!(authed.service_name(), "atm-test");
 
-        for env in [
-            FakeEnvSource::from_pairs([(ATM_OTEL_ENDPOINT, "")]),
-            FakeEnvSource::from_pairs([
-                (ATM_OTEL_ENDPOINT, "http://collector"),
-                (ATM_OTEL_PROTOCOL, "xml"),
-            ]),
+        for protocol in ["http/json", "http/protobuf", "xml"] {
+            let message = rejects(&[
+                (ATM_OTEL_ENDPOINT, "http://collector:4317"),
+                (ATM_OTEL_PROTOCOL, protocol),
+            ]);
+            assert!(message.contains("ATM_OTEL_PROTOCOL=grpc"), "{message}");
+        }
+        rejects(&[(ATM_OTEL_ENDPOINT, "")]);
+        rejects(&[(ATM_OTEL_ENDPOINT, "   ")]);
+    }
+
+    #[test]
+    fn export_config_rejects_bad_endpoints() {
+        for endpoint in [
+            "collector:4317",
+            "ftp://collector:4317",
+            "unix:///tmp/otel.sock",
+            "http://",
+            "http:///v1",
+            "http://:4317",
+            "https://user:pass@collector:4317",
+            "http://token@localhost:4317",
         ] {
-            let error = TelemetryExportConfig::from_env(&env).unwrap_err();
+            rejects(&[(ATM_OTEL_ENDPOINT, endpoint)]);
+        }
+        for endpoint in [
+            "http://localhost:4317",
+            "HTTPS://collector.example",
+            "http://[::1]:4317/",
+            "http://127.0.0.1:4317",
+        ] {
+            assert!(
+                TelemetryExportConfig::from_env(&env(&[(ATM_OTEL_ENDPOINT, endpoint)]))
+                    .unwrap()
+                    .is_some(),
+                "{endpoint}"
+            );
+        }
+    }
+
+    #[test]
+    fn export_config_auth_header_rules() {
+        let oversized = format!("Bearer {}", "a".repeat(MAX_AUTH_HEADER_BYTES));
+        for header in [
+            "",
+            "  ",
+            "Bearer a\r\nX-Injected: 1",
+            "Bearer \u{e9}",
+            &oversized,
+        ] {
+            rejects(&[
+                (ATM_OTEL_ENDPOINT, "https://collector.example:4317"),
+                (ATM_OTEL_AUTH_HEADER, header),
+            ]);
+        }
+        let at_limit = "a".repeat(MAX_AUTH_HEADER_BYTES);
+        assert!(
+            TelemetryExportConfig::from_env(&env(&[
+                (ATM_OTEL_ENDPOINT, "https://collector.example:4317"),
+                (ATM_OTEL_AUTH_HEADER, &at_limit),
+            ]))
+            .unwrap()
+            .is_some()
+        );
+
+        let message = rejects(&[
+            (ATM_OTEL_ENDPOINT, "http://collector.example:4317"),
+            (ATM_OTEL_AUTH_HEADER, "Bearer s3cret-token"),
+        ]);
+        assert!(message.contains("https"), "{message}");
+        assert!(!message.contains("s3cret-token"), "{message}");
+        for loopback in [
+            "http://localhost:4317",
+            "http://127.0.0.1:4317",
+            "http://[::1]:4317",
+        ] {
+            assert!(
+                TelemetryExportConfig::from_env(&env(&[
+                    (ATM_OTEL_ENDPOINT, loopback),
+                    (ATM_OTEL_AUTH_HEADER, "Bearer s3cret-token"),
+                ]))
+                .unwrap()
+                .is_some(),
+                "{loopback}"
+            );
+        }
+        rejects(&[
+            (ATM_OTEL_ENDPOINT, "http://localhost:4317"),
+            (ATM_OTEL_SERVICE_NAME, " "),
+        ]);
+    }
+
+    #[test]
+    fn export_config_debug_redacts_auth_header() {
+        let config = TelemetryExportConfig::from_env(&env(&[
+            (ATM_OTEL_ENDPOINT, "https://collector.example:4317"),
+            (ATM_OTEL_AUTH_HEADER, "Bearer s3cret-token"),
+        ]))
+        .unwrap()
+        .unwrap();
+        let debug = format!("{config:?}");
+        assert!(!debug.contains("s3cret-token"), "{debug}");
+        assert!(debug.contains("<redacted>"), "{debug}");
+        assert!(debug.contains("https://collector.example:4317"), "{debug}");
+    }
+
+    #[test]
+    fn log_destination_from_env_table() {
+        let endpoint = (ATM_OTEL_ENDPOINT, "http://localhost:4317");
+        assert_eq!(
+            LogDestination::from_env(&FakeEnvSource::empty()).unwrap(),
+            LogDestination::File
+        );
+        assert_eq!(
+            LogDestination::from_env(&env(&[(ATM_LOG_DESTINATION, "file")])).unwrap(),
+            LogDestination::File
+        );
+        assert_eq!(
+            LogDestination::from_env(&env(&[(ATM_LOG_DESTINATION, "otel"), endpoint])).unwrap(),
+            LogDestination::Otel
+        );
+        assert_eq!(
+            LogDestination::from_env(&env(&[(ATM_LOG_DESTINATION, "both"), endpoint])).unwrap(),
+            LogDestination::Both
+        );
+        for pairs in [
+            vec![(ATM_LOG_DESTINATION, "otel")],
+            vec![(ATM_LOG_DESTINATION, "both")],
+            vec![(ATM_LOG_DESTINATION, "syslog"), endpoint],
+            vec![
+                (ATM_LOG_DESTINATION, "otel"),
+                (ATM_OTEL_ENDPOINT, "ftp://collector"),
+            ],
+        ] {
+            let error = LogDestination::from_env(&env(&pairs)).unwrap_err();
             assert_eq!(error.code(), AtmErrorCode::TelemetryExportConfigInvalid);
         }
     }
