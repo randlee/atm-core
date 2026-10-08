@@ -793,11 +793,6 @@ fn legacy_literal_ip_policy_from_value(value: Option<String>) -> LegacyLiteralIp
     }
 }
 
-/// Bounded wait for the listener step beyond the cumulative deadline: the
-/// runtime's own shutdown timeout starts a moment after the deadline, so this
-/// lets its abort-and-join run instead of detaching the Axum task.
-const LISTENER_ABORT_GRACE: Duration = Duration::from_millis(250);
-
 /// Drains every supervised subsystem under one cumulative deadline fixed at
 /// shutdown entry (ADR-055, REQ-DAEMON-RUNTIME-003): listener, recovery sweep,
 /// peer connections, task/workflow telemetry drains, the `$ATM_TEMP` sweeper,
@@ -812,16 +807,9 @@ async fn shutdown_replacement_daemon(
     workers: DaemonWorkers,
 ) -> Result<(), AtmError> {
     let deadline = tokio::time::Instant::now() + REPLACEMENT_DRAIN_DEADLINE;
-    let stopped = tokio::time::timeout_at(
-        deadline + LISTENER_ABORT_GRACE,
-        running.begin_shutdown().finish(),
-    )
-    .await
-    .unwrap_or_else(|_| {
-        Err(AtmError::daemon_unavailable(
-            "replacement HTTP runtime exceeded the cumulative daemon shutdown deadline",
-        ))
-    });
+    // The runtime bounds its own drain, cancellation and cleanup by
+    // `deadline`, so it is awaited to completion rather than dropped.
+    let stopped = running.begin_shutdown().finish(deadline).await;
     workers.recovery_sweep.shutdown(deadline).await;
     handler.shutdown_peer_connections(deadline).await;
     // Both drains feed the SDK, so they finish (or abort) before the exporter.
@@ -1357,7 +1345,7 @@ mod replacement_runtime_tests {
         );
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + super::REPLACEMENT_DRAIN_DEADLINE)
             .await
             .expect("plaintext bootstrap runtime drains");
     }
@@ -1544,7 +1532,7 @@ mod replacement_runtime_tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + super::REPLACEMENT_DRAIN_DEADLINE)
             .await
             .expect("replacement runtime drains");
 
