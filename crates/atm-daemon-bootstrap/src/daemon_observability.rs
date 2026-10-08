@@ -297,13 +297,7 @@ impl DaemonObservability {
         }
         // The guarded value is an immutable `Arc`, so a poisoned lock still
         // holds a valid logger to flush.
-        let logger = Arc::clone(
-            &self
-                .logger
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .0,
-        );
+        let logger = Arc::clone(&self.logger.lock().unwrap_or_else(PoisonError::into_inner).0);
         let flush = tokio::task::spawn_blocking(move || logger.flush());
         // Sink flush failures are recorded in logger health by the canonical
         // logger; an abandoned wait leaves nothing further to report.
@@ -943,7 +937,9 @@ mod tests {
     /// regressions are the deterministic controls.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn poisoned_logger_lock_still_drains_the_retained_logger() {
-        use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
+        use atm_core::observability::{
+            CommandEvent, ObservabilityPort, action_name, outcome_label,
+        };
         const BURST: usize = 64;
         let (_root, observability) = configured().await;
         for _ in 0..BURST {
