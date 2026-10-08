@@ -145,6 +145,7 @@ async fn drive_through_lead_notification_and_reset(
 /// with the per-kind counter, while the daemon is still serving.
 /// Negative: no span exists without its durable row.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::parallel(slo)]
 async fn composed_queue_wake_pump_exports_reminders_lead_notification_and_reset() {
     let receiver = Receiver::start(false).await;
     let (daemon, offset_ms) = start_clocked(endpoint_env(&receiver.endpoint)).await;
@@ -212,6 +213,7 @@ fn tree(root: &Path) -> BTreeSet<PathBuf> {
 /// host filesystem access.
 /// The child process owns `ATM_HOME`, so no parallel test sees it change.
 #[test]
+#[serial_test::parallel(slo)]
 fn composed_daemon_home_is_injected_not_ambient() {
     let sentinel = tempfile::tempdir().expect("sentinel home");
     let sentinel_path = sentinel.path().to_str().expect("utf-8 sentinel home");
