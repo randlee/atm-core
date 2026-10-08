@@ -56,6 +56,30 @@ pub struct PreparedWrite {
 }
 
 impl PreparedWrite {
+    fn from_persistence(
+        outcome: SendOutcome,
+        request: SendRequest,
+        timestamp: IsoTimestamp,
+        persistence: &crate::send::DeliveryPersistenceResult,
+        received_hook: Result<Option<PreparedReceivedHook>, AtmError>,
+        acknowledgement: Option<ResolvedAcknowledgement>,
+    ) -> Self {
+        Self {
+            outcome,
+            outbound_request: request,
+            persisted_timestamp: timestamp,
+            post_write_needed: persistence.requires_post_write(),
+            // Same-host receipts reuse the origin ULID; duplicate storage and
+            // receiver-only hooks have already been skipped by admission.
+            same_store_peer_receipt: persistence.duplicate_disposition
+                == DuplicateWriteDisposition::SameStorePeerReceipt,
+            received_hook,
+            acknowledgement,
+            task_rejection: persistence.task_rejection.clone(),
+            task_events: Vec::new(),
+        }
+    }
+
     /// Takes the exact task-ledger rows committed by this successful write.
     pub fn take_task_events(&mut self) -> Vec<atm_storage::TaskEventRow> {
         std::mem::take(&mut self.task_events)
@@ -626,7 +650,6 @@ fn prepare_persisted_write<
     let summary = crate::send::summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();
     let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
-    let acknowledgement_source_update = None;
     let mut persistence = persist_send_message(
         runtime,
         &request,
@@ -637,7 +660,7 @@ fn prepare_persisted_write<
         timestamp,
         requires_ack,
         task_id.clone(),
-        acknowledgement_source_update,
+        None,
     )?;
     let task_events = std::mem::take(&mut persistence.task_events);
     if let Err(error) = &persistence.operation {
@@ -653,9 +676,7 @@ fn prepare_persisted_write<
         requires_ack,
         acknowledgement.is_some(),
     );
-    // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
-    // skips its duplicate row and the receiver-only hook is likewise skipped.
-    let outcome = match finalize_send_outcome(
+    let outcome = finalize_send_outcome(
         runtime,
         observability,
         &request,
@@ -667,27 +688,17 @@ fn prepare_persisted_write<
         task_id,
         &persistence,
         delivery_mode,
-    ) {
-        Ok(outcome) => outcome,
-        Err(error) => {
-            return Ok(WriteExecution {
-                operation: Err(error),
-                task_events,
-            });
-        }
-    };
+    );
     Ok(WriteExecution {
-        operation: Ok(PreparedWrite {
-            outcome,
-            outbound_request: request,
-            persisted_timestamp: timestamp,
-            post_write_needed: persistence.requires_post_write(),
-            same_store_peer_receipt: persistence.duplicate_disposition
-                == DuplicateWriteDisposition::SameStorePeerReceipt,
-            received_hook,
-            acknowledgement,
-            task_rejection: persistence.task_rejection.clone(),
-            task_events: Vec::new(),
+        operation: outcome.map(|outcome| {
+            PreparedWrite::from_persistence(
+                outcome,
+                request,
+                timestamp,
+                &persistence,
+                received_hook,
+                acknowledgement,
+            )
         }),
         task_events,
     })
@@ -739,7 +750,7 @@ async fn prepare_persisted_write_async(
         requires_ack,
         acknowledgement.is_some(),
     );
-    let outcome = match finalize_send_outcome(
+    let outcome = finalize_send_outcome(
         runtime,
         observability,
         &request,
@@ -751,27 +762,17 @@ async fn prepare_persisted_write_async(
         task_id,
         &persistence,
         DeliveryExecutionMode::Deferred,
-    ) {
-        Ok(outcome) => outcome,
-        Err(error) => {
-            return Ok(WriteExecution {
-                operation: Err(error),
-                task_events,
-            });
-        }
-    };
+    );
     Ok(WriteExecution {
-        operation: Ok(PreparedWrite {
-            outcome,
-            outbound_request: request,
-            persisted_timestamp: timestamp,
-            post_write_needed: persistence.requires_post_write(),
-            same_store_peer_receipt: persistence.duplicate_disposition
-                == DuplicateWriteDisposition::SameStorePeerReceipt,
-            received_hook,
-            acknowledgement,
-            task_rejection: persistence.task_rejection.clone(),
-            task_events: Vec::new(),
+        operation: outcome.map(|outcome| {
+            PreparedWrite::from_persistence(
+                outcome,
+                request,
+                timestamp,
+                &persistence,
+                received_hook,
+                acknowledgement,
+            )
         }),
         task_events,
     })
