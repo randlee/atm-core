@@ -493,7 +493,8 @@ impl ScObservabilityAdapter {
 
     #[cfg(test)]
     fn shutdown(self) -> sc_observability_types::LoggingHealthReport {
-        let _ = self.logger.shutdown();
+        // Fault fixtures inspect the native health report after either outcome.
+        let _shutdown_result = self.logger.shutdown();
         self.logger.health()
     }
 
