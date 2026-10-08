@@ -3121,8 +3121,10 @@ Satisfied by:
 - `REQ-CORE-DOCTOR-001` for observability health reporting aspects
 - `REQ-CORE-OBS-001` for ATM event and query-model boundary aspects
 - `REQ-P-OBS-005` and `REQ-CORE-TASK-TELEMETRY-001` are satisfied by ADR-064,
-  `TaskTelemetryRecord`, `TaskTelemetrySink`, and the task-telemetry boundary
-  manifest
+  `TaskTelemetryRecord`, `TaskTelemetrySink`, the task-telemetry boundary
+  manifest, and the daemon composition in `atm-daemon-bootstrap` (ADR-064
+  D11), proven by `telemetry_lifecycle_tests` against a live OTLP gRPC
+  receiver
 - `REQ-DAEMON-OBS-001` and `REQ-DAEMON-OBS-002` for daemon/runtime retained
   event-baseline aspects
 
@@ -3131,6 +3133,7 @@ ATM must emit structured records through `sc-observability`.
 Initial shared integration scope:
 - `sc-observability-types`
 - `sc-observability`
+- `sc-observability-log` (all 1.5.0)
 
 Outside the initial retained observability integration:
 - `sc-observe`
