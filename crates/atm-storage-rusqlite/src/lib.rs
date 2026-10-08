@@ -4270,7 +4270,7 @@ mod tests {
         let peer_task: atm_storage::TaskId = "AX.3-peer".parse().expect("peer task");
         let mut peer = message("atm:peer-task", "peer receipt");
         peer.envelope.task_id = Some(peer_task.clone());
-        store
+        let _ = store
             .admit_message_with_provenance(&peer, MessageWriteOrigin::Peer)
             .expect("persist peer receipt");
         assert!(
@@ -4661,7 +4661,7 @@ mod tests {
         source.envelope.task_id = Some(task_id.clone());
         source.envelope.requires_ack = true;
         source.envelope.pending_ack_at = Some(IsoTimestamp::now());
-        store
+        let _ = store
             .admit_message_with_provenance(&source, MessageWriteOrigin::Peer)
             .expect("save peer assignment");
 
@@ -4723,7 +4723,7 @@ mod tests {
         let mut peer = message("atm:async-peer-task", "peer receipt");
         peer.envelope.task_id = Some(task_id.clone());
 
-        backend
+        let _ = backend
             .async_message_store()
             .admit_message_with_provenance_async(peer, MessageWriteOrigin::Peer)
             .await
