@@ -298,8 +298,8 @@ Historical Phase R boundary direction (retired by Phase AI):
   - `atm-runtime` becomes the concrete runtime/store composition root
   - `atm-daemon` consumes storage-neutral runtime inputs and stops
     constructing SQLite-backed adapters directly in production composition
-  - relocked boundary records forbid a direct `atm-daemon -> atm-rusqlite`
-    edge; any reintroduction must fail the Rust
+  - relocked boundary records forbid a direct
+    `atm-daemon -> atm-storage-rusqlite` edge; any reintroduction must fail the Rust
     `crates/atm-architecture/` dependency guard (`cargo test --package
     atm-architecture`), which is the sole code-driven boundary enforcement
     layer
