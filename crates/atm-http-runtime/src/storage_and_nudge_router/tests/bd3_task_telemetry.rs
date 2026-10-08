@@ -277,6 +277,51 @@ async fn router_producers_project_exactly_their_committed_rows() {
     );
 }
 
+/// A replayed committed dispatch reaches the real router hook and SQLite
+/// handoff writer, but its existing message key must not project a second
+/// telemetry record or change the hook's successful caller result.
+#[tokio::test]
+async fn replayed_router_handoff_emits_nothing_for_the_existing_sqlite_key() {
+    let fixture = fixture(true, None, None);
+    let sink = RecordingTaskTelemetrySink::new();
+    let runtime = recording_runtime(&sink);
+    let router = fixture.router.clone().with_task_telemetry(runtime.clone());
+
+    write(
+        &router,
+        assignment_request(&fixture, "sender", "recipient", "BD3-DUPLICATE"),
+    )
+    .await
+    .expect("initial assignment succeeds");
+    let dispatch = fixture
+        .received_hook
+        .dispatches
+        .lock()
+        .expect("recorded dispatch")
+        .last()
+        .cloned()
+        .expect("assignment emitted a task-linked dispatch");
+
+    let warnings = router
+        .emit_received_hook(
+            Ok(vec![dispatch]),
+            RequestDeadline::after(Duration::from_secs(10)),
+        )
+        .await;
+    assert!(
+        warnings.is_empty(),
+        "replayed handoff leaves the caller successful"
+    );
+
+    settle(&runtime).await;
+    assert_eq!(prompt_handoffs(&fixture, "BD3-DUPLICATE").await.len(), 1);
+    assert_eq!(
+        kinds(&sink.records(), "BD3-DUPLICATE"),
+        ["assigned", "prompt_handoff"],
+        "the existing SQLite handoff emits no second projection"
+    );
+}
+
 #[derive(Debug, PartialEq)]
 struct Observed {
     responses: Vec<Result<&'static str, atm_storage::AtmErrorCode>>,
