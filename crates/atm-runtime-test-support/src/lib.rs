@@ -20,8 +20,11 @@ use atm_storage::{
 };
 use atm_storage_rusqlite::SqliteStorageFactory;
 
+pub mod task_telemetry;
+
 pub use atm_storage::testing::InMemoryTaskLedgerReader;
 pub use atm_storage_rusqlite::{TemplateAdmissionMessage, TemplateAdmissionSnapshot};
+pub use task_telemetry::RecordingTaskTelemetrySink;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RecordedWriterOutcome {
@@ -249,6 +252,16 @@ impl Drop for SqliteRuntimeGuard {
 }
 
 pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, AtmError> {
+    open_sqlite_boundary_with_task_telemetry(path, None)
+}
+
+/// [`open_sqlite_boundary`] with an optional task telemetry setup, such as
+/// [`RecordingTaskTelemetrySink::setup`], so handler tests observe the records
+/// the assembled runtime exports.
+pub fn open_sqlite_boundary_with_task_telemetry(
+    path: impl AsRef<Path>,
+    task_telemetry: Option<atm_runtime::TaskTelemetrySetup>,
+) -> Result<RuntimeAssembly, AtmError> {
     let config_current_dir = std::env::current_dir().map_err(|_source| {
         AtmError::config("failed to resolve current directory for sqlite test runtime assembly")
     })?;
@@ -265,6 +278,7 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
         non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
         template_composer: None,
         workflow_telemetry: None,
+        task_telemetry,
     })
 }
 

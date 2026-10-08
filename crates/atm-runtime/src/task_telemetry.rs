@@ -320,7 +320,7 @@ impl TaskTelemetrySink for TaskTelemetryRuntime {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::sync::Mutex;
     use std::sync::atomic::AtomicUsize;
@@ -331,7 +331,7 @@ mod tests {
 
     const WAIT: Duration = Duration::from_secs(5);
 
-    fn record(kind: TaskTelemetryKind) -> TaskTelemetryRecord {
+    pub(crate) fn record(kind: TaskTelemetryKind) -> TaskTelemetryRecord {
         TaskTelemetryRecord {
             kind,
             team: "atm-dev".parse().expect("team"),

@@ -207,6 +207,7 @@ fn assemble_host_runtime_with_storage_factory(
         non_claude_outbound,
         template_composer,
         workflow_telemetry: None,
+        task_telemetry: None,
     })
 }
 
