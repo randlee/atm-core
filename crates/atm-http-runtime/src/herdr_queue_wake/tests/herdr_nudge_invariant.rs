@@ -237,7 +237,7 @@ fn install_escalation_targets(
     }
 }
 
-type RealTaskPumpFixture = (
+pub(super) type RealTaskPumpFixture = (
     tempfile::TempDir,
     LocalServiceRuntime,
     Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
@@ -247,7 +247,7 @@ type RealTaskPumpFixture = (
     Arc<Mutex<IsoTimestamp>>,
 );
 
-fn build_real_task_pump(task_names: &[&str]) -> RealTaskPumpFixture {
+pub(super) fn build_real_task_pump(task_names: &[&str]) -> RealTaskPumpFixture {
     let root = tempfile::tempdir().expect("temporary root");
     let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
     let team: TeamName = "lifecycle-team".parse().expect("team");
