@@ -565,6 +565,7 @@ pub(crate) mod tests {
         let runtime = TaskTelemetryRuntime::start(
             TaskTelemetryConfig {
                 queue_capacity: 1,
+                emit_timeout: MAX_DURATION,
                 ..Default::default()
             },
             Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>,
@@ -632,6 +633,7 @@ pub(crate) mod tests {
         let sink = GatedSink::closed();
         let runtime = TaskTelemetryRuntime::start(
             TaskTelemetryConfig {
+                emit_timeout: MAX_DURATION,
                 drain_timeout: MAX_DURATION,
                 ..Default::default()
             },
