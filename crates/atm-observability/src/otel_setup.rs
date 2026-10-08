@@ -78,12 +78,7 @@ pub(crate) fn setup_with_timeouts(
     timeout: Duration,
 ) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
     tokio::runtime::Handle::try_current()?;
-    let mut endpoint =
-        Endpoint::from_shared(config.endpoint().to_owned())?.timeout(transport_timeout);
-    if config.endpoint().starts_with("https://") {
-        endpoint = endpoint.tls_config(ClientTlsConfig::new().with_native_roots())?;
-    }
-    let channel = endpoint.connect_lazy();
+    let channel = lazy_channel(config, transport_timeout)?;
     let auth: Option<MetadataValue<Ascii>> = config.auth_header().map(str::parse).transpose()?;
     // The upstream builder merges ambient OTEL headers even with metadata
     // supplied. Its standard interceptor runs after that merge: replace the
@@ -151,6 +146,19 @@ pub(crate) fn setup_with_timeouts(
         logger,
         meter,
     ))
+}
+
+/// Lazily connected gRPC channel with the transport-level timeout applied.
+fn lazy_channel(
+    config: &TelemetryExportConfig,
+    transport_timeout: Duration,
+) -> Result<tonic::transport::Channel, Box<dyn std::error::Error + Send + Sync>> {
+    let mut endpoint =
+        Endpoint::from_shared(config.endpoint().to_owned())?.timeout(transport_timeout);
+    if config.endpoint().starts_with("https://") {
+        endpoint = endpoint.tls_config(ClientTlsConfig::new().with_native_roots())?;
+    }
+    Ok(endpoint.connect_lazy())
 }
 
 fn tracer_provider(
