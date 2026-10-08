@@ -280,7 +280,7 @@ pub fn build_routed_retained_logger(
     retained_log_policy: RetainedLogPolicy,
     level_override: Option<RetainedLogLevel>,
     destination: atm_core::LogDestination,
-    otel: Option<opentelemetry_sdk::logs::SdkLogger>,
+    otel: Option<crate::otel_logs::OtelLogger>,
 ) -> Result<RetainedLogger, AtmError> {
     if destination != atm_core::LogDestination::Otel {
         prepare_retained_log(log_dir)?;

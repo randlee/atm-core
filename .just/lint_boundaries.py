@@ -296,6 +296,7 @@ SCB_SINGLETON_ALLOWLIST_PATH = Path(".just/allowlists/scb_singleton_allowlist.to
 SCB_SINGLETON_FIXTURE_PATH = Path(".just/fixtures/scb_singleton_known_bad.rs")
 SCB_OBSERVABILITY_ALLOWLIST_PATH = Path(".just/allowlists/scb_observability_allowlist.toml")
 SCB_OBSERVABILITY_FIXTURE_PATH = Path(".just/fixtures/scb_observability_known_bad.rs")
+SCB_OBSERVABILITY_OTEL_FIXTURE_PATH = Path(".just/fixtures/scb_observability_otel_known_bad.rs")
 SCB_CONFIG_DIRECT_PATTERNS = ("config::load_team_config(", "load_claude_team_config_document(")
 SCB_CONFIG_GENERIC_HELPER_PATTERNS = (
     "fn load_workspace_config(",
@@ -364,6 +365,14 @@ SCB_OBSERVABILITY_DIRECT_PATTERNS = (
     "sc_observability_types::ActionName",
     "sc_observability_types::OutcomeLabel",
 )
+# SCB-OBSERVABILITY-002: OpenTelemetry/tonic use inside atm-observability stays in the exporter modules.
+SCB_OBSERVABILITY_OTEL_SRC_ROOT = "crates/atm-observability/src/"
+SCB_OBSERVABILITY_OTEL_MODULES = {"otel_setup.rs", "otel_logs.rs", "task_exporter.rs", "export_diagnostics.rs"}
+SCB_OBSERVABILITY_OTEL_PATH_RE = re.compile(
+    r"\b(?:opentelemetry(?:_sdk|_otlp)?|tonic)::|\buse\s+(?:opentelemetry(?:_sdk|_otlp)?|tonic)\b"
+)
+# Functions allowed to call force_flush( (shutdown/flush paths). None call it today, so any call is a violation.
+SCB_OBSERVABILITY_FORCE_FLUSH_ALLOWED_FNS: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -1079,6 +1088,7 @@ def scb_singleton_fixture_violation(
 def scb_observability_fixture_violation(
     violations: list[BoundaryViolation],
     expected_rules: set[str],
+    fixture_path: Path = SCB_OBSERVABILITY_FIXTURE_PATH,
 ) -> BoundaryViolation | None:
     observed_rules = {
         violation.location.split(" ", 1)[0]
@@ -1089,7 +1099,7 @@ def scb_observability_fixture_violation(
     if not missing:
         return None
     return BoundaryViolation(
-        f"{SCB_OBSERVABILITY_FIXTURE_PATH.as_posix()}: fixture self-test did not reject {', '.join(missing)}",
+        f"{fixture_path.as_posix()}: fixture self-test did not reject {', '.join(missing)}",
         "",
     )
 
@@ -3087,6 +3097,66 @@ def collect_scb_observability_rule_violations(
     return violations
 
 
+def non_test_rust_lines(lines: list[str]) -> list[tuple[int, str]]:
+    """(line number, text) of every line outside `#[cfg(test)]` items; an item ends at its `;` or matching brace."""
+    kept: list[tuple[int, str]] = []
+    skipping_item = False
+    depth = 0
+    opened = False
+    for line_number, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if skipping_item:
+            depth += line.count("{") - line.count("}")
+            opened = opened or "{" in line
+            if (opened and depth <= 0) or (not opened and stripped.endswith(";")):
+                skipping_item = False
+            continue
+        if stripped.startswith("#[cfg(test)]"):
+            skipping_item, depth, opened = True, 0, False
+            continue
+        kept.append((line_number, line))
+    return kept
+
+
+def collect_scb_observability_otel_violations(
+    repo_root: Path,
+    source_paths: list[Path],
+) -> list[BoundaryViolation]:
+    violations: list[BoundaryViolation] = []
+    for source_path in source_paths:
+        rel_path = source_path.relative_to(repo_root)
+        rel_source = rel_path.as_posix()
+        if rel_path != SCB_OBSERVABILITY_OTEL_FIXTURE_PATH and not rel_source.startswith(
+            SCB_OBSERVABILITY_OTEL_SRC_ROOT
+        ):
+            continue
+        name = rel_path.name
+        if "/otel_tests/" in rel_source or name == "tests.rs" or name.endswith("_tests.rs"):
+            continue
+        lines = source_path.read_text(encoding="utf-8").splitlines()
+        otel_allowed = name in SCB_OBSERVABILITY_OTEL_MODULES
+        for line_number, line in non_test_rust_lines(lines):
+            if is_comment_line(line):
+                continue
+            if not otel_allowed and SCB_OBSERVABILITY_OTEL_PATH_RE.search(line):
+                violations.append(
+                    BoundaryViolation(
+                        f"SCB-OBSERVABILITY-002 {rel_source}:{line_number} opentelemetry/opentelemetry_sdk/opentelemetry_otlp/tonic paths are confined to otel_setup, otel_logs, task_exporter and export_diagnostics",
+                        "",
+                    )
+                )
+            if "force_flush(" in line and (
+                enclosing_function_name(lines, line_number) not in SCB_OBSERVABILITY_FORCE_FLUSH_ALLOWED_FNS
+            ):
+                violations.append(
+                    BoundaryViolation(
+                        f"SCB-OBSERVABILITY-002 {rel_source}:{line_number} force_flush( is allowed only in the shutdown/flush functions named in SCB_OBSERVABILITY_FORCE_FLUSH_ALLOWED_FNS (no per-event flush)",
+                        "",
+                    )
+                )
+    return violations
+
+
 def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     records, parse_violations = parse_boundary_records(repo_root)
     violations: list[BoundaryViolation] = []
@@ -3106,6 +3176,7 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations.extend(collect_scb_workspace_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_singleton_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_observability_rule_violations(repo_root, rust_sources(repo_root)))
+    violations.extend(collect_scb_observability_otel_violations(repo_root, rust_sources(repo_root)))
     fixture_path = repo_root / SCB_CONFIG_FIXTURE_PATH
     if not fixture_path.exists():
         violations.append(
@@ -3188,6 +3259,22 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
         )
         if fixture_failure is not None:
             violations.append(fixture_failure)
+    otel_fixture_path = repo_root / SCB_OBSERVABILITY_OTEL_FIXTURE_PATH
+    if not otel_fixture_path.exists():
+        violations.append(
+            BoundaryViolation(
+                SCB_OBSERVABILITY_OTEL_FIXTURE_PATH.as_posix(),
+                "missing required SCB-OBSERVABILITY-002 known-bad fixture",
+            )
+        )
+    else:
+        otel_failure = scb_observability_fixture_violation(
+            collect_scb_observability_otel_violations(repo_root, [otel_fixture_path]),
+            {"SCB-OBSERVABILITY-002"},
+            SCB_OBSERVABILITY_OTEL_FIXTURE_PATH,
+        )
+        if otel_failure is not None:
+            violations.append(otel_failure)
     return dedupe_violations(violations)
 
 

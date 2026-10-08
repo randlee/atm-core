@@ -39,7 +39,7 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["per_event_force_flush", "collector_ack_from_admission"]
 
 [enforcement]
-lint_rules = ["SCB-OBSERVABILITY-001"]
+lint_rules = ["SCB-OBSERVABILITY-002"]
 review_gates = ["native_sdk_tokio", "bounded_projection", "durable_times", "redaction", "observable_health", "standard_provider_ownership"]
 
 [status]
