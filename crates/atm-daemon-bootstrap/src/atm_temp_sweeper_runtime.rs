@@ -129,7 +129,9 @@ impl AtmTempSweeperRuntime {
     /// early, so shutdown does not need to wait for an unbounded directory
     /// walk to finish on its own (QM43-I7) — the grace period exists for
     /// the last in-flight chunk of work, not the whole remaining tree.
-    pub async fn shutdown(&self) {
+    /// Stops the sweeper within `min(SWEEPER_SHUTDOWN_GRACE, deadline)`, so
+    /// the daemon's cumulative shutdown deadline also bounds this step.
+    pub async fn shutdown(&self, deadline: tokio::time::Instant) {
         if let Ok(mut sender) = self.shutdown.lock()
             && let Some(sender) = sender.take()
         {
@@ -142,7 +144,8 @@ impl AtmTempSweeperRuntime {
         let Some(mut worker) = worker else {
             return;
         };
-        if tokio::time::timeout(SWEEPER_SHUTDOWN_GRACE, &mut worker)
+        let deadline = deadline.min(tokio::time::Instant::now() + SWEEPER_SHUTDOWN_GRACE);
+        if tokio::time::timeout_at(deadline, &mut worker)
             .await
             .is_err()
         {
@@ -377,7 +380,9 @@ mod tests {
         observability.pass_completed.notified().await;
         assert!(!expired.exists(), "expired entry must be reclaimed");
 
-        sweeper.shutdown().await;
+        sweeper
+            .shutdown(tokio::time::Instant::now() + SWEEPER_SHUTDOWN_GRACE)
+            .await;
     }
 
     #[tokio::test]
@@ -392,9 +397,12 @@ mod tests {
         );
         // Shutdown must complete well within its own bounded grace period
         // even though the next tick is far in the future.
-        tokio::time::timeout(SWEEPER_SHUTDOWN_GRACE, sweeper.shutdown())
-            .await
-            .expect("shutdown completes within its own grace period");
+        tokio::time::timeout(
+            SWEEPER_SHUTDOWN_GRACE,
+            sweeper.shutdown(tokio::time::Instant::now() + SWEEPER_SHUTDOWN_GRACE),
+        )
+        .await
+        .expect("shutdown completes within its own grace period");
     }
 
     /// QM43-I7: a non-cancellable `spawn_blocking` sweep pass would let
