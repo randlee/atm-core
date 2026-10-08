@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::Duration;
 
 use atm_core::atm_temp::ProcessEnvSource;
@@ -42,10 +42,6 @@ const RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
 /// limits need at most two 400ms exports per quiescent signal.
 const EXPORT_SHUTDOWN_BOUND: Duration = Duration::from_secs(1);
 
-/// The one daemon process owner, registered by `bootstrap_replacement_observability`
-/// like the process-global tracing bridge it installs.
-static PROCESS_OWNER: OnceLock<DaemonObservability> = OnceLock::new();
-
 struct LoggerLifecycle(Arc<RetainedLogger>);
 
 impl LoggerLifecycle {
@@ -70,6 +66,9 @@ struct Export {
     selection: ExportSelection,
     diagnostics: Arc<ExportDiagnostics>,
     // MUTEX: runtime assembly takes the setups once; shutdown takes providers once.
+    // Each guards a single Option that is only ever read or `take`n, so a
+    // panic while it is held cannot leave it half-updated: poison is recovered
+    // with `into_inner` so telemetry setup and shutdown still run.
     setups: Mutex<Option<(TaskTelemetrySetup, WorkflowTelemetrySetup)>>,
     providers: Mutex<Option<Providers>>,
     runtime: OnceLock<(
@@ -151,7 +150,10 @@ impl Export {
     }
 }
 
-pub(crate) struct DaemonObservability {
+/// The daemon process's observability owner: the retained logger and the
+/// standard SDK providers. The entrypoint bootstraps it once and passes it
+/// into daemon composition, which drains and shuts it down.
+pub struct DaemonObservability {
     // Keep one shared logger lifecycle behind a mutex so emit/health paths and
     // shutdown can coordinate a single transition into the stopped state.
     logger: Arc<Mutex<LoggerLifecycle>>,
@@ -183,15 +185,23 @@ impl DaemonObservability {
     /// blocking pool. Invalid export configuration never fails the daemon: it
     /// selects file logging and reports `Unavailable`/`ConfigInvalid` health.
     pub(crate) async fn bootstrap() -> Result<Self, AtmError> {
-        let export = resolve_export(&ProcessEnvSource);
-        let log_dir = home::host_log_dir()?;
+        Self::bootstrap_from(&ProcessEnvSource, home::host_log_dir()?).await
+    }
+
+    /// [`Self::bootstrap`] over an explicit environment and log directory.
+    pub(crate) async fn bootstrap_from(
+        env: &dyn atm_core::atm_temp::EnvSource,
+        log_dir: PathBuf,
+    ) -> Result<Self, AtmError> {
+        let export = resolve_export(env);
         let destination = export.destination;
         let otel_logger = export
             .export
             .providers
             .lock()
-            .ok()
-            .and_then(|providers| providers.as_ref().map(|p| p.1.logger(ATM_SERVICE_NAME)));
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+            .map(|p| p.1.logger(ATM_SERVICE_NAME));
         let (logger, active_log_path) = tokio::task::spawn_blocking(move || {
             let level = logger_level_override()?;
             let active_log_path = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
@@ -218,16 +228,6 @@ impl DaemonObservability {
         })
     }
 
-    /// Registers this value as the process lifecycle owner. Called once by
-    /// the daemon entrypoint, after the process-global tracing bridge exists.
-    pub(crate) fn register_process_owner(&self) {
-        let _ = PROCESS_OWNER.set(self.clone());
-    }
-
-    pub(crate) fn process_owner() -> Option<Self> {
-        PROCESS_OWNER.get().cloned()
-    }
-
     /// Hands the existing task/workflow setups to runtime assembly once.
     pub(crate) fn take_telemetry_setups(
         &self,
@@ -235,8 +235,8 @@ impl DaemonObservability {
         self.export
             .setups
             .lock()
-            .ok()
-            .and_then(|mut setups| setups.take())
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
             .map_or((None, None), |(task, workflow)| {
                 (Some(task), Some(workflow))
             })
@@ -248,7 +248,7 @@ impl DaemonObservability {
         task: Arc<TaskTelemetryDiagnostics>,
         workflow: Arc<WorkflowTelemetryDiagnostics>,
     ) {
-        let _ = self.export.runtime.set((task, workflow));
+        self.export.runtime.get_or_init(|| (task, workflow));
     }
 
     /// Shuts the three standard providers down concurrently on the blocking
@@ -266,16 +266,42 @@ impl DaemonObservability {
                 let (sender, receiver) = watch::channel(false);
                 let bound = deadline.min(Instant::now() + EXPORT_SHUTDOWN_BOUND);
                 tokio::spawn(async move {
-                    let providers = export.providers.lock().ok().and_then(|mut p| p.take());
+                    let providers = export
+                        .providers
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .take();
                     if let Some(providers) = providers {
                         shutdown_providers(providers, bound, &export.diagnostics).await;
                     }
-                    let _ = sender.send(true);
+                    sender.send_replace(true);
                 });
                 receiver
             })
             .clone();
-        let _ = tokio::time::timeout_at(deadline, done.wait_for(|done| *done)).await;
+        // Past its own deadline a caller stops waiting; the owner keeps the outcome.
+        drop(tokio::time::timeout_at(deadline, done.wait_for(|done| *done)).await);
+    }
+
+    /// Flushes every retained event admitted before the call, file and routed
+    /// OpenTelemetry sinks, through the existing canonical `flush` on the
+    /// blocking pool. The wait is bounded by `min(1s, deadline)` and consumes
+    /// the caller's cumulative deadline; past it nothing is attempted. The
+    /// canonical flush keeps its own configured 1s bound, so a timeout
+    /// abandons the wait, not the call. The logger stays live: this does not
+    /// stop the writer thread, which process exit ends.
+    pub(crate) async fn flush_logger(&self, deadline: Instant) {
+        let bound = deadline.min(Instant::now() + RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT);
+        if bound <= Instant::now() {
+            return;
+        }
+        // The guarded value is an immutable `Arc`, so a poisoned lock still
+        // holds a valid logger to flush.
+        let logger = Arc::clone(&self.logger.lock().unwrap_or_else(PoisonError::into_inner).0);
+        let flush = tokio::task::spawn_blocking(move || logger.flush());
+        // Sink flush failures are recorded in logger health by the canonical
+        // logger; an abandoned wait leaves nothing further to report.
+        drop(tokio::time::timeout_at(bound, flush).await);
     }
 
     pub(crate) fn install_tracing_bridge(&self) -> Result<(), AtmError> {
@@ -330,6 +356,30 @@ impl DaemonObservability {
     }
 
     #[cfg(test)]
+    pub(crate) fn export_providers_present_for_test(&self) -> bool {
+        self.export
+            .providers
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_some()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn export_health_for_test(&self) -> AtmTelemetryExportHealth {
+        self.export.health()
+    }
+
+    /// The same bridge `install_tracing_bridge` installs process-wide, for a
+    /// test-scoped dispatcher.
+    #[cfg(test)]
+    pub(crate) fn tracing_bridge_for_test(&self) -> atm_observability::TracingBridgeLayer {
+        let logger = self.logger.lock().expect("logger lock");
+        let bridge = atm_observability::TracingBridgeLayer::new(Arc::clone(&logger.0));
+        bridge.set_export_diagnostics(Arc::clone(&self.export.diagnostics));
+        bridge
+    }
+
+    #[cfg(test)]
     fn shutdown_for_test(self) {
         let logger = match Arc::try_unwrap(self.logger) {
             Ok(logger) => logger,
@@ -343,7 +393,7 @@ impl DaemonObservability {
             Ok(retained_logger) => retained_logger,
             Err(_) => panic!("test retained logger must have one owner"),
         };
-        let _ = retained_logger.shutdown();
+        drop(retained_logger.shutdown());
     }
 
     #[cfg(test)]
@@ -659,5 +709,270 @@ mod tests {
             !rotated_log_path.exists(),
             "background prune worker should remove expired rotated files"
         );
+    }
+
+    /// Positive: through the daemon's own bootstrap, each of
+    /// `ATM_LOG_DESTINATION=file|otel|both` delivers one record per selected
+    /// destination for a CLI-startup port record, a direct `sc` macro record,
+    /// and a tracing-origin record, and
+    /// the standard logger provider still exports after the retained logger
+    /// is shut down.
+    /// Negative: a below-threshold record and a secret field value reach
+    /// neither destination, and SDK diagnostics never recurse into export.
+    /// Query/follow and CLI-error behavior remain covered by
+    /// `concrete_adapter_emits_queries_follows_and_reports_health` and
+    /// `run_snapshot_surfaces_observability_query_error`; rotation retention
+    /// remains covered by `retained_log_prune_runs_on_a_background_worker`.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn daemon_log_destinations_route_once_and_keep_the_provider() {
+        use crate::telemetry_lifecycle_tests::receiver::Receiver;
+        use atm_core::observability::{
+            CommandEvent, ObservabilityPort, action_name, outcome_label,
+        };
+        use opentelemetry::logs::{LogRecord as _, Logger as _, LoggerProvider as _};
+        use tracing_subscriber::layer::SubscriberExt as _;
+
+        fn count(records: &[String], needle: &str) -> usize {
+            records
+                .iter()
+                .filter(|record| record.contains(needle))
+                .count()
+        }
+
+        for destination in ["file", "otel", "both"] {
+            let receiver = Receiver::start(false).await;
+            let root = TempDir::new().expect("tempdir");
+            let log_dir = root.path().join("logs");
+            let env = atm_core::test_support::FakeEnvSource::new([
+                ("ATM_OTEL_ENDPOINT", Some(receiver.endpoint.as_str())),
+                ("ATM_LOG_DESTINATION", Some(destination)),
+            ]);
+            let observability = DaemonObservability::bootstrap_from(&env, log_dir.clone())
+                .await
+                .expect("bootstrap");
+            let mut direct_sc_attachment = observability
+                .logger
+                .lock()
+                .expect("logger lock")
+                .0
+                .attach_sc_log_facade()
+                .expect("attach direct sc logger");
+            let dispatch = tracing::Dispatch::new(
+                tracing_subscriber::registry().with(observability.tracing_bridge_for_test()),
+            );
+            let subscriber = tracing::dispatcher::set_default(&dispatch);
+            observability
+                .emit(CommandEvent {
+                    command: "atm",
+                    action: action_name("cli_startup"),
+                    outcome: outcome_label("ok"),
+                    team: "bd6-team".parse().expect("team"),
+                    agent: "sender".parse().expect("agent"),
+                    sender: "sender".parse().expect("agent"),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: None,
+                    error_message: None,
+                })
+                .expect("CLI startup record");
+            sc_observability_log::event!(
+                name: "bd6.direct_sc_macro",
+                target: "atm_daemon_bootstrap::bd6_direct_sc_macro",
+                sc_observability_log::Level::INFO,
+                "bd6 direct sc macro record"
+            );
+            tracing::warn!(target: "atm_daemon_bootstrap::bd6_tracing_record", token = "raw-secret", "bd6 tracing record");
+            tracing::debug!(target: "atm_daemon_bootstrap::bd6_below_threshold", "bd6 below threshold");
+            observability.flush_for_test();
+            let exported = |receiver: &Receiver| -> Vec<String> {
+                receiver
+                    .capture
+                    .logs
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .map(|record| format!("{record:?}"))
+                    .collect()
+            };
+            if destination != "file" {
+                receiver
+                    .capture
+                    .wait(Duration::from_secs(15), "both exported records", || {
+                        let logs = exported(&receiver);
+                        count(&logs, "cli_startup") == 1
+                            && count(&logs, "bd6.direct_sc_macro") == 1
+                            && count(&logs, "bd6_tracing_record") == 1
+                    })
+                    .await;
+                let logs = exported(&receiver);
+                assert_eq!(logs.len(), 3, "{destination}: no recursion: {logs:#?}");
+                assert_eq!(count(&logs, "raw-secret"), 0);
+                assert_eq!(count(&logs, "below_threshold"), 0);
+            } else {
+                // Negative control: file-only owns the retained JSONL sink,
+                // so every collector record would be an unintended export.
+                assert!(
+                    exported(&receiver).is_empty(),
+                    "file-only must not export OTLP logs: {:#?}",
+                    exported(&receiver)
+                );
+            }
+            let file = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
+            if destination == "otel" {
+                assert!(!file.exists(), "otel-only writes no JSONL");
+            } else {
+                let lines: Vec<String> = std::fs::read_to_string(&file)
+                    .expect("jsonl")
+                    .lines()
+                    .map(str::to_owned)
+                    .collect();
+                assert_eq!(count(&lines, "cli_startup"), 1, "{lines:#?}");
+                assert_eq!(count(&lines, "bd6.direct_sc_macro"), 1, "{lines:#?}");
+                assert_eq!(count(&lines, "bd6_tracing_record"), 1, "{lines:#?}");
+                assert_eq!(count(&lines, "raw-secret"), 0);
+                assert_eq!(count(&lines, "below_threshold"), 0);
+            }
+            drop(subscriber);
+            drop(dispatch);
+            direct_sc_attachment
+                .detach(Duration::from_secs(1))
+                .expect("detach direct sc logger");
+            let export = Arc::clone(&observability.export);
+            let caller = export
+                .providers
+                .lock()
+                .unwrap()
+                .as_ref()
+                .expect("configured providers")
+                .1
+                .logger("bd6-caller");
+            observability.shutdown_for_test();
+            let mut record = caller.create_log_record();
+            record.set_body("bd6 after retained logger shutdown".into());
+            caller.emit(record);
+            drop(caller);
+            let providers = export.providers.lock().unwrap().take().expect("providers");
+            super::shutdown_providers(
+                providers,
+                tokio::time::Instant::now() + Duration::from_secs(1),
+                &export.diagnostics,
+            )
+            .await;
+            assert_eq!(
+                count(&exported(&receiver), "bd6 after retained logger shutdown"),
+                1,
+                "{destination}: the provider outlives the retained logger"
+            );
+            receiver.stop().await;
+        }
+    }
+
+    /// Runs `hold`, which locks a mutex and panics while holding the guard,
+    /// the way a panicking holder poisons it.
+    fn poison(hold: impl FnOnce() + Send + 'static) {
+        std::thread::spawn(hold)
+            .join()
+            .expect_err("the holder panicked");
+    }
+
+    /// A bootstrapped owner with a configured exporter (lazy connection, no
+    /// collector needed) so setups and providers are present.
+    async fn configured() -> (TempDir, DaemonObservability) {
+        let root = TempDir::new().expect("tempdir");
+        let env = atm_core::test_support::FakeEnvSource::new([(
+            "ATM_OTEL_ENDPOINT",
+            Some("http://127.0.0.1:4317"),
+        )]);
+        let observability = DaemonObservability::bootstrap_from(&env, root.path().join("logs"))
+            .await
+            .expect("bootstrap");
+        (root, observability)
+    }
+
+    /// Positive: a poisoned setups lock still hands the setups to runtime
+    /// assembly. Negative: it does not read as "no setups", which would
+    /// silently disable telemetry.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn poisoned_setups_lock_still_hands_over_the_setups() {
+        let (_root, observability) = configured().await;
+        let export = Arc::clone(&observability.export);
+        poison(move || {
+            let _guard = export.setups.lock().expect("lock before poisoning");
+            panic!("deliberate poison");
+        });
+        assert!(observability.export.setups.is_poisoned());
+        let (task, workflow) = observability.take_telemetry_setups();
+        assert!(task.is_some() && workflow.is_some());
+        let (again, _) = observability.take_telemetry_setups();
+        assert!(again.is_none(), "the setups are handed over once");
+    }
+
+    /// Positive: a poisoned providers lock still shuts the providers down.
+    /// Negative: they are not left installed.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn poisoned_providers_lock_still_shuts_the_providers_down() {
+        let (_root, observability) = configured().await;
+        assert!(observability.export_providers_present_for_test());
+        let export = Arc::clone(&observability.export);
+        poison(move || {
+            let _guard = export.providers.lock().expect("lock before poisoning");
+            panic!("deliberate poison");
+        });
+        assert!(observability.export.providers.is_poisoned());
+        observability
+            .shutdown_export(tokio::time::Instant::now() + Duration::from_secs(5))
+            .await;
+        assert!(!observability.export_providers_present_for_test());
+    }
+
+    /// Positive: a poisoned logger lock still drains the retained logger: every
+    /// event admitted before the call is on disk when `flush_logger` returns.
+    /// Negative control (scheduler-dependent, not deterministic): no writer
+    /// barrier exists, so a burst this size is usually still queued behind the
+    /// writer when the last `emit` returns and a skipped flush then leaves
+    /// lines missing (0 of 30 mutant runs passed). A schedule where the writer
+    /// drains first would let the mutant pass; the setups and providers
+    /// regressions are the deterministic controls.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn poisoned_logger_lock_still_drains_the_retained_logger() {
+        use atm_core::observability::{
+            CommandEvent, ObservabilityPort, action_name, outcome_label,
+        };
+        const BURST: usize = 64;
+        let (_root, observability) = configured().await;
+        for _ in 0..BURST {
+            observability
+                .emit(CommandEvent {
+                    command: "atm",
+                    action: action_name("poison_drain"),
+                    outcome: outcome_label("ok"),
+                    team: "bd6-team".parse().expect("team"),
+                    agent: "sender".parse().expect("agent"),
+                    sender: "sender".parse().expect("agent"),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: None,
+                    error_message: None,
+                })
+                .expect("admitted before the poison");
+        }
+        let logger = Arc::clone(&observability.logger);
+        poison(move || {
+            let _guard = logger.lock().expect("lock before poisoning");
+            panic!("deliberate poison");
+        });
+        assert!(observability.logger.is_poisoned());
+        observability
+            .flush_logger(tokio::time::Instant::now() + Duration::from_secs(5))
+            .await;
+        let written = std::fs::read_to_string(&observability.active_log_path)
+            .expect("log file")
+            .matches("poison_drain")
+            .count();
+        assert_eq!(written, BURST, "the flush drained every admitted event");
     }
 }
