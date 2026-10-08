@@ -433,6 +433,30 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn diagnostics_snapshot_is_payload_free() {
+        let TaskTelemetryDiagnosticsSnapshot {
+            emitted,
+            dropped_full,
+            dropped_timeout,
+            dropped_failure,
+            dropped_shutdown,
+            config_invalid,
+        } = TaskTelemetryDiagnosticsSnapshot::default();
+
+        assert_eq!(
+            [
+                emitted,
+                dropped_full,
+                dropped_timeout,
+                dropped_failure,
+                dropped_shutdown,
+            ],
+            [0; 5]
+        );
+        assert!(!config_invalid);
+    }
+
+    #[test]
     fn config_bounds_and_defaults() {
         let defaults = TaskTelemetryConfig::default();
         assert_eq!(defaults.queue_capacity, 256);
