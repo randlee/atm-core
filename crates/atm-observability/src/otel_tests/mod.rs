@@ -66,6 +66,65 @@ async fn shutdown(setup: TelemetrySetup) {
 }
 
 #[tokio::test]
+async fn every_task_kind_exports_its_typed_name_and_facts() {
+    use TaskTelemetryKind::*;
+    let kinds = [
+        Assigned,
+        Acked,
+        Started,
+        Reassigned,
+        Reopened,
+        Completed,
+        Refused,
+        Cancelled,
+        Rejected,
+        Reminded,
+        LeadNotified,
+        Moved,
+        Migrated,
+        RemindersReset,
+        PromptHandoff,
+    ];
+    let receiver = Receiver::start(false).await;
+    let setup =
+        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+    for (index, kind) in kinds.into_iter().enumerate() {
+        setup
+            .0
+            .sink
+            .emit(record("all-kinds", kind, index as u64 + 1, 1))
+            .await
+            .unwrap();
+    }
+    shutdown(setup).await;
+    {
+        let spans = receiver.capture.spans.lock().unwrap();
+        let events: Vec<_> = spans
+            .iter()
+            .filter(|span| span.name == "atm.task.event")
+            .collect();
+        assert_eq!(events.len(), kinds.len());
+        for (event, kind) in events.iter().zip(kinds) {
+            let fact = event
+                .attributes
+                .iter()
+                .find(|attribute| attribute.key == "atm.task.kind")
+                .unwrap();
+            assert_eq!(
+                fact.value.as_ref().unwrap().value,
+                Some(
+                    opentelemetry_proto::tonic::common::v1::any_value::Value::StringValue(
+                        kind.as_str().to_owned()
+                    )
+                )
+            );
+            assert_eq!(event.start_time_unix_nano, event.end_time_unix_nano);
+        }
+    }
+    receiver.stop().await;
+}
+
+#[tokio::test]
 async fn workflow_uses_durable_native_spans_without_inventing_incomplete_duration() {
     let receiver = Receiver::start(false).await;
     let setup =
@@ -165,10 +224,14 @@ async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
         } else {
             panic!("native counter sum");
         }
-        for name in ["atm.task.time_to_start_ms", "atm.task.time_to_close_ms"] {
+        for (name, sum) in [
+            ("atm.task.time_to_start_ms", 2000.),
+            ("atm.task.time_to_close_ms", 6000.),
+        ] {
             let histogram = metrics.iter().find(|metric| metric.name == name).unwrap();
             if let Some(Data::Histogram(histogram)) = &histogram.data {
                 assert_eq!(histogram.data_points[0].count, 1);
+                assert_eq!(histogram.data_points[0].sum, Some(sum));
                 assert!(histogram.data_points[0].attributes.is_empty());
                 assert!(!histogram.data_points[0].explicit_bounds.is_empty());
             } else {

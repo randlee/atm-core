@@ -11,7 +11,6 @@ fn explicit_atm_configuration_ignores_ambient_otel_settings() {
             "otel_tests::ambient::ambient_child",
             "--nocapture",
         ])
-        .env("ATM_OTEL_AMBIENT_TEST_CHILD", "1")
         .env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
         .env("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://127.0.0.1:1")
         .env(
@@ -32,6 +31,7 @@ fn explicit_atm_configuration_ignores_ambient_otel_settings() {
         .env("OTEL_SERVICE_NAME", "wrong")
         .env("OTEL_TRACES_SAMPLER", "always_off")
         .env("OTEL_METRIC_EXPORT_INTERVAL", "3600000")
+        .env("OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE", "delta")
         .env("OTEL_BSP_MAX_QUEUE_SIZE", "1")
         .env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", "1")
         .output()
@@ -47,7 +47,8 @@ fn explicit_atm_configuration_ignores_ambient_otel_settings() {
 
 #[tokio::test]
 async fn ambient_child() {
-    if std::env::var_os("ATM_OTEL_AMBIENT_TEST_CHILD").is_none() {
+    // The parent invokes this exact libtest filter in a separate process.
+    if !std::env::args().any(|argument| argument == "otel_tests::ambient::ambient_child") {
         return;
     }
     let receiver = Receiver::start(false).await;
@@ -83,5 +84,22 @@ async fn ambient_child() {
         }
     }
     shutdown(setup).await;
+    {
+        let metrics = receiver.capture.metrics.lock().unwrap();
+        assert!(
+            metrics
+                .iter()
+                .any(|metric| metric.name == "atm.task.events")
+        );
+        for metric in metrics.iter() {
+            if let Some(Data::Sum(sum)) = &metric.data {
+                assert_eq!(
+                    sum.aggregation_temporality,
+                    opentelemetry_proto::tonic::metrics::v1::AggregationTemporality::Cumulative
+                        as i32
+                );
+            }
+        }
+    }
     receiver.stop().await;
 }
