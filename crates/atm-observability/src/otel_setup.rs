@@ -12,8 +12,8 @@ use opentelemetry_otlp::{Compression, WithExportConfig, WithTonicConfig};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::logs::log_processor_with_async_runtime::BatchLogProcessor;
 use opentelemetry_sdk::logs::{BatchConfigBuilder as LogBatchConfigBuilder, SdkLoggerProvider};
-use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader;
+use opentelemetry_sdk::metrics::{SdkMeterProvider, Temporality};
 use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
 use opentelemetry_sdk::trace::{BatchConfigBuilder, Sampler, SdkTracerProvider};
@@ -98,7 +98,9 @@ pub(crate) fn setup_with_limits(
     // Build fallible exporters first, before starting any SDK worker.
     let spans = exporter!(opentelemetry_otlp::SpanExporter::builder());
     let logs = exporter!(opentelemetry_otlp::LogExporter::builder());
-    let metrics = exporter!(opentelemetry_otlp::MetricExporter::builder());
+    let metrics = exporter!(
+        opentelemetry_otlp::MetricExporter::builder().with_temporality(Temporality::Cumulative)
+    );
     let resource = Resource::builder_empty()
         .with_service_name(config.service_name().to_owned())
         .build();
