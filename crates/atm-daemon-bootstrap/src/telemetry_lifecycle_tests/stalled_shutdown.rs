@@ -46,6 +46,7 @@ use crate::DaemonLaunchIdentity;
 use crate::atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
 use crate::daemon_observability::RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT;
 use crate::queue_drain::RecoverySweepHandle;
+use crate::shutdown_probe::{Probe, observe};
 
 /// The longest emit and drain a telemetry runtime accepts, so only the shared
 /// shutdown deadline can end a stalled drain.
@@ -264,14 +265,12 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
 
     // Retained logger: every flush blocks until released. Earlier steps use
     // the whole deadline, so a flush that honours it is never attempted.
-    daemon
-        .observability
-        .stall_logger_flush_for_test(move || block_until_released(&blocked));
+    let probe = Probe::new();
+    probe.stall_logger_flush(move || block_until_released(&blocked));
 
-    let observability = daemon.observability.clone();
-    let stopped = daemon.shutdown().await;
+    let stopped = observe(&probe, daemon.shutdown()).await;
 
-    let steps = observability.shutdown_steps_for_test();
+    let steps = probe.steps();
     let deadline = assert_one_shutdown_deadline(&steps);
     let sweep = steps
         .iter()
@@ -304,8 +303,10 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
 /// deadline when that comes first, and otherwise until the 1s logger bound
 /// from its start: the recorded wait bound is exactly the earlier of the two
 /// and the flush returns no earlier than it.
-/// Negative: no elapsed time is compared against an upper limit.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+/// Negative: the clock is paused and only this test advances it, after the
+/// stalled flush has started, so no deadline can pass before `flush_logger`
+/// runs and no elapsed time is compared.
+#[tokio::test(start_paused = true)]
 async fn a_stalled_logger_flush_ends_at_the_earlier_of_deadline_and_bound() {
     let (_root, observability) =
         Daemon::bootstrap(atm_core::test_support::FakeEnvSource::new([])).await;
@@ -313,18 +314,27 @@ async fn a_stalled_logger_flush_ends_at_the_earlier_of_deadline_and_bound() {
     let (release, blocked) = std::sync::mpsc::channel();
     let _release = Release(release);
     let blocked: Blocked = Arc::new(Mutex::new(blocked));
-    observability.stall_logger_flush_for_test(move || {
+    let probe = Probe::new();
+    probe.stall_logger_flush(move || {
         let _ = entered.send(());
         block_until_released(&blocked);
     });
 
-    let early = Instant::now() + Duration::from_millis(300);
-    observability.flush_logger(early).await;
-    hook_started(&mut flush_entered, "logger flush").await;
+    // A held blocking flush stops the paused clock advancing on its own; each
+    // wait ends only when the test advances past its bound.
+    let early_by = Duration::from_millis(300);
+    let early = Instant::now() + early_by;
+    tokio::join!(observe(&probe, observability.flush_logger(early)), async {
+        hook_started(&mut flush_entered, "first logger flush").await;
+        tokio::time::advance(early_by).await;
+    });
     let late = Instant::now() + Duration::from_secs(5);
-    observability.flush_logger(late).await;
+    tokio::join!(observe(&probe, observability.flush_logger(late)), async {
+        hook_started(&mut flush_entered, "second logger flush").await;
+        tokio::time::advance(RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT).await;
+    });
 
-    let steps = observability.shutdown_steps_for_test();
+    let steps = probe.steps();
     let [first, second] = steps.as_slice() else {
         panic!("two logger flushes: {steps:#?}");
     };
@@ -338,4 +348,9 @@ async fn a_stalled_logger_flush_ends_at_the_earlier_of_deadline_and_bound() {
         assert!(step.returned >= step.deadline, "{steps:#?}");
     }
     assert_eq!(first.deadline, early, "{steps:#?}");
+    assert_eq!(
+        second.deadline,
+        second.started + RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT,
+        "{steps:#?}"
+    );
 }

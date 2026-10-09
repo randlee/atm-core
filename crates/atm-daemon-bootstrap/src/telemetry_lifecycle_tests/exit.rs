@@ -18,6 +18,7 @@ use super::{
     Daemon, DaemonObservability, EXPORT_WAIT, assert_one_shutdown_deadline, endpoint_env,
     exported_counts, sent_message_id, task_record,
 };
+use crate::shutdown_probe::{Probe, observe};
 use atm_core::observability::{AtmTelemetryExportHealth, AtmTelemetryExportState};
 use atm_core::test_support::FakeEnvSource;
 
@@ -73,11 +74,13 @@ fn exit_proof_child() {
             .await
             .expect("stdin reader")
             .expect("stop request");
-        let observability = daemon.observability.clone();
-        daemon.shutdown().await.expect("child daemon shutdown");
+        let probe = Probe::new();
+        observe(&probe, daemon.shutdown())
+            .await
+            .expect("child daemon shutdown");
         // The stop SLO holds by construction; the parent sees a failure here
         // as an unsuccessful exit.
-        assert_one_shutdown_deadline(&observability.shutdown_steps_for_test());
+        assert_one_shutdown_deadline(&probe.steps());
     });
     drop(runtime);
 }
@@ -740,8 +743,11 @@ fn combined_lifecycle_child() {
         assert!(task.snapshot().dropped_full > 0, "the task queue is full");
         let observability = daemon.observability.clone();
         handshake("BD6-READY".to_owned()).await;
-        daemon.shutdown().await.expect("child daemon shutdown");
-        assert_one_shutdown_deadline(&observability.shutdown_steps_for_test());
+        let probe = Probe::new();
+        observe(&probe, daemon.shutdown())
+            .await
+            .expect("child daemon shutdown");
+        assert_one_shutdown_deadline(&probe.steps());
 
         let counts = task.snapshot();
         assert_eq!(

@@ -51,6 +51,7 @@ mod peer_launch_config;
 mod queue_drain;
 mod received_hook_selector;
 mod replacement_handler;
+mod shutdown_probe;
 mod singleton_guard;
 mod sqlite_observability;
 
@@ -824,64 +825,48 @@ async fn shutdown_replacement_daemon(
 ) -> Result<(), AtmError> {
     let entered = tokio::time::Instant::now();
     let deadline = entered + REPLACEMENT_DRAIN_DEADLINE;
-    // Test builds record each step's start, the shared deadline and its return.
-    #[cfg(test)]
-    let spy = workers.observability.clone();
-    macro_rules! step {
-        ($name:literal, $started:expr, $step:expr) => {{
-            #[cfg(test)]
-            let started = $started;
-            let output = $step;
-            #[cfg(test)]
-            if let Some(spy) = &spy {
-                spy.record_shutdown_step_for_test($name, started, deadline);
-            }
-            output
-        }};
-    }
-    step!("entry", entered, ());
+    shutdown_probe::record("entry", entered, deadline);
     // The runtime bounds its own drain, cancellation and cleanup by
     // `deadline`, so it is awaited to completion rather than dropped.
-    let stopped = step!(
+    let stopped = shutdown_probe::step(
         "listener",
-        tokio::time::Instant::now(),
-        running.begin_shutdown().finish(deadline).await
-    );
-    step!(
+        deadline,
+        running.begin_shutdown().finish(deadline),
+    )
+    .await;
+    shutdown_probe::step(
         "recovery_sweep",
-        tokio::time::Instant::now(),
-        workers.recovery_sweep.shutdown(deadline).await
-    );
-    step!(
+        deadline,
+        workers.recovery_sweep.shutdown(deadline),
+    )
+    .await;
+    shutdown_probe::step(
         "peer_connections",
-        tokio::time::Instant::now(),
-        handler.shutdown_peer_connections(deadline).await
-    );
+        deadline,
+        handler.shutdown_peer_connections(deadline),
+    )
+    .await;
     // Both drains feed the SDK, so they finish (or abort) before the exporter.
-    step!(
-        "telemetry_drains",
-        tokio::time::Instant::now(),
+    shutdown_probe::step("telemetry_drains", deadline, async {
         tokio::join!(
             workers.task_telemetry.shutdown(deadline),
             workers.workflow_telemetry.shutdown(deadline),
         )
-    );
+    })
+    .await;
     // The sweeper emits through the retained logger, so it stops first.
-    step!(
+    shutdown_probe::step(
         "atm_temp_sweeper",
-        tokio::time::Instant::now(),
-        workers.atm_temp_sweeper.shutdown(deadline).await
-    );
+        deadline,
+        workers.atm_temp_sweeper.shutdown(deadline),
+    )
+    .await;
     if let Some(observability) = &workers.observability {
         tracing::info!(target: "atm_daemon_bootstrap::lifecycle", code = "ATM_DAEMON_SHUTDOWN_DRAINED", "replacement ATM daemon drained its subsystems; closing retained logs");
         // Routed records reach the SDK logger before its provider stops; the
         // second flush puts provider-shutdown diagnostics on disk.
         observability.flush_logger(deadline).await;
-        step!(
-            "export",
-            tokio::time::Instant::now(),
-            observability.shutdown_export(deadline).await
-        );
+        shutdown_probe::step("export", deadline, observability.shutdown_export(deadline)).await;
         observability.flush_logger(deadline).await;
     }
     diagnostic_timeline::stop_flush_worker();
