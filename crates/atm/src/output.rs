@@ -1203,8 +1203,8 @@ mod tests {
             (
                 json!({"state": "degraded", "endpoint": "https://collector.example:4317",
                     "protocol": "grpc", "emitted": 2, "dropped_full": 1, "dropped_timeout": 0,
-                    "dropped_failure": 0, "dropped_shutdown": 0, "last_failure": "rejected"}),
-                "observability.export: state=degraded endpoint=https://collector.example:4317 protocol=grpc emitted=2 dropped_full=1 dropped_timeout=0 dropped_failure=0 dropped_shutdown=0 last_failure=rejected\n",
+                    "dropped_failure": 0, "dropped_shutdown": 0, "last_failure": "timed_out"}),
+                "observability.export: state=degraded endpoint=https://collector.example:4317 protocol=grpc emitted=2 dropped_full=1 dropped_timeout=0 dropped_failure=0 dropped_shutdown=0 last_failure=timed_out\n",
                 EXPORT_FINDING,
             ),
             (
