@@ -150,9 +150,14 @@ gRPC (tonic). No other observability facade or HTTP exporter is composed.
   16 KiB, and deduplicates within a `DEDUP_LIMIT` 8192-entry window only
   (`task_exporter.rs`). A close seen before its start exports a partial
   span; nothing is replayed, backfilled or stored across an outage.
-- Shutdown uses one cumulative deadline (`REPLACEMENT_DRAIN_DEADLINE`, 5s):
-  listeners, recovery sweep, peers, then the task telemetry drain, then
-  the providers, bounded by `min(1s, remaining)`. The first shutdown caller
+- Shutdown uses one cumulative deadline (`REPLACEMENT_DRAIN_DEADLINE`, 5s,
+  fixed at shutdown entry; every step gets only the remaining time), in this
+  order: listener, recovery sweep, peer connections, the task telemetry drain,
+  the `$ATM_TEMP` sweeper (it logs, so it stops before the logger), a retained
+  logger flush, the provider shutdown (bounded by `min(1s, remaining)`), a
+  second logger flush that puts provider-shutdown diagnostics on disk, the
+  diagnostic timeline flush worker, and last the retained logger shutdown
+  (bounded by `min(1s, remaining)`). The first shutdown caller
   owns provider shutdown, so a cancelled or concurrent caller waits for the
   same stored outcome until its own deadline. A timeout abandons the wait,
   not the SDK call, and process exit releases it.

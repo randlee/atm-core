@@ -33,8 +33,8 @@ const RETAINED_LOG_ROTATION_MAX_FILES: usize = 5;
 const RETAINED_LOG_RETENTION_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const RETAINED_LOG_MAINTENANCE_CADENCE: Duration = Duration::from_secs(60);
 // Allow one bounded maintenance join during shutdown without turning routine
-// daemon stop into a long blocking operation. This stays below the outer 2s
-// graceful drain budget so retained-log shutdown cannot consume the entire
+// daemon stop into a long blocking operation. This stays below the outer 5s
+// `REPLACEMENT_DRAIN_DEADLINE` graceful drain budget so retained-log shutdown cannot consume the entire
 // daemon stop window by itself.
 pub(crate) const RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
 /// Upper bound on the exporter step of daemon shutdown. The bd-5 production
