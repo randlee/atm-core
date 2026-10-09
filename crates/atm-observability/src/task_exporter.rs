@@ -7,14 +7,11 @@
 //! or assignment-state eviction; no replay/backfill or outage storage exists.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
 use atm_core::{
     TaskTelemetryError, TaskTelemetryKind as Kind, TaskTelemetryRecord, TaskTelemetrySink,
-    WorkflowTelemetryError, WorkflowTelemetryRecord, WorkflowTelemetrySink,
 };
 use opentelemetry::metrics::{Counter, Histogram, Meter};
 use opentelemetry::trace::{Event, Span, SpanId, TraceId, Tracer};
@@ -143,7 +140,7 @@ pub(crate) struct TaskExporter {
     events: Counter<u64>,
     time_to_start: Histogram<f64>,
     time_to_close: Histogram<f64>,
-    // MUTEX: task and workflow workers share bounded projection state. Keep
+    // MUTEX: the task telemetry worker owns bounded projection state. Keep
     // only projection and nonblocking SDK recording/admission here; exporter
     // network I/O and SDK lifecycle/shutdown work must remain outside.
     state: Mutex<State>,
@@ -411,79 +408,6 @@ impl TaskExporter {
         };
         span.end_with_timestamp(end.max(start));
     }
-
-    fn workflow(&self, record: WorkflowTelemetryRecord) -> Result<(), TaskTelemetryError> {
-        let encoded = serde_json::to_vec(&record).map_err(|_| TaskTelemetryError::Rejected)?;
-        if encoded.len() > RECORD_LIMIT {
-            return Err(TaskTelemetryError::Rejected);
-        }
-        let key = identity(&[
-            b"workflow",
-            record.scope_kind.as_str().as_bytes(),
-            record.scope_id.as_str().as_bytes(),
-        ]);
-        let id = identity(&[b"workflow-span", &encoded]);
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| TaskTelemetryError::Unavailable)?;
-        if state.duplicate(id) {
-            return Ok(());
-        }
-        drop(state);
-        let start: SystemTime = record.start_timestamp.into_inner().into();
-        let end = record
-            .end_timestamp
-            .map(|at| at.into_inner().into())
-            .unwrap_or(start);
-        let trace_id = trace_id_from_digest(key);
-        let span_id = span_id_from_digest(id);
-        self.span(
-            "atm.workflow",
-            trace_id,
-            span_id,
-            start,
-            end,
-            vec![
-                KeyValue::new("atm.workflow.scope_kind", record.scope_kind.to_string()),
-                KeyValue::new("atm.workflow.scope_id", record.scope_id.as_str().to_owned()),
-                KeyValue::new("atm.workflow.state", record.state.to_string()),
-                KeyValue::new("atm.workflow.stage", record.stage.to_string()),
-                KeyValue::new("atm.workflow.transition", record.transition.to_string()),
-                KeyValue::new(
-                    "atm.workflow.start_message_id",
-                    record.start_message_id.to_string(),
-                ),
-                KeyValue::new(
-                    "atm.workflow.end_message_id",
-                    record
-                        .end_message_id
-                        .as_ref()
-                        .map(ToString::to_string)
-                        .unwrap_or_default(),
-                ),
-                KeyValue::new(
-                    "atm.workflow.iteration",
-                    record
-                        .iteration
-                        .map(|iteration| {
-                            serde_json::to_string(&iteration).expect("typed iteration")
-                        })
-                        .unwrap_or_default(),
-                ),
-                KeyValue::new(
-                    "atm.workflow.observation",
-                    match record.observation {
-                        atm_core::WorkflowTelemetryObservation::Completed => "completed",
-                        atm_core::WorkflowTelemetryObservation::Incomplete => "incomplete",
-                    },
-                ),
-                KeyValue::new("atm.partial", record.end_timestamp.is_none()),
-            ],
-            Vec::new(),
-        );
-        Ok(())
-    }
 }
 
 impl Drop for TaskExporter {
@@ -501,25 +425,8 @@ impl Drop for TaskExporter {
 
 impl atm_core::boundary::sealed::Sealed for TaskExporter {}
 impl TaskTelemetrySink for TaskExporter {
-    fn emit(
-        &self,
-        record: TaskTelemetryRecord,
-    ) -> Pin<Box<dyn Future<Output = Result<(), TaskTelemetryError>> + Send + '_>> {
-        Box::pin(async move { self.task(record) })
-    }
-}
-impl WorkflowTelemetrySink for TaskExporter {
-    fn emit(
-        &self,
-        record: WorkflowTelemetryRecord,
-    ) -> Pin<Box<dyn Future<Output = Result<(), WorkflowTelemetryError>> + Send + '_>> {
-        Box::pin(async move {
-            self.workflow(record).map_err(|error| match error {
-                TaskTelemetryError::Unavailable => WorkflowTelemetryError::Unavailable,
-                TaskTelemetryError::Rejected => WorkflowTelemetryError::Rejected,
-                TaskTelemetryError::TimedOut => WorkflowTelemetryError::TimedOut,
-            })
-        })
+    fn emit(&self, record: TaskTelemetryRecord) -> Result<(), TaskTelemetryError> {
+        self.task(record)
     }
 }
 

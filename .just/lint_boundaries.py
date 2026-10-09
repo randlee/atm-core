@@ -2795,7 +2795,6 @@ def is_test_support_crate(info: ManifestInfo) -> bool:
 # (ADR-064). Test-support crates are governed by allowed_test_double_paths.
 TELEMETRY_SINK_IMPLEMENTATION_RULES = {
     "LINT-BOUNDARY-TASK-TELEMETRY-SINK-REFERENCES": "atm-observability",
-    "LINT-BOUNDARY-WORKFLOW-TELEMETRY-SINK-REFERENCES": "atm-observability",
 }
 
 

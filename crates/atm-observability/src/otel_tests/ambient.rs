@@ -128,7 +128,6 @@ async fn ambient_child() {
         .0
         .sink
         .emit(record("ambient", TaskTelemetryKind::Completed, 1, 1))
-        .await
         .unwrap();
     receiver
         .capture

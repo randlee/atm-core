@@ -763,7 +763,6 @@ fn combined_lifecycle_child() {
             daemon.workers.task_telemetry.try_emit(task_record(seq));
         }
         let task = daemon.workers.task_telemetry.diagnostics();
-        let workflow = Arc::clone(daemon.workers.workflow_telemetry.diagnostics());
         assert!(task.snapshot().dropped_full > 0, "the task queue is full");
         let observability = daemon.observability.clone();
         handshake("BD6-READY".to_owned()).await;
@@ -775,11 +774,7 @@ fn combined_lifecycle_child() {
 
         let counts = task.snapshot();
         assert_eq!(
-            counts.emitted
-                + counts.dropped_full
-                + counts.dropped_timeout
-                + counts.dropped_failure
-                + counts.dropped_shutdown,
+            counts.emitted + counts.dropped_full + counts.dropped_failure + counts.dropped_shutdown,
             committed + FLOOD,
             "every task record is counted exactly once: {counts:?}"
         );
@@ -789,7 +784,6 @@ fn combined_lifecycle_child() {
         let health = observability.export_health_for_test();
         assert_ne!(health.state, AtmTelemetryExportState::Healthy, "{health:?}");
         assert!(health.last_failure.is_some(), "{health:?}");
-        let load = |counter: &std::sync::atomic::AtomicU64| counter.load(Ordering::Relaxed);
         assert_eq!(
             (
                 health.emitted,
@@ -800,10 +794,10 @@ fn combined_lifecycle_child() {
             ),
             (
                 counts.emitted,
-                counts.dropped_full + load(&workflow.dropped_full),
-                counts.dropped_timeout + load(&workflow.dropped_timeout),
-                counts.dropped_failure + load(&workflow.dropped_failure),
-                counts.dropped_shutdown + load(&workflow.dropped_shutdown),
+                counts.dropped_full,
+                0,
+                counts.dropped_failure,
+                counts.dropped_shutdown,
             ),
             "{health:?}"
         );

@@ -1,16 +1,11 @@
 //! In-memory task telemetry doubles for downstream handler tests.
 //!
-//! These implement the first-party `TaskTelemetrySink` and
-//! `WorkflowTelemetrySink` boundaries only for tests (`[testing]` in
-//! `boundaries/atm-core/task-telemetry-sink.toml` and
-//! `workflow-telemetry-sink.toml`).
+//! These implement the first-party `TaskTelemetrySink` boundary only for
+//! tests (`[testing]` in `boundaries/atm-core/task-telemetry-sink.toml`).
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 
-use atm_core::{
-    TaskTelemetryError, TaskTelemetryRecord, TaskTelemetrySink, WorkflowTelemetryError,
-    WorkflowTelemetryRecord, WorkflowTelemetrySink,
-};
+use atm_core::{TaskTelemetryError, TaskTelemetryRecord, TaskTelemetrySink};
 use atm_runtime::{TaskTelemetryConfig, TaskTelemetrySetup};
 
 /// Records every emitted task telemetry record, in order, and answers each
@@ -65,83 +60,67 @@ impl RecordingTaskTelemetrySink {
 impl atm_core::boundary::sealed::Sealed for RecordingTaskTelemetrySink {}
 
 impl TaskTelemetrySink for RecordingTaskTelemetrySink {
-    fn emit(
-        &self,
-        record: TaskTelemetryRecord,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<(), TaskTelemetryError>> + Send + '_>,
-    > {
+    fn emit(&self, record: TaskTelemetryRecord) -> Result<(), TaskTelemetryError> {
         self.records
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(record);
-        let result = self.result;
-        Box::pin(async move { result })
+        self.result
     }
 }
 
-/// Never completes an emit, so the runtime's emit timeout and bounded queue
-/// are what a stalled exporter leaves the producer with.
-#[derive(Debug, Default)]
-pub struct StalledTaskTelemetrySink;
-
-impl atm_core::boundary::sealed::Sealed for StalledTaskTelemetrySink {}
-
-impl TaskTelemetrySink for StalledTaskTelemetrySink {
-    fn emit(
-        &self,
-        _record: TaskTelemetryRecord,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<(), TaskTelemetryError>> + Send + '_>,
-    > {
-        Box::pin(std::future::pending())
-    }
-}
-
-/// Calls `on_emit` for each task or workflow record it receives, then never
-/// completes the emit, so only a deadline can end a drain that waits on it.
-pub struct ReportingStalledTelemetrySink {
+/// Blocks every emit until its [`StallRelease`] is dropped, so the runtime's
+/// bounded queue and shutdown deadline are what a stalled exporter leaves the
+/// producer with. The sink is synchronous and holds a Tokio worker thread
+/// while stalled: use it on a multi-thread runtime, and drop the release
+/// before the runtime shuts down so that thread can be joined.
+pub struct StalledTaskTelemetrySink {
     on_emit: Box<dyn Fn() + Send + Sync>,
+    released: Mutex<mpsc::Receiver<()>>,
 }
 
-impl ReportingStalledTelemetrySink {
+/// Unblocks every stalled emit, now and later, when dropped.
+#[derive(Debug)]
+pub struct StallRelease(#[allow(dead_code)] mpsc::Sender<()>);
+
+impl StalledTaskTelemetrySink {
     #[must_use]
-    pub fn new(on_emit: impl Fn() + Send + Sync + 'static) -> Self {
-        Self {
-            on_emit: Box::new(on_emit),
-        }
+    pub fn new() -> (Self, StallRelease) {
+        Self::reporting(|| {})
+    }
+
+    /// Calls `on_emit` as each emit starts, before it stalls.
+    #[must_use]
+    pub fn reporting(on_emit: impl Fn() + Send + Sync + 'static) -> (Self, StallRelease) {
+        let (release, released) = mpsc::channel();
+        (
+            Self {
+                on_emit: Box::new(on_emit),
+                released: Mutex::new(released),
+            },
+            StallRelease(release),
+        )
     }
 }
 
-impl std::fmt::Debug for ReportingStalledTelemetrySink {
+impl std::fmt::Debug for StalledTaskTelemetrySink {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ReportingStalledTelemetrySink")
+        f.debug_struct("StalledTaskTelemetrySink")
             .finish_non_exhaustive()
     }
 }
 
-impl atm_core::boundary::sealed::Sealed for ReportingStalledTelemetrySink {}
+impl atm_core::boundary::sealed::Sealed for StalledTaskTelemetrySink {}
 
-impl TaskTelemetrySink for ReportingStalledTelemetrySink {
-    fn emit(
-        &self,
-        _record: TaskTelemetryRecord,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<(), TaskTelemetryError>> + Send + '_>,
-    > {
+impl TaskTelemetrySink for StalledTaskTelemetrySink {
+    fn emit(&self, _record: TaskTelemetryRecord) -> Result<(), TaskTelemetryError> {
         (self.on_emit)();
-        Box::pin(std::future::pending())
-    }
-}
-
-impl WorkflowTelemetrySink for ReportingStalledTelemetrySink {
-    fn emit(
-        &self,
-        _record: WorkflowTelemetryRecord,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<(), WorkflowTelemetryError>> + Send + '_>,
-    > {
-        (self.on_emit)();
-        Box::pin(std::future::pending())
+        // Nothing is ever sent: `recv` returns once the release is dropped.
+        let _ = self
+            .released
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .recv();
+        Err(TaskTelemetryError::Unavailable)
     }
 }
