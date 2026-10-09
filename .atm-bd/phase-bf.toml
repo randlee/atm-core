@@ -1,0 +1,3 @@
+plan = "docs/plans/phase-bf.jsonl"
+root = "atm-phase-bf"
+integration_branch = "integrate/phase-bf"
