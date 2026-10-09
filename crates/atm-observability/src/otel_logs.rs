@@ -6,6 +6,9 @@ use sc_observability::v2::LogSink;
 use sc_observability_types::v2::LogSinkError;
 use sc_observability_types::{Level, LogEvent, SinkHealth, SinkHealthState, SinkName};
 
+/// The SDK logger type, named here so the crate root never spells an OpenTelemetry path.
+pub type OtelLogger = SdkLogger;
+
 /// Receives already-filtered and redacted retained events. This sink owns no
 /// provider lifecycle: dropping or flushing it never shuts down or flushes the
 /// caller's provider. `emit` is SDK admission, not a collector acknowledgement.

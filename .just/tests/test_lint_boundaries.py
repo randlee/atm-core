@@ -16,6 +16,7 @@ if str(JUST_DIR) not in sys.path:
 
 from lint_boundaries import collect_boundary_violations
 from lint_boundaries import collect_io_forbidden_source_violations
+from lint_boundaries import collect_scb_observability_otel_violations
 from lint_boundaries import boundary_doc_section_lines
 from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
 from lint_boundaries import parse_boundary_records
@@ -505,6 +506,10 @@ sunset_sprint = "AD.26"
 """,
             encoding="utf-8",
         )
+        (repo_root / ".just/fixtures/scb_observability_otel_known_bad.rs").write_text(
+            "use opentelemetry::trace::Tracer;\n\nfn on_event() {\n    provider.force_flush();\n}\n",
+            encoding="utf-8",
+        )
         (repo_root / ".just/fixtures/scb_observability_known_bad.rs").write_text(
             """\
 type ActionName = sc_observability_types::ActionName;
@@ -607,6 +612,30 @@ fn send_bad(team_dir: &std::path::Path) {
             self.assertTrue(
                 any(item.startswith("SCB-OBSERVABILITY-001 ") for item in rendered), rendered
             )
+
+    def test_scb_observability_002_confines_otel_paths_to_exporter_modules(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            src = repo_root / "crates/atm-observability/src"
+            src.mkdir(parents=True)
+            allowed = src / "otel_setup.rs"
+            allowed.write_text("use opentelemetry_sdk::Resource;\nuse tonic::transport::Endpoint;\n", encoding="utf-8")
+            clean = src / "lib.rs"
+            clean.write_text(
+                'const T: &str = "opentelemetry_sdk";\n'
+                "#[cfg(test)]\nmod tests {\n    use opentelemetry::trace::Tracer;\n}\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(collect_scb_observability_otel_violations(repo_root, [allowed, clean]), [])
+
+            bad = src / "tracing_bridge.rs"
+            bad.write_text(
+                "use opentelemetry::trace::Tracer;\n\nfn on_event() {\n    provider.force_flush();\n}\n",
+                encoding="utf-8",
+            )
+            rendered = [v.render() for v in collect_scb_observability_otel_violations(repo_root, [bad])]
+            self.assertTrue(any("SCB-OBSERVABILITY-002 crates/atm-observability/src/tracing_bridge.rs:1 " in r for r in rendered), rendered)
+            self.assertTrue(any("SCB-OBSERVABILITY-002 crates/atm-observability/src/tracing_bridge.rs:4 " in r for r in rendered), rendered)
 
     def test_collect_boundary_violations_rejects_scb_retained_rule_family(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
