@@ -28,6 +28,16 @@ fn config(endpoint: &str) -> TelemetryExportConfig {
 }
 
 #[test]
+fn a_rejected_metric_stream_is_a_typed_error_not_a_panic() {
+    let error = crate::otel_setup::task_stream(0).expect_err("zero cardinality is invalid");
+    assert!(
+        error.to_string().starts_with("invalid task metric stream:"),
+        "{error}"
+    );
+    crate::otel_setup::task_stream(32).expect("the production limit builds");
+}
+
+#[test]
 fn setup_without_tokio_returns_safe_error_instead_of_panicking() {
     let diagnostics = crate::ExportDiagnostics::default();
     let result = crate::setup_telemetry(&config("http://127.0.0.1:4317"), &diagnostics);
@@ -52,9 +62,8 @@ pub(crate) fn record(
 }
 
 async fn shutdown(setup: TelemetrySetup) {
-    let (task, workflow, traces, logs, metrics) = setup;
+    let (task, traces, logs, metrics) = setup;
     drop(task);
-    drop(workflow);
     let results = tokio::join!(
         tokio::task::spawn_blocking(move || traces.shutdown()),
         tokio::task::spawn_blocking(move || logs.shutdown()),
@@ -93,7 +102,6 @@ async fn every_task_kind_exports_its_typed_name_and_facts() {
             .0
             .sink
             .emit(record("all-kinds", kind, index as u64 + 1, 1))
-            .await
             .unwrap();
     }
     shutdown(setup).await;
@@ -125,47 +133,6 @@ async fn every_task_kind_exports_its_typed_name_and_facts() {
 }
 
 #[tokio::test]
-async fn workflow_uses_durable_native_spans_without_inventing_incomplete_duration() {
-    let receiver = Receiver::start(false).await;
-    let setup =
-        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
-    for completed in [true, false] {
-        let record = serde_json::from_value(serde_json::json!({
-            "observation": if completed { "Completed" } else { "Incomplete" },
-            "scope_kind": "sprint", "scope_id": "bd-fixture", "state": "done",
-            "stage": "dev", "transition": "complete", "iteration": null,
-            "start_message_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-            "start_timestamp": "2026-01-01T00:00:01Z",
-            "end_message_id": completed.then_some("01ARZ3NDEKTSV4RRFFQ69G5FAW"),
-            "end_timestamp": completed.then_some("2026-01-01T00:00:04Z"),
-            "duration_millis": completed.then_some(3000)
-        }))
-        .unwrap();
-        setup.1.sink.emit(record).await.unwrap();
-    }
-    shutdown(setup).await;
-    {
-        let spans = receiver.capture.spans.lock().unwrap();
-        assert_eq!(spans.len(), 2);
-        assert!(spans.iter().all(|span| span.name == "atm.workflow"));
-        assert_eq!(
-            spans[0].end_time_unix_nano - spans[0].start_time_unix_nano,
-            3_000_000_000
-        );
-        assert_eq!(spans[1].end_time_unix_nano, spans[1].start_time_unix_nano);
-        assert_eq!(spans[0].trace_id, spans[1].trace_id);
-        assert_ne!(spans[0].span_id, spans[1].span_id);
-        assert!(
-            spans[0]
-                .attributes
-                .iter()
-                .any(|attribute| attribute.key == "atm.workflow.scope_id")
-        );
-    }
-    receiver.stop().await;
-}
-
-#[tokio::test]
 async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
     let receiver = Receiver::start(false).await;
     let setup =
@@ -176,12 +143,12 @@ async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
         (TaskTelemetryKind::Completed, 3, 7),
     ] {
         let record = record("task-normal", kind, seq, second);
-        setup.0.sink.emit(record.clone()).await.unwrap();
-        setup.0.sink.emit(record).await.unwrap();
+        setup.0.sink.emit(record.clone()).unwrap();
+        setup.0.sink.emit(record).unwrap();
     }
     receiver
         .capture
-        .wait(|| {
+        .wait("a span and a metric export", || {
             !receiver.capture.spans.lock().unwrap().is_empty()
                 && !receiver.capture.metrics.lock().unwrap().is_empty()
         })
@@ -263,13 +230,11 @@ async fn native_ids_are_deterministic_isolated_and_context_does_not_leak() {
                 .0
                 .sink
                 .emit(record(task, TaskTelemetryKind::Assigned, seq, seq))
-                .await
                 .unwrap();
             setup
                 .0
                 .sink
                 .emit(record(task, TaskTelemetryKind::Completed, seq + 1, seq + 1))
-                .await
                 .unwrap();
         }
         assert!(
@@ -282,7 +247,7 @@ async fn native_ids_are_deterministic_isolated_and_context_does_not_leak() {
                 .get::<opentelemetry::trace::SpanId>()
                 .is_none()
         );
-        setup.2.tracer("unrelated").start("unrelated").end();
+        setup.1.tracer("unrelated").start("unrelated").end();
         shutdown(setup).await;
     }
     {
@@ -327,14 +292,12 @@ async fn late_old_close_never_closes_new_assignment_and_missing_start_is_partial
             .0
             .sink
             .emit(record("reordered", kind, seq, second))
-            .await
             .unwrap();
     }
     setup
         .0
         .sink
         .emit(record("missing", TaskTelemetryKind::Completed, 9, 9))
-        .await
         .unwrap();
     shutdown(setup).await;
     {
@@ -387,12 +350,7 @@ async fn receiver_metrics_cap_series_without_identity_labels() {
             (TaskTelemetryKind::Started, 2, 2),
             (TaskTelemetryKind::Completed, 3, 3),
         ] {
-            setup
-                .0
-                .sink
-                .emit(record(&task, kind, seq, second))
-                .await
-                .unwrap();
+            setup.0.sink.emit(record(&task, kind, seq, second)).unwrap();
         }
     }
     shutdown(setup).await;

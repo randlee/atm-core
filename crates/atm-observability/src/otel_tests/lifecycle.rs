@@ -1,7 +1,9 @@
 #![cfg(test)]
 
 use super::*;
-use crate::otel_setup::{EXPORT_BATCH, EXPORT_INTERVAL, EXPORT_QUEUE, EXPORT_TIMEOUT};
+use crate::otel_setup::{
+    EXPORT_BATCH, EXPORT_INTERVAL, EXPORT_QUEUE, EXPORT_TIMEOUT, EXPORT_TRANSPORT_TIMEOUT,
+};
 use crate::{ExportDiagnostics, TracingBridgeLayer, build_retained_logger};
 use atm_core::observability::{
     AtmTelemetryExportFailure, AtmTelemetryExportHealth, AtmTelemetryExportState,
@@ -73,6 +75,7 @@ fn production_limits_are_distinct_from_test_deadlines_and_terminal_failure_is_re
     assert_eq!(EXPORT_QUEUE, 256);
     assert_eq!(EXPORT_BATCH, 256);
     assert_eq!(EXPORT_TIMEOUT, Duration::from_millis(400));
+    assert_eq!(EXPORT_TRANSPORT_TIMEOUT, Duration::from_millis(300));
     assert_eq!(EXPORT_INTERVAL, Duration::from_secs(1));
     let diagnostics = ExportDiagnostics::default();
     diagnostics.shutdown_wait_timed_out();
@@ -202,14 +205,13 @@ async fn unreachable_collector_scenario() {
         .0
         .sink
         .emit(record("unreachable", TaskTelemetryKind::Assigned, 1, 1))
-        .await
         .unwrap();
     setup
-        .3
+        .2
         .logger("unreachable")
-        .emit(setup.3.logger("unreachable").create_log_record());
+        .emit(setup.2.logger("unreachable").create_log_record());
     setup
-        .4
+        .3
         .meter("unreachable")
         .u64_counter("fixture.count")
         .build()
@@ -225,15 +227,13 @@ async fn unreachable_collector_scenario() {
         .0
         .sink
         .emit(record("unreachable", TaskTelemetryKind::Completed, 2, 2))
-        .await
         .unwrap();
     let mut snapshot = health();
     diagnostics.project(&mut snapshot);
     assert_eq!(snapshot.state, AtmTelemetryExportState::Unavailable);
     assert_eq!(snapshot.dropped_failure, 0);
-    let (task, workflow, traces, logs, metrics) = setup;
+    let (task, traces, logs, metrics) = setup;
     drop(task);
-    drop(workflow);
     let (trace, log, metric) = tokio::join!(
         tokio::task::spawn_blocking(move || traces.shutdown()),
         tokio::task::spawn_blocking(move || logs.shutdown()),
@@ -274,27 +274,25 @@ async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() 
         .0
         .sink
         .emit(record("stalled", TaskTelemetryKind::Completed, 1, 1))
-        .await
         .unwrap();
-    let logger = setup.3.logger("stalled");
+    let logger = setup.2.logger("stalled");
     let mut log = logger.create_log_record();
     log.set_body("nonempty".into());
     logger.emit(log);
     setup
-        .4
+        .3
         .meter("stalled")
         .u64_counter("fixture.count")
         .build()
         .add(1, &[]);
-    let (task, workflow, traces, logs, metrics) = setup;
+    let (task, traces, logs, metrics) = setup;
     drop(task);
-    drop(workflow);
     let trace = tokio::task::spawn_blocking(move || traces.shutdown());
     let log = tokio::task::spawn_blocking(move || logs.shutdown());
     let metric = tokio::task::spawn_blocking(move || metrics.shutdown());
     let capture = &receiver.capture;
     capture
-        .wait(|| {
+        .wait("an export started for every signal", || {
             Signal::ALL
                 .iter()
                 .all(|signal| capture.started(*signal) >= 1)
@@ -313,7 +311,7 @@ async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() 
     // cannot fire). The pinned SDK wraps the tonic failure as InternalFailure
     // text naming the signal's client, which is then the only possible shape.
     capture
-        .wait(|| {
+        .wait("an export finished for every signal", || {
             Signal::ALL
                 .iter()
                 .all(|signal| capture.finished(*signal) >= 1)
@@ -340,8 +338,8 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
     let receiver = Receiver::start(true).await;
     let setup =
         setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
-    let tracer = setup.2.tracer("full-backlog");
-    let logger = setup.3.logger("full-backlog");
+    let tracer = setup.1.tracer("full-backlog");
+    let logger = setup.2.logger("full-backlog");
     // No yield: saturate each SDK bounded queue before its worker can consume.
     for _ in 0..1024 {
         tracer.start("queued").end();
@@ -350,9 +348,8 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
         logger.emit(log);
     }
     let diagnostics = Arc::new(ExportDiagnostics::default());
-    let (task, workflow, traces, logs, metrics) = setup;
+    let (task, traces, logs, metrics) = setup;
     drop(task);
-    drop(workflow);
     let duplicate = traces.clone();
     // The outer bound only names a hang; the pass criterion is the results.
     let results = tokio::time::timeout(Duration::from_secs(120), async {
@@ -401,10 +398,11 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
     assert_eq!(
         (
             snapshot.dropped_full,
+            snapshot.dropped_timeout,
             snapshot.dropped_failure,
             snapshot.dropped_shutdown
         ),
-        (0, 0, 0),
+        (0, 0, 0, 0),
         "SDK quantities are unknown, never copied from synthetic estimates"
     );
     receiver.stop().await;
@@ -418,28 +416,27 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     let setup =
         setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_secs(30)).unwrap();
     for _ in 0..64 {
-        setup.2.tracer("abandoned-wait").start("nonempty").end();
+        setup.1.tracer("abandoned-wait").start("nonempty").end();
     }
-    let logger = setup.3.logger("abandoned-wait");
+    let logger = setup.2.logger("abandoned-wait");
     let mut log = logger.create_log_record();
     log.set_body("nonempty".into());
     logger.emit(log);
     setup
-        .4
+        .3
         .meter("abandoned-wait")
         .u64_counter("fixture.count")
         .build()
         .add(1, &[]);
-    let (task, workflow, traces, logs, metrics) = setup;
+    let (task, traces, logs, metrics) = setup;
     drop(task);
-    drop(workflow);
     let diagnostics = Arc::new(ExportDiagnostics::default());
     let mut trace_call = tokio::task::spawn_blocking(move || traces.shutdown());
     let mut log_call = tokio::task::spawn_blocking(move || logs.shutdown());
     let mut metric_call = tokio::task::spawn_blocking(move || metrics.shutdown());
     let capture = &receiver.capture;
     capture
-        .wait(|| {
+        .wait("an export started for every signal", || {
             Signal::ALL
                 .iter()
                 .all(|signal| capture.started(*signal) >= 1)

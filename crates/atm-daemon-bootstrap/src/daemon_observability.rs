@@ -15,16 +15,15 @@ use atm_observability::{
     ExportDiagnostics, RetainedCommandEvent, RetainedLogOffer, RetainedLogPolicy, RetainedLogger,
     build_routed_retained_logger, logger_level_override,
 };
-use atm_runtime::{
-    TaskTelemetryDiagnostics, TaskTelemetrySetup, WorkflowTelemetryDiagnostics,
-    WorkflowTelemetrySetup,
-};
+use atm_runtime::{TaskTelemetryDiagnostics, TaskTelemetrySetup};
 use opentelemetry::logs::LoggerProvider;
 use opentelemetry_sdk::error::OTelSdkError;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use tokio::sync::watch;
+
+use crate::shutdown_probe;
 use tokio::time::Instant;
 
 const ATM_SERVICE_NAME: &str = "atm";
@@ -34,8 +33,8 @@ const RETAINED_LOG_ROTATION_MAX_FILES: usize = 5;
 const RETAINED_LOG_RETENTION_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const RETAINED_LOG_MAINTENANCE_CADENCE: Duration = Duration::from_secs(60);
 // Allow one bounded maintenance join during shutdown without turning routine
-// daemon stop into a long blocking operation. This stays below the outer 2s
-// graceful drain budget so retained-log shutdown cannot consume the entire
+// daemon stop into a long blocking operation. This stays below the outer 5s
+// `REPLACEMENT_DRAIN_DEADLINE` graceful drain budget so retained-log shutdown cannot consume the entire
 // daemon stop window by itself.
 pub(crate) const RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
 /// Upper bound on the exporter step of daemon shutdown. The bd-5 production
@@ -59,45 +58,20 @@ enum ExportSelection {
 
 type Providers = (SdkTracerProvider, SdkLoggerProvider, SdkMeterProvider);
 
-/// Test-installed work run on the blocking pool before each logger flush.
-#[cfg(test)]
-type FlushStall = Arc<OnceLock<Box<dyn Fn() + Send + Sync>>>;
-
-/// One bounded shutdown step as a test observed it: when it started, the
-/// absolute deadline it was given or computed, and when it returned.
-#[cfg(test)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ShutdownStep {
-    pub(crate) step: &'static str,
-    pub(crate) started: Instant,
-    pub(crate) deadline: Instant,
-    pub(crate) returned: Instant,
-}
-
 /// Export state owned by the process lifecycle: the standard SDK providers
-/// (retained only for shutdown), the setups handed once to runtime assembly,
+/// (retained only for shutdown), the setup handed once to runtime assembly,
 /// and the runtime counters attached after assembly.
 struct Export {
     selection: ExportSelection,
     diagnostics: Arc<ExportDiagnostics>,
-    // MUTEX: runtime assembly takes the setups once; shutdown takes providers once.
+    // MUTEX: runtime assembly takes the setup once; shutdown takes providers once.
     // Each guards a single Option that is only ever read or `take`n, so a
     // panic while it is held cannot leave it half-updated: poison is recovered
     // with `into_inner` so telemetry setup and shutdown still run.
-    setups: Mutex<Option<(TaskTelemetrySetup, WorkflowTelemetrySetup)>>,
+    setups: Mutex<Option<TaskTelemetrySetup>>,
     providers: Mutex<Option<Providers>>,
-    runtime: OnceLock<(
-        Arc<TaskTelemetryDiagnostics>,
-        Arc<WorkflowTelemetryDiagnostics>,
-    )>,
+    runtime: OnceLock<Arc<TaskTelemetryDiagnostics>>,
     shutdown: OnceLock<watch::Receiver<bool>>,
-    /// Test-installed gate the shared shutdown step awaits after the provider
-    /// shutdowns, before it publishes its outcome.
-    #[cfg(test)]
-    shutdown_gate: Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
-    /// Test record of every shutdown step's deadline, in call order.
-    #[cfg(test)]
-    shutdown_steps: Mutex<Vec<ShutdownStep>>,
 }
 
 impl Export {
@@ -111,9 +85,7 @@ impl Export {
         setup: Option<atm_observability::TelemetrySetup>,
     ) -> Self {
         let (setups, providers) = match setup {
-            Some((task, workflow, tracer, logger, meter)) => {
-                (Some((task, workflow)), Some((tracer, logger, meter)))
-            }
+            Some((task, tracer, logger, meter)) => (Some(task), Some((tracer, logger, meter))),
             None => (None, None),
         };
         Self {
@@ -123,24 +95,7 @@ impl Export {
             providers: Mutex::new(providers),
             runtime: OnceLock::new(),
             shutdown: OnceLock::new(),
-            #[cfg(test)]
-            shutdown_gate: Mutex::default(),
-            #[cfg(test)]
-            shutdown_steps: Mutex::default(),
         }
-    }
-
-    #[cfg(test)]
-    fn record_shutdown_step(&self, step: &'static str, started: Instant, deadline: Instant) {
-        self.shutdown_steps
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(ShutdownStep {
-                step,
-                started,
-                deadline,
-                returned: Instant::now(),
-            });
     }
 
     fn health(&self) -> AtmTelemetryExportHealth {
@@ -168,18 +123,16 @@ impl Export {
                 health.protocol = Some(TelemetryExportProtocol::Grpc);
             }
         }
-        // Task and workflow admission queues are separate, so their known
-        // runtime losses are disjoint and add without double counting.
-        if let Some((task, workflow)) = self.runtime.get() {
-            use std::sync::atomic::Ordering::Relaxed;
+        // The task telemetry runtime's known losses. `dropped_timeout` stays
+        // in the governed doctor JSON and is always 0: the synchronous sink
+        // has no emit timeout.
+        if let Some(task) = self.runtime.get() {
             let task = task.snapshot();
             health.emitted = task.emitted;
-            health.dropped_full = task.dropped_full + workflow.dropped_full.load(Relaxed);
-            health.dropped_timeout = task.dropped_timeout + workflow.dropped_timeout.load(Relaxed);
-            health.dropped_failure = task.dropped_failure + workflow.dropped_failure.load(Relaxed);
-            health.dropped_shutdown =
-                task.dropped_shutdown + workflow.dropped_shutdown.load(Relaxed);
-            if health.dropped_full + health.dropped_timeout + health.dropped_failure > 0 {
+            health.dropped_full = task.dropped_full;
+            health.dropped_failure = task.dropped_failure;
+            health.dropped_shutdown = task.dropped_shutdown;
+            if health.dropped_full + health.dropped_failure > 0 {
                 health.state = AtmTelemetryExportState::Degraded;
             }
         }
@@ -198,8 +151,6 @@ pub struct DaemonObservability {
     logger: Arc<Mutex<LoggerLifecycle>>,
     active_log_path: PathBuf,
     export: Arc<Export>,
-    #[cfg(test)]
-    flush_stall: FlushStall,
 }
 
 impl std::fmt::Debug for DaemonObservability {
@@ -216,8 +167,6 @@ impl Clone for DaemonObservability {
             logger: Arc::clone(&self.logger),
             active_log_path: self.active_log_path.clone(),
             export: Arc::clone(&self.export),
-            #[cfg(test)]
-            flush_stall: Arc::clone(&self.flush_stall),
         }
     }
 }
@@ -268,32 +217,21 @@ impl DaemonObservability {
             logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
             active_log_path,
             export: Arc::new(export.export),
-            #[cfg(test)]
-            flush_stall: FlushStall::default(),
         })
     }
 
-    /// Hands the existing task/workflow setups to runtime assembly once.
-    pub(crate) fn take_telemetry_setups(
-        &self,
-    ) -> (Option<TaskTelemetrySetup>, Option<WorkflowTelemetrySetup>) {
+    /// Hands the task telemetry setup to runtime assembly once.
+    pub(crate) fn take_telemetry_setup(&self) -> Option<TaskTelemetrySetup> {
         self.export
             .setups
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .take()
-            .map_or((None, None), |(task, workflow)| {
-                (Some(task), Some(workflow))
-            })
     }
 
-    /// Attaches the assembled runtimes' known-loss counters to doctor health.
-    pub(crate) fn attach_runtime_telemetry(
-        &self,
-        task: Arc<TaskTelemetryDiagnostics>,
-        workflow: Arc<WorkflowTelemetryDiagnostics>,
-    ) {
-        self.export.runtime.get_or_init(|| (task, workflow));
+    /// Attaches the assembled runtime's known-loss counters to doctor health.
+    pub(crate) fn attach_runtime_telemetry(&self, task: Arc<TaskTelemetryDiagnostics>) {
+        self.export.runtime.get_or_init(|| task);
     }
 
     /// Shuts the three standard providers down concurrently on the blocking
@@ -311,6 +249,8 @@ impl DaemonObservability {
                 let (sender, receiver) = watch::channel(false);
                 let started = Instant::now();
                 let bound = deadline.min(started + EXPORT_SHUTDOWN_BOUND);
+                shutdown_probe::record("export.providers", started, bound);
+                let gate = shutdown_probe::export_gate();
                 tokio::spawn(async move {
                     let providers = export
                         .providers
@@ -320,20 +260,7 @@ impl DaemonObservability {
                     if let Some(providers) = providers {
                         shutdown_providers(providers, bound, &export.diagnostics).await;
                     }
-                    #[cfg(test)]
-                    export.record_shutdown_step("export.providers", started, bound);
-                    #[cfg(test)]
-                    {
-                        let gate = export
-                            .shutdown_gate
-                            .lock()
-                            .unwrap_or_else(PoisonError::into_inner)
-                            .take();
-                        if let Some(gate) = gate {
-                            // Released by a send or by the sender's drop.
-                            drop(gate.await);
-                        }
-                    }
+                    gate.await;
                     sender.send_replace(true);
                 });
                 receiver
@@ -354,29 +281,21 @@ impl DaemonObservability {
         let started = Instant::now();
         let bound = deadline.min(started + RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT);
         if bound <= Instant::now() {
-            #[cfg(test)]
-            self.export
-                .record_shutdown_step("logger.flush.skipped", started, bound);
+            shutdown_probe::record("logger.flush.skipped", started, bound);
             return;
         }
         // The guarded value is an immutable `Arc`, so a poisoned lock still
         // holds a valid logger to flush.
         let logger = Arc::clone(&self.logger.lock().unwrap_or_else(PoisonError::into_inner).0);
-        #[cfg(test)]
-        let stall = Arc::clone(&self.flush_stall);
+        let stall = shutdown_probe::logger_flush_stall();
         let flush = tokio::task::spawn_blocking(move || {
-            #[cfg(test)]
-            if let Some(stall) = stall.get() {
-                stall();
-            }
+            stall();
             logger.flush()
         });
         // Sink flush failures are recorded in logger health by the canonical
         // logger; an abandoned wait leaves nothing further to report.
         drop(tokio::time::timeout_at(bound, flush).await);
-        #[cfg(test)]
-        self.export
-            .record_shutdown_step("logger.flush", started, bound);
+        shutdown_probe::record("logger.flush", started, bound);
     }
 
     /// Stops the retained-log writer after the final flush, on the blocking
@@ -443,52 +362,7 @@ impl DaemonObservability {
             logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
             active_log_path,
             export: Arc::new(Export::inert()),
-            flush_stall: FlushStall::default(),
         })
-    }
-
-    /// Runs `stall` on the blocking pool before every later logger flush of
-    /// this owner and its clones, so a test can hold the flush step open; the
-    /// retained logger itself exposes no flush seam. First install wins.
-    #[cfg(test)]
-    pub(crate) fn stall_logger_flush_for_test(&self, stall: impl Fn() + Send + Sync + 'static) {
-        let _ = self.flush_stall.set(Box::new(stall));
-    }
-
-    /// Holds the shared export-shutdown step open after its provider
-    /// shutdowns until the returned sender is used or dropped, so a test
-    /// decides when the step ends instead of a timer.
-    #[cfg(test)]
-    pub(crate) fn hold_export_shutdown_for_test(&self) -> tokio::sync::oneshot::Sender<()> {
-        let (release, gate) = tokio::sync::oneshot::channel();
-        *self
-            .export
-            .shutdown_gate
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) = Some(gate);
-        release
-    }
-
-    /// Records a daemon shutdown step that was given `deadline` at `started`
-    /// and returned now.
-    #[cfg(test)]
-    pub(crate) fn record_shutdown_step_for_test(
-        &self,
-        step: &'static str,
-        started: Instant,
-        deadline: Instant,
-    ) {
-        self.export.record_shutdown_step(step, started, deadline);
-    }
-
-    /// Every shutdown step this owner and its clones recorded, in call order.
-    #[cfg(test)]
-    pub(crate) fn shutdown_steps_for_test(&self) -> Vec<ShutdownStep> {
-        self.export
-            .shutdown_steps
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
     }
 
     #[cfg(test)]
@@ -1039,10 +913,11 @@ mod tests {
             panic!("deliberate poison");
         });
         assert!(observability.export.setups.is_poisoned());
-        let (task, workflow) = observability.take_telemetry_setups();
-        assert!(task.is_some() && workflow.is_some());
-        let (again, _) = observability.take_telemetry_setups();
-        assert!(again.is_none(), "the setups are handed over once");
+        assert!(observability.take_telemetry_setup().is_some());
+        assert!(
+            observability.take_telemetry_setup().is_none(),
+            "the setup is handed over once"
+        );
     }
 
     /// Positive: a poisoned providers lock still shuts the providers down.
@@ -1065,12 +940,10 @@ mod tests {
 
     /// Positive: a poisoned logger lock still drains the retained logger: every
     /// event admitted before the call is on disk when `flush_logger` returns.
-    /// Negative control (scheduler-dependent, not deterministic): no writer
-    /// barrier exists, so a burst this size is usually still queued behind the
-    /// writer when the last `emit` returns and a skipped flush then leaves
-    /// lines missing (0 of 30 mutant runs passed). A schedule where the writer
-    /// drains first would let the mutant pass; the setups and providers
-    /// regressions are the deterministic controls.
+    /// No negative control is claimed: without a writer barrier the writer may
+    /// drain the burst before the flush, so a skipped flush is not reliably
+    /// observable here; the setups and providers regressions are the
+    /// deterministic poison controls.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn poisoned_logger_lock_still_drains_the_retained_logger() {
         use atm_core::observability::{

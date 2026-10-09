@@ -51,6 +51,7 @@ mod peer_launch_config;
 mod queue_drain;
 mod received_hook_selector;
 mod replacement_handler;
+mod shutdown_probe;
 mod singleton_guard;
 mod sqlite_observability;
 
@@ -186,7 +187,7 @@ pub fn assemble_host_runtime_with_template_composer(
         non_claude_outbound,
         template_composer,
         SqliteStorageFactory::host_scoped(),
-        (None, None),
+        None,
     )
 }
 
@@ -195,19 +196,14 @@ fn assemble_host_runtime_with_storage_factory(
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
     template_composer: Option<Arc<dyn TemplateComposer>>,
     storage_factory: SqliteStorageFactory,
-    telemetry: (
-        Option<atm_runtime::TaskTelemetrySetup>,
-        Option<atm_runtime::WorkflowTelemetrySetup>,
-    ),
+    task_telemetry: Option<atm_runtime::TaskTelemetrySetup>,
 ) -> Result<RuntimeAssembly, AtmError> {
-    let (task_telemetry, workflow_telemetry) = telemetry;
     assemble_runtime(RuntimeAssemblyInputs {
         host_runtime_scope: current_host_runtime_scope()?,
         storage_factory: Arc::new(storage_factory),
         config_current_dir,
         non_claude_outbound,
         template_composer,
-        workflow_telemetry,
         task_telemetry,
     })
 }
@@ -230,9 +226,8 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 /// must not depend on that directory: [`RuntimeAssembly::for_daemon`] removes
 /// the workspace-backed config doctor before requests can be served.
 ///
-/// The supplied observability `owner` forwards its task/workflow telemetry
-/// setups here once; without an owner (or without an endpoint) both runtimes
-/// are inert.
+/// The supplied observability `owner` forwards its task telemetry setup here
+/// once; without an owner (or without an endpoint) the runtime is inert.
 pub fn assemble_daemon_runtime(
     owner: Option<&DaemonObservability>,
 ) -> Result<RuntimeAssembly, AtmError> {
@@ -242,13 +237,13 @@ pub fn assemble_daemon_runtime(
     compose_daemon_assembly(storage_factory, owner)
 }
 
-/// Assembles the daemon runtime from `owner`'s telemetry setups and attaches
-/// the assembled runtimes' known-loss counters back to its export health.
+/// Assembles the daemon runtime from `owner`'s telemetry setup and attaches
+/// the assembled runtime's known-loss counters back to its export health.
 fn compose_daemon_assembly(
     storage_factory: SqliteStorageFactory,
     owner: Option<&DaemonObservability>,
 ) -> Result<RuntimeAssembly, AtmError> {
-    let telemetry = owner.map_or((None, None), |owner| owner.take_telemetry_setups());
+    let telemetry = owner.and_then(DaemonObservability::take_telemetry_setup);
     let assembly = assemble_host_runtime_with_storage_factory(
         PathBuf::new(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
@@ -258,10 +253,7 @@ fn compose_daemon_assembly(
     )
     .map(RuntimeAssembly::for_daemon)?;
     if let Some(owner) = owner {
-        owner.attach_runtime_telemetry(
-            assembly.task_telemetry.diagnostics(),
-            Arc::clone(assembly.workflow_telemetry.diagnostics()),
-        );
+        owner.attach_runtime_telemetry(assembly.task_telemetry.diagnostics());
     }
     Ok(assembly)
 }
@@ -472,10 +464,7 @@ async fn run_replacement_daemon_with_selector(
         start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
     let herdr_config = daemon_herdr_config(&ProcessEnvSource)?;
     let assembly = assemble_daemon_runtime(obs_owner.as_ref())?;
-    let telemetry = (
-        assembly.workflow_telemetry.clone(),
-        assembly.task_telemetry.clone(),
-    );
+    let telemetry = assembly.task_telemetry.clone();
     let diagnostic_timeline = Arc::clone(&assembly.diagnostic_timeline);
     let diagnostic_counters = diagnostic_timeline::active_counters();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
@@ -541,7 +530,6 @@ fn observability_port(
 
 /// The supervised subsystems every terminal daemon path drains exactly once.
 struct DaemonWorkers {
-    workflow_telemetry: atm_runtime::WorkflowTelemetryRuntime,
     task_telemetry: atm_runtime::TaskTelemetryRuntime,
     recovery_sweep: queue_drain::RecoverySweepHandle,
     atm_temp_sweeper: AtmTempSweeperRuntime,
@@ -554,16 +542,12 @@ impl DaemonWorkers {
     /// The workers of the process daemon, with the supplied observability
     /// owner of the standard SDK providers.
     fn for_process(
-        (workflow_telemetry, task_telemetry): (
-            atm_runtime::WorkflowTelemetryRuntime,
-            atm_runtime::TaskTelemetryRuntime,
-        ),
+        task_telemetry: atm_runtime::TaskTelemetryRuntime,
         recovery_sweep: queue_drain::RecoverySweepHandle,
         atm_temp_sweeper: AtmTempSweeperRuntime,
         observability: Option<DaemonObservability>,
     ) -> Self {
         Self {
-            workflow_telemetry,
             task_telemetry,
             recovery_sweep,
             atm_temp_sweeper,
@@ -811,9 +795,10 @@ fn legacy_literal_ip_policy_from_value(value: Option<String>) -> LegacyLiteralIp
 
 /// Drains every supervised subsystem under one cumulative deadline fixed at
 /// shutdown entry (ADR-055, REQ-DAEMON-RUNTIME-003): listener, recovery sweep,
-/// peer connections, task/workflow telemetry drains, the `$ATM_TEMP` sweeper,
-/// the retained-logger flushes around exporter shutdown each get only the
-/// remaining time, never a fresh budget.
+/// peer connections, the task telemetry drain, the `$ATM_TEMP` sweeper,
+/// the retained-logger flushes around exporter shutdown and the diagnostic
+/// timeline flush worker each get only the remaining time, never a fresh
+/// budget.
 /// Every terminal daemon path uses this sequence, so a failed ready handshake
 /// cannot leave a subsystem alive after the listener is gone. The returned
 /// result is the listener's; telemetry outcomes are retained as health.
@@ -824,67 +809,55 @@ async fn shutdown_replacement_daemon(
 ) -> Result<(), AtmError> {
     let entered = tokio::time::Instant::now();
     let deadline = entered + REPLACEMENT_DRAIN_DEADLINE;
-    // Test builds record each step's start, the shared deadline and its return.
-    #[cfg(test)]
-    let spy = workers.observability.clone();
-    macro_rules! step {
-        ($name:literal, $started:expr, $step:expr) => {{
-            #[cfg(test)]
-            let started = $started;
-            let output = $step;
-            #[cfg(test)]
-            if let Some(spy) = &spy {
-                spy.record_shutdown_step_for_test($name, started, deadline);
-            }
-            output
-        }};
-    }
-    step!("entry", entered, ());
+    shutdown_probe::record("entry", entered, deadline);
     // The runtime bounds its own drain, cancellation and cleanup by
     // `deadline`, so it is awaited to completion rather than dropped.
-    let stopped = step!(
+    let stopped = shutdown_probe::step(
         "listener",
-        tokio::time::Instant::now(),
-        running.begin_shutdown().finish(deadline).await
-    );
-    step!(
+        deadline,
+        running.begin_shutdown().finish(deadline),
+    )
+    .await;
+    shutdown_probe::step(
         "recovery_sweep",
-        tokio::time::Instant::now(),
-        workers.recovery_sweep.shutdown(deadline).await
-    );
-    step!(
+        deadline,
+        workers.recovery_sweep.shutdown(deadline),
+    )
+    .await;
+    shutdown_probe::step(
         "peer_connections",
-        tokio::time::Instant::now(),
-        handler.shutdown_peer_connections(deadline).await
-    );
-    // Both drains feed the SDK, so they finish (or abort) before the exporter.
-    step!(
-        "telemetry_drains",
-        tokio::time::Instant::now(),
-        tokio::join!(
-            workers.task_telemetry.shutdown(deadline),
-            workers.workflow_telemetry.shutdown(deadline),
-        )
-    );
+        deadline,
+        handler.shutdown_peer_connections(deadline),
+    )
+    .await;
+    // The drain feeds the SDK, so it finishes (or aborts) before the exporter.
+    shutdown_probe::step(
+        "task_telemetry",
+        deadline,
+        workers.task_telemetry.shutdown(deadline),
+    )
+    .await;
     // The sweeper emits through the retained logger, so it stops first.
-    step!(
+    shutdown_probe::step(
         "atm_temp_sweeper",
-        tokio::time::Instant::now(),
-        workers.atm_temp_sweeper.shutdown(deadline).await
-    );
+        deadline,
+        workers.atm_temp_sweeper.shutdown(deadline),
+    )
+    .await;
     if let Some(observability) = &workers.observability {
         tracing::info!(target: "atm_daemon_bootstrap::lifecycle", code = "ATM_DAEMON_SHUTDOWN_DRAINED", "replacement ATM daemon drained its subsystems; closing retained logs");
         // Routed records reach the SDK logger before its provider stops; the
         // second flush puts provider-shutdown diagnostics on disk.
         observability.flush_logger(deadline).await;
-        step!(
-            "export",
-            tokio::time::Instant::now(),
-            observability.shutdown_export(deadline).await
-        );
+        shutdown_probe::step("export", deadline, observability.shutdown_export(deadline)).await;
         observability.flush_logger(deadline).await;
     }
-    diagnostic_timeline::stop_flush_worker();
+    shutdown_probe::step(
+        "timeline_flush_worker",
+        deadline,
+        diagnostic_timeline::stop_flush_worker(deadline),
+    )
+    .await;
     if let Some(observability) = &workers.observability {
         // Last: the timeline worker and the flushes above still log through it.
         observability.shutdown_logger(deadline).await;

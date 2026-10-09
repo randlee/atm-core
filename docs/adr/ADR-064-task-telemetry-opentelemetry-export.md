@@ -28,13 +28,18 @@ template variables, or free-form event detail.
 
 ### D2. Separate task sink
 
-`TaskTelemetrySink` is a sealed, object-safe, first-party boundary with the
-same three delivery errors as `WorkflowTelemetrySink`. The workflow sink is
-not merged into or replaced by this contract.
+`TaskTelemetrySink` is a sealed, object-safe, first-party boundary. Its
+`emit` is synchronous and returns `Unavailable` or `Rejected`; it must not
+block. The task telemetry runtime's single worker calls it for each record
+taken from the one bounded ATM queue, so encoding, identity and dedup stay
+off the producer path, and the exporter's SDK batch processor is the only
+export queue behind it. There is no emit timeout. The former workflow
+telemetry runtime and `WorkflowTelemetrySink` had no production producer and
+were removed (2026-10-09 ruling), leaving this one runtime.
 
 ### D3. Best-effort isolation
 
-Export is best effort. A full queue, timeout, rejection, exporter failure, or
+Export is best effort. A full queue, rejection, exporter failure, or
 bounded-shutdown drop is diagnostic data only and cannot fail or roll back the
 task operation whose durable fact is being projected.
 
@@ -79,7 +84,13 @@ Accepted dependency decisions:
 - `atm-daemon-bootstrap -> opentelemetry_sdk` is accepted only for the
   lifecycle (construction, flush, shutdown) of the standard SDK providers,
   which bootstrap holds in its existing `DaemonObservability`. Exporters and
-  domain projection stay in `atm-observability`.
+  domain projection stay in `atm-observability`. Lint rule
+  `SCB-OBSERVABILITY-002` enforces both sides: in non-test sources,
+  `opentelemetry`, `opentelemetry_sdk`, `opentelemetry_otlp` and `tonic` paths
+  are allowed in `atm-observability` only in `otel_setup`, `otel_logs`,
+  `task_exporter` and `export_diagnostics`, and in `atm-daemon-bootstrap` only
+  `opentelemetry` and `opentelemetry_sdk` paths in `daemon_observability.rs`;
+  any other use names its file and line.
 
 Other crates receive runtime handles, not exporter dependencies.
 
@@ -108,12 +119,12 @@ The boundary manifest permits `atm-runtime` and `atm-observability` only,
 forbids payload/variable export, and requires best-effort behavior. The seal is
 the ADR-001 workspace-convention seal enforced by boundary lint and review.
 
-### D10. Separate domain contracts
+### D10. One task telemetry contract
 
-`TaskTelemetrySink` and `WorkflowTelemetrySink` stay separate domain
-contracts, following the accepted ADR-046 design. One exporter implements
-both and maps their identical error sets through one table. This decision
-adds no generic telemetry framework.
+`TaskTelemetrySink` is the only telemetry sink contract; the exporter
+implements it. The ADR-046 workflow sink, which had no production producer,
+was removed with its runtime. This decision adds no generic telemetry
+framework.
 
 ### D11. Daemon composition
 
@@ -128,8 +139,8 @@ gRPC (tonic). No other observability facade or HTTP exporter is composed.
   serving with file logging, export disabled and `ConfigInvalid` health.
   Rejected values are never echoed.
 - Bootstrap holds only the lifecycle handles of the three standard providers
-  (traces, logs, metrics), and composition hands one task and one workflow
-  runtime handle to the router and the queue-wake pump. Producers call the
+  (traces, logs, metrics), and composition hands one task telemetry runtime
+  handle to the router and the queue-wake pump. Producers call the
   non-blocking `try_emit`.
 - Actual task producers: the router (assigned, reassigned, started, closed,
   reopened, rejected, prompt handoff) and the queue-wake pump (reminded,
@@ -137,25 +148,43 @@ gRPC (tonic). No other observability facade or HTTP exporter is composed.
   produces no row and no record.
 - Bounds are the exporter constants: SDK queue `EXPORT_QUEUE` 256, batch
   `EXPORT_BATCH` 256, interval `EXPORT_INTERVAL` 1s and per-export
-  `EXPORT_TIMEOUT` 400 ms (`otel_setup.rs`). The task projection keeps at
+  `EXPORT_TIMEOUT` 400 ms, with the tonic transport bound
+  `EXPORT_TRANSPORT_TIMEOUT` 300 ms below it so a stalled export always
+  ends as a transport timeout (`otel_setup.rs`). The task projection keeps at
   most `ACTIVE_LIMIT` 4096 open assignments, `EVENT_LIMIT` 64 events and
   `BYTE_LIMIT` 64 KiB per assignment, drops a record over `RECORD_LIMIT`
   16 KiB, and deduplicates within a `DEDUP_LIMIT` 8192-entry window only
   (`task_exporter.rs`). A close seen before its start exports a partial
   span; nothing is replayed, backfilled or stored across an outage.
-- Shutdown uses one cumulative deadline (`REPLACEMENT_DRAIN_DEADLINE`, 5s):
-  listeners, recovery sweep, peers, then the task and workflow drains, then
-  the providers, bounded by `min(1s, remaining)`. The first shutdown caller
+- Shutdown uses one cumulative deadline (`REPLACEMENT_DRAIN_DEADLINE`, 5s,
+  fixed at shutdown entry; every step gets only the remaining time), in this
+  order: listener, recovery sweep, peer connections, the task telemetry drain,
+  the `$ATM_TEMP` sweeper (it logs, so it stops before the logger), a retained
+  logger flush, the provider shutdown (bounded by `min(1s, remaining)`), a
+  second logger flush that puts provider-shutdown diagnostics on disk, the
+  diagnostic timeline flush worker, and last the retained logger shutdown
+  (bounded by `min(1s, remaining)`). The first shutdown caller
   owns provider shutdown, so a cancelled or concurrent caller waits for the
   same stored outcome until its own deadline. A timeout abandons the wait,
-  not the SDK call, and process exit releases it.
+  not the SDK call, and process exit releases it. The stop time of the
+  shipped binary (SIGTERM to exit) is an integration property: the benchmark
+  smoke run (`just smoke admission-capacity`) measures every clean stop of its
+  daemon, reports it, and fails the run over 5s or on a non-zero exit.
 - Health: `Inert` with no endpoint; `Healthy` when configured and no loss or
   failure has been observed; `Degraded` when the runtime counted
-  `dropped_full`, `dropped_timeout` or `dropped_failure`; `Unavailable` with
+  `dropped_full` or `dropped_failure`; `Unavailable` with
   `last_failure` set when the SDK reported a transport failure through the
   process-global tracing bridge, a provider shutdown failed or timed out, or
   configuration was invalid. An observed failure is not cleared by later
-  success. SDK-private queue losses are unknown and never invented.
+  success. SDK-private queue losses are unknown and never invented. The
+  governed doctor JSON keeps `dropped_timeout`, which is always 0 because
+  the synchronous sink has no emit timeout.
+- Shutdown aborts a drain that outlives its deadline. Because the sink is
+  synchronous, an aborted worker stops only after its current sink call
+  returns; shutdown waits for that only until the deadline and then abandons
+  the worker. Every admitted record is counted exactly once: a record already
+  counted as a shutdown drop is not counted again if an abandoned sink call
+  returns late.
 
 ## Consequences
 

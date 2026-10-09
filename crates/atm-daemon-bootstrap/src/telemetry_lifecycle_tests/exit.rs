@@ -1,10 +1,11 @@
-//! Real process-exit proof for the daemon shutdown SLO.
+//! Real process-exit proof of the daemon shutdown sequence.
 //!
 //! The parent re-executes this test binary as a child that composes the
 //! daemon on its own multi-thread runtime, exports to a collector living in
 //! the parent process, and stops on request: `shutdown_replacement_daemon`,
 //! runtime teardown (which releases abandoned SDK blocking calls), process
-//! exit. The parent times the stop request to the child's exit status.
+//! exit. The parent awaits the child's exit status. The 5s/10s stop bounds
+//! of the shipped binary are measured by the benchmark smoke run, not here.
 #![cfg(test)]
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -18,6 +19,7 @@ use super::{
     Daemon, DaemonObservability, EXPORT_WAIT, assert_one_shutdown_deadline, endpoint_env,
     exported_counts, sent_message_id, task_record,
 };
+use crate::shutdown_probe::{Probe, observe};
 use atm_core::observability::{AtmTelemetryExportHealth, AtmTelemetryExportState};
 use atm_core::test_support::FakeEnvSource;
 
@@ -73,11 +75,12 @@ fn exit_proof_child() {
             .await
             .expect("stdin reader")
             .expect("stop request");
-        let observability = daemon.observability.clone();
-        daemon.shutdown().await.expect("child daemon shutdown");
-        // The stop SLO holds by construction; the parent sees a failure here
-        // as an unsuccessful exit.
-        assert_one_shutdown_deadline(&observability.shutdown_steps_for_test());
+        let probe = Probe::new();
+        observe(&probe, daemon.shutdown())
+            .await
+            .expect("child daemon shutdown");
+        // The parent sees a failure here as an unsuccessful exit.
+        assert_one_shutdown_deadline(&probe.steps());
     });
     drop(runtime);
 }
@@ -163,16 +166,40 @@ fn await_eof_then_exit<T>(
             panic!("{what} did not close stdout before its deadline");
         }
     };
-    loop {
-        if let Some(status) = child.try_wait().expect("poll child exit") {
-            return (carried, status);
-        }
-        if Instant::now() >= deadline {
-            kill_and_reap(child);
-            panic!("{what} closed stdout but did not exit before its deadline");
-        }
-        std::thread::yield_now();
-    }
+    // The exit is awaited, not polled. A watchdog kills the child by pid only
+    // if it has not exited by `deadline`; that failure path then panics.
+    let pid = child.id();
+    let (exited, exit_seen) = mpsc::channel::<()>();
+    let (status, killed) = std::thread::scope(|scope| {
+        let watchdog = scope.spawn(move || {
+            let timed_out = matches!(
+                exit_seen.recv_timeout(deadline.saturating_duration_since(Instant::now())),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            );
+            if timed_out {
+                kill_pid(pid);
+            }
+            timed_out
+        });
+        let status = child.wait().expect("await child exit");
+        let _ = exited.send(());
+        (status, watchdog.join().expect("exit watchdog joins"))
+    });
+    assert!(
+        !killed,
+        "{what} closed stdout but did not exit before its deadline"
+    );
+    (carried, status)
+}
+
+/// Force-kills an unreaped child by pid; only the hang path calls it.
+fn kill_pid(pid: u32) {
+    let pid = pid.to_string();
+    #[cfg(unix)]
+    let killed = Command::new("kill").args(["-KILL", &pid]).status();
+    #[cfg(windows)]
+    let killed = Command::new("taskkill").args(["/F", "/PID", &pid]).status();
+    drop(killed);
 }
 
 fn child_execution_is_proven(output: &std::process::Output) -> bool {
@@ -320,12 +347,12 @@ fn pre_stop_export_gate_rejects_a_missing_export() {
 }
 
 /// Positive: with the task queue full and a collector that never answers,
-/// the daemon process exits successfully, its shutdown steps sharing the one
-/// deadline fixed at entry, so the 10s force SLO holds by construction.
+/// the daemon process exits successfully after shutdown, its shutdown steps
+/// sharing the one deadline fixed at entry.
 /// Negative: no elapsed time is asserted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::serial(slo)]
-async fn process_exits_within_ten_seconds_with_full_queue_and_stalled_collector() {
+async fn process_exits_successfully_after_shutdown_with_full_queue_and_stalled_collector() {
     let stalled = Receiver::start(true).await;
     let endpoint = stalled.endpoint.clone();
     let capture = stalled.capture.clone();
@@ -358,12 +385,12 @@ async fn process_exits_within_ten_seconds_with_full_queue_and_stalled_collector(
 }
 
 /// Positive: with a healthy collector the daemon process exits successfully
-/// after flushing its export, its shutdown steps sharing the one deadline
-/// fixed at entry, so the 5s clean-stop SLO holds by construction.
+/// after a clean shutdown that flushed its export, its shutdown steps sharing
+/// the one deadline fixed at entry.
 /// Negative: no elapsed time is asserted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::serial(slo)]
-async fn process_exits_within_five_seconds_when_clean() {
+async fn process_exits_successfully_after_clean_shutdown() {
     let healthy = Receiver::start(false).await;
     let endpoint = healthy.endpoint.clone();
     tokio::task::spawn_blocking(move || stop_to_exit("clean", Some(&endpoint), None))
@@ -736,20 +763,18 @@ fn combined_lifecycle_child() {
             daemon.workers.task_telemetry.try_emit(task_record(seq));
         }
         let task = daemon.workers.task_telemetry.diagnostics();
-        let workflow = Arc::clone(daemon.workers.workflow_telemetry.diagnostics());
         assert!(task.snapshot().dropped_full > 0, "the task queue is full");
         let observability = daemon.observability.clone();
         handshake("BD6-READY".to_owned()).await;
-        daemon.shutdown().await.expect("child daemon shutdown");
-        assert_one_shutdown_deadline(&observability.shutdown_steps_for_test());
+        let probe = Probe::new();
+        observe(&probe, daemon.shutdown())
+            .await
+            .expect("child daemon shutdown");
+        assert_one_shutdown_deadline(&probe.steps());
 
         let counts = task.snapshot();
         assert_eq!(
-            counts.emitted
-                + counts.dropped_full
-                + counts.dropped_timeout
-                + counts.dropped_failure
-                + counts.dropped_shutdown,
+            counts.emitted + counts.dropped_full + counts.dropped_failure + counts.dropped_shutdown,
             committed + FLOOD,
             "every task record is counted exactly once: {counts:?}"
         );
@@ -759,7 +784,6 @@ fn combined_lifecycle_child() {
         let health = observability.export_health_for_test();
         assert_ne!(health.state, AtmTelemetryExportState::Healthy, "{health:?}");
         assert!(health.last_failure.is_some(), "{health:?}");
-        let load = |counter: &std::sync::atomic::AtomicU64| counter.load(Ordering::Relaxed);
         assert_eq!(
             (
                 health.emitted,
@@ -770,10 +794,10 @@ fn combined_lifecycle_child() {
             ),
             (
                 counts.emitted,
-                counts.dropped_full + load(&workflow.dropped_full),
-                counts.dropped_timeout + load(&workflow.dropped_timeout),
-                counts.dropped_failure + load(&workflow.dropped_failure),
-                counts.dropped_shutdown + load(&workflow.dropped_shutdown),
+                counts.dropped_full,
+                0,
+                counts.dropped_failure,
+                counts.dropped_shutdown,
             ),
             "{health:?}"
         );
@@ -823,8 +847,8 @@ async fn line_with(lines: &Arc<Mutex<mpsc::Receiver<String>>>, marker: &'static 
 /// and the task queue fills behind it. Together: every task record is counted
 /// exactly once in the runtime counters, doctor's loss counts equal those
 /// runtime counts while the stalled export shows only as the SDK failure
-/// state, and every shutdown step shares the one deadline fixed at entry, so
-/// the 10s force SLO holds by construction; no elapsed time is asserted.
+/// state, and every shutdown step shares the one deadline fixed at entry; no
+/// elapsed time is asserted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::serial(slo)]
 async fn delivered_export_then_full_backlog_behind_stall() {

@@ -524,8 +524,9 @@ async fn drive(runtime: TaskTelemetryRuntime) -> Observed {
 
 /// A failing, a stalled-and-full, and a disabled telemetry runtime leave the
 /// caller's responses and the durable ledger identical, and no handler waits
-/// on the sink (the stalled emit timeout is far longer than the bound).
-#[tokio::test]
+/// on the sink (the stalled sink is held until after the bound). The stalled
+/// sink holds a worker thread, so this runs on a multi-thread runtime.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn failing_stalled_and_full_sinks_never_change_the_task_outcome() {
     let baseline = drive(TaskTelemetryRuntime::disabled()).await;
     assert_eq!(
@@ -543,13 +544,13 @@ async fn failing_stalled_and_full_sinks_never_change_the_task_outcome() {
     assert!(failing_counts.dropped_failure > 0, "{failing_counts:?}");
     assert_eq!(failing_counts.emitted, 0);
 
+    let (stalled_sink, release) = StalledTaskTelemetrySink::new();
     let stalled_runtime = TaskTelemetryRuntime::start(
         TaskTelemetryConfig {
             queue_capacity: 1,
-            emit_timeout: Duration::from_secs(30),
             drain_timeout: Duration::from_millis(50),
         },
-        Arc::new(StalledTaskTelemetrySink),
+        Arc::new(stalled_sink),
     );
     let stalled = tokio::time::timeout(Duration::from_secs(20), drive(stalled_runtime.clone()))
         .await
@@ -558,6 +559,7 @@ async fn failing_stalled_and_full_sinks_never_change_the_task_outcome() {
     let stalled_counts = stalled_runtime.diagnostics().snapshot();
     assert!(!stalled_counts.config_invalid);
     assert!(stalled_counts.dropped_full > 0, "{stalled_counts:?}");
+    drop(release);
     settle(&stalled_runtime).await;
 }
 

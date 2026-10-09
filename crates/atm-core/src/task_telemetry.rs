@@ -4,9 +4,6 @@
 //! events or prompt handoffs. Message bodies, template variables, and free-form
 //! event details are deliberately excluded.
 
-use std::future::Future;
-use std::pin::Pin;
-
 use atm_storage::{
     AgentName, AtmMessageId, BuiltInNudgeTemplateKind, IsoTimestamp, PromptTrigger,
     ReminderOutcome, TaskActor, TaskCloseOutcome, TaskEventMarker, TaskId, TaskStateTag, TeamName,
@@ -100,31 +97,18 @@ impl TaskTelemetryKind {
 pub enum TaskTelemetryError {
     Unavailable,
     Rejected,
-    TimedOut,
 }
 
 /// BOUNDARY-TaskTelemetrySink — an object-safe, first-party-only sink.
+///
+/// `emit` is synchronous and must not block: the runtime's single worker calls
+/// it directly, and the exporter's own SDK processor is the only export queue.
 pub trait TaskTelemetrySink: crate::boundary::sealed::Sealed + Send + Sync {
     /// Emits one task telemetry record without affecting task processing.
-    fn emit(
-        &self,
-        record: TaskTelemetryRecord,
-    ) -> Pin<Box<dyn Future<Output = Result<(), TaskTelemetryError>> + Send + '_>>;
-}
-
-/// Inert built-in default used when task telemetry export is disabled.
-#[derive(Debug, Default)]
-pub struct NoopTaskTelemetrySink;
-
-impl crate::boundary::sealed::Sealed for NoopTaskTelemetrySink {}
-
-impl TaskTelemetrySink for NoopTaskTelemetrySink {
-    fn emit(
-        &self,
-        _record: TaskTelemetryRecord,
-    ) -> Pin<Box<dyn Future<Output = Result<(), TaskTelemetryError>> + Send + '_>> {
-        Box::pin(async { Ok(()) })
-    }
+    ///
+    /// # Errors
+    /// Returns why the record was not accepted for export.
+    fn emit(&self, record: TaskTelemetryRecord) -> Result<(), TaskTelemetryError>;
 }
 
 const ATM_LOG_DESTINATION: &str = "ATM_LOG_DESTINATION";
@@ -372,8 +356,15 @@ mod tests {
 
     #[test]
     fn boundary_is_object_safe() {
+        struct Sink;
+        impl crate::boundary::sealed::Sealed for Sink {}
+        impl TaskTelemetrySink for Sink {
+            fn emit(&self, _record: TaskTelemetryRecord) -> Result<(), TaskTelemetryError> {
+                Ok(())
+            }
+        }
         fn accepts_dyn(_: &dyn TaskTelemetrySink) {}
-        let sink: Arc<dyn TaskTelemetrySink> = Arc::new(NoopTaskTelemetrySink);
+        let sink: Arc<dyn TaskTelemetrySink> = Arc::new(Sink);
         accepts_dyn(&*sink);
     }
 
@@ -403,26 +394,6 @@ mod tests {
                 serde_json::to_string(&kind).unwrap(),
                 format!("\"{expected}\"")
             );
-        }
-    }
-
-    #[test]
-    fn error_variants_match_workflow_telemetry_error() {
-        use crate::workflow_telemetry::WorkflowTelemetryError as Workflow;
-
-        let task = [
-            TaskTelemetryError::Unavailable,
-            TaskTelemetryError::Rejected,
-            TaskTelemetryError::TimedOut,
-        ];
-        let workflow = [
-            Workflow::Unavailable,
-            Workflow::Rejected,
-            Workflow::TimedOut,
-        ];
-        assert_eq!(task.len(), workflow.len());
-        for (task, workflow) in task.into_iter().zip(workflow) {
-            assert_eq!(format!("{task:?}"), format!("{workflow:?}"));
         }
     }
 

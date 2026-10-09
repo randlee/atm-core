@@ -2,26 +2,26 @@
 //!
 //! The runtime is the sole holder and caller of the [`TaskTelemetrySink`]
 //! trait object (ADR-064). Producers call [`TaskTelemetryRuntime::try_emit`],
-//! which never awaits; one worker forwards records to the sink.
+//! which never awaits; one worker calls the synchronous sink for each record.
+//! The exporter's SDK batch processor is the only export queue behind it.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
-use atm_core::{TaskTelemetryError, TaskTelemetryRecord, TaskTelemetrySink};
+use atm_core::{TaskTelemetryRecord, TaskTelemetrySink};
 use atm_storage::AtmErrorCode;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
-use crate::telemetry_limits::{DEFAULT_CAPACITY, DEFAULT_DRAIN, DEFAULT_TIMEOUT, within_limits};
+use crate::telemetry_limits::{DEFAULT_CAPACITY, DEFAULT_DRAIN, within_limits};
 
 /// Validated worker limits. Invalid configuration is converted to a disabled
 /// runtime rather than making ATM task processing unavailable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskTelemetryConfig {
     pub queue_capacity: usize,
-    pub emit_timeout: Duration,
     pub drain_timeout: Duration,
 }
 
@@ -29,21 +29,20 @@ impl Default for TaskTelemetryConfig {
     fn default() -> Self {
         Self {
             queue_capacity: DEFAULT_CAPACITY,
-            emit_timeout: DEFAULT_TIMEOUT,
             drain_timeout: DEFAULT_DRAIN,
         }
     }
 }
 
 impl TaskTelemetryConfig {
-    /// Accepts a queue of 1..=4096 records and timeouts of 1 ms..=30 s.
+    /// Accepts a queue of 1..=4096 records and a drain timeout of 1 ms..=30 s.
     ///
     /// # Errors
     ///
     /// Returns [`AtmErrorCode::TelemetryExportConfigInvalid`] for any value
     /// outside those bounds.
     pub fn validate(&self) -> Result<(), AtmErrorCode> {
-        if !within_limits(self.queue_capacity, self.emit_timeout, self.drain_timeout) {
+        if !within_limits(self.queue_capacity, self.drain_timeout) {
             return Err(AtmErrorCode::TelemetryExportConfigInvalid);
         }
         Ok(())
@@ -62,7 +61,6 @@ pub struct TaskTelemetrySetup {
 pub struct TaskTelemetryDiagnostics {
     emitted: AtomicU64,
     dropped_full: AtomicU64,
-    dropped_timeout: AtomicU64,
     dropped_failure: AtomicU64,
     dropped_shutdown: AtomicU64,
     config_invalid: AtomicBool,
@@ -79,7 +77,6 @@ pub struct TaskTelemetryDiagnostics {
 pub struct TaskTelemetryDiagnosticsSnapshot {
     pub emitted: u64,
     pub dropped_full: u64,
-    pub dropped_timeout: u64,
     pub dropped_failure: u64,
     pub dropped_shutdown: u64,
     pub config_invalid: bool,
@@ -91,16 +88,25 @@ impl TaskTelemetryDiagnostics {
         TaskTelemetryDiagnosticsSnapshot {
             emitted: self.emitted.load(Ordering::Relaxed),
             dropped_full: self.dropped_full.load(Ordering::Relaxed),
-            dropped_timeout: self.dropped_timeout.load(Ordering::Relaxed),
             dropped_failure: self.dropped_failure.load(Ordering::Relaxed),
             dropped_shutdown: self.dropped_shutdown.load(Ordering::Relaxed),
             config_invalid: self.config_invalid.load(Ordering::Relaxed),
         }
     }
 
+    /// Counts one admitted record under `counter`, once. A record already
+    /// counted as abandoned by `shutdown` (which zeroes `pending`) is not
+    /// counted again when an abandoned sink call returns late.
     fn resolve(&self, counter: &AtomicU64) {
-        counter.fetch_add(1, Ordering::Relaxed);
-        self.pending.fetch_sub(1, Ordering::Relaxed);
+        if self
+            .pending
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |pending| {
+                pending.checked_sub(1)
+            })
+            .is_ok()
+        {
+            counter.fetch_add(1, Ordering::Relaxed);
+        }
     }
 }
 
@@ -163,7 +169,6 @@ impl TaskTelemetryRuntime {
             sink,
             receiver,
             stop_receiver,
-            config.emit_timeout,
             Arc::clone(&diagnostics),
         ));
         Self {
@@ -221,8 +226,10 @@ impl TaskTelemetryRuntime {
     }
 
     /// Stops admission, drains until `min(drain_timeout, deadline)`, then
-    /// aborts and joins the worker. Repeated calls are no-ops once the worker
-    /// is joined; a cancelled call leaves the worker for the next caller.
+    /// aborts the worker and joins it until `deadline`. A worker still inside
+    /// a sink call at `deadline` is abandoned. Repeated calls are no-ops once
+    /// the worker is gone; a cancelled call leaves the worker for the next
+    /// caller.
     pub async fn shutdown(&self, deadline: Instant) {
         let taken = self
             .sender
@@ -251,10 +258,16 @@ impl TaskTelemetryRuntime {
             .is_err()
         {
             worker.abort();
-            if let Err(error) = (&mut *worker).await
-                && error.is_panic()
-            {
-                tracing::warn!(%error, "task telemetry worker panicked during abort");
+            // The sink is synchronous, so an aborted worker stops only when
+            // its current sink call returns.
+            match tokio::time::timeout_at(deadline, &mut *worker).await {
+                Ok(Err(error)) if error.is_panic() => {
+                    tracing::warn!(%error, "task telemetry worker panicked during abort");
+                }
+                Ok(_) => {}
+                Err(_) => tracing::warn!(
+                    "task telemetry worker still inside a sink call at the shutdown deadline; abandoned"
+                ),
             }
             let abandoned = self.diagnostics.pending.swap(0, Ordering::Relaxed);
             self.diagnostics
@@ -283,13 +296,12 @@ async fn run_worker(
     sink: Arc<dyn TaskTelemetrySink>,
     mut receiver: mpsc::Receiver<TaskTelemetryRecord>,
     mut stop: oneshot::Receiver<Instant>,
-    emit_timeout: Duration,
     diagnostics: Arc<TaskTelemetryDiagnostics>,
 ) {
     let drain_deadline = loop {
         tokio::select! {
             message = receiver.recv() => match message {
-                Some(record) => emit_one(&*sink, record, emit_timeout, &diagnostics).await,
+                Some(record) => emit_one(&*sink, record, &diagnostics),
                 None => return,
             },
             deadline = &mut stop => match deadline {
@@ -301,25 +313,21 @@ async fn run_worker(
     };
     receiver.close();
     while let Ok(Some(record)) = tokio::time::timeout_at(drain_deadline, receiver.recv()).await {
-        emit_one(&*sink, record, emit_timeout, &diagnostics).await;
+        emit_one(&*sink, record, &diagnostics);
     }
     while receiver.try_recv().is_ok() {
         diagnostics.resolve(&diagnostics.dropped_shutdown);
     }
 }
 
-async fn emit_one(
+fn emit_one(
     sink: &dyn TaskTelemetrySink,
     record: TaskTelemetryRecord,
-    timeout: Duration,
     diagnostics: &TaskTelemetryDiagnostics,
 ) {
-    let counter = match tokio::time::timeout(timeout, sink.emit(record)).await {
-        Ok(Ok(())) => &diagnostics.emitted,
-        Ok(Err(TaskTelemetryError::TimedOut)) | Err(_) => &diagnostics.dropped_timeout,
-        Ok(Err(TaskTelemetryError::Unavailable | TaskTelemetryError::Rejected)) => {
-            &diagnostics.dropped_failure
-        }
+    let counter = match sink.emit(record) {
+        Ok(()) => &diagnostics.emitted,
+        Err(_) => &diagnostics.dropped_failure,
     };
     diagnostics.resolve(counter);
 }
@@ -328,12 +336,11 @@ async fn emit_one(
 pub(crate) mod tests {
     use super::*;
     use crate::telemetry_limits::{MAX_DURATION, MIN_DURATION};
-    use std::sync::Mutex;
     use std::sync::atomic::AtomicUsize;
+    use std::sync::{Condvar, Mutex};
 
-    use atm_core::TaskTelemetryKind;
+    use atm_core::{TaskTelemetryError, TaskTelemetryKind};
     use atm_storage::TaskActor;
-    use tokio::sync::Semaphore;
 
     const WAIT: Duration = Duration::from_secs(5);
 
@@ -356,36 +363,39 @@ pub(crate) mod tests {
         }
     }
 
-    type EmitFuture<'a> = std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<(), TaskTelemetryError>> + Send + 'a>,
-    >;
-
-    /// Waits on `gate` before recording each record, so tests control when
-    /// the worker makes progress without sleeping.
+    /// Blocks each sink call until the gate opens, so tests control when the
+    /// worker makes progress without sleeping. A closed gate holds a Tokio
+    /// worker thread, so tests that use one run on a multi-thread runtime.
     struct GatedSink {
-        gate: Semaphore,
+        open: Mutex<bool>,
+        opened: Condvar,
         started: AtomicUsize,
         records: Mutex<Vec<TaskTelemetryRecord>>,
         result: Result<(), TaskTelemetryError>,
     }
 
     impl GatedSink {
-        fn open(result: Result<(), TaskTelemetryError>) -> Arc<Self> {
+        fn with_gate(open: bool, result: Result<(), TaskTelemetryError>) -> Arc<Self> {
             Arc::new(Self {
-                gate: Semaphore::new(Semaphore::MAX_PERMITS),
+                open: Mutex::new(open),
+                opened: Condvar::new(),
                 started: AtomicUsize::new(0),
                 records: Mutex::new(Vec::new()),
                 result,
             })
         }
 
+        fn open(result: Result<(), TaskTelemetryError>) -> Arc<Self> {
+            Self::with_gate(true, result)
+        }
+
         fn closed() -> Arc<Self> {
-            Arc::new(Self {
-                gate: Semaphore::new(0),
-                started: AtomicUsize::new(0),
-                records: Mutex::new(Vec::new()),
-                result: Ok(()),
-            })
+            Self::with_gate(false, Ok(()))
+        }
+
+        fn release(&self) {
+            *self.open.lock().expect("gate lock") = true;
+            self.opened.notify_all();
         }
 
         fn records(&self) -> Vec<TaskTelemetryRecord> {
@@ -406,13 +416,16 @@ pub(crate) mod tests {
     impl atm_core::boundary::sealed::Sealed for GatedSink {}
 
     impl TaskTelemetrySink for GatedSink {
-        fn emit(&self, record: TaskTelemetryRecord) -> EmitFuture<'_> {
-            Box::pin(async move {
-                self.started.fetch_add(1, Ordering::Relaxed);
-                let _permit = self.gate.acquire().await.expect("gate open");
-                self.records.lock().expect("records lock").push(record);
-                self.result
-            })
+        fn emit(&self, record: TaskTelemetryRecord) -> Result<(), TaskTelemetryError> {
+            self.started.fetch_add(1, Ordering::Relaxed);
+            let open = self.open.lock().expect("gate lock");
+            drop(
+                self.opened
+                    .wait_while(open, |open| !*open)
+                    .expect("gate lock"),
+            );
+            self.records.lock().expect("records lock").push(record);
+            self.result
         }
     }
 
@@ -434,6 +447,18 @@ pub(crate) mod tests {
         });
     }
 
+    /// Waits until the abandoned worker has returned from the sink and
+    /// dropped its clone.
+    async fn wait_sink_released(sink: &Arc<GatedSink>) {
+        tokio::time::timeout(WAIT, async {
+            while Arc::strong_count(sink) > 1 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("abandoned worker released the sink");
+    }
+
     fn has_worker(runtime: &TaskTelemetryRuntime) -> bool {
         runtime
             .lifecycle
@@ -448,21 +473,14 @@ pub(crate) mod tests {
         let TaskTelemetryDiagnosticsSnapshot {
             emitted,
             dropped_full,
-            dropped_timeout,
             dropped_failure,
             dropped_shutdown,
             config_invalid,
         } = TaskTelemetryDiagnosticsSnapshot::default();
 
         assert_eq!(
-            [
-                emitted,
-                dropped_full,
-                dropped_timeout,
-                dropped_failure,
-                dropped_shutdown,
-            ],
-            [0; 5]
+            [emitted, dropped_full, dropped_failure, dropped_shutdown],
+            [0; 4]
         );
         assert!(!config_invalid);
     }
@@ -471,14 +489,12 @@ pub(crate) mod tests {
     fn config_bounds_and_defaults() {
         let defaults = TaskTelemetryConfig::default();
         assert_eq!(defaults.queue_capacity, 256);
-        assert_eq!(defaults.emit_timeout, Duration::from_secs(1));
         assert_eq!(defaults.drain_timeout, Duration::from_secs(2));
         for queue_capacity in [1, 256, 4096] {
-            for timeout in [MIN_DURATION, MAX_DURATION] {
+            for drain_timeout in [MIN_DURATION, MAX_DURATION] {
                 let config = TaskTelemetryConfig {
                     queue_capacity,
-                    emit_timeout: timeout,
-                    drain_timeout: timeout,
+                    drain_timeout,
                 };
                 assert_eq!(config.validate(), Ok(()), "{config:?}");
             }
@@ -493,7 +509,7 @@ pub(crate) mod tests {
                 ..defaults.clone()
             },
             TaskTelemetryConfig {
-                emit_timeout: Duration::ZERO,
+                drain_timeout: Duration::ZERO,
                 ..defaults.clone()
             },
             TaskTelemetryConfig {
@@ -588,13 +604,12 @@ pub(crate) mod tests {
         runtime.shutdown(Instant::now() + WAIT).await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn full_queue_drops_without_blocking_the_producer() {
         let sink = GatedSink::closed();
         let runtime = TaskTelemetryRuntime::start(
             TaskTelemetryConfig {
                 queue_capacity: 1,
-                emit_timeout: MAX_DURATION,
                 ..Default::default()
             },
             Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>,
@@ -606,63 +621,40 @@ pub(crate) mod tests {
             runtime.try_emit(record(TaskTelemetryKind::Reminded));
         }
         assert_eq!(runtime.diagnostics().snapshot().dropped_full, 9);
-        sink.gate.add_permits(Semaphore::MAX_PERMITS);
+        sink.release();
         wait_for(&runtime, |s| s.emitted == 2).await;
         runtime.shutdown(Instant::now() + WAIT).await;
     }
 
     #[tokio::test]
-    async fn sink_failures_and_timeouts_are_counted_separately() {
-        for (error, expect_failure) in [
-            (TaskTelemetryError::Unavailable, true),
-            (TaskTelemetryError::Rejected, true),
-            (TaskTelemetryError::TimedOut, false),
+    async fn sink_failures_are_counted_as_failure_drops() {
+        for error in [
+            TaskTelemetryError::Unavailable,
+            TaskTelemetryError::Rejected,
         ] {
             let runtime = TaskTelemetryRuntime::start(
                 TaskTelemetryConfig::default(),
                 GatedSink::open(Err(error)),
             );
             runtime.try_emit(record(TaskTelemetryKind::Refused));
-            wait_for(&runtime, |s| s.dropped_failure + s.dropped_timeout == 1).await;
-            let snapshot = runtime.diagnostics().snapshot();
+            wait_for(&runtime, |s| s.dropped_failure == 1).await;
             assert_eq!(
-                snapshot.dropped_failure,
-                u64::from(expect_failure),
+                runtime.diagnostics().snapshot(),
+                TaskTelemetryDiagnosticsSnapshot {
+                    dropped_failure: 1,
+                    ..Default::default()
+                },
                 "{error:?}"
             );
-            assert_eq!(
-                snapshot.dropped_timeout,
-                u64::from(!expect_failure),
-                "{error:?}"
-            );
-            assert_eq!(snapshot.emitted, 0);
             runtime.shutdown(Instant::now() + WAIT).await;
         }
     }
 
-    #[tokio::test]
-    async fn stuck_sink_hits_the_emit_timeout() {
-        let sink = GatedSink::closed();
-        let runtime = TaskTelemetryRuntime::start(
-            TaskTelemetryConfig {
-                emit_timeout: MIN_DURATION,
-                ..Default::default()
-            },
-            Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>,
-        );
-        runtime.try_emit(record(TaskTelemetryKind::Acked));
-        runtime.try_emit(record(TaskTelemetryKind::Started));
-        wait_for(&runtime, |s| s.dropped_timeout == 2).await;
-        assert!(sink.records().is_empty());
-        runtime.shutdown(Instant::now() + WAIT).await;
-    }
-
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn shutdown_drains_queued_records_within_the_deadline() {
         let sink = GatedSink::closed();
         let runtime = TaskTelemetryRuntime::start(
             TaskTelemetryConfig {
-                emit_timeout: MAX_DURATION,
                 drain_timeout: MAX_DURATION,
                 ..Default::default()
             },
@@ -676,7 +668,7 @@ pub(crate) mod tests {
             let runtime = runtime.clone();
             async move { runtime.shutdown(Instant::now() + WAIT).await }
         });
-        sink.gate.add_permits(Semaphore::MAX_PERMITS);
+        sink.release();
         shutdown.await.expect("shutdown task");
         assert_eq!(
             runtime.diagnostics().snapshot(),
@@ -694,12 +686,11 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn caller_deadline_bounds_shutdown_and_counts_abandoned_records() {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn caller_deadline_bounds_shutdown_and_counts_abandoned_records_once() {
         let sink = GatedSink::closed();
         let runtime = TaskTelemetryRuntime::start(
             TaskTelemetryConfig {
-                emit_timeout: MAX_DURATION,
                 drain_timeout: MAX_DURATION,
                 ..Default::default()
             },
@@ -714,28 +705,26 @@ pub(crate) mod tests {
             runtime.shutdown(Instant::now() + Duration::from_millis(20)),
         )
         .await
-        .expect("shutdown obeys the caller deadline, not the 30 s drain");
-        assert_eq!(
-            runtime.diagnostics().snapshot(),
-            TaskTelemetryDiagnosticsSnapshot {
-                dropped_shutdown: 3,
-                ..Default::default()
-            }
-        );
+        .expect("shutdown obeys the caller deadline, not the 30 s drain or the held sink");
+        let abandoned = TaskTelemetryDiagnosticsSnapshot {
+            dropped_shutdown: 3,
+            ..Default::default()
+        };
+        assert_eq!(runtime.diagnostics().snapshot(), abandoned);
         assert!(!has_worker(&runtime));
-        assert_eq!(
-            Arc::strong_count(&sink),
-            1,
-            "aborted worker released the sink"
-        );
+
+        // The abandoned sink call returns late; its record was already
+        // counted as a shutdown drop and is not counted again.
+        sink.release();
+        wait_sink_released(&sink).await;
+        assert_eq!(runtime.diagnostics().snapshot(), abandoned);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cancelled_shutdown_leaves_the_worker_for_the_next_call() {
         let sink = GatedSink::closed();
         let runtime = TaskTelemetryRuntime::start(
             TaskTelemetryConfig {
-                emit_timeout: MAX_DURATION,
                 drain_timeout: MAX_DURATION,
                 ..Default::default()
             },
@@ -766,7 +755,6 @@ pub(crate) mod tests {
             .shutdown(Instant::now() + Duration::from_millis(5))
             .await;
         assert!(!has_worker(&runtime));
-        assert_eq!(Arc::strong_count(&sink), 1, "worker joined, not detached");
         let terminal = runtime.diagnostics().snapshot();
         assert_eq!(terminal.dropped_shutdown, 1);
 
@@ -776,5 +764,8 @@ pub(crate) mod tests {
             terminal,
             "repeated shutdown keeps the terminal result"
         );
+        sink.release();
+        wait_sink_released(&sink).await;
+        assert_eq!(runtime.diagnostics().snapshot(), terminal);
     }
 }

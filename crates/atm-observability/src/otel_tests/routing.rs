@@ -77,7 +77,7 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
                 policy(),
                 Some(RetainedLogLevel::Info),
                 destination,
-                Some(setup.3.logger("atm.structured")),
+                Some(setup.2.logger("atm.structured")),
             )
             .unwrap(),
         );
@@ -109,7 +109,9 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
         if destination != LogDestination::File {
             receiver
                 .capture
-                .wait(|| receiver.capture.logs.lock().unwrap().len() >= 2)
+                .wait("two log exports", || {
+                    receiver.capture.logs.lock().unwrap().len() >= 2
+                })
                 .await;
             let logs = receiver.capture.logs.lock().unwrap();
             assert_eq!(
@@ -147,7 +149,7 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
         tokio::task::spawn_blocking(move || logger.shutdown())
             .await
             .unwrap();
-        let sdk_logger = setup.3.logger("caller-still-owns-provider");
+        let sdk_logger = setup.2.logger("caller-still-owns-provider");
         let mut record = sdk_logger.create_log_record();
         record.set_body("after retained logger drop".into());
         sdk_logger.emit(record);

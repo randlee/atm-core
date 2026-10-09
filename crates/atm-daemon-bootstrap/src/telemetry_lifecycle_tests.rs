@@ -49,7 +49,8 @@ use serde_json::Map;
 use tokio::time::Instant;
 
 use super::atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
-use super::daemon_observability::{DaemonObservability, ShutdownStep};
+use super::daemon_observability::DaemonObservability;
+use super::shutdown_probe::{Probe, ShutdownStep, observe};
 use super::{
     DaemonLaunchIdentity, DaemonWorkers, ReplacementHandlerConfig, SelectedPeerAdapterSelection,
     build_replacement_handler, compose_daemon_assembly,
@@ -166,7 +167,6 @@ impl Daemon {
         }
         let runtime = assembly.service_runtime.clone();
         let task_telemetry = assembly.task_telemetry.clone();
-        let workflow_telemetry = assembly.workflow_telemetry.clone();
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
         let (handler, recovery_sweep) = build_replacement_handler(
             assembly,
@@ -235,7 +235,6 @@ impl Daemon {
             running,
             handler,
             workers: DaemonWorkers {
-                workflow_telemetry,
                 task_telemetry,
                 recovery_sweep,
                 atm_temp_sweeper,
@@ -538,14 +537,15 @@ fn export_health(doctor: &serde_json::Value) -> AtmTelemetryExportHealth {
 }
 
 /// The daemon shutdown steps, in call order, each given the shared deadline.
-const SHUTDOWN_STEPS: [&str; 7] = [
+const SHUTDOWN_STEPS: [&str; 8] = [
     "entry",
     "listener",
     "recovery_sweep",
     "peer_connections",
-    "telemetry_drains",
+    "task_telemetry",
     "atm_temp_sweeper",
     "export",
+    "timeline_flush_worker",
 ];
 
 /// Proves the shutdown bound by construction from the recorded steps, never
@@ -616,15 +616,13 @@ async fn composition_uses_only_the_supplied_observability_owner() {
     )
     .expect("compose daemon runtime");
 
-    let (task, workflow) = supplied.take_telemetry_setups();
     assert!(
-        task.is_none() && workflow.is_none(),
-        "composition took the supplied owner's setups"
+        supplied.take_telemetry_setup().is_none(),
+        "composition took the supplied owner's setup"
     );
-    let (task, workflow) = other.take_telemetry_setups();
     assert!(
-        task.is_some() && workflow.is_some(),
-        "an owner composition was not handed keeps its setups"
+        other.take_telemetry_setup().is_some(),
+        "an owner composition was not handed keeps its setup"
     );
 }
 
@@ -996,42 +994,38 @@ fn assert_export_remediation(doctor: &serde_json::Value) {
     );
 }
 
-/// A task runtime whose sink never completes, with a one-record queue and a
-/// short emit timeout, so a burst leaves real `dropped_full` (queue) and
-/// `dropped_timeout` (stuck emit) counts. Attach it before composing the daemon.
-async fn lossy_task_runtime() -> atm_runtime::TaskTelemetryRuntime {
+/// A task runtime whose sink stalls until the returned release is dropped,
+/// with a one-record queue, so a burst leaves real `dropped_full` counts.
+/// Attach it before composing the daemon, and drop the release before
+/// shutting the runtime down.
+async fn lossy_task_runtime() -> (
+    atm_runtime::TaskTelemetryRuntime,
+    atm_runtime_test_support::StallRelease,
+) {
+    let (entered_tx, mut entered) = tokio::sync::mpsc::unbounded_channel();
+    let (sink, release) =
+        atm_runtime_test_support::StalledTaskTelemetrySink::reporting(move || {
+            let _ = entered_tx.send(());
+        });
     let runtime = atm_runtime::TaskTelemetryRuntime::start(
         atm_runtime::TaskTelemetryConfig {
             queue_capacity: 1,
-            emit_timeout: Duration::from_millis(200),
             ..Default::default()
         },
-        Arc::new(atm_runtime_test_support::StalledTaskTelemetrySink),
+        Arc::new(sink),
     );
-    // One record in flight and one queued at most; the rest must drop full.
-    const RECORDS: u64 = 6;
-    for seq in 1..=RECORDS {
+    runtime.try_emit(task_record(1));
+    tokio::time::timeout(EXPORT_WAIT, entered.recv())
+        .await
+        .expect("the worker never reached the stalled sink")
+        .expect("the stalled sink is alive");
+    // One record is in the stalled sink and one fills the queue; the rest
+    // drop full, synchronously, so no counter moves after this point.
+    for seq in 2..=6 {
         runtime.try_emit(task_record(seq));
     }
-    let diagnostics = runtime.diagnostics();
-    let mut cadence = tokio::time::interval(Duration::from_millis(20));
-    // The sink never succeeds, so every record ends as exactly one loss. Wait
-    // for that quiescent state: afterwards no emit timer is left to move a
-    // counter between the doctor read and the diagnostics snapshot.
-    tokio::time::timeout(EXPORT_WAIT, async {
-        loop {
-            let snapshot = diagnostics.snapshot();
-            if snapshot.dropped_full + snapshot.dropped_timeout == RECORDS {
-                break;
-            }
-            cadence.tick().await;
-        }
-    })
-    .await
-    .expect("every emitted record ends as a full or timed-out loss");
-    let snapshot = diagnostics.snapshot();
-    assert!(snapshot.dropped_full > 0, "{snapshot:?}");
-    runtime
+    assert_eq!(runtime.diagnostics().snapshot().dropped_full, 4);
+    (runtime, release)
 }
 
 /// Doctor reports exactly the runtime's known losses, disjoint per cause.
@@ -1040,12 +1034,12 @@ fn assert_doctor_reports_losses(
     losses: atm_runtime::TaskTelemetryDiagnosticsSnapshot,
 ) {
     let health = export_health(doctor);
-    assert!(
-        losses.dropped_full > 0 && losses.dropped_timeout > 0,
-        "{losses:?}"
-    );
+    assert!(losses.dropped_full > 0, "{losses:?}");
     assert_eq!(health.dropped_full, losses.dropped_full);
-    assert_eq!(health.dropped_timeout, losses.dropped_timeout);
+    assert_eq!(
+        health.dropped_timeout, 0,
+        "the governed field stays and the synchronous sink never times out"
+    );
     assert_eq!(
         (health.dropped_failure, health.dropped_shutdown),
         (0, 0),
@@ -1118,11 +1112,8 @@ fn unreachable_collector_child() {
         observability
             .install_tracing_bridge()
             .expect("the child process owns the global tracing bridge");
-        let lossy = lossy_task_runtime().await;
-        observability.attach_runtime_telemetry(
-            lossy.diagnostics(),
-            Arc::new(atm_runtime::WorkflowTelemetryDiagnostics::default()),
-        );
+        let (lossy, _release) = lossy_task_runtime().await;
+        observability.attach_runtime_telemetry(lossy.diagnostics());
         let daemon = Daemon::compose(root, observability).await;
         for task in ["BD6-U1", "BD6-U2", "BD6-U3"] {
             sent_message_id(
@@ -1145,33 +1136,28 @@ fn unreachable_collector_child() {
         assert_export_remediation(&doctor);
         // Runtime losses and the SDK failure are reported together, disjointly.
         assert_doctor_reports_losses(&doctor, lossy.diagnostics().snapshot());
-        let observability = daemon.observability.clone();
-        daemon
-            .shutdown()
+        let probe = Probe::new();
+        observe(&probe, daemon.shutdown())
             .await
             .expect("shutdown result is the listener's");
-        // The 5s clean-stop SLO holds by construction: every step shares the
-        // one deadline fixed at shutdown entry.
-        assert_one_shutdown_deadline(&observability.shutdown_steps_for_test());
+        // Every step shares the one deadline fixed at shutdown entry.
+        assert_one_shutdown_deadline(&probe.steps());
     });
     drop(runtime);
     println!("{}", exit::CHILD_SCENARIO_SENTINEL);
 }
 
-/// Positive: known runtime losses (a full task queue and a stuck emit) reach
-/// `doctor --json` as `Degraded` with exactly the runtime's `dropped_full` and
-/// `dropped_timeout`, as one export finding, with no SDK failure and no invented
-/// failure or shutdown loss.
+/// Positive: known runtime losses (a full task queue behind a stalled sink)
+/// reach `doctor --json` as `Degraded` with exactly the runtime's
+/// `dropped_full`, as one export finding, with no SDK failure and no invented
+/// timeout, failure or shutdown loss.
 /// Negative: the daemon keeps serving and the task write keeps its result.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn runtime_losses_reach_doctor_json_as_one_degraded_finding() {
     let collector = Receiver::start(false).await;
     let (root, observability) = Daemon::bootstrap(endpoint_env(&collector.endpoint)).await;
-    let lossy = lossy_task_runtime().await;
-    observability.attach_runtime_telemetry(
-        lossy.diagnostics(),
-        Arc::new(atm_runtime::WorkflowTelemetryDiagnostics::default()),
-    );
+    let (lossy, release) = lossy_task_runtime().await;
+    observability.attach_runtime_telemetry(lossy.diagnostics());
     let daemon = Daemon::compose(root, observability).await;
     sent_message_id(
         daemon
@@ -1190,6 +1176,7 @@ async fn runtime_losses_reach_doctor_json_as_one_degraded_finding() {
     assert_doctor_reports_losses(&doctor, lossy.diagnostics().snapshot());
     assert_export_remediation(&doctor);
     daemon.shutdown().await.expect("clean daemon shutdown");
+    drop(release);
     lossy
         .shutdown(Instant::now() + Duration::from_secs(5))
         .await;
@@ -1197,9 +1184,9 @@ async fn runtime_losses_reach_doctor_json_as_one_degraded_finding() {
 }
 
 /// Positive: a collector that accepts connections but never answers leaves
-/// task results unchanged, and daemon shutdown with a stalled exporter keeps
-/// the clean-stop SLO by construction (every step shares the one deadline
-/// fixed at entry), retaining the terminal export failure.
+/// task results unchanged, and daemon shutdown with a stalled exporter gives
+/// every step the one deadline fixed at entry, retaining the terminal export
+/// failure.
 /// Negative: no elapsed time is compared.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[serial_test::serial(slo)]
@@ -1225,11 +1212,11 @@ async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
         })
         .await;
     let observability = daemon.observability.clone();
-    daemon
-        .shutdown()
+    let probe = Probe::new();
+    observe(&probe, daemon.shutdown())
         .await
         .expect("shutdown result is the listener's");
-    assert_one_shutdown_deadline(&observability.shutdown_steps_for_test());
+    assert_one_shutdown_deadline(&probe.steps());
     // The SDK's own 400ms export timeout or the 1s wait bound ends the step;
     // either way the terminal failure is retained.
     let health = observability.export_health_for_test();
@@ -1247,8 +1234,9 @@ async fn stalled_export_in_flight() -> (Receiver, tempfile::TempDir, DaemonObser
         DaemonObservability::bootstrap_from(&endpoint_env(&stalled.endpoint), root.path().into())
             .await
             .expect("bootstrap");
-    let (task, _workflow) = observability.take_telemetry_setups();
-    let task = task.expect("configured task setup");
+    let task = observability
+        .take_telemetry_setup()
+        .expect("configured task setup");
     let runtime = atm_runtime::TaskTelemetryRuntime::start(task.config, task.sink);
     for seq in 1..=64 {
         runtime.try_emit(task_record(seq));
@@ -1282,13 +1270,17 @@ async fn stalled_export_in_flight() -> (Receiver, tempfile::TempDir, DaemonObser
 #[serial_test::parallel(slo)]
 async fn concurrent_and_cancelled_export_shutdown_share_one_ordered_outcome() {
     let (stalled, _root, observability) = stalled_export_in_flight().await;
-    let release = observability.hold_export_shutdown_for_test();
+    let probe = Probe::new();
+    let release = probe.hold_export_shutdown();
 
     // The first caller is cancelled right after it starts the shared work;
     // the gate keeps the step open, and the outcome survives the caller.
     let cancelled = tokio::time::timeout(
         Duration::from_millis(1),
-        observability.shutdown_export(Instant::now() + Duration::from_secs(5)),
+        observe(
+            &probe,
+            observability.shutdown_export(Instant::now() + Duration::from_secs(5)),
+        ),
     )
     .await;
     assert!(
@@ -1354,8 +1346,13 @@ async fn concurrent_and_cancelled_export_shutdown_share_one_ordered_outcome() {
 async fn shutdown_export_is_bounded_by_the_clean_stop_slo() {
     let (stalled, _root, observability) = stalled_export_in_flight().await;
     let deadline = Instant::now() + Duration::from_secs(30);
-    observability.shutdown_export(deadline).await;
-    let steps = observability.shutdown_steps_for_test();
+    let probe = Probe::new();
+    observe(&probe, observability.shutdown_export(deadline)).await;
+    assert!(
+        Instant::now() < deadline,
+        "the caller returned at its own deadline, not at the step's end"
+    );
+    let steps = probe.steps();
     let [step] = steps.as_slice() else {
         panic!("one exporter step: {steps:#?}");
     };
@@ -1364,10 +1361,6 @@ async fn shutdown_export_is_bounded_by_the_clean_stop_slo() {
         step.deadline,
         step.started + super::daemon_observability::EXPORT_SHUTDOWN_BOUND,
         "{steps:#?}"
-    );
-    assert!(
-        step.returned < deadline,
-        "the exporter step ended before the caller's deadline"
     );
     stalled.stop().await;
 }

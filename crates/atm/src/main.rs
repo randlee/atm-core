@@ -31,7 +31,7 @@ use atm_observability::retained_sink_fault_mode as shared_retained_sink_fault_mo
 #[cfg(test)]
 use atm_observability::{ATM_LOG_LEVEL_ENV, ATM_RETAINED_SINK_FAULT_ENV};
 use atm_observability::{
-    RetainedLogLevel, logger_level_override as shared_logger_level_override,
+    LogExport, RetainedLogLevel, logger_level_override as shared_logger_level_override,
     logger_root_for_log_dir as shared_logger_root_for_log_dir, prepare_retained_log,
 };
 use chrono::{DateTime, Utc};
@@ -232,8 +232,8 @@ async fn run() -> Result<(), AtmError> {
         return Err(error);
     }
 
-    let observability = match init_observability(cli.stderr_logs()) {
-        Ok(observability) => observability,
+    let (observability, log_export) = match init_observability(cli.stderr_logs()) {
+        Ok(initialized) => initialized,
         Err(error) => {
             let fallback = observability::CliObservability::fallback();
             fallback.report_fatal_error("bootstrap", &error);
@@ -245,10 +245,14 @@ async fn run() -> Result<(), AtmError> {
         tracing::info!(launch_cwd = %launch_cwd.display(), "atm process started");
     }
 
-    match cli.run(&observability).await {
+    let result = match cli.run(&observability).await {
         Ok(()) => Ok(()),
         Err(error) => Err(report_and_map_service_error(&observability, error)),
-    }
+    };
+    // Every record above was flushed into the routed sinks; export the ones
+    // queued for OTel before the process exits.
+    log_export.shutdown(LOG_EXPORT_SHUTDOWN_BOUND).await;
+    result
 }
 
 /// Prints the live CLI-surface tree in the requested `mode` (`json` or
@@ -295,7 +299,16 @@ fn report_and_map_service_error(
     }
 }
 
-fn init_observability(stderr_logs: bool) -> Result<observability::CliObservability, AtmError> {
+/// Upper bound on exporting queued OTel records at CLI exit, the same budget
+/// the daemon shares across its providers at shutdown.
+const LOG_EXPORT_SHUTDOWN_BOUND: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Builds the CLI's retained logger routed to the destination the daemon uses
+/// (`ATM_LOG_DESTINATION`, ADR-064 D4). The returned export must be shut down
+/// before exit so queued OTel records are delivered.
+fn init_observability(
+    stderr_logs: bool,
+) -> Result<(observability::CliObservability, LogExport), AtmError> {
     let log_dir = home::host_log_dir()?;
     let console_log_route = if stderr_logs {
         ConsoleLogRoute::Stderr
@@ -308,19 +321,45 @@ fn init_observability(stderr_logs: bool) -> Result<observability::CliObservabili
     let target_category = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|_source| {
         AtmError::observability_bootstrap("failed to validate ATM observability target")
     })?;
-    let (logger, active_log_path) = build_logger(&log_dir, console_log_route, &service_name)?;
+    let log_export = LogExport::from_env(&atm_core::ProcessEnvSource);
+    if log_export.config_invalid() {
+        tracing::warn!(
+            code = "ATM_TELEMETRY_EXPORT_CONFIG_INVALID",
+            "OpenTelemetry export disabled: invalid ATM_OTEL_* or ATM_LOG_DESTINATION configuration; the CLI continues with file logging"
+        );
+    }
+    let (logger, active_log_path) = build_logger(
+        &log_dir,
+        console_log_route,
+        &service_name,
+        Some(&log_export),
+    )?;
 
-    Ok(observability::CliObservability::from_boxed_port(Box::new(
-        ScObservabilityAdapter::new(logger, active_log_path, service_name, target_category),
-    )))
+    Ok((
+        observability::CliObservability::from_boxed_port(Box::new(ScObservabilityAdapter::new(
+            logger,
+            active_log_path,
+            service_name,
+            target_category,
+        ))),
+        log_export,
+    ))
 }
 
+/// `export` selects the routed destination; `None` logs to the file only.
 pub(crate) fn build_logger(
     log_dir: &Path,
     console_log_route: ConsoleLogRoute,
     service_name: &ServiceName,
+    export: Option<&LogExport>,
 ) -> Result<(Logger, PathBuf), AtmError> {
-    let active_log_path = prepare_retained_log(log_dir)?;
+    let destination = export.map_or(atm_core::LogDestination::File, LogExport::destination);
+    // An OTel-only destination writes no JSONL, as in the daemon.
+    let active_log_path = if destination == atm_core::LogDestination::Otel {
+        log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME)
+    } else {
+        prepare_retained_log(log_dir)?
+    };
     let mut config = LoggerConfig::default_for(
         service_name.clone(),
         shared_logger_root_for_log_dir(log_dir)?,
@@ -331,7 +370,11 @@ pub(crate) fn build_logger(
     // ATM CLI owns stdout/stderr UX by default; only opt into a shared
     // console sink when the CLI routing rule explicitly selects one.
     config.enable_console_sink = false;
+    config.enable_file_sink = destination != atm_core::LogDestination::Otel;
     let mut builder = Logger::builder(config).map_err(map_init_error)?;
+    if let Some(export) = export {
+        export.register_sink(&mut builder);
+    }
     if console_log_route == ConsoleLogRoute::Stderr {
         builder.register_sink(SinkRegistration::typed(Arc::new(ConsoleSink::stderr())));
     }
@@ -943,7 +986,8 @@ pub(crate) fn new_adapter_port(
         ConsoleLogRoute::Disabled
     };
     let test_log_dir = resolve_adapter_log_dir(home_dir)?;
-    let (logger, active_log_path) = build_logger(&test_log_dir, console_log_route, &service_name)?;
+    let (logger, active_log_path) =
+        build_logger(&test_log_dir, console_log_route, &service_name, None)?;
     Ok(Box::new(ScObservabilityAdapter::new(
         logger,
         active_log_path,
@@ -1023,7 +1067,7 @@ mod adapter_tests {
                 (ATM_RETAINED_SINK_FAULT_ENV, Some(mode)),
             ]);
             let (logger, active_log_path) =
-                build_logger(&log_dir, ConsoleLogRoute::Disabled, &service_name)
+                build_logger(&log_dir, ConsoleLogRoute::Disabled, &service_name, None)
                     .expect("fault-injection logger");
             let adapter =
                 ScObservabilityAdapter::new(logger, active_log_path, service_name, target);

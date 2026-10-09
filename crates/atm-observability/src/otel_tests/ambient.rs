@@ -128,11 +128,10 @@ async fn ambient_child() {
         .0
         .sink
         .emit(record("ambient", TaskTelemetryKind::Completed, 1, 1))
-        .await
         .unwrap();
     receiver
         .capture
-        .wait(|| {
+        .wait("a span and a metric export", || {
             !receiver.capture.spans.lock().unwrap().is_empty()
                 && !receiver.capture.metrics.lock().unwrap().is_empty()
         })

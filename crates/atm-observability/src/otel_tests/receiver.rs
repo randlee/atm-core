@@ -81,8 +81,10 @@ impl Capture {
         self.release.notify_one();
     }
 
-    pub async fn wait(&self, condition: impl Fn() -> bool) {
-        tokio::time::timeout(Duration::from_secs(5), async {
+    /// Waits until `condition` holds, re-checking on every capture change.
+    /// The 30s bound is failure-only; on expiry the panic names `what`.
+    pub async fn wait(&self, what: &str, condition: impl Fn() -> bool) {
+        tokio::time::timeout(Duration::from_secs(30), async {
             loop {
                 let changed = self.changed.notified();
                 if condition() {
@@ -92,7 +94,7 @@ impl Capture {
             }
         })
         .await
-        .expect("receiver condition before deadline");
+        .unwrap_or_else(|_| panic!("the receiver never observed {what}"));
     }
 }
 
