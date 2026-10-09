@@ -4188,9 +4188,30 @@ fn documented_boundary_section<'a>(docs: &'a str, name: &str) -> Option<&'a str>
     Some(&rest[..next])
 }
 
+/// Reads a source file with LF line endings, so multi-line source-text
+/// assertions hold on a CRLF (Windows) checkout too.
 fn read_source(path: &Path) -> String {
-    fs::read_to_string(path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+    lf_line_endings(
+        fs::read_to_string(path)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display())),
+    )
+}
+
+fn lf_line_endings(source: String) -> String {
+    if source.contains("\r\n") {
+        source.replace("\r\n", "\n")
+    } else {
+        source
+    }
+}
+
+#[test]
+fn read_source_normalizes_crlf_to_lf() {
+    assert_eq!(
+        lf_line_endings("fn a() {\r\n    b();\r\n}\r\n".to_owned()),
+        "fn a() {\n    b();\n}\n"
+    );
+    assert_eq!(lf_line_endings("a\nb\rc".to_owned()), "a\nb\rc");
 }
 
 #[test]
