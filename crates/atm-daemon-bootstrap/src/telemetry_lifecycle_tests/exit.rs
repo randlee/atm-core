@@ -166,16 +166,40 @@ fn await_eof_then_exit<T>(
             panic!("{what} did not close stdout before its deadline");
         }
     };
-    loop {
-        if let Some(status) = child.try_wait().expect("poll child exit") {
-            return (carried, status);
-        }
-        if Instant::now() >= deadline {
-            kill_and_reap(child);
-            panic!("{what} closed stdout but did not exit before its deadline");
-        }
-        std::thread::yield_now();
-    }
+    // The exit is awaited, not polled. A watchdog kills the child by pid only
+    // if it has not exited by `deadline`; that failure path then panics.
+    let pid = child.id();
+    let (exited, exit_seen) = mpsc::channel::<()>();
+    let (status, killed) = std::thread::scope(|scope| {
+        let watchdog = scope.spawn(move || {
+            let timed_out = matches!(
+                exit_seen.recv_timeout(deadline.saturating_duration_since(Instant::now())),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            );
+            if timed_out {
+                kill_pid(pid);
+            }
+            timed_out
+        });
+        let status = child.wait().expect("await child exit");
+        let _ = exited.send(());
+        (status, watchdog.join().expect("exit watchdog joins"))
+    });
+    assert!(
+        !killed,
+        "{what} closed stdout but did not exit before its deadline"
+    );
+    (carried, status)
+}
+
+/// Force-kills an unreaped child by pid; only the hang path calls it.
+fn kill_pid(pid: u32) {
+    let pid = pid.to_string();
+    #[cfg(unix)]
+    let killed = Command::new("kill").args(["-KILL", &pid]).status();
+    #[cfg(windows)]
+    let killed = Command::new("taskkill").args(["/F", "/PID", &pid]).status();
+    drop(killed);
 }
 
 fn child_execution_is_proven(output: &std::process::Output) -> bool {

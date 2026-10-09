@@ -297,7 +297,7 @@ async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() 
     let metric = tokio::task::spawn_blocking(move || metrics.shutdown());
     let capture = &receiver.capture;
     capture
-        .wait(|| {
+        .wait("an export started for every signal", || {
             Signal::ALL
                 .iter()
                 .all(|signal| capture.started(*signal) >= 1)
@@ -316,7 +316,7 @@ async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() 
     // cannot fire). The pinned SDK wraps the tonic failure as InternalFailure
     // text naming the signal's client, which is then the only possible shape.
     capture
-        .wait(|| {
+        .wait("an export finished for every signal", || {
             Signal::ALL
                 .iter()
                 .all(|signal| capture.finished(*signal) >= 1)
@@ -442,7 +442,7 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     let mut metric_call = tokio::task::spawn_blocking(move || metrics.shutdown());
     let capture = &receiver.capture;
     capture
-        .wait(|| {
+        .wait("an export started for every signal", || {
             Signal::ALL
                 .iter()
                 .all(|signal| capture.started(*signal) >= 1)
