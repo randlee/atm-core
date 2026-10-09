@@ -20,8 +20,13 @@ use opentelemetry_sdk::trace::{BatchConfigBuilder, Sampler, SdkTracerProvider};
 use tonic::metadata::{Ascii, MetadataValue};
 use tonic::transport::{ClientTlsConfig, Endpoint};
 
-/// Production per-export bound, shared by tonic and every SDK processor.
+/// Production per-export bound of every SDK processor.
 pub(crate) const EXPORT_TIMEOUT: Duration = Duration::from_millis(400);
+/// Production tonic transport bound. It is offset below `EXPORT_TIMEOUT` so a
+/// stalled export always ends as a transport timeout (`TimedOut`); equal
+/// bounds left the SDK and tonic timers racing, so the recorded failure shape
+/// depended on the scheduler. The SDK bound remains the backstop.
+pub(crate) const EXPORT_TRANSPORT_TIMEOUT: Duration = Duration::from_millis(300);
 pub(crate) const EXPORT_QUEUE: usize = 256;
 pub(crate) const EXPORT_BATCH: usize = 256;
 pub(crate) const EXPORT_INTERVAL: Duration = Duration::from_secs(1);
@@ -51,7 +56,13 @@ pub fn setup_telemetry(
     config: &TelemetryExportConfig,
     diagnostics: &crate::ExportDiagnostics,
 ) -> Result<TelemetrySetup, atm_core::error::AtmError> {
-    setup_with_limits(config, EXPORT_BATCH, EXPORT_TIMEOUT).map_err(|source| {
+    setup_with_timeouts(
+        config,
+        EXPORT_BATCH,
+        EXPORT_TRANSPORT_TIMEOUT,
+        EXPORT_TIMEOUT,
+    )
+    .map_err(|source| {
         diagnostics.setup_failed(source);
         atm_core::error::AtmError::new(
             atm_core::error::AtmErrorCode::TelemetryExportConfigInvalid,
@@ -60,6 +71,7 @@ pub fn setup_telemetry(
     })
 }
 
+#[cfg(test)]
 pub(crate) fn setup_with_limits(
     config: &TelemetryExportConfig,
     batch: usize,
@@ -68,9 +80,9 @@ pub(crate) fn setup_with_limits(
     setup_with_timeouts(config, batch, timeout, timeout)
 }
 
-/// Production passes one value for both bounds. Tests may give the tonic
-/// transport and the SDK processors different bounds so exactly one timer can
-/// decide an outcome.
+/// Production gives the tonic transport a bound below the SDK processors' so
+/// exactly one timer decides a stalled export; tests do the same with their
+/// own bounds.
 pub(crate) fn setup_with_timeouts(
     config: &TelemetryExportConfig,
     batch: usize,

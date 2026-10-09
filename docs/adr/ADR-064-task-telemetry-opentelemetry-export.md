@@ -137,7 +137,9 @@ gRPC (tonic). No other observability facade or HTTP exporter is composed.
   produces no row and no record.
 - Bounds are the exporter constants: SDK queue `EXPORT_QUEUE` 256, batch
   `EXPORT_BATCH` 256, interval `EXPORT_INTERVAL` 1s and per-export
-  `EXPORT_TIMEOUT` 400 ms (`otel_setup.rs`). The task projection keeps at
+  `EXPORT_TIMEOUT` 400 ms, with the tonic transport bound
+  `EXPORT_TRANSPORT_TIMEOUT` 300 ms below it so a stalled export always
+  ends as a transport timeout (`otel_setup.rs`). The task projection keeps at
   most `ACTIVE_LIMIT` 4096 open assignments, `EVENT_LIMIT` 64 events and
   `BYTE_LIMIT` 64 KiB per assignment, drops a record over `RECORD_LIMIT`
   16 KiB, and deduplicates within a `DEDUP_LIMIT` 8192-entry window only
