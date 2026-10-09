@@ -71,8 +71,8 @@ already-validated endpoint, never the auth header.
 
 ### D5. Dependency direction
 
-`atm-core` owns records, configuration, the sink, its no-op implementation,
-and health DTOs without importing `sc-observability` or OpenTelemetry.
+`atm-core` owns records, configuration, the sink trait (it has no built-in no-op
+implementation), and health DTOs without importing `sc-observability` or OpenTelemetry.
 `atm-runtime` owns composition and queue-fronting emission. `atm-observability`
 owns the concrete exporters and the domain projection onto OpenTelemetry
 records.

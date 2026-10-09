@@ -132,7 +132,6 @@ pub mod transport;
 pub mod types;
 /// Generic local lifecycle projection over immutable workflow admission facts.
 pub mod workflow_analytics;
-/// First-party-only telemetry contract for workflow lifecycle projections.
 /// Canonical write pipeline shared by `ack` and `send`; consumed only
 /// through their facades, so the module itself stays crate-private.
 pub(crate) mod write;
