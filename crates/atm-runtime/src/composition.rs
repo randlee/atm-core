@@ -158,7 +158,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     let task_telemetry = inputs
         .task_telemetry
         .map_or_else(TaskTelemetryRuntime::disabled, |setup| {
-            TaskTelemetryRuntime::start(setup.config, setup.sink)
+            TaskTelemetryRuntime::start(setup.sink)
         });
     let storage = inputs
         .storage_factory
@@ -411,7 +411,7 @@ mod tests {
             snapshot.emitted + snapshot.dropped_full + snapshot.dropped_shutdown,
             0
         );
-        assert!(!snapshot.config_invalid);
+        assert!(!snapshot.no_runtime);
         drop(assembly);
         std::fs::remove_dir_all(root).expect("remove tempdir");
     }

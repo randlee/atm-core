@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::TelemetryExportConfig;
-use atm_runtime::task_telemetry::{TaskTelemetryConfig, TaskTelemetrySetup};
+use atm_runtime::task_telemetry::TaskTelemetrySetup;
 use opentelemetry::logs::LoggerProvider;
 use opentelemetry::metrics::MeterProvider;
 use opentelemetry::trace::TracerProvider;
@@ -127,15 +127,7 @@ pub(crate) fn setup_with_timeouts(
         tracer.tracer("atm.task"),
         meter.meter("atm.task"),
     ));
-    Ok((
-        TaskTelemetrySetup {
-            config: TaskTelemetryConfig::default(),
-            sink,
-        },
-        tracer,
-        logger,
-        meter,
-    ))
+    Ok((TaskTelemetrySetup { sink }, tracer, logger, meter))
 }
 
 /// The validated gRPC channel plus the interceptor that replaces the request

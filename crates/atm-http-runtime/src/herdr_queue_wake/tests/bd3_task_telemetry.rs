@@ -61,7 +61,7 @@ async fn queue_wake_producers_project_exactly_their_committed_rows() {
     let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["BD3-PUMP"]);
     let sink = RecordingTaskTelemetrySink::new();
     let setup = RecordingTaskTelemetrySink::setup(&sink);
-    let telemetry = TaskTelemetryRuntime::start(setup.config, setup.sink);
+    let telemetry = TaskTelemetryRuntime::start(setup.sink);
     let pump = pump.with_task_telemetry(telemetry.clone());
 
     for minute in 0..10 {
@@ -154,7 +154,7 @@ async fn failed_sqlite_reminder_update_emits_nothing_and_keeps_the_prompt_result
     let (root, runtime, fake, pump, key, tasks, _now) = build_real_task_pump(&["BD3-FAIL"]);
     let sink = RecordingTaskTelemetrySink::new();
     let setup = RecordingTaskTelemetrySink::setup(&sink);
-    let telemetry = TaskTelemetryRuntime::start(setup.config, setup.sink);
+    let telemetry = TaskTelemetryRuntime::start(setup.sink);
     let pump = pump.with_task_telemetry(telemetry.clone());
     atm_runtime_test_support::install_sqlite_task_update_failure(
         root.path().join("runtime").join("mail.sqlite3"),
@@ -232,7 +232,7 @@ async fn failed_sqlite_lead_notification_update_emits_nothing() {
     advance_to_lead_notification(&pump, &fake, &key, &now).await;
     let sink = RecordingTaskTelemetrySink::new();
     let setup = RecordingTaskTelemetrySink::setup(&sink);
-    let telemetry = TaskTelemetryRuntime::start(setup.config, setup.sink);
+    let telemetry = TaskTelemetryRuntime::start(setup.sink);
     let pump = pump.with_task_telemetry(telemetry.clone());
     atm_runtime_test_support::install_sqlite_task_update_failure(
         root.path().join("runtime").join("mail.sqlite3"),
@@ -275,7 +275,7 @@ async fn failed_sqlite_reminder_reset_update_emits_nothing() {
     pump.tick_once().await;
     let sink = RecordingTaskTelemetrySink::new();
     let setup = RecordingTaskTelemetrySink::setup(&sink);
-    let telemetry = TaskTelemetryRuntime::start(setup.config, setup.sink);
+    let telemetry = TaskTelemetryRuntime::start(setup.sink);
     let pump = pump.with_task_telemetry(telemetry.clone());
     atm_runtime_test_support::install_sqlite_task_update_failure(
         root.path().join("runtime").join("mail.sqlite3"),

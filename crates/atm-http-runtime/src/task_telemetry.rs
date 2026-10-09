@@ -223,7 +223,7 @@ mod tests {
     ) -> Vec<TaskTelemetryRecord> {
         let sink = atm_runtime_test_support::RecordingTaskTelemetrySink::new();
         let setup = atm_runtime_test_support::RecordingTaskTelemetrySink::setup(&sink);
-        let runtime = TaskTelemetryRuntime::start(setup.config, setup.sink);
+        let runtime = TaskTelemetryRuntime::start(setup.sink);
         project(&runtime);
         runtime
             .shutdown(tokio::time::Instant::now() + std::time::Duration::from_secs(5))

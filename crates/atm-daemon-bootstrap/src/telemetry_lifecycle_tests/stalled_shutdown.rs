@@ -32,7 +32,7 @@ use atm_core::observability::{
 };
 use atm_core::protocol::RequestEnvelope;
 use atm_http_runtime::{CanonicalWriteHandler, RuntimeHealth};
-use atm_runtime::{TaskTelemetryConfig, TaskTelemetryRuntime};
+use atm_runtime::TaskTelemetryRuntime;
 use atm_runtime_test_support::{StallRelease, StalledTaskTelemetrySink};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::time::Instant;
@@ -45,10 +45,6 @@ use crate::atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
 use crate::daemon_observability::RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT;
 use crate::queue_drain::RecoverySweepHandle;
 use crate::shutdown_probe::{Probe, observe};
-
-/// The longest drain a telemetry runtime accepts, so only the shared shutdown
-/// deadline can end a stalled drain.
-const STALL_LIMIT: Duration = Duration::from_secs(30);
 
 /// Reports each hook start, then never finishes.
 struct StallingHook(UnboundedSender<()>);
@@ -193,17 +189,12 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
     daemon.workers.recovery_sweep = RecoverySweepHandle::stalled_for_test(RuntimeHealth::default());
 
     // Task telemetry drain: one record sits in a sink held until the test
-    // ends, so only the deadline can end the drain. The composed runtime it
+    // ends; the earlier stalled steps have used the whole shared deadline, so it
+    // is the deadline, not the 2 s drain, that ends this one. The composed runtime it
     // replaces stops at once.
     let (sink_tx, mut sink_entered) = unbounded_channel();
     let (sink, _sink_release) = reporting_stalled_sink(sink_tx);
-    let task_telemetry = TaskTelemetryRuntime::start(
-        TaskTelemetryConfig {
-            drain_timeout: STALL_LIMIT,
-            ..TaskTelemetryConfig::default()
-        },
-        Arc::new(sink),
-    );
+    let task_telemetry = TaskTelemetryRuntime::start(Arc::new(sink));
     task_telemetry.try_emit(task_record(65));
     hook_started(&mut sink_entered, "task telemetry sink").await;
     std::mem::replace(&mut daemon.workers.task_telemetry, task_telemetry)

@@ -10,49 +10,18 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use atm_core::{TaskTelemetryRecord, TaskTelemetrySink};
-use atm_storage::AtmErrorCode;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
-use crate::telemetry_limits::{DEFAULT_CAPACITY, DEFAULT_DRAIN, within_limits};
-
-/// Validated worker limits. Invalid configuration is converted to a disabled
-/// runtime rather than making ATM task processing unavailable.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TaskTelemetryConfig {
-    pub queue_capacity: usize,
-    pub drain_timeout: Duration,
-}
-
-impl Default for TaskTelemetryConfig {
-    fn default() -> Self {
-        Self {
-            queue_capacity: DEFAULT_CAPACITY,
-            drain_timeout: DEFAULT_DRAIN,
-        }
-    }
-}
-
-impl TaskTelemetryConfig {
-    /// Accepts a queue of 1..=4096 records and a drain timeout of 1 ms..=30 s.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`AtmErrorCode::TelemetryExportConfigInvalid`] for any value
-    /// outside those bounds.
-    pub fn validate(&self) -> Result<(), AtmErrorCode> {
-        if !within_limits(self.queue_capacity, self.drain_timeout) {
-            return Err(AtmErrorCode::TelemetryExportConfigInvalid);
-        }
-        Ok(())
-    }
-}
+/// Production worker limits: the queue holds 256 records and shutdown drains
+/// for at most 2 s (further bounded by the caller's deadline).
+pub const TASK_TELEMETRY_QUEUE_CAPACITY: usize = 256;
+const DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Bootstrap-owned exporter selection. Absence keeps telemetry inert.
 #[derive(Clone)]
 pub struct TaskTelemetrySetup {
-    pub config: TaskTelemetryConfig,
     pub sink: Arc<dyn TaskTelemetrySink>,
 }
 
@@ -63,7 +32,8 @@ pub struct TaskTelemetryDiagnostics {
     dropped_full: AtomicU64,
     dropped_failure: AtomicU64,
     dropped_shutdown: AtomicU64,
-    config_invalid: AtomicBool,
+    /// Set when `start` ran outside a Tokio runtime and left telemetry inert.
+    no_runtime: AtomicBool,
     /// Admitted records not yet resolved by the worker; drained into
     /// `dropped_shutdown` if the worker is aborted.
     pending: AtomicU64,
@@ -79,7 +49,9 @@ pub struct TaskTelemetryDiagnosticsSnapshot {
     pub dropped_full: u64,
     pub dropped_failure: u64,
     pub dropped_shutdown: u64,
-    pub config_invalid: bool,
+    /// The runtime was started outside Tokio, so no worker exists and nothing
+    /// will be exported.
+    pub no_runtime: bool,
 }
 
 impl TaskTelemetryDiagnostics {
@@ -90,7 +62,7 @@ impl TaskTelemetryDiagnostics {
             dropped_full: self.dropped_full.load(Ordering::Relaxed),
             dropped_failure: self.dropped_failure.load(Ordering::Relaxed),
             dropped_shutdown: self.dropped_shutdown.load(Ordering::Relaxed),
-            config_invalid: self.config_invalid.load(Ordering::Relaxed),
+            no_runtime: self.no_runtime.load(Ordering::Relaxed),
         }
     }
 
@@ -142,28 +114,24 @@ pub struct TaskTelemetryRuntime {
     sender: Arc<std::sync::Mutex<Option<mpsc::Sender<TaskTelemetryRecord>>>>,
     diagnostics: Arc<TaskTelemetryDiagnostics>,
     lifecycle: Arc<tokio::sync::Mutex<Lifecycle>>,
-    drain_timeout: Duration,
 }
 
 impl TaskTelemetryRuntime {
-    /// Starts one worker. Invalid config returns a disabled runtime with
-    /// `config_invalid` set; it never prevents runtime construction.
-    pub fn start(config: TaskTelemetryConfig, sink: Arc<dyn TaskTelemetrySink>) -> Self {
-        if config.validate().is_err() {
-            let runtime = Self::disabled();
-            runtime
-                .diagnostics
-                .config_invalid
-                .store(true, Ordering::Relaxed);
-            return runtime;
-        }
+    /// Starts one worker. A caller outside Tokio gets an inert runtime whose
+    /// diagnostics report `no_runtime`; it never prevents runtime construction.
+    pub fn start(sink: Arc<dyn TaskTelemetrySink>) -> Self {
         // `assemble_runtime` is synchronous. Telemetry is best-effort, so a
         // caller outside Tokio gets an inert runtime rather than a panic.
         let Ok(handle) = tokio::runtime::Handle::try_current() else {
-            return Self::disabled();
+            let runtime = Self::disabled();
+            runtime
+                .diagnostics
+                .no_runtime
+                .store(true, Ordering::Relaxed);
+            return runtime;
         };
         let diagnostics = Arc::new(TaskTelemetryDiagnostics::default());
-        let (sender, receiver) = mpsc::channel(config.queue_capacity);
+        let (sender, receiver) = mpsc::channel(TASK_TELEMETRY_QUEUE_CAPACITY);
         let (stop, stop_receiver) = oneshot::channel();
         let worker = handle.spawn(run_worker(
             sink,
@@ -179,7 +147,6 @@ impl TaskTelemetryRuntime {
                 worker: Some(worker),
                 drain_deadline: None,
             })),
-            drain_timeout: config.drain_timeout,
         }
     }
 
@@ -189,7 +156,6 @@ impl TaskTelemetryRuntime {
             sender: Arc::new(std::sync::Mutex::new(None)),
             diagnostics: Arc::new(TaskTelemetryDiagnostics::default()),
             lifecycle: Arc::new(tokio::sync::Mutex::new(Lifecycle::default())),
-            drain_timeout: DEFAULT_DRAIN,
         }
     }
 
@@ -225,7 +191,7 @@ impl TaskTelemetryRuntime {
         Arc::clone(&self.diagnostics)
     }
 
-    /// Stops admission, drains until `min(drain_timeout, deadline)`, then
+    /// Stops admission, drains until `min(DRAIN_TIMEOUT, deadline)`, then
     /// aborts the worker and joins it until `deadline`. A worker still inside
     /// a sink call at `deadline` is abandoned. Repeated calls are no-ops once
     /// the worker is gone; a cancelled call leaves the worker for the next
@@ -242,7 +208,7 @@ impl TaskTelemetryRuntime {
         let mut lifecycle = self.lifecycle.lock().await;
         let drain_deadline = *lifecycle
             .drain_deadline
-            .get_or_insert_with(|| deadline.min(Instant::now() + self.drain_timeout));
+            .get_or_insert_with(|| deadline.min(Instant::now() + DRAIN_TIMEOUT));
         if let Some(stop) = lifecycle.stop.take()
             && stop.send(drain_deadline).is_err()
         {
@@ -335,7 +301,6 @@ fn emit_one(
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::telemetry_limits::{MAX_DURATION, MIN_DURATION};
     use std::sync::atomic::AtomicUsize;
     use std::sync::{Condvar, Mutex};
 
@@ -475,93 +440,37 @@ pub(crate) mod tests {
             dropped_full,
             dropped_failure,
             dropped_shutdown,
-            config_invalid,
+            no_runtime,
         } = TaskTelemetryDiagnosticsSnapshot::default();
 
         assert_eq!(
             [emitted, dropped_full, dropped_failure, dropped_shutdown],
             [0; 4]
         );
-        assert!(!config_invalid);
+        assert!(!no_runtime);
     }
 
     #[test]
-    fn config_bounds_and_defaults() {
-        let defaults = TaskTelemetryConfig::default();
-        assert_eq!(defaults.queue_capacity, 256);
-        assert_eq!(defaults.drain_timeout, Duration::from_secs(2));
-        for queue_capacity in [1, 256, 4096] {
-            for drain_timeout in [MIN_DURATION, MAX_DURATION] {
-                let config = TaskTelemetryConfig {
-                    queue_capacity,
-                    drain_timeout,
-                };
-                assert_eq!(config.validate(), Ok(()), "{config:?}");
-            }
-        }
-        for config in [
-            TaskTelemetryConfig {
-                queue_capacity: 0,
-                ..defaults.clone()
-            },
-            TaskTelemetryConfig {
-                queue_capacity: 4097,
-                ..defaults.clone()
-            },
-            TaskTelemetryConfig {
-                drain_timeout: Duration::ZERO,
-                ..defaults.clone()
-            },
-            TaskTelemetryConfig {
-                drain_timeout: Duration::from_secs(31),
-                ..defaults.clone()
-            },
-        ] {
-            assert_eq!(
-                config.validate(),
-                Err(AtmErrorCode::TelemetryExportConfigInvalid),
-                "{config:?}"
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn invalid_config_is_disabled_without_a_worker() {
-        let sink = GatedSink::open(Ok(()));
-        let runtime = TaskTelemetryRuntime::start(
-            TaskTelemetryConfig {
-                queue_capacity: 0,
-                ..Default::default()
-            },
-            Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>,
-        );
+    fn start_outside_tokio_reports_no_runtime() {
+        let runtime = TaskTelemetryRuntime::start(GatedSink::open(Ok(())));
         assert!(!has_worker(&runtime));
         runtime.try_emit(record(TaskTelemetryKind::Assigned));
         assert_eq!(
             runtime.diagnostics().snapshot(),
             TaskTelemetryDiagnosticsSnapshot {
-                config_invalid: true,
+                no_runtime: true,
                 ..Default::default()
-            }
+            },
+            "an inert start must be reported, not look healthy"
         );
-        assert_eq!(
-            Arc::strong_count(&sink),
-            1,
-            "invalid config never holds the sink"
-        );
-        runtime.shutdown(Instant::now() + WAIT).await;
     }
 
-    #[test]
-    fn valid_config_outside_tokio_is_inert() {
-        let runtime =
-            TaskTelemetryRuntime::start(TaskTelemetryConfig::default(), GatedSink::open(Ok(())));
-        assert!(!has_worker(&runtime));
-        runtime.try_emit(record(TaskTelemetryKind::Assigned));
-        assert_eq!(
-            runtime.diagnostics().snapshot(),
-            TaskTelemetryDiagnosticsSnapshot::default()
-        );
+    #[tokio::test]
+    async fn start_inside_tokio_does_not_report_no_runtime() {
+        let runtime = TaskTelemetryRuntime::start(GatedSink::open(Ok(())));
+        assert!(has_worker(&runtime));
+        assert!(!runtime.diagnostics().snapshot().no_runtime);
+        runtime.shutdown(Instant::now() + WAIT).await;
     }
 
     #[tokio::test]
@@ -580,10 +489,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn configured_sink_receives_records_and_counts_emitted() {
         let sink = GatedSink::open(Ok(()));
-        let runtime = TaskTelemetryRuntime::start(
-            TaskTelemetryConfig::default(),
-            Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>,
-        );
+        let runtime = TaskTelemetryRuntime::start(Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>);
         let sent = [
             record(TaskTelemetryKind::Assigned),
             record(TaskTelemetryKind::Started),
@@ -607,22 +513,19 @@ pub(crate) mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn full_queue_drops_without_blocking_the_producer() {
         let sink = GatedSink::closed();
-        let runtime = TaskTelemetryRuntime::start(
-            TaskTelemetryConfig {
-                queue_capacity: 1,
-                ..Default::default()
-            },
-            Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>,
-        );
+        let runtime = TaskTelemetryRuntime::start(Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>);
         runtime.try_emit(record(TaskTelemetryKind::Assigned));
         sink.wait_started(1).await;
-        // One record is in flight and one fills the queue; the rest drop.
-        for _ in 0..10 {
+        // One record is in flight and the queue fills; the rest drop.
+        for _ in 0..TASK_TELEMETRY_QUEUE_CAPACITY + 9 {
             runtime.try_emit(record(TaskTelemetryKind::Reminded));
         }
         assert_eq!(runtime.diagnostics().snapshot().dropped_full, 9);
         sink.release();
-        wait_for(&runtime, |s| s.emitted == 2).await;
+        wait_for(&runtime, |s| {
+            s.emitted == 1 + TASK_TELEMETRY_QUEUE_CAPACITY as u64
+        })
+        .await;
         runtime.shutdown(Instant::now() + WAIT).await;
     }
 
@@ -632,10 +535,7 @@ pub(crate) mod tests {
             TaskTelemetryError::Unavailable,
             TaskTelemetryError::Rejected,
         ] {
-            let runtime = TaskTelemetryRuntime::start(
-                TaskTelemetryConfig::default(),
-                GatedSink::open(Err(error)),
-            );
+            let runtime = TaskTelemetryRuntime::start(GatedSink::open(Err(error)));
             runtime.try_emit(record(TaskTelemetryKind::Refused));
             wait_for(&runtime, |s| s.dropped_failure == 1).await;
             assert_eq!(
@@ -653,13 +553,7 @@ pub(crate) mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn shutdown_drains_queued_records_within_the_deadline() {
         let sink = GatedSink::closed();
-        let runtime = TaskTelemetryRuntime::start(
-            TaskTelemetryConfig {
-                drain_timeout: MAX_DURATION,
-                ..Default::default()
-            },
-            Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>,
-        );
+        let runtime = TaskTelemetryRuntime::start(Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>);
         for _ in 0..4 {
             runtime.try_emit(record(TaskTelemetryKind::Moved));
         }
@@ -689,13 +583,7 @@ pub(crate) mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn caller_deadline_bounds_shutdown_and_counts_abandoned_records_once() {
         let sink = GatedSink::closed();
-        let runtime = TaskTelemetryRuntime::start(
-            TaskTelemetryConfig {
-                drain_timeout: MAX_DURATION,
-                ..Default::default()
-            },
-            Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>,
-        );
+        let runtime = TaskTelemetryRuntime::start(Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>);
         for _ in 0..3 {
             runtime.try_emit(record(TaskTelemetryKind::Cancelled));
         }
@@ -705,7 +593,7 @@ pub(crate) mod tests {
             runtime.shutdown(Instant::now() + Duration::from_millis(20)),
         )
         .await
-        .expect("shutdown obeys the caller deadline, not the 30 s drain or the held sink");
+        .expect("shutdown obeys the caller deadline, not the 2 s drain or the held sink");
         let abandoned = TaskTelemetryDiagnosticsSnapshot {
             dropped_shutdown: 3,
             ..Default::default()
@@ -723,13 +611,7 @@ pub(crate) mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cancelled_shutdown_leaves_the_worker_for_the_next_call() {
         let sink = GatedSink::closed();
-        let runtime = TaskTelemetryRuntime::start(
-            TaskTelemetryConfig {
-                drain_timeout: MAX_DURATION,
-                ..Default::default()
-            },
-            Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>,
-        );
+        let runtime = TaskTelemetryRuntime::start(Arc::clone(&sink) as Arc<dyn TaskTelemetrySink>);
         runtime.try_emit(record(TaskTelemetryKind::Reopened));
         sink.wait_started(1).await;
         let cancelled = tokio::time::timeout(

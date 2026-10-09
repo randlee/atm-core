@@ -135,6 +135,11 @@ impl Export {
             if health.dropped_full + health.dropped_failure > 0 {
                 health.state = AtmTelemetryExportState::Degraded;
             }
+            if task.no_runtime {
+                // Started outside Tokio: no worker exists, nothing exports.
+                health.state = AtmTelemetryExportState::Unavailable;
+                health.last_failure = Some(AtmTelemetryExportFailure::Unavailable);
+            }
         }
         // Observable SDK transport/lifecycle failures; never SDK loss counts.
         self.diagnostics.project(&mut health);
@@ -931,6 +936,41 @@ mod tests {
             observability.take_telemetry_setup().is_none(),
             "the setup is handed over once"
         );
+    }
+
+    /// Positive: a task telemetry runtime started outside Tokio is inert and
+    /// doctor health reports the exporter Unavailable. Negative: the same
+    /// owner with a runtime started inside Tokio stays Healthy.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn task_runtime_started_outside_tokio_is_reported_unavailable() {
+        let (_root, observability) = configured().await;
+        let (sink, _release) = atm_runtime_test_support::StalledTaskTelemetrySink::new();
+        let sink = Arc::new(sink);
+        let inert = std::thread::spawn({
+            let sink = Arc::clone(&sink);
+            move || atm_runtime::TaskTelemetryRuntime::start(sink)
+        })
+        .join()
+        .expect("start outside Tokio");
+        let live = atm_runtime::TaskTelemetryRuntime::start(sink);
+        observability.attach_runtime_telemetry(live.diagnostics());
+        assert_eq!(
+            observability.export_health_for_test().state,
+            atm_core::observability::AtmTelemetryExportState::Healthy
+        );
+        let (_other_root, other) = configured().await;
+        other.attach_runtime_telemetry(inert.diagnostics());
+        let health = other.export_health_for_test();
+        assert_eq!(
+            health.state,
+            atm_core::observability::AtmTelemetryExportState::Unavailable
+        );
+        assert_eq!(
+            health.last_failure,
+            Some(atm_core::observability::AtmTelemetryExportFailure::Unavailable)
+        );
+        live.shutdown(tokio::time::Instant::now() + Duration::from_secs(1))
+            .await;
     }
 
     /// Positive: a poisoned providers lock still shuts the providers down.

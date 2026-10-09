@@ -10,7 +10,6 @@ pub mod doctor_projection;
 mod legacy_storage_adapters;
 pub mod mailbox_runtime;
 pub mod task_telemetry;
-mod telemetry_limits;
 
 pub use atm_storage::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
@@ -29,6 +28,6 @@ pub use mailbox_runtime::{
     SupervisorState, read_deadline,
 };
 pub use task_telemetry::{
-    TaskTelemetryConfig, TaskTelemetryDiagnostics, TaskTelemetryDiagnosticsSnapshot,
+    TASK_TELEMETRY_QUEUE_CAPACITY, TaskTelemetryDiagnostics, TaskTelemetryDiagnosticsSnapshot,
     TaskTelemetryRuntime, TaskTelemetrySetup,
 };

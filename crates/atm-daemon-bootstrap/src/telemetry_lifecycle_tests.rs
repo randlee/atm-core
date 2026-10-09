@@ -1032,7 +1032,7 @@ fn assert_export_remediation(doctor: &serde_json::Value) {
 }
 
 /// A task runtime whose sink stalls until the returned release is dropped,
-/// with a one-record queue, so a burst leaves real `dropped_full` counts.
+/// with a full production queue, so a burst leaves real `dropped_full` counts.
 /// Attach it before composing the daemon, and drop the release before
 /// shutting the runtime down.
 async fn lossy_task_runtime() -> (
@@ -1044,21 +1044,15 @@ async fn lossy_task_runtime() -> (
         atm_runtime_test_support::StalledTaskTelemetrySink::reporting(move || {
             let _ = entered_tx.send(());
         });
-    let runtime = atm_runtime::TaskTelemetryRuntime::start(
-        atm_runtime::TaskTelemetryConfig {
-            queue_capacity: 1,
-            ..Default::default()
-        },
-        Arc::new(sink),
-    );
+    let runtime = atm_runtime::TaskTelemetryRuntime::start(Arc::new(sink));
     runtime.try_emit(task_record(1));
     tokio::time::timeout(EXPORT_WAIT, entered.recv())
         .await
         .expect("the worker never reached the stalled sink")
         .expect("the stalled sink is alive");
-    // One record is in the stalled sink and one fills the queue; the rest
-    // drop full, synchronously, so no counter moves after this point.
-    for seq in 2..=6 {
+    // One record is in the stalled sink and the queue fills; the rest drop
+    // full, synchronously, so no counter moves after this point.
+    for seq in 2..=(2 + atm_runtime::TASK_TELEMETRY_QUEUE_CAPACITY as u64 + 3) {
         runtime.try_emit(task_record(seq));
     }
     assert_eq!(runtime.diagnostics().snapshot().dropped_full, 4);
@@ -1274,7 +1268,7 @@ async fn stalled_export_in_flight() -> (Receiver, tempfile::TempDir, DaemonObser
     let task = observability
         .take_telemetry_setup()
         .expect("configured task setup");
-    let runtime = atm_runtime::TaskTelemetryRuntime::start(task.config, task.sink);
+    let runtime = atm_runtime::TaskTelemetryRuntime::start(task.sink);
     for seq in 1..=64 {
         runtime.try_emit(task_record(seq));
     }
