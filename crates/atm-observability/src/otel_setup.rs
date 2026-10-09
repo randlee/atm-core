@@ -21,6 +21,13 @@ use tonic::metadata::{Ascii, MetadataValue};
 use tonic::transport::{ClientTlsConfig, Endpoint};
 
 /// Production per-export bound, shared by tonic and every SDK processor.
+///
+/// Trade-off: the same bound is the transport's connect timeout (see
+/// `lazy_channel`), so a cold https connection (DNS, TCP and TLS handshake) that
+/// takes longer than this fails the first export, visible only as diagnostics.
+/// A longer bound would let a stalled collector hold the process shutdown
+/// deadline, which bootstrap shares across every provider; ATM chooses bounded
+/// shutdown over first-export reliability against a slow collector.
 pub(crate) const EXPORT_TIMEOUT: Duration = Duration::from_millis(400);
 pub(crate) const EXPORT_QUEUE: usize = 256;
 pub(crate) const EXPORT_BATCH: usize = 256;
@@ -148,13 +155,15 @@ pub(crate) fn setup_with_timeouts(
     ))
 }
 
-/// Lazily connected gRPC channel with the transport-level timeout applied.
+/// Lazily connected gRPC channel with the transport-level request and connect
+/// timeouts applied; both use the export bound (see `EXPORT_TIMEOUT`).
 fn lazy_channel(
     config: &TelemetryExportConfig,
     transport_timeout: Duration,
 ) -> Result<tonic::transport::Channel, Box<dyn std::error::Error + Send + Sync>> {
-    let mut endpoint =
-        Endpoint::from_shared(config.endpoint().to_owned())?.timeout(transport_timeout);
+    let mut endpoint = Endpoint::from_shared(config.endpoint().to_owned())?
+        .timeout(transport_timeout)
+        .connect_timeout(transport_timeout);
     if config.endpoint().starts_with("https://") {
         endpoint = endpoint.tls_config(ClientTlsConfig::new().with_native_roots())?;
     }
