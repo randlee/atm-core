@@ -38,7 +38,8 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::time::Instant;
 
 use super::{
-    Daemon, EXPORT_WAIT, Receiver, assert_one_shutdown_deadline, endpoint_env, task_record,
+    Daemon, EXPORT_WAIT, Receiver, assert_shutdown_deadline_passed_through, endpoint_env,
+    task_record,
 };
 use crate::DaemonLaunchIdentity;
 use crate::atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
@@ -234,7 +235,10 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
     let stopped = observe(&probe, daemon.shutdown()).await;
 
     let steps = probe.steps();
-    let deadline = assert_one_shutdown_deadline(&steps);
+    // The one exemption from `assert_one_shutdown_deadline`: the stalled
+    // recovery sweep is ended by the shared deadline itself, so it returns
+    // after it by the timer's wake latency, asserted below.
+    let deadline = assert_shutdown_deadline_passed_through(&steps);
     let sweep = steps
         .iter()
         .find(|step| step.step == "recovery_sweep")
