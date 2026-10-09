@@ -398,10 +398,11 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
     assert_eq!(
         (
             snapshot.dropped_full,
+            snapshot.dropped_timeout,
             snapshot.dropped_failure,
             snapshot.dropped_shutdown
         ),
-        (0, 0, 0),
+        (0, 0, 0, 0),
         "SDK quantities are unknown, never copied from synthetic estimates"
     );
     receiver.stop().await;
