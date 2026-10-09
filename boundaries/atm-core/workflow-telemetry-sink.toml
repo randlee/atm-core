@@ -35,7 +35,7 @@ response_types = ["Result<(), WorkflowTelemetryError>"]
 error_types = ["WorkflowTelemetryError"]
 
 [testing]
-allowed_test_double_paths = ["atm_runtime::workflow_telemetry::tests"]
+allowed_test_double_paths = ["atm_runtime::workflow_telemetry::tests", "atm_runtime_test_support::task_telemetry"]
 forbidden_test_bypasses = ["payload_bearing_record"]
 
 [enforcement]

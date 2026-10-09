@@ -2526,6 +2526,7 @@ def _scan_lines_for_trait_impl_violations(
     """
 
     allowed_paths = set(record.allowed_test_double_paths)
+    kind = "trait-only" if record.implementation_visibility == "trait_only" else "test-double"
     violations: list[BoundaryViolation] = []
     for offset, line in enumerate(lines):
         if is_comment_line(line):
@@ -2540,12 +2541,13 @@ def _scan_lines_for_trait_impl_violations(
             # a real implementation and must not be mistaken for one.
             continue
         implementation_path = f"{module_path}::{match.group(1)}"
-        if implementation_path in allowed_paths:
+        # An entry names either one double or the module whose doubles it approves.
+        if implementation_path in allowed_paths or module_path in allowed_paths:
             continue
         violations.append(
             BoundaryViolation(
                 f"{rel_source}:{line_offset + offset + 1}",
-                f"{record.boundary_id} trait-only implementation {implementation_path!r} "
+                f"{record.boundary_id} {kind} implementation {implementation_path!r} "
                 "is not listed in testing.allowed_test_double_paths",
             )
         )
@@ -2746,12 +2748,43 @@ def find_cfg_test_src_module_test_double_violations(
         child_path = resolve_file_module_child(source_path, mod_name)
         if child_path is None:
             continue
-        child_module_path = crate_qualified_module_path(info, child_path)
-        violations.extend(
-            find_trait_only_test_double_violations(record, child_module_path, child_path, repo_root)
-        )
+        violations.extend(find_test_file_module_tree_violations(record, info, child_path, repo_root))
 
     return violations
+
+
+def find_test_file_module_tree_violations(
+    record: BoundaryRecord,
+    info: ManifestInfo,
+    source_path: Path,
+    repo_root: Path,
+) -> list[BoundaryViolation]:
+    """Scan a `#[cfg(test)]` file module and every file module below it.
+
+    Everything declared under a test-gated module is test-only, so a double
+    in a grandchild file (`mod a;` inside the test module's own file) is as
+    much a test double as one in the module itself.
+    """
+
+    violations = find_trait_only_test_double_violations(
+        record, crate_qualified_module_path(info, source_path), source_path, repo_root
+    )
+    lines = source_path.read_text(encoding="utf-8").splitlines()
+    for line in lines:
+        match = MOD_FILE_DECL_RE.match(line.strip())
+        if match is None:
+            continue
+        child_path = resolve_file_module_child(source_path, match.group(1))
+        if child_path is not None:
+            violations.extend(find_test_file_module_tree_violations(record, info, child_path, repo_root))
+    return violations
+
+
+def is_test_support_crate(info: ManifestInfo) -> bool:
+    """Return whether `info` is a workspace test-support crate, whose whole
+    `src/` exists to provide test doubles."""
+
+    return info.package_name.endswith("-test-support")
 
 
 def collect_active_implementation_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
@@ -2767,6 +2800,10 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
         is_trait_only_with_allowlist = (
             record.implementation_visibility == "trait_only" and record.allowed_test_double_paths
         )
+        # A trait with a public production implementation still confines its
+        # test doubles to the allowlist: every test-gated or test-support
+        # implementation must be named there.
+        has_test_double_allowlist = bool(record.allowed_test_double_paths)
         source_files = source_files_for_crate(owner_info)
         for source_path in source_files:
             if is_trait_only_with_allowlist:
@@ -2781,7 +2818,7 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
                 violations.extend(find_public_reexport_violations(record, source_path, repo_root))
             if record.implementation_constructor == "private":
                 violations.extend(find_public_constructor_violations(record, source_path, repo_root))
-        if is_trait_only_with_allowlist:
+        if has_test_double_allowlist:
             # A sealed trait's test doubles are not confined to the owner
             # crate's own `src/`: any workspace crate may implement the trait
             # from its dev-only `tests/` directory (e.g. a consumer crate's
@@ -2802,9 +2839,19 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
             # to avoid re-flagging an already-approved `crate::…`-qualified
             # double under a second, `<crate>::…`-qualified identity.
             for consumer_info in all_infos:
-                if consumer_info.path == owner_info.path:
+                if is_trait_only_with_allowlist and consumer_info.path == owner_info.path:
                     continue
                 for consumer_src_path in source_files_for_crate(consumer_info):
+                    if is_test_support_crate(consumer_info):
+                        violations.extend(
+                            find_trait_only_test_double_violations(
+                                record,
+                                crate_qualified_module_path(consumer_info, consumer_src_path),
+                                consumer_src_path,
+                                repo_root,
+                            )
+                        )
+                        continue
                     violations.extend(
                         find_cfg_test_src_module_test_double_violations(
                             record, consumer_info, consumer_src_path, repo_root

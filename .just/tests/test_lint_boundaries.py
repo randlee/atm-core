@@ -1409,6 +1409,84 @@ tempfile = "3"
                 rendered,
             )
 
+    def test_collect_boundary_violations_confines_public_trait_test_doubles_to_the_allowlist(
+        self,
+    ) -> None:
+        """A trait with a public production implementation still confines its
+        test doubles: a double in a grandchild file of a consumer crate's
+        `#[cfg(test)]` module, or an unlisted one in a test-support crate, is
+        flagged; a listed module's doubles and production impls are not.
+        """
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            (repo_root / "Cargo.toml").write_text(
+                ROOT_MANIFEST.replace(
+                    '"crates/atm-daemon"]', '"crates/atm-daemon", "crates/atm-test-support"]'
+                ),
+                encoding="utf-8",
+            )
+            support = repo_root / "crates/atm-test-support"
+            (support / "src").mkdir(parents=True)
+            (support / "Cargo.toml").write_text(
+                '[package]\nname = "atm-test-support"\nversion.workspace = true\n'
+                'edition.workspace = true\npublish = false\n\n[lib]\nname = "atm_test_support"\n',
+                encoding="utf-8",
+            )
+            (support / "src/lib.rs").write_text("pub mod sinks;\npub mod other;\n", encoding="utf-8")
+            (support / "src/sinks.rs").write_text("impl TestSink for ListedSink {}\n", encoding="utf-8")
+            (support / "src/other.rs").write_text("impl TestSink for UnlistedSink {}\n", encoding="utf-8")
+            public_record = (
+                BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "TestSink"')
+                .replace('owner_package = "atm-storage-rusqlite"', 'owner_package = "atm-core"')
+                .replace('owner_crate_path = "atm_storage_rusqlite"', 'owner_crate_path = "atm_core"')
+                .replace(
+                    'allowed_dependents = ["atm-daemon"]',
+                    'allowed_dependents = ["agent-team-mail", "atm-daemon", "atm-storage-rusqlite"]',
+                )
+                .replace('type = "SqliteMailStore"', 'type = "NoopSink"')
+                .replace('module = "atm_storage_rusqlite::mail_store"', 'module = "atm_core"')
+                .replace('visibility = "private"\nconstructor = "private"', 'visibility = "public"\nconstructor = "public"')
+                .replace('state = "planned"', 'state = "active"')
+                .replace('forbidden = ["SqliteMailStore", "SqliteMailStore::open", "rusqlite::Connection"]', "forbidden = []")
+                .replace(
+                    'allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]',
+                    'allowed_test_double_paths = ["atm_test_support::sinks"]',
+                )
+            )
+            self.write_toml_record(repo_root, "atm-core", text=public_record)
+            (repo_root / "crates/atm-core/src/lib.rs").write_text(
+                "impl TestSink for NoopSink {}\n", encoding="utf-8"
+            )
+            daemon_src = repo_root / "crates/atm-daemon/src"
+            (daemon_src / "lib.rs").write_text(
+                "impl TestSink for ProductionSink {}\n\n#[cfg(test)]\nmod lifecycle_tests;\n",
+                encoding="utf-8",
+            )
+            (daemon_src / "lifecycle_tests.rs").write_text("mod stalled;\n", encoding="utf-8")
+            (daemon_src / "lifecycle_tests").mkdir()
+            (daemon_src / "lifecycle_tests/stalled.rs").write_text(
+                "impl TestSink for StallingSink {}\n", encoding="utf-8"
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+
+            for allowed in ("NoopSink", "ProductionSink", "ListedSink"):
+                self.assertFalse(any(allowed in item for item in rendered), rendered)
+            for flagged in (
+                "atm_daemon::lifecycle_tests::stalled::StallingSink",
+                "atm_test_support::other::UnlistedSink",
+            ):
+                self.assertTrue(
+                    any(
+                        f"test-double implementation '{flagged}'" in item
+                        and "allowed_test_double_paths" in item
+                        for item in rendered
+                    ),
+                    (flagged, rendered),
+                )
+
     def test_collect_boundary_violations_scans_consumer_crate_cfg_test_src_module_for_trait_only_doubles(
         self,
     ) -> None:

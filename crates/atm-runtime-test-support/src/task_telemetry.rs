@@ -1,11 +1,16 @@
 //! In-memory task telemetry doubles for downstream handler tests.
 //!
-//! These implement the first-party `TaskTelemetrySink` boundary only for
-//! tests (`[testing]` in `boundaries/atm-core/task-telemetry-sink.toml`).
+//! These implement the first-party `TaskTelemetrySink` and
+//! `WorkflowTelemetrySink` boundaries only for tests (`[testing]` in
+//! `boundaries/atm-core/task-telemetry-sink.toml` and
+//! `workflow-telemetry-sink.toml`).
 
 use std::sync::{Arc, Mutex};
 
-use atm_core::{TaskTelemetryError, TaskTelemetryRecord, TaskTelemetrySink};
+use atm_core::{
+    TaskTelemetryError, TaskTelemetryRecord, TaskTelemetrySink, WorkflowTelemetryError,
+    WorkflowTelemetryRecord, WorkflowTelemetrySink,
+};
 use atm_runtime::{TaskTelemetryConfig, TaskTelemetrySetup};
 
 /// Records every emitted task telemetry record, in order, and answers each
@@ -89,6 +94,54 @@ impl TaskTelemetrySink for StalledTaskTelemetrySink {
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), TaskTelemetryError>> + Send + '_>,
     > {
+        Box::pin(std::future::pending())
+    }
+}
+
+/// Calls `on_emit` for each task or workflow record it receives, then never
+/// completes the emit, so only a deadline can end a drain that waits on it.
+pub struct ReportingStalledTelemetrySink {
+    on_emit: Box<dyn Fn() + Send + Sync>,
+}
+
+impl ReportingStalledTelemetrySink {
+    #[must_use]
+    pub fn new(on_emit: impl Fn() + Send + Sync + 'static) -> Self {
+        Self {
+            on_emit: Box::new(on_emit),
+        }
+    }
+}
+
+impl std::fmt::Debug for ReportingStalledTelemetrySink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReportingStalledTelemetrySink")
+            .finish_non_exhaustive()
+    }
+}
+
+impl atm_core::boundary::sealed::Sealed for ReportingStalledTelemetrySink {}
+
+impl TaskTelemetrySink for ReportingStalledTelemetrySink {
+    fn emit(
+        &self,
+        _record: TaskTelemetryRecord,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<(), TaskTelemetryError>> + Send + '_>,
+    > {
+        (self.on_emit)();
+        Box::pin(std::future::pending())
+    }
+}
+
+impl WorkflowTelemetrySink for ReportingStalledTelemetrySink {
+    fn emit(
+        &self,
+        _record: WorkflowTelemetryRecord,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<(), WorkflowTelemetryError>> + Send + '_>,
+    > {
+        (self.on_emit)();
         Box::pin(std::future::pending())
     }
 }

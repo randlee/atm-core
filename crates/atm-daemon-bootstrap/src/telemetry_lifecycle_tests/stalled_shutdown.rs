@@ -30,14 +30,12 @@ use atm_core::observability::{
     NullObservability, ObservabilityPort,
 };
 use atm_core::protocol::RequestEnvelope;
-use atm_core::{
-    SweepConfig, TaskTelemetryError, TaskTelemetryRecord, TaskTelemetrySink,
-    WorkflowTelemetryError, WorkflowTelemetryRecord, WorkflowTelemetrySink,
-};
+use atm_core::{SweepConfig, WorkflowTelemetryRecord};
 use atm_http_runtime::{CanonicalWriteHandler, RuntimeHealth};
 use atm_runtime::{
     TaskTelemetryConfig, TaskTelemetryRuntime, WorkflowTelemetryConfig, WorkflowTelemetryRuntime,
 };
+use atm_runtime_test_support::task_telemetry::ReportingStalledTelemetrySink;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::time::Instant;
 
@@ -83,30 +81,11 @@ impl MessageReceivedHookSelector for StallingSelector {
     }
 }
 
-/// A telemetry sink that reports each emit, then never finishes it.
-struct StallingSink(UnboundedSender<()>);
-
-impl atm_core::boundary::sealed::Sealed for StallingSink {}
-
-impl TaskTelemetrySink for StallingSink {
-    fn emit(
-        &self,
-        _record: TaskTelemetryRecord,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<(), TaskTelemetryError>> + Send + '_>> {
-        let _ = self.0.send(());
-        Box::pin(std::future::pending())
-    }
-}
-
-impl WorkflowTelemetrySink for StallingSink {
-    fn emit(
-        &self,
-        _record: WorkflowTelemetryRecord,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<(), WorkflowTelemetryError>> + Send + '_>>
-    {
-        let _ = self.0.send(());
-        Box::pin(std::future::pending())
-    }
+/// A telemetry sink that reports each emit on `entered`, then never finishes it.
+fn reporting_stalled_sink(entered: UnboundedSender<()>) -> ReportingStalledTelemetrySink {
+    ReportingStalledTelemetrySink::new(move || {
+        let _ = entered.send(());
+    })
 }
 
 /// Blocks the calling thread until the paired [`Release`] is dropped.
@@ -237,7 +216,7 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
             drain_timeout: STALL_LIMIT,
             ..TaskTelemetryConfig::default()
         },
-        Arc::new(StallingSink(sink_tx.clone())),
+        Arc::new(reporting_stalled_sink(sink_tx.clone())),
     );
     let workflow_telemetry = WorkflowTelemetryRuntime::start(
         WorkflowTelemetryConfig {
@@ -245,7 +224,7 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
             drain_timeout: STALL_LIMIT,
             ..WorkflowTelemetryConfig::default()
         },
-        Arc::new(StallingSink(sink_tx)),
+        Arc::new(reporting_stalled_sink(sink_tx)),
     );
     task_telemetry.try_emit(task_record(65));
     workflow_telemetry.try_emit(workflow_record());
