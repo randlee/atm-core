@@ -3189,8 +3189,6 @@ mod tests {
     }
 
     const PROBE_SHUTDOWN: Duration = Duration::from_secs(1);
-    /// Timer wake-up latency allowed past a deadline; not a shutdown budget.
-    const TIMER_WAKE_SLACK: Duration = Duration::from_millis(20);
 
     /// Starts a loopback runtime with a [`ShutdownProbeMaintenance`] and the
     /// holding [`CountingLoopbackRouter`]; `(ended, aborted)` observe the
@@ -3237,7 +3235,8 @@ mod tests {
     /// Positive: with the server held by an in-flight request and maintenance
     /// ignoring the shutdown signal, `finish` cancels and joins both and
     /// removes the endpoint record within one shutdown bound, never a second
-    /// fresh budget for maintenance.
+    /// fresh budget for maintenance. The clock is paused once the request is
+    /// held, so the bound is exact virtual time.
     #[tokio::test(flavor = "current_thread")]
     async fn stuck_server_and_maintenance_share_one_shutdown_bound() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
@@ -3251,12 +3250,18 @@ mod tests {
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
         handler.wait_until_entered().await;
 
+        // Pause only now: auto-advance during the real socket handshake above
+        // would run the client's own timeout out before the request lands.
+        tokio::time::pause();
         let deadline = tokio::time::Instant::now() + PROBE_SHUTDOWN;
         let result = running.begin_shutdown().finish(deadline).await;
         let overrun = tokio::time::Instant::now().saturating_duration_since(deadline);
-        assert!(
-            overrun <= TIMER_WAKE_SLACK,
-            "shutdown including endpoint cleanup overran the deadline by {overrun:?}"
+        // The clock is paused, so virtual time passes only by timers firing:
+        // any overrun is a second budget, not wake-up latency.
+        assert_eq!(
+            overrun,
+            Duration::ZERO,
+            "shutdown including endpoint cleanup overran the deadline"
         );
         assert_eq!(
             result.err().map(|error| error.code().as_str().to_owned()),

@@ -120,3 +120,40 @@ async fn cli_log_records_reach_the_configured_destination() {
         server.await.expect("server task").expect("server");
     }
 }
+
+fn atm_ack_with_endpoint_stderr(home: &Path, endpoint: &str, extra: &[&str]) -> String {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_atm"))
+        .args(extra)
+        .args(["ack", "localhost", "received"])
+        .env("ATM_HOME", home)
+        .env("ATM_CONFIG_HOME", home.join("config"))
+        .env("ATM_LOG_DIR", home.join("logs"))
+        .env("ATM_TEAMS_DIR", home.join("teams"))
+        .env("ATM_IDENTITY", "sender-a")
+        .env("ATM_TEAM", "test-team")
+        .env("ATM_OTEL_ENDPOINT", endpoint)
+        .env("ATM_LOG_DESTINATION", "otel")
+        .env_remove("ATM_OTEL_AUTH_HEADER")
+        .env_remove("ATM_OTEL_PROTOCOL")
+        .output()
+        .expect("run atm ack");
+    String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
+/// Positive: an invalid export configuration prints
+/// `ATM_TELEMETRY_EXPORT_CONFIG_INVALID` on stderr without `--stderr-logs`.
+/// Negative: a valid configuration prints no such warning.
+#[test]
+fn invalid_export_configuration_warns_without_stderr_logs() {
+    let home = tempfile::tempdir().expect("tempdir");
+    let invalid = atm_ack_with_endpoint_stderr(home.path(), "ftp://collector:4317", &[]);
+    assert!(
+        invalid.contains("ATM_TELEMETRY_EXPORT_CONFIG_INVALID"),
+        "stderr: {invalid}"
+    );
+    let valid = atm_ack_with_endpoint_stderr(home.path(), "http://127.0.0.1:9", &[]);
+    assert!(
+        !valid.contains("ATM_TELEMETRY_EXPORT_CONFIG_INVALID"),
+        "stderr: {valid}"
+    );
+}

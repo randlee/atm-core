@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::TelemetryExportConfig;
-use atm_runtime::task_telemetry::{TaskTelemetryConfig, TaskTelemetrySetup};
+use atm_runtime::task_telemetry::TaskTelemetrySetup;
 use opentelemetry::logs::LoggerProvider;
 use opentelemetry::metrics::MeterProvider;
 use opentelemetry::trace::TracerProvider;
@@ -127,15 +127,7 @@ pub(crate) fn setup_with_timeouts(
         tracer.tracer("atm.task"),
         meter.meter("atm.task"),
     ));
-    Ok((
-        TaskTelemetrySetup {
-            config: TaskTelemetryConfig::default(),
-            sink,
-        },
-        tracer,
-        logger,
-        meter,
-    ))
+    Ok((TaskTelemetrySetup { sink }, tracer, logger, meter))
 }
 
 /// The validated gRPC channel plus the interceptor that replaces the request
@@ -312,10 +304,18 @@ fn lazy_channel(
     let mut endpoint = Endpoint::from_shared(config.endpoint().to_owned())?
         .timeout(transport_timeout)
         .connect_timeout(transport_timeout);
-    if config.endpoint().starts_with("https://") {
+    if uses_tls(config.endpoint()) {
         endpoint = endpoint.tls_config(ClientTlsConfig::new().with_native_roots())?;
     }
     Ok(endpoint.connect_lazy())
+}
+
+/// Whether the endpoint scheme is `https`, in any letter case, as
+/// `parse_endpoint` accepts it.
+pub(crate) fn uses_tls(endpoint: &str) -> bool {
+    endpoint
+        .get(..8)
+        .is_some_and(|scheme| scheme.eq_ignore_ascii_case("https://"))
 }
 
 fn tracer_provider(

@@ -6,7 +6,7 @@
 use std::sync::{Arc, Mutex, mpsc};
 
 use atm_core::{TaskTelemetryError, TaskTelemetryRecord, TaskTelemetrySink};
-use atm_runtime::{TaskTelemetryConfig, TaskTelemetrySetup};
+use atm_runtime::TaskTelemetrySetup;
 
 /// Records every emitted task telemetry record, in order, and answers each
 /// emit with a fixed result.
@@ -47,11 +47,10 @@ impl RecordingTaskTelemetrySink {
             .clone()
     }
 
-    /// A runtime setup with default limits that exports into `sink`.
+    /// A runtime setup that exports into `sink`.
     #[must_use]
     pub fn setup(sink: &Arc<Self>) -> TaskTelemetrySetup {
         TaskTelemetrySetup {
-            config: TaskTelemetryConfig::default(),
             sink: Arc::clone(sink) as Arc<dyn TaskTelemetrySink>,
         }
     }

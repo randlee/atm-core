@@ -584,6 +584,8 @@ fn async_admission_matches_sync_behavior_for_local_ack() {
         ack_write_request(message_id),
         &runtime,
     ))
+    .expect("async local acknowledgement commits")
+    .operation
     .expect("async local acknowledgement admits");
 
     assert_eq!(write.reply.agent.as_str(), TEST_SENDER);

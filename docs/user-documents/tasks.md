@@ -48,7 +48,9 @@ every team member without truncation. Both commands default to 200 rows and
 accept `--limit N` or `--all`; events retain the most recent rows and display
 them in sequence order. When a limit drops rows, ATM prints
 `N more rows omitted (--all)` on stderr. `atm task events <id> --json` returns
-an object with `events` and `handoffs` arrays. An unknown task id prints the
+an object with `events` and `handoffs` arrays. A refused request is recorded as a `rejected` event whose detail reads
+`CODE: message` (for example `ATM_TASK_ALREADY_CLOSED: ...`), in both `atm task events` and
+`atm task history`. An unknown task id prints the
 event header only (or `{"events":[],"handoffs":[]}` as JSON) and succeeds. See
 ADR-062 for the task tables and audit/replay contract.
 

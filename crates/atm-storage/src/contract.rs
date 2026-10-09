@@ -819,13 +819,18 @@ pub trait AsyncMessageStore: MessageStore {
     }
 
     /// Resolves a pending acknowledgement source, persists its reply, and
-    /// transitions that source as one async durable admission.
+    /// transitions that source as one async durable admission. A refused
+    /// acknowledgement still returns its committed rejection-audit rows.
     async fn acknowledge_message_atomically_async(
         &self,
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
-    ) -> Result<AcknowledgementCommit, AtmError> {
+    ) -> Result<crate::CommittedTaskWrite<AcknowledgementCommit>, AtmError> {
         self.acknowledge_message_atomically(&source, builder)
+            .map(|commit| crate::CommittedTaskWrite {
+                operation: Ok(commit),
+                task_events: Vec::new(),
+            })
     }
 }
 

@@ -3,14 +3,14 @@
 use super::*;
 use crate::task_telemetry::{record_from_event, record_from_handoff};
 use atm_core::TaskTelemetryRecord;
-use atm_runtime::{TaskTelemetryConfig, TaskTelemetryRuntime};
+use atm_runtime::TaskTelemetryRuntime;
 use atm_runtime_test_support::{RecordingTaskTelemetrySink, StalledTaskTelemetrySink};
 
 const TEAM: &str = "test-team";
 
 fn recording_runtime(sink: &Arc<RecordingTaskTelemetrySink>) -> TaskTelemetryRuntime {
     let setup = RecordingTaskTelemetrySink::setup(sink);
-    TaskTelemetryRuntime::start(setup.config, setup.sink)
+    TaskTelemetryRuntime::start(setup.sink)
 }
 
 async fn write(
@@ -545,19 +545,19 @@ async fn failing_stalled_and_full_sinks_never_change_the_task_outcome() {
     assert_eq!(failing_counts.emitted, 0);
 
     let (stalled_sink, release) = StalledTaskTelemetrySink::new();
-    let stalled_runtime = TaskTelemetryRuntime::start(
-        TaskTelemetryConfig {
-            queue_capacity: 1,
-            drain_timeout: Duration::from_millis(50),
-        },
-        Arc::new(stalled_sink),
-    );
+    let stalled_runtime = TaskTelemetryRuntime::start(Arc::new(stalled_sink));
     let stalled = tokio::time::timeout(Duration::from_secs(20), drive(stalled_runtime.clone()))
         .await
         .expect("handlers never await a stalled sink");
     assert_eq!(stalled, baseline);
+    // A burst past the production queue capacity, behind the held sink, must
+    // drop full without ever blocking the producer.
+    let burst = failing.records().first().cloned().expect("a record");
+    for _ in 0..=atm_runtime::TASK_TELEMETRY_QUEUE_CAPACITY + 1 {
+        stalled_runtime.try_emit(burst.clone());
+    }
     let stalled_counts = stalled_runtime.diagnostics().snapshot();
-    assert!(!stalled_counts.config_invalid);
+    assert!(!stalled_counts.no_runtime);
     assert!(stalled_counts.dropped_full > 0, "{stalled_counts:?}");
     drop(release);
     settle(&stalled_runtime).await;

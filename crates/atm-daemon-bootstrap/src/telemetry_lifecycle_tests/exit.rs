@@ -4,8 +4,10 @@
 //! daemon on its own multi-thread runtime, exports to a collector living in
 //! the parent process, and stops on request: `shutdown_replacement_daemon`,
 //! runtime teardown (which releases abandoned SDK blocking calls), process
-//! exit. The parent awaits the child's exit status. The 5s/10s stop bounds
-//! of the shipped binary are measured by the benchmark smoke run, not here.
+//! exit. The parent awaits the child's exit status. No stop-time bound is
+//! asserted here. The benchmark smoke run (`scripts/smoke`) checks only that a
+//! clean stop of the shipped binary exits 0 within 5s; the 10s bound for a full
+//! queue and a stalled collector is not measured by either.
 #![cfg(test)]
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -79,7 +81,8 @@ fn exit_proof_child() {
         observe(&probe, daemon.shutdown())
             .await
             .expect("child daemon shutdown");
-        // The parent sees a failure here as an unsuccessful exit.
+        // One shared deadline, every step returned by it. The parent sees a
+        // failure here as an unsuccessful exit.
         assert_one_shutdown_deadline(&probe.steps());
     });
     drop(runtime);
@@ -528,7 +531,7 @@ fn await_parent_confirmation() {
 }
 
 /// The retained JSONL lines in `logs` after the child exited.
-fn retained_lines(logs: &std::path::Path) -> Vec<String> {
+pub(super) fn retained_lines(logs: &std::path::Path) -> Vec<String> {
     std::fs::read_to_string(logs.join(atm_observability::CANONICAL_LOG_FILE_NAME))
         .expect("retained log file")
         .lines()
@@ -676,8 +679,8 @@ fn final_record_index(lines: &[String], backlog: usize) -> usize {
 /// Positive: after `shutdown_replacement_daemon` and a real process exit, the
 /// final lifecycle record is on disk behind a full backlog, and the collector
 /// holds it. The child exits only once the parent saw the record stored, so
-/// no real-time delivery bound is asserted. SDK diagnostics are never exported
-/// back to the collector. Omitting the first flush loses it from disk.
+/// no real-time delivery bound is asserted. Omitting the first flush loses it
+/// from disk.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::parallel(slo)]
 async fn final_lifecycle_record_reaches_disk_and_collector() {
@@ -794,6 +797,8 @@ fn combined_lifecycle_child() {
         observe(&probe, daemon.shutdown())
             .await
             .expect("child daemon shutdown");
+        // The stalled collector is cut off by the export's own 1s bound, so
+        // every step still returns by the shared deadline.
         assert_one_shutdown_deadline(&probe.steps());
 
         let counts = task.snapshot();

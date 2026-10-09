@@ -39,6 +39,12 @@ pub const RETAINED_FIELD_ALLOWLIST: &[&str] = &[
     "refresh_error_code",
     "error_layer",
     "origin",
+    "shutdown_timed_out",
+    "emitted",
+    "dropped_full",
+    "dropped_timeout",
+    "dropped_failure",
+    "dropped_shutdown",
 ];
 
 /// Removes fields that are not permitted to reach retained diagnostics.
@@ -633,7 +639,6 @@ pub enum AtmTelemetryExportState {
 pub enum AtmTelemetryExportFailure {
     ConfigInvalid,
     Unavailable,
-    Rejected,
     TimedOut,
     ShutdownTimedOut,
 }
@@ -1086,7 +1091,7 @@ mod tests {
             "dropped_timeout": 0,
             "dropped_failure": 0,
             "dropped_shutdown": 0,
-            "last_failure": "rejected"
+            "last_failure": "timed_out"
         });
         let decoded: AtmTelemetryExportHealth = serde_json::from_value(valid.clone()).unwrap();
         assert_eq!(decoded.state, AtmTelemetryExportState::Degraded);

@@ -459,14 +459,14 @@ async fn run_direct_core_write_interval(
                 }
                 let request = direct_core_write_request(&home, sequence_offset + sequence)?;
                 let source_preflight = preflight_write_source_request(&runtime, &request)?;
-                let _committed_write = prepare_write_with_preflight_async_runtime(
+                let execution = prepare_write_with_preflight_async_runtime(
                     request,
                     &NullObservability,
                     &runtime,
                     source_preflight,
                 )
                 .await?;
-                accepted += 1;
+                accepted += count_accepted(execution)?;
             }
         });
     }
@@ -485,6 +485,13 @@ async fn run_direct_core_write_interval(
         )));
     }
     Ok((accepted, started.elapsed().as_secs_f64()))
+}
+
+/// Counts a committed write as accepted only when its operation succeeded:
+/// an operation failure commits a rejection audit and still returns `Ok`.
+fn count_accepted<T>(execution: atm_storage::CommittedTaskWrite<T>) -> Result<usize, AtmError> {
+    execution.operation?;
+    Ok(1)
 }
 
 fn direct_core_write_request(
@@ -524,11 +531,30 @@ fn replacement_exit_code(error: &AtmError) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        BenchmarkHookMode, BenchmarkInvocation, DirectStorageTarget, direct_core_write_request,
-        direct_storage_message, parse_benchmark_invocation, parse_capacity_agent,
-        parse_capacity_team, parse_nonzero_argument,
+        BenchmarkHookMode, BenchmarkInvocation, DirectStorageTarget, count_accepted,
+        direct_core_write_request, direct_storage_message, parse_benchmark_invocation,
+        parse_capacity_agent, parse_capacity_team, parse_nonzero_argument,
     };
+    use atm_core::error::AtmError;
     use atm_core::types::{AgentName, TeamName};
+    use atm_storage::CommittedTaskWrite;
+
+    /// Positive: a committed successful operation counts as one accepted write.
+    /// Negative: a committed-but-failed operation is an error, never accepted.
+    #[test]
+    fn a_failed_write_operation_is_not_counted_as_accepted() {
+        let ok = CommittedTaskWrite {
+            operation: Ok(()),
+            task_events: Vec::new(),
+        };
+        assert_eq!(count_accepted(ok).expect("successful write"), 1);
+        let failed = CommittedTaskWrite::<()> {
+            operation: Err(AtmError::daemon_unavailable("insert failed")),
+            task_events: Vec::new(),
+        };
+        let error = count_accepted(failed).expect_err("a failed operation must not count");
+        assert!(error.to_string().contains("insert failed"), "{error}");
+    }
 
     #[test]
     fn direct_storage_messages_are_unique_and_target_the_capacity_recipient() {

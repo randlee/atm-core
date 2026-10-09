@@ -491,3 +491,103 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     );
     receiver.stop().await;
 }
+
+const QUEUE_DROP_CHILD: &str = "ATM_OTEL_QUEUE_DROP_CHILD";
+const QUEUE_DROP_TEST: &str = "otel_tests::lifecycle::sdk_queue_drops_degrade_export_health";
+
+/// Positive: overflowing the SDK span and log queues against a real stalled
+/// collector reports each drop through the production tracing bridge, and
+/// export health leaves `Healthy` for `Degraded`.
+/// Negative: before the overflow health is `Healthy`, and the drop invents
+/// neither a failure class nor a loss count.
+/// Runs in a child process that owns the global subscriber, for the reason
+/// given on `real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recovery`.
+#[test]
+fn sdk_queue_drops_degrade_export_health() {
+    if std::env::var_os(QUEUE_DROP_CHILD).is_some() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(queue_drop_scenario());
+        return;
+    }
+    let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        .args([
+            "--exact",
+            QUEUE_DROP_TEST,
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(QUEUE_DROP_CHILD, "1")
+        .output()
+        .expect("spawn the queue-drop child");
+    assert!(
+        output.status.success(),
+        "child scenario failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+async fn queue_drop_scenario() {
+    let receiver = Receiver::start(true).await;
+    let (_root, diagnostics, observed) = install_global_subscriber();
+    let setup = setup_with_limits(
+        &config(&receiver.endpoint),
+        EXPORT_BATCH,
+        Duration::from_millis(50),
+    )
+    .unwrap();
+    let mut before = health();
+    diagnostics.project(&mut before);
+    let tracer = setup.1.tracer("queue-drop");
+    let logger = setup.2.logger("queue-drop");
+    // No await: the current-thread runtime cannot run the SDK workers, so
+    // each bounded queue fills at EXPORT_QUEUE and the rest are dropped.
+    for _ in 0..EXPORT_QUEUE * 2 {
+        tracer.start("queued").end();
+        let mut log = logger.create_log_record();
+        log.set_body("queued".into());
+        logger.emit(log);
+    }
+    let mut after = health();
+    diagnostics.project(&mut after);
+    let (task, traces, logs, metrics) = setup;
+    drop(task);
+    // The shutdown results describe the stalled collector, not the drops,
+    // so they are not projected here.
+    let _ = tokio::join!(
+        tokio::task::spawn_blocking(move || traces.shutdown()),
+        tokio::task::spawn_blocking(move || logs.shutdown()),
+        tokio::task::spawn_blocking(move || metrics.shutdown())
+    );
+    receiver.stop().await;
+    let names = observed.names();
+    assert_eq!(before.state, AtmTelemetryExportState::Healthy);
+    for name in [
+        "BatchSpanProcessor.SpanDroppingStarted",
+        "BatchLogProcessor.LogDroppingStarted",
+        "BatchSpanProcessor.Shutdown",
+        "BatchLogProcessor.LogsDropped",
+    ] {
+        assert!(
+            names.iter().any(|seen| seen == name),
+            "{name} not emitted: {names:?}"
+        );
+        // Each drop event degrades health on its own.
+        let alone = ExportDiagnostics::default();
+        alone.observe_sdk_event(name);
+        let mut projected = health();
+        alone.project(&mut projected);
+        assert_eq!(projected.state, AtmTelemetryExportState::Degraded, "{name}");
+        assert_eq!(projected.last_failure, None, "{name}");
+    }
+    assert_eq!(after.state, AtmTelemetryExportState::Degraded, "{names:?}");
+    assert_eq!(after.last_failure, None);
+    assert_eq!(
+        (after.dropped_full, after.dropped_failure),
+        (0, 0),
+        "the SDK's drop count is private and never invented"
+    );
+}

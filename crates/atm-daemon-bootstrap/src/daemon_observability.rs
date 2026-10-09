@@ -72,6 +72,26 @@ struct Export {
     providers: Mutex<Option<Providers>>,
     runtime: OnceLock<Arc<TaskTelemetryDiagnostics>>,
     shutdown: OnceLock<watch::Receiver<bool>>,
+    /// How the provider shutdown ended, once it has run.
+    shutdown_outcome: OnceLock<ProviderShutdown>,
+}
+
+/// The end of the standard providers' shutdown, for the retained loss record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProviderShutdown {
+    Completed,
+    Failed,
+    TimedOut,
+}
+
+impl ProviderShutdown {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::TimedOut => "timed_out",
+        }
+    }
 }
 
 impl Export {
@@ -95,6 +115,7 @@ impl Export {
             providers: Mutex::new(providers),
             runtime: OnceLock::new(),
             shutdown: OnceLock::new(),
+            shutdown_outcome: OnceLock::new(),
         }
     }
 
@@ -134,6 +155,11 @@ impl Export {
             health.dropped_shutdown = task.dropped_shutdown;
             if health.dropped_full + health.dropped_failure > 0 {
                 health.state = AtmTelemetryExportState::Degraded;
+            }
+            if task.no_runtime {
+                // Started outside Tokio: no worker exists, nothing exports.
+                health.state = AtmTelemetryExportState::Unavailable;
+                health.last_failure = Some(AtmTelemetryExportFailure::Unavailable);
             }
         }
         // Observable SDK transport/lifecycle failures; never SDK loss counts.
@@ -258,7 +284,9 @@ impl DaemonObservability {
                         .unwrap_or_else(PoisonError::into_inner)
                         .take();
                     if let Some(providers) = providers {
-                        shutdown_providers(providers, bound, &export.diagnostics).await;
+                        let outcome =
+                            shutdown_providers(providers, bound, &export.diagnostics).await;
+                        let _ = export.shutdown_outcome.set(outcome);
                     }
                     gate.await;
                     sender.send_replace(true);
@@ -268,6 +296,43 @@ impl DaemonObservability {
             .clone();
         // Past its own deadline a caller stops waiting; the owner keeps the outcome.
         drop(tokio::time::timeout_at(deadline, done.wait_for(|done| *done)).await);
+    }
+
+    /// Writes one retained record of telemetry lost by shutdown time: the
+    /// known loss counts, the provider shutdown outcome and whether it timed
+    /// out. The caller's next logger flush puts it on disk. Nothing is written
+    /// for an unconfigured export or a clean, lossless stop.
+    pub(crate) fn report_shutdown_loss(&self) {
+        if !matches!(self.export.selection, ExportSelection::Configured { .. }) {
+            return;
+        }
+        let health = self.export.health();
+        let outcome = self.export.shutdown_outcome.get().copied();
+        let timed_out = outcome == Some(ProviderShutdown::TimedOut)
+            || health.last_failure == Some(AtmTelemetryExportFailure::ShutdownTimedOut);
+        let lossless = health.dropped_full
+            + health.dropped_timeout
+            + health.dropped_failure
+            + health.dropped_shutdown
+            == 0
+            && health.state == AtmTelemetryExportState::Healthy
+            && outcome == Some(ProviderShutdown::Completed);
+        if lossless {
+            return;
+        }
+        tracing::warn!(
+            target: "atm_daemon_bootstrap::lifecycle",
+            code = "ATM_TELEMETRY_SHUTDOWN_LOSS",
+            outcome = outcome.map_or("not_run", ProviderShutdown::as_str),
+            failure_class = health.last_failure.map(failure_class),
+            shutdown_timed_out = timed_out,
+            emitted = health.emitted,
+            dropped_full = health.dropped_full,
+            dropped_timeout = health.dropped_timeout,
+            dropped_failure = health.dropped_failure,
+            dropped_shutdown = health.dropped_shutdown,
+            "telemetry export lost records or failed by daemon shutdown"
+        );
     }
 
     /// Flushes every retained event admitted before the call, file and routed
@@ -417,7 +482,7 @@ async fn shutdown_providers(
     (tracer, logger, meter): Providers,
     bound: Instant,
     diagnostics: &ExportDiagnostics,
-) {
+) -> ProviderShutdown {
     let all = async {
         tokio::join!(
             tokio::task::spawn_blocking(move || tracer.shutdown()),
@@ -427,15 +492,33 @@ async fn shutdown_providers(
     };
     match tokio::time::timeout_at(bound, all).await {
         Ok((trace, log, metric)) => {
+            let mut outcome = ProviderShutdown::Completed;
             for result in [trace, log, metric] {
-                diagnostics.observe_result(result.unwrap_or_else(|_| {
+                let result = result.unwrap_or_else(|_| {
                     Err(OTelSdkError::InternalFailure(
                         "provider shutdown worker panicked".to_owned(),
                     ))
-                }));
+                });
+                if result.is_err() {
+                    outcome = ProviderShutdown::Failed;
+                }
+                diagnostics.observe_result(result);
             }
+            outcome
         }
-        Err(_) => diagnostics.shutdown_wait_timed_out(),
+        Err(_) => {
+            diagnostics.shutdown_wait_timed_out();
+            ProviderShutdown::TimedOut
+        }
+    }
+}
+
+fn failure_class(failure: AtmTelemetryExportFailure) -> &'static str {
+    match failure {
+        AtmTelemetryExportFailure::ConfigInvalid => "config_invalid",
+        AtmTelemetryExportFailure::Unavailable => "unavailable",
+        AtmTelemetryExportFailure::TimedOut => "timed_out",
+        AtmTelemetryExportFailure::ShutdownTimedOut => "shutdown_timed_out",
     }
 }
 
@@ -875,6 +958,19 @@ mod tests {
                 1,
                 "{destination}: the provider outlives the retained logger"
             );
+            if destination == "file" {
+                // Negative control, read after the providers are flushed and
+                // shut down: apart from the provider-direct caller record
+                // above, no routed record may have reached the collector.
+                let routed: Vec<String> = exported(&receiver)
+                    .into_iter()
+                    .filter(|record| !record.contains("bd6 after retained logger shutdown"))
+                    .collect();
+                assert!(
+                    routed.is_empty(),
+                    "file-only must export no routed OTLP log: {routed:#?}"
+                );
+            }
             receiver.stop().await;
         }
     }
@@ -918,6 +1014,41 @@ mod tests {
             observability.take_telemetry_setup().is_none(),
             "the setup is handed over once"
         );
+    }
+
+    /// Positive: a task telemetry runtime started outside Tokio is inert and
+    /// doctor health reports the exporter Unavailable. Negative: the same
+    /// owner with a runtime started inside Tokio stays Healthy.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn task_runtime_started_outside_tokio_is_reported_unavailable() {
+        let (_root, observability) = configured().await;
+        let (sink, _release) = atm_runtime_test_support::StalledTaskTelemetrySink::new();
+        let sink = Arc::new(sink);
+        let inert = std::thread::spawn({
+            let sink = Arc::clone(&sink);
+            move || atm_runtime::TaskTelemetryRuntime::start(sink)
+        })
+        .join()
+        .expect("start outside Tokio");
+        let live = atm_runtime::TaskTelemetryRuntime::start(sink);
+        observability.attach_runtime_telemetry(live.diagnostics());
+        assert_eq!(
+            observability.export_health_for_test().state,
+            atm_core::observability::AtmTelemetryExportState::Healthy
+        );
+        let (_other_root, other) = configured().await;
+        other.attach_runtime_telemetry(inert.diagnostics());
+        let health = other.export_health_for_test();
+        assert_eq!(
+            health.state,
+            atm_core::observability::AtmTelemetryExportState::Unavailable
+        );
+        assert_eq!(
+            health.last_failure,
+            Some(atm_core::observability::AtmTelemetryExportFailure::Unavailable)
+        );
+        live.shutdown(tokio::time::Instant::now() + Duration::from_secs(1))
+            .await;
     }
 
     /// Positive: a poisoned providers lock still shuts the providers down.

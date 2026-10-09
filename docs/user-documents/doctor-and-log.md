@@ -57,7 +57,8 @@ and collector delivery.
 
 Export is inert unless `ATM_OTEL_ENDPOINT` is set. Configure it with
 `ATM_OTEL_PROTOCOL=grpc` (the only supported protocol), optionally
-`ATM_OTEL_AUTH_HEADER`, and `ATM_OTEL_SERVICE_NAME` (default: `atm-daemon`).
+`ATM_OTEL_AUTH_HEADER` (the value of the `authorization` header, for example
+`Bearer <token>`, not a full `authorization: ...` header line), and `ATM_OTEL_SERVICE_NAME` (default: `atm-daemon`).
 `ATM_LOG_DESTINATION` defaults to `file`; `otel` and `both` require an export
 endpoint. The `atm` CLI and the daemon route their log records to the same
 destination; with `otel` neither writes the local JSONL log. Do not place
@@ -80,7 +81,9 @@ template variables, or free-form event detail.
 `last_failure`. The JSON object has those same fields; `endpoint`, `protocol`,
 and `last_failure` may be null. `dropped_timeout` is kept for compatibility and
 is always 0. `healthy` reports local SDK admission/processing
-evidence; it does not confirm collector receipt. Doctor findings describe
+evidence; it does not confirm collector receipt. `degraded` also means the
+SDK dropped spans or log records on a full export queue; that count is not
+reported. Doctor findings describe
 degraded or unavailable export; use their remediation rather than treating
 telemetry delivery as a reason to retry a task operation.
 

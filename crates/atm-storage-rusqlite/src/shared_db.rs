@@ -491,12 +491,12 @@ impl SharedDb {
         &self,
         source: AcknowledgementSource,
         builder: std::sync::Arc<dyn AcknowledgementReplyBuilder>,
-    ) -> Result<AcknowledgementCommit, AtmError> {
-        match self
+    ) -> Result<atm_storage::CommittedTaskWrite<AcknowledgementCommit>, AtmError> {
+        let committed = self
             .writer
-            .submit_async(WriteOp::Acknowledge { source, builder })
-            .await?
-        {
+            .submit_committed_async(WriteOp::Acknowledge { source, builder })
+            .await?;
+        Ok(committed.and_then(|result| match result {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::ReadDisplayStateApplied
             | WriteOpResult::UpsertMessage { .. }
@@ -509,7 +509,7 @@ impl SharedDb {
             | WriteOpResult::DiagnosticsPruned(_) => Err(AtmError::daemon_unavailable(
                 "sqlite writer returned the wrong result for async acknowledgement admission",
             )),
-        }
+        }))
     }
 
     pub(crate) fn mailbox_reader(&self) -> Arc<dyn AsyncMailboxReader + Send + Sync> {

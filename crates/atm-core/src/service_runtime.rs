@@ -648,7 +648,7 @@ impl LocalServiceRuntime {
         &self,
         source: atm_storage::AcknowledgementSource,
         builder: std::sync::Arc<dyn atm_storage::AcknowledgementReplyBuilder>,
-    ) -> Result<atm_storage::AcknowledgementCommit, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::AcknowledgementCommit>, AtmError> {
         let store = self.async_message_store.as_ref().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "Tokio acknowledgement admission was not installed in this runtime",

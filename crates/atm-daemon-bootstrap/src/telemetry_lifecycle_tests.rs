@@ -12,6 +12,7 @@
 mod exit;
 mod queue_wake;
 pub(crate) mod receiver;
+mod shutdown_loss;
 mod stalled_shutdown;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -548,13 +549,36 @@ const SHUTDOWN_STEPS: [&str; 8] = [
     "timeline_flush_worker",
 ];
 
-/// Proves the shutdown bound by construction from the recorded steps, never
-/// from elapsed time: the deadline is fixed once at entry
-/// `REPLACEMENT_DRAIN_DEADLINE` ahead, every step receives exactly that
-/// deadline and starts only after the previous one returned, and the logger
-/// and exporter waits compute bounds no later than it and no later than their
-/// own 1 s bound from their start. Returns the shared deadline.
+/// Proves, from the recorded steps, that shutdown met one shared deadline:
+/// [`assert_shutdown_deadline_passed_through`], and every top-level step
+/// returned at or before that deadline, with no slack. A step that ran on a
+/// fresh budget past the deadline fails here even when it was handed the
+/// shared deadline. Returns the shared deadline.
 fn assert_one_shutdown_deadline(steps: &[ShutdownStep]) -> Instant {
+    let deadline = assert_shutdown_deadline_passed_through(steps);
+    for step in steps
+        .iter()
+        .filter(|step| SHUTDOWN_STEPS.contains(&step.step))
+    {
+        assert!(
+            step.returned <= deadline,
+            "step {} returned after the shared deadline: {steps:#?}",
+            step.step
+        );
+    }
+    deadline
+}
+
+/// Proves the shutdown deadline is passed through unchanged, from the
+/// recorded steps: it is fixed once at entry `REPLACEMENT_DRAIN_DEADLINE`
+/// ahead, every step receives exactly that deadline and starts only after the
+/// previous one returned, and the logger and exporter waits compute bounds no
+/// later than it and no later than their own 1 s bound from their start. It
+/// does not prove a step returned in time. Only a shutdown whose stalled step
+/// is ended by the shared deadline itself calls it alone, since that step
+/// returns after the deadline by its timer's wake latency; every other caller
+/// uses [`assert_one_shutdown_deadline`]. Returns the shared deadline.
+fn assert_shutdown_deadline_passed_through(steps: &[ShutdownStep]) -> Instant {
     let entry = steps.first().expect("the shutdown recorded its entry");
     assert_eq!(entry.step, "entry", "{steps:#?}");
     assert_eq!(
@@ -593,6 +617,56 @@ fn assert_one_shutdown_deadline(steps: &[ShutdownStep]) -> Instant {
         );
     }
     entry.deadline
+}
+
+/// Synthetic steps for one shutdown that meets its deadline: the entry fixes
+/// it, then each top-level step runs 1ms after the previous one returned.
+fn steps_meeting_the_deadline() -> Vec<ShutdownStep> {
+    let entry = Instant::now();
+    let deadline = entry + super::REPLACEMENT_DRAIN_DEADLINE;
+    let mut at = entry;
+    SHUTDOWN_STEPS
+        .iter()
+        .map(|&step| {
+            let started = at;
+            at = started + Duration::from_millis(1);
+            ShutdownStep {
+                step,
+                started,
+                deadline,
+                returned: if step == "entry" { started } else { at },
+            }
+        })
+        .collect()
+}
+
+/// Control: a shutdown whose steps all returned by the shared deadline passes.
+#[test]
+fn one_shutdown_deadline_accepts_steps_that_returned_by_it() {
+    let steps = steps_meeting_the_deadline();
+    assert_eq!(assert_one_shutdown_deadline(&steps), steps[0].deadline);
+}
+
+/// Negative: a top-level step handed the shared deadline but run on a fresh
+/// 20s budget returns past the deadline, and the assertion fails, although
+/// every label and the step order are still correct.
+#[test]
+#[should_panic(expected = "step task_telemetry returned after the shared deadline")]
+fn one_shutdown_deadline_rejects_a_step_on_a_fresh_budget() {
+    let mut steps = steps_meeting_the_deadline();
+    let fresh = Duration::from_secs(20);
+    let index = steps
+        .iter()
+        .position(|step| step.step == "task_telemetry")
+        .expect("task telemetry step");
+    let shift = steps[index].started + fresh - steps[index].returned;
+    steps[index].returned += shift;
+    for later in &mut steps[index + 1..] {
+        later.started += shift;
+        later.returned += shift;
+    }
+    assert_shutdown_deadline_passed_through(&steps);
+    assert_one_shutdown_deadline(&steps);
 }
 
 fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId {
@@ -828,31 +902,49 @@ async fn running_daemon_exports_duplicate_handoff_once() {
     receiver.stop().await;
 }
 
-/// Acked and migrated facts are state-neutral: they must be visible as facts,
-/// but must not invent time-to-start or time-to-close samples.
+/// Positive: an assignment that was acked and migrated and then completed
+/// records exactly one time-to-close sample, measured from its assignment.
+/// Negative: acked and migrated are state-neutral facts, so no time-to-start
+/// sample is invented when the task never started.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn running_daemon_export_has_no_duration_for_acked_or_migrated() {
+async fn running_daemon_export_has_close_duration_but_no_start_for_acked_or_migrated() {
     let receiver = Receiver::start(false).await;
     let daemon = Daemon::start(endpoint_env(&receiver.endpoint)).await;
-    let mut acked = task_record(1);
-    acked.task_id = "BD6-STATE-NEUTRAL".parse().expect("task id");
+    let mut assigned = task_record(1);
+    assigned.task_id = "BD6-STATE-NEUTRAL".parse().expect("task id");
+    let mut acked = assigned.clone();
     acked.kind = TaskTelemetryKind::Acked;
-    let mut migrated = acked.clone();
+    acked.seq = Some(2);
+    let mut migrated = assigned.clone();
     migrated.kind = TaskTelemetryKind::Migrated;
-    migrated.seq = Some(2);
-    daemon.workers.task_telemetry.try_emit(acked);
-    daemon.workers.task_telemetry.try_emit(migrated);
+    migrated.seq = Some(3);
+    let mut completed = assigned.clone();
+    completed.kind = TaskTelemetryKind::Completed;
+    completed.seq = Some(4);
+    completed.at = "2026-10-08T00:00:05Z"
+        .parse::<IsoTimestamp>()
+        .expect("timestamp");
+    for record in [assigned, acked, migrated, completed] {
+        daemon.workers.task_telemetry.try_emit(record);
+    }
 
     receiver
         .capture
-        .wait(EXPORT_WAIT, "acked and migrated exports", || {
-            let events = exported_events(&receiver.capture);
-            ["acked", "migrated"].into_iter().all(|kind| {
-                events
-                    .iter()
-                    .any(|event| event.task_id == "BD6-STATE-NEUTRAL" && event.kind == kind)
-            })
-        })
+        .wait(
+            EXPORT_WAIT,
+            "the four exports and the close duration",
+            || {
+                let events = exported_events(&receiver.capture);
+                ["assigned", "acked", "migrated", "completed"]
+                    .into_iter()
+                    .all(|kind| {
+                        events
+                            .iter()
+                            .any(|event| event.task_id == "BD6-STATE-NEUTRAL" && event.kind == kind)
+                    })
+                    && histogram_count(&receiver.capture, "atm.task.time_to_close_ms") >= 1
+            },
+        )
         .await;
     daemon.shutdown().await.expect("clean daemon shutdown");
     assert_eq!(
@@ -862,8 +954,8 @@ async fn running_daemon_export_has_no_duration_for_acked_or_migrated() {
     );
     assert_eq!(
         histogram_count(&receiver.capture, "atm.task.time_to_close_ms"),
-        0,
-        "Acked/Migrated must not invent a close duration"
+        1,
+        "the completed assignment records exactly one close duration"
     );
 
     receiver.stop().await;
@@ -995,7 +1087,7 @@ fn assert_export_remediation(doctor: &serde_json::Value) {
 }
 
 /// A task runtime whose sink stalls until the returned release is dropped,
-/// with a one-record queue, so a burst leaves real `dropped_full` counts.
+/// with a full production queue, so a burst leaves real `dropped_full` counts.
 /// Attach it before composing the daemon, and drop the release before
 /// shutting the runtime down.
 async fn lossy_task_runtime() -> (
@@ -1007,21 +1099,15 @@ async fn lossy_task_runtime() -> (
         atm_runtime_test_support::StalledTaskTelemetrySink::reporting(move || {
             let _ = entered_tx.send(());
         });
-    let runtime = atm_runtime::TaskTelemetryRuntime::start(
-        atm_runtime::TaskTelemetryConfig {
-            queue_capacity: 1,
-            ..Default::default()
-        },
-        Arc::new(sink),
-    );
+    let runtime = atm_runtime::TaskTelemetryRuntime::start(Arc::new(sink));
     runtime.try_emit(task_record(1));
     tokio::time::timeout(EXPORT_WAIT, entered.recv())
         .await
         .expect("the worker never reached the stalled sink")
         .expect("the stalled sink is alive");
-    // One record is in the stalled sink and one fills the queue; the rest
-    // drop full, synchronously, so no counter moves after this point.
-    for seq in 2..=6 {
+    // One record is in the stalled sink and the queue fills; the rest drop
+    // full, synchronously, so no counter moves after this point.
+    for seq in 2..=(2 + atm_runtime::TASK_TELEMETRY_QUEUE_CAPACITY as u64 + 3) {
         runtime.try_emit(task_record(seq));
     }
     assert_eq!(runtime.diagnostics().snapshot().dropped_full, 4);
@@ -1140,7 +1226,8 @@ fn unreachable_collector_child() {
         observe(&probe, daemon.shutdown())
             .await
             .expect("shutdown result is the listener's");
-        // Every step shares the one deadline fixed at shutdown entry.
+        // Every step shares the one deadline fixed at shutdown entry and
+        // returned by it.
         assert_one_shutdown_deadline(&probe.steps());
     });
     drop(runtime);
@@ -1216,6 +1303,8 @@ async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
     observe(&probe, daemon.shutdown())
         .await
         .expect("shutdown result is the listener's");
+    // The stalled export ends on its own 1s bound, so every step still
+    // returns by the shared deadline.
     assert_one_shutdown_deadline(&probe.steps());
     // The SDK's own 400ms export timeout or the 1s wait bound ends the step;
     // either way the terminal failure is retained.
@@ -1237,7 +1326,7 @@ async fn stalled_export_in_flight() -> (Receiver, tempfile::TempDir, DaemonObser
     let task = observability
         .take_telemetry_setup()
         .expect("configured task setup");
-    let runtime = atm_runtime::TaskTelemetryRuntime::start(task.config, task.sink);
+    let runtime = atm_runtime::TaskTelemetryRuntime::start(task.sink);
     for seq in 1..=64 {
         runtime.try_emit(task_record(seq));
     }
