@@ -16,8 +16,8 @@ use std::time::{Duration, Instant};
 
 use super::receiver::Receiver;
 use super::{
-    Daemon, DaemonObservability, EXPORT_WAIT, assert_one_shutdown_deadline, endpoint_env,
-    exported_counts, sent_message_id, task_record,
+    Daemon, DaemonObservability, EXPORT_WAIT, assert_every_step_returned_by_deadline,
+    assert_one_shutdown_deadline, endpoint_env, exported_counts, sent_message_id, task_record,
 };
 use crate::shutdown_probe::{Probe, observe};
 use atm_core::observability::{AtmTelemetryExportHealth, AtmTelemetryExportState};
@@ -794,7 +794,7 @@ fn combined_lifecycle_child() {
         observe(&probe, daemon.shutdown())
             .await
             .expect("child daemon shutdown");
-        assert_one_shutdown_deadline(&probe.steps());
+        assert_every_step_returned_by_deadline(&probe.steps());
 
         let counts = task.snapshot();
         assert_eq!(

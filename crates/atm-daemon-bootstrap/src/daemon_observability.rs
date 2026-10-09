@@ -875,6 +875,19 @@ mod tests {
                 1,
                 "{destination}: the provider outlives the retained logger"
             );
+            if destination == "file" {
+                // Negative control, read after the providers are flushed and
+                // shut down: apart from the provider-direct caller record
+                // above, no routed record may have reached the collector.
+                let routed: Vec<String> = exported(&receiver)
+                    .into_iter()
+                    .filter(|record| !record.contains("bd6 after retained logger shutdown"))
+                    .collect();
+                assert!(
+                    routed.is_empty(),
+                    "file-only must export no routed OTLP log: {routed:#?}"
+                );
+            }
             receiver.stop().await;
         }
     }

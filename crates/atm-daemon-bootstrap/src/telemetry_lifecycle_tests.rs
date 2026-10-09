@@ -548,12 +548,13 @@ const SHUTDOWN_STEPS: [&str; 8] = [
     "timeline_flush_worker",
 ];
 
-/// Proves the shutdown bound by construction from the recorded steps, never
-/// from elapsed time: the deadline is fixed once at entry
-/// `REPLACEMENT_DRAIN_DEADLINE` ahead, every step receives exactly that
-/// deadline and starts only after the previous one returned, and the logger
-/// and exporter waits compute bounds no later than it and no later than their
-/// own 1 s bound from their start. Returns the shared deadline.
+/// Proves the shutdown deadline is passed through unchanged, from the
+/// recorded steps: it is fixed once at entry `REPLACEMENT_DRAIN_DEADLINE`
+/// ahead, every step receives exactly that deadline and starts only after the
+/// previous one returned, and the logger and exporter waits compute bounds no
+/// later than it and no later than their own 1 s bound from their start. It
+/// does not prove a step returned in time; see
+/// [`assert_every_step_returned_by_deadline`]. Returns the shared deadline.
 fn assert_one_shutdown_deadline(steps: &[ShutdownStep]) -> Instant {
     let entry = steps.first().expect("the shutdown recorded its entry");
     assert_eq!(entry.step, "entry", "{steps:#?}");
@@ -593,6 +594,24 @@ fn assert_one_shutdown_deadline(steps: &[ShutdownStep]) -> Instant {
         );
     }
     entry.deadline
+}
+
+/// For an unstalled shutdown, where no step waits on a timer: every top-level
+/// step returned at or before the shared deadline. A stalled step ends on its
+/// timer and returns after the deadline by its wake latency, so stalled runs
+/// do not call this.
+fn assert_every_step_returned_by_deadline(steps: &[ShutdownStep]) {
+    let deadline = assert_one_shutdown_deadline(steps);
+    for step in steps
+        .iter()
+        .filter(|step| SHUTDOWN_STEPS.contains(&step.step))
+    {
+        assert!(
+            step.returned <= deadline,
+            "step {} returned after the shared deadline: {steps:#?}",
+            step.step
+        );
+    }
 }
 
 fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId {
@@ -828,31 +847,49 @@ async fn running_daemon_exports_duplicate_handoff_once() {
     receiver.stop().await;
 }
 
-/// Acked and migrated facts are state-neutral: they must be visible as facts,
-/// but must not invent time-to-start or time-to-close samples.
+/// Positive: an assignment that was acked and migrated and then completed
+/// records exactly one time-to-close sample, measured from its assignment.
+/// Negative: acked and migrated are state-neutral facts, so no time-to-start
+/// sample is invented when the task never started.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn running_daemon_export_has_no_duration_for_acked_or_migrated() {
+async fn running_daemon_export_has_close_duration_but_no_start_for_acked_or_migrated() {
     let receiver = Receiver::start(false).await;
     let daemon = Daemon::start(endpoint_env(&receiver.endpoint)).await;
-    let mut acked = task_record(1);
-    acked.task_id = "BD6-STATE-NEUTRAL".parse().expect("task id");
+    let mut assigned = task_record(1);
+    assigned.task_id = "BD6-STATE-NEUTRAL".parse().expect("task id");
+    let mut acked = assigned.clone();
     acked.kind = TaskTelemetryKind::Acked;
-    let mut migrated = acked.clone();
+    acked.seq = Some(2);
+    let mut migrated = assigned.clone();
     migrated.kind = TaskTelemetryKind::Migrated;
-    migrated.seq = Some(2);
-    daemon.workers.task_telemetry.try_emit(acked);
-    daemon.workers.task_telemetry.try_emit(migrated);
+    migrated.seq = Some(3);
+    let mut completed = assigned.clone();
+    completed.kind = TaskTelemetryKind::Completed;
+    completed.seq = Some(4);
+    completed.at = "2026-10-08T00:00:05Z"
+        .parse::<IsoTimestamp>()
+        .expect("timestamp");
+    for record in [assigned, acked, migrated, completed] {
+        daemon.workers.task_telemetry.try_emit(record);
+    }
 
     receiver
         .capture
-        .wait(EXPORT_WAIT, "acked and migrated exports", || {
-            let events = exported_events(&receiver.capture);
-            ["acked", "migrated"].into_iter().all(|kind| {
-                events
-                    .iter()
-                    .any(|event| event.task_id == "BD6-STATE-NEUTRAL" && event.kind == kind)
-            })
-        })
+        .wait(
+            EXPORT_WAIT,
+            "the four exports and the close duration",
+            || {
+                let events = exported_events(&receiver.capture);
+                ["assigned", "acked", "migrated", "completed"]
+                    .into_iter()
+                    .all(|kind| {
+                        events
+                            .iter()
+                            .any(|event| event.task_id == "BD6-STATE-NEUTRAL" && event.kind == kind)
+                    })
+                    && histogram_count(&receiver.capture, "atm.task.time_to_close_ms") >= 1
+            },
+        )
         .await;
     daemon.shutdown().await.expect("clean daemon shutdown");
     assert_eq!(
@@ -862,8 +899,8 @@ async fn running_daemon_export_has_no_duration_for_acked_or_migrated() {
     );
     assert_eq!(
         histogram_count(&receiver.capture, "atm.task.time_to_close_ms"),
-        0,
-        "Acked/Migrated must not invent a close duration"
+        1,
+        "the completed assignment records exactly one close duration"
     );
 
     receiver.stop().await;
