@@ -1,3 +1,4 @@
 {"sprint":"be-1"}
 {"sprint":"be-2","depends_on":["be-1"]}
-{"sprint":"be-3","depends_on":["be-2"]}
+{"sprint":"be-4","depends_on":["be-1"]}
+{"sprint":"be-3","depends_on":["be-2","be-4"]}
