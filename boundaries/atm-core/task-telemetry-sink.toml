@@ -8,10 +8,10 @@ trait = "TaskTelemetrySink"
 notes = "Sealed, object-safe first-party task telemetry projection. Records contain only typed task-ledger and prompt-handoff facts; message payloads, template variables, and free-form details are forbidden."
 
 [implementation]
-type = "TaskExporter"
-module = "atm_observability::task_exporter"
-visibility = "pub(crate)"
-constructor = "pub(crate)"
+type = "TaskTelemetrySink"
+module = "atm_core::task_telemetry"
+visibility = "public"
+constructor = "none"
 
 [composition]
 roots = ["atm_runtime::task_telemetry::TaskTelemetryRuntime::start"]
