@@ -1152,6 +1152,60 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertIsInstance(captured["run_duration_s"], float)
         self.assertGreaterEqual(captured["run_duration_s"], 0.0)
 
+    def test_a_slow_clean_stop_of_the_owned_daemon_fails_the_run(self):
+        captured: dict[str, object] = {}
+        process = mock.Mock(pid=42, returncode=0)
+        output = mock.Mock()
+        output.evidence.return_value = {}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "atm-capacity-proof"
+            daemon = root / "atm-daemon"
+            atm = root / "atm"
+            daemon.touch()
+            atm.touch()
+            with (
+                mock.patch.object(
+                    RUNNER,
+                    "require_capacity_benchmark_account",
+                    return_value=mock.Mock(durable_state_root=root / ".atm" / "db"),
+                ),
+                mock.patch.object(RUNNER, "require_clean_host_daemon_state"),
+                mock.patch.object(RUNNER, "clear_benchmark_database_state"),
+                mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
+                mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
+                mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, output)),
+                mock.patch.object(
+                    RUNNER,
+                    "provision_disposable_mtls_identity",
+                    side_effect=RUNNER.SmokeError("held after the first start"),
+                ),
+                mock.patch.object(
+                    RUNNER,
+                    "prepare_capacity_roster",
+                    side_effect=RUNNER.SmokeError("held after the first start"),
+                ),
+                mock.patch.object(RUNNER, "reap_owned_daemon", return_value=6.0),
+                mock.patch("builtins.print"),
+                mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
+                mock.patch.object(
+                    RUNNER,
+                    "write_evidence",
+                    side_effect=lambda _path, value: (captured.update(value), root / "evidence.json")[-1],
+                ),
+            ):
+                code, _evidence = RUNNER.run_capacity(
+                    home, root, "tcp", 1, sample_count=1, raw_evidence_directory=root,
+                )
+
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            captured["clean_stops"],
+            [{"stop_seconds": 6.0, "limit_seconds": 5.0, "exit_code": 0}],
+        )
+        self.assertIn("took 6.000s, over the 5s bound", captured["failure"])
+
     def test_sparse_profiles_and_schema_fields_are_declared(self):
         self.assertEqual(RUNNER.SPARSE_FRAMES_PER_CONNECTION, (1, 2, 4, 8, 16, 64))
 
@@ -1832,6 +1886,44 @@ class AdmissionCapacityTests(unittest.TestCase):
             RUNNER.reap_owned_daemon(process)
         terminate.assert_called_once_with(42)
         process.wait.assert_called_once_with(timeout=10.0)
+
+    @unittest.skipIf(os.name == "nt", "Windows termination is forced, not a clean stop")
+    def test_reap_measures_the_stop_request_to_reaped_exit(self):
+        process = mock.Mock()
+        process.pid = 42
+        process.wait.return_value = 0
+        with (
+            mock.patch.object(SUPPORT, "terminate_process"),
+            mock.patch.object(SUPPORT.time, "monotonic", side_effect=[10.0, 12.5]),
+        ):
+            self.assertEqual(RUNNER.reap_owned_daemon(process), 2.5)
+
+    def test_clean_stop_within_the_bound_is_recorded(self):
+        evidence = {}
+        with mock.patch("builtins.print") as printed:
+            RUNNER.record_clean_stop(evidence, 1.23456, 0)
+        self.assertEqual(
+            evidence["clean_stops"],
+            [{"stop_seconds": 1.235, "limit_seconds": 5.0, "exit_code": 0}],
+        )
+        printed.assert_called_once_with("atm-daemon clean stop: 1.235s (limit 5s, exit 0)")
+
+    def test_clean_stop_over_the_bound_fails_with_its_measurement(self):
+        evidence = {}
+        with mock.patch("builtins.print"):
+            with self.assertRaisesRegex(RUNNER.SmokeError, r"took 5\.001s, over the 5s bound"):
+                RUNNER.record_clean_stop(evidence, 5.001, 0)
+        self.assertEqual(evidence["clean_stops"][0]["stop_seconds"], 5.001)
+
+    def test_clean_stop_with_a_nonzero_exit_fails(self):
+        with mock.patch("builtins.print"):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "exited 1, not 0"):
+                RUNNER.record_clean_stop({}, 0.5, 1)
+
+    def test_unmeasured_stop_records_nothing(self):
+        evidence = {}
+        RUNNER.record_clean_stop(evidence, None, 1)
+        self.assertNotIn("clean_stops", evidence)
 
     def test_failed_daemon_readiness_reaps_the_new_child(self):
         process = mock.Mock()

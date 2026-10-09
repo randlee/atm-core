@@ -743,10 +743,47 @@ def require_capacity_benchmark_account() -> BenchmarkAccount:
         raise SmokeError(f"benchmark-account preflight failed: {error}") from error
 
 
-def reap_owned_daemon(process: subprocess.Popen[str]) -> None:
-    """Terminate and reap the benchmark-owned child without mistaking a zombie for a leak."""
+#: The shipped daemon's clean-stop bound: SIGTERM to process exit.
+CLEAN_STOP_LIMIT_SECONDS = 5.0
+
+
+def reap_owned_daemon(process: subprocess.Popen[str]) -> float | None:
+    """Terminate and reap the benchmark-owned child without mistaking a zombie for a leak.
+
+    Returns the seconds from the stop request to the reaped exit. Windows
+    termination is forced (``taskkill /F``), not a clean stop, so it is not
+    measured there.
+    """
+    started = time.monotonic()
     terminate_process(process.pid)
     process.wait(timeout=10.0)
+    return None if os.name == "nt" else time.monotonic() - started
+
+
+def record_clean_stop(
+    evidence: dict[str, Any], stop_seconds: float | None, exit_code: int | None,
+) -> None:
+    """Record one measured clean stop and fail it over the bound or on a non-zero exit."""
+    if stop_seconds is None:
+        return
+    evidence.setdefault("clean_stops", []).append(
+        {
+            "stop_seconds": round(stop_seconds, 3),
+            "limit_seconds": CLEAN_STOP_LIMIT_SECONDS,
+            "exit_code": exit_code,
+        }
+    )
+    print(
+        f"atm-daemon clean stop: {stop_seconds:.3f}s "
+        f"(limit {CLEAN_STOP_LIMIT_SECONDS:g}s, exit {exit_code})"
+    )
+    if exit_code != 0:
+        raise SmokeError(f"atm-daemon clean stop exited {exit_code}, not 0")
+    if stop_seconds > CLEAN_STOP_LIMIT_SECONDS:
+        raise SmokeError(
+            f"atm-daemon clean stop took {stop_seconds:.3f}s, over the "
+            f"{CLEAN_STOP_LIMIT_SECONDS:g}s bound"
+        )
 
 
 LIFECYCLE_RECOVERY = {

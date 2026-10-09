@@ -1,10 +1,11 @@
-//! Real process-exit proof for the daemon shutdown SLO.
+//! Real process-exit proof of the daemon shutdown sequence.
 //!
 //! The parent re-executes this test binary as a child that composes the
 //! daemon on its own multi-thread runtime, exports to a collector living in
 //! the parent process, and stops on request: `shutdown_replacement_daemon`,
 //! runtime teardown (which releases abandoned SDK blocking calls), process
-//! exit. The parent times the stop request to the child's exit status.
+//! exit. The parent awaits the child's exit status. The 5s/10s stop bounds
+//! of the shipped binary are measured by the benchmark smoke run, not here.
 #![cfg(test)]
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -78,8 +79,7 @@ fn exit_proof_child() {
         observe(&probe, daemon.shutdown())
             .await
             .expect("child daemon shutdown");
-        // The stop SLO holds by construction; the parent sees a failure here
-        // as an unsuccessful exit.
+        // The parent sees a failure here as an unsuccessful exit.
         assert_one_shutdown_deadline(&probe.steps());
     });
     drop(runtime);
@@ -347,12 +347,12 @@ fn pre_stop_export_gate_rejects_a_missing_export() {
 }
 
 /// Positive: with the task queue full and a collector that never answers,
-/// the daemon process exits successfully, its shutdown steps sharing the one
-/// deadline fixed at entry, so the 10s force SLO holds by construction.
+/// the daemon process exits successfully after shutdown, its shutdown steps
+/// sharing the one deadline fixed at entry.
 /// Negative: no elapsed time is asserted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::serial(slo)]
-async fn process_exits_within_ten_seconds_with_full_queue_and_stalled_collector() {
+async fn process_exits_successfully_after_shutdown_with_full_queue_and_stalled_collector() {
     let stalled = Receiver::start(true).await;
     let endpoint = stalled.endpoint.clone();
     let capture = stalled.capture.clone();
@@ -385,12 +385,12 @@ async fn process_exits_within_ten_seconds_with_full_queue_and_stalled_collector(
 }
 
 /// Positive: with a healthy collector the daemon process exits successfully
-/// after flushing its export, its shutdown steps sharing the one deadline
-/// fixed at entry, so the 5s clean-stop SLO holds by construction.
+/// after a clean shutdown that flushed its export, its shutdown steps sharing
+/// the one deadline fixed at entry.
 /// Negative: no elapsed time is asserted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::serial(slo)]
-async fn process_exits_within_five_seconds_when_clean() {
+async fn process_exits_successfully_after_clean_shutdown() {
     let healthy = Receiver::start(false).await;
     let endpoint = healthy.endpoint.clone();
     tokio::task::spawn_blocking(move || stop_to_exit("clean", Some(&endpoint), None))
@@ -847,8 +847,8 @@ async fn line_with(lines: &Arc<Mutex<mpsc::Receiver<String>>>, marker: &'static 
 /// and the task queue fills behind it. Together: every task record is counted
 /// exactly once in the runtime counters, doctor's loss counts equal those
 /// runtime counts while the stalled export shows only as the SDK failure
-/// state, and every shutdown step shares the one deadline fixed at entry, so
-/// the 10s force SLO holds by construction; no elapsed time is asserted.
+/// state, and every shutdown step shares the one deadline fixed at entry; no
+/// elapsed time is asserted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::serial(slo)]
 async fn delivered_export_then_full_backlog_behind_stall() {

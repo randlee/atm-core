@@ -160,7 +160,10 @@ gRPC (tonic). No other observability facade or HTTP exporter is composed.
   (bounded by `min(1s, remaining)`). The first shutdown caller
   owns provider shutdown, so a cancelled or concurrent caller waits for the
   same stored outcome until its own deadline. A timeout abandons the wait,
-  not the SDK call, and process exit releases it.
+  not the SDK call, and process exit releases it. The stop time of the
+  shipped binary (SIGTERM to exit) is an integration property: the benchmark
+  smoke run (`just smoke admission-capacity`) measures every clean stop of its
+  daemon, reports it, and fails the run over 5s or on a non-zero exit.
 - Health: `Inert` with no endpoint; `Healthy` when configured and no loss or
   failure has been observed; `Degraded` when the runtime counted
   `dropped_full` or `dropped_failure`; `Unavailable` with

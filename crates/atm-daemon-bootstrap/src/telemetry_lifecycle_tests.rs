@@ -1140,8 +1140,7 @@ fn unreachable_collector_child() {
         observe(&probe, daemon.shutdown())
             .await
             .expect("shutdown result is the listener's");
-        // The 5s clean-stop SLO holds by construction: every step shares the
-        // one deadline fixed at shutdown entry.
+        // Every step shares the one deadline fixed at shutdown entry.
         assert_one_shutdown_deadline(&probe.steps());
     });
     drop(runtime);
@@ -1185,9 +1184,9 @@ async fn runtime_losses_reach_doctor_json_as_one_degraded_finding() {
 }
 
 /// Positive: a collector that accepts connections but never answers leaves
-/// task results unchanged, and daemon shutdown with a stalled exporter keeps
-/// the clean-stop SLO by construction (every step shares the one deadline
-/// fixed at entry), retaining the terminal export failure.
+/// task results unchanged, and daemon shutdown with a stalled exporter gives
+/// every step the one deadline fixed at entry, retaining the terminal export
+/// failure.
 /// Negative: no elapsed time is compared.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[serial_test::serial(slo)]

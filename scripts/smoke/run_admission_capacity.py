@@ -107,6 +107,7 @@ from scripts.smoke.admission_capacity_support import (
     release_binary,
     release_version,
     reap_owned_daemon,
+    record_clean_stop,
     require_capacity_benchmark_account,
     require_managed_peer_wire_security,
     require_ready_managed_doctor,
@@ -489,7 +490,8 @@ def run_capacity(
         nonlocal process, daemon_output
         if process is None:
             return
-        reap_owned_daemon(process)
+        stopped = process
+        stop_seconds = reap_owned_daemon(stopped)
         if daemon_output is not None:
             daemon_output.join()
             captured_output = daemon_output.evidence()
@@ -498,6 +500,7 @@ def run_capacity(
                 evidence[output_key] = captured_output
         process = None
         daemon_output = None
+        record_clean_stop(evidence, stop_seconds, stopped.returncode)
 
     def start_daemon(mode: str = launch_peer_wire_security) -> None:
         """Start the exact released daemon and retain its ownership handle."""
