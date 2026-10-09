@@ -360,9 +360,9 @@ mod tests {
         impl crate::boundary::sealed::Sealed for Sink {}
         impl TaskTelemetrySink for Sink {
             fn emit(&self, _record: TaskTelemetryRecord) -> Result<(), TaskTelemetryError> {
+                Ok(())
             }
         }
-            }
         fn accepts_dyn(_: &dyn TaskTelemetrySink) {}
         let sink: Arc<dyn TaskTelemetrySink> = Arc::new(Sink);
         accepts_dyn(&*sink);
