@@ -453,8 +453,6 @@ struct SinkState {
     last_dropped: u64,
     degraded_since: Option<Instant>,
     last_transition: Option<Instant>,
-    #[cfg(test)]
-    emitted_codes: Vec<&'static str>,
 }
 
 impl DegradationMonitor {
@@ -470,8 +468,6 @@ impl DegradationMonitor {
         if dropped_total > state.last_dropped && state.degraded_since.is_none() && !rate_limited {
             state.degraded_since = Some(now);
             state.last_transition = Some(now);
-            #[cfg(test)]
-            state.emitted_codes.push("ATM_LOG_SINK_DEGRADED");
             tracing::warn!(
                 origin = "timeline",
                 code = "ATM_LOG_SINK_DEGRADED",
@@ -486,8 +482,6 @@ impl DegradationMonitor {
         {
             state.degraded_since = None;
             state.last_transition = Some(now);
-            #[cfg(test)]
-            state.emitted_codes.push("ATM_LOG_SINK_RECOVERED");
             tracing::warn!(
                 origin = "timeline",
                 code = "ATM_LOG_SINK_RECOVERED",
@@ -763,41 +757,70 @@ mod tests {
         }
     }
 
-    #[test]
-    fn ac7_saturation_state_transitions_from_degraded_to_recovered_after_quiet_window() {
-        let monitor = DegradationMonitor::default();
-        monitor.observe("timeline", 1);
-        {
-            let mut sinks = monitor.sinks.lock().expect("monitor state");
-            let state = sinks.get_mut("timeline").expect("degraded state");
-            assert!(state.degraded_since.is_some());
-            // `Instant::now() - Duration` panics on arithmetic underflow if
-            // the process monotonic clock has less uptime than the offset
-            // (possible on a just-booted VM). Use `checked_sub` and fail with
-            // a clear diagnostic instead of an opaque subtraction panic.
-            state.degraded_since = Some(
-                std::time::Instant::now()
-                    .checked_sub(std::time::Duration::from_secs(
-                        DEGRADATION_RECOVERY_WINDOW_SECS + 1,
-                    ))
-                    .expect(
-                        "process monotonic clock must have at least \
-                         DEGRADATION_RECOVERY_WINDOW_SECS + 1s of uptime to exercise \
-                         the recovery-window transition",
-                    ),
-            );
-            state.last_transition = None;
+    /// Captures formatted tracing output, the observable the monitor emits through.
+    #[derive(Clone, Default)]
+    struct LogCapture(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for LogCapture {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().expect("capture").extend_from_slice(bytes);
+            Ok(bytes.len())
         }
 
-        monitor.observe("timeline", 1);
-        let sinks = monitor.sinks.lock().expect("monitor state");
-        assert!(
-            sinks
-                .get("timeline")
-                .expect("recovered state")
-                .degraded_since
-                .is_none()
-        );
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn ac7_saturation_state_transitions_from_degraded_to_recovered_after_quiet_window() {
+        let capture = LogCapture::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer({
+                let capture = capture.clone();
+                move || capture.clone()
+            })
+            .with_ansi(false)
+            .finish();
+        tracing::subscriber::with_default(subscriber, || {
+            let monitor = DegradationMonitor::default();
+            monitor.observe("timeline", 1);
+            {
+                let mut sinks = monitor.sinks.lock().expect("monitor state");
+                let state = sinks.get_mut("timeline").expect("degraded state");
+                assert!(state.degraded_since.is_some());
+                // `Instant::now() - Duration` panics on arithmetic underflow if
+                // the process monotonic clock has less uptime than the offset
+                // (possible on a just-booted VM). Use `checked_sub` and fail with
+                // a clear diagnostic instead of an opaque subtraction panic.
+                state.degraded_since = Some(
+                    std::time::Instant::now()
+                        .checked_sub(std::time::Duration::from_secs(
+                            DEGRADATION_RECOVERY_WINDOW_SECS + 1,
+                        ))
+                        .expect(
+                            "process monotonic clock must have at least \
+                             DEGRADATION_RECOVERY_WINDOW_SECS + 1s of uptime to exercise \
+                             the recovery-window transition",
+                        ),
+                );
+                state.last_transition = None;
+            }
+
+            monitor.observe("timeline", 1);
+            let sinks = monitor.sinks.lock().expect("monitor state");
+            assert!(
+                sinks
+                    .get("timeline")
+                    .expect("recovered state")
+                    .degraded_since
+                    .is_none()
+            );
+        });
+        let output = String::from_utf8(capture.0.lock().expect("capture").clone()).expect("utf8");
+        let degraded = output.find("ATM_LOG_SINK_DEGRADED").expect(&output);
+        let recovered = output.find("ATM_LOG_SINK_RECOVERED").expect(&output);
+        assert!(degraded < recovered, "{output}");
     }
 
     fn test_retained_log_policy() -> atm_observability::RetainedLogPolicy {
