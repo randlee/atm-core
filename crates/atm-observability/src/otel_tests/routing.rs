@@ -109,7 +109,9 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
         if destination != LogDestination::File {
             receiver
                 .capture
-                .wait(|| receiver.capture.logs.lock().unwrap().len() >= 2)
+                .wait("two log exports", || {
+                    receiver.capture.logs.lock().unwrap().len() >= 2
+                })
                 .await;
             let logs = receiver.capture.logs.lock().unwrap();
             assert_eq!(

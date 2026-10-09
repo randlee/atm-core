@@ -4706,7 +4706,13 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
+    /// Positive: a prompt-handoff write held inside the store while the
+    /// response deadline passes is recorded as a timeout, and the Tokio worker
+    /// stays live. The write is gated, so it is provably running when the
+    /// paused clock is advanced past the deadline; nothing races a timer.
+    /// Negative: the real-clock deadline is 30s, a failure-only bound, so
+    /// admission can never observe it expired.
+    #[tokio::test(start_paused = true)]
     async fn record_bridge_timeout_logs_and_emission_succeeds() {
         let dispatch = task_handoff_dispatch(Some("BB6-TIMEOUT"));
         let layer = PromptHandoffErrorLayer::default();
@@ -4717,23 +4723,34 @@ pub(crate) mod tests {
             RuntimeHealth::default(),
         );
         let store = Arc::new(atm_storage::DummyTaskStore::default());
-        store.set_prompt_handoff_delay(Duration::from_millis(100));
+        let (entered, release) = store.hold_next_prompt_handoff();
+        let response_deadline = Duration::from_secs(30);
+        let telemetry = atm_runtime::TaskTelemetryRuntime::disabled();
         let timer_fired = Arc::new(AtomicBool::new(false));
         let timer_observed = Arc::clone(&timer_fired);
         let timer = tokio::spawn(async move {
             tokio::task::yield_now().await;
             timer_observed.store(true, Ordering::Release);
         });
-        crate::prompt_handoff_record::record_prompt_handoff(
-            &bridge,
-            RequestDeadline::after(Duration::from_millis(20)),
-            Ok(store),
-            &dispatch,
-            PromptTrigger::Steer,
-            IsoTimestamp::now(),
-            &atm_runtime::TaskTelemetryRuntime::disabled(),
-        )
-        .await;
+        tokio::join!(
+            crate::prompt_handoff_record::record_prompt_handoff(
+                &bridge,
+                RequestDeadline::after(response_deadline),
+                Ok(store),
+                &dispatch,
+                PromptTrigger::Steer,
+                IsoTimestamp::now(),
+                &telemetry,
+            ),
+            async {
+                tokio::task::spawn_blocking(move || entered.recv())
+                    .await
+                    .expect("entered reader joins")
+                    .expect("the store write is held");
+                tokio::time::advance(response_deadline).await;
+            },
+        );
+        drop(release);
         timer.await.expect("independent timer joins");
 
         assert!(

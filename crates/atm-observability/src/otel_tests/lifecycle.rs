@@ -1,7 +1,9 @@
 #![cfg(test)]
 
 use super::*;
-use crate::otel_setup::{EXPORT_BATCH, EXPORT_INTERVAL, EXPORT_QUEUE, EXPORT_TIMEOUT};
+use crate::otel_setup::{
+    EXPORT_BATCH, EXPORT_INTERVAL, EXPORT_QUEUE, EXPORT_TIMEOUT, EXPORT_TRANSPORT_TIMEOUT,
+};
 use crate::{ExportDiagnostics, TracingBridgeLayer, build_retained_logger};
 use atm_core::observability::{
     AtmTelemetryExportFailure, AtmTelemetryExportHealth, AtmTelemetryExportState,
@@ -73,6 +75,7 @@ fn production_limits_are_distinct_from_test_deadlines_and_terminal_failure_is_re
     assert_eq!(EXPORT_QUEUE, 256);
     assert_eq!(EXPORT_BATCH, 256);
     assert_eq!(EXPORT_TIMEOUT, Duration::from_millis(400));
+    assert_eq!(EXPORT_TRANSPORT_TIMEOUT, Duration::from_millis(300));
     assert_eq!(EXPORT_INTERVAL, Duration::from_secs(1));
     let diagnostics = ExportDiagnostics::default();
     diagnostics.shutdown_wait_timed_out();
@@ -294,7 +297,7 @@ async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() 
     let metric = tokio::task::spawn_blocking(move || metrics.shutdown());
     let capture = &receiver.capture;
     capture
-        .wait(|| {
+        .wait("an export started for every signal", || {
             Signal::ALL
                 .iter()
                 .all(|signal| capture.started(*signal) >= 1)
@@ -313,7 +316,7 @@ async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() 
     // cannot fire). The pinned SDK wraps the tonic failure as InternalFailure
     // text naming the signal's client, which is then the only possible shape.
     capture
-        .wait(|| {
+        .wait("an export finished for every signal", || {
             Signal::ALL
                 .iter()
                 .all(|signal| capture.finished(*signal) >= 1)
@@ -439,7 +442,7 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     let mut metric_call = tokio::task::spawn_blocking(move || metrics.shutdown());
     let capture = &receiver.capture;
     capture
-        .wait(|| {
+        .wait("an export started for every signal", || {
             Signal::ALL
                 .iter()
                 .all(|signal| capture.started(*signal) >= 1)

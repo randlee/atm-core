@@ -1065,6 +1065,42 @@ allowed_dependencies = ["atm-core", "rusqlite"]
                 rendered,
             )
 
+    def test_manifest_dependency_allowlist_locks_every_listed_boundary_record(self) -> None:
+        """A manifest allowlist naming several records locks each of them, so a
+        second record of the same owner cannot drift."""
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            active = BASE_BOUNDARY_TOML.replace('state = "planned"', 'state = "active"')
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text=active)
+            second = (
+                active.replace('boundary_id = "BOUNDARY-MailStore-Sqlite"', 'boundary_id = "BOUNDARY-Second-Sqlite"')
+                .replace('allowed_dependencies = ["atm-core", "rusqlite"]', 'allowed_dependencies = ["atm-core"]')
+            )
+            (repo_root / "boundaries/atm-storage-rusqlite/second.toml").write_text(second, encoding="utf-8")
+            config_path = repo_root / ".just/lint-config.toml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8")
+                + """
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
+boundary_record_path = ["boundaries/atm-storage-rusqlite/mail-store.toml", "boundaries/atm-storage-rusqlite/second.toml"]
+allowed_dependencies = ["atm-core", "rusqlite"]
+""",
+                encoding="utf-8",
+            )
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            diverged = [item for item in rendered if "diverges from its manifest dependency allowlist" in item]
+            self.assertEqual(
+                diverged,
+                [
+                    "boundaries/atm-storage-rusqlite/second.toml:1 [BOUNDARY-Second-Sqlite]: "
+                    "boundary record allowed_dependencies diverges from its manifest dependency allowlist "
+                    "(missing ['rusqlite']; extra [])"
+                ],
+            )
+
     def test_collect_boundary_violations_flags_duplicate_boundary_ids(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -1422,6 +1458,130 @@ tempfile = "3"
                     for item in rendered
                 ),
                 rendered,
+            )
+
+    def test_collect_boundary_violations_confines_public_trait_test_doubles_to_the_allowlist(
+        self,
+    ) -> None:
+        """A trait with a public production implementation still confines its
+        test doubles: a double in a grandchild file of a consumer crate's
+        `#[cfg(test)]` module, or an unlisted one in a test-support crate, is
+        flagged; a listed module's doubles and production impls are not.
+        """
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            (repo_root / "Cargo.toml").write_text(
+                ROOT_MANIFEST.replace(
+                    '"crates/atm-daemon"]', '"crates/atm-daemon", "crates/atm-test-support"]'
+                ),
+                encoding="utf-8",
+            )
+            support = repo_root / "crates/atm-test-support"
+            (support / "src").mkdir(parents=True)
+            (support / "Cargo.toml").write_text(
+                '[package]\nname = "atm-test-support"\nversion.workspace = true\n'
+                'edition.workspace = true\npublish = false\n\n[lib]\nname = "atm_test_support"\n',
+                encoding="utf-8",
+            )
+            (support / "src/lib.rs").write_text("pub mod sinks;\npub mod other;\n", encoding="utf-8")
+            (support / "src/sinks.rs").write_text("impl TestSink for ListedSink {}\n", encoding="utf-8")
+            (support / "src/other.rs").write_text("impl TestSink for UnlistedSink {}\n", encoding="utf-8")
+            public_record = (
+                BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "TestSink"')
+                .replace('owner_package = "atm-storage-rusqlite"', 'owner_package = "atm-core"')
+                .replace('owner_crate_path = "atm_storage_rusqlite"', 'owner_crate_path = "atm_core"')
+                .replace(
+                    'allowed_dependents = ["atm-daemon"]',
+                    'allowed_dependents = ["agent-team-mail", "atm-daemon", "atm-storage-rusqlite"]',
+                )
+                .replace('type = "SqliteMailStore"', 'type = "NoopSink"')
+                .replace('module = "atm_storage_rusqlite::mail_store"', 'module = "atm_core"')
+                .replace('visibility = "private"\nconstructor = "private"', 'visibility = "public"\nconstructor = "public"')
+                .replace('state = "planned"', 'state = "active"')
+                .replace('forbidden = ["SqliteMailStore", "SqliteMailStore::open", "rusqlite::Connection"]', "forbidden = []")
+                .replace(
+                    'allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]',
+                    'allowed_test_double_paths = ["atm_test_support::sinks"]',
+                )
+            )
+            self.write_toml_record(repo_root, "atm-core", text=public_record)
+            (repo_root / "crates/atm-core/src/lib.rs").write_text(
+                "impl TestSink for NoopSink {}\n", encoding="utf-8"
+            )
+            daemon_src = repo_root / "crates/atm-daemon/src"
+            (daemon_src / "lib.rs").write_text(
+                "impl TestSink for ProductionSink {}\n\n#[cfg(test)]\nmod lifecycle_tests;\n",
+                encoding="utf-8",
+            )
+            (daemon_src / "lifecycle_tests.rs").write_text("mod stalled;\n", encoding="utf-8")
+            (daemon_src / "lifecycle_tests").mkdir()
+            (daemon_src / "lifecycle_tests/stalled.rs").write_text(
+                "impl TestSink for StallingSink {}\n", encoding="utf-8"
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+
+            for allowed in ("NoopSink", "ProductionSink", "ListedSink"):
+                self.assertFalse(any(allowed in item for item in rendered), rendered)
+            for flagged in (
+                "atm_daemon::lifecycle_tests::stalled::StallingSink",
+                "atm_test_support::other::UnlistedSink",
+            ):
+                self.assertTrue(
+                    any(
+                        f"test-double implementation '{flagged}'" in item
+                        and "allowed_test_double_paths" in item
+                        for item in rendered
+                    ),
+                    (flagged, rendered),
+                )
+
+    def test_telemetry_sink_rule_flags_a_production_sink_outside_owner_and_exporter(self) -> None:
+        """A record naming a telemetry-sink rule confines production impls of its
+        trait to the owner and exporting crates; test-scoped impls pass."""
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            record = (
+                BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "TaskTelemetrySink"')
+                .replace('owner_package = "atm-storage-rusqlite"', 'owner_package = "atm-core"')
+                .replace('owner_crate_path = "atm_storage_rusqlite"', 'owner_crate_path = "atm_core"')
+                .replace(
+                    'allowed_dependents = ["atm-daemon"]',
+                    'allowed_dependents = ["agent-team-mail", "atm-daemon", "atm-storage-rusqlite"]',
+                )
+                .replace('state = "planned"', 'state = "active"')
+                .replace('forbidden = ["SqliteMailStore", "SqliteMailStore::open", "rusqlite::Connection"]', "forbidden = []")
+                .replace('allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]', "allowed_test_double_paths = []")
+            )
+            rule = "LINT-BOUNDARY-TASK-TELEMETRY-SINK-REFERENCES"
+            record = record.replace('lint_rules = ["LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES"]', f'lint_rules = ["{rule}"]')
+            self.write_toml_record(repo_root, "atm-core", text=record)
+            (repo_root / "crates/atm-core/src/lib.rs").write_text(
+                "impl TaskTelemetrySink for NoopTaskTelemetrySink {}\n", encoding="utf-8"
+            )
+            (repo_root / "crates/atm-daemon/src/lib.rs").write_text(
+                "#[cfg(test)]\nmod tests {\n    impl TaskTelemetrySink for GatedSink {}\n}\n",
+                encoding="utf-8",
+            )
+
+            clean = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertFalse(any(rule in item for item in clean), clean)
+
+            (repo_root / "crates/atm-daemon/src/lib.rs").write_text(
+                "impl TaskTelemetrySink for DaemonSink {}\n", encoding="utf-8"
+            )
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            flagged = [item for item in rendered if rule in item]
+            self.assertEqual(
+                flagged,
+                [
+                    f"crates/atm-daemon/src/lib.rs:1: {rule} production TaskTelemetrySink "
+                    "implementation outside atm-core and atm-observability"
+                ],
             )
 
     def test_collect_boundary_violations_scans_consumer_crate_cfg_test_src_module_for_trait_only_doubles(

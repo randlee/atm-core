@@ -21,9 +21,9 @@ io_owns = ["best_effort_telemetry_export"]
 io_forbidden = ["database_io", "socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm-runtime", "atm-observability"]
+allowed_dependents = ["atm-runtime", "atm-observability", "atm-runtime-test-support"]
 allowed_dependencies = []
-forbidden_edges = ["atm -> telemetry-implementation", "atm-http-runtime -> telemetry-implementation", "atm-storage -> telemetry-implementation", "atm-storage-rusqlite -> telemetry-implementation", "atm-daemon-bootstrap -> telemetry-implementation", "atm-core -> sc-observability"]
+forbidden_edges = ["atm -> opentelemetry-otlp", "atm-http-runtime -> opentelemetry-otlp", "atm-storage -> opentelemetry-otlp", "atm-storage-rusqlite -> opentelemetry-otlp", "atm-daemon-bootstrap -> opentelemetry-otlp", "atm-core -> sc-observability"]
 
 [references]
 scope = "outside_owner_crate"

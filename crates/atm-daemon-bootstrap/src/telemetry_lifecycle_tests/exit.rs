@@ -18,6 +18,7 @@ use super::{
     Daemon, DaemonObservability, EXPORT_WAIT, assert_one_shutdown_deadline, endpoint_env,
     exported_counts, sent_message_id, task_record,
 };
+use crate::shutdown_probe::{Probe, observe};
 use atm_core::observability::{AtmTelemetryExportHealth, AtmTelemetryExportState};
 use atm_core::test_support::FakeEnvSource;
 
@@ -73,11 +74,13 @@ fn exit_proof_child() {
             .await
             .expect("stdin reader")
             .expect("stop request");
-        let observability = daemon.observability.clone();
-        daemon.shutdown().await.expect("child daemon shutdown");
+        let probe = Probe::new();
+        observe(&probe, daemon.shutdown())
+            .await
+            .expect("child daemon shutdown");
         // The stop SLO holds by construction; the parent sees a failure here
         // as an unsuccessful exit.
-        assert_one_shutdown_deadline(&observability.shutdown_steps_for_test());
+        assert_one_shutdown_deadline(&probe.steps());
     });
     drop(runtime);
 }
@@ -163,16 +166,40 @@ fn await_eof_then_exit<T>(
             panic!("{what} did not close stdout before its deadline");
         }
     };
-    loop {
-        if let Some(status) = child.try_wait().expect("poll child exit") {
-            return (carried, status);
-        }
-        if Instant::now() >= deadline {
-            kill_and_reap(child);
-            panic!("{what} closed stdout but did not exit before its deadline");
-        }
-        std::thread::yield_now();
-    }
+    // The exit is awaited, not polled. A watchdog kills the child by pid only
+    // if it has not exited by `deadline`; that failure path then panics.
+    let pid = child.id();
+    let (exited, exit_seen) = mpsc::channel::<()>();
+    let (status, killed) = std::thread::scope(|scope| {
+        let watchdog = scope.spawn(move || {
+            let timed_out = matches!(
+                exit_seen.recv_timeout(deadline.saturating_duration_since(Instant::now())),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            );
+            if timed_out {
+                kill_pid(pid);
+            }
+            timed_out
+        });
+        let status = child.wait().expect("await child exit");
+        let _ = exited.send(());
+        (status, watchdog.join().expect("exit watchdog joins"))
+    });
+    assert!(
+        !killed,
+        "{what} closed stdout but did not exit before its deadline"
+    );
+    (carried, status)
+}
+
+/// Force-kills an unreaped child by pid; only the hang path calls it.
+fn kill_pid(pid: u32) {
+    let pid = pid.to_string();
+    #[cfg(unix)]
+    let killed = Command::new("kill").args(["-KILL", &pid]).status();
+    #[cfg(windows)]
+    let killed = Command::new("taskkill").args(["/F", "/PID", &pid]).status();
+    drop(killed);
 }
 
 fn child_execution_is_proven(output: &std::process::Output) -> bool {
@@ -740,8 +767,11 @@ fn combined_lifecycle_child() {
         assert!(task.snapshot().dropped_full > 0, "the task queue is full");
         let observability = daemon.observability.clone();
         handshake("BD6-READY".to_owned()).await;
-        daemon.shutdown().await.expect("child daemon shutdown");
-        assert_one_shutdown_deadline(&observability.shutdown_steps_for_test());
+        let probe = Probe::new();
+        observe(&probe, daemon.shutdown())
+            .await
+            .expect("child daemon shutdown");
+        assert_one_shutdown_deadline(&probe.steps());
 
         let counts = task.snapshot();
         assert_eq!(

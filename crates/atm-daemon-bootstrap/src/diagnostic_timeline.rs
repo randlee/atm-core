@@ -115,9 +115,10 @@ fn start_flush_worker() {
     *worker_slot = Some(FlushWorker { stop_tx, join });
 }
 
-/// Stops and joins the bootstrap-owned flush worker during daemon shutdown.
-/// The worker receives an explicit signal instead of relying on process exit.
-pub(crate) fn stop_flush_worker() {
+/// Stops the bootstrap-owned flush worker during daemon shutdown and waits
+/// for it until `deadline`. The worker receives an explicit signal instead of
+/// relying on process exit.
+pub(crate) async fn stop_flush_worker(deadline: tokio::time::Instant) {
     let Some(worker) = FLUSH_WORKER
         .lock()
         .ok()
@@ -125,8 +126,16 @@ pub(crate) fn stop_flush_worker() {
     else {
         return;
     };
+    stop_worker(worker, deadline).await;
+}
+
+/// Signals `worker` to stop and joins it on the blocking pool, bounded by
+/// `deadline`. The worker may be inside a SQLite write, so a timeout abandons
+/// the wait, not the thread: it exits on the signal once that write ends.
+async fn stop_worker(worker: FlushWorker, deadline: tokio::time::Instant) {
     let _ = worker.stop_tx.send(());
-    let _ = worker.join.join();
+    let join = tokio::task::spawn_blocking(move || worker.join.join());
+    drop(tokio::time::timeout_at(deadline, join).await);
 }
 
 fn run_flush_worker(stop_rx: Receiver<()>) {
@@ -869,7 +878,60 @@ mod tests {
             std::sync::Arc::ptr_eq(&first, &second),
             "a second attach_timeline call must not replace the active writer or its flush cadence"
         );
-        super::stop_flush_worker();
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("stop runtime")
+            .block_on(super::stop_flush_worker(
+                tokio::time::Instant::now() + std::time::Duration::from_secs(30),
+            ));
+    }
+
+    /// Positive: a flush worker held inside its flush (as in a slow SQLite
+    /// write) does not hold shutdown: the bounded stop returns once its
+    /// deadline passes while the worker is still provably running, and the
+    /// worker exits on the stop signal after it is released.
+    /// Negative: no elapsed time is compared; the 30s timeout is a
+    /// failure-only hang bound for an unbounded join.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_held_flush_worker_does_not_hold_shutdown_past_its_deadline() {
+        let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel::<()>();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let (exited_tx, exited_rx) = std::sync::mpsc::channel::<()>();
+        let join = std::thread::spawn(move || {
+            // Inside `flush_due`: the stop signal is read only after it.
+            entered_tx.send(()).expect("test awaits the held flush");
+            let _ = release_rx.recv();
+            let _ = stop_rx.recv();
+            let _ = exited_tx.send(());
+        });
+        tokio::task::spawn_blocking(move || entered_rx.recv())
+            .await
+            .expect("entered reader")
+            .expect("the worker entered its flush");
+
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(300);
+        tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            super::stop_worker(super::FlushWorker { stop_tx, join }, deadline),
+        )
+        .await
+        .expect("the bounded stop never returned: the join is unbounded");
+        assert!(tokio::time::Instant::now() >= deadline);
+        assert_eq!(
+            exited_rx.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Empty),
+            "the stop returned while the held worker was still running"
+        );
+
+        release_tx.send(()).expect("release the held flush");
+        tokio::task::spawn_blocking(move || {
+            exited_rx.recv_timeout(std::time::Duration::from_secs(30))
+        })
+        .await
+        .expect("exit reader")
+        .expect("the released worker never exited on its stop signal");
     }
 
     #[test]

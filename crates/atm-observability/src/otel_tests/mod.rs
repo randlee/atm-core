@@ -181,7 +181,7 @@ async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
     }
     receiver
         .capture
-        .wait(|| {
+        .wait("a span and a metric export", || {
             !receiver.capture.spans.lock().unwrap().is_empty()
                 && !receiver.capture.metrics.lock().unwrap().is_empty()
         })
