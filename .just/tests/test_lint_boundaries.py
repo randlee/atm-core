@@ -675,6 +675,14 @@ fn send_bad(team_dir: &std::path::Path) {
             self.assertTrue(any("crates/atm-daemon-bootstrap/src/lib.rs:2 " in r for r in rendered), rendered)
             self.assertTrue(any("crates/atm-daemon-bootstrap/src/daemon_observability.rs:1 " in r for r in rendered), rendered)
 
+            nested = src / "nested"
+            nested.mkdir()
+            same_name = nested / "daemon_observability.rs"
+            same_name.write_text("use opentelemetry_sdk::Resource;\n", encoding="utf-8")
+            rendered = [v.render() for v in collect_scb_observability_otel_violations(repo_root, [same_name])]
+            self.assertEqual(len(rendered), 1, rendered)
+            self.assertIn("crates/atm-daemon-bootstrap/src/nested/daemon_observability.rs:1 ", rendered[0])
+
     def test_collect_boundary_violations_rejects_scb_retained_rule_family(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

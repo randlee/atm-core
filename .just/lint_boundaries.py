@@ -372,13 +372,13 @@ SCB_OBSERVABILITY_DIRECT_PATTERNS = (
 _OTEL_ALL = frozenset({"opentelemetry", "opentelemetry_sdk", "opentelemetry_otlp", "tonic"})
 SCB_OBSERVABILITY_OTEL_ROOTS: dict[str, dict[str, frozenset[str]]] = {
     "crates/atm-observability/src/": {
-        "otel_setup.rs": _OTEL_ALL,
-        "otel_logs.rs": _OTEL_ALL,
-        "task_exporter.rs": _OTEL_ALL,
-        "export_diagnostics.rs": _OTEL_ALL,
+        "crates/atm-observability/src/otel_setup.rs": _OTEL_ALL,
+        "crates/atm-observability/src/otel_logs.rs": _OTEL_ALL,
+        "crates/atm-observability/src/task_exporter.rs": _OTEL_ALL,
+        "crates/atm-observability/src/export_diagnostics.rs": _OTEL_ALL,
     },
     "crates/atm-daemon-bootstrap/src/": {
-        "daemon_observability.rs": frozenset({"opentelemetry", "opentelemetry_sdk"}),
+        "crates/atm-daemon-bootstrap/src/daemon_observability.rs": frozenset({"opentelemetry", "opentelemetry_sdk"}),
     },
 }
 # Fixtures are checked as if they sat in the named root, in a file with no allowance.
@@ -3253,7 +3253,7 @@ def collect_scb_observability_otel_violations(
         allowed_crates = (
             frozenset()
             if rel_path in SCB_OBSERVABILITY_OTEL_FIXTURES
-            else SCB_OBSERVABILITY_OTEL_ROOTS[root].get(rel_path.name, frozenset())
+            else SCB_OBSERVABILITY_OTEL_ROOTS[root].get(rel_source, frozenset())
         )
         lines = source_path.read_text(encoding="utf-8").splitlines()
         for line_number, line in non_test_rust_lines(lines):
@@ -3263,7 +3263,7 @@ def collect_scb_observability_otel_violations(
                 crate_name = match.group(1) or match.group(2)
                 if crate_name in allowed_crates:
                     continue
-                allowed_here = ", ".join(sorted(SCB_OBSERVABILITY_OTEL_ROOTS[root])) or "none"
+                allowed_here = ", ".join(sorted(path.rsplit("/", 1)[1] for path in SCB_OBSERVABILITY_OTEL_ROOTS[root])) or "none"
                 violations.append(
                     BoundaryViolation(
                         f"SCB-OBSERVABILITY-002 {rel_source}:{line_number} {crate_name} paths are confined to the modules listed in SCB_OBSERVABILITY_OTEL_ROOTS[{root!r}] ({allowed_here})",

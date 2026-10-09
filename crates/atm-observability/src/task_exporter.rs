@@ -204,7 +204,10 @@ impl TaskExporter {
             identity(&[b"handoff", key.as_bytes(), &encoded])
         };
         let at: SystemTime = record.at.into_inner().into();
-        let attributes = task_attributes(&record);
+        // One encoding serves the size check, the handoff identity and the
+        // allowlisted attribute facts (parsed back, not serialized again).
+        let facts = serde_json::from_slice::<serde_json::Value>(&encoded).ok();
+        let attributes = task_attributes(&record, facts);
         let mut state = self
             .state
             .lock()
@@ -492,7 +495,10 @@ fn assignment_identity(key: TelemetryDigest, assignment: &Assignment) -> Telemet
     ])
 }
 
-fn task_attributes(record: &TaskTelemetryRecord) -> Vec<KeyValue> {
+fn task_attributes(
+    record: &TaskTelemetryRecord,
+    facts: Option<serde_json::Value>,
+) -> Vec<KeyValue> {
     let mut attributes = vec![
         KeyValue::new("atm.task.kind", record.kind.as_str()),
         KeyValue::new("atm.team", record.team.to_string()),
@@ -500,7 +506,7 @@ fn task_attributes(record: &TaskTelemetryRecord) -> Vec<KeyValue> {
         KeyValue::new("atm.task.assignee", record.assignee.to_string()),
     ];
     // Serialize only the contract's explicitly allowlisted, typed facts.
-    if let Ok(serde_json::Value::Object(facts)) = serde_json::to_value(record) {
+    if let Some(serde_json::Value::Object(facts)) = facts {
         for name in [
             "actor",
             "seq",

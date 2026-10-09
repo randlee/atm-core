@@ -28,6 +28,16 @@ fn config(endpoint: &str) -> TelemetryExportConfig {
 }
 
 #[test]
+fn a_rejected_metric_stream_is_a_typed_error_not_a_panic() {
+    let error = crate::otel_setup::task_stream(0).expect_err("zero cardinality is invalid");
+    assert!(
+        error.to_string().starts_with("invalid task metric stream:"),
+        "{error}"
+    );
+    crate::otel_setup::task_stream(32).expect("the production limit builds");
+}
+
+#[test]
 fn setup_without_tokio_returns_safe_error_instead_of_panicking() {
     let diagnostics = crate::ExportDiagnostics::default();
     let result = crate::setup_telemetry(&config("http://127.0.0.1:4317"), &diagnostics);

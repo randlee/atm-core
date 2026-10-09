@@ -122,7 +122,7 @@ pub(crate) fn setup_with_timeouts(
         .build();
     let tracer = tracer_provider(spans, resource.clone(), batch, timeout);
     let logger = logger_provider(logs, resource.clone(), batch, timeout);
-    let meter = meter_provider(metrics, resource, timeout);
+    let meter = meter_provider(metrics, resource, timeout)?;
     let sink = Arc::new(crate::task_exporter::TaskExporter::new(
         tracer.tracer("atm.task"),
         meter.meter("atm.task"),
@@ -349,20 +349,46 @@ fn tracer_provider(
         .build()
 }
 
+/// Per-instrument series cap for the `atm.task.*` metrics.
+const TASK_METRIC_CARDINALITY: usize = 32;
+
+/// The SDK refused to build the cardinality-capped metric stream.
+#[derive(Debug)]
+pub(crate) struct MetricStreamError(String);
+
+impl std::fmt::Display for MetricStreamError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid task metric stream: {}", self.0)
+    }
+}
+
+impl std::error::Error for MetricStreamError {}
+
+pub(crate) fn task_stream(
+    cardinality_limit: usize,
+) -> Result<opentelemetry_sdk::metrics::Stream, MetricStreamError> {
+    opentelemetry_sdk::metrics::Stream::builder()
+        .with_cardinality_limit(cardinality_limit)
+        .build()
+        .map_err(|source| MetricStreamError(source.to_string()))
+}
+
 fn meter_provider(
     metrics: opentelemetry_otlp::MetricExporter,
     resource: Resource,
     timeout: Duration,
-) -> SdkMeterProvider {
-    SdkMeterProvider::builder()
+) -> Result<SdkMeterProvider, MetricStreamError> {
+    // Validate once so a builder failure propagates through setup; the view
+    // below rebuilds the same stream per instrument and cannot then fail.
+    task_stream(TASK_METRIC_CARDINALITY)?;
+    Ok(SdkMeterProvider::builder()
         .with_resource(resource)
         .with_view(|instrument: &opentelemetry_sdk::metrics::Instrument| {
-            instrument.name().starts_with("atm.task.").then(|| {
-                opentelemetry_sdk::metrics::Stream::builder()
-                    .with_cardinality_limit(32)
-                    .build()
-                    .expect("fixed positive cardinality")
-            })
+            instrument
+                .name()
+                .starts_with("atm.task.")
+                .then(|| task_stream(TASK_METRIC_CARDINALITY).ok())
+                .flatten()
         })
         .with_reader(
             PeriodicReader::builder(metrics, Tokio)
@@ -370,5 +396,5 @@ fn meter_provider(
                 .with_timeout(timeout)
                 .build(),
         )
-        .build()
+        .build())
 }
