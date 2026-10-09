@@ -467,7 +467,7 @@ class ManifestSectionRule:
 class ManifestDependencyAllowlist:
     owner_manifest_path: Path
     allowed_dependencies: tuple[str, ...]
-    boundary_record_path: Path | None
+    boundary_record_paths: tuple[Path, ...]
 
 
 @dataclass(frozen=True)
@@ -720,20 +720,23 @@ def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAl
             raise SystemExit(
                 f"[boundaries.manifest_dependency_allowlists][{index}].allowed_dependencies must be an array of non-empty strings"
             )
+        # One owner manifest may lock several of its boundary records.
+        if isinstance(boundary_record_path, str):
+            boundary_record_path = [boundary_record_path]
         if boundary_record_path is not None and (
-            not isinstance(boundary_record_path, str) or not boundary_record_path
+            not isinstance(boundary_record_path, list)
+            or not boundary_record_path
+            or not all(isinstance(item, str) and item for item in boundary_record_path)
         ):
             raise SystemExit(
-                f"[boundaries.manifest_dependency_allowlists][{index}].boundary_record_path must be a non-empty string when present"
+                f"[boundaries.manifest_dependency_allowlists][{index}].boundary_record_path must be a non-empty string or array of non-empty strings when present"
             )
         rules.append(
             ManifestDependencyAllowlist(
                 owner_manifest_path=Path(owner_manifest_path),
                 allowed_dependencies=tuple(allowed_dependencies),
-                boundary_record_path=(
-                    Path(boundary_record_path)
-                    if boundary_record_path is not None
-                    else None
+                boundary_record_paths=tuple(
+                    Path(path) for path in boundary_record_path or ()
                 ),
             )
         )
@@ -1902,8 +1905,8 @@ def collect_manifest_dependency_allowlist_violations(
             )
             continue
 
-        if allowlist.boundary_record_path is not None:
-            record = records_by_path.get(allowlist.boundary_record_path)
+        for boundary_record_path in allowlist.boundary_record_paths:
+            record = records_by_path.get(boundary_record_path)
             if record is None:
                 violations.append(
                     BoundaryViolation(
@@ -1947,8 +1950,8 @@ def collect_manifest_dependency_allowlist_violations(
                 else:
                     actual_production_dependencies.add(canonical_name)
 
-        if allowlist.boundary_record_path is not None:
-            record = records_by_path.get(allowlist.boundary_record_path)
+        for boundary_record_path in allowlist.boundary_record_paths:
+            record = records_by_path.get(boundary_record_path)
             if record is not None and record.allowed_dev_dependencies:
                 documented_production = set(record.allowed_dependencies)
                 documented_dev = set(record.allowed_dev_dependencies)
@@ -2787,6 +2790,50 @@ def is_test_support_crate(info: ManifestInfo) -> bool:
     return info.package_name.endswith("-test-support")
 
 
+# Telemetry sink rules: a production implementation of the record's sink trait
+# lives only in the owner crate (the no-op) or in the named exporting crate
+# (ADR-064). Test-support crates are governed by allowed_test_double_paths.
+TELEMETRY_SINK_IMPLEMENTATION_RULES = {
+    "LINT-BOUNDARY-TASK-TELEMETRY-SINK-REFERENCES": "atm-observability",
+    "LINT-BOUNDARY-WORKFLOW-TELEMETRY-SINK-REFERENCES": "atm-observability",
+}
+
+
+def collect_telemetry_sink_implementation_violations(
+    repo_root: Path, records: list[BoundaryRecord]
+) -> list[BoundaryViolation]:
+    violations: list[BoundaryViolation] = []
+    infos = manifest_info(repo_root)
+    for record in records:
+        if record.public_trait is None:
+            continue
+        for rule in record.lint_rules:
+            exporter = TELEMETRY_SINK_IMPLEMENTATION_RULES.get(rule)
+            if exporter is None:
+                continue
+            pattern = re.compile(
+                rf"\bimpl(?:\s*<[^>{{;]*>)?\s+(?:[A-Za-z0-9_:]+::)?{re.escape(record.public_trait)}\s+for\b"
+            )
+            for info in infos:
+                if {record.owner_package, exporter} & set(info.aliases) or is_test_support_crate(info):
+                    continue
+                for source_path in source_files_for_crate(info):
+                    lines = source_path.read_text(encoding="utf-8").splitlines()
+                    test_scope = rust_file_test_scope(source_path, lines)
+                    rel_source = source_path.relative_to(repo_root).as_posix()
+                    for index, line in enumerate(lines):
+                        if test_scope[index] or is_comment_line(line) or not pattern.search(line):
+                            continue
+                        violations.append(
+                            BoundaryViolation(
+                                f"{rel_source}:{index + 1}",
+                                f"{rule} production {record.public_trait} implementation outside "
+                                f"{record.owner_package} and {exporter}",
+                            )
+                        )
+    return violations
+
+
 def collect_active_implementation_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
     alias_map = manifest_by_alias(repo_root)
@@ -3216,6 +3263,7 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations.extend(collect_reference_violations(repo_root, records))
     violations.extend(collect_test_bypass_violations(repo_root, records))
     violations.extend(collect_active_implementation_violations(repo_root, records))
+    violations.extend(collect_telemetry_sink_implementation_violations(repo_root, records))
     violations.extend(collect_io_forbidden_source_violations(repo_root, records))
     violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
@@ -3413,6 +3461,7 @@ def run(repo_root: Path) -> int:
     violations.extend(collect_reference_violations(repo_root, records))
     violations.extend(collect_test_bypass_violations(repo_root, records))
     violations.extend(collect_active_implementation_violations(repo_root, records))
+    violations.extend(collect_telemetry_sink_implementation_violations(repo_root, records))
     violations.extend(collect_io_forbidden_source_violations(repo_root, records))
     violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
