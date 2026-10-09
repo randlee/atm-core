@@ -5,9 +5,7 @@ use std::collections::HashMap;
 #[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;
 #[cfg(any(test, feature = "test-utils"))]
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-#[cfg(any(test, feature = "test-utils"))]
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
@@ -314,8 +312,17 @@ pub struct DummyTaskStore {
     escalation_recipients: Mutex<HashMap<String, Vec<AgentAddress>>>,
     fail_reminders: bool,
     fail_prompt_handoffs: AtomicBool,
-    prompt_handoff_delay_millis: AtomicU64,
+    prompt_handoff_hold: Mutex<Option<PromptHandoffHold>>,
     fail_escalation_recipient_reads: AtomicBool,
+}
+
+/// Holds the next prompt-handoff write: it signals `entered`, then blocks
+/// until `release` is used or dropped.
+#[cfg(any(test, feature = "test-utils"))]
+#[derive(Debug)]
+struct PromptHandoffHold {
+    entered: std::sync::mpsc::Sender<()>,
+    release: std::sync::mpsc::Receiver<()>,
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -332,7 +339,7 @@ impl DummyTaskStore {
             escalation_recipients: Mutex::new(HashMap::new()),
             fail_reminders,
             fail_prompt_handoffs: AtomicBool::new(false),
-            prompt_handoff_delay_millis: AtomicU64::new(0),
+            prompt_handoff_hold: Mutex::new(None),
             fail_escalation_recipient_reads: AtomicBool::new(false),
         }
     }
@@ -341,11 +348,20 @@ impl DummyTaskStore {
         self.fail_prompt_handoffs.store(fail, Ordering::SeqCst);
     }
 
-    pub fn set_prompt_handoff_delay(&self, delay: Duration) {
-        self.prompt_handoff_delay_millis.store(
-            u64::try_from(delay.as_millis()).unwrap_or(u64::MAX),
-            Ordering::SeqCst,
-        );
+    /// Holds the next prompt-handoff write inside the store. Returns the
+    /// receiver that fires once the write is held, and the sender that
+    /// releases it (dropping it releases too).
+    pub fn hold_next_prompt_handoff(
+        &self,
+    ) -> (std::sync::mpsc::Receiver<()>, std::sync::mpsc::Sender<()>) {
+        let (entered, entered_rx) = std::sync::mpsc::channel();
+        let (release_tx, release) = std::sync::mpsc::channel();
+        *self
+            .prompt_handoff_hold
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some(PromptHandoffHold { entered, release });
+        (entered_rx, release_tx)
     }
 
     pub fn set_fail_escalation_recipient_reads(&self, fail: bool) {
@@ -566,12 +582,14 @@ impl TaskStore for DummyTaskStore {
                 "injected prompt-handoff bookkeeping failure",
             ));
         }
-        let delay_millis = self.prompt_handoff_delay_millis.load(Ordering::SeqCst);
-        if delay_millis != 0 {
-            let started = std::time::Instant::now();
-            while started.elapsed() < Duration::from_millis(delay_millis) {
-                std::thread::yield_now();
-            }
+        let hold = self
+            .prompt_handoff_hold
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(hold) = hold {
+            let _ = hold.entered.send(());
+            let _ = hold.release.recv();
         }
         let mut rows = self
             .prompt_handoffs
