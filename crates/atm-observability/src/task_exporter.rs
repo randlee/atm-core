@@ -305,7 +305,13 @@ impl TaskExporter {
             return;
         }
         if assignment.closed {
-            if !begins || at <= assignment.last {
+            // Decide by seq when both sides have one: a reassign stamped with
+            // the same instant as the close is still newer by seq.
+            let newer = match (record.seq, assignment.highest_seq) {
+                (Some(seq), Some(highest)) => seq > highest,
+                _ => at > assignment.last,
+            };
+            if !begins || !newer {
                 return;
             }
             *assignment = Assignment::new(at, attributes.clone(), touched);

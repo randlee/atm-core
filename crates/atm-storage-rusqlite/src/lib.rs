@@ -650,7 +650,7 @@ impl AsyncMessageStore for SqliteMessageStore {
         &self,
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
-    ) -> Result<AcknowledgementCommit, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<AcknowledgementCommit>, AtmError> {
         self.db.submit_acknowledgement_async(source, builder).await
     }
 }
@@ -4242,6 +4242,69 @@ mod tests {
                 .expect("load reply"),
             Some(committed.reply),
             "the reply derived from the transaction-loaded source is durable"
+        );
+    }
+
+    /// Positive: an acknowledgement refused with a task rejection returns its
+    /// committed `Rejected` audit row beside the error, so it can be exported.
+    /// Negative: the refused acknowledgement leaves its source pending.
+    #[tokio::test]
+    async fn refused_task_acknowledgement_returns_its_committed_rejected_row() {
+        struct RefusingBuilder;
+
+        impl AcknowledgementReplyBuilder for RefusingBuilder {
+            fn build_reply(&self, _source: &Message) -> Result<Message, atm_storage::AtmError> {
+                Err(atm_storage::AtmError::new(
+                    atm_storage::AtmErrorCode::TaskAlreadyClosed,
+                    "task already closed",
+                ))
+            }
+        }
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let source_id = AtmMessageId::new();
+        let mut source = message(&format!("atm:{source_id}"), "needs acknowledgement");
+        source.envelope.message_id = Some(source_id);
+        source.envelope.task_id = Some("BD-ACK-REJECT".parse().expect("task id"));
+        source.envelope.requires_ack = true;
+        source.envelope.pending_ack_at = Some(IsoTimestamp::now());
+        backend
+            .message_store()
+            .save_message(&source)
+            .expect("save pending source");
+
+        let committed = backend
+            .async_message_store()
+            .acknowledge_message_atomically_async(
+                AcknowledgementSource {
+                    team: source.team.clone(),
+                    agent: source.agent.clone(),
+                    message_id: source_id,
+                },
+                Arc::new(RefusingBuilder),
+            )
+            .await
+            .expect("the rejection commits");
+
+        assert_eq!(
+            committed.operation.expect_err("refused").code(),
+            atm_storage::AtmErrorCode::TaskAlreadyClosed
+        );
+        assert_eq!(committed.task_events.len(), 1);
+        assert_eq!(
+            committed.task_events[0].event,
+            atm_storage::TaskEventKind::Rejected
+        );
+        assert!(
+            backend
+                .message_store()
+                .load_message(&source.message_key)
+                .expect("load source")
+                .expect("source exists")
+                .envelope
+                .acknowledged_at
+                .is_none(),
+            "a refused acknowledgement leaves the source pending"
         );
     }
 

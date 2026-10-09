@@ -318,6 +318,18 @@ const LOG_EXPORT_SHUTDOWN_BOUND: std::time::Duration = std::time::Duration::from
 /// Builds the CLI's retained logger routed to the destination the daemon uses
 /// (`ATM_LOG_DESTINATION`, ADR-064 D4). The returned export must be shut down
 /// before exit so queued OTel records are delivered.
+/// Tells the operator the OTel export configuration is invalid. With
+/// `--stderr-logs` the installed tracing subscriber prints it; otherwise no
+/// subscriber exists yet, so it goes straight to stderr.
+fn report_invalid_export_config(stderr_logs: bool) {
+    const MESSAGE: &str = "OpenTelemetry export disabled: invalid ATM_OTEL_* or ATM_LOG_DESTINATION configuration; the CLI continues with file logging";
+    if stderr_logs {
+        tracing::warn!(code = "ATM_TELEMETRY_EXPORT_CONFIG_INVALID", "{MESSAGE}");
+    } else {
+        eprintln!("warning: ATM_TELEMETRY_EXPORT_CONFIG_INVALID: {MESSAGE}");
+    }
+}
+
 fn init_observability(
     stderr_logs: bool,
 ) -> Result<(observability::CliObservability, LogExport), AtmError> {
@@ -335,10 +347,7 @@ fn init_observability(
     })?;
     let log_export = LogExport::from_env(&atm_core::ProcessEnvSource);
     if log_export.config_invalid() {
-        tracing::warn!(
-            code = "ATM_TELEMETRY_EXPORT_CONFIG_INVALID",
-            "OpenTelemetry export disabled: invalid ATM_OTEL_* or ATM_LOG_DESTINATION configuration; the CLI continues with file logging"
-        );
+        report_invalid_export_config(stderr_logs);
     }
     let (logger, active_log_path) = build_logger(
         &log_dir,

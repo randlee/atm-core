@@ -488,13 +488,22 @@ pub async fn prepare_write_with_preflight_async_runtime(
         )
         .await;
     }
-    let acknowledgement = admit_acknowledgement_write_async(request, runtime).await?;
-    prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime).map(|prepared| {
-        WriteExecution {
-            operation: Ok(prepared),
-            task_events: Vec::new(),
+    let admitted = admit_acknowledgement_write_async(request, runtime).await?;
+    let task_events = admitted.task_events;
+    match admitted.operation {
+        Ok(acknowledgement) => {
+            prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime).map(
+                |prepared| WriteExecution {
+                    operation: Ok(prepared),
+                    task_events,
+                },
+            )
         }
-    })
+        Err(error) => Ok(WriteExecution {
+            operation: Err(error),
+            task_events,
+        }),
+    }
 }
 
 /// The sole write pipeline. `acknowledges_message_id` selects only an

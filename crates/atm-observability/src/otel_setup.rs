@@ -304,10 +304,18 @@ fn lazy_channel(
     let mut endpoint = Endpoint::from_shared(config.endpoint().to_owned())?
         .timeout(transport_timeout)
         .connect_timeout(transport_timeout);
-    if config.endpoint().starts_with("https://") {
+    if uses_tls(config.endpoint()) {
         endpoint = endpoint.tls_config(ClientTlsConfig::new().with_native_roots())?;
     }
     Ok(endpoint.connect_lazy())
+}
+
+/// Whether the endpoint scheme is `https`, in any letter case, as
+/// `parse_endpoint` accepts it.
+pub(crate) fn uses_tls(endpoint: &str) -> bool {
+    endpoint
+        .get(..8)
+        .is_some_and(|scheme| scheme.eq_ignore_ascii_case("https://"))
 }
 
 fn tracer_provider(

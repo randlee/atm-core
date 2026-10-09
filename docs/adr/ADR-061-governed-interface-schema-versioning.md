@@ -106,7 +106,11 @@ migration functions directly.
   pinned pre-1.11 `DoctorReport` payload still decodes; a current payload with
   export health round-trips without loss. Its state, protocol and failure
   enums are closed: an unknown value is a typed decode error, never a panic
-  or a silent `healthy`. This is a minor, backward-compatible bump.
+  or a silent `healthy`. This is a minor, backward-compatible bump. The
+  failure enum originally carried a `rejected` value that no code path ever
+  produced; it was removed before any release shipped `1.11.0` (develop and
+  main still report `1.9.0`/no export health), so no released consumer saw
+  it and no further bump or major-version approval applies.
 - **2026-09-26 — issue #1599 (`atm task history`):** `HTTP_API_VERSION`
   moves from `1.9.0` to `1.10.0`. `TaskLedgerQuery` gains the additive
   `History { member, limit }` request variant, dispatched through the same

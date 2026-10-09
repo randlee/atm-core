@@ -757,32 +757,9 @@ mod tests {
         }
     }
 
-    /// Captures formatted tracing output, the observable the monitor emits through.
-    #[derive(Clone, Default)]
-    struct LogCapture(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
-
-    impl std::io::Write for LogCapture {
-        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().expect("capture").extend_from_slice(bytes);
-            Ok(bytes.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
     #[test]
     fn ac7_saturation_state_transitions_from_degraded_to_recovered_after_quiet_window() {
-        let capture = LogCapture::default();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer({
-                let capture = capture.clone();
-                move || capture.clone()
-            })
-            .with_ansi(false)
-            .finish();
-        tracing::subscriber::with_default(subscriber, || {
+        let ((), output) = atm_core::test_support::capture_tracing(|| {
             let monitor = DegradationMonitor::default();
             monitor.observe("timeline", 1);
             {
@@ -817,7 +794,6 @@ mod tests {
                     .is_none()
             );
         });
-        let output = String::from_utf8(capture.0.lock().expect("capture").clone()).expect("utf8");
         let degraded = output.find("ATM_LOG_SINK_DEGRADED").expect(&output);
         let recovered = output.find("ATM_LOG_SINK_RECOVERED").expect(&output);
         assert!(degraded < recovered, "{output}");

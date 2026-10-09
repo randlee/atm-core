@@ -517,7 +517,6 @@ fn failure_class(failure: AtmTelemetryExportFailure) -> &'static str {
     match failure {
         AtmTelemetryExportFailure::ConfigInvalid => "config_invalid",
         AtmTelemetryExportFailure::Unavailable => "unavailable",
-        AtmTelemetryExportFailure::Rejected => "rejected",
         AtmTelemetryExportFailure::TimedOut => "timed_out",
         AtmTelemetryExportFailure::ShutdownTimedOut => "shutdown_timed_out",
     }

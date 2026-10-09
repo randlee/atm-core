@@ -405,3 +405,59 @@ async fn receiver_metrics_cap_series_without_identity_labels() {
     }
     receiver.stop().await;
 }
+
+/// Positive: an `https` endpoint enables TLS in any letter case, matching the
+/// scheme validation. Negative: `http` and look-alike prefixes do not.
+#[test]
+fn tls_is_enabled_for_an_https_scheme_in_any_case() {
+    for endpoint in ["https://c:4317", "HTTPS://c:4317", "HttpS://c:4317"] {
+        assert!(crate::otel_setup::uses_tls(endpoint), "{endpoint}");
+    }
+    for endpoint in [
+        "http://c:4317",
+        "HTTP://c:4317",
+        "https:/c",
+        "xhttps://c",
+        "",
+    ] {
+        assert!(!crate::otel_setup::uses_tls(endpoint), "{endpoint}");
+    }
+}
+
+/// Positive: a reassign stamped with the same instant as the close of a
+/// closed assignment of unknown generation starts a new assignment, decided by
+/// its higher seq. Negative: the new assignment's own close yields a second
+/// task span and is not dropped as an old terminal row.
+#[tokio::test]
+async fn same_instant_reassign_after_a_close_starts_a_new_assignment_by_seq() {
+    let receiver = Receiver::start(false).await;
+    let setup =
+        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+    for (kind, seq, second) in [
+        (TaskTelemetryKind::Completed, 3, 3),
+        (TaskTelemetryKind::Reassigned, 4, 3),
+        (TaskTelemetryKind::Completed, 5, 4),
+    ] {
+        setup
+            .0
+            .sink
+            .emit(record("same-instant", kind, seq, second))
+            .unwrap();
+    }
+    shutdown(setup).await;
+    {
+        let spans = receiver.capture.spans.lock().unwrap();
+        let tasks: Vec<_> = spans
+            .iter()
+            .filter(|span| span.name == "atm.task")
+            .collect();
+        assert_eq!(tasks.len(), 2, "the reassign opened a second assignment");
+        assert!(
+            tasks
+                .iter()
+                .any(|task| task.end_time_unix_nano - task.start_time_unix_nano == 1_000_000_000),
+            "the new assignment closed one second after it began"
+        );
+    }
+    receiver.stop().await;
+}

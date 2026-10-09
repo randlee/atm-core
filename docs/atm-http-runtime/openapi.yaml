@@ -208,7 +208,7 @@ components:
         dropped_timeout: { type: integer, format: uint64 }
         dropped_failure: { type: integer, format: uint64 }
         dropped_shutdown: { type: integer, format: uint64 }
-        last_failure: { type: string, enum: [config_invalid, unavailable, rejected, timed_out, shutdown_timed_out], nullable: true }
+        last_failure: { type: string, enum: [config_invalid, unavailable, timed_out, shutdown_timed_out], nullable: true }
     RuntimeStatusSnapshot:
       type: object
       required: [liveness, readiness]
