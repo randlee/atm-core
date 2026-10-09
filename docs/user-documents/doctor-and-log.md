@@ -80,7 +80,9 @@ template variables, or free-form event detail.
 `last_failure`. The JSON object has those same fields; `endpoint`, `protocol`,
 and `last_failure` may be null. `dropped_timeout` is kept for compatibility and
 is always 0. `healthy` reports local SDK admission/processing
-evidence; it does not confirm collector receipt. Doctor findings describe
+evidence; it does not confirm collector receipt. `degraded` also means the
+SDK dropped spans or log records on a full export queue; that count is not
+reported. Doctor findings describe
 degraded or unavailable export; use their remediation rather than treating
 telemetry delivery as a reason to retry a task operation.
 
