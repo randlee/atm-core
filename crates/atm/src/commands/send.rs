@@ -44,12 +44,15 @@ use crate::output;
 )]
 /// Send one ATM mailbox message.
 pub struct SendCommand {
+    /// Recipient address for the message.
     #[arg(required_unless_present = "from_json", conflicts_with = "from_json")]
     to: Option<String>,
 
+    /// Message body to send.
     #[arg(index = 2)]
     message: Option<String>,
 
+    /// Override the team resolved from caller context.
     #[arg(long)]
     team: Option<String>,
 
@@ -63,15 +66,19 @@ pub struct SendCommand {
     #[arg(long, value_name = "HOST")]
     host: Option<String>,
 
+    /// Restrict the send to this caller chat ID.
     #[arg(long = "chat-id", conflicts_with = "actor")]
     chat_id: Option<String>,
 
+    /// Act as this member instead of the environment identity.
     #[arg(long = "as")]
     actor: Option<String>,
 
+    /// Read the message body from this file.
     #[arg(long, conflicts_with = "from_json")]
     file: Option<PathBuf>,
 
+    /// Read the message body from standard input.
     #[arg(long, conflicts_with = "from_json")]
     stdin: bool,
 
@@ -121,21 +128,27 @@ pub struct SendCommand {
     #[arg(long = "from-json")]
     from_json: bool,
 
+    /// Classify the message under this category.
     #[arg(long, value_name = "CATEGORY")]
     category: Option<String>,
 
+    /// Add a tag to the message; may be repeated.
     #[arg(long = "tag", value_name = "TAG")]
     tag: Vec<String>,
 
+    /// Record this content format with the message.
     #[arg(long = "content-format", value_name = "FORMAT")]
     content_format: Option<String>,
 
+    /// Store this summary with the message.
     #[arg(long)]
     summary: Option<String>,
 
+    /// Require the recipient to acknowledge the message.
     #[arg(long = "requires-ack", conflicts_with = "task_id")]
     pub(super) requires_ack: bool,
 
+    /// Link this message to the task with this ID.
     #[arg(long = "task-id")]
     pub(super) task_id: Option<TaskId>,
 
@@ -143,9 +156,11 @@ pub struct SendCommand {
     #[arg(long = "task-complete", requires = "task_id")]
     pub(super) task_complete: bool,
 
+    /// Validate and display the send without delivering it.
     #[arg(long)]
     pub(super) dry_run: bool,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     pub(super) json: bool,
 }

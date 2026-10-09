@@ -413,6 +413,13 @@ class GitHookTests(unittest.TestCase):
         self.assertIn(".githooks/* text eol=lf", attributes.read_text(encoding="utf-8"))
         self.assertNotIn(b"\r\n", self.HOOK.read_bytes(), "hook must be LF-only in the tree")
 
+    def test_cli_reference_source_assets_are_pinned_to_lf(self) -> None:
+        attributes = self.HOOK.parents[1] / ".gitattributes"
+        self.assertIn(
+            "crates/atm/assets/cli-reference/* text eol=lf",
+            attributes.read_text(encoding="utf-8"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

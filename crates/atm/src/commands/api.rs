@@ -36,6 +36,7 @@ impl ApiCommand {
 enum ApiSubcommand {
     /// Print the versioned daemon OpenAPI contract.
     Spec {
+        /// Serialization format for the OpenAPI contract.
         #[arg(long, default_value = "yaml", value_parser = ["json", "yaml"])]
         format: String,
     },

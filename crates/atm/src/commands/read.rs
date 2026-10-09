@@ -23,57 +23,75 @@ pub struct ReadCommand {
     #[arg(index = 1, value_name = "MESSAGE_ID")]
     message_id_positional: Option<String>,
 
+    /// Override the team resolved from caller context.
     #[arg(long)]
     team: Option<String>,
 
+    /// Restrict reads to this caller chat ID.
     #[arg(long = "chat-id", conflicts_with = "actor")]
     chat_id: Option<String>,
 
+    /// Act as this member instead of the environment identity.
     #[arg(long = "as")]
     actor: Option<String>,
 
+    /// Read all matching messages.
     #[arg(long, conflicts_with_all = ["unread", "unread_only", "pending_ack", "pending_ack_only"])]
     all: bool,
 
+    /// Read unread matching messages.
     #[arg(long, conflicts_with_all = ["pending_ack", "pending_ack_only", "all"])]
     unread: bool,
 
+    /// Deprecated spelling for `--unread`.
     #[arg(long = "unread-only", conflicts_with_all = ["pending_ack", "pending_ack_only", "all"])]
     unread_only: bool,
 
+    /// Read messages awaiting acknowledgement.
     #[arg(long = "pending-ack", conflicts_with_all = ["unread", "unread_only", "all"])]
     pending_ack: bool,
 
+    /// Deprecated spelling for `--pending-ack`.
     #[arg(long = "pending-ack-only", conflicts_with_all = ["unread", "unread_only", "all"])]
     pending_ack_only: bool,
 
+    /// Deprecated spelling for `--all`.
     #[arg(long, conflicts_with_all = ["message_id", "task", "contains", "from", "since"])]
     history: bool,
 
+    /// Read one message by its ID.
     #[arg(long = "message-id", conflicts_with_all = ["task", "contains", "from", "since"])]
     message_id: Option<String>,
 
+    /// Restrict messages to this task ID.
     #[arg(long)]
     task: Option<String>,
 
+    /// Restrict messages to bodies containing this text.
     #[arg(long)]
     contains: Option<String>,
 
+    /// Explicitly retain the default seen-state filter.
     #[arg(long)]
     since_last_seen: bool,
 
+    /// Disable the default seen-state filter.
     #[arg(long = "no-since-last-seen", default_value_t = false)]
     no_since_last_seen: bool,
 
+    /// Restrict messages to those at or after this timestamp.
     #[arg(long)]
     since: Option<String>,
 
+    /// Restrict messages to this sender address.
     #[arg(long)]
     from: Option<String>,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 
+    /// Wait up to this many seconds for matching messages.
     #[arg(long)]
     timeout: Option<u64>,
 }

@@ -32,6 +32,7 @@ pub struct TeamsCommand {
     #[command(subcommand)]
     command: Option<TeamsSubcommand>,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 
@@ -57,15 +58,20 @@ enum TeamsSubcommand {
 
 #[derive(Debug, Args)]
 struct AddMemberCommand {
+    /// Team that will contain the new member.
     team: String,
+    /// Name of the member to add.
     member: String,
 
+    /// Agent-type metadata to store for the member.
     #[arg(long, default_value = "general-purpose")]
     agent_type: String,
 
+    /// Model metadata to store for the member.
     #[arg(long, default_value = "unknown")]
     model: String,
 
+    /// ATM home directory to store for the member.
     #[arg(long = "home-dir")]
     home_dir: Option<PathBuf>,
 
@@ -97,27 +103,35 @@ struct AddMemberCommand {
     )]
     host: Option<String>,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }
 
 #[derive(Debug, Args)]
 struct UpdateMemberCommand {
+    /// Team containing the member to update.
     team: String,
+    /// Name of the member to update.
     member: String,
 
+    /// Replace the member's stored ATM home directory.
     #[arg(long)]
     home_dir: Option<PathBuf>,
 
+    /// Replace the member's stored workspace root.
     #[arg(long = "workspace-root")]
     workspace_root: Option<PathBuf>,
 
+    /// Replace the member's harness metadata.
     #[arg(long)]
     harness: Option<String>,
 
+    /// Replace the member's agent-type metadata.
     #[arg(long)]
     agent_type: Option<String>,
 
+    /// Replace the member's model metadata.
     #[arg(long)]
     model: Option<String>,
 
@@ -152,21 +166,26 @@ struct UpdateMemberCommand {
     )]
     host: Option<String>,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }
 
 #[derive(Debug, Args)]
 struct RemoveMemberCommand {
+    /// Team containing the member to remove.
     team: String,
+    /// Name of the member to remove.
     member: String,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }
 
 #[derive(Debug, Args)]
 struct SetNudgeTemplateCommand {
+    /// Team whose nudge template override to set.
     #[arg(long)]
     team: String,
     #[arg(
@@ -175,15 +194,18 @@ struct SetNudgeTemplateCommand {
     )]
     kind: String,
 
+    /// Template body to use for the override.
     #[arg(long = "template-body")]
     template_body: String,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }
 
 #[derive(Debug, Args)]
 struct DisableNudgeTemplateCommand {
+    /// Team whose nudge template override to disable.
     #[arg(long)]
     team: String,
     #[arg(
@@ -192,12 +214,14 @@ struct DisableNudgeTemplateCommand {
     )]
     kind: String,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }
 
 #[derive(Debug, Args)]
 struct ClearNudgeTemplateCommand {
+    /// Team whose nudge template override to clear.
     #[arg(long)]
     team: String,
     #[arg(
@@ -206,28 +230,35 @@ struct ClearNudgeTemplateCommand {
     )]
     kind: String,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }
 
 #[derive(Debug, Args)]
 struct BackupCommand {
+    /// Team whose roster configuration to back up.
     team: String,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }
 
 #[derive(Debug, Args)]
 struct RestoreCommand {
+    /// Team whose roster configuration to restore.
     team: String,
 
+    /// Backup file to restore instead of the default backup location.
     #[arg(long)]
     from: Option<PathBuf>,
 
+    /// Validate and display the restore without writing it.
     #[arg(long = "dry-run")]
     dry_run: bool,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }

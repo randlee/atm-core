@@ -5,3 +5,9 @@
 
 # Templates embedded with include_str! must retain LF across CRLF checkouts.
 crates/atm-core/templates/* text eol=lf
+crates/atm/assets/cli-reference/* text eol=lf
+docs/user-documents/cli-reference.md text eol=lf
+site/cli/index.html text eol=lf
+site/cli/cli-reference.css text eol=lf
+site/cli/cli-reference.js text eol=lf
+crates/atm/tests/cli_surface_baseline.json text eol=lf

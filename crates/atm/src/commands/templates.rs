@@ -19,14 +19,18 @@ pub struct TemplatesCommand {
 enum TemplatesSubcommand {
     /// List every known immutable template revision, optionally by metadata type.
     List {
+        /// Restrict results to this template metadata type.
         #[arg(long = "type")]
         template_type: Option<String>,
+        /// Emit the result as JSON.
         #[arg(long)]
         json: bool,
     },
     /// Show the stored schema/frontmatter for one exact immutable SHA.
     Schema {
+        /// SHA of the immutable template revision.
         sha: TemplateSha,
+        /// Emit the result as JSON.
         #[arg(long)]
         json: bool,
     },

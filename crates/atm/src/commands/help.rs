@@ -19,12 +19,15 @@ pub(crate) struct HelpDocLink {
 #[derive(Debug, Args)]
 /// Show ATM-owned conceptual help or delegated clap subcommand help.
 pub struct HelpCommand {
+    /// Conceptual-help topic or clap subcommand path to show.
     #[arg()]
     target: Option<String>,
 
+    /// List available conceptual-help topics.
     #[arg(long, conflicts_with = "target")]
     list: bool,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }

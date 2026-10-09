@@ -357,6 +357,28 @@ def validate_cli_surface(root: Path, findings: list[Finding]) -> None:
         "CLI surface contract passed",
         "CLI surface contract failed",
     )
+    generated = run_capture(
+        [
+            "cargo",
+            "run",
+            "-p",
+            "agent-team-mail",
+            "--features",
+            "cli-surface-dump",
+            "--example",
+            "gen_cli_docs",
+            "--",
+            "--check",
+        ],
+        cwd=root,
+    )
+    append_completed_findings(
+        findings,
+        "cli-surface",
+        generated,
+        "generated installed and website CLI references are current",
+        "generated installed or website CLI reference is stale",
+    )
 
 
 def workspace_member_manifests(root: Path) -> dict[str, Path]:

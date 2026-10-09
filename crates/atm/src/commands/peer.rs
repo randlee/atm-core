@@ -34,18 +34,23 @@ struct InterfaceCommand {
 #[derive(Debug, Subcommand)]
 enum InterfaceSubcommand {
     List {
+        /// Emit the result as JSON.
         #[arg(long)]
         json: bool,
     },
     Set {
+        /// Socket address on which the HTTPS interface listens.
         #[arg(long)]
         bind: String,
+        /// Durable hostname advertised for this interface.
         #[arg(long)]
         advertise_host: String,
+        /// Enable or disable this HTTPS interface.
         #[arg(long, default_value_t = true)]
         enabled: bool,
     },
     Remove {
+        /// Socket address of the HTTPS interface to remove.
         #[arg(long)]
         bind: String,
     },
@@ -60,14 +65,18 @@ struct CertificateCommand {
 #[derive(Debug, Subcommand)]
 enum CertificateSubcommand {
     Show {
+        /// Emit the result as JSON.
         #[arg(long)]
         json: bool,
     },
     Init {
+        /// TLS certificate fingerprint for this host.
         #[arg(long)]
         fingerprint: String,
+        /// Reference to the local TLS private key; never the key material.
         #[arg(long)]
         private_key_ref: String,
+        /// Confirm the certificate initialization.
         #[arg(long)]
         yes: bool,
     },
@@ -82,32 +91,43 @@ struct TrustCommand {
 #[derive(Debug, Subcommand)]
 enum TrustSubcommand {
     List {
+        /// Emit the result as JSON.
         #[arg(long)]
         json: bool,
     },
     Add {
+        /// Durable hostname of the trusted peer.
         #[arg(long)]
         host: String,
+        /// TLS certificate fingerprint expected from the peer.
         #[arg(long)]
         fingerprint: String,
+        /// HTTPS port exposed by the trusted peer.
         #[arg(long, default_value_t = 43101)]
         https_port: u16,
+        /// Confirm adding the trusted peer.
         #[arg(long)]
         yes: bool,
     },
     Replace {
+        /// Durable hostname of the trusted peer.
         #[arg(long)]
         host: String,
+        /// Replacement TLS certificate fingerprint.
         #[arg(long)]
         fingerprint: String,
+        /// HTTPS port exposed by the trusted peer.
         #[arg(long, default_value_t = 43101)]
         https_port: u16,
+        /// Confirm replacing the trusted-peer configuration.
         #[arg(long)]
         yes: bool,
     },
     Revoke {
+        /// Durable hostname of the trusted peer to revoke.
         #[arg(long)]
         host: String,
+        /// Confirm revoking the trusted peer.
         #[arg(long)]
         yes: bool,
     },
@@ -123,6 +143,7 @@ enum TrustSubcommand {
         /// `HOSTNAME`, keeping its fingerprint and port. May be repeated.
         #[arg(long = "map", value_name = "IP=HOSTNAME")]
         map: Vec<String>,
+        /// Apply the displayed migration plan.
         #[arg(long)]
         yes: bool,
     },

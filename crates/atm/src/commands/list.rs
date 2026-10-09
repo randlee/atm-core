@@ -15,38 +15,50 @@ use crate::output;
 #[derive(Debug, Args)]
 /// List one ATM mailbox surface as bounded metadata rows.
 pub struct ListCommand {
+    /// Mailbox target address to inspect; defaults to the caller.
     target: Option<String>,
 
+    /// Override the team resolved from caller context.
     #[arg(long)]
     team: Option<String>,
 
+    /// Include all messages instead of a filtered state.
     #[arg(long, conflicts_with_all = ["unread", "pending_ack"])]
     all: bool,
 
+    /// Include unread messages.
     #[arg(long, conflicts_with = "pending_ack")]
     unread: bool,
 
+    /// Include messages awaiting acknowledgement.
     #[arg(long = "pending-ack", conflicts_with = "unread")]
     pending_ack: bool,
 
+    /// Maximum number of messages to return.
     #[arg(long)]
     limit: Option<usize>,
 
+    /// Include messages at or after this timestamp.
     #[arg(long)]
     since: Option<String>,
 
+    /// Include messages sent by this address.
     #[arg(long)]
     from: Option<String>,
 
+    /// Include messages linked to this task ID.
     #[arg(long)]
     task: Option<String>,
 
+    /// Include messages whose body contains this text.
     #[arg(long)]
     contains: Option<String>,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 
+    /// Act as this member instead of the environment identity.
     #[arg(long = "as")]
     actor: Option<String>,
 }

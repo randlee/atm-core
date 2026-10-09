@@ -436,6 +436,11 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             ),
             root / ".winget" / "randlee.agent-team-mail.yaml",
             root / "Cargo.lock",
+            root / "crates/atm/tests/cli_surface_baseline.json",
+            root / "docs/user-documents/cli-reference.md",
+            root / "site/cli/index.html",
+            root / "site/cli/cli-reference.css",
+            root / "site/cli/cli-reference.js",
         }
         self.assertEqual(set(changes), expected)
         for path in prerelease_tag.python_project_paths(root):

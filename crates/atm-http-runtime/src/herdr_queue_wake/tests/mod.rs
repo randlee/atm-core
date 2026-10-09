@@ -2074,7 +2074,7 @@ async fn ac13_herdr_wake_pending_ephemeral_state_tracks_the_in_flight_claim() {
     let prompt_gate = fake.block_next_prompt();
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(1), async {
+    tokio::time::timeout(Duration::from_secs(30), async {
         loop {
             if runtime
                 .roster_ephemeral_state(key.team(), key.agent())

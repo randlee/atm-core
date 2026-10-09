@@ -26,7 +26,9 @@ class PagesSiteTests(unittest.TestCase):
         parser.feed(HOME.read_text(encoding="utf-8"))
         self.assertIn("reports/", parser.links)
         self.assertIn("announcements/", parser.links)
+        self.assertIn("cli/", parser.links)
         self.assertTrue((HOME.parent / "reports/index.html").is_file())
+        self.assertTrue((HOME.parent / "cli/index.html").is_file())
 
     def test_pages_workflow_validates_and_uploads_only_site(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")

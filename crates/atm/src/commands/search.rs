@@ -42,6 +42,7 @@ pub struct SearchCommand {
     #[arg(long = "var", value_name = "KEY=VALUE")]
     vars: Vec<String>,
 
+    /// Filter messages by a stored tag; may be repeated.
     #[arg(long = "tag", value_name = "VALUE")]
     tags: Vec<String>,
 
@@ -49,33 +50,43 @@ pub struct SearchCommand {
     #[arg(long = "effective-tag", value_name = "VALUE")]
     effective_tags: Vec<String>,
 
+    /// Filter messages by their category.
     #[arg(long)]
     category: Option<String>,
 
+    /// Filter messages by sender address.
     #[arg(long)]
     from: Option<String>,
 
+    /// Filter messages by team.
     #[arg(long)]
     team: Option<String>,
 
+    /// Filter messages by agent identity.
     #[arg(long)]
     agent: Option<String>,
 
+    /// Filter workflow projections by scope kind.
     #[arg(long = "workflow-scope-kind", value_name = "VALUE")]
     workflow_scope_kind: Option<String>,
 
+    /// Filter workflow projections by scope ID.
     #[arg(long = "workflow-scope-id", value_name = "VALUE")]
     workflow_scope_id: Option<String>,
 
+    /// Filter workflow projections by state.
     #[arg(long = "workflow-state", value_name = "VALUE")]
     workflow_state: Option<String>,
 
+    /// Filter workflow projections by stage.
     #[arg(long = "workflow-stage", value_name = "VALUE")]
     workflow_stage: Option<String>,
 
+    /// Filter workflow projections by transition.
     #[arg(long = "workflow-transition", value_name = "VALUE")]
     workflow_transition: Option<String>,
 
+    /// Filter workflow projections by iteration.
     #[arg(long = "workflow-iteration", value_name = "VALUE")]
     workflow_iteration: Option<String>,
 
@@ -83,36 +94,47 @@ pub struct SearchCommand {
     #[arg(long = "lifecycle-scope-kind", value_name = "VALUE")]
     lifecycle_scope_kind: Option<String>,
 
+    /// Lifecycle projection scope ID.
     #[arg(long = "lifecycle-scope-id", value_name = "VALUE")]
     lifecycle_scope_id: Option<String>,
 
+    /// Filter lifecycle projection start events by state.
     #[arg(long = "lifecycle-start-state", value_name = "VALUE")]
     lifecycle_start_state: Option<String>,
 
+    /// Filter lifecycle projection start events by stage.
     #[arg(long = "lifecycle-start-stage", value_name = "VALUE")]
     lifecycle_start_stage: Option<String>,
 
+    /// Filter lifecycle projection start events by transition.
     #[arg(long = "lifecycle-start-transition", value_name = "VALUE")]
     lifecycle_start_transition: Option<String>,
 
+    /// Filter lifecycle projection end events by state.
     #[arg(long = "lifecycle-end-state", value_name = "VALUE")]
     lifecycle_end_state: Option<String>,
 
+    /// Filter lifecycle projection end events by stage.
     #[arg(long = "lifecycle-end-stage", value_name = "VALUE")]
     lifecycle_end_stage: Option<String>,
 
+    /// Filter lifecycle projection end events by transition.
     #[arg(long = "lifecycle-end-transition", value_name = "VALUE")]
     lifecycle_end_transition: Option<String>,
 
+    /// Include messages at or after this timestamp.
     #[arg(long)]
     since: Option<String>,
 
+    /// Include messages at or before this timestamp.
     #[arg(long)]
     until: Option<String>,
 
+    /// Maximum number of search results to return.
     #[arg(long)]
     limit: Option<u32>,
 
+    /// Continue from this search-results cursor.
     #[arg(long)]
     cursor: Option<String>,
 
@@ -120,18 +142,23 @@ pub struct SearchCommand {
     #[arg(long)]
     per_mailbox: bool,
 
+    /// Return only the number of matching messages.
     #[arg(long, conflicts_with_all = ["group_by", "min", "max"])]
     count: bool,
 
+    /// Group matching messages by this field.
     #[arg(long, value_name = "FIELD", conflicts_with_all = ["count", "min", "max"])]
     group_by: Option<String>,
 
+    /// Return the earliest matching message timestamp.
     #[arg(long, value_parser = ["message_at"], conflicts_with_all = ["count", "group_by", "max"])]
     min: Option<String>,
 
+    /// Return the latest matching message timestamp.
     #[arg(long, value_parser = ["message_at"], conflicts_with_all = ["count", "group_by", "min"])]
     max: Option<String>,
 
+    /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
 }
