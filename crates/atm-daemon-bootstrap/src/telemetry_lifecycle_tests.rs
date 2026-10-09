@@ -596,7 +596,7 @@ fn assert_one_shutdown_deadline(steps: &[ShutdownStep]) -> Instant {
     entry.deadline
 }
 
-/// For an unstalled shutdown, where no step waits on a timer: every top-level
+/// For a shutdown with no stalled step, where no step waits on a timer: every top-level
 /// step returned at or before the shared deadline. A stalled step ends on its
 /// timer and returns after the deadline by its wake latency, so stalled runs
 /// do not call this.
