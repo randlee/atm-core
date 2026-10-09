@@ -549,14 +549,36 @@ const SHUTDOWN_STEPS: [&str; 8] = [
     "timeline_flush_worker",
 ];
 
+/// Proves, from the recorded steps, that shutdown met one shared deadline:
+/// [`assert_shutdown_deadline_passed_through`], and every top-level step
+/// returned at or before that deadline, with no slack. A step that ran on a
+/// fresh budget past the deadline fails here even when it was handed the
+/// shared deadline. Returns the shared deadline.
+fn assert_one_shutdown_deadline(steps: &[ShutdownStep]) -> Instant {
+    let deadline = assert_shutdown_deadline_passed_through(steps);
+    for step in steps
+        .iter()
+        .filter(|step| SHUTDOWN_STEPS.contains(&step.step))
+    {
+        assert!(
+            step.returned <= deadline,
+            "step {} returned after the shared deadline: {steps:#?}",
+            step.step
+        );
+    }
+    deadline
+}
+
 /// Proves the shutdown deadline is passed through unchanged, from the
 /// recorded steps: it is fixed once at entry `REPLACEMENT_DRAIN_DEADLINE`
 /// ahead, every step receives exactly that deadline and starts only after the
 /// previous one returned, and the logger and exporter waits compute bounds no
 /// later than it and no later than their own 1 s bound from their start. It
-/// does not prove a step returned in time; see
-/// [`assert_every_step_returned_by_deadline`]. Returns the shared deadline.
-fn assert_one_shutdown_deadline(steps: &[ShutdownStep]) -> Instant {
+/// does not prove a step returned in time. Only a shutdown whose stalled step
+/// is ended by the shared deadline itself calls it alone, since that step
+/// returns after the deadline by its timer's wake latency; every other caller
+/// uses [`assert_one_shutdown_deadline`]. Returns the shared deadline.
+fn assert_shutdown_deadline_passed_through(steps: &[ShutdownStep]) -> Instant {
     let entry = steps.first().expect("the shutdown recorded its entry");
     assert_eq!(entry.step, "entry", "{steps:#?}");
     assert_eq!(
@@ -597,22 +619,54 @@ fn assert_one_shutdown_deadline(steps: &[ShutdownStep]) -> Instant {
     entry.deadline
 }
 
-/// For a shutdown with no stalled step, where no step waits on a timer: every top-level
-/// step returned at or before the shared deadline. A stalled step ends on its
-/// timer and returns after the deadline by its wake latency, so stalled runs
-/// do not call this.
-fn assert_every_step_returned_by_deadline(steps: &[ShutdownStep]) {
-    let deadline = assert_one_shutdown_deadline(steps);
-    for step in steps
+/// Synthetic steps for one shutdown that meets its deadline: the entry fixes
+/// it, then each top-level step runs 1ms after the previous one returned.
+fn steps_meeting_the_deadline() -> Vec<ShutdownStep> {
+    let entry = Instant::now();
+    let deadline = entry + super::REPLACEMENT_DRAIN_DEADLINE;
+    let mut at = entry;
+    SHUTDOWN_STEPS
         .iter()
-        .filter(|step| SHUTDOWN_STEPS.contains(&step.step))
-    {
-        assert!(
-            step.returned <= deadline,
-            "step {} returned after the shared deadline: {steps:#?}",
-            step.step
-        );
+        .map(|&step| {
+            let started = at;
+            at = started + Duration::from_millis(1);
+            ShutdownStep {
+                step,
+                started,
+                deadline,
+                returned: if step == "entry" { started } else { at },
+            }
+        })
+        .collect()
+}
+
+/// Control: a shutdown whose steps all returned by the shared deadline passes.
+#[test]
+fn one_shutdown_deadline_accepts_steps_that_returned_by_it() {
+    let steps = steps_meeting_the_deadline();
+    assert_eq!(assert_one_shutdown_deadline(&steps), steps[0].deadline);
+}
+
+/// Negative: a top-level step handed the shared deadline but run on a fresh
+/// 20s budget returns past the deadline, and the assertion fails, although
+/// every label and the step order are still correct.
+#[test]
+#[should_panic(expected = "step task_telemetry returned after the shared deadline")]
+fn one_shutdown_deadline_rejects_a_step_on_a_fresh_budget() {
+    let mut steps = steps_meeting_the_deadline();
+    let fresh = Duration::from_secs(20);
+    let index = steps
+        .iter()
+        .position(|step| step.step == "task_telemetry")
+        .expect("task telemetry step");
+    let shift = steps[index].started + fresh - steps[index].returned;
+    steps[index].returned += shift;
+    for later in &mut steps[index + 1..] {
+        later.started += shift;
+        later.returned += shift;
     }
+    assert_shutdown_deadline_passed_through(&steps);
+    assert_one_shutdown_deadline(&steps);
 }
 
 fn sent_message_id(response: ResponseEnvelope) -> atm_core::schema::AtmMessageId {
@@ -1172,7 +1226,8 @@ fn unreachable_collector_child() {
         observe(&probe, daemon.shutdown())
             .await
             .expect("shutdown result is the listener's");
-        // Every step shares the one deadline fixed at shutdown entry.
+        // Every step shares the one deadline fixed at shutdown entry and
+        // returned by it.
         assert_one_shutdown_deadline(&probe.steps());
     });
     drop(runtime);
@@ -1248,6 +1303,8 @@ async fn stalled_collector_never_changes_task_results_or_blocks_shutdown() {
     observe(&probe, daemon.shutdown())
         .await
         .expect("shutdown result is the listener's");
+    // The stalled export ends on its own 1s bound, so every step still
+    // returns by the shared deadline.
     assert_one_shutdown_deadline(&probe.steps());
     // The SDK's own 400ms export timeout or the 1s wait bound ends the step;
     // either way the terminal failure is retained.
