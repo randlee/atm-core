@@ -2809,8 +2809,8 @@ def is_test_support_crate(info: ManifestInfo) -> bool:
 
 
 # Telemetry sink rules: a production implementation of the record's sink trait
-# lives only in the owner crate (the no-op) or in the named exporting crate
-# (ADR-064). Test-support crates are governed by allowed_test_double_paths.
+# lives only in the named exporting crate (ADR-064); atm-core owns the trait
+# and has no built-in no-op sink. Test-support crates are governed by allowed_test_double_paths.
 TELEMETRY_SINK_IMPLEMENTATION_RULES = {
     "LINT-BOUNDARY-TASK-TELEMETRY-SINK-REFERENCES": "atm-observability",
 }

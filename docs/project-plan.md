@@ -1902,7 +1902,7 @@ pending records, not closure evidence.
 
 ## 62. Phase BD — OpenTelemetry Export And Observability [PLANNED IN BEADS — IN PROGRESS]
 
-Phase BD is planned in the beads graph (`bd` root `atm-phase-bd`, sprints bd-1 through bd-6) and in [`docs/plans/phase-bd.jsonl`](./plans/phase-bd.jsonl); there is no markdown sprint set.
+Phase BD is planned in the beads graph (`bd` root `atm-phase-bd`, sprints bd-1 through bd-7) and in [`docs/plans/phase-bd.jsonl`](./plans/phase-bd.jsonl); there is no markdown sprint set.
 
 ## Daemon-Switch Scope Reduction
 

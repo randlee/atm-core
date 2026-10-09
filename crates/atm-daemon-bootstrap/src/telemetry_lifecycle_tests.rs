@@ -869,8 +869,8 @@ async fn running_daemon_export_has_no_duration_for_acked_or_migrated() {
     receiver.stop().await;
 }
 
-/// Positive: an absent endpoint composes no SDK provider, leaves both task
-/// and workflow runtimes disabled and reports `Inert`.
+/// Positive: an absent endpoint composes no SDK provider, leaves the task
+/// telemetry runtime disabled and reports `Inert`.
 /// Negative: task writes still succeed and nothing is admitted for export.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::parallel(slo)]
