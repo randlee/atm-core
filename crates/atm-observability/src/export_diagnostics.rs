@@ -62,10 +62,10 @@ impl ExportDiagnostics {
     }
 
     fn record(&self, kind: AtmTelemetryExportFailure) {
-        if let Ok(mut failure) = self.failure.lock() {
-            if failure.kind != Some(AtmTelemetryExportFailure::ShutdownTimedOut) {
-                failure.kind = Some(kind);
-            }
+        if let Ok(mut failure) = self.failure.lock()
+            && failure.kind != Some(AtmTelemetryExportFailure::ShutdownTimedOut)
+        {
+            failure.kind = Some(kind);
         }
     }
 
