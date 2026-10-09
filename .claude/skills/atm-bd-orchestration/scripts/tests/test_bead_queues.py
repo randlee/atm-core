@@ -1,4 +1,4 @@
-"""bead-queues against a real bd workspace (the pour tests' proxied server), with `atm` and `gh` stubbed.
+"""bead-queues against a real bd workspace (the pour tests' own dolt server), with `atm` and `gh` stubbed.
 
 The beads are built in the package's shape: sprint groups poured by bead-groups
 under a container that is a child of the phase root, finding beads and fix
@@ -20,7 +20,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_bead_pour_mock import MISSING, SKIP_REASON, Workspace, findings_file, group, init_workspace, stop_server  # noqa: E402
 
 FAKE_ATM = """#!/usr/bin/env python3
-import os, sys
+import json, os, sys
+if os.environ.get("FAKE_ATM_ARGV"):
+    open(os.environ["FAKE_ATM_ARGV"], "w").write(json.dumps(sys.argv[1:]))
 sys.stdout.write(open(os.environ["FAKE_ATM_TASKS"]).read())
 """
 FAKE_GH = """#!/usr/bin/env python3
@@ -238,11 +240,36 @@ class BeadQueuesTests(unittest.TestCase):
         q = Queues(self.ws, "er")
         proc = q.run("--json", env={"FAKE_GH_FAIL": "1"})
         assert proc.returncode == 2 and proc.stdout == "" and "gh" in proc.stderr
-        proc = q.run("--json", env={"ATM_IDENTITY": ""})
-        assert proc.returncode == 3 and proc.stdout == ""
+        proc = q.run("--json", env={"ATM_IDENTITY": ""})   # the workspace config has no lead
+        assert proc.returncode == 3 and proc.stdout == "" and "roles.lead" in proc.stderr
         self.ws.bd("delete", q.root, "--force")
         proc = q.run("--json")
         assert proc.returncode == 2 and proc.stdout == "" and q.root in proc.stderr
+
+    def test_caller_defaults_to_the_repository_lead_and_atm_toml_team(self):
+        """Without ATM_IDENTITY and ATM_TEAM the caller is the configured lead in .atm.toml's default team;
+        the environment, then the flags, take precedence."""
+        q = Queues(self.ws, "id")
+        config = self.ws.root / ".claude/project/atm-bd-orchestration.yaml"
+        original = config.read_text()
+        atm_toml = self.ws.root / ".atm.toml"
+        self.addCleanup(config.write_text, original)
+        self.addCleanup(atm_toml.unlink, missing_ok=True)
+        config.write_text(original + "lead: lead-from-config\n")
+        atm_toml.write_text('[atm]\ndefault_team = "team-from-toml"\n')
+        argv = q.dir / "atm-argv.json"
+
+        def caller(*args: str, **env: str) -> list[str]:
+            proc = q.run(*args, env={"ATM_IDENTITY": "", "ATM_TEAM": "", "FAKE_ATM_ARGV": str(argv), **env})
+            assert proc.returncode == 0, proc.stderr
+            sent = json.loads(argv.read_text())
+            return [sent[sent.index("--as") + 1], sent[sent.index("--team") + 1] if "--team" in sent else None]
+
+        assert caller() == ["lead-from-config", "team-from-toml"]
+        assert caller(ATM_IDENTITY="env-me", ATM_TEAM="env-team") == ["env-me", "env-team"]
+        assert caller("--as", "flag-me", "--team", "flag-team", ATM_IDENTITY="env-me", ATM_TEAM="env-team") == ["flag-me", "flag-team"]
+        atm_toml.unlink()
+        assert caller() == ["lead-from-config", None]
 
 
 if __name__ == "__main__":

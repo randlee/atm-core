@@ -655,7 +655,7 @@ class QaLogContractTests(unittest.TestCase):
 
     ROUND_ROW = ("'{completed_at:$completed_at, completed_local:$completed_local, duration:$duration, phase:$phase, sprint:$sprint,\n"
                  "    task:$task, pr_number:(($pr_number|tonumber?)//null), iteration:$iteration, verdict:$verdict, tested:$tested,\n"
-                 "    fnd:$fnd, blk:$blk, imp:$imp, min:$min}' >> .sc/qa-log/phase-d.jsonl")
+                 "    fnd:$fnd, blk:$blk, imp:$imp, min:$min}')\nprintf '%s\\n' \"$ROW\" >> .sc/qa-log/phase-d.jsonl")
     STATS_ROW = ("  {snapshot_at: $completed_at, snapshot_local: $completed_local, phase: $ph, trigger_task: $task,\n"
                  "   tot: ($f | length),\n")
 
@@ -665,10 +665,11 @@ class QaLogContractTests(unittest.TestCase):
                 result = _render("qa-template.xml.j2", _example(example))
                 self.assertEqual(result.returncode, 0, result.stderr)
                 step = result.stdout[result.stdout.index('<step id="j">'):]
-                self.assertIn("mkdir -p .sc/qa-log\nLOCKDIR=.sc/qa-log/.append.lock\n", step)
+                self.assertIn("mkdir -p .sc/qa-log\n", step)
+                self.assertNotIn("LOCKDIR", step)   # one printf append per row; no lock
                 self.assertIn(self.ROUND_ROW, step)
                 self.assertIn(self.STATS_ROW, step)
-                self.assertIn("min: ([$f[] | select(.status==\"open\" and .metadata.severity==\"minor\")] | length)}' >> .sc/qa-log/phase-d-stats.jsonl", step)
+                self.assertIn("min: ([$f[] | select(.status==\"open\" and .metadata.severity==\"minor\")] | length)}')\nprintf '%s\\n' \"$STATS\" >> .sc/qa-log/phase-d-stats.jsonl", step)
 
 
 if __name__ == "__main__":

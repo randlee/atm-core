@@ -23,15 +23,16 @@ def _step_j(values: dict) -> str:
     if result.returncode:
         raise AssertionError(result.stderr)
     text = result.stdout[result.stdout.index('<step id="j">'):]
-    return text[text.index("```"):text.rindex("rmdir")]
+    start = text.index("```")
+    return text[start:text.index("```", start + 3)]
 
 
 def _produce(step: str, workdir: Path, findings: list[dict] | None = None,
              bd_rows: list[dict] | None = None, blocking: dict | None = None) -> tuple[dict, dict]:
     """Run step j's count lines and two row writers on real finding rows (bd replaced by `bd_rows`)."""
     counts = step[step.index("FNDFILE="):step.index("TESTED=")].replace("<scratch>", str(workdir))
-    round_cmd = step[step.index("jq -nc"):step.index("\n\nbd list")]
-    stats_cmd = step[step.index("bd list"):].rstrip()
+    round_cmd = step[step.index("ROW=$(jq -nc"):step.index("\n\nSTATS=$(bd list")]
+    stats_cmd = step[step.index("STATS=$(bd list"):].rstrip()
     (workdir / "bd-list.json").write_text(json.dumps(bd_rows or []))
     stats_cmd = stats_cmd.replace("bd list --all --json 2>/dev/null", "cat bd-list.json", 1)
     if findings:

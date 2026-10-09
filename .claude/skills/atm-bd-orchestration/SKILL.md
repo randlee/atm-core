@@ -1,6 +1,6 @@
 ---
 name: atm-bd-orchestration
-version: 0.7.2
+version: 0.7.3
 description: Bead-driven phase orchestration for the lead. Use when running a phase whose plan is in beads, dispatching from `bd ready` with ATM tasks, and landing it as one gh stack.
 requires:
   cli:
@@ -253,8 +253,9 @@ No dev bead is dispatched until the plan passes review.
    containers. It gets no assignee; dispatch sets it:
 
    ```bash
-   bd create --id <root>-plan-qa --type task --parent <root> \
+   bd create --id <root>-plan-qa --type task \
      -l phase-<x>,stage:plan-review --title "phase-<x>: plan review"
+   bd update <root>-plan-qa --parent <root>    # bd refuses --id with --parent
    bd dep add <sprint container> <root>-plan-qa    # once per sprint container
    ```
 
@@ -380,9 +381,10 @@ review bead and dispatch it with `review-template.xml.j2`. After corrections,
 reuse its carried verification scope at the new integration head:
 
 ```bash
-bd create --id <root>-review --type task --parent <root> \
+bd create --id <root>-review --type task \
   -l phase-<x>,stage:review --assignee <reviewer> \
   --title "phase-<x>: phase-end review"
+bd update <root>-review --parent <root>    # bd refuses --id with --parent
 ```
 
 On review-complete, file each finding with `finding-bead.json.j2`, using:
