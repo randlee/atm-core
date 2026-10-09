@@ -539,7 +539,7 @@ fn export_health(doctor: &serde_json::Value) -> AtmTelemetryExportHealth {
 }
 
 /// The daemon shutdown steps, in call order, each given the shared deadline.
-const SHUTDOWN_STEPS: [&str; 7] = [
+const SHUTDOWN_STEPS: [&str; 8] = [
     "entry",
     "listener",
     "recovery_sweep",
@@ -547,6 +547,7 @@ const SHUTDOWN_STEPS: [&str; 7] = [
     "telemetry_drains",
     "atm_temp_sweeper",
     "export",
+    "timeline_flush_worker",
 ];
 
 /// Proves the shutdown bound by construction from the recorded steps, never

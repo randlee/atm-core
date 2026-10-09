@@ -813,8 +813,9 @@ fn legacy_literal_ip_policy_from_value(value: Option<String>) -> LegacyLiteralIp
 /// Drains every supervised subsystem under one cumulative deadline fixed at
 /// shutdown entry (ADR-055, REQ-DAEMON-RUNTIME-003): listener, recovery sweep,
 /// peer connections, task/workflow telemetry drains, the `$ATM_TEMP` sweeper,
-/// the retained-logger flushes around exporter shutdown each get only the
-/// remaining time, never a fresh budget.
+/// the retained-logger flushes around exporter shutdown and the diagnostic
+/// timeline flush worker each get only the remaining time, never a fresh
+/// budget.
 /// Every terminal daemon path uses this sequence, so a failed ready handshake
 /// cannot leave a subsystem alive after the listener is gone. The returned
 /// result is the listener's; telemetry outcomes are retained as health.
@@ -869,7 +870,12 @@ async fn shutdown_replacement_daemon(
         shutdown_probe::step("export", deadline, observability.shutdown_export(deadline)).await;
         observability.flush_logger(deadline).await;
     }
-    diagnostic_timeline::stop_flush_worker();
+    shutdown_probe::step(
+        "timeline_flush_worker",
+        deadline,
+        diagnostic_timeline::stop_flush_worker(deadline),
+    )
+    .await;
     if let Some(observability) = &workers.observability {
         // Last: the timeline worker and the flushes above still log through it.
         observability.shutdown_logger(deadline).await;
