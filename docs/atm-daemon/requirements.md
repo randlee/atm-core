@@ -295,8 +295,9 @@ Initial crate requirement IDs:
   and reports `ConfigInvalid`; every committed task fact is exported while
   the daemon serves; collector outages change export health only, never a
   task result; provider shutdown runs last within the cumulative shutdown
-  deadline, so the process exits within 5s when clean and within 10s with a
-  full queue and a stalled collector. Satisfies: `REQ-P-OBS-005`,
+  deadline (5s); the benchmark smoke run checks that a clean stop exits 0
+  within 5s, and no test measures a stop-time bound with a full queue and a
+  stalled collector. Satisfies: `REQ-P-OBS-005`,
   `REQ-CORE-TASK-TELEMETRY-001`.
 - `REQ-DAEMON-HEALTH-001` `atm-daemon` owns the daemon health interface
   consumed by `atm doctor`. The minimum daemon-owned field inventory is:

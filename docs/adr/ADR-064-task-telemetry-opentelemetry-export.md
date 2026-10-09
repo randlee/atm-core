@@ -115,7 +115,8 @@ not a replacement for task-ledger history.
 
 ### D9. First-party boundary governance
 
-The boundary manifest permits `atm-runtime` and `atm-observability` only,
+The boundary manifest permits `atm-runtime`, `atm-observability` and the
+`atm-runtime-test-support` test crate only,
 forbids payload/variable export, and requires best-effort behavior. The seal is
 the ADR-001 workspace-convention seal enforced by boundary lint and review.
 
@@ -143,7 +144,7 @@ gRPC (tonic). No other observability facade or HTTP exporter is composed.
   handle to the router and the queue-wake pump. Producers call the
   non-blocking `try_emit`.
 - Actual task producers: the router (assigned, reassigned, started, closed,
-  reopened, rejected, prompt handoff) and the queue-wake pump (reminded,
+  reopened, moved, rejected, prompt handoff) and the queue-wake pump (reminded,
   reminders reset, lead notified, reminder prompt handoff). Acknowledgement
   produces no row and no record.
 - Bounds are the exporter constants: SDK queue `EXPORT_QUEUE` 256, batch

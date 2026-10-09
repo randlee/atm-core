@@ -715,7 +715,8 @@ The exact design is owned by:
 Task telemetry (`REQ-CORE-TASK-TELEMETRY-001`, ADR-064):
 
 - `atm-core` owns the task telemetry record, the sealed `TaskTelemetrySink`
-  with its no-op default, `TelemetryExportConfig`, `LogDestination` and the
+  (there is no default sink: without an exporter the runtime holds none),
+  `TelemetryExportConfig`, `LogDestination` and the
   export health projection on `AtmObservabilityHealth.export`
 - `atm-runtime` composes and is the sole holder and caller of the sink;
   `atm-observability` owns the OpenTelemetry exporter that implements it

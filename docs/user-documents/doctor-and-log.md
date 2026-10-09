@@ -57,7 +57,8 @@ and collector delivery.
 
 Export is inert unless `ATM_OTEL_ENDPOINT` is set. Configure it with
 `ATM_OTEL_PROTOCOL=grpc` (the only supported protocol), optionally
-`ATM_OTEL_AUTH_HEADER`, and `ATM_OTEL_SERVICE_NAME` (default: `atm-daemon`).
+`ATM_OTEL_AUTH_HEADER` (the value of the `authorization` header, for example
+`Bearer <token>`, not a full `authorization: ...` header line), and `ATM_OTEL_SERVICE_NAME` (default: `atm-daemon`).
 `ATM_LOG_DESTINATION` defaults to `file`; `otel` and `both` require an export
 endpoint. The `atm` CLI and the daemon route their log records to the same
 destination; with `otel` neither writes the local JSONL log. Do not place

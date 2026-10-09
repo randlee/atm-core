@@ -4,8 +4,10 @@
 //! daemon on its own multi-thread runtime, exports to a collector living in
 //! the parent process, and stops on request: `shutdown_replacement_daemon`,
 //! runtime teardown (which releases abandoned SDK blocking calls), process
-//! exit. The parent awaits the child's exit status. The 5s/10s stop bounds
-//! of the shipped binary are measured by the benchmark smoke run, not here.
+//! exit. The parent awaits the child's exit status. No stop-time bound is
+//! asserted here. The benchmark smoke run (`scripts/smoke`) checks only that a
+//! clean stop of the shipped binary exits 0 within 5s; the 10s bound for a full
+//! queue and a stalled collector is not measured by either.
 #![cfg(test)]
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -676,8 +678,8 @@ fn final_record_index(lines: &[String], backlog: usize) -> usize {
 /// Positive: after `shutdown_replacement_daemon` and a real process exit, the
 /// final lifecycle record is on disk behind a full backlog, and the collector
 /// holds it. The child exits only once the parent saw the record stored, so
-/// no real-time delivery bound is asserted. SDK diagnostics are never exported
-/// back to the collector. Omitting the first flush loses it from disk.
+/// no real-time delivery bound is asserted. Omitting the first flush loses it
+/// from disk.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::parallel(slo)]
 async fn final_lifecycle_record_reaches_disk_and_collector() {
