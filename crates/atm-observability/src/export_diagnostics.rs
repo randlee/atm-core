@@ -1,4 +1,4 @@
-//! Observable SDK failures only; private SDK queue/drop totals are unknown.
+//! Observable SDK failures and queue drops; private SDK drop totals are unknown.
 
 use std::sync::Mutex;
 
@@ -12,6 +12,9 @@ struct Failure {
     // Only the class is kept: SDK error text can contain credentials or
     // collector-supplied text and is never stored or formatted into logs.
     kind: Option<AtmTelemetryExportFailure>,
+    // An SDK batch processor dropped a record on a full or closed queue. Only
+    // the occurrence is observable; the SDK keeps the count private.
+    queue_dropped: bool,
 }
 
 /// Failure evidence shared by the existing tracing bridge and bootstrap.
@@ -23,17 +26,26 @@ pub struct ExportDiagnostics {
 }
 
 impl ExportDiagnostics {
-    /// Records the only four qualified mid-run export failure event names.
-    /// SDK tracing fields expose no typed source, so their class is Unavailable.
+    /// Records the four qualified mid-run export failure event names and the
+    /// batch processors' queue-drop event names. SDK tracing fields expose no
+    /// typed source, so a failure's class is Unavailable.
     pub fn observe_sdk_event(&self, name: &str) {
-        if matches!(
-            name,
+        match name {
             "BatchSpanProcessor.Export.Error"
-                | "BatchSpanProcessor.Flush.ExportError"
-                | "BatchLogProcessor.Export.Error"
-                | "PeriodicReader.ExportFailed"
-        ) {
-            self.record(AtmTelemetryExportFailure::Unavailable);
+            | "BatchSpanProcessor.Flush.ExportError"
+            | "BatchLogProcessor.Export.Error"
+            | "PeriodicReader.ExportFailed" => self.record(AtmTelemetryExportFailure::Unavailable),
+            // The first drop on a full or closed queue, and the shutdown
+            // report the async-runtime processors emit only after a drop.
+            "BatchSpanProcessor.SpanDroppingStarted"
+            | "BatchSpanProcessor.Shutdown"
+            | "BatchLogProcessor.LogDroppingStarted"
+            | "BatchLogProcessor.LogsDropped" => {
+                if let Ok(mut failure) = self.failure.lock() {
+                    failure.queue_dropped = true;
+                }
+            }
+            _ => {}
         }
     }
 
@@ -69,15 +81,17 @@ impl ExportDiagnostics {
         }
     }
 
-    /// Adds observable failure evidence to runtime-owned counts. It never
-    /// invents loss counts for the SDK's private queues.
+    /// Adds observable failure evidence to runtime-owned counts. An SDK queue
+    /// drop degrades a healthy export; a failure makes it unavailable. It
+    /// never invents loss counts for the SDK's private queues.
     pub fn project(&self, health: &mut AtmTelemetryExportHealth) {
-        let kind = self
-            .failure
-            .lock()
-            .map_or(Some(AtmTelemetryExportFailure::Unavailable), |failure| {
-                failure.kind
-            });
+        let (kind, queue_dropped) = self.failure.lock().map_or(
+            (Some(AtmTelemetryExportFailure::Unavailable), false),
+            |failure| (failure.kind, failure.queue_dropped),
+        );
+        if queue_dropped && health.state == AtmTelemetryExportState::Healthy {
+            health.state = AtmTelemetryExportState::Degraded;
+        }
         if let Some(kind) = kind {
             health.last_failure = Some(kind);
             health.state = AtmTelemetryExportState::Unavailable;

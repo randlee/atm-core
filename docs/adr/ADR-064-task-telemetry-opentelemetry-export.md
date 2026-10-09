@@ -172,11 +172,15 @@ gRPC (tonic). No other observability facade or HTTP exporter is composed.
   daemon, reports it, and fails the run over 5s or on a non-zero exit.
 - Health: `Inert` with no endpoint; `Healthy` when configured and no loss or
   failure has been observed; `Degraded` when the runtime counted
-  `dropped_full` or `dropped_failure`; `Unavailable` with
+  `dropped_full` or `dropped_failure`, or an SDK batch processor reported a
+  queue drop (`BatchSpanProcessor.SpanDroppingStarted`/`Shutdown`,
+  `BatchLogProcessor.LogDroppingStarted`/`LogsDropped`) through the tracing
+  bridge; `Unavailable` with
   `last_failure` set when the SDK reported a transport failure through the
   process-global tracing bridge, a provider shutdown failed or timed out, or
   configuration was invalid. An observed failure is not cleared by later
-  success. SDK-private queue losses are unknown and never invented. The
+  success. An SDK queue drop is observed, but its count stays private to
+  the SDK and is never invented or added to the runtime counts. The
   governed doctor JSON keeps `dropped_timeout`, which is always 0 because
   the synchronous sink has no emit timeout.
 - Shutdown aborts a drain that outlives its deadline. Because the sink is
