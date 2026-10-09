@@ -50,16 +50,39 @@ impl IdGenerator for DurableIds {
     }
 }
 
+/// A 256-bit SHA-256 identity: the assignment key, an event/span id, or an assignment span id.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct TelemetryDigest([u8; 32]);
+
+impl TelemetryDigest {
+    fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
+/// The Started event of an assignment: its sequence (when known) and wall time.
+#[derive(Clone, Copy)]
+struct StartMark {
+    seq: Option<u64>,
+    at: SystemTime,
+}
+
+/// A buffered span event with the sequence that ordered it, when it has one.
+struct SeqEvent {
+    seq: Option<u64>,
+    event: Event,
+}
+
 struct Assignment {
     generation: Option<u64>,
     assigned: Option<SystemTime>,
-    started: Option<(Option<u64>, SystemTime)>,
+    started: Option<StartMark>,
     first: SystemTime,
     last: SystemTime,
     highest_seq: Option<u64>,
     closed_through: Option<u64>,
     closed: bool,
-    events: Vec<(Option<u64>, Event)>,
+    events: Vec<SeqEvent>,
     bytes: usize,
     attributes: Vec<KeyValue>,
     touched: u64,
@@ -87,12 +110,12 @@ impl Assignment {
         // Move only sequence-proven future events into that generation.
         let (future, previous) = std::mem::take(&mut self.events)
             .into_iter()
-            .partition(|(seq, _)| seq.is_some() && *seq >= generation);
+            .partition(|event| event.seq.is_some() && event.seq >= generation);
         next.events = future;
         self.events = previous;
         if self
             .started
-            .is_some_and(|(seq, _)| seq.is_some() && seq >= generation)
+            .is_some_and(|start| start.seq.is_some() && start.seq >= generation)
         {
             next.started = self.started.take();
         }
@@ -100,15 +123,15 @@ impl Assignment {
         next.last = next
             .events
             .iter()
-            .map(|(_, event)| event.timestamp)
+            .map(|buffered| buffered.event.timestamp)
             .max()
             .unwrap_or(at)
             .max(at);
-        next.highest_seq = next.events.iter().filter_map(|(seq, _)| *seq).max();
+        next.highest_seq = next.events.iter().filter_map(|buffered| buffered.seq).max();
         self.last = self
             .events
             .iter()
-            .map(|(_, event)| event.timestamp)
+            .map(|buffered| buffered.event.timestamp)
             .max()
             .unwrap_or(self.first);
     }
@@ -116,14 +139,14 @@ impl Assignment {
 
 #[derive(Default)]
 struct State {
-    assignments: HashMap<[u8; 32], Assignment>,
-    seen: HashSet<[u8; 32]>,
-    order: VecDeque<[u8; 32]>,
+    assignments: HashMap<TelemetryDigest, Assignment>,
+    seen: HashSet<TelemetryDigest>,
+    order: VecDeque<TelemetryDigest>,
     clock: u64,
 }
 
 impl State {
-    fn duplicate(&mut self, id: [u8; 32]) -> bool {
+    fn duplicate(&mut self, id: TelemetryDigest) -> bool {
         if !self.seen.insert(id) {
             return true;
         }
@@ -179,9 +202,9 @@ impl TaskExporter {
             record.task_id.as_str().as_bytes(),
         ]);
         let id = if let Some(seq) = record.seq {
-            identity(&[b"event", &key, &seq.to_be_bytes()])
+            identity(&[b"event", key.as_bytes(), &seq.to_be_bytes()])
         } else {
-            identity(&[b"handoff", &key, &encoded])
+            identity(&[b"handoff", key.as_bytes(), &encoded])
         };
         let at: SystemTime = record.at.into_inner().into();
         let attributes = task_attributes(&record);
@@ -225,7 +248,7 @@ impl TaskExporter {
     fn project_task(
         &self,
         state: &mut State,
-        key: [u8; 32],
+        key: TelemetryDigest,
         record: &TaskTelemetryRecord,
         attributes: Vec<KeyValue>,
         bytes: usize,
@@ -256,7 +279,7 @@ impl TaskExporter {
 
     fn record_assignment(
         &self,
-        key: [u8; 32],
+        key: TelemetryDigest,
         assignment: &mut Assignment,
         record: &TaskTelemetryRecord,
         attributes: Vec<KeyValue>,
@@ -293,17 +316,17 @@ impl TaskExporter {
             assignment.attributes = attributes.clone();
         }
         if record.kind == Kind::Started {
-            assignment.started = Some((record.seq, at));
+            assignment.started = Some(StartMark { seq: record.seq, at });
         }
         assignment.first = assignment.first.min(at);
         assignment.last = assignment.last.max(at);
         assignment.highest_seq = assignment.highest_seq.max(record.seq);
         if assignment.events.len() < EVENT_LIMIT && assignment.bytes + bytes <= BYTE_LIMIT {
             assignment.bytes += bytes;
-            assignment.events.push((
-                record.seq,
-                Event::new(record.kind.as_str(), at, attributes, 0),
-            ));
+            assignment.events.push(SeqEvent {
+                seq: record.seq,
+                event: Event::new(record.kind.as_str(), at, attributes, 0),
+            });
         }
         if ends_assignment(record.kind) {
             self.close_assignment(key, assignment, record);
@@ -312,7 +335,7 @@ impl TaskExporter {
 
     fn close_assignment(
         &self,
-        key: [u8; 32],
+        key: TelemetryDigest,
         assignment: &mut Assignment,
         record: &TaskTelemetryRecord,
     ) {
@@ -325,8 +348,8 @@ impl TaskExporter {
         if let Some(assigned) = assignment.assigned {
             // Defer duration metrics until closure so a late assignment
             // row can associate an already-observed start correctly.
-            if let Some((_, started)) = assignment.started
-                && let Ok(duration) = started.duration_since(assigned)
+            if let Some(start) = assignment.started
+                && let Ok(duration) = start.at.duration_since(assigned)
             {
                 self.time_to_start
                     .record(duration.as_secs_f64() * 1000., &[]);
@@ -351,7 +374,7 @@ impl TaskExporter {
             attributes,
             std::mem::take(&mut assignment.events)
                 .into_iter()
-                .map(|(_, event)| event)
+                .map(|buffered| buffered.event)
                 .collect(),
         );
         assignment.closed_through = record.seq.or(assignment.highest_seq);
@@ -359,7 +382,7 @@ impl TaskExporter {
         assignment.bytes = 0;
     }
 
-    fn finish_assignment(&self, key: [u8; 32], assignment: Assignment, partial: bool) {
+    fn finish_assignment(&self, key: TelemetryDigest, assignment: Assignment, partial: bool) {
         if assignment.events.is_empty() {
             return;
         }
@@ -378,7 +401,7 @@ impl TaskExporter {
             assignment
                 .events
                 .into_iter()
-                .map(|(_, event)| event)
+                .map(|buffered| buffered.event)
                 .collect(),
         );
     }
@@ -523,28 +546,28 @@ impl WorkflowTelemetrySink for TaskExporter {
     }
 }
 
-fn identity(parts: &[&[u8]]) -> [u8; 32] {
+fn identity(parts: &[&[u8]]) -> TelemetryDigest {
     let mut hash = Sha256::new();
     for part in parts {
         hash.update((part.len() as u64).to_be_bytes());
         hash.update(part);
     }
-    hash.finalize().into()
+    TelemetryDigest(hash.finalize().into())
 }
 
-fn trace_id_from_digest(digest: [u8; 32]) -> TraceId {
+fn trace_id_from_digest(digest: TelemetryDigest) -> TraceId {
     let mut bytes = [0; 16];
-    bytes.copy_from_slice(&digest[..16]);
+    bytes.copy_from_slice(&digest.as_bytes()[..16]);
     TraceId::from_bytes(bytes)
 }
 
-fn span_id_from_digest(digest: [u8; 32]) -> SpanId {
+fn span_id_from_digest(digest: TelemetryDigest) -> SpanId {
     let mut bytes = [0; 8];
-    bytes.copy_from_slice(&digest[..8]);
+    bytes.copy_from_slice(&digest.as_bytes()[..8]);
     SpanId::from_bytes(bytes)
 }
 
-fn assignment_identity(key: [u8; 32], assignment: &Assignment) -> [u8; 32] {
+fn assignment_identity(key: TelemetryDigest, assignment: &Assignment) -> TelemetryDigest {
     let nanos = assignment
         .assigned
         .unwrap_or(assignment.first)
@@ -553,7 +576,7 @@ fn assignment_identity(key: [u8; 32], assignment: &Assignment) -> [u8; 32] {
         .as_nanos();
     identity(&[
         b"assignment",
-        &key,
+        key.as_bytes(),
         &assignment.generation.unwrap_or(0).to_be_bytes(),
         &nanos.to_be_bytes(),
     ])

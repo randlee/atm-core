@@ -83,6 +83,10 @@ pub enum DropReason {
 }
 
 /// AW.2's bounded diagnostic timeline hook.
+///
+/// Deliberately open (not sealed like the sibling sinks): the daemon bootstrap's
+/// `DiagnosticTimelineWriter` and the herdr queue-wake tests implement it from
+/// outside this crate.
 pub trait DiagnosticSink: Send + Sync {
     /// ```
     /// use std::sync::Arc;
