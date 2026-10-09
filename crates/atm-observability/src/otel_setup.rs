@@ -67,8 +67,8 @@ pub fn setup_telemetry(
         EXPORT_TRANSPORT_TIMEOUT,
         EXPORT_TIMEOUT,
     )
-    .map_err(|source| {
-        diagnostics.setup_failed(source);
+    .map_err(|_source| {
+        diagnostics.setup_failed();
         atm_core::error::AtmError::new(
             atm_core::error::AtmErrorCode::TelemetryExportConfigInvalid,
             "native OpenTelemetry setup failed; check ATM_OTEL_ENDPOINT and ATM_OTEL_AUTH_HEADER",
