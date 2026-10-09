@@ -256,8 +256,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   (`REPLACEMENT_DRAIN_DEADLINE`, 5s), in this order: listener, recovery sweep,
   peer connections, the task telemetry drain, the `$ATM_TEMP` sweeper, a
   retained-logger flush, the OpenTelemetry providers within
-  `min(1s, remaining)`, a second logger flush, then the diagnostic timeline
-  flush worker. The first caller owns provider shutdown, so concurrent
+  `min(1s, remaining)`, a second logger flush, the diagnostic timeline
+  flush worker, then the final retained-logger shutdown. The first caller owns provider shutdown, so concurrent
   or cancelled callers observe the same stored outcome (ADR-064 D11)
 - startup does not run a replay-resume sweep or require a SQLite-backed replay
   store. ADR-038's explicitly requested, bounded canonical record scan is the
