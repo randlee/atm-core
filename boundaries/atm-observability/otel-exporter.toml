@@ -30,9 +30,9 @@ scope = "outside_owner_crate"
 forbidden = []
 
 [contracts]
-request_types = ["TaskTelemetryRecord", "WorkflowTelemetryRecord", "TelemetryExportConfig", "LogDestination"]
-response_types = ["TaskTelemetrySetup", "WorkflowTelemetrySetup", "SdkTracerProvider", "SdkLoggerProvider", "SdkMeterProvider"]
-error_types = ["TaskTelemetryError", "WorkflowTelemetryError", "OTelSdkError"]
+request_types = ["TaskTelemetryRecord", "TelemetryExportConfig", "LogDestination"]
+response_types = ["TaskTelemetrySetup", "SdkTracerProvider", "SdkLoggerProvider", "SdkMeterProvider"]
+error_types = ["TaskTelemetryError", "OTelSdkError"]
 
 [testing]
 allowed_test_double_paths = []

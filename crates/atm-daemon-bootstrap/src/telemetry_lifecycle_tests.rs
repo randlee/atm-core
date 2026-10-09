@@ -167,7 +167,6 @@ impl Daemon {
         }
         let runtime = assembly.service_runtime.clone();
         let task_telemetry = assembly.task_telemetry.clone();
-        let workflow_telemetry = assembly.workflow_telemetry.clone();
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
         let (handler, recovery_sweep) = build_replacement_handler(
             assembly,
@@ -236,7 +235,6 @@ impl Daemon {
             running,
             handler,
             workers: DaemonWorkers {
-                workflow_telemetry,
                 task_telemetry,
                 recovery_sweep,
                 atm_temp_sweeper,
@@ -544,7 +542,7 @@ const SHUTDOWN_STEPS: [&str; 8] = [
     "listener",
     "recovery_sweep",
     "peer_connections",
-    "telemetry_drains",
+    "task_telemetry",
     "atm_temp_sweeper",
     "export",
     "timeline_flush_worker",
@@ -618,15 +616,13 @@ async fn composition_uses_only_the_supplied_observability_owner() {
     )
     .expect("compose daemon runtime");
 
-    let (task, workflow) = supplied.take_telemetry_setups();
     assert!(
-        task.is_none() && workflow.is_none(),
-        "composition took the supplied owner's setups"
+        supplied.take_telemetry_setup().is_none(),
+        "composition took the supplied owner's setup"
     );
-    let (task, workflow) = other.take_telemetry_setups();
     assert!(
-        task.is_some() && workflow.is_some(),
-        "an owner composition was not handed keeps its setups"
+        other.take_telemetry_setup().is_some(),
+        "an owner composition was not handed keeps its setup"
     );
 }
 
@@ -998,42 +994,38 @@ fn assert_export_remediation(doctor: &serde_json::Value) {
     );
 }
 
-/// A task runtime whose sink never completes, with a one-record queue and a
-/// short emit timeout, so a burst leaves real `dropped_full` (queue) and
-/// `dropped_timeout` (stuck emit) counts. Attach it before composing the daemon.
-async fn lossy_task_runtime() -> atm_runtime::TaskTelemetryRuntime {
+/// A task runtime whose sink stalls until the returned release is dropped,
+/// with a one-record queue, so a burst leaves real `dropped_full` counts.
+/// Attach it before composing the daemon, and drop the release before
+/// shutting the runtime down.
+async fn lossy_task_runtime() -> (
+    atm_runtime::TaskTelemetryRuntime,
+    atm_runtime_test_support::StallRelease,
+) {
+    let (entered_tx, mut entered) = tokio::sync::mpsc::unbounded_channel();
+    let (sink, release) =
+        atm_runtime_test_support::StalledTaskTelemetrySink::reporting(move || {
+            let _ = entered_tx.send(());
+        });
     let runtime = atm_runtime::TaskTelemetryRuntime::start(
         atm_runtime::TaskTelemetryConfig {
             queue_capacity: 1,
-            emit_timeout: Duration::from_millis(200),
             ..Default::default()
         },
-        Arc::new(atm_runtime_test_support::StalledTaskTelemetrySink),
+        Arc::new(sink),
     );
-    // One record in flight and one queued at most; the rest must drop full.
-    const RECORDS: u64 = 6;
-    for seq in 1..=RECORDS {
+    runtime.try_emit(task_record(1));
+    tokio::time::timeout(EXPORT_WAIT, entered.recv())
+        .await
+        .expect("the worker never reached the stalled sink")
+        .expect("the stalled sink is alive");
+    // One record is in the stalled sink and one fills the queue; the rest
+    // drop full, synchronously, so no counter moves after this point.
+    for seq in 2..=6 {
         runtime.try_emit(task_record(seq));
     }
-    let diagnostics = runtime.diagnostics();
-    let mut cadence = tokio::time::interval(Duration::from_millis(20));
-    // The sink never succeeds, so every record ends as exactly one loss. Wait
-    // for that quiescent state: afterwards no emit timer is left to move a
-    // counter between the doctor read and the diagnostics snapshot.
-    tokio::time::timeout(EXPORT_WAIT, async {
-        loop {
-            let snapshot = diagnostics.snapshot();
-            if snapshot.dropped_full + snapshot.dropped_timeout == RECORDS {
-                break;
-            }
-            cadence.tick().await;
-        }
-    })
-    .await
-    .expect("every emitted record ends as a full or timed-out loss");
-    let snapshot = diagnostics.snapshot();
-    assert!(snapshot.dropped_full > 0, "{snapshot:?}");
-    runtime
+    assert_eq!(runtime.diagnostics().snapshot().dropped_full, 4);
+    (runtime, release)
 }
 
 /// Doctor reports exactly the runtime's known losses, disjoint per cause.
@@ -1042,12 +1034,12 @@ fn assert_doctor_reports_losses(
     losses: atm_runtime::TaskTelemetryDiagnosticsSnapshot,
 ) {
     let health = export_health(doctor);
-    assert!(
-        losses.dropped_full > 0 && losses.dropped_timeout > 0,
-        "{losses:?}"
-    );
+    assert!(losses.dropped_full > 0, "{losses:?}");
     assert_eq!(health.dropped_full, losses.dropped_full);
-    assert_eq!(health.dropped_timeout, losses.dropped_timeout);
+    assert_eq!(
+        health.dropped_timeout, 0,
+        "the governed field stays and the synchronous sink never times out"
+    );
     assert_eq!(
         (health.dropped_failure, health.dropped_shutdown),
         (0, 0),
@@ -1120,11 +1112,8 @@ fn unreachable_collector_child() {
         observability
             .install_tracing_bridge()
             .expect("the child process owns the global tracing bridge");
-        let lossy = lossy_task_runtime().await;
-        observability.attach_runtime_telemetry(
-            lossy.diagnostics(),
-            Arc::new(atm_runtime::WorkflowTelemetryDiagnostics::default()),
-        );
+        let (lossy, _release) = lossy_task_runtime().await;
+        observability.attach_runtime_telemetry(lossy.diagnostics());
         let daemon = Daemon::compose(root, observability).await;
         for task in ["BD6-U1", "BD6-U2", "BD6-U3"] {
             sent_message_id(
@@ -1159,20 +1148,17 @@ fn unreachable_collector_child() {
     println!("{}", exit::CHILD_SCENARIO_SENTINEL);
 }
 
-/// Positive: known runtime losses (a full task queue and a stuck emit) reach
-/// `doctor --json` as `Degraded` with exactly the runtime's `dropped_full` and
-/// `dropped_timeout`, as one export finding, with no SDK failure and no invented
-/// failure or shutdown loss.
+/// Positive: known runtime losses (a full task queue behind a stalled sink)
+/// reach `doctor --json` as `Degraded` with exactly the runtime's
+/// `dropped_full`, as one export finding, with no SDK failure and no invented
+/// timeout, failure or shutdown loss.
 /// Negative: the daemon keeps serving and the task write keeps its result.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn runtime_losses_reach_doctor_json_as_one_degraded_finding() {
     let collector = Receiver::start(false).await;
     let (root, observability) = Daemon::bootstrap(endpoint_env(&collector.endpoint)).await;
-    let lossy = lossy_task_runtime().await;
-    observability.attach_runtime_telemetry(
-        lossy.diagnostics(),
-        Arc::new(atm_runtime::WorkflowTelemetryDiagnostics::default()),
-    );
+    let (lossy, release) = lossy_task_runtime().await;
+    observability.attach_runtime_telemetry(lossy.diagnostics());
     let daemon = Daemon::compose(root, observability).await;
     sent_message_id(
         daemon
@@ -1191,6 +1177,7 @@ async fn runtime_losses_reach_doctor_json_as_one_degraded_finding() {
     assert_doctor_reports_losses(&doctor, lossy.diagnostics().snapshot());
     assert_export_remediation(&doctor);
     daemon.shutdown().await.expect("clean daemon shutdown");
+    drop(release);
     lossy
         .shutdown(Instant::now() + Duration::from_secs(5))
         .await;
@@ -1248,8 +1235,9 @@ async fn stalled_export_in_flight() -> (Receiver, tempfile::TempDir, DaemonObser
         DaemonObservability::bootstrap_from(&endpoint_env(&stalled.endpoint), root.path().into())
             .await
             .expect("bootstrap");
-    let (task, _workflow) = observability.take_telemetry_setups();
-    let task = task.expect("configured task setup");
+    let task = observability
+        .take_telemetry_setup()
+        .expect("configured task setup");
     let runtime = atm_runtime::TaskTelemetryRuntime::start(task.config, task.sink);
     for seq in 1..=64 {
         runtime.try_emit(task_record(seq));

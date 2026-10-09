@@ -134,8 +134,8 @@ The sweeper is the first periodic task composed against the replacement
 Tokio/Axum runtime (`atm-daemon-bootstrap`), not the legacy synchronous
 daemon's maintenance worker, which CLAUDE.md rules off-limits for new work.
 It follows the existing cancel-then-join-within-a-bounded-deadline shape
-already used for `WorkflowTelemetryRuntime::shutdown`
-(`crates/atm-runtime/src/workflow_telemetry.rs:171`): a shutdown signal is
+already used for `TaskTelemetryRuntime::shutdown`
+(`crates/atm-runtime/src/task_telemetry.rs`): a shutdown signal is
 sent, the worker is given its own bounded grace period to finish an
 in-flight per-entry removal, and only after that grace period expires is the
 task aborted — and even then, the abort is always joined. A raw

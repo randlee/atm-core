@@ -4,8 +4,8 @@
 //! Every step that can stall without changing a production API stalls: a
 //! local write held open by its received hook (listener drain), a recovery
 //! sweep and transition drain that never finish, a peer write whose detached
-//! hook never finishes (peer-connection drain), task and workflow telemetry
-//! sinks that never answer, a `$ATM_TEMP` sweep pass blocked in its
+//! hook never finishes (peer-connection drain), a task telemetry sink held
+//! until the test ends, a `$ATM_TEMP` sweep pass blocked in its
 //! observability emit, an OTLP export to a collector that never answers
 //! (exporter shutdown), and a retained-logger flush held on the blocking
 //! pool (both logger flush steps). The clock stays real: the exporter step shuts
@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::AuthenticatedIngress;
+use atm_core::SweepConfig;
 use atm_core::api::{ApiRequest, RequestDeadline};
 use atm_core::boundary::{
     AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
@@ -30,12 +31,9 @@ use atm_core::observability::{
     NullObservability, ObservabilityPort,
 };
 use atm_core::protocol::RequestEnvelope;
-use atm_core::{SweepConfig, WorkflowTelemetryRecord};
 use atm_http_runtime::{CanonicalWriteHandler, RuntimeHealth};
-use atm_runtime::{
-    TaskTelemetryConfig, TaskTelemetryRuntime, WorkflowTelemetryConfig, WorkflowTelemetryRuntime,
-};
-use atm_runtime_test_support::task_telemetry::ReportingStalledTelemetrySink;
+use atm_runtime::{TaskTelemetryConfig, TaskTelemetryRuntime};
+use atm_runtime_test_support::{StallRelease, StalledTaskTelemetrySink};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::time::Instant;
 
@@ -48,8 +46,8 @@ use crate::daemon_observability::RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT;
 use crate::queue_drain::RecoverySweepHandle;
 use crate::shutdown_probe::{Probe, observe};
 
-/// The longest emit and drain a telemetry runtime accepts, so only the shared
-/// shutdown deadline can end a stalled drain.
+/// The longest drain a telemetry runtime accepts, so only the shared shutdown
+/// deadline can end a stalled drain.
 const STALL_LIMIT: Duration = Duration::from_secs(30);
 
 /// Reports each hook start, then never finishes.
@@ -82,9 +80,12 @@ impl MessageReceivedHookSelector for StallingSelector {
     }
 }
 
-/// A telemetry sink that reports each emit on `entered`, then never finishes it.
-fn reporting_stalled_sink(entered: UnboundedSender<()>) -> ReportingStalledTelemetrySink {
-    ReportingStalledTelemetrySink::new(move || {
+/// A telemetry sink that reports each emit on `entered`, then holds it until
+/// the returned release is dropped.
+fn reporting_stalled_sink(
+    entered: UnboundedSender<()>,
+) -> (StalledTaskTelemetrySink, StallRelease) {
+    StalledTaskTelemetrySink::reporting(move || {
         let _ = entered.send(());
     })
 }
@@ -129,23 +130,6 @@ impl ObservabilityPort for BlockingEmit {
 
     fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
         NullObservability.health()
-    }
-}
-
-fn workflow_record() -> WorkflowTelemetryRecord {
-    WorkflowTelemetryRecord {
-        observation: atm_core::WorkflowTelemetryObservation::Incomplete,
-        scope_kind: atm_storage::WorkflowScopeKind::new("sprint").expect("kind"),
-        scope_id: atm_storage::WorkflowScopeId::new("bd-6").expect("scope"),
-        state: atm_storage::WorkflowState::new("opened").expect("state"),
-        stage: atm_storage::WorkflowStage::new("dev").expect("stage"),
-        transition: atm_storage::WorkflowTransition::new("start").expect("transition"),
-        iteration: None,
-        start_message_id: atm_storage::AtmMessageId::new(),
-        start_timestamp: atm_storage::IsoTimestamp::now(),
-        end_message_id: None,
-        end_timestamp: None,
-        duration_millis: None,
     }
 }
 
@@ -208,33 +192,21 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
     // composed handle it replaces aborts on drop.
     daemon.workers.recovery_sweep = RecoverySweepHandle::stalled_for_test(RuntimeHealth::default());
 
-    // Task and workflow drains: one record each sits in a sink that never
-    // answers. The composed runtimes it replaces stop at once.
+    // Task telemetry drain: one record sits in a sink held until the test
+    // ends, so only the deadline can end the drain. The composed runtime it
+    // replaces stops at once.
     let (sink_tx, mut sink_entered) = unbounded_channel();
+    let (sink, _sink_release) = reporting_stalled_sink(sink_tx);
     let task_telemetry = TaskTelemetryRuntime::start(
         TaskTelemetryConfig {
-            emit_timeout: STALL_LIMIT,
             drain_timeout: STALL_LIMIT,
             ..TaskTelemetryConfig::default()
         },
-        Arc::new(reporting_stalled_sink(sink_tx.clone())),
-    );
-    let workflow_telemetry = WorkflowTelemetryRuntime::start(
-        WorkflowTelemetryConfig {
-            emit_timeout: STALL_LIMIT,
-            drain_timeout: STALL_LIMIT,
-            ..WorkflowTelemetryConfig::default()
-        },
-        Arc::new(reporting_stalled_sink(sink_tx)),
+        Arc::new(sink),
     );
     task_telemetry.try_emit(task_record(65));
-    workflow_telemetry.try_emit(workflow_record());
     hook_started(&mut sink_entered, "task telemetry sink").await;
-    hook_started(&mut sink_entered, "workflow telemetry sink").await;
     std::mem::replace(&mut daemon.workers.task_telemetry, task_telemetry)
-        .shutdown(Instant::now())
-        .await;
-    std::mem::replace(&mut daemon.workers.workflow_telemetry, workflow_telemetry)
         .shutdown(Instant::now())
         .await;
 

@@ -719,8 +719,9 @@ Task telemetry (`REQ-CORE-TASK-TELEMETRY-001`, ADR-064):
   export health projection on `AtmObservabilityHealth.export`
 - `atm-runtime` composes and is the sole holder and caller of the sink;
   `atm-observability` owns the OpenTelemetry exporter that implements it
-- `TaskTelemetrySink` and `WorkflowTelemetrySink` remain separate domain
-  contracts; the exporter implements both
+- `TaskTelemetrySink` is the only telemetry sink contract: its synchronous
+  `emit` is called by the runtime's single worker, and the exporter's SDK
+  batch processor is the only export queue
 
 ## 6. Error-Code Registry Boundary
 

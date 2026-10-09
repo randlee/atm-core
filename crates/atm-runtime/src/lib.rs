@@ -11,7 +11,6 @@ mod legacy_storage_adapters;
 pub mod mailbox_runtime;
 pub mod task_telemetry;
 mod telemetry_limits;
-pub mod workflow_telemetry;
 
 pub use atm_storage::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
@@ -32,8 +31,4 @@ pub use mailbox_runtime::{
 pub use task_telemetry::{
     TaskTelemetryConfig, TaskTelemetryDiagnostics, TaskTelemetryDiagnosticsSnapshot,
     TaskTelemetryRuntime, TaskTelemetrySetup,
-};
-pub use workflow_telemetry::{
-    WorkflowTelemetryConfig, WorkflowTelemetryDiagnostics, WorkflowTelemetryRuntime,
-    WorkflowTelemetrySetup,
 };

@@ -4,8 +4,8 @@
 //! This is the first periodic maintenance task composed against
 //! `atm-daemon-bootstrap`/`atm-http-runtime` — not the legacy synchronous
 //! daemon's maintenance worker, which CLAUDE.md rules off-limits for new
-//! work. Its shutdown shape mirrors `WorkflowTelemetryRuntime::shutdown`
-//! (`crates/atm-runtime/src/workflow_telemetry.rs`): send a cancellation
+//! work. Its shutdown shape mirrors `TaskTelemetryRuntime::shutdown`
+//! (`crates/atm-runtime/src/task_telemetry.rs`): send a cancellation
 //! signal, give the worker its own bounded grace period to let an in-flight
 //! sweep pass finish, and only abort — always followed by a join — if that
 //! grace period expires. A raw `.abort()`-only shutdown does not guarantee

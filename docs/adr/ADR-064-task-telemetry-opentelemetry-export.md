@@ -28,13 +28,18 @@ template variables, or free-form event detail.
 
 ### D2. Separate task sink
 
-`TaskTelemetrySink` is a sealed, object-safe, first-party boundary with the
-same three delivery errors as `WorkflowTelemetrySink`. The workflow sink is
-not merged into or replaced by this contract.
+`TaskTelemetrySink` is a sealed, object-safe, first-party boundary. Its
+`emit` is synchronous and returns `Unavailable` or `Rejected`; it must not
+block. The task telemetry runtime's single worker calls it for each record
+taken from the one bounded ATM queue, so encoding, identity and dedup stay
+off the producer path, and the exporter's SDK batch processor is the only
+export queue behind it. There is no emit timeout. The former workflow
+telemetry runtime and `WorkflowTelemetrySink` had no production producer and
+were removed (2026-10-09 ruling), leaving this one runtime.
 
 ### D3. Best-effort isolation
 
-Export is best effort. A full queue, timeout, rejection, exporter failure, or
+Export is best effort. A full queue, rejection, exporter failure, or
 bounded-shutdown drop is diagnostic data only and cannot fail or roll back the
 task operation whose durable fact is being projected.
 
@@ -108,12 +113,12 @@ The boundary manifest permits `atm-runtime` and `atm-observability` only,
 forbids payload/variable export, and requires best-effort behavior. The seal is
 the ADR-001 workspace-convention seal enforced by boundary lint and review.
 
-### D10. Separate domain contracts
+### D10. One task telemetry contract
 
-`TaskTelemetrySink` and `WorkflowTelemetrySink` stay separate domain
-contracts, following the accepted ADR-046 design. One exporter implements
-both and maps their identical error sets through one table. This decision
-adds no generic telemetry framework.
+`TaskTelemetrySink` is the only telemetry sink contract; the exporter
+implements it. The ADR-046 workflow sink, which had no production producer,
+was removed with its runtime. This decision adds no generic telemetry
+framework.
 
 ### D11. Daemon composition
 
@@ -128,8 +133,8 @@ gRPC (tonic). No other observability facade or HTTP exporter is composed.
   serving with file logging, export disabled and `ConfigInvalid` health.
   Rejected values are never echoed.
 - Bootstrap holds only the lifecycle handles of the three standard providers
-  (traces, logs, metrics), and composition hands one task and one workflow
-  runtime handle to the router and the queue-wake pump. Producers call the
+  (traces, logs, metrics), and composition hands one task telemetry runtime
+  handle to the router and the queue-wake pump. Producers call the
   non-blocking `try_emit`.
 - Actual task producers: the router (assigned, reassigned, started, closed,
   reopened, rejected, prompt handoff) and the queue-wake pump (reminded,
@@ -146,18 +151,26 @@ gRPC (tonic). No other observability facade or HTTP exporter is composed.
   (`task_exporter.rs`). A close seen before its start exports a partial
   span; nothing is replayed, backfilled or stored across an outage.
 - Shutdown uses one cumulative deadline (`REPLACEMENT_DRAIN_DEADLINE`, 5s):
-  listeners, recovery sweep, peers, then the task and workflow drains, then
+  listeners, recovery sweep, peers, then the task telemetry drain, then
   the providers, bounded by `min(1s, remaining)`. The first shutdown caller
   owns provider shutdown, so a cancelled or concurrent caller waits for the
   same stored outcome until its own deadline. A timeout abandons the wait,
   not the SDK call, and process exit releases it.
 - Health: `Inert` with no endpoint; `Healthy` when configured and no loss or
   failure has been observed; `Degraded` when the runtime counted
-  `dropped_full`, `dropped_timeout` or `dropped_failure`; `Unavailable` with
+  `dropped_full` or `dropped_failure`; `Unavailable` with
   `last_failure` set when the SDK reported a transport failure through the
   process-global tracing bridge, a provider shutdown failed or timed out, or
   configuration was invalid. An observed failure is not cleared by later
-  success. SDK-private queue losses are unknown and never invented.
+  success. SDK-private queue losses are unknown and never invented. The
+  governed doctor JSON keeps `dropped_timeout`, which is always 0 because
+  the synchronous sink has no emit timeout.
+- Shutdown aborts a drain that outlives its deadline. Because the sink is
+  synchronous, an aborted worker stops only after its current sink call
+  returns; shutdown waits for that only until the deadline and then abandons
+  the worker. Every admitted record is counted exactly once: a record already
+  counted as a shutdown drop is not counted again if an abandoned sink call
+  returns late.
 
 ## Consequences
 

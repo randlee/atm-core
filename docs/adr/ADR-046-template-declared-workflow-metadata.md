@@ -138,6 +138,10 @@ security decision may depend on workflow metadata or telemetry.
 
 ### 4. Telemetry boundary and failure isolation
 
+> Superseded 2026-10-09: the workflow telemetry sink and runtime below had no
+> production producer and were removed; ADR-064's task telemetry runtime is
+> the only telemetry path.
+
 `atm-core` owns the sealed, object-safe `WorkflowTelemetrySink` boundary, its
 leaf record/error DTOs. The
 configured implementation and supervised worker are assembled only by

@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use atm_core::TelemetryExportConfig;
 use atm_runtime::task_telemetry::{TaskTelemetryConfig, TaskTelemetrySetup};
-use atm_runtime::workflow_telemetry::{WorkflowTelemetryConfig, WorkflowTelemetrySetup};
 use opentelemetry::metrics::MeterProvider;
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::{Compression, WithExportConfig, WithTonicConfig};
@@ -41,7 +40,6 @@ pub(crate) const EXPORT_INTERVAL: Duration = Duration::from_secs(1);
 /// Existing runtime setup values plus unwrapped, standard SDK providers.
 pub type TelemetrySetup = (
     TaskTelemetrySetup,
-    WorkflowTelemetrySetup,
     SdkTracerProvider,
     SdkLoggerProvider,
     SdkMeterProvider,
@@ -155,10 +153,6 @@ pub(crate) fn setup_with_timeouts(
     Ok((
         TaskTelemetrySetup {
             config: TaskTelemetryConfig::default(),
-            sink: sink.clone(),
-        },
-        WorkflowTelemetrySetup {
-            config: WorkflowTelemetryConfig::default(),
             sink,
         },
         tracer,

@@ -15,10 +15,7 @@ use atm_observability::{
     ExportDiagnostics, RetainedCommandEvent, RetainedLogOffer, RetainedLogPolicy, RetainedLogger,
     build_routed_retained_logger, logger_level_override,
 };
-use atm_runtime::{
-    TaskTelemetryDiagnostics, TaskTelemetrySetup, WorkflowTelemetryDiagnostics,
-    WorkflowTelemetrySetup,
-};
+use atm_runtime::{TaskTelemetryDiagnostics, TaskTelemetrySetup};
 use opentelemetry::logs::LoggerProvider;
 use opentelemetry_sdk::error::OTelSdkError;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
@@ -62,21 +59,18 @@ enum ExportSelection {
 type Providers = (SdkTracerProvider, SdkLoggerProvider, SdkMeterProvider);
 
 /// Export state owned by the process lifecycle: the standard SDK providers
-/// (retained only for shutdown), the setups handed once to runtime assembly,
+/// (retained only for shutdown), the setup handed once to runtime assembly,
 /// and the runtime counters attached after assembly.
 struct Export {
     selection: ExportSelection,
     diagnostics: Arc<ExportDiagnostics>,
-    // MUTEX: runtime assembly takes the setups once; shutdown takes providers once.
+    // MUTEX: runtime assembly takes the setup once; shutdown takes providers once.
     // Each guards a single Option that is only ever read or `take`n, so a
     // panic while it is held cannot leave it half-updated: poison is recovered
     // with `into_inner` so telemetry setup and shutdown still run.
-    setups: Mutex<Option<(TaskTelemetrySetup, WorkflowTelemetrySetup)>>,
+    setups: Mutex<Option<TaskTelemetrySetup>>,
     providers: Mutex<Option<Providers>>,
-    runtime: OnceLock<(
-        Arc<TaskTelemetryDiagnostics>,
-        Arc<WorkflowTelemetryDiagnostics>,
-    )>,
+    runtime: OnceLock<Arc<TaskTelemetryDiagnostics>>,
     shutdown: OnceLock<watch::Receiver<bool>>,
 }
 
@@ -91,9 +85,7 @@ impl Export {
         setup: Option<atm_observability::TelemetrySetup>,
     ) -> Self {
         let (setups, providers) = match setup {
-            Some((task, workflow, tracer, logger, meter)) => {
-                (Some((task, workflow)), Some((tracer, logger, meter)))
-            }
+            Some((task, tracer, logger, meter)) => (Some(task), Some((tracer, logger, meter))),
             None => (None, None),
         };
         Self {
@@ -131,18 +123,16 @@ impl Export {
                 health.protocol = Some(TelemetryExportProtocol::Grpc);
             }
         }
-        // Task and workflow admission queues are separate, so their known
-        // runtime losses are disjoint and add without double counting.
-        if let Some((task, workflow)) = self.runtime.get() {
-            use std::sync::atomic::Ordering::Relaxed;
+        // The task telemetry runtime's known losses. `dropped_timeout` stays
+        // in the governed doctor JSON and is always 0: the synchronous sink
+        // has no emit timeout.
+        if let Some(task) = self.runtime.get() {
             let task = task.snapshot();
             health.emitted = task.emitted;
-            health.dropped_full = task.dropped_full + workflow.dropped_full.load(Relaxed);
-            health.dropped_timeout = task.dropped_timeout + workflow.dropped_timeout.load(Relaxed);
-            health.dropped_failure = task.dropped_failure + workflow.dropped_failure.load(Relaxed);
-            health.dropped_shutdown =
-                task.dropped_shutdown + workflow.dropped_shutdown.load(Relaxed);
-            if health.dropped_full + health.dropped_timeout + health.dropped_failure > 0 {
+            health.dropped_full = task.dropped_full;
+            health.dropped_failure = task.dropped_failure;
+            health.dropped_shutdown = task.dropped_shutdown;
+            if health.dropped_full + health.dropped_failure > 0 {
                 health.state = AtmTelemetryExportState::Degraded;
             }
         }
@@ -230,27 +220,18 @@ impl DaemonObservability {
         })
     }
 
-    /// Hands the existing task/workflow setups to runtime assembly once.
-    pub(crate) fn take_telemetry_setups(
-        &self,
-    ) -> (Option<TaskTelemetrySetup>, Option<WorkflowTelemetrySetup>) {
+    /// Hands the task telemetry setup to runtime assembly once.
+    pub(crate) fn take_telemetry_setup(&self) -> Option<TaskTelemetrySetup> {
         self.export
             .setups
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .take()
-            .map_or((None, None), |(task, workflow)| {
-                (Some(task), Some(workflow))
-            })
     }
 
-    /// Attaches the assembled runtimes' known-loss counters to doctor health.
-    pub(crate) fn attach_runtime_telemetry(
-        &self,
-        task: Arc<TaskTelemetryDiagnostics>,
-        workflow: Arc<WorkflowTelemetryDiagnostics>,
-    ) {
-        self.export.runtime.get_or_init(|| (task, workflow));
+    /// Attaches the assembled runtime's known-loss counters to doctor health.
+    pub(crate) fn attach_runtime_telemetry(&self, task: Arc<TaskTelemetryDiagnostics>) {
+        self.export.runtime.get_or_init(|| task);
     }
 
     /// Shuts the three standard providers down concurrently on the blocking
@@ -932,10 +913,11 @@ mod tests {
             panic!("deliberate poison");
         });
         assert!(observability.export.setups.is_poisoned());
-        let (task, workflow) = observability.take_telemetry_setups();
-        assert!(task.is_some() && workflow.is_some());
-        let (again, _) = observability.take_telemetry_setups();
-        assert!(again.is_none(), "the setups are handed over once");
+        assert!(observability.take_telemetry_setup().is_some());
+        assert!(
+            observability.take_telemetry_setup().is_none(),
+            "the setup is handed over once"
+        );
     }
 
     /// Positive: a poisoned providers lock still shuts the providers down.

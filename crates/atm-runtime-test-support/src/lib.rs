@@ -24,7 +24,7 @@ pub mod task_telemetry;
 
 pub use atm_storage::testing::InMemoryTaskLedgerReader;
 pub use atm_storage_rusqlite::{TemplateAdmissionMessage, TemplateAdmissionSnapshot};
-pub use task_telemetry::{RecordingTaskTelemetrySink, StalledTaskTelemetrySink};
+pub use task_telemetry::{RecordingTaskTelemetrySink, StallRelease, StalledTaskTelemetrySink};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RecordedWriterOutcome {
@@ -295,7 +295,6 @@ pub fn open_sqlite_boundary_with_task_telemetry(
         config_current_dir,
         non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
         template_composer: None,
-        workflow_telemetry: None,
         task_telemetry,
     })
 }
