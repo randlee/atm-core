@@ -59,7 +59,9 @@ Export is inert unless `ATM_OTEL_ENDPOINT` is set. Configure it with
 `ATM_OTEL_PROTOCOL=grpc` (the only supported protocol), optionally
 `ATM_OTEL_AUTH_HEADER`, and `ATM_OTEL_SERVICE_NAME` (default: `atm-daemon`).
 `ATM_LOG_DESTINATION` defaults to `file`; `otel` and `both` require an export
-endpoint. Do not place credentials in an endpoint URL.
+endpoint. The `atm` CLI and the daemon route their log records to the same
+destination; with `otel` neither writes the local JSONL log. Do not place
+credentials in an endpoint URL.
 
 The live task-ledger records cover assignment, start, completion, refusal,
 cancellation, reassignment, reopening, rejection, reminders, lead notification,

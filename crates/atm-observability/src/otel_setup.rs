@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use atm_core::TelemetryExportConfig;
 use atm_runtime::task_telemetry::{TaskTelemetryConfig, TaskTelemetrySetup};
+use opentelemetry::logs::LoggerProvider;
 use opentelemetry::metrics::MeterProvider;
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::{Compression, WithExportConfig, WithTonicConfig};
@@ -95,18 +96,7 @@ pub(crate) fn setup_with_timeouts(
     timeout: Duration,
 ) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
     tokio::runtime::Handle::try_current()?;
-    let channel = lazy_channel(config, transport_timeout)?;
-    let auth: Option<MetadataValue<Ascii>> = config.auth_header().map(str::parse).transpose()?;
-    // The upstream builder merges ambient OTEL headers even with metadata
-    // supplied. Its standard interceptor runs after that merge: replace the
-    // map with ATM's validated metadata so no ambient credential is exported.
-    let interceptor = move |mut request: tonic::Request<()>| {
-        request.metadata_mut().clear();
-        if let Some(auth) = &auth {
-            request.metadata_mut().insert("authorization", auth.clone());
-        }
-        Ok(request)
-    };
+    let (channel, interceptor) = grpc_transport(config, transport_timeout)?;
     // Explicit gzip also prevents the upstream builder consulting ambient
     // compression settings; gRPC remains the only transport.
     macro_rules! exporter {
@@ -130,21 +120,7 @@ pub(crate) fn setup_with_timeouts(
         .with_service_name(config.service_name().to_owned())
         .build();
     let tracer = tracer_provider(spans, resource.clone(), batch, timeout);
-    let logger = SdkLoggerProvider::builder()
-        .with_resource(resource.clone())
-        .with_log_processor(
-            BatchLogProcessor::builder(logs, Tokio)
-                .with_batch_config(
-                    LogBatchConfigBuilder::default()
-                        .with_max_queue_size(EXPORT_QUEUE)
-                        .with_max_export_batch_size(batch)
-                        .with_max_export_timeout(timeout)
-                        .with_scheduled_delay(EXPORT_INTERVAL)
-                        .build(),
-                )
-                .build(),
-        )
-        .build();
+    let logger = logger_provider(logs, resource.clone(), batch, timeout);
     let meter = meter_provider(metrics, resource, timeout);
     let sink = Arc::new(crate::task_exporter::TaskExporter::new(
         tracer.tracer("atm.task"),
@@ -158,6 +134,171 @@ pub(crate) fn setup_with_timeouts(
         tracer,
         logger,
         meter,
+    ))
+}
+
+/// The validated gRPC channel plus the interceptor that replaces the request
+/// metadata with ATM's own. The upstream builder merges ambient OTEL headers
+/// even with metadata supplied; its standard interceptor runs after that
+/// merge, so no ambient credential is exported.
+#[allow(
+    clippy::type_complexity,
+    reason = "the interceptor closure type is unnameable"
+)]
+fn grpc_transport(
+    config: &TelemetryExportConfig,
+    transport_timeout: Duration,
+) -> Result<
+    (
+        tonic::transport::Channel,
+        impl FnMut(tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    ),
+    Box<dyn std::error::Error + Send + Sync>,
+> {
+    let channel = lazy_channel(config, transport_timeout)?;
+    let auth: Option<MetadataValue<Ascii>> = config.auth_header().map(str::parse).transpose()?;
+    let interceptor = move |mut request: tonic::Request<()>| {
+        request.metadata_mut().clear();
+        if let Some(auth) = &auth {
+            request.metadata_mut().insert("authorization", auth.clone());
+        }
+        Ok(request)
+    };
+    Ok((channel, interceptor))
+}
+
+fn logger_provider(
+    logs: opentelemetry_otlp::LogExporter,
+    resource: Resource,
+    batch: usize,
+    timeout: Duration,
+) -> SdkLoggerProvider {
+    SdkLoggerProvider::builder()
+        .with_resource(resource)
+        .with_log_processor(
+            BatchLogProcessor::builder(logs, Tokio)
+                .with_batch_config(
+                    LogBatchConfigBuilder::default()
+                        .with_max_queue_size(EXPORT_QUEUE)
+                        .with_max_export_batch_size(batch)
+                        .with_max_export_timeout(timeout)
+                        .with_scheduled_delay(EXPORT_INTERVAL)
+                        .build(),
+                )
+                .build(),
+        )
+        .build()
+}
+
+/// The routed log destination of a short-lived process (the `atm` CLI) and,
+/// for `otel` or `both`, its one native SDK log provider on the current Tokio
+/// runtime. It shares [`atm_core::LogDestination::from_env`],
+/// [`TelemetryExportConfig::from_env`] and the daemon's transport and batch
+/// bounds; it builds no trace or metric provider.
+#[derive(Debug)]
+pub struct LogExport {
+    destination: atm_core::LogDestination,
+    provider: Option<SdkLoggerProvider>,
+    config_invalid: bool,
+}
+
+impl LogExport {
+    /// Resolves the destination the daemon would use from `env`. Invalid
+    /// configuration or failed SDK setup selects file logging, as the daemon
+    /// does, and is reported by [`Self::config_invalid`].
+    #[must_use]
+    pub fn from_env(env: &dyn atm_core::atm_temp::EnvSource) -> Self {
+        let Ok(destination) = atm_core::LogDestination::from_env(env) else {
+            return Self::invalid();
+        };
+        if destination == atm_core::LogDestination::File {
+            return Self {
+                destination,
+                provider: None,
+                config_invalid: false,
+            };
+        }
+        // `otel` and `both` already required an endpoint, so a configuration
+        // is present unless it is invalid.
+        let Ok(Some(config)) = TelemetryExportConfig::from_env(env) else {
+            return Self::invalid();
+        };
+        match log_provider(&config) {
+            Ok(provider) => Self {
+                destination,
+                provider: Some(provider),
+                config_invalid: false,
+            },
+            Err(_) => Self::invalid(),
+        }
+    }
+
+    fn invalid() -> Self {
+        Self {
+            destination: atm_core::LogDestination::File,
+            provider: None,
+            config_invalid: true,
+        }
+    }
+
+    /// Whether invalid configuration or failed SDK setup selected file
+    /// logging in place of the configured destination.
+    #[must_use]
+    pub fn config_invalid(&self) -> bool {
+        self.config_invalid
+    }
+
+    /// The destination records are routed to.
+    #[must_use]
+    pub fn destination(&self) -> atm_core::LogDestination {
+        self.destination
+    }
+
+    /// Registers the OTel log sink on `builder` when the destination includes
+    /// OTel; a file-only export registers nothing.
+    pub fn register_sink(&self, builder: &mut sc_observability::v2::LoggerBuilder) {
+        if let Some(provider) = &self.provider {
+            builder.register_sink(sc_observability::SinkRegistration::typed(Arc::new(
+                crate::otel_logs::OtelLogSink::new(provider.logger("atm")),
+            )));
+        }
+    }
+
+    /// Exports every admitted record and stops the provider, waiting at most
+    /// `bound`. The blocking SDK shutdown runs on the blocking pool so a
+    /// current-thread runtime keeps driving the batch worker it waits for.
+    pub async fn shutdown(self, bound: Duration) {
+        if let Some(provider) = self.provider {
+            let shutdown = tokio::task::spawn_blocking(move || provider.shutdown());
+            drop(tokio::time::timeout(bound, shutdown).await);
+        }
+    }
+}
+
+fn log_provider(
+    config: &TelemetryExportConfig,
+) -> Result<SdkLoggerProvider, Box<dyn std::error::Error + Send + Sync>> {
+    tokio::runtime::Handle::try_current()?;
+    let (channel, interceptor) = grpc_transport(config, EXPORT_TRANSPORT_TIMEOUT)?;
+    let logs = opentelemetry_otlp::LogExporter::builder()
+        .with_tonic()
+        .with_channel(channel)
+        .with_timeout(EXPORT_TRANSPORT_TIMEOUT)
+        .with_compression(Compression::Gzip)
+        .with_interceptor(interceptor)
+        .build()?;
+    let resource = Resource::builder_empty()
+        .with_service_name(config.service_name().to_owned())
+        .build();
+    Ok(logger_provider(
+        logs,
+        resource,
+        EXPORT_BATCH,
+        EXPORT_TIMEOUT,
     ))
 }
 

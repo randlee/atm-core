@@ -400,7 +400,7 @@ mod otel_setup;
 mod task_exporter;
 pub mod tracing_bridge;
 pub use export_diagnostics::ExportDiagnostics;
-pub use otel_setup::{TelemetrySetup, setup_telemetry};
+pub use otel_setup::{LogExport, TelemetrySetup, setup_telemetry};
 
 pub use atm_core::observability::{
     CANONICAL_LOG_FILE_NAME, GRAFT_FALLBACK_LOG_FILE_NAME, RETAINED_FIELD_ALLOWLIST,
