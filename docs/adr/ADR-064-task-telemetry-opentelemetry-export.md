@@ -84,7 +84,13 @@ Accepted dependency decisions:
 - `atm-daemon-bootstrap -> opentelemetry_sdk` is accepted only for the
   lifecycle (construction, flush, shutdown) of the standard SDK providers,
   which bootstrap holds in its existing `DaemonObservability`. Exporters and
-  domain projection stay in `atm-observability`.
+  domain projection stay in `atm-observability`. Lint rule
+  `SCB-OBSERVABILITY-002` enforces both sides: in non-test sources,
+  `opentelemetry`, `opentelemetry_sdk`, `opentelemetry_otlp` and `tonic` paths
+  are allowed in `atm-observability` only in `otel_setup`, `otel_logs`,
+  `task_exporter` and `export_diagnostics`, and in `atm-daemon-bootstrap` only
+  `opentelemetry` and `opentelemetry_sdk` paths in `daemon_observability.rs`;
+  any other use names its file and line.
 
 Other crates receive runtime handles, not exporter dependencies.
 

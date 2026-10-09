@@ -507,6 +507,9 @@ sunset_sprint = "AD.26"
 """,
             encoding="utf-8",
         )
+        (repo_root / ".just/fixtures/scb_observability_otel_bootstrap_known_bad.rs").write_text(
+            "use tonic::transport::Channel;\n", encoding="utf-8"
+        )
         (repo_root / ".just/fixtures/scb_observability_otel_known_bad.rs").write_text(
             "use opentelemetry::trace::Tracer;\n\nfn on_event() {\n    provider.force_flush();\n}\n",
             encoding="utf-8",
@@ -651,6 +654,26 @@ fn send_bad(team_dir: &std::path::Path) {
             rendered = [v.render() for v in collect_scb_observability_otel_violations(repo_root, [bad])]
             self.assertTrue(any("SCB-OBSERVABILITY-002 crates/atm-observability/src/tracing_bridge.rs:1 " in r for r in rendered), rendered)
             self.assertTrue(any("SCB-OBSERVABILITY-002 crates/atm-observability/src/tracing_bridge.rs:4 " in r for r in rendered), rendered)
+
+    def test_scb_observability_002_allows_only_daemon_observability_in_bootstrap(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            src = repo_root / "crates/atm-daemon-bootstrap/src"
+            (src / "telemetry_lifecycle_tests").mkdir(parents=True)
+            allowed = src / "daemon_observability.rs"
+            allowed.write_text("use opentelemetry_sdk::trace::SdkTracerProvider;\nuse opentelemetry::logs::LoggerProvider;\n", encoding="utf-8")
+            test_dir = src / "telemetry_lifecycle_tests" / "receiver.rs"
+            test_dir.write_text("use tonic::transport::Server;\n", encoding="utf-8")
+            self.assertEqual(collect_scb_observability_otel_violations(repo_root, [allowed, test_dir]), [])
+
+            other = src / "lib.rs"
+            other.write_text("\nuse opentelemetry_sdk::Resource;\n", encoding="utf-8")
+            tonic_in_allowed = src / "daemon_observability.rs"
+            tonic_in_allowed.write_text("use tonic::transport::Channel;\n", encoding="utf-8")
+            rendered = [v.render() for v in collect_scb_observability_otel_violations(repo_root, [other, tonic_in_allowed])]
+            self.assertEqual(len(rendered), 2, rendered)
+            self.assertTrue(any("crates/atm-daemon-bootstrap/src/lib.rs:2 " in r for r in rendered), rendered)
+            self.assertTrue(any("crates/atm-daemon-bootstrap/src/daemon_observability.rs:1 " in r for r in rendered), rendered)
 
     def test_collect_boundary_violations_rejects_scb_retained_rule_family(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
