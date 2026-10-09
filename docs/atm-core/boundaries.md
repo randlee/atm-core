@@ -276,7 +276,7 @@ Notes:
   the legacy compile-bridge `MailStore` / `RosterStore` handles used during
   AC.4 consumer cutover.
 - `AA.4` relies on these adjunct contracts to remove the direct
-  `atm-daemon -> atm-rusqlite` dependency while keeping shutdown finalization
+  `atm-daemon -> atm-storage-rusqlite` dependency while keeping shutdown finalization
   storage-neutral at the daemon boundary. Any retained lifecycle operation is
   storage-owned; it is not a `RuntimeStorageFinalizer` boundary. ADR-038's
   canonical-record query is a narrow storage trait method, not a
@@ -467,23 +467,28 @@ Notes:
 - Non-Claude outbound payload delivery still uses the dedicated
   `NonClaudeOutbound` boundary rather than any notification surface.
 
-## WorkflowTelemetrySink
+## TaskTelemetrySink
 
 Canonical machine-readable boundary source:
-- [../../boundaries/atm-core/workflow-telemetry-sink.toml](../../boundaries/atm-core/workflow-telemetry-sink.toml)
+- [../../boundaries/atm-core/task-telemetry-sink.toml](../../boundaries/atm-core/task-telemetry-sink.toml)
 
 Purpose:
-- Owns the sealed, object-safe, first-party telemetry projection contract for
-  lifecycle observations. It is intentionally not a public plug-in API.
+- Owns the sealed, object-safe, first-party projection contract for durable
+  task events and prompt handoffs (ADR-064). It is intentionally not a public
+  plug-in API.
 
 Notes:
-- `atm-core` provides only `NoopWorkflowTelemetrySink`; `atm-runtime` is the
-  sole permitted out-of-owner implementation and composition site.
-- Records include immutable workflow snapshot attributes and durable timestamps
-  only. Payload text and merged variables are forbidden.
-- Intake is best effort. A full queue, timeout, sink failure, invalid
-  configuration, or shutdown drop must not affect admission, routing, retry,
-  or query results.
+- `atm-core` provides only the sealed trait and records, with no built-in
+  sink; `atm-runtime` composes
+  through `TaskTelemetryRuntime::start` and is the sole holder and caller of the
+  sink; `atm-observability` owns the OpenTelemetry exporting implementation.
+- Callers that want no export use `TaskTelemetryRuntime::disabled`.
+- Records carry typed task-ledger and handoff facts only. Message bodies,
+  template variables and free-form detail are forbidden.
+- Export is best effort. A full queue, timeout, rejection, exporter failure,
+  invalid configuration or shutdown drop never affects task state, routing,
+  admission or retry.
+- The recording test sink lives only in `atm-runtime-test-support`.
 
 ## ClaudeCompatibilityMailboxWriter
 

@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-OtelExporter"
+owner_package = "atm-observability"
+owner_crate_path = "atm_observability"
+name = "OtelExporter"
+
+[public]
+facade = "setup_telemetry"
+
+[implementation]
+type = "TaskExporter"
+module = "atm_observability::task_exporter"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_observability::setup_telemetry"]
+
+[ownership]
+io_owns = ["otel_export"]
+io_forbidden = ["database_io", "daemon_lifecycle"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm"]
+allowed_dependencies = ["atm-core", "atm-runtime", "opentelemetry", "opentelemetry_sdk", "opentelemetry-otlp", "sc-observability", "sc-observability-log", "sc-observability-types", "serde_json", "sha2", "tokio", "tonic", "tracing", "tracing-subscriber"]
+allowed_dev_dependencies = ["atm-core", "opentelemetry-proto", "serial_test", "tempfile", "tokio-stream", "tonic", "trybuild"]
+forbidden_edges = ["atm-core -> opentelemetry", "atm-runtime -> opentelemetry", "atm-http-runtime -> opentelemetry", "atm-storage -> opentelemetry", "atm-storage-rusqlite -> opentelemetry", "atm-observability -> sc-observability-otlp"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["TaskTelemetryRecord", "TelemetryExportConfig", "LogDestination"]
+response_types = ["TaskTelemetrySetup", "SdkTracerProvider", "SdkLoggerProvider", "SdkMeterProvider"]
+error_types = ["TaskTelemetryError", "OTelSdkError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["per_event_force_flush", "collector_ack_from_admission"]
+
+[enforcement]
+lint_rules = ["SCB-OBSERVABILITY-002"]
+review_gates = ["native_sdk_tokio", "bounded_projection", "durable_times", "redaction", "observable_health", "standard_provider_ownership"]
+
+[status]
+state = "active"
+notes = ["ADR-064 accepts atm-observability -> atm-runtime solely for existing setup types; no reverse edge or seal relaxation.", "Native SDK processors own batching. Bootstrap owns the returned standard providers and the shared process shutdown deadline. Private SDK drop counts are unknown; admission is not collector acknowledgement."]

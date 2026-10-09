@@ -4,8 +4,8 @@
 //! This is the first periodic maintenance task composed against
 //! `atm-daemon-bootstrap`/`atm-http-runtime` — not the legacy synchronous
 //! daemon's maintenance worker, which CLAUDE.md rules off-limits for new
-//! work. Its shutdown shape mirrors `WorkflowTelemetryRuntime::shutdown`
-//! (`crates/atm-runtime/src/workflow_telemetry.rs`): send a cancellation
+//! work. Its shutdown shape mirrors `TaskTelemetryRuntime::shutdown`
+//! (`crates/atm-runtime/src/task_telemetry.rs`): send a cancellation
 //! signal, give the worker its own bounded grace period to let an in-flight
 //! sweep pass finish, and only abort — always followed by a join — if that
 //! grace period expires. A raw `.abort()`-only shutdown does not guarantee
@@ -129,20 +129,30 @@ impl AtmTempSweeperRuntime {
     /// early, so shutdown does not need to wait for an unbounded directory
     /// walk to finish on its own (QM43-I7) — the grace period exists for
     /// the last in-flight chunk of work, not the whole remaining tree.
-    pub async fn shutdown(&self) {
-        if let Ok(mut sender) = self.shutdown.lock()
-            && let Some(sender) = sender.take()
+    /// Stops the sweeper within `min(SWEEPER_SHUTDOWN_GRACE, deadline)`, so
+    /// the daemon's cumulative shutdown deadline also bounds this step.
+    pub async fn shutdown(&self, deadline: tokio::time::Instant) {
+        if let Some(sender) = self
+            .shutdown
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
         {
             // A dropped-receiver error here just means the worker task has
             // already exited; nothing to react to.
             sender.send(()).ok();
         }
         self.cancelled.store(true, Ordering::Relaxed);
-        let worker = self.worker.lock().ok().and_then(|mut worker| worker.take());
+        let worker = self
+            .worker
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
         let Some(mut worker) = worker else {
             return;
         };
-        if tokio::time::timeout(SWEEPER_SHUTDOWN_GRACE, &mut worker)
+        let deadline = deadline.min(tokio::time::Instant::now() + SWEEPER_SHUTDOWN_GRACE);
+        if tokio::time::timeout_at(deadline, &mut worker)
             .await
             .is_err()
         {
@@ -164,8 +174,19 @@ impl Drop for AtmTempSweeperRuntime {
         // calling `shutdown`: signal cancellation and abort rather than
         // leak a detached, possibly still-running task.
         self.cancelled.store(true, Ordering::Relaxed);
-        if let Ok(mut worker) = self.worker.lock()
-            && let Some(worker) = worker.take()
+        if let Some(sender) = self
+            .shutdown
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+        {
+            let _ = sender.send(());
+        }
+        if let Some(worker) = self
+            .worker
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
         {
             worker.abort();
         }
@@ -312,6 +333,7 @@ mod tests {
                 jsonl: Default::default(),
                 timeline: Default::default(),
                 degraded: Vec::new(),
+                export: None,
                 detail: Some("sweep pass completion test observer".to_string()),
             })
         }
@@ -376,7 +398,9 @@ mod tests {
         observability.pass_completed.notified().await;
         assert!(!expired.exists(), "expired entry must be reclaimed");
 
-        sweeper.shutdown().await;
+        sweeper
+            .shutdown(tokio::time::Instant::now() + SWEEPER_SHUTDOWN_GRACE)
+            .await;
     }
 
     #[tokio::test]
@@ -391,9 +415,107 @@ mod tests {
         );
         // Shutdown must complete well within its own bounded grace period
         // even though the next tick is far in the future.
-        tokio::time::timeout(SWEEPER_SHUTDOWN_GRACE, sweeper.shutdown())
+        tokio::time::timeout(
+            SWEEPER_SHUTDOWN_GRACE,
+            sweeper.shutdown(tokio::time::Instant::now() + SWEEPER_SHUTDOWN_GRACE),
+        )
+        .await
+        .expect("shutdown completes within its own grace period");
+    }
+
+    #[tokio::test]
+    async fn shutdown_signals_and_joins_when_take_once_locks_are_poisoned() {
+        let (shutdown, shutdown_rx) = oneshot::channel();
+        let (joined, joined_rx) = oneshot::channel();
+        let sweeper = Arc::new(AtmTempSweeperRuntime {
+            shutdown: Mutex::new(Some(shutdown)),
+            worker: Mutex::new(Some(tokio::spawn(async move {
+                shutdown_rx.await.expect("shutdown signal");
+                let _ = joined.send(());
+            }))),
+            cancelled: Arc::new(AtomicBool::new(false)),
+        });
+
+        let shutdown_poisoner = Arc::clone(&sweeper);
+        let shutdown_poisoner = std::thread::spawn(move || {
+            let _guard = shutdown_poisoner.shutdown.lock().expect("shutdown lock");
+            panic!("poison shutdown lock for cleanup regression coverage");
+        });
+        assert!(
+            shutdown_poisoner.join().is_err(),
+            "shutdown lock must poison"
+        );
+        let worker_poisoner = Arc::clone(&sweeper);
+        let worker_poisoner = std::thread::spawn(move || {
+            let _guard = worker_poisoner.worker.lock().expect("worker lock");
+            panic!("poison worker lock for cleanup regression coverage");
+        });
+        assert!(worker_poisoner.join().is_err(), "worker lock must poison");
+
+        sweeper
+            .shutdown(tokio::time::Instant::now() + SWEEPER_SHUTDOWN_GRACE)
+            .await;
+
+        tokio::time::timeout(Duration::from_secs(1), joined_rx)
             .await
-            .expect("shutdown completes within its own grace period");
+            .expect("shutdown must join the poisoned-lock worker")
+            .expect("worker completion must be observed");
+    }
+
+    #[tokio::test]
+    async fn drop_signals_and_aborts_when_take_once_locks_are_poisoned() {
+        let (shutdown, shutdown_rx) = oneshot::channel();
+        let (aborted, aborted_rx) = oneshot::channel();
+        let sweeper = Arc::new(AtmTempSweeperRuntime {
+            shutdown: Mutex::new(Some(shutdown)),
+            worker: Mutex::new(Some(tokio::spawn(async move {
+                struct AbortSignal(Option<oneshot::Sender<()>>);
+
+                impl Drop for AbortSignal {
+                    fn drop(&mut self) {
+                        if let Some(aborted) = self.0.take() {
+                            let _ = aborted.send(());
+                        }
+                    }
+                }
+
+                let _abort_signal = AbortSignal(Some(aborted));
+                std::future::pending::<()>().await;
+            }))),
+            cancelled: Arc::new(AtomicBool::new(false)),
+        });
+        tokio::task::yield_now().await;
+
+        let shutdown_poisoner = Arc::clone(&sweeper);
+        let shutdown_poisoner = std::thread::spawn(move || {
+            let _guard = shutdown_poisoner.shutdown.lock().expect("shutdown lock");
+            panic!("poison shutdown lock for Drop regression coverage");
+        });
+        assert!(
+            shutdown_poisoner.join().is_err(),
+            "shutdown lock must poison"
+        );
+        let worker_poisoner = Arc::clone(&sweeper);
+        let worker_poisoner = std::thread::spawn(move || {
+            let _guard = worker_poisoner.worker.lock().expect("worker lock");
+            panic!("poison worker lock for Drop regression coverage");
+        });
+        assert!(worker_poisoner.join().is_err(), "worker lock must poison");
+
+        let sweeper = match Arc::try_unwrap(sweeper) {
+            Ok(sweeper) => sweeper,
+            Err(_) => panic!("sole sweeper owner"),
+        };
+        drop(sweeper);
+
+        tokio::time::timeout(Duration::from_secs(1), shutdown_rx)
+            .await
+            .expect("Drop must retain and signal the poisoned shutdown sender")
+            .expect("shutdown sender must send before Drop returns");
+        tokio::time::timeout(Duration::from_secs(1), aborted_rx)
+            .await
+            .expect("Drop must abort the poisoned-lock worker")
+            .expect("aborted worker must drop its sentinel");
     }
 
     /// QM43-I7: a non-cancellable `spawn_blocking` sweep pass would let

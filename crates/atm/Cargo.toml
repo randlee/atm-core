@@ -53,8 +53,16 @@ name = "command_error_log"
 path = "tests/command_error_log.rs"
 
 [[test]]
+name = "cli_log_destination"
+path = "tests/cli_log_destination.rs"
+
+[[test]]
 name = "task_ledger_cli"
 path = "tests/task_ledger_cli.rs"
+
+[[test]]
+name = "doctor_telemetry"
+path = "tests/doctor_telemetry.rs"
 
 [[example]]
 name = "gen_cli_docs"
@@ -89,6 +97,10 @@ ulid.workspace = true
 atm-graft = { workspace = true, features = ["test-support"] }
 atm-core = { workspace = true, features = ["test-utils"] }
 atm-runtime-test-support.workspace = true
+# In-process OTLP gRPC log collector for the CLI log-destination proof.
+opentelemetry-proto = { version = "=0.33.0", default-features = false, features = ["gen-tonic", "logs"] }
 sc-observability = { workspace = true, features = ["fault-injection"] }
 serial_test = "3"
 tempfile = "3"
+tokio-stream = { version = "0.1", features = ["net"] }
+tonic = { workspace = true, features = ["router"] }

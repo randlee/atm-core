@@ -1198,7 +1198,7 @@ Required integration rules:
 - `atm-core` must keep the shared crates behind an ATM-owned injected boundary
 - `atm` owns the concrete shared-crate bootstrap and dependency wiring
 - the active release baseline uses the published
-  `sc-observability = "=1.4.1"` crates.io dependency
+  `sc-observability = "=1.5.0"` crates.io dependency
 - the same pinned Rust toolchain must be used locally and in CI across ATM and
   `sc-*` repos
 - the concrete integration work is planned in Phase K of
@@ -3098,12 +3098,33 @@ Product requirement ID:
   subsystems.
 - `REQ-P-OBS-004` ATM retained-log maintenance must keep daemon success-path
   observability off the synchronous file-I/O hot path.
+- `REQ-P-OBS-005` Every durable task event and prompt handoff must be
+  exportable through OpenTelemetry when an endpoint is configured. Export is
+  a non-authoritative projection of durable rows and must never alter task
+  state, routing, admission, retry, policy, or security.
+- `REQ-CORE-TASK-TELEMETRY-001` `atm-core` must expose one typed task telemetry
+  record and sealed best-effort sink. The record may contain typed ledger and
+  handoff facts only; message bodies, template variables, and free-form event
+  detail are forbidden. Telemetry is non-authoritative: a dropped, rejected or
+  timed-out export never fails or rolls back the task operation. Export is
+  configured only through `ATM_OTEL_ENDPOINT` (absent = inert),
+  `ATM_OTEL_PROTOCOL` (`grpc` only, the default), `ATM_OTEL_AUTH_HEADER` and
+  `ATM_OTEL_SERVICE_NAME` (default `atm-daemon`), and log routing through
+  `ATM_LOG_DESTINATION` (`file` default, `otel`, `both`; `otel`/`both` require
+  an endpoint). Invalid values return `ATM_TELEMETRY_EXPORT_CONFIG_INVALID` and
+  ATM continues with export disabled. The auth header is redacted from debug
+  output and never appears in doctor health.
 
 Satisfied by:
 - `REQ-ATM-OBS-001` for CLI bootstrap/injection aspects
 - `REQ-CORE-LOG-001` for ATM log query/follow service aspects
 - `REQ-CORE-DOCTOR-001` for observability health reporting aspects
 - `REQ-CORE-OBS-001` for ATM event and query-model boundary aspects
+- `REQ-P-OBS-005` and `REQ-CORE-TASK-TELEMETRY-001` are satisfied by ADR-064,
+  `TaskTelemetryRecord`, `TaskTelemetrySink`, the task-telemetry boundary
+  manifest, and the daemon composition in `atm-daemon-bootstrap` (ADR-064
+  D11), proven by `telemetry_lifecycle_tests` against a live OTLP gRPC
+  receiver
 - `REQ-DAEMON-OBS-001` and `REQ-DAEMON-OBS-002` for daemon/runtime retained
   event-baseline aspects
 
@@ -3112,10 +3133,12 @@ ATM must emit structured records through `sc-observability`.
 Initial shared integration scope:
 - `sc-observability-types`
 - `sc-observability`
+- `sc-observability-log` (all 1.5.0)
 
-Deferred from the initial retained observability integration:
+Outside the initial retained observability integration:
 - `sc-observe`
-- `sc-observability-otlp`
+- Phase BD integrates task telemetry with OpenTelemetry through the ATM-owned
+  task telemetry boundary; `atm-core` does not import an exporter crate.
 
 Required ATM event classes:
 - command started

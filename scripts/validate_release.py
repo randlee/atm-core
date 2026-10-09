@@ -936,7 +936,7 @@ def configured_known_good_pin(dependency: str) -> str | None:
 def replace_cargo_exact_pin(path: Path, dependency: str, version: str) -> bool:
     text = path.read_text(encoding="utf-8")
     pattern = re.compile(
-        rf'(?m)^(?P<prefix>[ \t]*{re.escape(dependency)}[ \t]*=[ \t]*")'
+        rf'(?m)^(?P<prefix>[ \t]*{re.escape(dependency)}[ \t]*=[ \t]*(?:\{{[^\n]*?version[ \t]*=[ \t]*)?")'
         rf"=?\d+\.\d+\.\d+(?P<suffix>\"[^\n]*)$"
     )
     matches = list(pattern.finditer(text))

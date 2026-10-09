@@ -26,6 +26,9 @@ atm-runtime.workspace = true
 atm-storage.workspace = true
 atm-storage-rusqlite.workspace = true
 atm-template-sc-compose.workspace = true
+# Lifecycle-only standard SDK provider handles (ADR-064); construction stays in atm-observability.
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
 peer-tls.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -42,6 +45,12 @@ atm-herdr = { workspace = true, features = ["test-utils"] }
 atm-http-runtime = { workspace = true, features = ["test-support"] }
 atm-runtime-test-support.workspace = true
 atm-storage-rusqlite = { workspace = true, features = ["test-support"] }
+# In-process OTLP gRPC collector for the BD6 lifecycle proofs.
+opentelemetry-proto = { version = "=0.33.0", default-features = false, features = ["gen-tonic", "trace", "logs", "metrics"] }
 serial_test = "3"
+sc-observability-log.workspace = true
 serde_json.workspace = true
 tempfile = "3"
+tokio-stream = { version = "0.1", features = ["net"] }
+tonic = { workspace = true, features = ["router"] }
+tracing-subscriber.workspace = true

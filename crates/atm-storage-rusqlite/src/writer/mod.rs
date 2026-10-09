@@ -86,12 +86,16 @@ impl SerialWriterQueue {
 }
 
 pub(crate) enum ReplyTx {
-    Sync(SyncSender<Result<WriteOpResult, AtmError>>),
-    Async(tokio::sync::oneshot::Sender<Result<WriteOpResult, AtmError>>),
+    Sync(SyncSender<Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>>),
+    Async(
+        tokio::sync::oneshot::Sender<
+            Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>,
+        >,
+    ),
 }
 
 impl ReplyTx {
-    fn send(self, result: Result<WriteOpResult, AtmError>) {
+    fn send(self, result: Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>) {
         match self {
             Self::Sync(sender) => {
                 let _ = sender.send(result);
@@ -114,6 +118,21 @@ pub(crate) enum DiagnosticWriterMessage {
         now_unix_ms: i64,
         reply: SyncSender<Result<u64, AtmError>>,
     },
+}
+
+fn fail_submit(
+    observability: &dyn SqliteObservability,
+    stage: &'static str,
+    outcome: SqliteObservabilityOutcome,
+    error: AtmError,
+) -> AtmError {
+    observability.emit_or_warn(SqliteObservabilityEvent::new(
+        stage,
+        outcome,
+        error.message().to_owned(),
+        Some(error.code()),
+    ));
+    error
 }
 
 /// Result of a non-blocking diagnostic-lane offer.  Diagnostic events must
@@ -289,16 +308,20 @@ impl SqliteWriter {
     }
 
     pub(crate) fn submit(&self, op: WriteOp) -> Result<WriteOpResult, AtmError> {
+        self.submit_committed(op)?.operation
+    }
+
+    pub(crate) fn submit_committed(
+        &self,
+        op: WriteOp,
+    ) -> Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError> {
         let sender = self.sender.as_ref().ok_or_else(|| {
-            let error = writer_channel_closed_error();
-            self.observability
-                .emit_or_warn(SqliteObservabilityEvent::new(
-                    "writer_submit",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                ));
-            error
+            fail_submit(
+                self.observability.as_ref(),
+                "writer_submit",
+                SqliteObservabilityOutcome::Failed,
+                writer_channel_closed_error(),
+            )
         })?;
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         let deadline = Instant::now() + self.write_op_deadline;
@@ -311,73 +334,61 @@ impl SqliteWriter {
                 Ok(()) => break,
                 Err(tokio::sync::mpsc::error::TrySendError::Full(returned)) => {
                     if Instant::now() >= deadline {
-                        let error = writer_queue_timeout_error(self.write_op_deadline);
-                        self.observability
-                            .emit_or_warn(SqliteObservabilityEvent::new(
-                                "writer_submit",
-                                SqliteObservabilityOutcome::Timeout,
-                                error.message().to_owned(),
-                                Some(error.code()),
-                            ));
-                        return Err(error);
+                        return Err(fail_submit(
+                            self.observability.as_ref(),
+                            "writer_submit",
+                            SqliteObservabilityOutcome::Timeout,
+                            writer_queue_timeout_error(self.write_op_deadline),
+                        ));
                     }
                     message = returned;
                     thread::park_timeout(SUBMIT_RETRY_INTERVAL);
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    let error = writer_channel_closed_error();
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_submit",
-                            SqliteObservabilityOutcome::Failed,
-                            error.message().to_owned(),
-                            Some(error.code()),
-                        ));
-                    return Err(error);
+                    return Err(fail_submit(
+                        self.observability.as_ref(),
+                        "writer_submit",
+                        SqliteObservabilityOutcome::Failed,
+                        writer_channel_closed_error(),
+                    ));
                 }
             }
         }
         reply_rx
             .recv_timeout(self.write_op_deadline)
             .map_err(|error| match error {
-                RecvTimeoutError::Timeout => {
-                    let error = writer_reply_timeout_error(self.write_op_deadline);
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_reply",
-                            SqliteObservabilityOutcome::Timeout,
-                            error.message().to_owned(),
-                            Some(error.code()),
-                        ));
-                    error
-                }
-                RecvTimeoutError::Disconnected => {
-                    let error = writer_reply_channel_closed_error();
-                    self.observability
-                        .emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_reply",
-                            SqliteObservabilityOutcome::Failed,
-                            error.message().to_owned(),
-                            Some(error.code()),
-                        ));
-                    error
-                }
+                RecvTimeoutError::Timeout => fail_submit(
+                    self.observability.as_ref(),
+                    "writer_reply",
+                    SqliteObservabilityOutcome::Timeout,
+                    writer_reply_timeout_error(self.write_op_deadline),
+                ),
+                RecvTimeoutError::Disconnected => fail_submit(
+                    self.observability.as_ref(),
+                    "writer_reply",
+                    SqliteObservabilityOutcome::Failed,
+                    writer_reply_channel_closed_error(),
+                ),
             })?
     }
 
     /// Enqueues one operation without blocking the Tokio executor, then awaits
     /// the reply from the single synchronous SQLite writer thread.
     pub(crate) async fn submit_async(&self, op: WriteOp) -> Result<WriteOpResult, AtmError> {
+        self.submit_committed_async(op).await?.operation
+    }
+
+    pub(crate) async fn submit_committed_async(
+        &self,
+        op: WriteOp,
+    ) -> Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError> {
         let sender = self.sender.as_ref().ok_or_else(|| {
-            let error = writer_channel_closed_error();
-            self.observability
-                .emit_or_warn(SqliteObservabilityEvent::new(
-                    "writer_submit",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                ));
-            error
+            fail_submit(
+                self.observability.as_ref(),
+                "writer_submit",
+                SqliteObservabilityOutcome::Failed,
+                writer_channel_closed_error(),
+            )
         })?;
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
         let message = WriterMessage::Submit {
@@ -387,50 +398,38 @@ impl SqliteWriter {
         tokio::time::timeout(self.write_op_deadline, sender.send(message))
             .await
             .map_err(|_| {
-                let error = writer_queue_timeout_error(self.write_op_deadline);
-                self.observability
-                    .emit_or_warn(SqliteObservabilityEvent::new(
-                        "writer_submit",
-                        SqliteObservabilityOutcome::Timeout,
-                        error.message().to_owned(),
-                        Some(error.code()),
-                    ));
-                error
+                fail_submit(
+                    self.observability.as_ref(),
+                    "writer_submit",
+                    SqliteObservabilityOutcome::Timeout,
+                    writer_queue_timeout_error(self.write_op_deadline),
+                )
             })?
             .map_err(|_| {
-                let error = writer_channel_closed_error();
-                self.observability
-                    .emit_or_warn(SqliteObservabilityEvent::new(
-                        "writer_submit",
-                        SqliteObservabilityOutcome::Failed,
-                        error.message().to_owned(),
-                        Some(error.code()),
-                    ));
-                error
+                fail_submit(
+                    self.observability.as_ref(),
+                    "writer_submit",
+                    SqliteObservabilityOutcome::Failed,
+                    writer_channel_closed_error(),
+                )
             })?;
         tokio::time::timeout(self.write_op_deadline, reply_rx)
             .await
             .map_err(|_| {
-                let error = writer_reply_timeout_error(self.write_op_deadline);
-                self.observability
-                    .emit_or_warn(SqliteObservabilityEvent::new(
-                        "writer_reply",
-                        SqliteObservabilityOutcome::Timeout,
-                        error.message().to_owned(),
-                        Some(error.code()),
-                    ));
-                error
+                fail_submit(
+                    self.observability.as_ref(),
+                    "writer_reply",
+                    SqliteObservabilityOutcome::Timeout,
+                    writer_reply_timeout_error(self.write_op_deadline),
+                )
             })?
             .map_err(|_| {
-                let error = writer_reply_channel_closed_error();
-                self.observability
-                    .emit_or_warn(SqliteObservabilityEvent::new(
-                        "writer_reply",
-                        SqliteObservabilityOutcome::Failed,
-                        error.message().to_owned(),
-                        Some(error.code()),
-                    ));
-                error
+                fail_submit(
+                    self.observability.as_ref(),
+                    "writer_reply",
+                    SqliteObservabilityOutcome::Failed,
+                    writer_reply_channel_closed_error(),
+                )
             })?
     }
 
@@ -569,6 +568,9 @@ pub(crate) use batch::{
     WriterWork, collect_batch, process_batch, process_diagnostic_batch, receive_next_work,
 };
 #[cfg(test)]
+mod committed_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::observability::NullSqliteObservability;
@@ -580,6 +582,43 @@ mod tests {
     use rusqlite::params;
     use serde_json::Map;
     use std::sync::atomic::{AtomicU64, Ordering};
+
+    #[derive(Default)]
+    struct RecordingObservability(Mutex<Vec<SqliteObservabilityEvent>>);
+
+    impl SqliteObservability for RecordingObservability {
+        fn emit(&self, event: SqliteObservabilityEvent) -> Result<(), AtmError> {
+            self.0
+                .lock()
+                .expect("observability events lock")
+                .push(event);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn fail_submit_emits_the_error_once_and_returns_it_unchanged() {
+        let observability = RecordingObservability::default();
+        let error = writer_reply_timeout_error(Duration::from_secs(1));
+        let message = error.message().to_owned();
+        let code = error.code();
+
+        let returned = fail_submit(
+            &observability,
+            "writer_reply",
+            SqliteObservabilityOutcome::Timeout,
+            error,
+        );
+
+        assert_eq!(returned.message(), message);
+        assert_eq!(returned.code(), code);
+        let events = observability.0.lock().expect("observability events lock");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].action, "writer_reply");
+        assert_eq!(events[0].outcome, SqliteObservabilityOutcome::Timeout);
+        assert_eq!(events[0].message, message);
+        assert_eq!(events[0].error_code, Some(code));
+    }
 
     #[test]
     fn queued_primary_work_drains_before_a_full_diagnostic_lane() {
@@ -691,7 +730,10 @@ mod tests {
 
         assert!(matches!(
             reply.recv().expect("primary mailbox reply"),
-            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+            Ok(atm_storage::CommittedTaskWrite {
+                operation: Ok(WriteOpResult::UpsertMessage { inserted: true, .. }),
+                ..
+            })
         ));
         let persisted: i64 = connection
             .query_row(
@@ -763,7 +805,10 @@ mod tests {
         );
         assert!(matches!(
             reply.recv().expect("primary mailbox reply"),
-            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+            Ok(atm_storage::CommittedTaskWrite {
+                operation: Ok(WriteOpResult::UpsertMessage { inserted: true, .. }),
+                ..
+            })
         ));
     }
 
@@ -846,7 +891,7 @@ mod tests {
 
     static NEXT_TEST_DB_ID: AtomicU64 = AtomicU64::new(1);
 
-    fn message(key: &str) -> Message {
+    pub(super) fn message(key: &str) -> Message {
         let team: TeamName = "writer-test-team".parse().expect("team");
         let agent: AgentName = "writer-test-agent".parse().expect("agent");
         Message {
@@ -879,9 +924,12 @@ mod tests {
         }
     }
 
-    fn queued_upsert(
+    pub(super) fn queued_upsert(
         message: Message,
-    ) -> (QueuedWrite, mpsc::Receiver<Result<WriteOpResult, AtmError>>) {
+    ) -> (
+        QueuedWrite,
+        mpsc::Receiver<Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>>,
+    ) {
         let (reply, receiver) = mpsc::sync_channel(1);
         (
             QueuedWrite {
@@ -1142,12 +1190,25 @@ mod tests {
 
         assert!(matches!(
             first_reply.recv().expect("first reply"),
-            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+            Ok(atm_storage::CommittedTaskWrite {
+                operation: Ok(WriteOpResult::UpsertMessage { inserted: true, .. }),
+                ..
+            })
         ));
-        assert!(invalid_reply.recv().expect("invalid reply").is_err());
+        assert!(
+            invalid_reply
+                .recv()
+                .expect("invalid reply")
+                .unwrap()
+                .operation
+                .is_err()
+        );
         assert!(matches!(
             last_reply.recv().expect("last reply"),
-            Ok(WriteOpResult::UpsertMessage { inserted: true, .. })
+            Ok(atm_storage::CommittedTaskWrite {
+                operation: Ok(WriteOpResult::UpsertMessage { inserted: true, .. }),
+                ..
+            })
         ));
         let persisted: i64 = connection
             .query_row(

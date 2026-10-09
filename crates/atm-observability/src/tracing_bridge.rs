@@ -3,7 +3,7 @@
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock};
 
 use atm_core::observability::RETAINED_FIELD_ALLOWLIST;
 use atm_core::observability_counters::{DiagnosticCounters, DiagnosticCountersSource};
@@ -83,6 +83,10 @@ pub enum DropReason {
 }
 
 /// AW.2's bounded diagnostic timeline hook.
+///
+/// Deliberately open (not sealed like the sibling sinks): the daemon bootstrap's
+/// `DiagnosticTimelineWriter` and the herdr queue-wake tests implement it from
+/// outside this crate.
 pub trait DiagnosticSink: Send + Sync {
     /// ```
     /// use std::sync::Arc;
@@ -167,7 +171,10 @@ pub enum BridgeError {
 pub struct TracingBridgeLayer {
     logger: Arc<RetainedLogger>,
     stats: Arc<TracingBridgeStats>,
-    sink: Arc<RwLock<Option<Arc<dyn DiagnosticSink>>>>,
+    // Bootstrap installs each hook once; events only read it afterwards.
+    sink: Arc<OnceLock<Arc<dyn DiagnosticSink>>>,
+    // SDK failures must reach health before retention filtering or queue offers.
+    export_diagnostics: Arc<OnceLock<Arc<crate::ExportDiagnostics>>>,
 }
 
 impl TracingBridgeLayer {
@@ -175,7 +182,8 @@ impl TracingBridgeLayer {
         Self {
             logger,
             stats: Arc::new(TracingBridgeStats::default()),
-            sink: Arc::new(RwLock::new(None)),
+            sink: Arc::new(OnceLock::new()),
+            export_diagnostics: Arc::new(OnceLock::new()),
         }
     }
 
@@ -183,10 +191,13 @@ impl TracingBridgeLayer {
         Arc::clone(&self.stats)
     }
 
-    pub fn set_diagnostic_sink(&self, sink: Arc<dyn DiagnosticSink>) {
-        if let Ok(mut slot) = self.sink.write() {
-            *slot = Some(sink);
-        }
+    pub fn set_diagnostic_sink(&self, sink: Arc<dyn DiagnosticSink>) -> bool {
+        self.sink.set(sink).is_ok()
+    }
+
+    /// Connects observable SDK transport failures to the existing health owner.
+    pub fn set_export_diagnostics(&self, diagnostics: Arc<crate::ExportDiagnostics>) -> bool {
+        self.export_diagnostics.set(diagnostics).is_ok()
     }
 
     /// Installs once as the process-global subscriber; a second subscriber is
@@ -203,6 +214,11 @@ impl TracingBridgeLayer {
     }
 
     fn emit(&self, event: &Event<'_>) {
+        if crate::otel_logs::is_sdk_target(event.metadata().target())
+            && let Some(diagnostics) = self.export_diagnostics.get()
+        {
+            diagnostics.observe_sdk_event(event.metadata().name());
+        }
         if !should_retain(event.metadata().level(), event.metadata().target()) {
             return;
         }
@@ -228,7 +244,14 @@ impl TracingBridgeLayer {
         }
         let _reset = Reset;
 
-        let retained = RetainedTracingEvent::from_event(event);
+        let mut retained = RetainedTracingEvent::from_event(event);
+        if crate::otel_logs::is_sdk_target(event.metadata().target()) {
+            // Keep safe local evidence, never collector text or auth headers.
+            retained.fields.clear();
+            retained
+                .fields
+                .push(("code", Value::String(event.metadata().name().to_owned())));
+        }
         self.forward_retained(retained);
     }
 
@@ -265,8 +288,7 @@ impl TracingBridgeLayer {
             }
         };
         if !retained.origin.skips_diagnostic_sink()
-            && let Ok(slot) = self.sink.read()
-            && let Some(sink) = slot.as_ref()
+            && let Some(sink) = self.sink.get()
         {
             let event = RetainedEvent {
                 ts_unix_ms: retained.timestamp.into_inner().unix_timestamp_nanos() as i64
@@ -331,7 +353,12 @@ impl RetainedTracingEvent {
             timestamp: self.timestamp,
             level: self.level,
             service: ServiceName::new("atm").expect("literal service name"),
-            target: TargetCategory::new("atm.tracing").expect("literal target category"),
+            target: TargetCategory::new(if crate::otel_logs::is_sdk_target(&self.component) {
+                "opentelemetry_sdk"
+            } else {
+                "atm.tracing"
+            })
+            .expect("literal target category"),
             action: ActionName::new("tracing.event").expect("literal action"),
             message: (!self.message.is_empty()).then_some(self.message.clone()),
             identity: ProcessIdentity::default(),
@@ -529,13 +556,60 @@ mod tests {
     fn diagnostic_sink_receives_runtime_error_codes() {
         let (_tempdir, bridge) = bridge();
         let sink = Arc::new(RecordingDiagnosticSink::default());
-        bridge.set_diagnostic_sink(sink.clone());
+        assert!(bridge.set_diagnostic_sink(sink.clone()));
         with_bridge(&bridge, || {
             tracing::warn!(target: "atm_http_runtime::herdr_queue_wake", code = "ATM_HERDR_UNAVAILABLE", "Herdr list failed");
         });
         assert_eq!(
             sink.codes.lock().expect("codes").as_slice(),
             ["ATM_HERDR_UNAVAILABLE"]
+        );
+    }
+
+    #[test]
+    fn bootstrap_hooks_keep_the_first_installation() {
+        let (_tempdir, bridge) = bridge();
+        let first_sink = Arc::new(RecordingDiagnosticSink::default());
+        let second_sink = Arc::new(RecordingDiagnosticSink::default());
+        assert!(bridge.set_diagnostic_sink(first_sink.clone()));
+        assert!(
+            !bridge.set_diagnostic_sink(second_sink.clone()),
+            "bootstrap must not replace the installed retained sink"
+        );
+
+        let first_diagnostics = Arc::new(crate::ExportDiagnostics::default());
+        let second_diagnostics = Arc::new(crate::ExportDiagnostics::default());
+        assert!(bridge.set_export_diagnostics(first_diagnostics.clone()));
+        assert!(
+            !bridge.set_export_diagnostics(second_diagnostics),
+            "bootstrap must not replace the SDK diagnostics observer"
+        );
+        assert!(Arc::ptr_eq(
+            bridge
+                .export_diagnostics
+                .get()
+                .expect("diagnostics installed"),
+            &first_diagnostics
+        ));
+
+        with_bridge(&bridge, || {
+            tracing::warn!(target: "atm_http_runtime::herdr_queue_wake", code = "ATM_HERDR_UNAVAILABLE", "Herdr list failed");
+        });
+        assert_eq!(
+            first_sink
+                .codes
+                .lock()
+                .expect("first sink codes")
+                .as_slice(),
+            ["ATM_HERDR_UNAVAILABLE"]
+        );
+        assert!(
+            second_sink
+                .codes
+                .lock()
+                .expect("second sink codes")
+                .is_empty(),
+            "the duplicate sink must receive no events"
         );
     }
 

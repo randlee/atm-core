@@ -200,11 +200,12 @@ pub(crate) fn admit_acknowledgement_write<
 /// Async counterpart of [`admit_acknowledgement_write`] for the replacement
 /// Tokio daemon. The roster check remains synchronous core validation; the
 /// source lookup, reply creation, and atomic source transition are one await
-/// on the storage-owned durable-admission lane.
+/// on the storage-owned durable-admission lane. The result keeps the committed
+/// rejection-audit rows of a refused acknowledgement.
 pub(crate) async fn admit_acknowledgement_write_async(
     mut request: SendRequest,
     runtime: &LocalServiceRuntime,
-) -> Result<AtomicAcknowledgementWrite, AtmError> {
+) -> Result<atm_storage::CommittedTaskWrite<AtomicAcknowledgementWrite>, AtmError> {
     canonicalize_local_acknowledgement_caller(runtime, &mut request);
     let provenance = validate_write_provenance(
         if request.to.is_some() {
@@ -261,10 +262,12 @@ pub(crate) async fn admit_acknowledgement_write_async(
             )),
         )
     };
-    let _commit = runtime
+    let committed = runtime
         .acknowledge_message_atomically_async(source, builder.clone())
         .await?;
-    builder.take()
+    // A refused acknowledgement carries its committed rejection-audit rows
+    // out with the error, so the caller can still export them.
+    Ok(committed.and_then(|_commit| builder.take()))
 }
 
 /// A local acknowledgement does not travel through ordinary send-context

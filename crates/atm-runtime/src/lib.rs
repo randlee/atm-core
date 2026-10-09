@@ -9,7 +9,7 @@ mod composition;
 pub mod doctor_projection;
 mod legacy_storage_adapters;
 pub mod mailbox_runtime;
-pub mod workflow_telemetry;
+pub mod task_telemetry;
 
 pub use atm_storage::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
@@ -27,7 +27,7 @@ pub use mailbox_runtime::{
     AsyncMailboxRuntime, HandoffConfig, StateHandoffDiagnostics, StateHandoffSupervisor,
     SupervisorState, read_deadline,
 };
-pub use workflow_telemetry::{
-    WorkflowTelemetryConfig, WorkflowTelemetryDiagnostics, WorkflowTelemetryRuntime,
-    WorkflowTelemetrySetup,
+pub use task_telemetry::{
+    TASK_TELEMETRY_QUEUE_CAPACITY, TaskTelemetryDiagnostics, TaskTelemetryDiagnosticsSnapshot,
+    TaskTelemetryRuntime, TaskTelemetrySetup,
 };

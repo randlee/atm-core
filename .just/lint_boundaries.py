@@ -296,6 +296,8 @@ SCB_SINGLETON_ALLOWLIST_PATH = Path(".just/allowlists/scb_singleton_allowlist.to
 SCB_SINGLETON_FIXTURE_PATH = Path(".just/fixtures/scb_singleton_known_bad.rs")
 SCB_OBSERVABILITY_ALLOWLIST_PATH = Path(".just/allowlists/scb_observability_allowlist.toml")
 SCB_OBSERVABILITY_FIXTURE_PATH = Path(".just/fixtures/scb_observability_known_bad.rs")
+SCB_OBSERVABILITY_OTEL_FIXTURE_PATH = Path(".just/fixtures/scb_observability_otel_known_bad.rs")
+SCB_OBSERVABILITY_OTEL_BOOTSTRAP_FIXTURE_PATH = Path(".just/fixtures/scb_observability_otel_bootstrap_known_bad.rs")
 SCB_CONFIG_DIRECT_PATTERNS = ("config::load_team_config(", "load_claude_team_config_document(")
 SCB_CONFIG_GENERIC_HELPER_PATTERNS = (
     "fn load_workspace_config(",
@@ -360,10 +362,35 @@ SCB_SINGLETON_ALLOWED_HOOK_CALLERS = {
 SCB_OBSERVABILITY_ALLOWED_SRC_FILES = {
     Path("crates/atm-daemon-bootstrap/src/daemon_observability.rs"),
 }
+SCB_OBSERVABILITY_SCAN_ROOTS = ("crates/atm-daemon/src/", "crates/atm-daemon-bootstrap/src/")
 SCB_OBSERVABILITY_DIRECT_PATTERNS = (
     "sc_observability_types::ActionName",
     "sc_observability_types::OutcomeLabel",
 )
+# SCB-OBSERVABILITY-002: OpenTelemetry/tonic use stays in the exporter modules of atm-observability and, for the
+# standard SDK providers' lifecycle only, in atm-daemon-bootstrap's daemon_observability.rs (ADR-064 D5).
+_OTEL_ALL = frozenset({"opentelemetry", "opentelemetry_sdk", "opentelemetry_otlp", "tonic"})
+SCB_OBSERVABILITY_OTEL_ROOTS: dict[str, dict[str, frozenset[str]]] = {
+    "crates/atm-observability/src/": {
+        "crates/atm-observability/src/otel_setup.rs": _OTEL_ALL,
+        "crates/atm-observability/src/otel_logs.rs": _OTEL_ALL,
+        "crates/atm-observability/src/task_exporter.rs": _OTEL_ALL,
+        "crates/atm-observability/src/export_diagnostics.rs": _OTEL_ALL,
+    },
+    "crates/atm-daemon-bootstrap/src/": {
+        "crates/atm-daemon-bootstrap/src/daemon_observability.rs": frozenset({"opentelemetry", "opentelemetry_sdk"}),
+    },
+}
+# Fixtures are checked as if they sat in the named root, in a file with no allowance.
+SCB_OBSERVABILITY_OTEL_FIXTURES: dict[Path, str] = {
+    SCB_OBSERVABILITY_OTEL_FIXTURE_PATH: "crates/atm-observability/src/",
+    SCB_OBSERVABILITY_OTEL_BOOTSTRAP_FIXTURE_PATH: "crates/atm-daemon-bootstrap/src/",
+}
+SCB_OBSERVABILITY_OTEL_PATH_RE = re.compile(
+    r"\b(opentelemetry_sdk|opentelemetry_otlp|opentelemetry|tonic)::|\buse\s+(opentelemetry_sdk|opentelemetry_otlp|opentelemetry|tonic)\b"
+)
+# Functions allowed to call force_flush( (shutdown/flush paths). None call it today, so any call is a violation.
+SCB_OBSERVABILITY_FORCE_FLUSH_ALLOWED_FNS: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -458,7 +485,7 @@ class ManifestSectionRule:
 class ManifestDependencyAllowlist:
     owner_manifest_path: Path
     allowed_dependencies: tuple[str, ...]
-    boundary_record_path: Path | None
+    boundary_record_paths: tuple[Path, ...]
 
 
 @dataclass(frozen=True)
@@ -711,20 +738,23 @@ def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAl
             raise SystemExit(
                 f"[boundaries.manifest_dependency_allowlists][{index}].allowed_dependencies must be an array of non-empty strings"
             )
+        # One owner manifest may lock several of its boundary records.
+        if isinstance(boundary_record_path, str):
+            boundary_record_path = [boundary_record_path]
         if boundary_record_path is not None and (
-            not isinstance(boundary_record_path, str) or not boundary_record_path
+            not isinstance(boundary_record_path, list)
+            or not boundary_record_path
+            or not all(isinstance(item, str) and item for item in boundary_record_path)
         ):
             raise SystemExit(
-                f"[boundaries.manifest_dependency_allowlists][{index}].boundary_record_path must be a non-empty string when present"
+                f"[boundaries.manifest_dependency_allowlists][{index}].boundary_record_path must be a non-empty string or array of non-empty strings when present"
             )
         rules.append(
             ManifestDependencyAllowlist(
                 owner_manifest_path=Path(owner_manifest_path),
                 allowed_dependencies=tuple(allowed_dependencies),
-                boundary_record_path=(
-                    Path(boundary_record_path)
-                    if boundary_record_path is not None
-                    else None
+                boundary_record_paths=tuple(
+                    Path(path) for path in boundary_record_path or ()
                 ),
             )
         )
@@ -1079,6 +1109,7 @@ def scb_singleton_fixture_violation(
 def scb_observability_fixture_violation(
     violations: list[BoundaryViolation],
     expected_rules: set[str],
+    fixture_path: Path = SCB_OBSERVABILITY_FIXTURE_PATH,
 ) -> BoundaryViolation | None:
     observed_rules = {
         violation.location.split(" ", 1)[0]
@@ -1089,7 +1120,7 @@ def scb_observability_fixture_violation(
     if not missing:
         return None
     return BoundaryViolation(
-        f"{SCB_OBSERVABILITY_FIXTURE_PATH.as_posix()}: fixture self-test did not reject {', '.join(missing)}",
+        f"{fixture_path.as_posix()}: fixture self-test did not reject {', '.join(missing)}",
         "",
     )
 
@@ -1892,8 +1923,8 @@ def collect_manifest_dependency_allowlist_violations(
             )
             continue
 
-        if allowlist.boundary_record_path is not None:
-            record = records_by_path.get(allowlist.boundary_record_path)
+        for boundary_record_path in allowlist.boundary_record_paths:
+            record = records_by_path.get(boundary_record_path)
             if record is None:
                 violations.append(
                     BoundaryViolation(
@@ -1937,8 +1968,8 @@ def collect_manifest_dependency_allowlist_violations(
                 else:
                     actual_production_dependencies.add(canonical_name)
 
-        if allowlist.boundary_record_path is not None:
-            record = records_by_path.get(allowlist.boundary_record_path)
+        for boundary_record_path in allowlist.boundary_record_paths:
+            record = records_by_path.get(boundary_record_path)
             if record is not None and record.allowed_dev_dependencies:
                 documented_production = set(record.allowed_dependencies)
                 documented_dev = set(record.allowed_dev_dependencies)
@@ -2516,6 +2547,7 @@ def _scan_lines_for_trait_impl_violations(
     """
 
     allowed_paths = set(record.allowed_test_double_paths)
+    kind = "trait-only" if record.implementation_visibility == "trait_only" else "test-double"
     violations: list[BoundaryViolation] = []
     for offset, line in enumerate(lines):
         if is_comment_line(line):
@@ -2530,12 +2562,13 @@ def _scan_lines_for_trait_impl_violations(
             # a real implementation and must not be mistaken for one.
             continue
         implementation_path = f"{module_path}::{match.group(1)}"
-        if implementation_path in allowed_paths:
+        # An entry names either one double or the module whose doubles it approves.
+        if implementation_path in allowed_paths or module_path in allowed_paths:
             continue
         violations.append(
             BoundaryViolation(
                 f"{rel_source}:{line_offset + offset + 1}",
-                f"{record.boundary_id} trait-only implementation {implementation_path!r} "
+                f"{record.boundary_id} {kind} implementation {implementation_path!r} "
                 "is not listed in testing.allowed_test_double_paths",
             )
         )
@@ -2736,11 +2769,85 @@ def find_cfg_test_src_module_test_double_violations(
         child_path = resolve_file_module_child(source_path, mod_name)
         if child_path is None:
             continue
-        child_module_path = crate_qualified_module_path(info, child_path)
-        violations.extend(
-            find_trait_only_test_double_violations(record, child_module_path, child_path, repo_root)
-        )
+        violations.extend(find_test_file_module_tree_violations(record, info, child_path, repo_root))
 
+    return violations
+
+
+def find_test_file_module_tree_violations(
+    record: BoundaryRecord,
+    info: ManifestInfo,
+    source_path: Path,
+    repo_root: Path,
+) -> list[BoundaryViolation]:
+    """Scan a `#[cfg(test)]` file module and every file module below it.
+
+    Everything declared under a test-gated module is test-only, so a double
+    in a grandchild file (`mod a;` inside the test module's own file) is as
+    much a test double as one in the module itself.
+    """
+
+    violations = find_trait_only_test_double_violations(
+        record, crate_qualified_module_path(info, source_path), source_path, repo_root
+    )
+    lines = source_path.read_text(encoding="utf-8").splitlines()
+    for line in lines:
+        match = MOD_FILE_DECL_RE.match(line.strip())
+        if match is None:
+            continue
+        child_path = resolve_file_module_child(source_path, match.group(1))
+        if child_path is not None:
+            violations.extend(find_test_file_module_tree_violations(record, info, child_path, repo_root))
+    return violations
+
+
+def is_test_support_crate(info: ManifestInfo) -> bool:
+    """Return whether `info` is a workspace test-support crate, whose whole
+    `src/` exists to provide test doubles."""
+
+    return info.package_name.endswith("-test-support")
+
+
+# Telemetry sink rules: a production implementation of the record's sink trait
+# lives only in the named exporting crate (ADR-064); atm-core owns the trait
+# and has no built-in no-op sink. Test-support crates are governed by allowed_test_double_paths.
+TELEMETRY_SINK_IMPLEMENTATION_RULES = {
+    "LINT-BOUNDARY-TASK-TELEMETRY-SINK-REFERENCES": "atm-observability",
+}
+
+
+def collect_telemetry_sink_implementation_violations(
+    repo_root: Path, records: list[BoundaryRecord]
+) -> list[BoundaryViolation]:
+    violations: list[BoundaryViolation] = []
+    infos = manifest_info(repo_root)
+    for record in records:
+        if record.public_trait is None:
+            continue
+        for rule in record.lint_rules:
+            exporter = TELEMETRY_SINK_IMPLEMENTATION_RULES.get(rule)
+            if exporter is None:
+                continue
+            pattern = re.compile(
+                rf"\bimpl(?:\s*<[^>{{;]*>)?\s+(?:[A-Za-z0-9_:]+::)?{re.escape(record.public_trait)}\s+for\b"
+            )
+            for info in infos:
+                if {record.owner_package, exporter} & set(info.aliases) or is_test_support_crate(info):
+                    continue
+                for source_path in source_files_for_crate(info):
+                    lines = source_path.read_text(encoding="utf-8").splitlines()
+                    test_scope = rust_file_test_scope(source_path, lines)
+                    rel_source = source_path.relative_to(repo_root).as_posix()
+                    for index, line in enumerate(lines):
+                        if test_scope[index] or is_comment_line(line) or not pattern.search(line):
+                            continue
+                        violations.append(
+                            BoundaryViolation(
+                                f"{rel_source}:{index + 1}",
+                                f"{rule} production {record.public_trait} implementation outside "
+                                f"{record.owner_package} and {exporter}",
+                            )
+                        )
     return violations
 
 
@@ -2757,6 +2864,10 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
         is_trait_only_with_allowlist = (
             record.implementation_visibility == "trait_only" and record.allowed_test_double_paths
         )
+        # A trait with a public production implementation still confines its
+        # test doubles to the allowlist: every test-gated or test-support
+        # implementation must be named there.
+        has_test_double_allowlist = bool(record.allowed_test_double_paths)
         source_files = source_files_for_crate(owner_info)
         for source_path in source_files:
             if is_trait_only_with_allowlist:
@@ -2771,7 +2882,7 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
                 violations.extend(find_public_reexport_violations(record, source_path, repo_root))
             if record.implementation_constructor == "private":
                 violations.extend(find_public_constructor_violations(record, source_path, repo_root))
-        if is_trait_only_with_allowlist:
+        if has_test_double_allowlist:
             # A sealed trait's test doubles are not confined to the owner
             # crate's own `src/`: any workspace crate may implement the trait
             # from its dev-only `tests/` directory (e.g. a consumer crate's
@@ -2792,9 +2903,19 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
             # to avoid re-flagging an already-approved `crate::…`-qualified
             # double under a second, `<crate>::…`-qualified identity.
             for consumer_info in all_infos:
-                if consumer_info.path == owner_info.path:
+                if is_trait_only_with_allowlist and consumer_info.path == owner_info.path:
                     continue
                 for consumer_src_path in source_files_for_crate(consumer_info):
+                    if is_test_support_crate(consumer_info):
+                        violations.extend(
+                            find_trait_only_test_double_violations(
+                                record,
+                                crate_qualified_module_path(consumer_info, consumer_src_path),
+                                consumer_src_path,
+                                repo_root,
+                            )
+                        )
+                        continue
                     violations.extend(
                         find_cfg_test_src_module_test_double_violations(
                             record, consumer_info, consumer_src_path, repo_root
@@ -3057,7 +3178,7 @@ def collect_scb_observability_rule_violations(
         rel_source = rel_path.as_posix()
         if (
             rel_path != SCB_OBSERVABILITY_FIXTURE_PATH
-            and not rel_source.startswith("crates/atm-daemon/src/")
+            and not rel_source.startswith(SCB_OBSERVABILITY_SCAN_ROOTS)
         ):
             continue
         if rel_path in SCB_OBSERVABILITY_ALLOWED_SRC_FILES:
@@ -3087,6 +3208,81 @@ def collect_scb_observability_rule_violations(
     return violations
 
 
+def non_test_rust_lines(lines: list[str]) -> list[tuple[int, str]]:
+    """(line number, text) of every line outside `#[cfg(test)]` items; an item ends at its `;` or matching brace."""
+    kept: list[tuple[int, str]] = []
+    skipping_item = False
+    depth = 0
+    opened = False
+    for line_number, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if skipping_item:
+            depth += line.count("{") - line.count("}")
+            opened = opened or "{" in line
+            if (opened and depth <= 0) or (not opened and stripped.endswith(";")):
+                skipping_item = False
+            continue
+        if stripped.startswith("#[cfg(test)]"):
+            skipping_item, depth, opened = True, 0, False
+            continue
+        kept.append((line_number, line))
+    return kept
+
+
+def is_test_source_path(rel_path: Path) -> bool:
+    """Test-only source: tests.rs, *_tests.rs, and anything under a tests or *_tests directory."""
+    name = rel_path.name
+    if name == "tests.rs" or name.endswith("_tests.rs"):
+        return True
+    return any(part == "tests" or part.endswith("_tests") for part in rel_path.parts[:-1])
+
+
+def collect_scb_observability_otel_violations(
+    repo_root: Path,
+    source_paths: list[Path],
+) -> list[BoundaryViolation]:
+    violations: list[BoundaryViolation] = []
+    for source_path in source_paths:
+        rel_path = source_path.relative_to(repo_root)
+        rel_source = rel_path.as_posix()
+        root = SCB_OBSERVABILITY_OTEL_FIXTURES.get(rel_path) or next(
+            (candidate for candidate in SCB_OBSERVABILITY_OTEL_ROOTS if rel_source.startswith(candidate)), None
+        )
+        if root is None or is_test_source_path(rel_path):
+            continue
+        allowed_crates = (
+            frozenset()
+            if rel_path in SCB_OBSERVABILITY_OTEL_FIXTURES
+            else SCB_OBSERVABILITY_OTEL_ROOTS[root].get(rel_source, frozenset())
+        )
+        lines = source_path.read_text(encoding="utf-8").splitlines()
+        for line_number, line in non_test_rust_lines(lines):
+            if is_comment_line(line):
+                continue
+            for match in SCB_OBSERVABILITY_OTEL_PATH_RE.finditer(line):
+                crate_name = match.group(1) or match.group(2)
+                if crate_name in allowed_crates:
+                    continue
+                allowed_here = ", ".join(sorted(path.rsplit("/", 1)[1] for path in SCB_OBSERVABILITY_OTEL_ROOTS[root])) or "none"
+                violations.append(
+                    BoundaryViolation(
+                        f"SCB-OBSERVABILITY-002 {rel_source}:{line_number} {crate_name} paths are confined to the modules listed in SCB_OBSERVABILITY_OTEL_ROOTS[{root!r}] ({allowed_here})",
+                        "",
+                    )
+                )
+                break
+            if "force_flush(" in line and (
+                enclosing_function_name(lines, line_number) not in SCB_OBSERVABILITY_FORCE_FLUSH_ALLOWED_FNS
+            ):
+                violations.append(
+                    BoundaryViolation(
+                        f"SCB-OBSERVABILITY-002 {rel_source}:{line_number} force_flush( is allowed only in the shutdown/flush functions named in SCB_OBSERVABILITY_FORCE_FLUSH_ALLOWED_FNS (no per-event flush)",
+                        "",
+                    )
+                )
+    return violations
+
+
 def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     records, parse_violations = parse_boundary_records(repo_root)
     violations: list[BoundaryViolation] = []
@@ -3099,6 +3295,7 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations.extend(collect_reference_violations(repo_root, records))
     violations.extend(collect_test_bypass_violations(repo_root, records))
     violations.extend(collect_active_implementation_violations(repo_root, records))
+    violations.extend(collect_telemetry_sink_implementation_violations(repo_root, records))
     violations.extend(collect_io_forbidden_source_violations(repo_root, records))
     violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
@@ -3106,6 +3303,7 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations.extend(collect_scb_workspace_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_singleton_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_observability_rule_violations(repo_root, rust_sources(repo_root)))
+    violations.extend(collect_scb_observability_otel_violations(repo_root, rust_sources(repo_root)))
     fixture_path = repo_root / SCB_CONFIG_FIXTURE_PATH
     if not fixture_path.exists():
         violations.append(
@@ -3188,6 +3386,23 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
         )
         if fixture_failure is not None:
             violations.append(fixture_failure)
+    for fixture_rel in SCB_OBSERVABILITY_OTEL_FIXTURES:
+        otel_fixture_path = repo_root / fixture_rel
+        if not otel_fixture_path.exists():
+            violations.append(
+                BoundaryViolation(
+                    fixture_rel.as_posix(),
+                    "missing required SCB-OBSERVABILITY-002 known-bad fixture",
+                )
+            )
+            continue
+        otel_failure = scb_observability_fixture_violation(
+            collect_scb_observability_otel_violations(repo_root, [otel_fixture_path]),
+            {"SCB-OBSERVABILITY-002"},
+            fixture_rel,
+        )
+        if otel_failure is not None:
+            violations.append(otel_failure)
     return dedupe_violations(violations)
 
 
@@ -3279,6 +3494,7 @@ def run(repo_root: Path) -> int:
     violations.extend(collect_reference_violations(repo_root, records))
     violations.extend(collect_test_bypass_violations(repo_root, records))
     violations.extend(collect_active_implementation_violations(repo_root, records))
+    violations.extend(collect_telemetry_sink_implementation_violations(repo_root, records))
     violations.extend(collect_io_forbidden_source_violations(repo_root, records))
     violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))

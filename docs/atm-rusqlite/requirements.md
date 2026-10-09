@@ -5,7 +5,7 @@
 This document defines the `atm-storage-rusqlite` crate requirements.
 
 The `atm-storage-rusqlite` crate owns the first concrete SQLite implementation of the
-durable store boundaries defined by `atm-core`.
+durable store boundaries defined by `atm-storage` (ADR-036).
 
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
@@ -15,8 +15,9 @@ The crate-local machine-readable boundary inventory lives in:
 `atm-storage-rusqlite` owns:
 
 - concrete `rusqlite`-backed implementations of:
-  - `MailStore`
+  - `MessageStore`
   - `RosterStore`
+  - `TaskStore`, including task-ledger persistence under ADR-062
 - SQLite connection/bootstrap wiring
 - schema migrations/bootstrap execution
 - transaction execution inside the concrete store implementation
@@ -30,8 +31,8 @@ The crate-local machine-readable boundary inventory lives in:
 - inbox JSONL parsing or writing
 - agent notification delivery
 - daemon live-status truth
-- approved durable task semantics; that line remains unresolved until the task
-  model is designed explicitly
+- task state-machine policy, defined by `atm-storage`; the backend persists
+  its approved transitions under product requirements §22.1 and ADR-062
 
 ## 3. Requirement Namespace
 
@@ -48,9 +49,11 @@ Initial allocation:
 Initial crate requirement IDs:
 
 - `REQ-RUSQLITE-STORE-001` `atm-storage-rusqlite` must implement the
-  approved `MailStore` and `RosterStore` contracts without widening those
-  interfaces. The `TaskStore` trait may remain defined upstream, but SQLite
-  task persistence is not an approved schema line at this time. Satisfies:
+  approved `MessageStore`, `RosterStore`, and `TaskStore` contracts.
+  `CommittedTaskWrite` separates operation errors from committed audit rows;
+  `PromptHandoffWrite` distinguishes inserted and existing persisted handoffs.
+  SQLite owns `tasks`, `task_events`, and `prompt_handoffs` under product §22.1
+  and ADR-062. This return-contract clarification changes no schema. Satisfies:
   `REQ-CORE-RUNTIME-001`, `REQ-CORE-STORE-001`, `REQ-CORE-STORE-002`.
 - `REQ-RUSQLITE-MIGRATION-001` `atm-storage-rusqlite` must own deterministic schema
   bootstrap and migration execution. Satisfies:
@@ -99,7 +102,8 @@ Required rules:
 - only `atm-storage-rusqlite` may own direct `rusqlite` calls in the first
   implementation line
 - concrete SQLite details remain private to this crate
-- callers depend on `atm-core` store traits, not on `rusqlite` types
+- callers depend on `atm-storage` traits (daemon consumers through
+  `atm-core::boundary`), not on `rusqlite` types
 - the default production durable database path is `~/.atm/db/mail.db`
 - the host-scoped SQLite database is one shared durable store keyed by team
   and agent, not one database per team
@@ -121,12 +125,13 @@ Required rules:
   - runtime-owned adapters surface SQLite-specific readiness through the
     subsystem-owned doctor traits rather than promoting those report shapes
     into `atm-storage-rusqlite`
-  - speculative SQLite task-store code is not part of the approved AC scope
+  - the historical AC task-storage exclusion was superseded by ADR-062 and
+    product requirements §22.1
 - schema bootstrap must be deterministic and idempotent
 - schema bootstrap must run once per database root before normal store
   operations, not on every connection acquisition
 - WAL / foreign-key / explicit-transaction policy must be enforced here
-- `MailStore` and `RosterStore` may share one internal SQLite
+- `MessageStore`, `TaskStore`, and `RosterStore` may share one internal SQLite
   root object, but they must not collapse into one public god-interface
 - the durable schema must expose:
   - one concrete message table with queryable identity/timestamp columns plus

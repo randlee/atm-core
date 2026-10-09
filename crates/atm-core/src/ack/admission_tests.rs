@@ -313,6 +313,19 @@ impl atm_storage::MessageStore for InMemoryAsyncStore {
         Ok(())
     }
 
+    fn admit_message_with_provenance(
+        &self,
+        message: &Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        self.save_message_if_absent(message)
+            .map(|existing| atm_storage::CommittedTaskWrite {
+                operation: Ok(atm_storage::MessageAdmissionOutcome::passive(existing)),
+                task_events: Vec::new(),
+            })
+    }
+
     fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError> {
         self.records
             .lock()
@@ -377,7 +390,16 @@ impl atm_storage::MessageStore for InMemoryAsyncStore {
 // The default async methods delegate to the synchronous implementations,
 // matching the transitional composition-root wiring under test.
 #[async_trait::async_trait]
-impl atm_storage::AsyncMessageStore for InMemoryAsyncStore {}
+impl atm_storage::AsyncMessageStore for InMemoryAsyncStore {
+    async fn admit_message_with_provenance_async(
+        &self,
+        message: Message,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        atm_storage::MessageStore::admit_message_with_provenance(self, &message, provenance)
+    }
+}
 
 struct SingleMemberRoster;
 
@@ -562,6 +584,8 @@ fn async_admission_matches_sync_behavior_for_local_ack() {
         ack_write_request(message_id),
         &runtime,
     ))
+    .expect("async local acknowledgement commits")
+    .operation
     .expect("async local acknowledgement admits");
 
     assert_eq!(write.reply.agent.as_str(), TEST_SENDER);

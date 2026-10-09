@@ -128,23 +128,28 @@ async fn record_stall_audit(
     let store = Arc::clone(task_store);
     let member = MemberKey::new(row.team.clone(), row.assignee.clone());
     let task_id = row.task_id.clone();
-    if let Err(error) = pump
+    match pump
         .blocking_bridge
         .run(herdr_request_deadline(), move || {
             store.record_lead_notified(&member, &task_id, now, &lead, &message_id)
         })
         .await
     {
-        tracing::warn!(
+        Ok(event) => {
+            crate::task_telemetry::project_task_events(
+                &pump.task_telemetry,
+                std::slice::from_ref(&event),
+            );
+            stats.lead_notifications += 1;
+        }
+        Err(error) => tracing::warn!(
             subsystem = "herdr_queue_wake",
             action = "task_lead_notification_record",
             outcome = "failed",
             task_id = %row.task_id,
             error = %error,
             "Task lead notification audit write failed"
-        );
-    } else {
-        stats.lead_notifications += 1;
+        ),
     }
 }
 

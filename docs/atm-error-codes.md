@@ -156,11 +156,17 @@ Error codes should describe the failure class, not a specific prose message.
   start/end selector field and an ordered RFC 3339 range.
 - `ATM_WORKFLOW_TELEMETRY_CONFIG_INVALID` — configured telemetry worker
   capacity or timeout is outside its bounded range. ATM remains available with
-  telemetry disabled; repair the configuration and restart the daemon.
+  telemetry disabled; repair the configuration and restart the daemon. No
+  longer emitted since the workflow telemetry runtime was removed; kept so
+  older daemons' output still parses.
+- `ATM_TELEMETRY_EXPORT_CONFIG_INVALID` — the configured OpenTelemetry
+  endpoint or protocol is invalid. ATM remains available with export disabled;
+  correct the `ATM_OTEL_*` configuration and restart the daemon.
 - `ATM_WORKFLOW_TELEMETRY_DROPPED` — the best-effort telemetry sink could not
   accept a record during a full queue, timeout, failure, or bounded shutdown.
   Inspect runtime diagnostics; this never changes admission, routing, or a
-  query result.
+  query result. No longer emitted since the workflow telemetry runtime was
+  removed; kept so older daemons' output still parses.
 - `ATM_WAIT_TIMEOUT`
 - `ATM_ACK_INVALID_STATE`
 - `ATM_CLEAR_INVALID_STATE`

@@ -5,9 +5,7 @@ use std::collections::HashMap;
 #[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;
 #[cfg(any(test, feature = "test-utils"))]
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-#[cfg(any(test, feature = "test-utils"))]
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +13,8 @@ use crate::contract::{ReadDeadline, ReadLaneError, sealed};
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
 use crate::task_state::{PromptHandoff, QueuePosition, TaskEventRow, TaskRow};
+#[cfg(any(test, feature = "test-utils"))]
+use crate::task_state::{TaskActor, TaskEventKind};
 use crate::types::{AgentName, IsoTimestamp, MemberKey, TaskId, TeamName};
 use crate::{AgentAddress, MoveTarget};
 
@@ -46,6 +46,62 @@ pub const TASK_CONSECUTIVE_REFUSAL_THRESHOLD: u32 = 3;
 
 /// Maximum recipients retained for one daemon or team escalation scope.
 pub const MAX_ESCALATION_RECIPIENTS: usize = 8;
+
+/// The operation result and audit rows made durable by a committed transaction.
+///
+/// An operation may fail while its rejection audit commits. An outer `Err`
+/// means commitment was not confirmed and never carries task-event rows.
+#[derive(Debug, Clone, PartialEq)]
+#[must_use]
+pub struct CommittedTaskWrite<T> {
+    pub operation: Result<T, AtmError>,
+    /// Committed rejection-audit rows, non-empty only when `operation` is
+    /// `Err`. A successful operation carries its own rows in its result
+    /// (`MessageAdmissionOutcome::task_events`, `TaskMoveRecord::event`), so
+    /// at most one of the two carriers is ever non-empty.
+    pub task_events: Vec<TaskEventRow>,
+}
+
+impl<T> CommittedTaskWrite<T> {
+    /// Converts the operation value without discarding committed audit rows.
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> CommittedTaskWrite<U> {
+        CommittedTaskWrite {
+            operation: self.operation.map(f),
+            task_events: self.task_events,
+        }
+    }
+
+    /// Converts a fallible operation value without discarding committed audit rows.
+    pub fn and_then<U>(self, f: impl FnOnce(T) -> Result<U, AtmError>) -> CommittedTaskWrite<U> {
+        CommittedTaskWrite {
+            operation: self.operation.and_then(f),
+            task_events: self.task_events,
+        }
+    }
+}
+
+/// Whether a prompt handoff was inserted or already existed durably.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PromptHandoffWrite {
+    Inserted(PromptHandoff),
+    Existing(PromptHandoff),
+}
+
+/// Persisted result of moving a task in the ordered ledger.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskMoveRecord {
+    pub assignee: AgentName,
+    pub from: QueuePosition,
+    pub to: QueuePosition,
+    pub event: TaskEventRow,
+}
+
+/// Persisted result of changing a task's reminder counters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskReminderRecord {
+    pub row: TaskRow,
+    pub event: TaskEventRow,
+}
 
 impl EscalationScope {
     #[must_use]
@@ -174,7 +230,10 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         task_id: &TaskId,
         assignee: Option<&AgentName>,
     ) -> Result<Vec<TaskEventRow>, AtmError>;
-    fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<(), AtmError>;
+    fn record_prompt_handoff(
+        &self,
+        handoff: &PromptHandoff,
+    ) -> Result<PromptHandoffWrite, AtmError>;
     fn move_task(
         &self,
         _team: &TeamName,
@@ -182,7 +241,7 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         _actor: &AgentName,
         _target: &MoveTarget,
         _at: IsoTimestamp,
-    ) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
+    ) -> Result<CommittedTaskWrite<TaskMoveRecord>, AtmError> {
         Err(AtmError::daemon_unavailable(
             "task store does not implement ordered task movement",
         ))
@@ -193,7 +252,7 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         task_id: &TaskId,
         at: IsoTimestamp,
         outcome: ReminderOutcome,
-    ) -> Result<TaskRow, AtmError>;
+    ) -> Result<TaskReminderRecord, AtmError>;
     /// Zeroes the reminder budget after the assignee is observed sustained
     /// active. The budget then counts from the assignee's last observed
     /// activity rather than from task assignment.
@@ -202,7 +261,7 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         member: &MemberKey,
         task_id: &TaskId,
         at: IsoTimestamp,
-    ) -> Result<TaskRow, AtmError>;
+    ) -> Result<TaskReminderRecord, AtmError>;
     fn record_lead_notified(
         &self,
         member: &MemberKey,
@@ -210,7 +269,7 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         at: IsoTimestamp,
         lead: &AgentName,
         message_id: &AtmMessageId,
-    ) -> Result<(), AtmError>;
+    ) -> Result<TaskEventRow, AtmError>;
 
     fn list_escalation_recipients(
         &self,
@@ -253,8 +312,17 @@ pub struct DummyTaskStore {
     escalation_recipients: Mutex<HashMap<String, Vec<AgentAddress>>>,
     fail_reminders: bool,
     fail_prompt_handoffs: AtomicBool,
-    prompt_handoff_delay_millis: AtomicU64,
+    prompt_handoff_hold: Mutex<Option<PromptHandoffHold>>,
     fail_escalation_recipient_reads: AtomicBool,
+}
+
+/// Holds the next prompt-handoff write: it signals `entered`, then blocks
+/// until `release` is used or dropped.
+#[cfg(any(test, feature = "test-utils"))]
+#[derive(Debug)]
+struct PromptHandoffHold {
+    entered: std::sync::mpsc::Sender<()>,
+    release: std::sync::mpsc::Receiver<()>,
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -271,7 +339,7 @@ impl DummyTaskStore {
             escalation_recipients: Mutex::new(HashMap::new()),
             fail_reminders,
             fail_prompt_handoffs: AtomicBool::new(false),
-            prompt_handoff_delay_millis: AtomicU64::new(0),
+            prompt_handoff_hold: Mutex::new(None),
             fail_escalation_recipient_reads: AtomicBool::new(false),
         }
     }
@@ -280,11 +348,20 @@ impl DummyTaskStore {
         self.fail_prompt_handoffs.store(fail, Ordering::SeqCst);
     }
 
-    pub fn set_prompt_handoff_delay(&self, delay: Duration) {
-        self.prompt_handoff_delay_millis.store(
-            u64::try_from(delay.as_millis()).unwrap_or(u64::MAX),
-            Ordering::SeqCst,
-        );
+    /// Holds the next prompt-handoff write inside the store. Returns the
+    /// receiver that fires once the write is held, and the sender that
+    /// releases it (dropping it releases too).
+    pub fn hold_next_prompt_handoff(
+        &self,
+    ) -> (std::sync::mpsc::Receiver<()>, std::sync::mpsc::Sender<()>) {
+        let (entered, entered_rx) = std::sync::mpsc::channel();
+        let (release_tx, release) = std::sync::mpsc::channel();
+        *self
+            .prompt_handoff_hold
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some(PromptHandoffHold { entered, release });
+        (entered_rx, release_tx)
     }
 
     pub fn set_fail_escalation_recipient_reads(&self, fail: bool) {
@@ -496,32 +573,39 @@ impl TaskStore for DummyTaskStore {
         Ok(Vec::new())
     }
 
-    fn record_prompt_handoff(&self, handoff: &PromptHandoff) -> Result<(), AtmError> {
+    fn record_prompt_handoff(
+        &self,
+        handoff: &PromptHandoff,
+    ) -> Result<PromptHandoffWrite, AtmError> {
         if self.fail_prompt_handoffs.load(Ordering::SeqCst) {
             return Err(AtmError::mailbox_write(
                 "injected prompt-handoff bookkeeping failure",
             ));
         }
-        let delay_millis = self.prompt_handoff_delay_millis.load(Ordering::SeqCst);
-        if delay_millis != 0 {
-            let started = std::time::Instant::now();
-            while started.elapsed() < Duration::from_millis(delay_millis) {
-                std::thread::yield_now();
-            }
+        let hold = self
+            .prompt_handoff_hold
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(hold) = hold {
+            let _ = hold.entered.send(());
+            let _ = hold.release.recv();
         }
         let mut rows = self
             .prompt_handoffs
             .lock()
             .map_err(|_| AtmError::mailbox_write("dummy prompt handoffs lock poisoned"))?;
-        if !rows.iter().any(|row| {
+        if let Some(existing) = rows.iter().find(|row| {
             row.team == handoff.team
                 && row.agent == handoff.agent
                 && row.message_key == handoff.message_key
+                && row.kind == handoff.kind
                 && row.attempt == handoff.attempt
         }) {
-            rows.push(handoff.clone());
+            return Ok(PromptHandoffWrite::Existing(existing.clone()));
         }
-        Ok(())
+        rows.push(handoff.clone());
+        Ok(PromptHandoffWrite::Inserted(handoff.clone()))
     }
 
     fn record_reminder(
@@ -530,7 +614,7 @@ impl TaskStore for DummyTaskStore {
         task_id: &TaskId,
         at: IsoTimestamp,
         _outcome: ReminderOutcome,
-    ) -> Result<TaskRow, AtmError> {
+    ) -> Result<TaskReminderRecord, AtmError> {
         if self.fail_reminders {
             return Err(AtmError::new(
                 crate::AtmErrorCode::InternalError,
@@ -545,7 +629,24 @@ impl TaskStore for DummyTaskStore {
             })?;
         row.last_reminded_at = Some(at);
         row.reminder_count = row.reminder_count.saturating_add(1);
-        Ok(row.clone())
+        Ok(TaskReminderRecord {
+            row: row.clone(),
+            event: TaskEventRow {
+                team: member.team().clone(),
+                task_id: task_id.clone(),
+                assignee: member.agent().clone(),
+                seq: 0,
+                at,
+                event: TaskEventKind::Reminded,
+                from_state: Some(row.state),
+                to_state: Some(row.state),
+                actor: TaskActor::Daemon,
+                message_id: None,
+                outcome: Some(_outcome),
+                marker: None,
+                detail: None,
+            },
+        })
     }
 
     fn reset_reminders(
@@ -553,7 +654,7 @@ impl TaskStore for DummyTaskStore {
         member: &MemberKey,
         task_id: &TaskId,
         at: IsoTimestamp,
-    ) -> Result<TaskRow, AtmError> {
+    ) -> Result<TaskReminderRecord, AtmError> {
         let mut rows = self.rows.lock().expect("dummy task rows lock");
         let row = rows
             .get_mut(&(member.team().clone(), task_id.clone()))
@@ -564,7 +665,24 @@ impl TaskStore for DummyTaskStore {
         row.lead_notified_count = 0;
         row.last_reminded_at = None;
         row.updated_at = at;
-        Ok(row.clone())
+        Ok(TaskReminderRecord {
+            row: row.clone(),
+            event: TaskEventRow {
+                team: member.team().clone(),
+                task_id: task_id.clone(),
+                assignee: member.agent().clone(),
+                seq: 0,
+                at,
+                event: TaskEventKind::RemindersReset,
+                from_state: Some(row.state),
+                to_state: Some(row.state),
+                actor: TaskActor::Daemon,
+                message_id: None,
+                outcome: None,
+                marker: None,
+                detail: None,
+            },
+        })
     }
 
     fn record_lead_notified(
@@ -574,8 +692,22 @@ impl TaskStore for DummyTaskStore {
         _at: IsoTimestamp,
         _lead: &AgentName,
         _message_id: &AtmMessageId,
-    ) -> Result<(), AtmError> {
-        Ok(())
+    ) -> Result<TaskEventRow, AtmError> {
+        Ok(TaskEventRow {
+            team: _member.team().clone(),
+            task_id: _task_id.clone(),
+            assignee: _member.agent().clone(),
+            seq: 0,
+            at: _at,
+            event: TaskEventKind::LeadNotified,
+            from_state: None,
+            to_state: None,
+            actor: TaskActor::Member(_lead.clone()),
+            message_id: Some(*_message_id),
+            outcome: None,
+            marker: None,
+            detail: None,
+        })
     }
 
     fn list_escalation_recipients(

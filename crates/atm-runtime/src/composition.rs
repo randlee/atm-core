@@ -6,7 +6,6 @@ use std::sync::Arc;
 use atm_core::boundary::{
     self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, TemplateComposer,
 };
-use atm_core::doctor::{DoctorFinding, DoctorSeverity};
 use atm_core::doctor::{ReaderPoolDoctorReport, ReaderPoolMetricsDoctorReport, RuntimeDoctorPorts};
 use atm_core::error::AtmError;
 use atm_core::home::HostRuntimeScope;
@@ -20,9 +19,7 @@ use crate::legacy_storage_adapters::{
     StorageBackends, boundary_mail_store_view, boundary_roster_store_view, runtime_doctor_ports,
 };
 use crate::mailbox_runtime::StorageAsyncMailboxRuntime;
-use crate::workflow_telemetry::{
-    WorkflowTelemetryDiagnostics, WorkflowTelemetryRuntime, WorkflowTelemetrySetup,
-};
+use crate::task_telemetry::{TaskTelemetryRuntime, TaskTelemetrySetup};
 
 #[derive(Clone)]
 pub struct RuntimeAssemblyInputs {
@@ -33,9 +30,9 @@ pub struct RuntimeAssemblyInputs {
     /// Optional application port supplied by the bootstrap composition root.
     /// Runtime owns no template-adapter dependency or implementation detail.
     pub template_composer: Option<Arc<dyn TemplateComposer>>,
-    /// Optional bootstrap-owned telemetry exporter. `None` selects the core
-    /// no-op sink; invalid supplied limits degrade doctor only.
-    pub workflow_telemetry: Option<WorkflowTelemetrySetup>,
+    /// Optional bootstrap-owned task telemetry exporter. `None` keeps task
+    /// telemetry disabled: no queue and no worker.
+    pub task_telemetry: Option<TaskTelemetrySetup>,
 }
 
 impl fmt::Debug for RuntimeAssemblyInputs {
@@ -53,11 +50,8 @@ impl fmt::Debug for RuntimeAssemblyInputs {
                     .map(|_| "dyn TemplateComposer"),
             )
             .field(
-                "workflow_telemetry",
-                &self
-                    .workflow_telemetry
-                    .as_ref()
-                    .map(|_| "configured exporter"),
+                "task_telemetry",
+                &self.task_telemetry.as_ref().map(|_| "configured exporter"),
             )
             .finish()
     }
@@ -76,7 +70,8 @@ pub struct RuntimeAssembly {
     pub diagnostic_timeline: Arc<dyn DiagnosticTimelineStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
     pub reader_lanes: Option<ReaderPoolDoctorReport>,
-    pub workflow_telemetry: WorkflowTelemetryRuntime,
+    /// Sole holder of the task telemetry sink; handlers call `try_emit`.
+    pub task_telemetry: TaskTelemetryRuntime,
     template_composer: Option<Arc<dyn TemplateComposer>>,
 }
 
@@ -94,7 +89,7 @@ impl fmt::Debug for RuntimeAssembly {
             .field("diagnostic_timeline", &"dyn DiagnosticTimelineStore")
             .field("doctor_ports", &self.doctor_ports)
             .field("reader_lanes", &self.reader_lanes)
-            .field("workflow_telemetry", &"WorkflowTelemetryRuntime")
+            .field("task_telemetry", &"TaskTelemetryRuntime")
             .field(
                 "template_composer",
                 &self
@@ -112,7 +107,6 @@ struct RuntimeConfigDoctor {
     // workspace and therefore must not read `.atm.toml` while answering
     // doctor requests.
     config_current_dir: Option<PathBuf>,
-    workflow_telemetry: Arc<WorkflowTelemetryDiagnostics>,
 }
 
 impl boundary::sealed::Sealed for RuntimeConfigDoctor {}
@@ -122,24 +116,9 @@ impl ConfigDoctor for RuntimeConfigDoctor {
         if let Some(config_current_dir) = &self.config_current_dir {
             let _ = load_atm_config(config_current_dir)?;
         }
-        let mut findings = Vec::new();
-        if self
-            .workflow_telemetry
-            .config_invalid
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
-            findings.push(DoctorFinding {
-                severity: DoctorSeverity::Warning,
-                code: atm_storage::AtmErrorCode::WorkflowTelemetryConfigInvalid,
-                message: "workflow telemetry configuration is invalid; telemetry is disabled"
-                    .to_owned(),
-                remediation: Some(
-                    "Repair the configured telemetry queue or timeout limits, then restart the daemon."
-                        .to_owned(),
-                ),
-            });
-        }
-        Ok(ConfigDoctorReport { findings })
+        Ok(ConfigDoctorReport {
+            findings: Vec::new(),
+        })
     }
 }
 
@@ -176,10 +155,10 @@ fn reader_pool_doctor_report(storage: &StorageHandles) -> Option<ReaderPoolDocto
 
 pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly, AtmError> {
     let template_composer = inputs.template_composer;
-    let workflow_telemetry = inputs
-        .workflow_telemetry
-        .map_or_else(WorkflowTelemetryRuntime::disabled, |setup| {
-            WorkflowTelemetryRuntime::start(setup.config, setup.sink)
+    let task_telemetry = inputs
+        .task_telemetry
+        .map_or_else(TaskTelemetryRuntime::disabled, |setup| {
+            TaskTelemetryRuntime::start(setup.sink)
         });
     let storage = inputs
         .storage_factory
@@ -216,7 +195,6 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     .with_template_rendering(template_catalog_store, template_composer.clone());
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
         config_current_dir: Some(inputs.config_current_dir),
-        workflow_telemetry: Arc::clone(workflow_telemetry.diagnostics()),
     }));
     Ok(RuntimeAssembly {
         service_runtime,
@@ -230,7 +208,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         diagnostic_timeline,
         doctor_ports,
         reader_lanes,
-        workflow_telemetry,
+        task_telemetry,
         template_composer,
     })
 }
@@ -303,7 +281,6 @@ impl RuntimeAssembly {
         self.service_runtime = self.service_runtime.without_workspace_config();
         self.doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
             config_current_dir: None,
-            workflow_telemetry: Arc::clone(self.workflow_telemetry.diagnostics()),
         }));
         self
     }
@@ -357,7 +334,6 @@ pub fn with_installed_roster_store<T>(
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use std::sync::Arc;
 
     use atm_core::boundary::ConfigDoctor;
     use atm_storage::{
@@ -366,7 +342,6 @@ mod tests {
     };
 
     use super::{RuntimeConfigDoctor, validate_enabled_peer_configuration};
-    use crate::workflow_telemetry::WorkflowTelemetryDiagnostics;
 
     #[test]
     fn composition_installs_the_task_store() {
@@ -379,6 +354,64 @@ mod tests {
             .expect("compose sqlite runtime");
 
         assert!(assembly.service_runtime.task_store().is_ok());
+        drop(assembly);
+        std::fs::remove_dir_all(root).expect("remove tempdir");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn composition_exports_task_telemetry_through_the_supplied_sink() {
+        let root = std::env::temp_dir().join(format!(
+            "atm-runtime-task-telemetry-{}",
+            atm_storage::AtmMessageId::new()
+        ));
+        std::fs::create_dir_all(&root).expect("tempdir");
+        let sink = atm_runtime_test_support::RecordingTaskTelemetrySink::new();
+        let assembly = atm_runtime_test_support::open_sqlite_boundary_with_task_telemetry(
+            root.join("runtime").join("mail.sqlite3"),
+            Some(atm_runtime_test_support::RecordingTaskTelemetrySink::setup(
+                &sink,
+            )),
+        )
+        .expect("compose sqlite runtime");
+
+        assembly
+            .task_telemetry
+            .try_emit(crate::task_telemetry::tests::record(
+                atm_core::TaskTelemetryKind::Assigned,
+            ));
+        assembly
+            .task_telemetry
+            .shutdown(tokio::time::Instant::now() + std::time::Duration::from_secs(5))
+            .await;
+
+        assert_eq!(sink.records().len(), 1);
+        assert_eq!(assembly.task_telemetry.diagnostics().snapshot().emitted, 1);
+        drop(assembly);
+        std::fs::remove_dir_all(root).expect("remove tempdir");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn composition_without_task_telemetry_is_disabled() {
+        let root = std::env::temp_dir().join(format!(
+            "atm-runtime-task-telemetry-off-{}",
+            atm_storage::AtmMessageId::new()
+        ));
+        std::fs::create_dir_all(&root).expect("tempdir");
+        let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(&root)
+            .expect("compose sqlite runtime");
+
+        assembly
+            .task_telemetry
+            .try_emit(crate::task_telemetry::tests::record(
+                atm_core::TaskTelemetryKind::Assigned,
+            ));
+
+        let snapshot = assembly.task_telemetry.diagnostics().snapshot();
+        assert_eq!(
+            snapshot.emitted + snapshot.dropped_full + snapshot.dropped_shutdown,
+            0
+        );
+        assert!(!snapshot.no_runtime);
         drop(assembly);
         std::fs::remove_dir_all(root).expect("remove tempdir");
     }
@@ -399,40 +432,15 @@ mod tests {
 
         let caller_doctor = RuntimeConfigDoctor {
             config_current_dir: Some(PathBuf::from(&workspace)),
-            workflow_telemetry: Arc::new(WorkflowTelemetryDiagnostics::default()),
         };
         assert!(caller_doctor.inspect_config().is_err());
 
         RuntimeConfigDoctor {
             config_current_dir: None,
-            workflow_telemetry: Arc::new(WorkflowTelemetryDiagnostics::default()),
         }
         .inspect_config()
         .expect("daemon doctor must ignore caller workspace config");
         std::fs::remove_dir_all(workspace).expect("remove workspace fixture");
-    }
-
-    #[test]
-    fn invalid_telemetry_configuration_is_a_doctor_warning_not_a_runtime_failure() {
-        let diagnostics = Arc::new(WorkflowTelemetryDiagnostics::default());
-        diagnostics
-            .config_invalid
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-        let report = RuntimeConfigDoctor {
-            config_current_dir: None,
-            workflow_telemetry: diagnostics,
-        }
-        .inspect_config()
-        .expect("doctor report");
-        assert_eq!(report.findings.len(), 1);
-        assert_eq!(
-            report.findings[0].code,
-            atm_storage::AtmErrorCode::WorkflowTelemetryConfigInvalid
-        );
-        assert_eq!(
-            report.findings[0].severity,
-            atm_core::doctor::DoctorSeverity::Warning
-        );
     }
 
     #[derive(Default)]

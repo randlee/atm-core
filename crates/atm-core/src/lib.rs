@@ -106,6 +106,8 @@ pub(crate) mod service_runtime_store;
 pub mod task_close;
 /// Read-only query contracts for the closed `atm task` command set.
 pub mod task_query;
+/// First-party-only telemetry contract for task-ledger facts.
+pub mod task_telemetry;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
 /// Pure resolution of template-declared workflow snapshots.
@@ -130,8 +132,6 @@ pub mod transport;
 pub mod types;
 /// Generic local lifecycle projection over immutable workflow admission facts.
 pub mod workflow_analytics;
-/// First-party-only telemetry contract for workflow lifecycle projections.
-pub mod workflow_telemetry;
 /// Canonical write pipeline shared by `ack` and `send`; consumed only
 /// through their facades, so the module itself stays crate-private.
 pub(crate) mod write;
@@ -200,6 +200,10 @@ pub use service_runtime::graft_store_error;
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
 };
+pub use task_telemetry::{
+    LogDestination, TaskHandoffFacts, TaskTelemetryError, TaskTelemetryKind, TaskTelemetryRecord,
+    TaskTelemetrySink, TelemetryExportConfig, TelemetryExportProtocol,
+};
 pub use transfer_script::{
     ConfiguredTransferScript, TransferInvocation, TransferScript, TransferScriptKind,
     resolve_transfer_script,
@@ -207,8 +211,4 @@ pub use transfer_script::{
 pub use workflow_analytics::{
     LifecycleObservation, WorkflowFact, WorkflowProjectionRequest, WorkflowSelector,
     project_lifecycles,
-};
-pub use workflow_telemetry::{
-    NoopWorkflowTelemetrySink, WorkflowTelemetryError, WorkflowTelemetryObservation,
-    WorkflowTelemetryRecord, WorkflowTelemetrySink,
 };

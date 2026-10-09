@@ -238,8 +238,8 @@ mod tests {
                         .count()
                 })
                 .sum::<usize>(),
-            2,
-            "prompt handoff insert and select must use the shared projection",
+            3,
+            "prompt handoff insert, readback, and collision lookup must use the shared projection",
         );
     }
 }

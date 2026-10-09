@@ -21,32 +21,39 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-peer-tls-interop"),
     ("atm", "atm-storage-rusqlite"),
     ("atm", "peer-tls"),
-    ("atm", "telemetry-implementation"),
+    ("atm", "opentelemetry-otlp"),
     ("atm-core", "atm-daemon"),
     ("atm-core", "atm-storage-rusqlite"),
     ("atm-core", "sc-observability"),
+    ("atm-core", "opentelemetry"),
     ("atm-daemon", "atm-runtime"),
     ("atm-daemon", "atm-peer-tls-interop"),
     ("atm-daemon", "atm-storage-rusqlite"),
     ("atm-daemon", "atm-observability"),
     ("atm-daemon", "peer-tls"),
     ("atm-daemon-bootstrap", "atm-peer-tls-interop"),
+    ("atm-daemon-bootstrap", "opentelemetry-otlp"),
     ("atm-daemon-client", "atm-daemon"),
     ("atm-daemon-client", "atm-storage-rusqlite"),
     ("atm-error", "atm-core"),
     ("atm-error", "atm-storage-rusqlite"),
     ("atm-http-runtime", "atm-storage"),
+    ("atm-http-runtime", "opentelemetry"),
     ("atm-observability", "atm-daemon-bootstrap"),
     ("atm-observability", "atm-http-runtime"),
     ("atm-observability", "atm-storage-rusqlite"),
+    ("atm-observability", "sc-observability-otlp"),
     ("atm-runtime", "atm-storage-rusqlite"),
+    ("atm-runtime", "opentelemetry"),
     ("atm-storage", "atm-core"),
     ("atm-storage", "atm-daemon"),
     ("atm-storage", "atm-storage-rusqlite"),
-    ("atm-storage", "telemetry-implementation"),
+    ("atm-storage", "opentelemetry-otlp"),
+    ("atm-storage", "opentelemetry"),
     ("atm-storage-rusqlite", "atm-core"),
     ("atm-storage-rusqlite", "atm-runtime"),
-    ("atm-storage-rusqlite", "telemetry-implementation"),
+    ("atm-storage-rusqlite", "opentelemetry-otlp"),
+    ("atm-storage-rusqlite", "opentelemetry"),
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
     ("atm-graft", "atm-peer-tls-interop"),
@@ -64,7 +71,7 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-http-runtime", "atm-graft"),
     ("atm-http-runtime", "atm-storage-rusqlite"),
     ("atm-http-runtime", "peer-tls"),
-    ("atm-http-runtime", "telemetry-implementation"),
+    ("atm-http-runtime", "opentelemetry-otlp"),
     ("atm-query-python", "atm-core"),
     ("atm-query-python", "atm-graft"),
     ("atm-query-python", "atm-http-runtime"),
@@ -155,21 +162,41 @@ fn adapter_availability_guard_scans_code_branches_not_comment_wording() {
 }
 
 #[test]
+fn daemon_observability_owner_is_passed_not_process_global() {
+    let root = workspace_root();
+    let composition = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
+    let owner = read_source(&root.join("crates/atm-daemon-bootstrap/src/daemon_observability.rs"));
+    for source in [&composition, &owner] {
+        assert!(
+            !source.contains("OnceLock<DaemonObservability>") && !source.contains("process_owner"),
+            "the daemon observability owner must be threaded through composition, not read from a process global"
+        );
+    }
+    assert!(
+        composition.contains("assemble_daemon_runtime(obs_owner.as_ref())?")
+            && composition.contains(
+                "DaemonWorkers::for_process(telemetry, recovery_sweep, atm_temp_sweeper, obs_owner)"
+            ),
+        "runtime assembly and the shutdown workers must receive the supplied owner"
+    );
+}
+
+#[test]
 fn daemon_must_not_read_caller_workspace_config() {
     let root = workspace_root();
     let composition = read_source(&root.join("crates/atm-daemon-bootstrap/src/lib.rs"));
     assert!(
-        composition.contains("assemble_daemon_runtime()?"),
+        composition.contains("assemble_daemon_runtime(obs_owner.as_ref())?"),
         "replacement daemon composition must select the daemon-only runtime assembly"
     );
     assert!(
-        composition.contains("pub fn assemble_daemon_runtime()")
+        composition.contains("pub fn assemble_daemon_runtime(")
             && composition.contains(".map(RuntimeAssembly::for_daemon)"),
         "daemon-only assembly must discard the workspace-backed configuration view"
     );
     assert!(
         !composition
-            .split("pub fn assemble_daemon_runtime()")
+            .split("pub fn assemble_daemon_runtime(")
             .nth(1)
             .unwrap_or_default()
             .split("/// Starts the replacement Tokio/Axum daemon")
@@ -180,9 +207,14 @@ fn daemon_must_not_read_caller_workspace_config() {
     );
     let runtime_composition = read_source(&root.join("crates/atm-runtime/src/composition.rs"));
     assert!(
-        runtime_composition.contains("config_current_dir: None,")
-            && runtime_composition
-                .contains("workflow_telemetry: Arc::clone(self.workflow_telemetry.diagnostics()),"),
+        runtime_composition
+            .split("pub fn for_daemon(mut self) -> Self {")
+            .nth(1)
+            .and_then(|body| body.split("\n    }\n").next())
+            .is_some_and(|body| {
+                body.contains("without_workspace_config()")
+                    && body.contains("RuntimeConfigDoctor {\n            config_current_dir: None,")
+            }),
         "the daemon runtime view must replace the caller-workspace config doctor"
     );
 
@@ -4156,9 +4188,30 @@ fn documented_boundary_section<'a>(docs: &'a str, name: &str) -> Option<&'a str>
     Some(&rest[..next])
 }
 
+/// Reads a source file with LF line endings, so multi-line source-text
+/// assertions hold on a CRLF (Windows) checkout too.
 fn read_source(path: &Path) -> String {
-    fs::read_to_string(path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+    lf_line_endings(
+        fs::read_to_string(path)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display())),
+    )
+}
+
+fn lf_line_endings(source: String) -> String {
+    if source.contains("\r\n") {
+        source.replace("\r\n", "\n")
+    } else {
+        source
+    }
+}
+
+#[test]
+fn read_source_normalizes_crlf_to_lf() {
+    assert_eq!(
+        lf_line_endings("fn a() {\r\n    b();\r\n}\r\n".to_owned()),
+        "fn a() {\n    b();\n}\n"
+    );
+    assert_eq!(lf_line_endings("a\nb\rc".to_owned()), "a\nb\rc");
 }
 
 #[test]

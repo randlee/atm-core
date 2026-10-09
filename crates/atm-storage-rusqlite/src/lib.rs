@@ -161,6 +161,56 @@ pub fn install_message_write_failure_for_test(path: impl AsRef<Path>) -> Result<
         })
 }
 
+/// Installs a test-only SQLite trigger that rejects prompt-handoff inserts.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+pub fn install_prompt_handoff_write_failure_for_test(
+    path: impl AsRef<Path>,
+) -> Result<(), AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
+        AtmError::daemon_unavailable("failed to open sqlite handoff-failure test connection")
+            .with_cause(error)
+    })?;
+    connection
+        .execute_batch(
+            r#"
+            CREATE TRIGGER fail_test_prompt_handoff_insert
+            BEFORE INSERT ON prompt_handoffs
+            BEGIN
+                SELECT RAISE(FAIL, 'test prompt handoff insert failure');
+            END;
+            "#,
+        )
+        .map_err(|error| {
+            AtmError::daemon_unavailable("failed to install sqlite handoff-failure trigger")
+                .with_cause(error)
+        })
+}
+
+/// Installs a test-only SQLite trigger that rejects task-row updates.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+pub fn install_task_update_failure_for_test(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
+        AtmError::daemon_unavailable("failed to open sqlite task-update failure test connection")
+            .with_cause(error)
+    })?;
+    connection
+        .execute_batch(
+            r#"
+            CREATE TRIGGER fail_test_task_update
+            BEFORE UPDATE ON tasks
+            BEGIN
+                SELECT RAISE(FAIL, 'test task update failure');
+            END;
+            "#,
+        )
+        .map_err(|error| {
+            AtmError::daemon_unavailable("failed to install sqlite task-update failure trigger")
+                .with_cause(error)
+        })
+}
+
 #[cfg(test)]
 pub(crate) use mailbox_metadata_types::SqliteMailboxMetadataRow;
 
@@ -304,7 +354,8 @@ impl MessageStore for SqliteMessageStore {
         &self,
         message: &Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
         self.db
             .submit_message_admission(message.clone(), provenance)
     }
@@ -578,7 +629,8 @@ impl AsyncMessageStore for SqliteMessageStore {
         &self,
         message: Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
         self.db
             .submit_message_admission_async(message, provenance)
             .await
@@ -587,7 +639,8 @@ impl AsyncMessageStore for SqliteMessageStore {
     async fn admit_template_message_async(
         &self,
         admission: atm_storage::TemplateMessageAdmission,
-    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
         self.db
             .submit_template_message_admission_async(admission)
             .await
@@ -597,7 +650,7 @@ impl AsyncMessageStore for SqliteMessageStore {
         &self,
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
-    ) -> Result<AcknowledgementCommit, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<AcknowledgementCommit>, AtmError> {
         self.db.submit_acknowledgement_async(source, builder).await
     }
 }
@@ -1084,6 +1137,8 @@ mod tests {
         let admission = backend
             .message_store()
             .admit_message_with_provenance(&start, MessageWriteOrigin::Local)
+            .expect("start commit")
+            .operation
             .expect("start task");
         assert_eq!(admission.task_assignee, Some(agent()));
     }
@@ -1103,7 +1158,7 @@ mod tests {
                 target,
                 at: IsoTimestamp::now(),
             })? {
-            crate::writer::WriteOpResult::TaskMoved((_, _, position)) => Ok(position),
+            crate::writer::WriteOpResult::TaskMoved(record) => Ok(record.to),
             _ => panic!("wrong writer result"),
         }
     }
@@ -1244,6 +1299,8 @@ mod tests {
         let first_admission = backend
             .message_store()
             .admit_message_with_provenance(&first_close, MessageWriteOrigin::Local)
+            .expect("close commit")
+            .operation
             .expect("first close");
         assert_eq!(first_admission.task_assignee, Some(agent()));
 
@@ -1287,6 +1344,8 @@ mod tests {
         let admission = backend
             .message_store()
             .admit_message_with_provenance(&report, MessageWriteOrigin::Local)
+            .expect("report commit")
+            .operation
             .expect("already-closed report is ordinary mail");
 
         assert!(admission.existing.is_none());
@@ -2908,6 +2967,8 @@ mod tests {
                 .admit_template_message_async(admission.clone())
                 .await
                 .expect("first admission")
+                .operation
+                .unwrap()
                 .existing
                 .is_none()
         );
@@ -2917,6 +2978,8 @@ mod tests {
                 .admit_template_message_async(admission)
                 .await
                 .expect("idempotent admission")
+                .operation
+                .unwrap()
                 .existing
                 .is_some()
         );
@@ -2979,7 +3042,9 @@ mod tests {
                 },
             })
             .await
-            .expect("rejected report admission commits");
+            .expect("rejected report admission commits")
+            .operation
+            .expect("report retained");
         assert!(outcome.task_rejection.is_some());
         assert_eq!(outcome.task_assignee, None);
 
@@ -4180,6 +4245,69 @@ mod tests {
         );
     }
 
+    /// Positive: an acknowledgement refused with a task rejection returns its
+    /// committed `Rejected` audit row beside the error, so it can be exported.
+    /// Negative: the refused acknowledgement leaves its source pending.
+    #[tokio::test]
+    async fn refused_task_acknowledgement_returns_its_committed_rejected_row() {
+        struct RefusingBuilder;
+
+        impl AcknowledgementReplyBuilder for RefusingBuilder {
+            fn build_reply(&self, _source: &Message) -> Result<Message, atm_storage::AtmError> {
+                Err(atm_storage::AtmError::new(
+                    atm_storage::AtmErrorCode::TaskAlreadyClosed,
+                    "task already closed",
+                ))
+            }
+        }
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let source_id = AtmMessageId::new();
+        let mut source = message(&format!("atm:{source_id}"), "needs acknowledgement");
+        source.envelope.message_id = Some(source_id);
+        source.envelope.task_id = Some("BD-ACK-REJECT".parse().expect("task id"));
+        source.envelope.requires_ack = true;
+        source.envelope.pending_ack_at = Some(IsoTimestamp::now());
+        backend
+            .message_store()
+            .save_message(&source)
+            .expect("save pending source");
+
+        let committed = backend
+            .async_message_store()
+            .acknowledge_message_atomically_async(
+                AcknowledgementSource {
+                    team: source.team.clone(),
+                    agent: source.agent.clone(),
+                    message_id: source_id,
+                },
+                Arc::new(RefusingBuilder),
+            )
+            .await
+            .expect("the rejection commits");
+
+        assert_eq!(
+            committed.operation.expect_err("refused").code(),
+            atm_storage::AtmErrorCode::TaskAlreadyClosed
+        );
+        assert_eq!(committed.task_events.len(), 1);
+        assert_eq!(
+            committed.task_events[0].event,
+            atm_storage::TaskEventKind::Rejected
+        );
+        assert!(
+            backend
+                .message_store()
+                .load_message(&source.message_key)
+                .expect("load source")
+                .expect("source exists")
+                .envelope
+                .acknowledged_at
+                .is_none(),
+            "a refused acknowledgement leaves the source pending"
+        );
+    }
+
     #[test]
     fn task_messages_transition_locally_and_peer_receipts_do_not_create_rows() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
@@ -4255,7 +4383,7 @@ mod tests {
         let peer_task: atm_storage::TaskId = "AX.3-peer".parse().expect("peer task");
         let mut peer = message("atm:peer-task", "peer receipt");
         peer.envelope.task_id = Some(peer_task.clone());
-        store
+        let _ = store
             .admit_message_with_provenance(&peer, MessageWriteOrigin::Peer)
             .expect("persist peer receipt");
         assert!(
@@ -4646,7 +4774,7 @@ mod tests {
         source.envelope.task_id = Some(task_id.clone());
         source.envelope.requires_ack = true;
         source.envelope.pending_ack_at = Some(IsoTimestamp::now());
-        store
+        let _ = store
             .admit_message_with_provenance(&source, MessageWriteOrigin::Peer)
             .expect("save peer assignment");
 
@@ -4708,7 +4836,7 @@ mod tests {
         let mut peer = message("atm:async-peer-task", "peer receipt");
         peer.envelope.task_id = Some(task_id.clone());
 
-        backend
+        let _ = backend
             .async_message_store()
             .admit_message_with_provenance_async(peer, MessageWriteOrigin::Peer)
             .await

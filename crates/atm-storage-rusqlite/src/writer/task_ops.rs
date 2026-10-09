@@ -16,8 +16,8 @@ use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::schema::AtmMessageId;
 use atm_storage::task_state::{
-    QueuePosition, TaskCloseOutcome, TaskEvent, TaskEventKind, TaskRow, TaskState, TaskStateTag,
-    Transition, transition,
+    QueuePosition, TaskActor, TaskCloseOutcome, TaskEvent, TaskEventKind, TaskEventMarker, TaskRow,
+    TaskState, TaskStateTag, Transition, transition,
 };
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{MessageWriteOrigin, MoveTarget, TaskOp};
@@ -32,37 +32,13 @@ pub(super) enum TaskMessageResult {
         task_assignee: Option<AgentName>,
         queued_position: Option<u32>,
         reassign_notice: Option<Box<Message>>,
+        task_events: Vec<atm_storage::TaskEventRow>,
     },
-    RejectedReportDelivered(AtmError),
+    RejectedReportDelivered {
+        error: AtmError,
+        event: atm_storage::TaskEventRow,
+    },
 }
-
-impl TaskMessageResult {
-    pub(super) fn into_admission_parts(self) -> TaskAdmissionParts {
-        match self {
-            Self::Applied {
-                already_closed,
-                task_assignee,
-                queued_position,
-                reassign_notice,
-            } => (
-                already_closed,
-                task_assignee,
-                queued_position,
-                reassign_notice,
-                None,
-            ),
-            Self::RejectedReportDelivered(error) => (None, None, None, None, Some(error)),
-        }
-    }
-}
-
-type TaskAdmissionParts = (
-    Option<TaskCloseOutcome>,
-    Option<AgentName>,
-    Option<u32>,
-    Option<Box<Message>>,
-    Option<AtmError>,
-);
 
 pub(super) fn load_task_row(
     connection: &Connection,
@@ -79,21 +55,62 @@ pub(super) fn append_rejected_task_event(
     connection: &Connection,
     target: &SharedDbTarget,
     error: &AtmError,
-) -> Result<(), AtmError> {
+) -> Result<Option<atm_storage::TaskEventRow>, AtmError> {
     if !is_task_rejection(error.code()) {
-        return Ok(());
+        return Ok(None);
     }
     if is_pre_admission_reassignment_refusal(op, error) {
         // A refused reassignment is an authorization failure before task
         // admission. Keep the attempted message and task ledger unchanged.
-        return Ok(());
+        return Ok(None);
     }
-    let (team, task_id, requested, actor, message_id) = match op {
+    let Some((team, task_id, requested, actor, message_id)) =
+        rejected_event_subject(op, connection, target)?
+    else {
+        return Ok(None);
+    };
+    let row = load_task_row(connection, target, &team, &task_id)?;
+    let assignee = row.as_ref().map_or(&requested, |row| &row.assignee);
+    let state = row.as_ref().map(|row| row.state.tag());
+    let detail = format!("{}: {}", error.code(), error.message());
+    append_task_event(
+        connection,
+        target,
+        &TaskEventDraft {
+            team: &team,
+            task_id: &task_id,
+            assignee,
+            at: &IsoTimestamp::now(),
+            event: TaskEventKind::Rejected,
+            from_state: state,
+            to_state: state,
+            close_outcome: row.as_ref().and_then(|row| row.state.close_outcome()),
+            actor: &actor,
+            message_id,
+            outcome: None,
+            marker: None,
+            detail: Some(&detail),
+        },
+    )
+    .map(Some)
+}
+
+/// Team, task, requested assignee, actor and message of a rejected task write.
+type RejectedSubject = (TeamName, TaskId, AgentName, AgentName, Option<AtmMessageId>);
+
+/// The team, task, requested assignee, actor and message a rejected task
+/// write is audited against, or `None` when the operation carries no task.
+fn rejected_event_subject(
+    op: &WriteOp,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<Option<RejectedSubject>, AtmError> {
+    Ok(Some(match op {
         WriteOp::UpsertMessage { record, provenance }
             if *provenance == MessageWriteOrigin::Local =>
         {
             let Some(task_id) = record.envelope.task_id.as_ref() else {
-                return Ok(());
+                return Ok(None);
             };
             (
                 record.team.clone(),
@@ -106,7 +123,7 @@ pub(super) fn append_rejected_task_event(
         WriteOp::Acknowledge { source, .. } => {
             let source = load_pending_ack_source(source, connection, target)?;
             let Some(task_id) = source.envelope.task_id.clone() else {
-                return Ok(());
+                return Ok(None);
             };
             (
                 source.team,
@@ -128,28 +145,8 @@ pub(super) fn append_rejected_task_event(
             actor.clone(),
             None,
         ),
-        _ => return Ok(()),
-    };
-    let row = load_task_row(connection, target, &team, &task_id)?;
-    let assignee = row.as_ref().map_or(&requested, |row| &row.assignee);
-    let state = row.as_ref().map(|row| row.state.tag());
-    append_task_event(
-        connection,
-        target,
-        &team,
-        &task_id,
-        assignee,
-        &IsoTimestamp::now(),
-        TaskEventKind::Rejected,
-        state,
-        state,
-        row.as_ref().and_then(|row| row.state.close_outcome()),
-        &actor,
-        message_id,
-        None,
-        None,
-        Some(error.message()),
-    )
+        _ => return Ok(None),
+    }))
 }
 
 fn is_pre_admission_reassignment_refusal(op: &WriteOp, error: &AtmError) -> bool {
@@ -174,6 +171,7 @@ pub(super) fn apply_task_message(
             task_assignee: None,
             queued_position: None,
             reassign_notice: None,
+            task_events: Vec::new(),
         });
     };
     match record.envelope.task_op.as_ref() {
@@ -183,6 +181,7 @@ pub(super) fn apply_task_message(
                 task_assignee: None,
                 queued_position: None,
                 reassign_notice: None,
+                task_events: Vec::new(),
             })
         }
         None => apply_task_assignment(
@@ -198,14 +197,16 @@ pub(super) fn apply_task_message(
             task_assignee: None,
             queued_position: Some(applied.queued_position),
             reassign_notice: applied.reassign_notice.map(Box::new),
+            task_events: applied.task_events,
         }),
         Some(TaskOp::Start) => {
-            apply_task_start(record, task_id, connection, target).map(|task_assignee| {
+            apply_task_start(record, task_id, connection, target).map(|(task_assignee, event)| {
                 TaskMessageResult::Applied {
                     already_closed: None,
                     task_assignee: Some(task_assignee),
                     queued_position: None,
                     reassign_notice: None,
+                    task_events: vec![event],
                 }
             })
         }
@@ -245,6 +246,7 @@ fn is_existing_task_report(
 struct TaskAssignmentApplied {
     queued_position: u32,
     reassign_notice: Option<Message>,
+    task_events: Vec<atm_storage::TaskEventRow>,
 }
 
 fn apply_task_assignment(
@@ -282,6 +284,7 @@ fn apply_task_assignment(
         return Ok(TaskAssignmentApplied {
             queued_position,
             reassign_notice: None,
+            task_events: Vec::new(),
         });
     }
 
@@ -290,7 +293,7 @@ fn apply_task_assignment(
         .filter(|row| row.state.is_open() && row.assignee != record.agent)
         .map(|row| row.assignee.clone());
 
-    let order = persist_task_assignment(
+    let (order, task_events) = persist_task_assignment(
         record,
         task_id,
         placement,
@@ -321,6 +324,7 @@ fn apply_task_assignment(
     Ok(TaskAssignmentApplied {
         queued_position,
         reassign_notice,
+        task_events,
     })
 }
 
@@ -335,7 +339,7 @@ fn persist_task_assignment(
     next_state: TaskState,
     connection: &Connection,
     target: &SharedDbTarget,
-) -> Result<Vec<TaskId>, AtmError> {
+) -> Result<(Vec<TaskId>, Vec<atm_storage::TaskEventRow>), AtmError> {
     let was_closed = row.is_some_and(|row| matches!(row.state, TaskState::Complete(_)));
     release_previous_assignment(record, task_id, row, connection, target)?;
     let mut order = queue_order(connection, target, &record.team, &record.agent)?;
@@ -356,10 +360,47 @@ fn persist_task_assignment(
     )?;
     renumber_previous_assignment(record, row, connection, target)?;
     renumber_queue(&record.team, &record.agent, &order, connection, target)?;
-    append_assignment_event(
+    let final_position = order
+        .iter()
+        .position(|id| id == task_id)
+        .and_then(|index| u32::try_from(index + 1).ok())
+        .ok_or_else(|| task_move_invalid("assigned task is absent from its normalized queue"))?;
+    let event = append_assignment_event(
         record, task_id, row, was_closed, message_id, at, next_state, connection, target,
     )?;
-    Ok(order)
+    let moved = placement
+        .map(|_| {
+            append_task_event(
+                connection,
+                target,
+                &TaskEventDraft {
+                    team: &record.team,
+                    task_id,
+                    assignee: &record.agent,
+                    at: &at,
+                    event: TaskEventKind::Moved,
+                    from_state: Some(next_state.tag()),
+                    to_state: Some(next_state.tag()),
+                    close_outcome: None,
+                    actor: &record.envelope.from,
+                    message_id: Some(message_id),
+                    outcome: None,
+                    marker: None,
+                    detail: Some(&format!(
+                        "{}→{}",
+                        row.and_then(|row| row.position)
+                            .map_or(0, QueuePosition::get),
+                        final_position
+                    )),
+                },
+            )
+        })
+        .transpose()?;
+    let mut events = vec![event];
+    if let Some(moved) = moved {
+        events.push(moved);
+    }
+    Ok((order, events))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -471,7 +512,7 @@ fn append_assignment_event(
     next_state: TaskState,
     connection: &Connection,
     target: &SharedDbTarget,
-) -> Result<(), AtmError> {
+) -> Result<atm_storage::TaskEventRow, AtmError> {
     let event = if was_closed {
         TaskEventKind::Reopened
     } else if row.is_some() {
@@ -482,19 +523,21 @@ fn append_assignment_event(
     append_task_event(
         connection,
         target,
-        &record.team,
-        task_id,
-        &record.agent,
-        &at,
-        event,
-        row.map(|row| row.state.tag()),
-        Some(next_state.tag()),
-        row.and_then(|row| row.state.close_outcome()),
-        &record.envelope.from,
-        Some(message_id),
-        None,
-        None,
-        None,
+        &TaskEventDraft {
+            team: &record.team,
+            task_id,
+            assignee: &record.agent,
+            at: &at,
+            event,
+            from_state: row.map(|row| row.state.tag()),
+            to_state: Some(next_state.tag()),
+            close_outcome: row.and_then(|row| row.state.close_outcome()),
+            actor: &record.envelope.from,
+            message_id: Some(message_id),
+            outcome: None,
+            marker: None,
+            detail: None,
+        },
     )
 }
 
@@ -506,7 +549,7 @@ pub(super) fn apply_task_move(
     at: IsoTimestamp,
     connection: &Connection,
     target: &SharedDbTarget,
-) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
+) -> Result<atm_storage::TaskMoveRecord, AtmError> {
     let Some(row) = load_task_row(connection, target, team, task_id)? else {
         return Err(task_not_found(format!(
             "no open task {task_id} for {actor}"
@@ -527,10 +570,15 @@ pub(super) fn apply_task_move(
     )
     .map_err(|error| error.into_atm_error())?;
     if row.state == TaskState::Active {
-        append_active_task_move(
+        let event = append_active_task_move(
             team, task_id, actor, &at, &row, next_state, connection, target,
         )?;
-        return Ok((row.assignee, QueuePosition::HEAD, QueuePosition::HEAD));
+        return Ok(atm_storage::TaskMoveRecord {
+            assignee: row.assignee,
+            from: QueuePosition::HEAD,
+            to: QueuePosition::HEAD,
+            event,
+        });
     }
     apply_queued_task_move(
         team, task_id, actor, target_pos, &at, &row, next_state, connection, target,
@@ -548,7 +596,7 @@ fn apply_queued_task_move(
     next_state: TaskState,
     connection: &Connection,
     target: &SharedDbTarget,
-) -> Result<(AgentName, QueuePosition, QueuePosition), AtmError> {
+) -> Result<atm_storage::TaskMoveRecord, AtmError> {
     let from = row
         .position
         .ok_or_else(|| task_move_invalid("open task has no queue position"))?;
@@ -572,24 +620,31 @@ fn apply_queued_task_move(
         .and_then(QueuePosition::new)
         .ok_or_else(|| task_move_invalid("task move produced no queue position"))?;
     let detail = format!("{}→{}", from.get(), to.get());
-    append_task_event(
+    let event = append_task_event(
         connection,
         target,
-        team,
-        task_id,
-        &row.assignee,
-        at,
-        TaskEventKind::Moved,
-        Some(row.state.tag()),
-        Some(next_state.tag()),
-        None,
-        actor,
-        None,
-        None,
-        None,
-        Some(&detail),
+        &TaskEventDraft {
+            team,
+            task_id,
+            assignee: &row.assignee,
+            at,
+            event: TaskEventKind::Moved,
+            from_state: Some(row.state.tag()),
+            to_state: Some(next_state.tag()),
+            close_outcome: None,
+            actor,
+            message_id: None,
+            outcome: None,
+            marker: None,
+            detail: Some(&detail),
+        },
     )?;
-    Ok((row.assignee.clone(), from, to))
+    Ok(atm_storage::TaskMoveRecord {
+        assignee: row.assignee.clone(),
+        from,
+        to,
+        event,
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -602,23 +657,25 @@ fn append_active_task_move(
     next_state: TaskState,
     connection: &Connection,
     target: &SharedDbTarget,
-) -> Result<(), AtmError> {
+) -> Result<atm_storage::TaskEventRow, AtmError> {
     append_task_event(
         connection,
         target,
-        team,
-        task_id,
-        &row.assignee,
-        at,
-        TaskEventKind::Moved,
-        Some(row.state.tag()),
-        Some(next_state.tag()),
-        None,
-        actor,
-        None,
-        None,
-        None,
-        Some("1→1"),
+        &TaskEventDraft {
+            team,
+            task_id,
+            assignee: &row.assignee,
+            at,
+            event: TaskEventKind::Moved,
+            from_state: Some(row.state.tag()),
+            to_state: Some(next_state.tag()),
+            close_outcome: None,
+            actor,
+            message_id: None,
+            outcome: None,
+            marker: None,
+            detail: Some("1→1"),
+        },
     )
 }
 
@@ -799,26 +856,49 @@ pub(super) fn acknowledge_assignment(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
+/// One task event row as the writer builds it, before its sequence number is
+/// allocated. Typed fields keep the reminder outcome and marker from being
+/// transposed with free-text `detail`.
+pub(super) struct TaskEventDraft<'a> {
+    pub(super) team: &'a TeamName,
+    pub(super) task_id: &'a TaskId,
+    pub(super) assignee: &'a AgentName,
+    pub(super) at: &'a IsoTimestamp,
+    pub(super) event: TaskEventKind,
+    pub(super) from_state: Option<TaskStateTag>,
+    pub(super) to_state: Option<TaskStateTag>,
+    pub(super) close_outcome: Option<TaskCloseOutcome>,
+    pub(super) actor: &'a AgentName,
+    pub(super) message_id: Option<AtmMessageId>,
+    pub(super) outcome: Option<atm_storage::ReminderOutcome>,
+    pub(super) marker: Option<TaskEventMarker>,
+    pub(super) detail: Option<&'a str>,
+}
+
 pub(super) fn append_task_event(
     connection: &Connection,
     target: &SharedDbTarget,
-    team: &TeamName,
-    task_id: &TaskId,
-    assignee: &AgentName,
-    at: &IsoTimestamp,
-    event: TaskEventKind,
-    from_state: Option<TaskStateTag>,
-    to_state: Option<TaskStateTag>,
-    close_outcome: Option<TaskCloseOutcome>,
-    actor: &AgentName,
-    message_id: Option<AtmMessageId>,
-    outcome: Option<&str>,
-    marker: Option<&str>,
-    detail: Option<&str>,
-) -> Result<(), AtmError> {
-    let from_state = from_state.map(task_state_tag_name);
-    let to_state = to_state.map(task_state_tag_name);
+    draft: &TaskEventDraft<'_>,
+) -> Result<atm_storage::TaskEventRow, AtmError> {
+    let TaskEventDraft {
+        team,
+        task_id,
+        assignee,
+        at,
+        event,
+        from_state: from_tag,
+        to_state: to_tag,
+        close_outcome,
+        actor,
+        message_id,
+        outcome,
+        marker,
+        detail,
+    } = *draft;
+    // Build the typed row states before the INSERT so a rejected state
+    // combination cannot fail after the row is written.
+    let from_state = task_event_state(from_tag, close_outcome)?;
+    let to_state = task_event_state(to_tag, close_outcome)?;
     let seq: u64 = connection
         .query_row(
             "SELECT COALESCE(MAX(seq),0)+1 FROM task_events WHERE team=?1 AND task_id=?2",
@@ -838,18 +918,52 @@ pub(super) fn append_task_event(
                 seq,
                 at.to_string(),
                 event.as_str(),
-                from_state,
-                to_state,
+                from_tag.map(task_state_tag_name),
+                to_tag.map(task_state_tag_name),
                 close_outcome.map(TaskCloseOutcome::as_str),
                 actor.as_str(),
                 message_id.map(|id| id.to_string()),
-                outcome,
-                marker,
+                outcome.map(atm_storage::ReminderOutcome::as_str),
+                marker.map(TaskEventMarker::as_str),
                 detail
             ],
         )
         .map_err(|error| sqlite_error(target, "failed to append task event", error))?;
-    Ok(())
+    let actor = if actor.as_str() == atm_storage::DAEMON_ACTOR_NAME {
+        TaskActor::Daemon
+    } else {
+        TaskActor::Member(actor.clone())
+    };
+    Ok(atm_storage::TaskEventRow {
+        team: team.clone(),
+        task_id: task_id.clone(),
+        assignee: assignee.clone(),
+        seq,
+        at: *at,
+        event,
+        from_state,
+        to_state,
+        actor,
+        message_id,
+        outcome,
+        marker,
+        detail: detail.map(str::to_owned),
+    })
+}
+
+fn task_event_state(
+    tag: Option<TaskStateTag>,
+    close_outcome: Option<TaskCloseOutcome>,
+) -> Result<Option<TaskState>, AtmError> {
+    tag.map(|tag| {
+        TaskState::from_parts(
+            tag,
+            (tag == TaskStateTag::Complete)
+                .then_some(close_outcome)
+                .flatten(),
+        )
+    })
+    .transpose()
 }
 
 const fn task_state_tag_name(state: TaskStateTag) -> &'static str {

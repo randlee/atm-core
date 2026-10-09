@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ATM daemon API
-  version: 1.10.0
+  version: 1.11.0
   description: HTTP contract shared by local UDS and future peer HTTPS adapters.
 servers:
   - url: /v1/atm
@@ -187,6 +187,28 @@ components:
         runtime_status:
           $ref: '#/components/schemas/RuntimeStatusSnapshot'
           description: Optional projection of the daemon's canonical ephemeral master-roster state; added in HTTP API 1.4.0.
+        observability:
+          $ref: '#/components/schemas/AtmObservabilityHealth'
+    AtmObservabilityHealth:
+      type: object
+      description: Retained observability health. Only the fields added since HTTP API 1.11.0 are listed here.
+      properties:
+        export:
+          $ref: '#/components/schemas/AtmTelemetryExportHealth'
+          description: Optional OpenTelemetry export health; added in HTTP API 1.11.0. Absent means the reporting daemon predates export health.
+    AtmTelemetryExportHealth:
+      type: object
+      required: [state, emitted, dropped_full, dropped_timeout, dropped_failure, dropped_shutdown]
+      properties:
+        state: { type: string, enum: [inert, healthy, degraded, unavailable] }
+        endpoint: { type: string, nullable: true, description: Validated collector endpoint; never carries credentials. }
+        protocol: { type: string, enum: [grpc], nullable: true }
+        emitted: { type: integer, format: uint64 }
+        dropped_full: { type: integer, format: uint64 }
+        dropped_timeout: { type: integer, format: uint64 }
+        dropped_failure: { type: integer, format: uint64 }
+        dropped_shutdown: { type: integer, format: uint64 }
+        last_failure: { type: string, enum: [config_invalid, unavailable, timed_out, shutdown_timed_out], nullable: true }
     RuntimeStatusSnapshot:
       type: object
       required: [liveness, readiness]

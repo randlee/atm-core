@@ -82,6 +82,7 @@ pub struct HerdrQueueWakePump {
     last_stats: Arc<Mutex<HerdrQueueWakeStats>>,
     release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
     pub(crate) blocking_bridge: BoundedBlockingBridge,
+    pub(crate) task_telemetry: atm_runtime::TaskTelemetryRuntime,
     #[cfg(test)]
     pub(crate) handoff_cleanup_test_gate:
         Arc<Mutex<Option<crate::herdr_queue_wake_test_gates::Gate>>>,
@@ -116,6 +117,7 @@ impl HerdrQueueWakePump {
                     .expect("Herdr blocking capacity is non-zero"),
                 runtime_health,
             ),
+            task_telemetry: atm_runtime::TaskTelemetryRuntime::disabled(),
             #[cfg(test)]
             handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
             #[cfg(test)]
@@ -130,9 +132,18 @@ impl HerdrQueueWakePump {
         self
     }
 
-    #[cfg(test)]
+    /// Projects committed reminder, reset, lead-notification and handoff rows
+    /// through the bounded runtime handle; the default is disabled.
     #[must_use]
-    fn with_clock(mut self, clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>) -> Self {
+    pub fn with_task_telemetry(mut self, runtime: atm_runtime::TaskTelemetryRuntime) -> Self {
+        self.task_telemetry = runtime;
+        self
+    }
+
+    /// Replaces the pump clock; for workspace tests that age the task ledger.
+    #[cfg(any(test, feature = "test-support"))]
+    #[must_use]
+    pub fn with_clock(mut self, clock: Arc<dyn Fn() -> IsoTimestamp + Send + Sync>) -> Self {
         self.clock = clock;
         self
     }

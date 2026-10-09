@@ -129,23 +129,6 @@ pub(crate) trait RetainedMailboxRuntime {
         let _ = (message_key, message_id);
         Ok(envelope.clone())
     }
-    /// Atomically admits a new immutable record or returns the existing record
-    /// for duplicate classification. The default retains compatibility for
-    /// narrow test runtimes; the production SQLite runtime overrides it to
-    /// keep the normal admission path on its writer lane.
-    fn admit_message_record(
-        &self,
-        home_dir: &Path,
-        record: boundary::Message,
-    ) -> Result<Option<boundary::Message>, AtmError> {
-        if let Some(existing) =
-            self.load_message_record(home_dir, &record.team, &record.agent, &record.message_key)?
-        {
-            return Ok(Some(existing));
-        }
-        self.persist_message_record(record)?;
-        Ok(None)
-    }
     /// Provenance-aware admission with the governed task-close result from
     /// the same durable writer transaction.
     fn admit_message_record_with_outcome(
@@ -153,11 +136,7 @@ pub(crate) trait RetainedMailboxRuntime {
         home_dir: &Path,
         record: boundary::Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
-        let _ = provenance;
-        self.admit_message_record(home_dir, record)
-            .map(atm_storage::MessageAdmissionOutcome::passive)
-    }
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>;
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError>;
     fn persist_message_records_atomically(
         &self,
@@ -244,27 +223,13 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         )
     }
 
-    fn admit_message_record(
-        &self,
-        _home_dir: &Path,
-        record: boundary::Message,
-    ) -> Result<Option<boundary::Message>, AtmError> {
-        self.message_store
-            .save_message_if_absent(&SharedMessage {
-                team: record.team,
-                agent: record.agent,
-                message_key: record.message_key,
-                envelope: record.envelope,
-            })
-            .map(|existing| existing.map(shared_message_to_record))
-    }
-
     fn admit_message_record_with_outcome(
         &self,
         _home_dir: &Path,
         record: boundary::Message,
         provenance: atm_storage::MessageWriteOrigin,
-    ) -> Result<atm_storage::MessageAdmissionOutcome, AtmError> {
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
         self.message_store
             .admit_message_with_provenance(&record, provenance)
     }

@@ -1117,6 +1117,10 @@ mod tests {
         TaskState, TrustedPeer,
     };
 
+    #[expect(
+        clippy::large_enum_variant,
+        reason = "test-only stub; boxing would churn every initializer for no runtime effect"
+    )]
     enum StubHealth {
         Ok(AtmObservabilityHealth),
         Err(AtmError),
@@ -1409,6 +1413,7 @@ mod tests {
                 jsonl: Default::default(),
                 timeline: Default::default(),
                 degraded: Vec::new(),
+                export: None,
                 detail: None,
             }),
         }
@@ -1515,6 +1520,15 @@ mod tests {
     )]
     impl atm_storage::MessageStore for UnusedMailStore {
         fn save_message(&self, _message: &atm_storage::Message) -> Result<(), AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn admit_message_with_provenance(
+            &self,
+            _message: &atm_storage::Message,
+            _provenance: atm_storage::MessageWriteOrigin,
+        ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+        {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
@@ -1850,6 +1864,7 @@ mod tests {
                     jsonl: Default::default(),
                     timeline: Default::default(),
                     degraded: Vec::new(),
+                    export: None,
                     detail: None,
                 }),
             },
@@ -2157,6 +2172,7 @@ mod tests {
                     jsonl: Default::default(),
                     timeline: Default::default(),
                     degraded: Vec::new(),
+                    export: None,
                     detail: None,
                 }),
             },
@@ -2320,6 +2336,7 @@ mod tests {
                     jsonl: Default::default(),
                     timeline: Default::default(),
                     degraded: Vec::new(),
+                    export: None,
                     detail: None,
                 }),
             },
@@ -2357,6 +2374,7 @@ mod tests {
                     jsonl: Default::default(),
                     timeline: Default::default(),
                     degraded: Vec::new(),
+                    export: None,
                     detail: None,
                 }),
             },
@@ -2391,6 +2409,7 @@ mod tests {
                     jsonl: Default::default(),
                     timeline: Default::default(),
                     degraded: Vec::new(),
+                    export: None,
                     detail: Some("query backlog".to_string()),
                 }),
             },
@@ -2422,6 +2441,7 @@ mod tests {
                     jsonl: Default::default(),
                     timeline: Default::default(),
                     degraded: Vec::new(),
+                    export: None,
                     detail: Some("logger unavailable".to_string()),
                 }),
             },
@@ -2484,6 +2504,7 @@ mod tests {
                     jsonl: Default::default(),
                     timeline: Default::default(),
                     degraded: Vec::new(),
+                    export: None,
                     detail: None,
                 }),
             },
@@ -2517,6 +2538,7 @@ mod tests {
                     jsonl: Default::default(),
                     timeline: Default::default(),
                     degraded: Vec::new(),
+                    export: None,
                     detail: None,
                 }),
             },
@@ -2550,6 +2572,7 @@ mod tests {
                     jsonl: Default::default(),
                     timeline: Default::default(),
                     degraded: Vec::new(),
+                    export: None,
                     detail: None,
                 }),
             },
@@ -2583,6 +2606,7 @@ mod tests {
                     jsonl: Default::default(),
                     timeline: Default::default(),
                     degraded: Vec::new(),
+                    export: None,
                     detail: None,
                 }),
             },
@@ -2648,6 +2672,7 @@ mod tests {
                     jsonl: Default::default(),
                     timeline: Default::default(),
                     degraded: Vec::new(),
+                    export: None,
                     detail: None,
                 }),
             },
@@ -2722,6 +2747,7 @@ mod tests {
                     jsonl: Default::default(),
                     timeline: Default::default(),
                     degraded: Vec::new(),
+                    export: None,
                     detail: None,
                 }),
             },
@@ -2749,6 +2775,7 @@ mod tests {
                 jsonl: Default::default(),
                 timeline: Default::default(),
                 degraded: Vec::new(),
+                export: None,
                 detail: None,
             }),
         }

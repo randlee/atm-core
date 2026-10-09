@@ -256,8 +256,10 @@ pub(crate) fn process_batch(
         }
     };
 
-    let mut replies: Vec<(ReplyTx, Result<WriteOpResult, AtmError>)> =
-        Vec::with_capacity(batch_len);
+    let mut replies: Vec<(
+        ReplyTx,
+        Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>,
+    )> = Vec::with_capacity(batch_len);
     let mut queued_writes = batch.into_iter().peekable();
     while let Some(queued) = queued_writes.next() {
         if !is_batchable_message_admission(&queued) {
@@ -306,15 +308,28 @@ pub(crate) fn process_batch(
         )
     });
     for (reply, result) in replies {
-        let final_result = if let Some(error) = &commit_error {
-            match result {
-                Ok(_) => Err(copy_error(target, error)),
-                Err(existing) => Err(existing),
-            }
-        } else {
-            result
-        };
-        reply.send(final_result);
+        reply.send(finalize_committed_reply(
+            target,
+            result,
+            commit_error.as_ref(),
+        ));
+    }
+}
+
+fn finalize_committed_reply(
+    target: &SharedDbTarget,
+    result: Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>,
+    commit_error: Option<&AtmError>,
+) -> Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError> {
+    let Some(error) = commit_error else {
+        return result;
+    };
+    match result {
+        Ok(committed) => Err(committed
+            .operation
+            .err()
+            .unwrap_or_else(|| copy_error(target, error))),
+        Err(existing) => Err(existing),
     }
 }
 
@@ -334,7 +349,10 @@ pub(crate) fn process_message_admission_group(
     transaction: &mut rusqlite::Transaction<'_>,
     cache: &mut stmt_cache::WriterStatementCache,
     admissions: Vec<QueuedWrite>,
-) -> Vec<(ReplyTx, Result<WriteOpResult, AtmError>)> {
+) -> Vec<(
+    ReplyTx,
+    Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>,
+)> {
     let savepoint = match transaction.savepoint() {
         Ok(savepoint) => savepoint,
         Err(error) => {
@@ -374,7 +392,15 @@ pub(crate) fn process_message_admission_group(
         Ok(()) => admissions
             .into_iter()
             .zip(results)
-            .map(|(queued, result)| (queued.reply, Ok(result)))
+            .map(|(queued, result)| {
+                (
+                    queued.reply,
+                    Ok(atm_storage::CommittedTaskWrite {
+                        operation: Ok(result),
+                        task_events: Vec::new(),
+                    }),
+                )
+            })
             .collect(),
         Err(error) => {
             let error = sqlite_error(
@@ -410,7 +436,10 @@ pub(crate) fn process_queued_write(
     transaction: &mut rusqlite::Transaction<'_>,
     cache: &mut stmt_cache::WriterStatementCache,
     queued: QueuedWrite,
-) -> (ReplyTx, Result<WriteOpResult, AtmError>) {
+) -> (
+    ReplyTx,
+    Result<atm_storage::CommittedTaskWrite<WriteOpResult>, AtmError>,
+) {
     let savepoint = match transaction.savepoint() {
         Ok(savepoint) => savepoint,
         Err(error) => {
@@ -433,11 +462,19 @@ pub(crate) fn process_queued_write(
         Ok(Err(error)) => {
             drop(savepoint);
             match task_ops::append_rejected_task_event(&queued.op, transaction, target, &error) {
-                Ok(()) => Err(error),
+                Ok(event) => Ok(atm_storage::CommittedTaskWrite {
+                    operation: Err(error),
+                    task_events: event.into_iter().collect(),
+                }),
                 Err(audit_error) => Err(audit_error),
             }
         }
-        result => finalize_queued_write(target, savepoint, result),
+        result => finalize_queued_write(target, savepoint, result).map(|operation| {
+            atm_storage::CommittedTaskWrite {
+                operation: Ok(operation),
+                task_events: Vec::new(),
+            }
+        }),
     };
     (reply, result)
 }

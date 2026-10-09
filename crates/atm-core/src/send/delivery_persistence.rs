@@ -32,9 +32,24 @@ pub(crate) struct DeliveryPersistenceResult {
     pub(crate) reassign_notice: Option<Message>,
     pub(crate) task_rejection: Option<AtmError>,
     pub(crate) warnings: Vec<WarningEntry>,
+    pub(crate) operation: Result<(), AtmError>,
+    pub(crate) task_events: Vec<atm_storage::TaskEventRow>,
 }
 
 impl DeliveryPersistenceResult {
+    pub(crate) fn with_committed_task_write(
+        mut self,
+        operation: Result<(), AtmError>,
+        task_events: Vec<atm_storage::TaskEventRow>,
+    ) -> Self {
+        if operation.is_err() {
+            self.newly_persisted = false;
+        }
+        self.operation = operation;
+        self.task_events = task_events;
+        self
+    }
+
     pub(crate) fn persisted(original_message: InboxMessage) -> Self {
         Self {
             disposition: DeliveryPersistenceDisposition::Persisted,
@@ -47,6 +62,8 @@ impl DeliveryPersistenceResult {
             reassign_notice: None,
             task_rejection: None,
             warnings: Vec::new(),
+            operation: Ok(()),
+            task_events: Vec::new(),
         }
     }
 
@@ -62,6 +79,8 @@ impl DeliveryPersistenceResult {
             reassign_notice: None,
             task_rejection: None,
             warnings: Vec::new(),
+            operation: Ok(()),
+            task_events: Vec::new(),
         }
     }
 
@@ -77,6 +96,8 @@ impl DeliveryPersistenceResult {
             reassign_notice: None,
             task_rejection: None,
             warnings: Vec::new(),
+            operation: Ok(()),
+            task_events: Vec::new(),
         }
     }
 

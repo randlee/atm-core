@@ -47,6 +47,46 @@ documented nullable fields. Use the endpoint `state` and `remedy` rather than
 guessing from a daemon log. See [Herdr Integration](./herdr.md) for the
 endpoint and unique-name model.
 
+## OpenTelemetry export
+
+Task and prompt-handoff telemetry can be exported through the official
+OpenTelemetry SDK's gRPC transport. It is a best-effort, non-authoritative
+projection: ATM continues to persist and route durable work when a collector
+is unavailable. Local retained-log persistence is separate from SDK admission
+and collector delivery.
+
+Export is inert unless `ATM_OTEL_ENDPOINT` is set. Configure it with
+`ATM_OTEL_PROTOCOL=grpc` (the only supported protocol), optionally
+`ATM_OTEL_AUTH_HEADER` (the value of the `authorization` header, for example
+`Bearer <token>`, not a full `authorization: ...` header line), and `ATM_OTEL_SERVICE_NAME` (default: `atm-daemon`).
+`ATM_LOG_DESTINATION` defaults to `file`; `otel` and `both` require an export
+endpoint. The `atm` CLI and the daemon route their log records to the same
+destination; with `otel` neither writes the local JSONL log. Do not place
+credentials in an endpoint URL.
+
+The live task-ledger records cover assignment, start, completion, refusal,
+cancellation, reassignment, reopening, rejection, reminders, lead notification,
+moves, and reminder resets; inserted prompt handoffs are also projected.
+Historical Acked/Migrated test fixtures are not live producer kinds. Export
+includes the `atm.task.time_to_start_ms` and
+`atm.task.time_to_close_ms` histograms. The record contract is described in
+[ADR-064, D1 ATM-owned record](../adr/ADR-064-task-telemetry-opentelemetry-export.md#d1-atm-owned-record).
+ATM sends these typed records through the official OpenTelemetry SDK directly
+over gRPC, without a facade or wrapper. It never exports message bodies,
+template variables, or free-form event detail.
+
+`atm doctor` prints `observability.export` with `state` (`inert`, `healthy`,
+`degraded`, or `unavailable`), `endpoint`, `protocol`, `emitted`,
+`dropped_full`, `dropped_timeout`, `dropped_failure`, `dropped_shutdown`, and
+`last_failure`. The JSON object has those same fields; `endpoint`, `protocol`,
+and `last_failure` may be null. `dropped_timeout` is kept for compatibility and
+is always 0. `healthy` reports local SDK admission/processing
+evidence; it does not confirm collector receipt. `degraded` also means the
+SDK dropped spans or log records on a full export queue; that count is not
+reported. Doctor findings describe
+degraded or unavailable export; use their remediation rather than treating
+telemetry delivery as a reason to retry a task operation.
+
 ## Log
 
 Use the ATM log surface when you need structured evidence for a failure,

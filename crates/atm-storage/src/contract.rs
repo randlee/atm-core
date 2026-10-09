@@ -248,6 +248,10 @@ pub struct MessageAdmissionOutcome {
     /// ordinary mail. Callers must complete ordinary post-write handling
     /// before surfacing this error to the sender.
     pub task_rejection: Option<AtmError>,
+    /// Task-ledger rows appended atomically with this successful admission.
+    /// The enclosing `CommittedTaskWrite::task_events` is then empty; it holds
+    /// rows only for a rejected operation.
+    pub task_events: Vec<TaskEventRow>,
 }
 
 impl MessageAdmissionOutcome {
@@ -728,11 +732,7 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         &self,
         message: &Message,
         provenance: MessageWriteOrigin,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
-        let _ = provenance;
-        self.save_message_if_absent(message)
-            .map(MessageAdmissionOutcome::passive)
-    }
+    ) -> Result<crate::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError>;
     /// Commits related immutable mailbox records as one durable unit.
     ///
     /// AI.31 uses this for an acknowledgement reply plus the acknowledged
@@ -805,32 +805,32 @@ pub trait AsyncMessageStore: MessageStore {
         &self,
         message: Message,
         provenance: MessageWriteOrigin,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
-        let _ = provenance;
-        self.save_message_if_absent_async(message)
-            .await
-            .map(MessageAdmissionOutcome::passive)
-    }
+    ) -> Result<crate::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError>;
 
     /// Atomically admits a mailbox record and its template decomposition on
     /// the backend-owned async writer lane.
     async fn admit_template_message_async(
         &self,
         _admission: crate::TemplateMessageAdmission,
-    ) -> Result<MessageAdmissionOutcome, AtmError> {
+    ) -> Result<crate::CommittedTaskWrite<MessageAdmissionOutcome>, AtmError> {
         Err(AtmError::daemon_unavailable(
             "message store does not implement async template-message admission",
         ))
     }
 
     /// Resolves a pending acknowledgement source, persists its reply, and
-    /// transitions that source as one async durable admission.
+    /// transitions that source as one async durable admission. A refused
+    /// acknowledgement still returns its committed rejection-audit rows.
     async fn acknowledge_message_atomically_async(
         &self,
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
-    ) -> Result<AcknowledgementCommit, AtmError> {
+    ) -> Result<crate::CommittedTaskWrite<AcknowledgementCommit>, AtmError> {
         self.acknowledge_message_atomically(&source, builder)
+            .map(|commit| crate::CommittedTaskWrite {
+                operation: Ok(commit),
+                task_events: Vec::new(),
+            })
     }
 }
 
@@ -1417,6 +1417,14 @@ mod tests {
     impl MessageStore for DummyStore {
         fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
             Ok(())
+        }
+
+        fn admit_message_with_provenance(
+            &self,
+            _message: &Message,
+            _provenance: crate::MessageWriteOrigin,
+        ) -> Result<crate::CommittedTaskWrite<crate::MessageAdmissionOutcome>, AtmError> {
+            unreachable!("contract test double does not admit messages")
         }
 
         fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {

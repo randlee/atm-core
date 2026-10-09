@@ -31,7 +31,7 @@ use atm_observability::retained_sink_fault_mode as shared_retained_sink_fault_mo
 #[cfg(test)]
 use atm_observability::{ATM_LOG_LEVEL_ENV, ATM_RETAINED_SINK_FAULT_ENV};
 use atm_observability::{
-    RetainedLogLevel, logger_level_override as shared_logger_level_override,
+    LogExport, RetainedLogLevel, logger_level_override as shared_logger_level_override,
     logger_root_for_log_dir as shared_logger_root_for_log_dir, prepare_retained_log,
 };
 use chrono::{DateTime, Utc};
@@ -40,16 +40,15 @@ use clap::CommandFactory;
 use clap::Parser;
 use clap::error::ErrorKind;
 #[cfg(any(test, feature = "fault-injection"))]
-use sc_observability::LogSink;
+use sc_observability::v2::LogSink;
 #[cfg(any(test, feature = "fault-injection"))]
-use sc_observability::LoggerBuilder;
-use sc_observability::{ConsoleSink, Logger, LoggerConfig, SinkRegistration};
+use sc_observability::v2::LoggerBuilder;
+use sc_observability::v2::{ConsoleSink, Logger, LoggerConfig, SinkRegistration};
 #[cfg(any(test, feature = "fault-injection"))]
-use sc_observability::{JsonlFileSink, RetentionPolicy, RotationPolicy};
+use sc_observability::{JsonlFileSink, RetainedLogPolicy};
 use sc_observability_types::{
-    ActionName, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent, LogQuery,
-    OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory,
-    Timestamp,
+    ActionName, Level, LevelFilter as SharedLevelFilter, LogEvent, LogQuery, OutcomeLabel,
+    ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory, Timestamp,
 };
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability_types::{SinkHealth, SinkHealthState};
@@ -233,8 +232,8 @@ async fn run() -> Result<(), AtmError> {
         return Err(error);
     }
 
-    let observability = match init_observability(cli.stderr_logs()) {
-        Ok(observability) => observability,
+    let (observability, log_export) = match init_observability(cli.stderr_logs()) {
+        Ok(initialized) => initialized,
         Err(error) => {
             let fallback = observability::CliObservability::fallback();
             fallback.report_fatal_error("bootstrap", &error);
@@ -246,10 +245,14 @@ async fn run() -> Result<(), AtmError> {
         tracing::info!(launch_cwd = %launch_cwd.display(), "atm process started");
     }
 
-    match cli.run(&observability).await {
+    let result = match cli.run(&observability).await {
         Ok(()) => Ok(()),
         Err(error) => Err(report_and_map_service_error(&observability, error)),
-    }
+    };
+    // Every record above was flushed into the routed sinks; export the ones
+    // queued for OTel before the process exits.
+    log_export.shutdown(LOG_EXPORT_SHUTDOWN_BOUND).await;
+    result
 }
 
 /// Prints the live CLI-surface tree in the requested `mode` (`json`,
@@ -308,7 +311,28 @@ fn report_and_map_service_error(
     }
 }
 
-fn init_observability(stderr_logs: bool) -> Result<observability::CliObservability, AtmError> {
+/// Upper bound on exporting queued OTel records at CLI exit, the same budget
+/// the daemon shares across its providers at shutdown.
+const LOG_EXPORT_SHUTDOWN_BOUND: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Builds the CLI's retained logger routed to the destination the daemon uses
+/// (`ATM_LOG_DESTINATION`, ADR-064 D4). The returned export must be shut down
+/// before exit so queued OTel records are delivered.
+/// Tells the operator the OTel export configuration is invalid. With
+/// `--stderr-logs` the installed tracing subscriber prints it; otherwise no
+/// subscriber exists yet, so it goes straight to stderr.
+fn report_invalid_export_config(stderr_logs: bool) {
+    const MESSAGE: &str = "OpenTelemetry export disabled: invalid ATM_OTEL_* or ATM_LOG_DESTINATION configuration; the CLI continues with file logging";
+    if stderr_logs {
+        tracing::warn!(code = "ATM_TELEMETRY_EXPORT_CONFIG_INVALID", "{MESSAGE}");
+    } else {
+        eprintln!("warning: ATM_TELEMETRY_EXPORT_CONFIG_INVALID: {MESSAGE}");
+    }
+}
+
+fn init_observability(
+    stderr_logs: bool,
+) -> Result<(observability::CliObservability, LogExport), AtmError> {
     let log_dir = home::host_log_dir()?;
     let console_log_route = if stderr_logs {
         ConsoleLogRoute::Stderr
@@ -321,19 +345,42 @@ fn init_observability(stderr_logs: bool) -> Result<observability::CliObservabili
     let target_category = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|_source| {
         AtmError::observability_bootstrap("failed to validate ATM observability target")
     })?;
-    let (logger, active_log_path) = build_logger(&log_dir, console_log_route, &service_name)?;
+    let log_export = LogExport::from_env(&atm_core::ProcessEnvSource);
+    if log_export.config_invalid() {
+        report_invalid_export_config(stderr_logs);
+    }
+    let (logger, active_log_path) = build_logger(
+        &log_dir,
+        console_log_route,
+        &service_name,
+        Some(&log_export),
+    )?;
 
-    Ok(observability::CliObservability::from_boxed_port(Box::new(
-        ScObservabilityAdapter::new(logger, active_log_path, service_name, target_category),
-    )))
+    Ok((
+        observability::CliObservability::from_boxed_port(Box::new(ScObservabilityAdapter::new(
+            logger,
+            active_log_path,
+            service_name,
+            target_category,
+        ))),
+        log_export,
+    ))
 }
 
+/// `export` selects the routed destination; `None` logs to the file only.
 pub(crate) fn build_logger(
     log_dir: &Path,
     console_log_route: ConsoleLogRoute,
     service_name: &ServiceName,
+    export: Option<&LogExport>,
 ) -> Result<(Logger, PathBuf), AtmError> {
-    let active_log_path = prepare_retained_log(log_dir)?;
+    let destination = export.map_or(atm_core::LogDestination::File, LogExport::destination);
+    // An OTel-only destination writes no JSONL, as in the daemon.
+    let active_log_path = if destination == atm_core::LogDestination::Otel {
+        log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME)
+    } else {
+        prepare_retained_log(log_dir)?
+    };
     let mut config = LoggerConfig::default_for(
         service_name.clone(),
         shared_logger_root_for_log_dir(log_dir)?,
@@ -344,19 +391,23 @@ pub(crate) fn build_logger(
     // ATM CLI owns stdout/stderr UX by default; only opt into a shared
     // console sink when the CLI routing rule explicitly selects one.
     config.enable_console_sink = false;
-    let mut builder = Logger::builder_typed(config).map_err(map_init_error)?;
+    config.enable_file_sink = destination != atm_core::LogDestination::Otel;
+    let mut builder = Logger::builder(config).map_err(map_init_error)?;
+    if let Some(export) = export {
+        export.register_sink(&mut builder);
+    }
     if console_log_route == ConsoleLogRoute::Stderr {
-        builder.register_sink(SinkRegistration::new(Arc::new(ConsoleSink::stderr())));
+        builder.register_sink(SinkRegistration::typed(Arc::new(ConsoleSink::stderr())));
     }
     #[cfg(any(test, feature = "fault-injection"))]
     if let Some(mode) = retained_sink_fault_mode()? {
-        register_retained_sink_fault(&mut builder, log_dir, mode);
+        register_retained_sink_fault(&mut builder, log_dir, mode)?;
     }
-    let logger = builder.build_typed().map_err(map_init_error)?;
+    let logger = builder.build().map_err(map_init_error)?;
     Ok((logger, active_log_path))
 }
 
-fn map_init_error(source: sc_observability_types::typed::InitFailure) -> AtmError {
+fn map_init_error(source: sc_observability_types::v2::InitError) -> AtmError {
     retain_shared_diagnostic_code(source.diagnostic().code.as_str());
     AtmError::observability_bootstrap("failed to initialize shared observability logger")
 }
@@ -428,15 +479,18 @@ fn register_retained_sink_fault(
     builder: &mut LoggerBuilder,
     log_dir: &Path,
     mode: RetainedSinkFaultMode,
-) {
-    let sink = Arc::new(JsonlFileSink::new(
-        fault_injection_log_path(log_dir),
-        RotationPolicy::default(),
-        RetentionPolicy::default(),
-    ));
-    builder.register_sink(SinkRegistration::new(Arc::new(
+) -> Result<(), AtmError> {
+    let sink = Arc::new(
+        JsonlFileSink::open(
+            fault_injection_log_path(log_dir),
+            RetainedLogPolicy::default(),
+        )
+        .map_err(map_init_error)?,
+    );
+    builder.register_sink(SinkRegistration::typed(Arc::new(
         RetainedSinkHealthOverride::new(sink, mode),
     )));
+    Ok(())
 }
 
 #[cfg(any(test, feature = "fault-injection"))]
@@ -461,22 +515,14 @@ impl RetainedSinkHealthOverride {
 
 #[cfg(any(test, feature = "fault-injection"))]
 impl LogSink for RetainedSinkHealthOverride {
-    #[expect(
-        deprecated,
-        reason = "sc-observability 1.4.1 retains the LogSinkError trait boundary; see sc-observability#203; this test fault sink must implement it"
-    )]
     fn write(
         &self,
         event: &sc_observability_types::LogEvent,
-    ) -> Result<(), sc_observability_types::LogSinkError> {
+    ) -> Result<(), sc_observability_types::v2::LogSinkError> {
         self.inner.write(event)
     }
 
-    #[expect(
-        deprecated,
-        reason = "sc-observability 1.4.1 retains the LogSinkError trait boundary; see sc-observability#203; this test fault sink must implement it"
-    )]
-    fn flush(&self) -> Result<(), sc_observability_types::LogSinkError> {
+    fn flush(&self) -> Result<(), sc_observability_types::v2::LogSinkError> {
         self.inner.flush()
     }
 
@@ -511,12 +557,14 @@ impl ScObservabilityAdapter {
 
     #[cfg(test)]
     fn shutdown(self) -> sc_observability_types::LoggingHealthReport {
-        self.logger.shutdown().health()
+        // Fault fixtures inspect the native health report after either outcome.
+        let _shutdown_result = self.logger.shutdown();
+        self.logger.health()
     }
 
     #[cfg(test)]
     fn flush(&self) -> Result<(), AtmError> {
-        self.logger.flush_typed().map_err(map_flush_error)
+        self.logger.flush().map_err(map_flush_error)
     }
 }
 
@@ -528,8 +576,8 @@ impl ObservabilityPort for ScObservabilityAdapter {
         // the explicit durability barrier here. Do not reuse this adapter as a
         // daemon or async runtime logger without revisiting that contract.
         let event = map_command_event(&self.service_name, &self.target_category, event)?;
-        self.logger.log_typed(event).map_err(map_log_error)?;
-        self.logger.flush_typed().map_err(map_flush_error)
+        self.logger.log(event).map_err(map_log_error)?;
+        self.logger.flush().map_err(map_flush_error)
     }
 
     fn query(&self, req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
@@ -577,21 +625,14 @@ impl ObservabilityPort for ScObservabilityAdapter {
             jsonl: Default::default(),
             timeline: Default::default(),
             degraded: Vec::new(),
+            export: None,
             detail,
         })
     }
 }
 
-fn map_log_error(source: sc_observability::LogFailure) -> AtmError {
-    let code = match &source {
-        sc_observability::LogFailure::InvalidEvent(error) => Some(error.diagnostic().code.as_str()),
-        sc_observability::LogFailure::WriterDegraded(context)
-        | sc_observability::LogFailure::ShutdownTimedOut(context) => {
-            Some(context.diagnostic().code.as_str())
-        }
-        _ => None,
-    };
-    map_log_error_with_code(code)
+fn map_log_error(source: sc_observability_types::v2::EventError) -> AtmError {
+    map_log_error_with_code(Some(source.diagnostic().code.as_str()))
 }
 
 fn map_log_error_with_code(code: Option<&str>) -> AtmError {
@@ -601,7 +642,7 @@ fn map_log_error_with_code(code: Option<&str>) -> AtmError {
     ))
 }
 
-fn map_flush_error(source: sc_observability_types::typed::FlushFailure) -> AtmError {
+fn map_flush_error(source: sc_observability_types::v2::FlushError) -> AtmError {
     AtmError::observability_emit(format!(
         "shared observability durability flush failed ({})",
         source.diagnostic().code.as_str()
@@ -966,7 +1007,8 @@ pub(crate) fn new_adapter_port(
         ConsoleLogRoute::Disabled
     };
     let test_log_dir = resolve_adapter_log_dir(home_dir)?;
-    let (logger, active_log_path) = build_logger(&test_log_dir, console_log_route, &service_name)?;
+    let (logger, active_log_path) =
+        build_logger(&test_log_dir, console_log_route, &service_name, None)?;
     Ok(Box::new(ScObservabilityAdapter::new(
         logger,
         active_log_path,
@@ -1046,7 +1088,7 @@ mod adapter_tests {
                 (ATM_RETAINED_SINK_FAULT_ENV, Some(mode)),
             ]);
             let (logger, active_log_path) =
-                build_logger(&log_dir, ConsoleLogRoute::Disabled, &service_name)
+                build_logger(&log_dir, ConsoleLogRoute::Disabled, &service_name, None)
                     .expect("fault-injection logger");
             let adapter =
                 ScObservabilityAdapter::new(logger, active_log_path, service_name, target);
@@ -1115,9 +1157,9 @@ mod adapter_tests {
             assert_eq!(actual_serialized, serialized);
         }
 
-        let init = map_init_error(sc_observability_types::typed::InitFailure::from_context(
-            context("SC_TEST_INIT_FAILURE"),
-        ));
+        let init = map_init_error(sc_observability_types::v2::InitError::Runtime {
+            context: context("SC_TEST_INIT_FAILURE"),
+        });
         assert_contract(
             &init,
             AtmErrorCode::ObservabilityBootstrapFailed,
@@ -1126,9 +1168,9 @@ mod adapter_tests {
             r#"{"code":"ATM_OBSERVABILITY_BOOTSTRAP_FAILED","message":"failed to initialize shared observability logger\n  Recovery: Check the retained-log directory and file permissions, then restart the daemon."}"#,
         );
 
-        let log = map_log_error(sc_observability::LogFailure::WriterDegraded(context(
-            "SC_TEST_WRITER_DEGRADED",
-        )));
+        let log = map_log_error(sc_observability_types::v2::EventError::Routing {
+            context: context("SC_TEST_WRITER_DEGRADED"),
+        });
         assert_contract(
             &log,
             AtmErrorCode::ObservabilityEmitFailed,
@@ -1137,11 +1179,9 @@ mod adapter_tests {
             r#"{"code":"ATM_OBSERVABILITY_EMIT_FAILED","message":"shared observability log admission failed (SC_TEST_WRITER_DEGRADED)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."}"#,
         );
 
-        let invalid = map_log_error(sc_observability::LogFailure::InvalidEvent(
-            sc_observability_types::typed::EventFailure::from_context(context(
-                "SC_TEST_INVALID_EVENT",
-            )),
-        ));
+        let invalid = map_log_error(sc_observability_types::v2::EventError::Validation {
+            context: context("SC_TEST_INVALID_EVENT"),
+        });
         assert_contract(
             &invalid,
             AtmErrorCode::ObservabilityEmitFailed,
@@ -1150,9 +1190,9 @@ mod adapter_tests {
             r#"{"code":"ATM_OBSERVABILITY_EMIT_FAILED","message":"shared observability log admission failed (SC_TEST_INVALID_EVENT)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."}"#,
         );
 
-        let stopped = map_log_error(sc_observability::LogFailure::ShutdownTimedOut(context(
-            "SC_TEST_SHUTDOWN_TIMEOUT",
-        )));
+        let stopped = map_log_error(sc_observability_types::v2::EventError::Routing {
+            context: context("SC_TEST_SHUTDOWN_TIMEOUT"),
+        });
         assert_contract(
             &stopped,
             AtmErrorCode::ObservabilityEmitFailed,
@@ -1161,9 +1201,9 @@ mod adapter_tests {
             r#"{"code":"ATM_OBSERVABILITY_EMIT_FAILED","message":"shared observability log admission failed (SC_TEST_SHUTDOWN_TIMEOUT)\n  Recovery: Retry the operation; if it persists, inspect daemon health for a logger or lock failure."}"#,
         );
 
-        let flush = map_flush_error(sc_observability_types::typed::FlushFailure::from_context(
-            context("SC_TEST_FLUSH_FAILURE"),
-        ));
+        let flush = map_flush_error(sc_observability_types::v2::FlushError::Drain {
+            context: context("SC_TEST_FLUSH_FAILURE"),
+        });
         assert_contract(
             &flush,
             AtmErrorCode::ObservabilityEmitFailed,

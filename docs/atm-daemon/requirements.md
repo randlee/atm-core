@@ -289,6 +289,16 @@ Initial crate requirement IDs:
   identifiers rather than raw strings for subsystem, message-id, and task-id
   meaning. Satisfies:
   `REQ-CORE-BOUNDARY-001`, `REQ-CORE-OBS-001`.
+- `REQ-DAEMON-OBS-005` the daemon composes OpenTelemetry export once at
+  bootstrap (ADR-064 D11): an absent endpoint composes no exporter and reports
+  `Inert`; invalid configuration keeps the daemon serving with file logging
+  and reports `ConfigInvalid`; every committed task fact is exported while
+  the daemon serves; collector outages change export health only, never a
+  task result; provider shutdown runs last within the cumulative shutdown
+  deadline (5s); the benchmark smoke run checks that a clean stop exits 0
+  within 5s, and no test measures a stop-time bound with a full queue and a
+  stalled collector. Satisfies: `REQ-P-OBS-005`,
+  `REQ-CORE-TASK-TELEMETRY-001`.
 - `REQ-DAEMON-HEALTH-001` `atm-daemon` owns the daemon health interface
   consumed by `atm doctor`. The minimum daemon-owned field inventory is:
   - liveness
@@ -302,7 +312,7 @@ Initial crate requirement IDs:
   `REQ-CORE-DOCTOR-002`.
   After `AA.4`, daemon code reaches concrete SQLite-backed runtime state only
   through `atm-runtime` and `atm-core` boundaries rather than a direct
-  `atm-daemon -> atm-rusqlite` dependency.
+  `atm-daemon -> atm-storage-rusqlite` dependency.
 - `REQ-DAEMON-SIGNAL-001` `atm-daemon` owns runtime-control installation and
   handling for daemon lifecycle transitions. Unix may satisfy this through
   signals; Windows may satisfy it through console or service-control events.
@@ -391,6 +401,7 @@ Requirement IDs:
 - `REQ-DAEMON-OBS-002`
 - `REQ-DAEMON-OBS-003`
 - `REQ-DAEMON-OBS-004`
+- `REQ-DAEMON-OBS-005`
 - `REQ-DAEMON-HEALTH-001`
 - `REQ-DAEMON-SIGNAL-001`
 - `REQ-DAEMON-PLATFORM-001`

@@ -389,6 +389,24 @@ impl RetainedMailboxRuntime for TestRuntime {
         })
     }
 
+    fn admit_message_record_with_outcome(
+        &self,
+        home_dir: &Path,
+        record: Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        let existing =
+            self.load_message_record(home_dir, &record.team, &record.agent, &record.message_key)?;
+        if existing.is_none() {
+            self.persist_message_record(record)?;
+        }
+        Ok(atm_storage::CommittedTaskWrite {
+            operation: Ok(atm_storage::MessageAdmissionOutcome::passive(existing)),
+            task_events: Vec::new(),
+        })
+    }
+
     fn query_mailbox_metadata_rows(
         &self,
         _home_dir: &Path,
@@ -873,6 +891,7 @@ impl ObservabilityPort for RecordingObservability {
             jsonl: Default::default(),
             timeline: Default::default(),
             degraded: Vec::new(),
+            export: None,
             detail: Some("test observer".to_string()),
         })
     }
@@ -1290,33 +1309,42 @@ fn self_addressed_plain_send_is_rejected_before_persistence() {
 
 #[test]
 #[serial_test::serial(env)]
-fn self_addressed_task_send_is_rejected_before_persistence() {
+fn self_addressed_task_assignment_is_persisted_without_delivery() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
+    let mut request = self_addressed_send_request(tempdir.path());
+    request.task_id = Some("SELF-1".parse().expect("task id"));
 
-    let error = super::send_mail_with_runtime_impl(
-        self_addressed_send_request(tempdir.path()),
-        &observability,
-        &runtime,
-        None,
-    )
-    .expect_err("self-addressed task send must fail");
+    let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect("self-addressed task assignment is accepted");
 
-    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
+    assert!(outcome.task_id.is_some(), "the assignment creates a task");
+    assert_eq!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("records lock")
+            .len(),
+        1,
+        "the task record is persisted"
+    );
     assert!(
         runtime
-            .appended_messages
+            .persisted_records
             .lock()
-            .expect("append lock")
-            .is_empty()
+            .expect("records lock")
+            .iter()
+            .all(|record| record.envelope.read),
+        "the self-task carrier is born read, so it is never unread"
     );
     assert!(
         runtime
             .non_claude_deliveries
             .lock()
             .expect("non-claude deliveries lock")
-            .is_empty()
+            .is_empty(),
+        "nothing is delivered to the caller's own pane"
     );
 }
 

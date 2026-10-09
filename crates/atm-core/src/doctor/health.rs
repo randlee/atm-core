@@ -6,7 +6,9 @@ use crate::doctor::report::{
 };
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
-use crate::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
+use crate::observability::{
+    AtmObservabilityHealth, AtmObservabilityHealthState, AtmTelemetryExportState,
+};
 use crate::types::{AgentName, TeamName};
 
 pub fn unavailable_snapshot(detail: String) -> AtmObservabilityHealth {
@@ -19,6 +21,7 @@ pub fn unavailable_snapshot(detail: String) -> AtmObservabilityHealth {
         jsonl: Default::default(),
         timeline: Default::default(),
         degraded: Vec::new(),
+        export: None,
         detail: Some(detail),
     }
 }
@@ -66,7 +69,7 @@ pub fn observability_finding(health: &AtmObservabilityHealth) -> DoctorFinding {
         .unwrap_or_default();
     let query_state = health.query_state.map(render_state).unwrap_or("unknown");
 
-    match health.logging_state {
+    let mut finding = match health.logging_state {
         AtmObservabilityHealthState::Healthy => DoctorFinding {
             severity: DoctorSeverity::Info,
             code: AtmErrorCode::ObservabilityHealthOk,
@@ -97,7 +100,24 @@ pub fn observability_finding(health: &AtmObservabilityHealth) -> DoctorFinding {
                     .to_string(),
             ),
         },
+    };
+
+    if matches!(
+        health.export.as_ref().map(|export| export.state),
+        Some(AtmTelemetryExportState::Degraded | AtmTelemetryExportState::Unavailable)
+    ) {
+        if finding.severity == DoctorSeverity::Info {
+            finding.severity = DoctorSeverity::Warning;
+        }
+        let export_remediation =
+            "Confirm ATM_OTEL_ENDPOINT is reachable; see docs/user-documents/doctor-and-log.md.";
+        finding.remediation = Some(match finding.remediation {
+            Some(existing) => format!("{existing} {export_remediation}"),
+            None => export_remediation.to_string(),
+        });
     }
+
+    finding
 }
 
 pub fn observability_finding_from_error(error: &AtmError) -> DoctorFinding {
@@ -137,15 +157,138 @@ fn render_state(state: AtmObservabilityHealthState) -> &'static str {
 mod tests {
     use std::path::PathBuf;
 
-    use super::environment_visibility;
+    use super::{environment_visibility, observability_finding};
+    use crate::doctor::report::DoctorReport;
+    use crate::doctor::report::DoctorSeverity;
+    use crate::observability::{
+        AtmObservabilityHealth, AtmObservabilityHealthState, AtmTelemetryExportHealth,
+        AtmTelemetryExportState,
+    };
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
+    use serde_json::json;
 
     // Synthetic stand-ins for the daemon's frozen launch-time environment.
     // Deliberately distinct from the caller's values so the test proves the
     // caller wins even when the ambient process env disagrees (issue #548).
     const DAEMON_LAUNCH_TEAM: &str = "daemon-launch-team";
     const DAEMON_LAUNCH_IDENTITY: &str = "daemon-launch-identity";
+
+    fn healthy_observability() -> AtmObservabilityHealth {
+        AtmObservabilityHealth {
+            active_log_path: None,
+            logging_state: AtmObservabilityHealthState::Healthy,
+            query_state: Some(AtmObservabilityHealthState::Healthy),
+            maintenance: None,
+            diagnostic: None,
+            jsonl: Default::default(),
+            timeline: Default::default(),
+            degraded: Vec::new(),
+            export: None,
+            detail: None,
+        }
+    }
+
+    #[test]
+    fn export_degraded_folds_into_the_single_observability_finding() {
+        let mut health = healthy_observability();
+        health.export = Some(AtmTelemetryExportHealth {
+            state: AtmTelemetryExportState::Degraded,
+            endpoint: Some("http://collector:4317".to_string()),
+            protocol: Some(crate::task_telemetry::TelemetryExportProtocol::Grpc),
+            emitted: 1,
+            dropped_full: 1,
+            dropped_timeout: 0,
+            dropped_failure: 0,
+            dropped_shutdown: 0,
+            last_failure: None,
+        });
+
+        let finding = observability_finding(&health);
+        assert_eq!(finding.severity, DoctorSeverity::Warning);
+        let remediation = finding.remediation.unwrap();
+        assert!(remediation.contains("ATM_OTEL_ENDPOINT"));
+        assert!(remediation.contains("docs/user-documents/doctor-and-log.md"));
+    }
+
+    #[test]
+    fn export_absent_leaves_finding_unchanged() {
+        let health = healthy_observability();
+        let finding = observability_finding(&health);
+        assert_eq!(finding.severity, DoctorSeverity::Info);
+        assert_eq!(finding.remediation, None);
+    }
+
+    fn pinned_pre_1_11_doctor_report() -> serde_json::Value {
+        json!({
+            "summary": {
+                "status": "healthy",
+                "message": "pinned 1.10 doctor fixture",
+                "info_count": 0,
+                "warning_count": 0,
+                "error_count": 0
+            },
+            "findings": [],
+            "recommendations": [],
+            "environment": {
+                "atm_home": null,
+                "atm_team": null,
+                "atm_identity": null,
+                "team_override": null
+            },
+            "member_roster": null,
+            "observability": {
+                "active_log_path": null,
+                "logging_state": "healthy",
+                "query_state": "healthy",
+                "maintenance": null,
+                "diagnostic": null,
+                "jsonl": {
+                    "forwarded_total": 0,
+                    "dropped_queue_full_total": 0,
+                    "dropped_reentrant_total": 0
+                },
+                "timeline": {
+                    "written_total": 0,
+                    "dropped_queue_full_total": 0,
+                    "dropped_persist_error_total": 0
+                },
+                "degraded": [],
+                "detail": null
+            },
+            "config": { "findings": [] },
+            "mail_store": { "findings": [] },
+            "roster_store": { "findings": [] }
+        })
+    }
+
+    #[test]
+    fn pinned_pre_1_11_doctor_report_without_export_decodes() {
+        let report: DoctorReport = serde_json::from_value(pinned_pre_1_11_doctor_report()).unwrap();
+        assert_eq!(report.observability.export, None);
+    }
+
+    #[test]
+    fn doctor_report_with_export_health_round_trips() {
+        let mut report: DoctorReport =
+            serde_json::from_value(pinned_pre_1_11_doctor_report()).unwrap();
+        report.observability.export = Some(AtmTelemetryExportHealth {
+            state: AtmTelemetryExportState::Healthy,
+            endpoint: Some("http://collector:4317".to_string()),
+            protocol: Some(crate::task_telemetry::TelemetryExportProtocol::Grpc),
+            emitted: 12,
+            dropped_full: 0,
+            dropped_timeout: 0,
+            dropped_failure: 0,
+            dropped_shutdown: 0,
+            last_failure: None,
+        });
+        let encoded = serde_json::to_string(&report).unwrap();
+        assert_eq!(
+            serde_json::from_str::<DoctorReport>(&encoded).unwrap(),
+            report
+        );
+    }
 
     #[test]
     #[serial_test::serial(env)]

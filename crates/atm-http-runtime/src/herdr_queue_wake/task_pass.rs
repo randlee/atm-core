@@ -422,6 +422,7 @@ impl HerdrQueueWakePump {
                     &dispatch,
                     atm_core::boundary::PromptTrigger::TaskPass,
                     now,
+                    &self.task_telemetry,
                 )
                 .await;
             }
@@ -496,7 +497,13 @@ impl HerdrQueueWakePump {
             })
             .await
         {
-            Ok(row) => Ok(row),
+            Ok(record) => {
+                crate::task_telemetry::project_task_events(
+                    &self.task_telemetry,
+                    std::slice::from_ref(&record.event),
+                );
+                Ok(record.row)
+            }
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_record", outcome = "failed", error = %error, member = %member, task_id = %task_id, "Herdr task reminder bookkeeping failed");
                 Err(error)
@@ -527,7 +534,11 @@ impl HerdrQueueWakePump {
             })
             .await
         {
-            Ok(_) => {
+            Ok(record) => {
+                crate::task_telemetry::project_task_events(
+                    &self.task_telemetry,
+                    std::slice::from_ref(&record.event),
+                );
                 tracing::info!(
                     subsystem = "herdr_queue_wake",
                     action = "task_reminder_reset",

@@ -72,6 +72,7 @@ pub struct StorageAndNudgeRouter {
     bare_cli_queue_full_drops: BareCliQueueFullDrops,
     member_state_transition_sink: Option<Arc<dyn crate::MemberStateTransitionSink>>,
     detached_received_hooks: DetachedReceivedHooks,
+    task_telemetry: atm_runtime::TaskTelemetryRuntime,
 }
 
 impl StorageAndNudgeRouter {
@@ -145,6 +146,7 @@ impl StorageAndNudgeRouter {
             bare_cli_queue_full_drops: Default::default(),
             member_state_transition_sink: None,
             detached_received_hooks: DetachedReceivedHooks::default(),
+            task_telemetry: atm_runtime::TaskTelemetryRuntime::disabled(),
         }
     }
 
@@ -272,16 +274,30 @@ impl StorageAndNudgeRouter {
         self
     }
 
+    /// Projects committed task-ledger rows through the bounded runtime handle;
+    /// the default is the disabled runtime.
+    #[must_use]
+    pub fn with_task_telemetry(mut self, runtime: atm_runtime::TaskTelemetryRuntime) -> Self {
+        self.task_telemetry = runtime;
+        self
+    }
+
     /// Drains retained authenticated peer connections after HTTP request
     /// admission has stopped, then the receiver-hook work that peer responses
     /// deliberately did not wait for. Individual request guards remain
     /// non-blocking on drop; only this daemon lifecycle path awaits driver
     /// termination.
-    pub async fn shutdown_peer_connections(&self, deadline: std::time::Duration) {
+    /// Releases outbound peer drivers, then detached received hooks, both
+    /// within the one caller-owned shutdown `deadline`: the drain gets only
+    /// what the pool left, never a fresh budget.
+    pub async fn shutdown_peer_connections(&self, deadline: tokio::time::Instant) {
         if let Some(pool) = &self.peer_connection_pool {
-            pool.shutdown(deadline).await;
+            pool.shutdown(deadline.saturating_duration_since(tokio::time::Instant::now()))
+                .await;
         }
-        self.detached_received_hooks.drain(deadline).await;
+        self.detached_received_hooks
+            .drain(deadline.saturating_duration_since(tokio::time::Instant::now()))
+            .await;
     }
 
     async fn commit_write(
@@ -293,13 +309,15 @@ impl StorageAndNudgeRouter {
             .write_source_preflight_bridge
             .preflight(deadline, self.service_runtime.clone(), request.clone())
             .await?;
-        let mut prepared = prepare_write_with_preflight_async_runtime(
+        let execution = prepare_write_with_preflight_async_runtime(
             request,
             self.observability.as_ref(),
             &self.service_runtime,
             source_preflight,
         )
         .await?;
+        crate::task_telemetry::project_task_events(&self.task_telemetry, &execution.task_events);
+        let mut prepared = execution.operation?;
         let newly_persisted = prepared.is_newly_persisted();
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
@@ -498,6 +516,7 @@ impl StorageAndNudgeRouter {
                         &dispatch,
                         atm_core::boundary::PromptTrigger::Steer,
                         dispatch.event.message_id.timestamp(),
+                        &self.task_telemetry,
                     )
                     .await;
                 }
@@ -598,25 +617,35 @@ impl StorageAndNudgeRouter {
             ));
         }
         let runtime = self.service_runtime.clone();
-        self.control_path_sync_bridge
+        let task_id = request.task_id.clone();
+        let committed = self
+            .control_path_sync_bridge
             .run(deadline, move || {
-                let (assignee, from, to) = runtime.task_store()?.move_task(
+                runtime.task_store()?.move_task(
                     &request.caller_team,
                     &request.task_id,
                     &request.caller_identity,
                     &request.target,
                     atm_core::types::IsoTimestamp::now(),
-                )?;
-                Ok(ApiResponse::new(ResponseEnvelope::TaskMove(
-                    TaskMoveOutcome {
-                        task_id: request.task_id,
-                        assignee,
-                        from,
-                        to,
-                    },
-                )))
+                )
             })
-            .await
+            .await?;
+        // A successful move carries its row in the record; the carrier holds
+        // only a committed rejection audit.
+        let mut rows = committed.task_events;
+        if let Ok(record) = &committed.operation {
+            rows.push(record.event.clone());
+        }
+        crate::task_telemetry::project_task_events(&self.task_telemetry, &rows);
+        let record = committed.operation?;
+        Ok(ApiResponse::new(ResponseEnvelope::TaskMove(
+            TaskMoveOutcome {
+                task_id,
+                assignee: record.assignee,
+                from: record.from,
+                to: record.to,
+            },
+        )))
     }
 
     async fn doctor(
@@ -1096,6 +1125,9 @@ pub(crate) fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Resu
 
 #[cfg(test)]
 pub(crate) mod tests {
+    mod bd3_task_telemetry;
+    mod self_task_assignment;
+
     use std::fs;
     use std::future::Future;
     use std::num::{NonZeroU16, NonZeroUsize};
@@ -1720,6 +1752,76 @@ pub(crate) mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows() {
+        let fixture = fixture(true, None, None);
+        assert_async_committed_rows(&fixture, false).await;
+    }
+
+    #[tokio::test]
+    async fn bd2_template_async_pipeline_retains_success_and_rejected_committed_rows() {
+        let fixture = fixture_with_selector_and_template(
+            true,
+            None,
+            None,
+            Some(template_composer_for("template body")),
+            |received_hook| {
+                Arc::new(FixedReceivedHookSelector {
+                    emitter: received_hook,
+                })
+            },
+        );
+        assert_async_committed_rows(&fixture, true).await;
+    }
+
+    async fn assert_async_committed_rows(fixture: &Fixture, template: bool) {
+        for rejected in [false, true] {
+            let task_id = if rejected { "MISSING" } else { "ASSIGNED" };
+            let mut request = task_write_request(fixture, task_id);
+            if template {
+                request.message_source =
+                    template_write_request(fixture, "template body").message_source;
+            }
+            if rejected {
+                request.task_op = Some(atm_storage::TaskOp::Close {
+                    outcome: atm_storage::TaskCloseOutcome::Completed,
+                    reason: None,
+                });
+            }
+            let runtime = &fixture.router.service_runtime;
+            let preflight =
+                atm_core::send::preflight_write_source_request(runtime, &request).unwrap();
+            let execution = atm_core::send::prepare_write_with_preflight_async_runtime(
+                request,
+                &NullObservability,
+                runtime,
+                preflight,
+            )
+            .await
+            .unwrap();
+            if rejected {
+                assert_eq!(
+                    execution.operation.err().unwrap().code(),
+                    atm_storage::AtmErrorCode::TaskNotFound
+                );
+            } else {
+                assert!(execution.operation.is_ok());
+            }
+            let rows = fixture
+                .task_store
+                .list_task_events(
+                    &"test-team".parse().unwrap(),
+                    &task_id.parse().unwrap(),
+                    None,
+                )
+                .unwrap();
+            // Template rejection has no preexisting audit producer. Preserve
+            // that behavior while returning every row that actually commits.
+            assert_eq!(rows.len(), usize::from(!(template && rejected)));
+            assert_eq!(execution.task_events, rows);
+        }
+    }
+
     fn pending_store_with_failures(
         store: &Arc<dyn PendingNudgeStore + Send + Sync>,
         failures: Option<usize>,
@@ -2087,7 +2189,7 @@ pub(crate) mod tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("task lifecycle daemon shuts down");
     }
@@ -2122,7 +2224,7 @@ pub(crate) mod tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("task lifecycle daemon shuts down");
     }
@@ -2412,6 +2514,7 @@ pub(crate) mod tests {
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
+            &atm_runtime::TaskTelemetryRuntime::disabled(),
         )
         .await;
 
@@ -4502,6 +4605,7 @@ pub(crate) mod tests {
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
+            &atm_runtime::TaskTelemetryRuntime::disabled(),
         )
         .await;
 
@@ -4532,6 +4636,7 @@ pub(crate) mod tests {
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
+            &atm_runtime::TaskTelemetryRuntime::disabled(),
         )
         .await;
 
@@ -4585,6 +4690,7 @@ pub(crate) mod tests {
             &dispatch,
             PromptTrigger::Steer,
             IsoTimestamp::now(),
+            &atm_runtime::TaskTelemetryRuntime::disabled(),
         )
         .await;
         release.store(true, Ordering::Release);
@@ -4600,7 +4706,13 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
+    /// Positive: a prompt-handoff write held inside the store while the
+    /// response deadline passes is recorded as a timeout, and the Tokio worker
+    /// stays live. The write is gated, so it is provably running when the
+    /// paused clock is advanced past the deadline; nothing races a timer.
+    /// Negative: the real-clock deadline is 30s, a failure-only bound, so
+    /// admission can never observe it expired.
+    #[tokio::test(start_paused = true)]
     async fn record_bridge_timeout_logs_and_emission_succeeds() {
         let dispatch = task_handoff_dispatch(Some("BB6-TIMEOUT"));
         let layer = PromptHandoffErrorLayer::default();
@@ -4611,22 +4723,34 @@ pub(crate) mod tests {
             RuntimeHealth::default(),
         );
         let store = Arc::new(atm_storage::DummyTaskStore::default());
-        store.set_prompt_handoff_delay(Duration::from_millis(100));
+        let (entered, release) = store.hold_next_prompt_handoff();
+        let response_deadline = Duration::from_secs(30);
+        let telemetry = atm_runtime::TaskTelemetryRuntime::disabled();
         let timer_fired = Arc::new(AtomicBool::new(false));
         let timer_observed = Arc::clone(&timer_fired);
         let timer = tokio::spawn(async move {
             tokio::task::yield_now().await;
             timer_observed.store(true, Ordering::Release);
         });
-        crate::prompt_handoff_record::record_prompt_handoff(
-            &bridge,
-            RequestDeadline::after(Duration::from_millis(20)),
-            Ok(store),
-            &dispatch,
-            PromptTrigger::Steer,
-            IsoTimestamp::now(),
-        )
-        .await;
+        tokio::join!(
+            crate::prompt_handoff_record::record_prompt_handoff(
+                &bridge,
+                RequestDeadline::after(response_deadline),
+                Ok(store),
+                &dispatch,
+                PromptTrigger::Steer,
+                IsoTimestamp::now(),
+                &telemetry,
+            ),
+            async {
+                tokio::task::spawn_blocking(move || entered.recv())
+                    .await
+                    .expect("entered reader joins")
+                    .expect("the store write is held");
+                tokio::time::advance(response_deadline).await;
+            },
+        );
+        drop(release);
         timer.await.expect("independent timer joins");
 
         assert!(
@@ -5205,7 +5329,7 @@ pub(crate) mod tests {
 
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("UDS runtime drains");
         assert!(
@@ -5307,7 +5431,7 @@ pub(crate) mod tests {
         );
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("search runtime drains");
     }
@@ -5390,7 +5514,7 @@ pub(crate) mod tests {
         );
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("UDS runtime drains");
     }
@@ -5488,7 +5612,7 @@ pub(crate) mod tests {
         }
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("direct peer runtime drains");
     }
@@ -5583,7 +5707,7 @@ pub(crate) mod tests {
         );
         remote_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("remote runtime drains");
         assert_eq!(
@@ -5670,7 +5794,7 @@ pub(crate) mod tests {
         pool.shutdown(Duration::from_secs(1)).await;
         remote_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("remote runtime drains");
     }
@@ -5835,12 +5959,12 @@ pub(crate) mod tests {
 
         local_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("local direct peer runtime drains");
         remote_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("remote direct peer runtime drains");
     }
@@ -5898,7 +6022,7 @@ pub(crate) mod tests {
 
         remote_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("remote direct peer runtime drains before acknowledgement");
 
@@ -5941,7 +6065,7 @@ pub(crate) mod tests {
 
         local_runtime
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("local direct peer runtime drains");
     }
@@ -5998,7 +6122,7 @@ pub(crate) mod tests {
         );
         running
             .begin_shutdown()
-            .finish()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("direct peer runtime drains");
     }
@@ -6467,6 +6591,135 @@ pub(crate) mod tests {
         assert_eq!(
             timed_out_emissions, 1,
             "the hook begins before its dedicated timeout expires"
+        );
+    }
+
+    /// Holds an authenticated stream open after the client closes: its
+    /// shutdown never completes, so the pooled driver stalls.
+    struct StallOnCloseAdapter;
+
+    struct StallOnClose(tokio::net::TcpStream);
+
+    impl tokio::io::AsyncRead for StallOnClose {
+        fn poll_read(
+            mut self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            Pin::new(&mut self.0).poll_read(cx, buf)
+        }
+    }
+
+    impl tokio::io::AsyncWrite for StallOnClose {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<std::io::Result<usize>> {
+            Pin::new(&mut self.0).poll_write(cx, buf)
+        }
+
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            Pin::new(&mut self.0).poll_flush(cx)
+        }
+
+        fn poll_shutdown(
+            self: Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            std::task::Poll::Pending
+        }
+    }
+
+    impl PeerStreamAdapter for StallOnCloseAdapter {
+        fn connect<'a>(
+            &'a self,
+            stream: tokio::net::TcpStream,
+            _peer: &'a atm_core::types::HostName,
+        ) -> PeerStreamFuture<'a, EstablishedPeerStream> {
+            Box::pin(async move { Ok(Box::new(StallOnClose(stream)) as EstablishedPeerStream) })
+        }
+
+        fn accept<'a>(
+            &'a self,
+            _stream: tokio::net::TcpStream,
+        ) -> PeerStreamFuture<'a, AcceptedPeerStream> {
+            Box::pin(async { Err(AtmError::config("test accepts no peers")) })
+        }
+    }
+
+    /// The pooled-driver drain and the detached-hook drain share the caller's
+    /// one absolute deadline: a stalled driver leaves the hooks only what
+    /// remains, never a fresh budget.
+    #[tokio::test]
+    async fn shutdown_peer_connections_spends_one_deadline_across_pool_and_hooks() {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("test peer binds");
+        let port = listener.local_addr().expect("test peer address").port();
+        tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("peer accepts");
+            let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(());
+            let router = axum::Router::new().route(
+                "/v1/atm/messages",
+                axum::routing::post(|| async { StatusCode::CREATED }),
+            );
+            let _ = crate::http1_server::serve_connection(
+                hyper_util::rt::TokioIo::new(stream),
+                router,
+                Duration::from_secs(30),
+                shutdown_rx,
+            )
+            .await;
+        });
+        let pool =
+            PeerConnectionPool::new(PeerPoolConfig::default(), Arc::new(StallOnCloseAdapter));
+        let mut connection = pool
+            .acquire(
+                &"127.0.0.1".parse().expect("peer authority"),
+                NonZeroU16::new(port).expect("non-zero test port"),
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("pooled peer connection");
+        let response = connection
+            .exchange(
+                atm_core::api::HttpRequest {
+                    method: "POST".to_owned(),
+                    path: "/v1/atm/messages".to_owned(),
+                    headers: Vec::new(),
+                    body: Vec::new(),
+                },
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("peer request succeeds");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        drop(connection);
+        assert_eq!(pool.pooled_count(), 1, "the connection is retained idle");
+        let fixture = fixture(true, None, None);
+        let router = fixture.router.clone().with_peer_connection_pool(pool);
+        router.detached_received_hooks.observe(
+            fixture.runtime_health.clone(),
+            atm_core::protocol::next_request_id(),
+            std::future::pending(),
+        );
+        // Real I/O set the stall up; virtual time measures the drain.
+        tokio::time::pause();
+        let started = tokio::time::Instant::now();
+        // Shorter than any step's own budget, so a fresh one shows.
+        let deadline = Duration::from_secs(3);
+
+        router.shutdown_peer_connections(started + deadline).await;
+
+        // Timer registrations round up to the 1ms wheel tick.
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= deadline && elapsed <= deadline + Duration::from_millis(10),
+            "{elapsed:?}"
         );
     }
 }

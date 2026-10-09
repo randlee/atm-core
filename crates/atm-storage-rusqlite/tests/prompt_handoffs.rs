@@ -13,6 +13,40 @@ use serde_json::Map;
 use tempfile::TempDir;
 
 const PRE_BB_DDL: &str = include_str!("fixtures/pre_bb_task_and_mail.sql");
+
+#[tokio::test]
+async fn bd2_duplicate_handoff_returns_persisted_original() {
+    let h = Harness::new();
+    let original = h.handoff(
+        "atm:01M2BB60000000000000000003",
+        0,
+        PromptTrigger::Steer,
+        "2026-09-12T15:27:34Z",
+    );
+    let first = h
+        .backend
+        .task_store()
+        .record_prompt_handoff(&original)
+        .unwrap();
+    assert_eq!(
+        first,
+        atm_storage::PromptHandoffWrite::Inserted(original.clone())
+    );
+    let mut changed = original.clone();
+    changed.at = "2026-09-12T15:28:34Z".parse().unwrap();
+    changed.trigger = PromptTrigger::TaskPass;
+    changed.task_id = "DIFFERENT".parse().unwrap();
+    let duplicate = h
+        .backend
+        .task_store()
+        .record_prompt_handoff(&changed)
+        .unwrap();
+    assert_eq!(h.list().await, vec![original.clone()]);
+    assert_eq!(
+        duplicate,
+        atm_storage::PromptHandoffWrite::Existing(original)
+    );
+}
 const PROMPT_HANDOFF_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS prompt_handoffs (
     team TEXT NOT NULL,

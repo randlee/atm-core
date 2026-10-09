@@ -20,8 +20,11 @@ use atm_storage::{
 };
 use atm_storage_rusqlite::SqliteStorageFactory;
 
+pub mod task_telemetry;
+
 pub use atm_storage::testing::InMemoryTaskLedgerReader;
 pub use atm_storage_rusqlite::{TemplateAdmissionMessage, TemplateAdmissionSnapshot};
+pub use task_telemetry::{RecordingTaskTelemetrySink, StallRelease, StalledTaskTelemetrySink};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RecordedWriterOutcome {
@@ -128,6 +131,15 @@ impl MessageStore for RecordingWriter {
         unreachable!("recording writer receives only read-display transitions")
     }
 
+    fn admit_message_with_provenance(
+        &self,
+        _message: &Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        unreachable!("recording writer receives only read-display transitions")
+    }
+
     fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
         unreachable!("recording writer receives only read-display transitions")
     }
@@ -147,6 +159,15 @@ impl MessageStore for RecordingWriter {
 
 #[async_trait::async_trait]
 impl AsyncMessageStore for RecordingWriter {
+    async fn admit_message_with_provenance_async(
+        &self,
+        _message: Message,
+        _provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+    {
+        unreachable!("recording writer receives only read-display transitions")
+    }
+
     async fn apply_read_display_state_async(
         &self,
         _scope: MailboxScope,
@@ -249,6 +270,16 @@ impl Drop for SqliteRuntimeGuard {
 }
 
 pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, AtmError> {
+    open_sqlite_boundary_with_task_telemetry(path, None)
+}
+
+/// [`open_sqlite_boundary`] with an optional task telemetry setup, such as
+/// [`RecordingTaskTelemetrySink::setup`], so handler tests observe the records
+/// the assembled runtime exports.
+pub fn open_sqlite_boundary_with_task_telemetry(
+    path: impl AsRef<Path>,
+    task_telemetry: Option<atm_runtime::TaskTelemetrySetup>,
+) -> Result<RuntimeAssembly, AtmError> {
     let config_current_dir = std::env::current_dir().map_err(|_source| {
         AtmError::config("failed to resolve current directory for sqlite test runtime assembly")
     })?;
@@ -264,7 +295,7 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
         config_current_dir,
         non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
         template_composer: None,
-        workflow_telemetry: None,
+        task_telemetry,
     })
 }
 
@@ -333,6 +364,16 @@ pub fn diagnostic_queue_batches_for_test() -> usize {
 /// SQLite busy-timeout scheduling across operating systems.
 pub fn install_sqlite_message_write_failure(path: impl AsRef<Path>) -> Result<(), AtmError> {
     atm_storage_rusqlite::install_message_write_failure_for_test(path)
+}
+
+/// Configure the isolated SQLite fixture to reject every prompt-handoff insert.
+pub fn install_sqlite_prompt_handoff_write_failure(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    atm_storage_rusqlite::install_prompt_handoff_write_failure_for_test(path)
+}
+
+/// Configure the isolated SQLite fixture to reject task-row updates.
+pub fn install_sqlite_task_update_failure(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    atm_storage_rusqlite::install_task_update_failure_for_test(path)
 }
 
 /// Inspects a SQLite fixture through test support, never from the replacement
