@@ -165,7 +165,8 @@ Error codes should describe the failure class, not a specific prose message.
 - `ATM_WORKFLOW_TELEMETRY_DROPPED` — the best-effort telemetry sink could not
   accept a record during a full queue, timeout, failure, or bounded shutdown.
   Inspect runtime diagnostics; this never changes admission, routing, or a
-  query result.
+  query result. No longer emitted since the workflow telemetry runtime was
+  removed; kept so older daemons' output still parses.
 - `ATM_WAIT_TIMEOUT`
 - `ATM_ACK_INVALID_STATE`
 - `ATM_CLEAR_INVALID_STATE`

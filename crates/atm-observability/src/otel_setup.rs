@@ -23,7 +23,8 @@ use tonic::transport::{ClientTlsConfig, Endpoint};
 /// Production per-export bound of every SDK processor.
 pub(crate) const EXPORT_TIMEOUT: Duration = Duration::from_millis(400);
 /// Production tonic transport bound. It is offset below `EXPORT_TIMEOUT` so a
-/// stalled export always ends as a transport timeout (`TimedOut`); equal
+/// stalled export always ends as a tonic transport timeout, which the SDK reports
+/// as an internal failure and the diagnostics record as `Unavailable`; equal
 /// bounds left the SDK and tonic timers racing, so the recorded failure shape
 /// depended on the scheduler. The SDK bound remains the backstop.
 ///
