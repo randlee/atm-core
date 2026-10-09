@@ -72,6 +72,10 @@ Without extra operator tuning, the replacement Tokio/Axum daemon retains:
 - daemon shutdown requested
 - daemon shutdown completed
 - daemon degraded / abnormal-exit signals
+- `ATM_TELEMETRY_SHUTDOWN_LOSS`: one record at daemon stop when telemetry
+  export lost records or its providers failed or timed out while shutting
+  down, with the loss counts, the provider shutdown `outcome`, and
+  `shutdown_timed_out`
 - every `warn!` and `error!` event emitted by ATM subsystems
 - `info!` from `atm_daemon_bootstrap::lifecycle`,
   `atm_http_runtime::listener`, and `atm_storage_rusqlite::maintenance`
@@ -79,7 +83,9 @@ Without extra operator tuning, the replacement Tokio/Axum daemon retains:
 The tracing bridge retains only the allowlisted structured fields: `ts`,
 `level`, `component`, `code`, `action`, `correlation_id`, `outcome`,
 `elapsed_ms`, `attempt`, `strategy`, `endpoint_kind`, `failure_class`,
-`error_layer`, and `origin`. Free-form `message` and `detail` text is never
+`error_layer`, `origin`, and the telemetry loss fields `shutdown_timed_out`,
+`emitted`, `dropped_full`, `dropped_timeout`, `dropped_failure`, and
+`dropped_shutdown`. Free-form `message` and `detail` text is never
 retained; it remains only on the live tracing/stderr path. Every other field is
 dropped, including message bodies, recipients, tokens, raw
 environment/configuration, and absolute user paths. Admission is non-blocking:

@@ -847,9 +847,11 @@ async fn shutdown_replacement_daemon(
     if let Some(observability) = &workers.observability {
         tracing::info!(target: "atm_daemon_bootstrap::lifecycle", code = "ATM_DAEMON_SHUTDOWN_DRAINED", "replacement ATM daemon drained its subsystems; closing retained logs");
         // Routed records reach the SDK logger before its provider stops; the
-        // second flush puts provider-shutdown diagnostics on disk.
+        // second flush puts provider-shutdown diagnostics and the shutdown
+        // loss record on disk.
         observability.flush_logger(deadline).await;
         shutdown_probe::step("export", deadline, observability.shutdown_export(deadline)).await;
+        observability.report_shutdown_loss();
         observability.flush_logger(deadline).await;
     }
     shutdown_probe::step(
