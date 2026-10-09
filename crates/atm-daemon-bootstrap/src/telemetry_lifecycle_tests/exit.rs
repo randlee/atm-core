@@ -148,6 +148,9 @@ fn kill_and_reap(child: &mut Child) {
     let _ = child.wait();
 }
 
+/// Tick of the bounded exit poll; the absolute deadline, not this, bounds the wait.
+const EXIT_POLL: Duration = Duration::from_millis(20);
+
 /// Waits for the child's stdout reader to finish (`eof` carries its result or
 /// is dropped at EOF), then confirms the exit, all inside one absolute
 /// `deadline`. Stdout EOF alone does not prove exit. On any timeout the child
@@ -166,40 +169,20 @@ fn await_eof_then_exit<T>(
             panic!("{what} did not close stdout before its deadline");
         }
     };
-    // The exit is awaited, not polled. A watchdog kills the child by pid only
-    // if it has not exited by `deadline`; that failure path then panics.
-    let pid = child.id();
-    let (exited, exit_seen) = mpsc::channel::<()>();
-    let (status, killed) = std::thread::scope(|scope| {
-        let watchdog = scope.spawn(move || {
-            let timed_out = matches!(
-                exit_seen.recv_timeout(deadline.saturating_duration_since(Instant::now())),
-                Err(mpsc::RecvTimeoutError::Timeout)
-            );
-            if timed_out {
-                kill_pid(pid);
-            }
-            timed_out
-        });
-        let status = child.wait().expect("await child exit");
-        let _ = exited.send(());
-        (status, watchdog.join().expect("exit watchdog joins"))
-    });
-    assert!(
-        !killed,
-        "{what} closed stdout but did not exit before its deadline"
-    );
-    (carried, status)
-}
-
-/// Force-kills an unreaped child by pid; only the hang path calls it.
-fn kill_pid(pid: u32) {
-    let pid = pid.to_string();
-    #[cfg(unix)]
-    let killed = Command::new("kill").args(["-KILL", &pid]).status();
-    #[cfg(windows)]
-    let killed = Command::new("taskkill").args(["/F", "/PID", &pid]).status();
-    drop(killed);
+    // Bounded `try_wait` polling inside the same absolute deadline. On expiry
+    // the child is killed and reaped here, by the owning handle, then fails.
+    loop {
+        if let Some(status) = child.try_wait().expect("poll child exit") {
+            return (carried, status);
+        }
+        if Instant::now() >= deadline {
+            kill_and_reap(child);
+            panic!("{what} closed stdout but did not exit before its deadline");
+        }
+        std::thread::park_timeout(
+            EXIT_POLL.min(deadline.saturating_duration_since(Instant::now())),
+        );
+    }
 }
 
 fn child_execution_is_proven(output: &std::process::Output) -> bool {
@@ -330,6 +313,47 @@ fn timed_out_child_is_killed_and_reaped_before_the_failure() {
         .try_wait()
         .expect("poll child")
         .expect("the timeout path reaped the child before failing");
+    assert!(!status.success(), "the child was killed: {status}");
+}
+
+/// Positive: a child that closed its stdout report but never exits is killed
+/// and reaped by the exit-wait timeout path, inside its deadline.
+/// Negative: the child is never left running or blocking the wait; no external
+/// kill binary is involved.
+#[test]
+#[serial_test::parallel(slo)]
+fn child_that_never_exits_is_killed_and_reaped_by_the_exit_wait() {
+    let mut child = Command::new(std::env::current_exe().expect("test binary"))
+        .args(["--exact", CHILD_TEST, "--nocapture", "--test-threads=1"])
+        .env(CHILD_MODE, "clean")
+        .env_remove(CHILD_ENDPOINT)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn never-exiting child");
+    // Stdin stays open, so the child keeps serving and never exits on its own.
+    let _stdin = child.stdin.take().expect("child stdin");
+    let (eof_tx, eof_rx) = mpsc::channel::<()>();
+    drop(eof_tx); // stdout reported EOF at once; only the exit wait can time out
+    let started = Instant::now();
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        await_eof_then_exit(
+            &mut child,
+            &eof_rx,
+            started + Duration::from_secs(2),
+            "never-exiting child",
+        )
+    }));
+    assert!(outcome.is_err(), "a child that never exits must time out");
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "the exit wait returned at its deadline, not after a blocked wait"
+    );
+    let status = child
+        .try_wait()
+        .expect("poll child")
+        .expect("the exit-wait path reaped the child before failing");
     assert!(!status.success(), "the child was killed: {status}");
 }
 
