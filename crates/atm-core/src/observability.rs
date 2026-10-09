@@ -39,6 +39,12 @@ pub const RETAINED_FIELD_ALLOWLIST: &[&str] = &[
     "refresh_error_code",
     "error_layer",
     "origin",
+    "shutdown_timed_out",
+    "emitted",
+    "dropped_full",
+    "dropped_timeout",
+    "dropped_failure",
+    "dropped_shutdown",
 ];
 
 /// Removes fields that are not permitted to reach retained diagnostics.

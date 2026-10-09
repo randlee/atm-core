@@ -528,7 +528,7 @@ fn await_parent_confirmation() {
 }
 
 /// The retained JSONL lines in `logs` after the child exited.
-fn retained_lines(logs: &std::path::Path) -> Vec<String> {
+pub(super) fn retained_lines(logs: &std::path::Path) -> Vec<String> {
     std::fs::read_to_string(logs.join(atm_observability::CANONICAL_LOG_FILE_NAME))
         .expect("retained log file")
         .lines()

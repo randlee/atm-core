@@ -12,6 +12,7 @@
 mod exit;
 mod queue_wake;
 pub(crate) mod receiver;
+mod shutdown_loss;
 mod stalled_shutdown;
 
 use std::collections::{BTreeMap, BTreeSet};
