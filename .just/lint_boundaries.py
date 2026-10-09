@@ -361,6 +361,7 @@ SCB_SINGLETON_ALLOWED_HOOK_CALLERS = {
 SCB_OBSERVABILITY_ALLOWED_SRC_FILES = {
     Path("crates/atm-daemon-bootstrap/src/daemon_observability.rs"),
 }
+SCB_OBSERVABILITY_SCAN_ROOTS = ("crates/atm-daemon/src/", "crates/atm-daemon-bootstrap/src/")
 SCB_OBSERVABILITY_DIRECT_PATTERNS = (
     "sc_observability_types::ActionName",
     "sc_observability_types::OutcomeLabel",
@@ -3067,7 +3068,7 @@ def collect_scb_observability_rule_violations(
         rel_source = rel_path.as_posix()
         if (
             rel_path != SCB_OBSERVABILITY_FIXTURE_PATH
-            and not rel_source.startswith("crates/atm-daemon/src/")
+            and not rel_source.startswith(SCB_OBSERVABILITY_SCAN_ROOTS)
         ):
             continue
         if rel_path in SCB_OBSERVABILITY_ALLOWED_SRC_FILES:

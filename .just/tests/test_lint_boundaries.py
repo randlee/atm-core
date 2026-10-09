@@ -17,6 +17,7 @@ if str(JUST_DIR) not in sys.path:
 from lint_boundaries import collect_boundary_violations
 from lint_boundaries import collect_io_forbidden_source_violations
 from lint_boundaries import collect_scb_observability_otel_violations
+from lint_boundaries import collect_scb_observability_rule_violations
 from lint_boundaries import boundary_doc_section_lines
 from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
 from lint_boundaries import parse_boundary_records
@@ -612,6 +613,20 @@ fn send_bad(team_dir: &std::path::Path) {
             self.assertTrue(
                 any(item.startswith("SCB-OBSERVABILITY-001 ") for item in rendered), rendered
             )
+
+    def test_scb_observability_001_scans_daemon_bootstrap_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_scb_observability_support(repo_root)
+            src = repo_root / "crates/atm-daemon-bootstrap/src"
+            src.mkdir(parents=True)
+            bad = src / "lifecycle.rs"
+            bad.write_text("type ActionName = sc_observability_types::ActionName;\n", encoding="utf-8")
+            allowed = src / "daemon_observability.rs"
+            allowed.write_text("type ActionName = sc_observability_types::ActionName;\n", encoding="utf-8")
+            rendered = [v.render() for v in collect_scb_observability_rule_violations(repo_root, [bad, allowed])]
+            self.assertEqual(len(rendered), 1, rendered)
+            self.assertIn("SCB-OBSERVABILITY-001 crates/atm-daemon-bootstrap/src/lifecycle.rs:1 ", rendered[0])
 
     def test_scb_observability_002_confines_otel_paths_to_exporter_modules(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
