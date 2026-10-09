@@ -9,10 +9,9 @@ use opentelemetry_sdk::error::{OTelSdkError, OTelSdkResult};
 
 #[derive(Default)]
 struct Failure {
+    // Only the class is kept: SDK error text can contain credentials or
+    // collector-supplied text and is never stored or formatted into logs.
     kind: Option<AtmTelemetryExportFailure>,
-    // Preserve typed SDK context privately. It can contain credentials or
-    // collector-supplied text and is never formatted into retained/OTel logs.
-    source: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 
 /// Failure evidence shared by the existing tracing bridge and bootstrap.
@@ -34,7 +33,7 @@ impl ExportDiagnostics {
                 | "BatchLogProcessor.Export.Error"
                 | "PeriodicReader.ExportFailed"
         ) {
-            self.record(AtmTelemetryExportFailure::Unavailable, None);
+            self.record(AtmTelemetryExportFailure::Unavailable);
         }
     }
 
@@ -48,32 +47,25 @@ impl ExportDiagnostics {
                     AtmTelemetryExportFailure::Unavailable
                 }
             };
-            self.record(kind, Some(Box::new(source)));
+            self.record(kind);
         }
     }
 
     /// A caller exceeded its wait deadline. This does not abort a blocking SDK
     /// shutdown call or prove that the collector received pending records.
     pub fn shutdown_wait_timed_out(&self) {
-        self.record(AtmTelemetryExportFailure::ShutdownTimedOut, None);
+        self.record(AtmTelemetryExportFailure::ShutdownTimedOut);
     }
 
-    pub(crate) fn setup_failed(&self, source: Box<dyn std::error::Error + Send + Sync>) {
-        self.record(AtmTelemetryExportFailure::ConfigInvalid, Some(source));
+    pub(crate) fn setup_failed(&self) {
+        self.record(AtmTelemetryExportFailure::ConfigInvalid);
     }
 
-    fn record(
-        &self,
-        kind: AtmTelemetryExportFailure,
-        source: Option<Box<dyn std::error::Error + Send + Sync>>,
-    ) {
-        if let Ok(mut failure) = self.failure.lock() {
-            if failure.kind != Some(AtmTelemetryExportFailure::ShutdownTimedOut) {
-                failure.kind = Some(kind);
-            }
-            if source.is_some() {
-                failure.source = source;
-            }
+    fn record(&self, kind: AtmTelemetryExportFailure) {
+        if let Ok(mut failure) = self.failure.lock()
+            && failure.kind != Some(AtmTelemetryExportFailure::ShutdownTimedOut)
+        {
+            failure.kind = Some(kind);
         }
     }
 

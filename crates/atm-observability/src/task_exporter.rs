@@ -406,7 +406,7 @@ impl TaskExporter {
         );
     }
 
-    #[allow(
+    #[expect(
         clippy::too_many_arguments,
         reason = "native span fields are projected once without introducing a parallel signal model"
     )]
