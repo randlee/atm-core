@@ -316,7 +316,10 @@ impl TaskExporter {
             assignment.attributes = attributes.clone();
         }
         if record.kind == Kind::Started {
-            assignment.started = Some(StartMark { seq: record.seq, at });
+            assignment.started = Some(StartMark {
+                seq: record.seq,
+                at,
+            });
         }
         assignment.first = assignment.first.min(at);
         assignment.last = assignment.last.max(at);
