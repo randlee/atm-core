@@ -203,8 +203,8 @@ pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
 };
 pub use task_telemetry::{
-    LogDestination, NoopTaskTelemetrySink, TaskHandoffFacts, TaskTelemetryError, TaskTelemetryKind,
-    TaskTelemetryRecord, TaskTelemetrySink, TelemetryExportConfig, TelemetryExportProtocol,
+    LogDestination, TaskHandoffFacts, TaskTelemetryError, TaskTelemetryKind, TaskTelemetryRecord,
+    TaskTelemetrySink, TelemetryExportConfig, TelemetryExportProtocol,
 };
 pub use transfer_script::{
     ConfiguredTransferScript, TransferInvocation, TransferScript, TransferScriptKind,
@@ -215,6 +215,6 @@ pub use workflow_analytics::{
     project_lifecycles,
 };
 pub use workflow_telemetry::{
-    NoopWorkflowTelemetrySink, WorkflowTelemetryError, WorkflowTelemetryObservation,
-    WorkflowTelemetryRecord, WorkflowTelemetrySink,
+    WorkflowTelemetryError, WorkflowTelemetryObservation, WorkflowTelemetryRecord,
+    WorkflowTelemetrySink,
 };

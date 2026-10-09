@@ -51,21 +51,6 @@ pub trait WorkflowTelemetrySink: crate::boundary::sealed::Sealed + Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<(), WorkflowTelemetryError>> + Send + '_>>;
 }
 
-/// Inert built-in default used when no valid runtime exporter is configured.
-#[derive(Debug, Default)]
-pub struct NoopWorkflowTelemetrySink;
-
-impl crate::boundary::sealed::Sealed for NoopWorkflowTelemetrySink {}
-
-impl WorkflowTelemetrySink for NoopWorkflowTelemetrySink {
-    fn emit(
-        &self,
-        _record: WorkflowTelemetryRecord,
-    ) -> Pin<Box<dyn Future<Output = Result<(), WorkflowTelemetryError>> + Send + '_>> {
-        Box::pin(async { Ok(()) })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,8 +58,19 @@ mod tests {
 
     #[test]
     fn boundary_is_object_safe() {
+        struct Sink;
+        impl crate::boundary::sealed::Sealed for Sink {}
+        impl WorkflowTelemetrySink for Sink {
+            fn emit(
+                &self,
+                _record: WorkflowTelemetryRecord,
+            ) -> Pin<Box<dyn Future<Output = Result<(), WorkflowTelemetryError>> + Send + '_>>
+            {
+                Box::pin(async { Ok(()) })
+            }
+        }
         fn accepts_dyn(_: &dyn WorkflowTelemetrySink) {}
-        let sink: Arc<dyn WorkflowTelemetrySink> = Arc::new(NoopWorkflowTelemetrySink);
+        let sink: Arc<dyn WorkflowTelemetrySink> = Arc::new(Sink);
         accepts_dyn(&*sink);
     }
 }

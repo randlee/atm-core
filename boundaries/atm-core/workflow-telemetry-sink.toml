@@ -8,10 +8,10 @@ trait = "WorkflowTelemetrySink"
 notes = "Sealed, object-safe first-party telemetry projection. Records contain only workflow snapshot attributes and durable timestamps; message payloads and merged variables are forbidden."
 
 [implementation]
-type = "NoopWorkflowTelemetrySink"
-module = "atm_core::workflow_telemetry"
-visibility = "public"
-constructor = "public"
+type = "TaskExporter"
+module = "atm_observability::task_exporter"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
 
 [composition]
 roots = ["atm_runtime::workflow_telemetry::WorkflowTelemetryRuntime::start"]
@@ -27,7 +27,7 @@ forbidden_edges = ["atm -> opentelemetry-otlp", "atm-http-runtime -> opentelemet
 
 [references]
 scope = "outside_owner_crate"
-forbidden = ["NoopWorkflowTelemetrySink"]
+forbidden = []
 
 [contracts]
 request_types = ["WorkflowTelemetryRecord"]
@@ -35,7 +35,7 @@ response_types = ["Result<(), WorkflowTelemetryError>"]
 error_types = ["WorkflowTelemetryError"]
 
 [testing]
-allowed_test_double_paths = ["atm_runtime::workflow_telemetry::tests", "atm_runtime_test_support::task_telemetry"]
+allowed_test_double_paths = ["atm_core::workflow_telemetry::tests", "atm_runtime::workflow_telemetry::tests", "atm_runtime_test_support::task_telemetry"]
 forbidden_test_bypasses = ["payload_bearing_record"]
 
 [enforcement]
@@ -44,4 +44,4 @@ review_gates = ["first_party_only", "no_payload_or_vars", "best_effort_only"]
 
 [status]
 state = "concrete_landed"
-notes = ["atm-core owns the no-op implementation; atm-runtime composes and calls the sink, while atm-observability owns the OpenTelemetry exporting implementation (ADR-064)."]
+notes = ["atm-core owns only the sealed trait and records (no built-in no-op sink); atm-runtime composes and calls the sink, while atm-observability owns the OpenTelemetry exporting implementation (ADR-064)."]

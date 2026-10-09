@@ -477,7 +477,8 @@ Purpose:
   lifecycle observations. It is intentionally not a public plug-in API.
 
 Notes:
-- `atm-core` provides only `NoopWorkflowTelemetrySink`; `atm-runtime` composes
+- `atm-core` provides only the sealed trait and records, with no built-in
+  sink; `atm-runtime` composes
   and calls the sink, and `atm-observability` is the permitted OpenTelemetry
   exporting implementation (ADR-064). No other crate implements it.
 - Records include immutable workflow snapshot attributes and durable timestamps
@@ -497,12 +498,11 @@ Purpose:
   plug-in API.
 
 Notes:
-- `atm-core` provides only `NoopTaskTelemetrySink`; `atm-runtime` composes
+- `atm-core` provides only the sealed trait and records, with no built-in
+  sink; `atm-runtime` composes
   through `TaskTelemetryRuntime::start` and is the sole holder and caller of the
   sink; `atm-observability` owns the OpenTelemetry exporting implementation.
-- `references.forbidden` rejects `NoopTaskTelemetrySink` outside `atm-core`
-  and the composition root: callers that want no export use
-  `TaskTelemetryRuntime::disabled`.
+- Callers that want no export use `TaskTelemetryRuntime::disabled`.
 - Records carry typed task-ledger and handoff facts only. Message bodies,
   template variables and free-form detail are forbidden.
 - Export is best effort. A full queue, timeout, rejection, exporter failure,

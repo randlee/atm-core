@@ -112,21 +112,6 @@ pub trait TaskTelemetrySink: crate::boundary::sealed::Sealed + Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<(), TaskTelemetryError>> + Send + '_>>;
 }
 
-/// Inert built-in default used when task telemetry export is disabled.
-#[derive(Debug, Default)]
-pub struct NoopTaskTelemetrySink;
-
-impl crate::boundary::sealed::Sealed for NoopTaskTelemetrySink {}
-
-impl TaskTelemetrySink for NoopTaskTelemetrySink {
-    fn emit(
-        &self,
-        _record: TaskTelemetryRecord,
-    ) -> Pin<Box<dyn Future<Output = Result<(), TaskTelemetryError>> + Send + '_>> {
-        Box::pin(async { Ok(()) })
-    }
-}
-
 const ATM_LOG_DESTINATION: &str = "ATM_LOG_DESTINATION";
 const MAX_AUTH_HEADER_BYTES: usize = 8192;
 
@@ -372,8 +357,19 @@ mod tests {
 
     #[test]
     fn boundary_is_object_safe() {
+        struct Sink;
+        impl crate::boundary::sealed::Sealed for Sink {}
+        impl TaskTelemetrySink for Sink {
+            fn emit(
+                &self,
+                _record: TaskTelemetryRecord,
+            ) -> Pin<Box<dyn Future<Output = Result<(), TaskTelemetryError>> + Send + '_>>
+            {
+                Box::pin(async { Ok(()) })
+            }
+        }
         fn accepts_dyn(_: &dyn TaskTelemetrySink) {}
-        let sink: Arc<dyn TaskTelemetrySink> = Arc::new(NoopTaskTelemetrySink);
+        let sink: Arc<dyn TaskTelemetrySink> = Arc::new(Sink);
         accepts_dyn(&*sink);
     }
 

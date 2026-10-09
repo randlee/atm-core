@@ -482,7 +482,7 @@ Requirement ID:
 
 Required rules:
 - `atm-core` owns `TaskTelemetryRecord`, `TaskTelemetryKind`,
-  `TaskHandoffFacts`, the sealed `TaskTelemetrySink`, `NoopTaskTelemetrySink`,
+  `TaskHandoffFacts`, the sealed `TaskTelemetrySink`,
   `TelemetryExportConfig`, `LogDestination` and the `AtmTelemetryExportHealth`
   projection without importing `sc-observability` or OpenTelemetry crates
 - records carry typed ledger and handoff facts only; no message body, template
