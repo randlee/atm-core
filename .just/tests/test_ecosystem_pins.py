@@ -132,7 +132,7 @@ class EcosystemPinTests(unittest.TestCase):
                 destination = root / relative_path
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(REPO_ROOT / relative_path, destination)
-            # Keep the copied workspace at the active 1.4.1 baseline; the
+            # Keep the copied workspace at the active 1.5.0 sc-observability baseline; the
             # known-good map below intentionally models the older recovery pin.
             evidence = root / "evidence.md"
             latest_registry.side_effect = lambda _root, dependency: {
