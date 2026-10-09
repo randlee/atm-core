@@ -166,19 +166,22 @@ async fn ay4_l4_connection_reset_keeps_unknown_prompt_pending_without_duplicate_
     );
 }
 
+const FAILURE_ONLY_BOUND: Duration = Duration::from_secs(30);
+
 #[tokio::test]
 async fn ay4_l5_shutdown_stops_new_queue_wake_admissions() {
     let fixture = fixture();
     let (list_gate, parked) = fixture.fake.block_next_list();
     let (shutdown, receiver) = tokio::sync::watch::channel(());
     let task = Arc::new(fixture.pump.clone()).start(receiver);
-    tokio::time::timeout(Duration::from_secs(1), parked.notified())
+    // Both waits are gated on events; 30s is a failure-only hang bound.
+    tokio::time::timeout(FAILURE_ONLY_BOUND, parked.notified())
         .await
-        .expect("queue wake reached its bounded list request");
+        .expect("queue wake never parked in its list request");
     shutdown.send(()).expect("shutdown signal");
     list_gate.notify_one();
-    tokio::time::timeout(Duration::from_secs(1), task)
+    tokio::time::timeout(FAILURE_ONLY_BOUND, task)
         .await
-        .expect("queue wake joins after completing in-flight work")
+        .expect("queue wake never joined after its released list request and shutdown")
         .expect("queue wake task join");
 }
