@@ -143,7 +143,7 @@ Render each reviewer assignment to a file, gate it with `jq`, and send it to
 the reviewer as a fenced ```json block:
 
 ```bash
-sc-compose render --file .claude/skills/atm-bd-orchestration/templates/<reviewer>-assignment.json.j2 \
+sc-compose render --strict --file .claude/skills/atm-bd-orchestration/templates/<reviewer>-assignment.json.j2 \
   --var-file <scratch>/<qa bead>-<reviewer>-vars.json --json-escape-mode auto \
   --output <scratch>/<qa bead>-<reviewer>.json && jq -e . <scratch>/<qa bead>-<reviewer>.json
 ```

@@ -16,5 +16,6 @@
   "adr_globs": [
     "docs/architecture.md",
     "docs/*/architecture.md"
-  ]
+  ],
+  "lint_command": "just lint"
 }

@@ -88,8 +88,8 @@ class CollectionTests(unittest.TestCase):
                 p.write_text(json.dumps(value))
                 with self.assertRaises(ValueError):
                     context.read_ids(p)
-        p.write_text('["atm-f.1", "atm-f2"]')
-        self.assertEqual(context.read_ids(p), ["atm-f.1", "atm-f2"])
+        p.write_text('["p-f.1", "p-f2"]')
+        self.assertEqual(context.read_ids(p), ["p-f.1", "p-f2"])
 
     def test_cli_returns_nonzero_for_collection_error(self):
         inventory = self.root / "ids.json"

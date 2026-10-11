@@ -5,8 +5,6 @@
   "deliverable_number": 1,
   "deliverable_text": "Implement the exporter.",
   "deliverables_total": 2,
-  "acceptance_criteria": "- [ ] exporter works",
-  "design": "A bounded synchronous exporter.",
   "owned_paths": ["crates/example-otlp"],
   "changed_files": ["crates/example-otlp/src/lib.rs"],
   "files_outside_owned_paths": [],

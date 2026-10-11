@@ -11,7 +11,6 @@ import sys
 from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"))
-from plan_contract import model_matches  # noqa: E402
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 IGNORED_STATUS_PATHS = (".beads.gate.lock", ".sc-compose/")
@@ -33,19 +32,6 @@ def run_json(runner: Runner, *args: str) -> Any:
 def metadata(bead: dict[str, Any]) -> dict[str, Any]:
     value = bead.get("metadata")
     return value if isinstance(value, dict) else {}
-
-
-def refusal_for_difficulty(bead: dict[str, Any], members: list[dict[str, Any]], identity: str) -> str | None:
-    difficulty = metadata(bead).get("difficulty")
-    member = next((row for row in members if identity in (row.get("name"), row.get("identity"), row.get("id"))), None)
-    if not isinstance(difficulty, str) or not model_matches(str((member or {}).get("model") or ""), difficulty):
-        return "DIFFICULTY_MISMATCH"
-    return None
-
-
-def members_for(runner: Runner) -> list[dict[str, Any]]:
-    members = run_json(runner, "atm", "members", "--json")
-    return members if isinstance(members, list) else members.get("members", [])
 
 
 def claimable(bead: dict[str, Any], identity: str) -> bool:
@@ -181,8 +167,6 @@ def dev_gate(args: argparse.Namespace, runner: Runner, identity: str) -> str:
     declared = declared_pr_target(runner, bead)
     if declared is not None and not descends(runner, str(declared), args.pr_target, git_dir(args)):
         return "PR_TARGET_MISMATCH"
-    if (reason := refusal_for_difficulty(bead, members_for(runner), identity)):
-        return reason
     if runner(["git", *git_dir(args), "merge-base", "--is-ancestor", f"origin/{args.pr_target}", "HEAD"], capture_output=True, text=True).returncode:
         return "WRONG_BASE"
     return "READY"

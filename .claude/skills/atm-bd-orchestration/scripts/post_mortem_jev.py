@@ -8,7 +8,6 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import datetime
-import fcntl
 import hashlib
 import importlib.util
 import json
@@ -182,11 +181,14 @@ def aggregate_atomic(response,coverage,specs,predicates,minimum_probability=0.8)
 
 
 def append_record(path:Path,row):
+ # One os.write on an O_APPEND descriptor: concurrent rows never interleave, so no lock.
  path.parent.mkdir(parents=True,exist_ok=True)
- with path.open('a',encoding='utf8') as f:
-  fcntl.flock(f.fileno(),fcntl.LOCK_EX)
-  f.write(encoded(row).decode()+'\n');f.flush();os.fsync(f.fileno())
-  fcntl.flock(f.fileno(),fcntl.LOCK_UN)
+ line=encoded(row)+b'\n'
+ fd=os.open(path,os.O_WRONLY|os.O_APPEND|os.O_CREAT,0o644)
+ try:
+  if os.write(fd,line)!=len(line):raise OSError(f'{path}: short append')
+  os.fsync(fd)
+ finally:os.close(fd)
 
 def immutable_write(path:Path,data:bytes):
  path.parent.mkdir(parents=True,exist_ok=True)

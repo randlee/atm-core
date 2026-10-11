@@ -1,6 +1,6 @@
 ---
 name: atm-bd-orchestration
-version: 0.7.2
+version: 0.14.0
 description: Bead-driven phase orchestration for the lead. Use when running a phase whose plan is in beads, dispatching from `bd ready` with ATM tasks, and landing it as one gh stack.
 requires:
   cli:
@@ -104,7 +104,7 @@ one fails the render.
 | `qa_member` | `qa-bead.json.j2` (`qa_member`), a parallel quick fix's QA bead |
 | `worktree_base` | sprint bead `worktree` = `<worktree_base>/<branch>` |
 | `test_command` | `dev-template`, `fix-assignment`, `dev-fix` |
-| `lint_command` | `dev-sanity-template` |
+| `lint_command` | `dev-template`, `fix-assignment`, `dev-fix`, `dev-sanity-template` |
 | `integration_branch_pattern` | the root's `integration_branch` (`plan-root.json.j2`), then `review-template` and `plan-review-template` (`integration_branch`) |
 | `plans_dir` | `sprint_index_common.py` (`phase_path`), `sprint-report`, `sprint-review`, `plan-review-template` |
 | `requirements_globs`, `adr_globs` | `plan-review-template`, `fix-assignment` |
@@ -223,8 +223,7 @@ on every restack and show up as out-of-scope work in that sprint's PR.
    from that QA has closed, one more quick-fix QA bead as in this step. When every roster agent is mid-task,
    the lead assigns the finding's task to itself (`atm task assign
    "$ATM_IDENTITY" --task-id <finding bead> --template fix-assignment.xml.j2
-   --vars <vars>`) when its own roster model fits the finding's `difficulty`
-   (gate (5)); it runs the template's gate, claim, start and close steps
+   --vars <vars>`) when the finding's `difficulty` suits it; it runs the template's gate, claim, start and close steps
    itself, acts on the subagent's report for steps c and f1, and a background
    developer subagent does the fix steps (b to e),
    since a background agent never writes to beads or ATM. When the lead's
@@ -253,8 +252,9 @@ No dev bead is dispatched until the plan passes review.
    containers. It gets no assignee; dispatch sets it:
 
    ```bash
-   bd create --id <root>-plan-qa --type task --parent <root> \
+   bd create --id <root>-plan-qa --type task \
      -l phase-<x>,stage:plan-review --title "phase-<x>: plan review"
+   bd update <root>-plan-qa --parent <root>    # bd refuses --id with --parent
    bd dep add <sprint container> <root>-plan-qa    # once per sprint container
    ```
 
@@ -314,10 +314,14 @@ For each ready bead:
 | sanity check (`stage:dev-sanity`) | [`dev-sanity-template.xml.j2`](templates/dev-sanity-template.xml.j2) | `.claude/skills/atm-beads/scripts/resolve-role dev-sanity` |
 | QA (`stage:qa`) | [`qa-template.xml.j2`](templates/qa-template.xml.j2) | quality-mgr |
 | fix (`stage:fix`) | [`fix-assignment.xml.j2`](templates/fix-assignment.xml.j2) | the member the lead picks for its `difficulty` |
-| finding from a quick-fix QA (its `discovered-from` QA bead has `metadata.quick_fix` true) | [`fix-assignment.xml.j2`](templates/fix-assignment.xml.j2), no sanity bead; once every finding from that failed QA has closed, one more quick-fix QA bead (Parallel Quick Fix step 4) | an idle dev whose model fits its `difficulty`, by priority |
+| finding from a quick-fix QA (its `discovered-from` QA bead has `metadata.quick_fix` true) | [`fix-assignment.xml.j2`](templates/fix-assignment.xml.j2), no sanity bead; once every finding from that failed QA has closed, one more quick-fix QA bead (Parallel Quick Fix step 4) | an idle dev picked for its `difficulty`, by priority |
 | important or minor finding (`stage:finding`, no `metadata.sanity_finding`, not from a quick-fix QA) | [`fix-assignment.xml.j2`](templates/fix-assignment.xml.j2), in the same step as one `bd import` of its sanity bead (`atm-beads` [`dev-sanity-bead.json.j2`](../atm-beads/templates/dev-sanity-bead.json.j2), `dev_bead` = the finding) and its QA bead ([`qa-bead.json.j2`](templates/qa-bead.json.j2), `checked_bead` = the finding, `blocked_by` = the sanity bead), each with `parent` = the finding's parent; a minor finding left in the backlog gets neither until it is assigned | an idle dev, by priority |
 | sanity finding (`stage:finding` with `metadata.sanity_finding`) | its checked bead's [`dev-fix.xml.j2`](templates/dev-fix.xml.j2), once per checked bead | the checked bead's assignee |
 | review (`stage:review`) | [`review-template.xml.j2`](templates/review-template.xml.j2) | the phase-end reviewer |
+
+`difficulty` is a minimum. Pick a dev at that tier, or one tier up when none is idle (fast to terra/sonnet); never far
+above it (fast to a frontier model). `sprint-report --dispatch` recommends idle roster members of type `dev`; the
+choice is the lead's.
 
 Then, on each task close:
 
@@ -339,7 +343,7 @@ Then, on each task close:
 
 Re-run `bd ready` after every close. Never cache the ready list. The open
 phase root also appears in it; it is never dispatched.
-On each Loop pass also run `.claude/skills/atm-bd-orchestration/scripts/bead-queues --phase <x>` and act on every row it reports.
+While phase work is under way, a cron must run `.claude/skills/atm-bd-orchestration/scripts/bead-queues --phase <x>` every 15 minutes, the only report of what the loop missed; the lead acts on every row it reports. Disable it when phase work is paused or the phase is complete.
 
 Close a sprint container when every child is closed (`bd children <sprint>
 --json | jq -e 'all(.[]; .status == "closed")'`): `bd close <sprint> --reason
@@ -380,9 +384,10 @@ review bead and dispatch it with `review-template.xml.j2`. After corrections,
 reuse its carried verification scope at the new integration head:
 
 ```bash
-bd create --id <root>-review --type task --parent <root> \
+bd create --id <root>-review --type task \
   -l phase-<x>,stage:review --assignee <reviewer> \
   --title "phase-<x>: phase-end review"
+bd update <root>-review --parent <root>    # bd refuses --id with --parent
 ```
 
 On review-complete, file each finding with `finding-bead.json.j2`, using:
@@ -524,7 +529,7 @@ written to beads with the `atm-beads` templates.
 | `finding-bead.json.j2` | bead | quality-mgr (QA, important and minor) and lead (review), one per finding |
 | `workflow-issue-bead.json.j2` | bead | anyone, a workflow class bead for a recurring failure signature |
 
-Bead templates render with `sc-compose render --file <t> --var-file <v>
+Bead templates render with `sc-compose render --strict --file <t> --var-file <v>
 --strict`, then `jq -c .` into a JSONL file for `bd import`. Examples of every
 template's vars are in [`examples/`](examples/).
 

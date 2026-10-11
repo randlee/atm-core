@@ -8,5 +8,6 @@
   "pr_target": "sprint/d-4-otlp-sync-exporter",
   "primary_checkout": "/path/to/atm-core",
   "phase_root": "atm-phase-d",
-  "test_command": "make test"
+  "test_command": "make test",
+  "lint_command": "just lint"
 }
