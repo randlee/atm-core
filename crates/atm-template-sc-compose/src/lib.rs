@@ -1452,6 +1452,38 @@ mod tests {
     }
 
     #[test]
+    fn production_adapter_renders_json_booleans_with_sc_compose_parity() {
+        let root = temporary_root("compose-boolean-parity");
+        let template_path = root.join("boolean-parity.md.j2");
+        let raw = "---\nrequired_variables:\n  - enabled\n  - disabled\n  - selection\n  - selection.checker_defect\n---\n{{ enabled }} {{ disabled }} {{ selection | tojson }} {{ selection.checker_defect }}";
+        fs::write(&template_path, raw).expect("write template");
+        let source = TemplateSource::file_backed(
+            raw.as_bytes().to_vec(),
+            fs::canonicalize(&template_path).expect("canonical template"),
+        );
+        let vars = Map::from_iter([
+            ("enabled".to_owned(), Value::Bool(false)),
+            ("disabled".to_owned(), Value::Bool(true)),
+            ("selection".to_owned(), json!({ "checker_defect": false })),
+        ]);
+        let template_root = TemplateRoot {
+            canonical_path: fs::canonicalize(&root).expect("canonical root"),
+        };
+        let composer = ScComposeTemplateComposer::new();
+
+        for rendered in [
+            composer.compose_file(&source, &vars, &template_root),
+            composer.render_within_root(&source, &vars, &template_root),
+        ] {
+            assert_eq!(
+                rendered.expect("compose JSON booleans").text,
+                "false true {\"checker_defect\":false} false"
+            );
+        }
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+    }
+
+    #[test]
     fn production_adapter_rejects_include_escaping_declared_root() {
         let parent = temporary_root("escape-parent");
         let root = parent.join("root");
