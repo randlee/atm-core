@@ -456,6 +456,18 @@ impl AtmError {
         .with_cause(cause)
     }
 
+    /// Reports a strict-render validation failure (an undeclared or unbound
+    /// variable). The diagnostic names the variable and the template and holds
+    /// no rendered content, so it is carried in the message the CLI prints.
+    pub fn template_render_variable_failed(diagnostic: impl fmt::Display) -> Self {
+        let diagnostic = diagnostic.to_string();
+        Self::new(
+            AtmErrorCode::TemplateRenderVerificationFailed,
+            format!("template verification render failed: {diagnostic}"),
+        )
+        .with_cause(diagnostic)
+    }
+
     /// Reports invalid checked JSON without exposing rendered template content.
     ///
     /// `sc-composer` 1.4.x automatically emits complete JSON values. Older

@@ -133,3 +133,56 @@ fn team_protocol_worked_example_executes_against_checked_in_fixture() {
     );
     assert!(!output.stdout.is_empty());
 }
+
+fn write_strict_fixture(dir: &Path) -> (PathBuf, PathBuf, PathBuf) {
+    let template = dir.join("strict.md.j2");
+    std::fs::write(&template, "hello {{ name }} and {{ missing }}").expect("write template");
+    let partial = dir.join("partial.json");
+    std::fs::write(&partial, r#"{"name":"x"}"#).expect("write partial vars");
+    let full = dir.join("full.json");
+    std::fs::write(&full, r#"{"name":"x","missing":"y"}"#).expect("write full vars");
+    (template, partial, full)
+}
+
+#[test]
+fn compose_fails_closed_on_a_variable_with_no_value_and_names_it() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (template, partial, full) = write_strict_fixture(dir.path());
+    let template = template.to_str().expect("utf-8");
+
+    let output = run_atm(&[
+        "compose",
+        "--template",
+        template,
+        "--vars",
+        partial.to_str().expect("utf-8"),
+    ]);
+    assert!(!output.status.success(), "unbound variable must fail");
+    assert!(output.stdout.is_empty(), "failed composition has no body");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("missing"),
+        "must name the variable: {stderr}"
+    );
+    assert!(
+        stderr.contains("strict.md.j2"),
+        "must name the template: {stderr}"
+    );
+
+    let output = run_atm(&[
+        "compose",
+        "--template",
+        template,
+        "--vars",
+        full.to_str().expect("utf-8"),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim_end(),
+        "hello x and y"
+    );
+}

@@ -69,7 +69,11 @@ pub(super) fn verify_template_send(
     let rendered = composer
         .render_within_root(&source, vars.as_map(), &root)
         .map_err(|error| {
-            if !inspection.include_references.is_empty() {
+            // The adapter's own verification failure already names the
+            // variable and template; re-wrapping would drop that text.
+            if error.code() == atm_storage::AtmErrorCode::TemplateRenderVerificationFailed {
+                error
+            } else if !inspection.include_references.is_empty() {
                 AtmError::template_include_unresolved(error)
             } else {
                 AtmError::template_render_verification_failed(error)
@@ -333,6 +337,34 @@ mod tests {
 
         assert_eq!(error, inspection_error);
         assert_eq!(composer.renders.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn variable_verification_failure_reaches_the_sender_unchanged() {
+        let inspection = TemplateInspection {
+            sha: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                .parse()
+                .expect("sha"),
+            frontmatter: atm_storage::TemplateFrontmatter::default(),
+            include_references: Vec::new(),
+            output_format: atm_storage::TemplateOutputFormat::Text,
+        };
+        let named = AtmError::template_render_variable_failed(
+            "ERR_VAL_UNBOUND_VARIABLE: unbound variable: missing (template t.md.j2)",
+        );
+        let composer = FixtureComposer {
+            inspection,
+            inspection_error: None,
+            render_result: Err(named.clone()),
+            renders: AtomicUsize::new(0),
+        };
+
+        let error = verify_template_send(&composer, &source(), input::default_message_max_bytes())
+            .expect_err("an unbound variable must fail the send");
+
+        assert_eq!(error, named);
+        assert!(error.message().contains("missing"));
+        assert!(error.message().contains("t.md.j2"));
     }
 
     #[test]
