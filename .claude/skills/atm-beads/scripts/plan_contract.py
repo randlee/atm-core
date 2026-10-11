@@ -18,7 +18,7 @@ PRIORITY_SPRINT: int = 2
 DIFFICULTY_MODELS: dict[str, tuple[str, ...]] = {
     "hard": ("fable", "opus", "astra"),
     "normal": ("terra", "opus", "sonnet"),
-    "fast": ("luna",),
+    "fast": ("luna", "haiku"),
 }
 DIFFICULTIES: tuple[str, ...] = tuple(DIFFICULTY_MODELS)
 
@@ -47,6 +47,12 @@ POLICY_KEYS: tuple[str, ...] = ("human_gates", "waivers")
 # policy.waivers[{bead, check, reason}]: a past state violation the user accepted in the plan PR; the validator
 # prints it as a warning instead of a problem. `check` names the state invariant.
 WAIVABLE_CHECKS: tuple[str, ...] = ("reopened_after_pass", "started_before_blocker", "pass_without_qa")
+
+
+def difficulty_tiers(difficulty: str) -> tuple[str, ...]:
+    """The difficulty, then the one tier above it: difficulty is a minimum, never far out of line."""
+    order = ("fast", "normal", "hard")
+    return order[order.index(difficulty):order.index(difficulty) + 2] if difficulty in order else ()
 
 
 def model_matches(model: str | None, difficulty: str) -> bool:

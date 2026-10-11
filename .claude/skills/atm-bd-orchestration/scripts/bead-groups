@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pour and relate the bead groups of sprints and blocking findings (diagram 07, stages 1 and 2).
+"""Attach the bead groups of sprints and blocking findings, with their relations (diagram 07).
 
   bead-groups [--validate] [--option A|B|C] [--json] TARGET...
 
@@ -21,22 +21,27 @@ and minor findings are not poured (refused): QA files them as plain finding
 beads. A finding group is not poured once its `filed_by` QA bead is closed:
 quality-mgr pours the groups first, then closes its QA bead.
 
-For every target it pours the group's formula with the sc-compose beads pour
-(today `sc-compose-pour-mock`; POUR below is the one line to change), then
-adds the edges the pour cannot make, from `<formula>.relations.json`:
-`validates` (E1 option); for a sprint, its dev bead `blocks` on the initial
-sanity bead of each predecessor in the phase's plan file depends_on; for a
-fix, `discovered-from` its `filed_by` QA bead. All targets are poured before
-any is related, so a predecessor in the same run is found.
+For every target it attaches the group's formula under the target's sprint
+container with `sc-compose bead attach`, together with the relations from
+`<formula>.relations.json`: `validates` (E1 option); for a sprint, its dev
+bead `blocks` on the initial sanity bead of each predecessor in the phase's
+plan file depends_on (under option A, which pours no sanity bead, on its dev
+bead); for a fix, `discovered-from` its `filed_by` QA bead.
+A relation's bead must exist when its target is attached, so sprints are
+attached in dependency order (a predecessor in the same run first), then
+findings.
 
-Both steps create only what is missing and never edit an existing bead, so
+The attach creates only what is missing and never edits an existing bead, so
 running it again after sprints are added to the plan fills in only the new
 groups. An edge that exists with another type (bd keeps one type per bead
-pair), a missing bead, or a bead at a poured id from another formula revision
-refuses that target, with a typed code, before its edges are written.
+pair), a removed edge, a missing bead, or a bead at a poured id from another
+formula revision refuses that target, with sc-compose's typed code, before
+anything is written.
 
---validate writes nothing: it previews each pour and reports every missing
-bead, missing edge, conflicting edge and SanityBead schema problem.
+--validate writes nothing: it previews each attach (`sc-compose bead
+preview-attach`) and reports every missing bead, missing edge and
+SanityBead schema problem; a relation to a bead that does not exist yet is
+reported as a missing bead.
 
 No poured bead gets an assignee: each carries `difficulty`, and the lead
 picks the agent at dispatch. Variables come from the target beads, the
@@ -64,8 +69,6 @@ import repo_config  # noqa: E402
 import sprint_index_common  # noqa: E402
 from bead_formulas import Bd, BdError, attach_id  # noqa: E402
 
-# The sc-compose beads pour. Replace with ["sc-compose"] when sc-compose ships the attach pour (#613).
-POUR = [sys.executable, str(SCRIPTS / "sc-compose-pour-mock")]
 SCHEMA = "atm-bd-orchestration/bead-groups/v1"
 SUCCESS, FAILED, USAGE, PROBLEMS = 0, 2, 3, 5
 SPRINT_KEYS = ("phase", "sprint", "stack", "layer", "difficulty")
@@ -89,6 +92,25 @@ def fmt(template: str, scope: dict) -> str:
         return string.Formatter().vformat(template, (), Strict(scope))
     except (KeyError, IndexError) as exc:
         raise TargetError("BEAD_GROUPS_UNRESOLVED", f"{template}: no value for {exc}") from exc
+
+
+def dependency_order(targets: list[tuple[dict, dict]]) -> list[tuple[dict, dict]]:
+    """Sprints before the sprints that depend on them (a relation's bead must exist when it is attached), then findings."""
+    sprints = [(e, t) for e, t in targets if t["kind"] == "sprint"]
+    container = {t["id"]: i for i, (_, t) in enumerate(sprints)}
+    done: list[int] = []
+
+    def visit(i: int, path: tuple[int, ...] = ()) -> None:
+        if i in done or i in path:
+            return
+        for pred in sprints[i][1]["vars"].get("predecessors", []):
+            if pred in container:
+                visit(container[pred], path + (i,))
+        done.append(i)
+
+    for i in range(len(sprints)):
+        visit(i)
+    return [sprints[i] for i in done] + [(e, t) for e, t in targets if t["kind"] != "sprint"]
 
 
 def split_ids(values: list[str]) -> list[str]:
@@ -156,7 +178,9 @@ class Run:
                    "layer": meta["layer"], "difficulty": meta["difficulty"], "priority": container.get("priority", 2),
                    "edge_option": option}
         compose["ref"] = fmt(sidecar["ref"], {"vars": compose})
-        relate_vars = {**sidecar.get("defaults", {}), "predecessor_sanity": [plan[d][1] for d in deps]}
+        relate_vars = {**sidecar.get("defaults", {}), "predecessor_sanity": [plan[d][1] for d in deps],
+                       "predecessors": [plan[d][0] for d in deps],
+                       "predecessor_dev": [attach_id(plan[d][0], compose["ref"], "dev") for d in deps]}
         return {"kind": "sprint", "id": bead, "formula": "sprint-group", "option": option, "compose": compose, "vars": relate_vars}
 
     def finding_targets(self, path: Path) -> list[dict | TargetError]:
@@ -229,75 +253,65 @@ class Run:
         if not ignore.exists():
             ignore.write_text("*\n")
         stem = f"{target['id']}.{target['compose']['ref']}.{formula}"
+        relations, missing = self.relations(target)
         # The attach reads the rendered formula by path, so it stays beside its request; nothing goes in bd's registry.
+        operation = "preview_attach" if self.validate else "attach"
         request = {
-            "schema": "sc-compose/beads/v1", "operation": "pour", "working_directory": str(self.repo),
+            "schema": "sc-compose/beads/v1", "operation": operation, "working_directory": str(self.repo),
             "template": str(template), "rendered_formula": str(out / f"{stem}.formula.toml"),
-            "compose_variables": target["compose"], "formula_name": formula,
-            "bead_variables": {"parent": target["compose"]["parent"], "ref": target["compose"]["ref"]},
-            "bd_executable": None, "pour_authorization": None if self.validate else "CreatePersistentBeads",
+            "compose_variables": target["compose"], "formula_name": formula, "bead_variables": {},
+            "parent": target["compose"]["parent"], "ref": target["compose"]["ref"], "relations": relations,
+            **({} if self.validate else {"pour_authorization": "CreatePersistentBeads"}),
         }
         path = out / f"{stem}.request.json"
         path.write_text(json.dumps(request, indent=2) + "\n")
-        operation = "preview-pour" if self.validate else "pour"
-        proc = subprocess.run([*POUR, "bead", operation, "--request", str(path), "--json"], cwd=self.repo, text=True, capture_output=True)
-        (out / f"{stem}.{operation}.receipt.json").write_text(proc.stdout)
+        subcommand = operation.replace("_", "-")
+        proc = subprocess.run(["sc-compose", "bead", subcommand, "--request", str(path), "--json"], cwd=self.repo, text=True, capture_output=True)
+        (out / f"{stem}.{subcommand}.receipt.json").write_text(proc.stdout)
         try:
             payload = json.loads(proc.stdout)["payload"]
         except (ValueError, KeyError, TypeError) as exc:
-            raise TargetError("BEAD_GROUPS_POUR_FAILED", f"pour gave no receipt (exit {proc.returncode}): {proc.stderr.strip()}") from exc
+            raise TargetError("BEAD_GROUPS_POUR_FAILED", f"attach gave no receipt (exit {proc.returncode}): {proc.stderr.strip()}") from exc
         if proc.returncode or payload.get("outcome") != "succeeded":
-            code = payload.get("error", {}).get("code") or next(iter(next(iter(payload["outcome"].values())).values()))
-            detail = payload.get("error", {}).get("message") or (payload.get("stages") or [{}])[-1].get("stderr_excerpt", "")
-            raise TargetError(code, f"pour of {target['id']}: {detail}")
-        return payload["attachment"]
+            outcome = payload.get("outcome")
+            diagnostic = (json.loads(proc.stdout).get("diagnostics") or [{}])[0]
+            code = ((payload.get("error") or {}).get("code")
+                    or (next(iter(next(iter(outcome.values())).values())) if isinstance(outcome, dict) else None)
+                    or diagnostic.get("code") or "BEAD_GROUPS_POUR_FAILED")
+            failed = [s for s in payload.get("stages") or [] if s.get("outcome") != "succeeded"] or [{}]
+            detail = (payload.get("error") or {}).get("message") or failed[-1].get("stderr_excerpt") or diagnostic.get("message", "")
+            raise TargetError(code, f"attach of {target['id']} (sc-compose exit {proc.returncode}): {detail}")
+        graph = payload["graph"]
+        wanted = {(self.endpoint(graph, r["from"]), self.endpoint(graph, r["to"]), r["type"]) for r in relations}
+        return {"ids": graph["ids"], "nodes": graph["nodes"], "missing": missing,
+                "edges": [e for e in graph["edges"] if (e["from"], e["to"], e["type"]) in wanted]}
 
-    def wanted(self, target: dict, attachment: dict) -> tuple[list, list]:
+    @staticmethod
+    def endpoint(graph: dict, value: str) -> str:
+        kind, _, name = value.partition(":")
+        return graph["ids"][name] if kind == "step" else name
+
+    def relations(self, target: dict) -> tuple[list[dict], list[str]]:
+        """The attach `relations` from the formula's relations file, and (validate only) a problem for each one
+        whose bead does not exist yet; the preview leaves those out, the attach refuses them."""
         sidecar = self.sidecar(target["formula"])
-        scalar = {**target["compose"], **{k: v for k, v in target["vars"].items() if not isinstance(v, list)}}
-        scope = {"parent": attachment["parent"], "ref": attachment["ref"], "steps": Strict(attachment["ids"]), "vars": Strict(scalar)}
-        chosen = sidecar["options"][target["option"]]
-        expect = [(fmt(e["from"], scope), fmt(e["to"], scope), e["type"]) for e in chosen.get("expect", [])]
-        edges = [(fmt(e["from"], scope), fmt(e["to"], scope), e["type"]) for e in chosen.get("edges", [])]
-        for rule in sidecar.get("edges", []):
-            if any(scalar.get(name) != want for name, want in rule.get("when", {}).items()):
-                continue
-            values = target["vars"].get(rule["each"], []) if "each" in rule else [None]
+        scope = {"vars": Strict({**target["compose"], **{k: v for k, v in target["vars"].items() if not isinstance(v, list)}})}
+        rules = [*sidecar["options"][target["option"]].get("relations", []), *sidecar.get("relations", [])]
+        rules = [(r, target["vars"].get(r["each"], []) if "each" in r else [None]) for r in rules]
+        relations, missing = [], []
+        for rule, values in rules:
             for value in values:
                 each = {**scope, "each": value}
-                edges.append((fmt(rule["from"], each), fmt(rule["to"], each), rule["type"]))
-        return expect, list(dict.fromkeys(edges))
-
-    def relate(self, target: dict, attachment: dict) -> tuple[list[dict], list[str]]:
-        """Plan the stage 2 edges; returns (rows, problems). Rows of beads the pour has yet to create are not checked."""
-        expect, edges = self.wanted(target, attachment)
-        unpoured = {n["id"] for n in attachment["nodes"] if n["action"] == "create"}
-        deps: dict[str, dict | None] = {}
-
-        def held(bead):
-            if bead not in deps:
-                deps[bead] = None if bead in unpoured or self.bd.show(bead) is None else self.bd.deps(bead)
-            return deps[bead]
-
-        rows, problems = [], []
-        for source, target_id, dep_type in expect:
-            have = held(source)
-            if have is not None and have.get(target_id) != dep_type:
-                problems.append(f"option {target['option']} expects {source} -> {target_id} as {dep_type or 'no edge'}, found {have.get(target_id) or 'no edge'}")
-        for source, target_id, dep_type in edges:
-            have, other = held(source), held(target_id)
-            if have is None or other is None:
-                missing = [b for b, d in ((source, have), (target_id, other)) if d is None]
-                rows.append({"from": source, "to": target_id, "type": dep_type, "action": "missing-bead"})
-                problems += [f"missing bead {b} for {source} -{dep_type}-> {target_id}" for b in missing if b not in unpoured]
-            elif have.get(target_id) is None:
-                rows.append({"from": source, "to": target_id, "type": dep_type, "action": "add"})
-            elif have[target_id] == dep_type:
-                rows.append({"from": source, "to": target_id, "type": dep_type, "action": "existing"})
-            else:
-                rows.append({"from": source, "to": target_id, "type": dep_type, "action": "conflict"})
-                problems.append(f"{source} -> {target_id} exists as {have[target_id]}; bd keeps one type per pair, cannot add {dep_type}")
-        return rows, problems
+                relation = {"from": fmt(rule["from"], each), "to": fmt(rule["to"], each), "type": rule["type"]}
+                if relation in relations:
+                    continue
+                beads = [e.partition(":")[2] for e in (relation["from"], relation["to"]) if e.startswith("bead:")]
+                absent = [b for b in beads if self.validate and self.bd.show(b) is None]
+                if absent:
+                    missing += [f"missing bead {b} for {relation['from']} -{relation['type']}-> {relation['to']}" for b in absent]
+                else:
+                    relations.append(relation)
+        return relations, missing
 
     def schema_problems(self, attachment: dict) -> list[str]:
         import bead_schema
@@ -332,9 +346,8 @@ def main(argv: list[str]) -> int:
         result.update({"outcome": "failed", "error": {"code": getattr(exc, "code", "BEAD_GROUPS_CANNOT_RUN"), "message": str(exc)}})
         return report(result, args.json, USAGE)
 
-    todo = [("sprint", b) for b in dict.fromkeys(sprint_ids)] + [("finding", t) for t in finding_targets]
-    entries = []
-    for kind, item in todo:  # stage 1 for every target first
+    entries, targets = [], []
+    for kind, item in [("sprint", b) for b in dict.fromkeys(sprint_ids)] + [("finding", t) for t in finding_targets]:
         bead = item if kind == "sprint" else getattr(item, "target_id", None) or item["id"]
         entry = {"id": bead, "kind": kind, "problems": []}
         entries.append(entry)
@@ -342,36 +355,22 @@ def main(argv: list[str]) -> int:
             if isinstance(item, TargetError):
                 raise item
             target = run.sprint_target(bead) if kind == "sprint" else item
-            entry.update({"formula": target["formula"], "option": target["option"], "_target": target})
-            attachment = run.pour(target)
-            entry.update({"ids": attachment["ids"], "nodes": attachment["nodes"], "_attachment": attachment})
-            entry["problems"] += [f"missing bead {n['id']}" for n in attachment["nodes"] if n["action"] == "create"]
-            created = {n["id"] for n in attachment["nodes"] if n["action"] == "create"}
-            entry["problems"] += [f"missing edge {e['from']} -{e['type']}-> {e['to']}" for e in attachment["edges"]
-                                  if e["action"] == "add" and e["from"] not in created]
+            entry.update({"formula": target["formula"], "option": target["option"]})
+            targets.append((entry, target))
         except (TargetError, BdError) as exc:
             entry["error"] = {"code": getattr(exc, "code", "BEAD_GROUPS_BD_FAILED"), "message": str(exc)}
-    for entry in entries:  # then stage 2
-        if "error" in entry:
-            continue
+    for entry, target in dependency_order(targets):
         try:
-            rows, problems = run.relate(entry["_target"], entry["_attachment"])
-            entry["edges"] = rows
+            attachment = run.pour(target)
+            entry.update({"ids": attachment["ids"], "nodes": attachment["nodes"], "edges": attachment["edges"]})
+            created = {n["id"] for n in attachment["nodes"] if n["action"] == "create"}
+            entry["problems"] += [f"missing bead {i}" for i in created] + attachment["missing"]
+            edges = [e for e in attachment["edges"] if e["action"] == "add" and e["from"] not in created]
+            entry["problems"] += [f"missing edge {e['from']} -{e['type']}-> {e['to']}" for e in edges]
             if args.validate:
-                entry["problems"] += problems + [f"missing edge {r['from']} -{r['type']}-> {r['to']}" for r in rows if r["action"] == "add"]
-                entry["problems"] += run.schema_problems(entry["_attachment"])
-            elif problems:
-                entry["error"] = {"code": "BEAD_GROUPS_EDGE_REFUSED", "message": "; ".join(problems)}
-            else:
-                for row in rows:
-                    if row["action"] == "add":
-                        run.bd.dep_add(row["from"], row["to"], row["type"])
-                        row["action"] = "added"
+                entry["problems"] += run.schema_problems(attachment)
         except (TargetError, BdError) as exc:
             entry["error"] = {"code": getattr(exc, "code", "BEAD_GROUPS_BD_FAILED"), "message": str(exc)}
-    for entry in entries:
-        entry.pop("_target", None)
-        entry.pop("_attachment", None)
     result["targets"] = entries
     if any("error" in e for e in entries):
         result["outcome"], code = "failed", FAILED

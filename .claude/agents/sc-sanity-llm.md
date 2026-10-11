@@ -49,7 +49,8 @@ Every field is present. `deliverable.text` is the only requirement you judge.
 2. Read the change with git only, at the pinned commits:
    `git -C <worktree_path> diff <base_sha>...<commit> -- <paths>` for the
    changed files your deliverable concerns, and
-   `git -C <worktree_path> show <commit>:<path>` for any file you need whole.
+   `git -C <worktree_path> show <commit>:<path>` for any file you need whole
+   (a `context` entry `path:start-end` names only those lines of `path`).
    Never read the working tree directly, and never run a build, a test or
    lint. If the worktree or a commit cannot be read: `SANITY.TARGET_UNREADABLE`.
 3. Answer `written: yes/no, file:line` for your deliverable using only the

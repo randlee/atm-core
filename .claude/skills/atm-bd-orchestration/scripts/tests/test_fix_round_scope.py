@@ -139,6 +139,16 @@ class CliTests(unittest.TestCase):
         out = self.run_cli("filter", "--carried", "carried.json", "--reviewer", "req-qa", "--result", "r.json")
         self.assertEqual(out.returncode, 2)
 
+    def test_inline_json_or_a_missing_file_is_a_named_error(self):
+        out = self.run_cli("filter", "--carried", "carried.json", "--reviewer", "arch-qa", "--result", '{"data": {"findings": []}}')
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("--result is a file path, not inline JSON", out.stderr)
+        self.assertNotIn("Traceback", out.stderr)
+        out = self.run_cli("owned", "--carried", "missing.json")
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("cannot read --carried missing.json", out.stderr)
+        self.assertNotIn("Traceback", out.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

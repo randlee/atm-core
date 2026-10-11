@@ -32,12 +32,12 @@ class BootstrapTests(unittest.TestCase):
     def test_sc_compose_uses_the_exact_prebuilt_release_asset(self) -> None:
         manifest = bootstrap.load_manifest()
         asset, url = bootstrap.sc_compose_install_command(manifest.sc_compose, "aarch64-apple-darwin")
-        self.assertEqual(asset, "sc-compose_1.6.1_aarch64-apple-darwin.tar.gz")
-        self.assertEqual(url, "https://github.com/randlee/sc-compose/releases/download/v1.6.1/" + asset)
-        self.assertEqual(dict(manifest.sc_compose_checksums)["aarch64-apple-darwin"], "23db29325d95c0f4bb94dead48d02883e00311e82dc66820fe51b1dd855b7168")
+        self.assertEqual(asset, "sc-compose_1.7.0_aarch64-apple-darwin.tar.gz")
+        self.assertEqual(url, "https://github.com/randlee/sc-compose/releases/download/v1.7.0/" + asset)
+        self.assertEqual(dict(manifest.sc_compose_checksums)["aarch64-apple-darwin"], "d7590a41921bef5a428bcbd33dda48006c6f6df5eafa83217cb820240fe6544b")
         self.assertEqual(
             dict(manifest.sc_compose_checksums)["x86_64-pc-windows-msvc"],
-            "35671244d7cf42faf5fa2f88e78a6944beeb3fdcce28cb795ef63e97a8c6ce32",
+            "80027b651ef86f2abe9ca88a16635fd53994fc0e9ec3c6c14d56ab151cbb3111",
         )
 
     def test_sc_compose_install_never_uses_cargo(self) -> None:
@@ -202,7 +202,7 @@ class BootstrapTests(unittest.TestCase):
             dict(manifest.cargo_binstall_checksums)["x86_64-pc-windows-msvc"],
             "0950f5a9f3422f74dea181d11f8b4d4447d1e9d1a9fdadcb72ff5b0b63c95207",
         )
-        self.assertEqual(manifest.sc_compose, "1.6.1")
+        self.assertEqual(manifest.sc_compose, "1.7.0")
         self.assertEqual(manifest.wyvern, "0.6.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
         self.assertNotIn("sc-compose", dict(manifest.python_packages))

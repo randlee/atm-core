@@ -60,7 +60,6 @@ def dev_runner(overrides=None):
         (gates.VALIDATE_PLAN, "--root", "atm-phase-d"): (0, ""),
         ("bd", "ready", "-n", "0", "--json"): (0, dumped([{"id": "bead"}])),
         ("bd", "show", "bead", "--json"): (0, dumped([{"status": "open", "assignee": "", "metadata": {"difficulty": "normal", "pr_target": "target"}}])),
-        ("atm", "members", "--json"): (0, dumped([{"identity": "terra", "model": "gpt-6-terra"}])),
         ("git", "merge-base", "--is-ancestor", "origin/target", "HEAD"): (0, ""),
     }; data.update(overrides or {}); return FakeRunner(data)
 
@@ -125,7 +124,6 @@ class AssignmentGateTests(unittest.TestCase):
             ("not-ready.json", dev_runner({("bd", "ready", "-n", "0", "--json"): (0, "[]")})),
             ("unclaimable.json", dev_runner({("bd", "show", "bead", "--json"): (0, dumped([{"status": "open", "assignee": "other", "metadata": {"difficulty": "normal"}}]))})),
             ("wrong-base.json", dev_runner({("git", "merge-base", "--is-ancestor", "origin/target", "HEAD"): (1, "")})),
-            ("difficulty-mismatch.json", dev_runner({("bd", "show", "bead", "--json"): (0, dumped([{"status": "open", "assignee": "", "metadata": {"difficulty": "hard"}}]))})),
             ("dev-ready.json", dev_runner()),
         ]
         for fixture, runner in cases:

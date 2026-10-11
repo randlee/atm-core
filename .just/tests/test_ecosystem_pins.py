@@ -166,7 +166,7 @@ class EcosystemPinTests(unittest.TestCase):
                     return_value=subprocess.CompletedProcess(
                         args=["/usr/bin/tool", "--version"],
                         returncode=0,
-                        stdout="sc-compose 1.6.1\n",
+                        stdout="sc-compose 1.7.0\n",
                         stderr="",
                     ),
                 ),
@@ -267,7 +267,7 @@ class EcosystemPinTests(unittest.TestCase):
                     return_value=subprocess.CompletedProcess(
                         args=["/usr/bin/tool", "--version"],
                         returncode=0,
-                        stdout="sc-compose 1.6.1\n",
+                        stdout="sc-compose 1.7.0\n",
                         stderr="",
                     ),
                 ),
@@ -301,7 +301,7 @@ class EcosystemPinTests(unittest.TestCase):
         self.assertFalse(accepted)
         self.assertEqual(len(findings), 1)
         self.assertIn("does not match", findings[0].summary)
-        self.assertIn("expected exactly 1.6.1", findings[0].detail)
+        self.assertIn("expected exactly 1.7.0", findings[0].detail)
 
     def test_release_preflight_accepts_the_manifest_sc_compose_binary(self) -> None:
         findings: list[VALIDATE_RELEASE.Finding] = []
@@ -311,7 +311,7 @@ class EcosystemPinTests(unittest.TestCase):
             return_value=subprocess.CompletedProcess(
                 args=["sc-compose", "--version"],
                 returncode=0,
-                stdout="sc-compose 1.6.1\n",
+                stdout="sc-compose 1.7.0\n",
                 stderr="",
             ),
         ):

@@ -199,6 +199,16 @@ class CiCheck(Repo):
         out = self.ci()
         self.assertEqual((out.returncode, out.stdout), (0, "plan valid: no tracked .atm-bd/phase-*.toml to check\n"), out.stderr)
 
+    def test_tracked_plan_without_its_phase_file_fails(self):
+        out = self.ci("plans/phase-t.jsonl")
+        self.assertEqual(out.returncode, 5, out.stdout + out.stderr)
+        self.assertEqual(out.stdout.splitlines(),
+                         ["plans/phase-t.jsonl: no tracked .atm-bd/phase-t.toml; the planner commits it with the plan"])
+
+    def test_tracked_plan_with_its_phase_file_passes(self):
+        out = self.ci("plans/phase-t.jsonl", ".atm-bd/phase-t.toml")
+        self.assertEqual((out.returncode, out.stdout), (0, "plan valid: 1 tracked phase file(s)\n"), out.stderr)
+
     def test_each_problem_names_its_file(self):
         cases = {
             "malformed toml": ("plan = \n", None, ".atm-bd/phase-t.toml: "),
