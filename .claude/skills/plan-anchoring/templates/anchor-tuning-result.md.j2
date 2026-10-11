@@ -1,0 +1,23 @@
+---
+required_variables:
+  - success
+  - canceled
+  - aborted_by
+  - data
+  - error
+  - metadata
+metadata:
+  id: anchor-tuning-result
+  version: 0.4.0
+  purpose: Standard fenced JSON response from anchor-tuning to the planner
+---
+```json
+{
+  "success": {{ success | tojson }},
+  "canceled": {{ canceled | tojson }},
+  "aborted_by": {{ aborted_by | tojson }},
+  "data": {{ data | tojson }},
+  "error": {{ error | tojson }},
+  "metadata": {{ metadata | tojson }}
+}
+```
