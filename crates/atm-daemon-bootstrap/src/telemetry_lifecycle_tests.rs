@@ -826,8 +826,13 @@ async fn running_daemon_export_excludes_message_template_and_auth_sentinels() {
     let receiver = Receiver::start(false).await;
     let daemon = Daemon::start(endpoint_env_with_auth(&receiver.endpoint, AUTH)).await;
     let template_path = daemon.root.path().join("private-message.j2");
-    std::fs::write(&template_path, format!("{BODY}: {{{{ private_value }}}}"))
-        .expect("write private template fixture");
+    std::fs::write(
+        &template_path,
+        format!(
+            "---\nrequired_variables:\n  - private_value\n---\n{BODY}: {{{{ private_value }}}}"
+        ),
+    )
+    .expect("write private template fixture");
     let mut request = daemon.request("sender", "recipient", "BD6-REDACT", None);
     request.message_source = SendMessageSource::Template(TemplateSendSource {
         canonical_template_path: std::fs::canonicalize(&template_path)
