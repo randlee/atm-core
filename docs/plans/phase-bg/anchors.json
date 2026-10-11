@@ -278,8 +278,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -298,6 +298,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-11T23:30:53+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-007",
+          "reason": "duplicate: ANC-007's all-platforms run is the Linux/macOS/Windows lint ANC-006 asks for"
         }
       ]
     },
@@ -440,7 +446,7 @@
       "id": "ANC-010",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "atm-core's lint must use the published sc-lint crates, and the vendored sc-lint crates must be removed.",
+      "statement": "atm-core's lint must use the published sc-lint crates.",
       "quote": "can you review any recent plans to migrate our sc-lint to use the published sc-lint crates?",
       "kind": "directive",
       "stated_by": "Rand",
@@ -458,7 +464,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -478,6 +484,14 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-11T23:30:53+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "atm-core's lint must use the published sc-lint crates, and the vendored sc-lint crates must be removed."
         }
       ]
     },
@@ -530,7 +544,7 @@
       "id": "ANC-012",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "After its sc-lint replacement is in place, every legacy atm-core lint tool that sc-lint duplicates must be removed.",
+      "statement": "After its sc-lint replacement is in place, every legacy atm-core lint tool that sc-lint duplicates, the vendored sc-lint crates included, must be removed.",
       "quote": "after replacement, I want all legacy lint tools that are duplicate removed.",
       "kind": "directive",
       "stated_by": "Rand",
@@ -548,7 +562,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -568,6 +582,14 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-11T23:30:53+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "After its sc-lint replacement is in place, every legacy atm-core lint tool that sc-lint duplicates must be removed."
         }
       ]
     },
@@ -683,8 +705,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 4,
-      "status": "locked",
+      "version": 5,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -717,6 +739,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-11T23:30:53+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-013",
+          "reason": "duplicate: disabling a fixable warning with an attribute is ignoring a finding without good reason, which ANC-013 forbids; ANC-016 covers the CI exception"
         }
       ]
     },

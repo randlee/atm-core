@@ -11,7 +11,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-003 | locked | Lint as good or better | 2026-10-09 |
 | ANC-004 | locked | Lint faster | 2026-10-09 |
 | ANC-005 | locked | Windows lint via xwin | 2026-10-09 |
-| ANC-006 | locked | Cross-platform lint | 2026-10-09 |
+| ANC-006 | retired | Cross-platform lint | 2026-10-09 |
 | ANC-007 | locked | just lint ci: Linux or all | 2026-10-09 |
 | ANC-008 | locked | just test from a manifest | 2026-10-09 |
 | ANC-009 | locked | Analyzers configured independently | 2026-10-09 |
@@ -20,7 +20,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-012 | locked | Remove duplicate legacy tools | 2026-10-11 |
 | ANC-013 | locked | Fix sc-lint findings | 2026-10-11 |
 | ANC-014 | locked | Refactor, don't squeeze | 2026-10-11 |
-| ANC-015 | locked | No attribute suppression of fixable warnings | 2026-10-11 |
+| ANC-015 | retired | No attribute suppression of fixable warnings | 2026-10-11 |
 | ANC-016 | locked | Suppression gets a findings bead | 2026-10-11 |
 | ANC-017 | locked | Small, maintainable sc-lint support code | 2026-10-11 |
 | ANC-018 | locked | Boilerplate goes upstream | 2026-10-11 |
@@ -111,7 +111,7 @@ Anchor: Lint must run on Linux, macOS and Windows.
 
 > yes, cross platform support (use of xwin for non-windows conosumers) and cross platform lint.
 
-Said by Rand, planning session (atm-core fenix), 2026-10-09. Status: locked. Version 2.
+Said by Rand, planning session (atm-core fenix), 2026-10-09. Status: retired. Version 3.
 
 Summary: Cross-platform lint
 
@@ -171,11 +171,11 @@ Fixtures:
 
 ## ANC-010
 
-Anchor: atm-core's lint must use the published sc-lint crates, and the vendored sc-lint crates must be removed.
+Anchor: atm-core's lint must use the published sc-lint crates.
 
 > can you review any recent plans to migrate our sc-lint to use the published sc-lint crates?
 
-Said by Rand, planning session (atm-core fenix), 2026-10-09. Status: locked. Version 2.
+Said by Rand, planning session (atm-core fenix), 2026-10-09. Status: locked. Version 3.
 
 Summary: Published sc-lint crates
 
@@ -203,11 +203,11 @@ Fixtures:
 
 ## ANC-012
 
-Anchor: After its sc-lint replacement is in place, every legacy atm-core lint tool that sc-lint duplicates must be removed.
+Anchor: After its sc-lint replacement is in place, every legacy atm-core lint tool that sc-lint duplicates, the vendored sc-lint crates included, must be removed.
 
 > after replacement, I want all legacy lint tools that are duplicate removed.
 
-Said by Rand, planning session (atm-core fenix), 2026-10-11. Status: locked. Version 2.
+Said by Rand, planning session (atm-core fenix), 2026-10-11. Status: locked. Version 3.
 
 Summary: Remove duplicate legacy tools
 
@@ -255,7 +255,7 @@ Anchor: Warnings that should be fixed must not be disabled with attributes.
 
 > also do not disable warnings w/ attributes for things that should be fixed.
 
-Said by Rand, planning session (atm-core fenix), 2026-10-11. Status: locked. Version 4.
+Said by Rand, planning session (atm-core fenix), 2026-10-11. Status: retired. Version 5.
 
 Summary: No attribute suppression of fixable warnings
 
