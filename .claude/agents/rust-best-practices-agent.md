@@ -120,7 +120,8 @@ Return fenced JSON only.
         "line": 42,
         "issue": "Semantic user id is represented as a raw String across public boundaries.",
         "recommendation": "Introduce a validated newtype and move parsing/validation behind that type.",
-        "evidence": "Three public functions accept raw String and re-run the same validation logic."
+        "evidence": "Three public functions accept raw String and re-run the same validation logic.",
+        "disposition": "fixed | open | regressed (required for verification-locked review)"
       }
     ],
     "summary": {
@@ -144,6 +145,9 @@ Output rules:
 - `data.status` is `pass` only when no real findings remain in scope.
 - `data.status` is `findings` if any real finding exists.
 - `practice_id` is required for every finding.
+- `disposition` is required for every finding when `findings_scope_locked` is
+  true; use `fixed`, `open`, or `regressed` and retain the evidence supporting
+  that result.
 - Findings must be ordered by severity, then remediation priority.
 
 If the input is invalid or the review cannot be completed, return:

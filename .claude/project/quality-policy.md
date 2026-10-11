@@ -82,8 +82,9 @@ their own prompts. The orchestration templates name this file as
 - Tests: `just test`
 - Phase-end validation: `just validate` (runs
   `scripts/validate_release.py`, the release preflight). quality-mgr passes
-  it to `rust-qa-agent` as `artifact_commands` on every `phase_end`
-  assignment and never runs it in the foreground.
+  it to `rust-qa-agent` as `artifact_commands` with
+  `artifact_regeneration_required: true` on every `phase_end` assignment and
+  never runs it in the foreground.
 
 ## Plan Naming
 
