@@ -7,7 +7,8 @@
 //! maintain a second parser, hash implementation, or fixture-backed
 //! production path.
 
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -18,9 +19,9 @@ use atm_core::boundary::{
 };
 use atm_core::error::AtmError;
 use sc_composer::{
-    ComposeError, ComposePolicy, ConfiningRoot, OutputFormat, RenderCheckMeta,
-    TemplateDirectiveKind, check_rendered_output_with_meta, expand_includes,
-    inspect_template_directives, parse_template_document, render_template,
+    ComposeError, ComposePolicy, ConfiningRoot, ExpandedTemplate, NoopObserver, OutputFormat,
+    RenderCheckMeta, ResolveResult, TemplateDirectiveKind, UnknownVariablePolicy,
+    check_rendered_output_with_meta, inspect_template_directives, parse_template_document,
 };
 use sc_sha::{HashInput, calculate_hash};
 use serde_json::{Map, Value};
@@ -76,11 +77,38 @@ fn template_load_error(cause: impl std::fmt::Display) -> AtmError {
     .with_cause(cause)
 }
 
+/// Names each failed variable and its template by file name. The upstream
+/// `Display` embeds the absolute template path, which ATM's public diagnostic
+/// must not carry.
+fn validation_error(error: &sc_composer::ValidationError) -> AtmError {
+    let diagnostics = error
+        .diagnostics()
+        .iter()
+        .map(|diagnostic| {
+            let template = diagnostic
+                .path
+                .as_deref()
+                .and_then(Path::file_name)
+                .map(|name| format!(" (template {})", name.to_string_lossy()))
+                .unwrap_or_default();
+            format!(
+                "{}: {}{template}",
+                diagnostic.code.as_str(),
+                diagnostic.message
+            )
+        })
+        .collect::<Vec<_>>();
+    if diagnostics.is_empty() {
+        return AtmError::template_render_verification_failed(error);
+    }
+    AtmError::template_render_variable_failed(diagnostics.join("; "))
+}
+
 fn composition_error(error: ComposeError) -> AtmError {
     match error {
         ComposeError::Include(error) => AtmError::template_include_unresolved(error),
         ComposeError::Resolve(error) => AtmError::template_include_unresolved(error),
-        ComposeError::Validation(error) => AtmError::template_render_verification_failed(error),
+        ComposeError::Validation(error) => validation_error(&error),
         ComposeError::Render(error) => AtmError::template_render_verification_failed(error),
         ComposeError::Config(error) => inspection_parse_error(error),
     }
@@ -201,6 +229,53 @@ fn verify_unchanged(source_path: &Path, expected: &[u8]) -> Result<(), AtmError>
     )))
 }
 
+/// The one render policy every ATM render path uses: a referenced variable
+/// that is undeclared or has no value is an error, exactly as
+/// `sc-compose render --strict`. Extra caller variables stay ignored. No
+/// caller can loosen it; the only input is the confining root.
+fn strict_policy(root: &TemplateRoot) -> ComposePolicy {
+    ComposePolicy {
+        strict_undeclared_variables: false,
+        unknown_variable_policy: UnknownVariablePolicy::Ignore,
+        unbound_variable_policy: Some(UnknownVariablePolicy::Error),
+        allowed_roots: vec![ConfiningRoot::from_path_buf(root.canonical_path.clone())],
+        ..ComposePolicy::default()
+    }
+}
+
+fn compose_request(
+    template_path: &Path,
+    vars: &Map<String, Value>,
+    root: &TemplateRoot,
+) -> Result<sc_composer::ComposeRequest, AtmError> {
+    let vars_input = vars
+        .iter()
+        .map(|(name, value)| {
+            let name = sc_composer::VariableName::new(name.clone()).map_err(|error| {
+                AtmError::validation(format!("invalid template variable '{name}': {error}"))
+            })?;
+            Ok((name, value.clone()))
+        })
+        .collect::<Result<std::collections::BTreeMap<_, _>, AtmError>>()?;
+    Ok(sc_composer::ComposeRequest {
+        runtime: None,
+        mode: sc_composer::ComposeMode::File {
+            template_path: template_path.to_path_buf(),
+        },
+        root: ConfiningRoot::from_path_buf(root.canonical_path.clone()),
+        vars_input,
+        vars_env: std::collections::BTreeMap::new(),
+        vars_defaults: std::collections::BTreeMap::new(),
+        // ATM's template-send contract contains only the rendered template
+        // body and captured variables. Guidance and user-prompt blocks are
+        // higher-level sc-composer features, so they must not be invented or
+        // appended by this adapter.
+        guidance_block: None,
+        user_prompt: None,
+        policy: strict_policy(root),
+    })
+}
+
 /// The only ATM production checked-emission seam.  The checker consumes
 /// the complete body, so invalid JSON can never reach a send or read path.
 fn checked_body(
@@ -260,17 +335,13 @@ impl TemplateComposer for ScComposeTemplateComposer {
             )
         })?;
         verify_unchanged(source_path, &template.raw_file_bytes)?;
-        let confining_root = ConfiningRoot::from_path_buf(root.canonical_path.clone());
-        let expanded = expand_includes(source_path, &confining_root, &ComposePolicy::default())
-            .map_err(AtmError::template_include_unresolved)?;
-        let text = render_template(&expanded.text, vars)
-            .map_err(AtmError::template_render_verification_failed)?;
-
+        let request = compose_request(source_path, vars, root)?;
+        let result = sc_composer::compose(&request).map_err(composition_error)?;
         checked_body(
-            &text,
+            &result.rendered_text,
             from_sc_output_format(OutputFormat::from_template_path(source_path)),
             source_path,
-            None,
+            result.failing_pass,
         )
     }
 
@@ -288,37 +359,7 @@ impl TemplateComposer for ScComposeTemplateComposer {
         })?;
         verify_unchanged(source_path, &template.raw_file_bytes)?;
 
-        let vars_input = vars
-            .iter()
-            .map(|(name, value)| {
-                let name = sc_composer::VariableName::new(name.clone()).map_err(|error| {
-                    AtmError::validation(format!("invalid template variable '{name}': {error}"))
-                })?;
-                Ok((name, value.clone()))
-            })
-            .collect::<Result<std::collections::BTreeMap<_, _>, AtmError>>()?;
-        let request = sc_composer::ComposeRequest {
-            runtime: None,
-            mode: sc_composer::ComposeMode::File {
-                template_path: source_path.to_path_buf(),
-            },
-            root: sc_composer::ConfiningRoot::from_path_buf(root.canonical_path.clone()),
-            vars_input,
-            vars_env: std::collections::BTreeMap::new(),
-            vars_defaults: std::collections::BTreeMap::new(),
-            // ATM's template-send contract contains only the rendered
-            // template body and captured variables. Guidance and user-prompt
-            // blocks are higher-level sc-composer features, so they must not
-            // be invented or appended by this adapter.
-            guidance_block: None,
-            user_prompt: None,
-            policy: sc_composer::ComposePolicy {
-                allowed_roots: vec![sc_composer::ConfiningRoot::from_path_buf(
-                    root.canonical_path.clone(),
-                )],
-                ..sc_composer::ComposePolicy::default()
-            },
-        };
+        let request = compose_request(source_path, vars, root)?;
         let result = sc_composer::compose(&request).map_err(composition_error)?;
         checked_body(
             &result.rendered_text,
@@ -343,13 +384,43 @@ impl TemplateComposer for ScComposeTemplateComposer {
             return Err(AtmError::decomposed_template_include_forbidden());
         }
         let source_text = source_text(source)?;
-        let text = render_template(source_text, vars)
-            .map_err(AtmError::template_render_verification_failed)?;
-        let path = match output_format {
-            TemplateOutputFormat::Text => Path::new("stored-template.txt"),
-            TemplateOutputFormat::Json => Path::new("stored-template.json"),
+        let parsed = parse_template_document(source_text).map_err(inspection_error)?;
+        // A stored template has no file: it composes under a virtual path
+        // with no includes, through the same strict policy as a file render.
+        let path = PathBuf::from(match output_format {
+            TemplateOutputFormat::Text => "stored-template.txt",
+            TemplateOutputFormat::Json => "stored-template.json",
+        });
+        let root = TemplateRoot {
+            canonical_path: PathBuf::from("."),
         };
-        checked_body(&text, output_format, path, None)
+        let request = compose_request(&path, vars, &root)?;
+        let expanded = ExpandedTemplate {
+            text: parsed.body().to_owned(),
+            resolved_files: vec![path.clone()],
+            frontmatters: vec![(path.clone(), parsed.passes().to_vec())],
+            include_chains: BTreeMap::from([(path.clone(), Vec::new())]),
+            source_texts: BTreeMap::from([(path.clone(), source_text.to_owned())]),
+            composition_fingerprint: None,
+        };
+        let resolved = ResolveResult {
+            resolved_path: path.clone(),
+            attempted_paths: vec![path.clone()],
+            ambiguity_candidates: Vec::new(),
+        };
+        let result = sc_composer::compose_with_observer_and_expanded(
+            &request,
+            &mut NoopObserver,
+            resolved,
+            expanded,
+        )
+        .map_err(composition_error)?;
+        checked_body(
+            &result.rendered_text,
+            output_format,
+            &path,
+            result.failing_pass,
+        )
     }
 }
 
@@ -383,6 +454,105 @@ mod tests {
         let root = std::env::temp_dir().join(format!("atm-template-{label}-{nonce}"));
         fs::create_dir_all(&root).expect("create isolated template root");
         root
+    }
+
+    /// Every render path fails closed on a referenced variable with no value,
+    /// and names the variable and the template by file name.
+    fn assert_names_missing(error: &atm_core::error::AtmError, template: &str) {
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(
+            error.message().contains("missing"),
+            "diagnostic must name the variable: {}",
+            error.message()
+        );
+        assert!(
+            error.message().contains(template),
+            "diagnostic must name the template: {}",
+            error.message()
+        );
+        assert!(
+            !error
+                .message()
+                .contains(std::env::temp_dir().to_str().unwrap()),
+            "diagnostic must not carry the absolute path: {}",
+            error.message()
+        );
+    }
+
+    fn strict_vars(with_missing: bool) -> Map<String, Value> {
+        let mut vars = Map::new();
+        vars.insert("name".to_owned(), Value::String("x".to_owned()));
+        if with_missing {
+            vars.insert("missing".to_owned(), Value::String("y".to_owned()));
+        }
+        vars
+    }
+
+    const STRICT_BODY: &str = "hello {{ name }} and {{ missing }}";
+
+    #[test]
+    fn file_render_paths_reject_an_unbound_variable_and_render_when_all_are_bound() {
+        let root = temporary_root("strict-file");
+        let path = root.join("strict.md.j2");
+        fs::write(&path, STRICT_BODY).expect("write template");
+        let canonical = fs::canonicalize(&path).expect("canonical template");
+        let source = TemplateSource::file_backed(STRICT_BODY.as_bytes().to_vec(), canonical);
+        let template_root = TemplateRoot {
+            canonical_path: fs::canonicalize(&root).expect("canonical root"),
+        };
+        let composer = ScComposeTemplateComposer::new();
+
+        let error = composer
+            .compose_file(&source, &strict_vars(false), &template_root)
+            .expect_err("compose_file must reject an unbound variable");
+        assert_names_missing(&error, "strict.md.j2");
+        let error = composer
+            .render_within_root(&source, &strict_vars(false), &template_root)
+            .expect_err("render_within_root must reject an unbound variable");
+        assert_names_missing(&error, "strict.md.j2");
+
+        for rendered in [
+            composer.compose_file(&source, &strict_vars(true), &template_root),
+            composer.render_within_root(&source, &strict_vars(true), &template_root),
+        ] {
+            assert_eq!(rendered.expect("all variables bound").text, "hello x and y");
+        }
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+    }
+
+    #[test]
+    fn stored_render_rejects_an_unbound_variable_and_renders_when_all_are_bound() {
+        let source = TemplateSource::stored(
+            STRICT_BODY.as_bytes().to_vec(),
+            Some(TemplateOutputFormat::Text),
+        );
+        let composer = ScComposeTemplateComposer::new();
+
+        let error = composer
+            .render_without_includes(&source, &strict_vars(false))
+            .expect_err("stored render must reject an unbound variable");
+        assert_names_missing(&error, "stored-template.txt");
+        let rendered = composer
+            .render_without_includes(&source, &strict_vars(true))
+            .expect("all variables bound");
+        assert_eq!(rendered.text, "hello x and y");
+    }
+
+    #[test]
+    fn extra_caller_variables_are_still_ignored() {
+        let source = TemplateSource::stored(
+            b"hello {{ name }}".to_vec(),
+            Some(TemplateOutputFormat::Text),
+        );
+        let mut vars = strict_vars(true);
+        vars.insert("unused".to_owned(), Value::String("z".to_owned()));
+        let rendered = ScComposeTemplateComposer::new()
+            .render_without_includes(&source, &vars)
+            .expect("extra variables stay ignored");
+        assert_eq!(rendered.text, "hello x");
     }
 
     #[test]
@@ -671,6 +841,13 @@ mod tests {
         fs::write(
             &primary_path,
             concat!(
+                // sc-composer 1.6.1 counts macro names and parameters as
+                // referenced variables, and every fail-closed render (this
+                // adapter and `sc-compose render --unknown-var-mode error`)
+                // rejects them as unbound. Declaring them as defaults is the
+                // supported way to compose macros; the macros still shadow
+                // these values inside the template.
+                "---\ndefaults:\n  label: \"\"\n  state: \"\"\n  value: \"\"\n---\n",
                 "{% macro label(value) %}{{ value | trim | default(\"none\") }}{% endmacro %}\n",
                 "{% macro state(value) %}{{ \"open\" if value else \"closed\" }}{% endmacro %}\n",
                 "{% set deviations = report.rows | selectattr(\"verdict\", \"ne\", \"PASS\") | list -%}\n",
