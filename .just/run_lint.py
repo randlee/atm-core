@@ -30,6 +30,7 @@ PYTHON_LINT_ORDER = (
     "version",
     "boundaries",
     "adr-index",
+    "template-frontmatter",
     "site-links",
     "site-generated",
     "unix-gating",
@@ -137,6 +138,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "lines": LintTask("lines", [*python_command, str(repo_root / ".just/check_line_counts.py")]),
         "boundaries": LintTask("boundaries", [*python_command, str(repo_root / ".just/lint_boundaries.py")]),
         "adr-index": LintTask("adr-index", [*python_command, str(repo_root / ".just/check_adr_index.py")]),
+        "template-frontmatter": LintTask(
+            "template-frontmatter", [*python_command, str(repo_root / ".just/check_template_frontmatter.py")]
+        ),
         "site-links": LintTask(
             "site-links", [*python_command, str(repo_root / ".just/check_site_links.py")]
         ),

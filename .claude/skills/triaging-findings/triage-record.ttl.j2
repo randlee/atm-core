@@ -32,11 +32,11 @@ required_variables:
   - worktree_branches
   - worktree_head_shas
   - worktree_order_indices
-optional_variables:
-  - triage_record_version
-  - closed_at
-  - closed_by
-  - deferred_note
+defaults:
+  triage_record_version: ""
+  closed_at: ""
+  closed_by: ""
+  deferred_note: ""
 ---
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
