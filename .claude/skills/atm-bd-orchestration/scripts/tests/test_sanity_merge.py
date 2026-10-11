@@ -9,7 +9,8 @@ import tempfile
 import time
 import unittest
 
-from jev_receipts import CLIENT, env, receipted
+from jev_receipts import CLIENT, env, receipted, split
+from rendering import render
 
 ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "scripts/sanity-merge"
@@ -155,6 +156,56 @@ class SanityMerge(unittest.TestCase):
         self.assertIn("cannot be verified", json.loads(no_key.stdout)["reviewer_results"][0]["error"]["message"])
         llm = self.merge([{**good, "data": without(good["data"], "jev")}, bare], *args[:4], "--reviewer", "sanity-llm", *args[6:])
         self.assertEqual((llm.returncode, json.loads(llm.stdout)["rejected_results"]), (0, []))
+
+    def test_a_split_reply_stands_on_every_part_receipt_and_the_triaged_final_result(self):
+        self.write_manifest(run_id="jev-run", reviewers=["sanity-llm", "sanity-jev"], operational_reviewer="sanity-llm")
+        self.lint(0)
+        args = (str(self.manifest), TASK, DEV, SPRINT, "--reviewer", "sanity-jev", "--started-at", "1700000000", "--completed-at", "1700000001")
+        agreed = split(self.result(1), ["yes", "yes"])
+        bare = split({**self.result(2, [FINDING]), "data": without(self.result(2, [FINDING])["data"], "jev")}, ["yes", "no", "yes"])
+        labels = ["1 of 3", "2 of 3", "3 of 3"]
+        undone = {**bare, "data": {**bare["data"], "jev_final": {
+            "choice": "no", "reason": "triage: part 2 shows the hand-off missing; parts 1 and 3 hold unrelated files",
+            "parts": labels}}}
+        done = {**bare, "data": {**bare["data"], "findings": [], "jev_final": {
+            "choice": "yes", "reason": "triage: part 2's no reads a moved test; parts 1 and 3 deliver", "parts": labels}}}
+        for name, reply, verdict in (("triaged no", undone, "FAIL"), ("triaged yes", done, "PASS")):
+            with self.subTest(name):
+                out = self.merge([agreed, reply], *args)
+                self.assertEqual(out.returncode, 0, out.stderr)
+                report = json.loads(out.stdout)
+                self.assertEqual((report["verdict"], report["rejected_results"]), (verdict, []))
+                self.assertEqual(report["reviewer_results"], [agreed, reply])
+
+        parts = undone["data"]["jev"]
+        def with_parts(new_parts, **data):
+            return {**undone, "data": {**undone["data"], "jev": new_parts, **data}}
+        forged = dict(parts[1], receipt={**parts[1]["receipt"], "mac": "0" * 64})
+        edited = dict(parts[1], receipt={**parts[1]["receipt"], "choice": "yes"})
+        response = dict(parts[1], response={**parts[1]["response"], "answers": {"written": {
+            **parts[1]["response"]["answers"]["written"], "choice": "yes"}}})
+        cases = {
+            "forged part receipt": (with_parts([parts[0], forged, parts[2]]), "no valid Jev receipt on part 2 of 3"),
+            "edited part receipt": (with_parts([parts[0], edited, parts[2]]), "no valid Jev receipt on part 2 of 3"),
+            "edited part response": (with_parts([parts[0], response, parts[2]]), "does not match its receipt"),
+            "a part dropped": (with_parts([parts[0], parts[2]]), "part 1 of 2 is missing or mislabelled"),
+            "disagreement not triaged": (with_parts(parts, jev_final=None), "parts disagree"),
+            "final cites some parts": (with_parts(parts, jev_final={**undone["data"]["jev_final"], "parts": labels[1:]}), "parts disagree"),
+            "findings contradict the final": (with_parts(parts, findings=[]), "contradicts the reply's findings"),
+            "final contradicts agreeing parts": ({**agreed, "data": {**agreed["data"], "deliverable": 2, "jev_final": {
+                "choice": "no", "reason": "r", "parts": ["1 of 2", "2 of 2"]}}}, "contradicts every Jev part"),
+        }
+        for name, (reply, reason) in cases.items():
+            with self.subTest(name):
+                out = self.merge([agreed, reply], *args)
+                self.assertEqual(out.returncode, 3, out.stderr)
+                slot = json.loads(out.stdout)["reviewer_results"][1]
+                self.assertEqual((slot["error"]["code"], slot["error"]["deliverable"]), ("SANITY.RESULT_INVALID", 2))
+                self.assertIn(reason, slot["error"]["message"])
+        reused = split(self.result(2), ["yes", "yes"])
+        reused["data"]["jev"] = agreed["data"]["jev"]
+        out = self.merge([agreed, reused], *args)
+        self.assertIn("reused", json.loads(out.stdout)["reviewer_results"][1]["error"]["message"])
 
     def test_pass(self):
         self.lint(0, "ok\n")
@@ -360,11 +411,7 @@ class SanityMerge(unittest.TestCase):
         self.assertEqual(self.merge([], str(self.manifest), TASK).returncode, 1)
 
     def render_complete(self, vars_, expected_heading):
-        var_file = self.dir / "vars.json"
-        var_file.write_text(json.dumps(vars_))
-        out = subprocess.run(["sc-compose", "render", "--strict", "--root", str(TEMPLATES),
-                              "--file", "dev-sanity-complete.md.j2", "--var-file", str(var_file)],
-                             capture_output=True, text=True)
+        out = render(TEMPLATES / "dev-sanity-complete.md.j2", vars_)
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertIn(expected_heading, out.stdout)
         self.assertIn(f'"verdict": "{vars_["verdict"]}"', out.stdout)

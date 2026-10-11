@@ -3,19 +3,21 @@ from __future__ import annotations
 
 import json
 import subprocess
-import tempfile
+import sys
 import unittest
 from pathlib import Path
 
 SKILL = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SKILL / "scripts"))
+import sc_render  # noqa: E402
 
 
 def render(values: dict) -> subprocess.CompletedProcess:
-    with tempfile.TemporaryDirectory() as d:
-        path = Path(d) / "vars.json"
-        path.write_text(json.dumps(values))
-        return subprocess.run(["sc-compose", "render", "--file", str(SKILL / "templates/plan-root.json.j2"),
-                               "--var-file", str(path), "--strict"], capture_output=True, text=True)
+    template = SKILL / "templates/plan-root.json.j2"
+    try:
+        return subprocess.CompletedProcess([str(template)], 0, sc_render.render(template, values), "")
+    except sc_render.RenderError as exc:
+        return subprocess.CompletedProcess([str(template)], 1, "", sc_render.error_text(exc))
 
 
 class PlanRootTests(unittest.TestCase):

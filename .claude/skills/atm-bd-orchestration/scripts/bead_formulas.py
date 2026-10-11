@@ -1,7 +1,7 @@
-"""Formula lookup and the small `bd` wrapper shared by `sc-compose-pour-mock` and `bead-groups`.
+"""Formula lookup and the small `bd` wrapper `bead-groups` uses.
 
 A formula is two files: `<name>.formula.toml.j2` (the sc-compose source) and
-`<name>.relations.json` (bead-groups data: attach ref and post-pour edges).
+`<name>.relations.json` (bead-groups data: attach ref and the attach relations).
 Each file is looked up on `search_path(repo)`, first match wins:
 
 1. `<repo>/.atm-bd/formula/` - the repository override (tracked in git; the
@@ -18,8 +18,6 @@ PACKAGE_FORMULAS = Path(__file__).resolve().parents[1] / "formulas"
 OVERRIDE_DIR = Path(".atm-bd") / "formula"
 TEMPLATE_SUFFIX = ".formula.toml.j2"
 RELATIONS_SUFFIX = ".relations.json"
-# Poured beads record where they came from, so a re-run can tell its own bead from a conflicting one.
-PROVENANCE_KEY = "sc_compose_attach"
 
 
 def search_path(repo: Path | None) -> list[Path]:
@@ -88,10 +86,3 @@ class Bd:
         rows = json.loads(proc.stdout)
         return rows[0] if rows else None
 
-    def deps(self, bead: str) -> dict[str, str]:
-        """{depends_on_id: dependency type} for the edges `bead` holds."""
-        rows = json.loads(self.run("dep", "list", bead, "--json").stdout or "[]")
-        return {row["id"]: row.get("dependency_type") or row.get("type") for row in rows}
-
-    def dep_add(self, bead: str, depends_on: str, dep_type: str) -> None:
-        self.run("dep", "add", bead, depends_on, "--type", dep_type)

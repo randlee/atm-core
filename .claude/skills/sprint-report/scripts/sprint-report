@@ -9,7 +9,6 @@ import json
 import re
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +16,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"))
 from sprint_index_common import load_phase_plan, run_json, index_bead_pairs, phase_id, sprint_beads
 from sprint_qa import metadata, choose_round, qa_verdict, qa_icon, findings_summary
-from plan_contract import DIFFICULTY_MODELS
+from plan_contract import DIFFICULTY_MODELS, difficulty_tiers, model_matches
 import repo_config
+import sc_render
 
 
 def edge_id(edge: dict[str, Any]) -> str:
@@ -236,8 +236,17 @@ def live_sprint_rows(index: dict[str, Any], beads: dict[str, dict[str, Any]]) ->
     return sorted(rows, key=order)
 
 
+def member_name(member: dict[str, Any]) -> str:
+    return str(member.get("name") or member.get("identity") or member.get("id") or "")
+
+
+def dev_members(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Roster members of type `dev`: the agents a dispatch row recommends."""
+    return [m for m in members if m.get("agent_type") == "dev"]
+
+
 def dispatch_rows(ready: list[dict[str, Any]], members: list[dict[str, Any]], active: set[str]) -> list[dict[str, str]]:
-    """Make the read-only dispatch rows; unclassified work is visible, never assigned."""
+    """Read-only dispatch rows recommending idle `dev` members for each difficulty, then one tier up; the lead decides."""
     rows = []
     for bead in ready:
         meta = metadata(bead)
@@ -247,9 +256,9 @@ def dispatch_rows(ready: list[dict[str, Any]], members: list[dict[str, Any]], ac
         if difficulty not in DIFFICULTY_MODELS:
             fitting = "UNCLASSIFIED"
         else:
-            names = [str(member.get("name") or member.get("identity") or member.get("id") or "") for member in members
-                     if str(member.get("name") or member.get("identity") or member.get("id") or "") not in active
-                     and any(model in str(member.get("model") or "").lower() for model in DIFFICULTY_MODELS[difficulty])]
+            idle = [m for m in dev_members(members) if member_name(m) not in active]
+            names = next((found for tier in difficulty_tiers(difficulty)
+                          if (found := [member_name(m) for m in idle if model_matches(str(m.get("model") or ""), tier)])), [])
             fitting = ",".join(filter(None, names)) or "WAIT"
         try:
             layer = int(meta.get("layer", 2**31 - 1))
@@ -264,10 +273,10 @@ def dispatch_rows(ready: list[dict[str, Any]], members: list[dict[str, Any]], ac
 
 
 def render_dispatch(rows: list[dict[str, str]], members: list[dict[str, Any]] = ()) -> str:
-    unknown = sorted(str(m.get("name") or m.get("identity") or m.get("id") or "") for m in members
-                     if str(m.get("model") or "").lower() in ("", "unknown", "none"))
-    head = ["prerequisite: every roster member has `model` set"
-            + (f"; unknown: {', '.join(unknown)}" if unknown else "")]
+    devs = dev_members(list(members))
+    unknown = sorted(member_name(m) for m in devs if str(m.get("model") or "").lower() in ("", "unknown", "none"))
+    head = ["prerequisite: dev agents have roster type `dev` and `model` set"
+            + (f"; unknown: {', '.join(unknown)}" if unknown else "") + ("" if devs else "; no roster member has type dev")]
     return "\n".join(head + ["{priority} {layer} {id} {stage} {severity} {sprint} {difficulty} {agents}".format(**row)
                              for row in rows])
 
@@ -279,7 +288,7 @@ def main() -> int:
     mode.add_argument("--detailed", action="store_true", help="render detailed sprint blocks")
     mode.add_argument("--dag", action="store_true", help="render the plan dependency DAG as SVG and PNG")
     mode.add_argument("--view", action="store_true", help="render the SVG DAG in an HTML artifact and open it in Wyvern")
-    mode.add_argument("--dispatch", action="store_true", help="print phase-scoped ready work and fitting free agents")
+    mode.add_argument("--dispatch", action="store_true", help="print phase-scoped ready work and recommended idle dev agents")
     parser.add_argument("--output", type=Path, help="local DAG export prefix; skips writing the HTML next to the plan")
     parser.add_argument("--open", action="store_true", help="open DAG PNG in Preview on macOS, default viewer elsewhere")
     parser.add_argument("--root", help="phase root bead id")
@@ -446,18 +455,12 @@ def main() -> int:
         "sprint_rows": "\n\n".join(detailed_rows) if args.detailed else "\n".join(table_rows),
         "integration_row": detailed_integration if args.detailed else integration_row,
     }
-    with tempfile.TemporaryDirectory(prefix="sprint-report-") as temp_dir:
-        var_file = Path(temp_dir) / "report.json"
-        var_file.write_text(json.dumps(variables, indent=2) + "\n", encoding="utf-8")
-        rendered = subprocess.run(
-            ["sc-compose", "render", "--file", str(repo / ".claude/skills/sprint-report/report.md.j2"),
-             "--var-file", str(var_file)],
-            cwd=repo, check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        )
-    if rendered.returncode:
-        print(rendered.stderr, file=sys.stderr, end="")
-        return rendered.returncode
-    print(rendered.stdout, end="")
+    try:
+        rendered = sc_render.render(repo / ".claude/skills/sprint-report/report.md.j2", variables)
+    except sc_render.RenderError as exc:
+        print(sc_render.error_text(exc), file=sys.stderr)
+        return 1
+    print(rendered, end="")
     return 0
 
 

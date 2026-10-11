@@ -8,20 +8,6 @@
   "base": "sprint/d-3-otlp-config",
   "pr_number": 262,
   "pr_url": "https://github.com/randlee/atm-core/pull/262",
-  "sanity_bead": "atm-d-4-sanity",
-  "dev_bead_id": "atm-d-4",
-  "dev_bead_title": "d-4: OTLP sync exporter",
-  "deliverable_number": 1,
-  "deliverable_text": "Implement the pinned deliverable.",
-  "deliverables_total": 1,
-  "owned_paths": [
-    "crates/example-otlp/src/sync.rs"
-  ],
-  "changed_files": [
-    "crates/example-otlp/src/sync.rs"
-  ],
-  "files_outside_owned_paths": [],
-  "base_sha": "sprint/d-3-otlp-config",
   "primary_checkout": "/path/to/atm-core",
   "lint_command": "make lint"
 }

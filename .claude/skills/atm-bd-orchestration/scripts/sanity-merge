@@ -20,10 +20,11 @@ findings_count, findings, findings_md, lint_md). `findings` preserves the
 structured, per-finding evidence used to create child fix beads after FAIL.
 
 For `--reviewer sanity-jev` every reply is screened first: a success without a valid receipt from the Jev client
-(`data.jev`, verified with TYPESAFE_API_KEY by `--client`, default .claude/skills/atm-bd-orchestration/scripts/jev_client.py), whose choice
-contradicts its findings or that reuses another deliverable's receipt, and a SANITY.JEV_* failure whose message is
-not the client's own text, becomes a SANITY.RESULT_INVALID failure for its deliverable; `rejected_results` keeps the
-replaced reply and reason. The selected merge rejects such a reply outright.
+(`data.jev`, verified with TYPESAFE_API_KEY by `--client`, default .claude/skills/atm-bd-orchestration/scripts/jev_client.py; a split
+request's reply carries every part with its own receipt), whose findings contradict its result (the parts' common
+choice, or dev-sanity's triaged `data.jev_final` when they disagree) or that reuses another deliverable's receipt,
+and a SANITY.JEV_* failure whose message is not the client's own text, becomes a SANITY.RESULT_INVALID failure for
+its deliverable; `rejected_results` keeps the replaced reply and reason. The selected merge rejects such a reply outright.
 
 Before any verdict the worktree named in the manifest must still be at the
 pinned SHA, on the pinned branch, with a clean tree, so lint and the checkers
@@ -210,8 +211,10 @@ def load_client(path):
 
 def jev_reply_problem(result, client, seen):
     """Why a sanity-jev reply cannot stand, or None. A success needs the client's receipt in `data.jev` (verified with
-    TYPESAFE_API_KEY), a `written` yes/no choice that agrees with its findings (no: exactly one; yes: none) and a
-    request no other deliverable's receipt used; a SANITY.JEV_* failure needs the client's own message verbatim.
+    TYPESAFE_API_KEY), or for a split request every part in order with its own verified receipt; findings that agree
+    with the result (no: exactly one; yes: none), which is the parts' common choice or, when they disagree, the
+    `data.jev_final` dev-sanity recorded after triage citing every part; and requests no other deliverable's receipt
+    used. A SANITY.JEV_* failure needs the client's own message verbatim.
     Anything not an envelope is left to the envelope checks."""
     if not isinstance(result, dict) or not isinstance(result.get("success"), bool):
         return None
@@ -233,17 +236,49 @@ def jev_reply_problem(result, client, seen):
     key = os.environ.get("TYPESAFE_API_KEY", "").strip()
     if not key:
         return "TYPESAFE_API_KEY is not set, so the Jev receipt cannot be verified"
-    receipt = data.get("jev")
-    if not client.verify_receipt(receipt, key):
-        return "no valid Jev receipt in data.jev: the reply was not written from a jev_client.py call"
-    if receipt["question"] != "written" or receipt["choice"] not in ("yes", "no"):
-        return f"Jev receipt answers {receipt['question']!r} with {receipt['choice']!r}, not written: yes or no"
+    jev, final = data.get("jev"), data.get("jev_final")
+    if isinstance(jev, list):  # a split request: every part's result, in order, each with its own receipt
+        receipts = []
+        for i, part in enumerate(jev, 1):
+            label = f"{i} of {len(jev)}"
+            if not isinstance(part, dict) or part.get("part") != label:
+                return f"Jev part {label} is missing or mislabelled: a split reply returns every part in order"
+            receipt = part.get("receipt")
+            if not client.verify_receipt(receipt, key):
+                return f"no valid Jev receipt on part {label}: the reply was not written from a jev_client.py call"
+            response = part.get("response")
+            answer = response.get("answers", {}).get("written") if isinstance(response, dict) else None
+            if not isinstance(answer, dict) or (answer.get("choice"), answer.get("probabilities")) != (
+                    receipt["choice"], receipt["probabilities"]):
+                return f"Jev part {label}'s response does not match its receipt"
+            receipts.append(receipt)
+        if not receipts:
+            return "no valid Jev receipt in data.jev: the part list is empty"
+    else:
+        if not client.verify_receipt(jev, key):
+            return "no valid Jev receipt in data.jev: the reply was not written from a jev_client.py call"
+        receipts = [jev]
+    for receipt in receipts:
+        if receipt["question"] != "written" or receipt["choice"] not in ("yes", "no"):
+            return f"Jev receipt answers {receipt['question']!r} with {receipt['choice']!r}, not written: yes or no"
+    choices = {receipt["choice"] for receipt in receipts}
+    if len(choices) == 1:
+        (choice,) = choices
+        if final is not None and (not isinstance(final, dict) or final.get("choice") != choice):
+            return f"data.jev_final contradicts every Jev part's choice {choice!r}"
+    else:
+        if not (isinstance(final, dict) and final.get("choice") in ("yes", "no")
+                and isinstance(final.get("reason"), str) and final["reason"].strip()
+                and final.get("parts") == [part["part"] for part in jev]):
+            return ("Jev parts disagree and data.jev_final does not record dev-sanity's triaged result "
+                    "({choice, reason, parts} citing every part)")
+        choice = final["choice"]
     findings = data.get("findings")
-    if not isinstance(findings, list) or len(findings) != (1 if receipt["choice"] == "no" else 0):
-        return f"Jev choice {receipt['choice']!r} contradicts the reply's findings"
-    if receipt["request_sha256"] in seen:
+    if not isinstance(findings, list) or len(findings) != (1 if choice == "no" else 0):
+        return f"Jev choice {choice!r} contradicts the reply's findings"
+    if any(receipt["request_sha256"] in seen for receipt in receipts):
         return "Jev receipt reused from another deliverable's request"
-    seen.add(receipt["request_sha256"])
+    seen.update(receipt["request_sha256"] for receipt in receipts)
     return None
 
 
@@ -267,15 +302,17 @@ def screen_jev_results(results, client):
 
 
 def context_path_exists(manifest, path):
-    """Require re-run context to be a file in the pinned manifest tree."""
+    """Require re-run context to be a file in the pinned manifest tree; a `path:start-end` entry's lines must lie in it."""
     worktree = manifest.get("worktree_path")
     if not isinstance(worktree, str) or not worktree:
         return False
-    return subprocess.run(
-        ["git", "-C", worktree, "cat-file", "-t", f"{manifest['sha']}:{path}"],
-        capture_output=True,
-        text=True,
-    ).stdout.strip() == "blob"
+    lines = re.fullmatch(r"(?P<path>.+):(?P<start>[0-9]+)-(?P<end>[0-9]+)", path)
+    target = f"{manifest['sha']}:{lines['path'] if lines else path}"
+    def git(*args):
+        return subprocess.run(["git", "-C", worktree, *args], capture_output=True, text=True).stdout
+    if git("cat-file", "-t", target).strip() != "blob":
+        return False
+    return not lines or 1 <= int(lines["start"]) <= int(lines["end"]) <= len(git("show", target).splitlines())
 
 
 def selected_results(args, manifest, sanity_bead, dev_bead):

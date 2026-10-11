@@ -20,7 +20,9 @@ before import (--file).
   validate-plan --root <id> --index <plan.jsonl> --beads <beads.json> --no-doctor        test input
   validate-plan --ci                                 offline (no bd, no fetch): every git-tracked
                                                      .atm-bd/phase-*.toml loads and its plan file (working
-                                                     tree) parses; one "<file>: <problem>" line per problem
+                                                     tree) parses, and every git-tracked
+                                                     <plans_dir>/phase-*.jsonl has its tracked phase file;
+                                                     one "<file>: <problem>" line per problem
 
 The phase file `.atm-bd/phase-<x>.toml` (tracked) names the plan file, the root and the integration branch.
 Without --index the plan file is read from origin/<integration_branch>:<plan>. The bead prefix is taken
@@ -203,13 +205,19 @@ def doctor() -> None:
 
 
 def ci(repo: Path) -> int:
-    """--ci: load every tracked phase file and parse its plan file; bd and the network are never used."""
+    """--ci: every tracked plan file has its tracked phase file; load every tracked phase file and parse its plan file.
+    bd and the network are never used."""
     names = [n for n in git("-C", str(repo), "ls-files", "-z", "--", ".atm-bd/phase-*.toml").split("\0")
              if n and Path(n).parent == plan_io.PHASE_DIR]
-    if not names:
+    plans_dir = Path(plan_io.repo_config.load(repo)["plans_dir"])
+    plans = [n for n in git("-C", str(repo), "ls-files", "-z", "--", str(plans_dir / "phase-*.jsonl")).split("\0")
+             if n and Path(n).parent == plans_dir]
+    tracked = {Path(n).stem for n in names}
+    problems: list[str] = [f"{n}: no tracked .atm-bd/{Path(n).stem}.toml; the planner commits it with the plan"
+                           for n in sorted(plans) if Path(n).stem not in tracked]
+    if not names and not problems:
         print("plan valid: no tracked .atm-bd/phase-*.toml to check")
         return VALID
-    problems: list[str] = []
     for name in sorted(names):
         try:
             config = plan_io.load_phase_config(repo, Path(name).stem.removeprefix("phase-"))

@@ -27,6 +27,7 @@ import sys
 PLAN_LINE = re.compile(r"^\s*(?:[-*]\s+)?(?P<bead>\S+)\s+(?P<severity>blocking|important|minor)\s+"
                        r"(?P<reviewer>\S+)\s+(?P<field>[^:\s][^:]*):")
 PLAN_SCRIPT = "validate-plan"
+FENCED = re.compile(r"\s*```(?:json)?[ \t]*\n(.*?)\n```\s*", re.S)  # a reviewer result as returned: fenced JSON
 
 
 class ScopeError(ValueError):
@@ -100,6 +101,9 @@ def main(argv: list[str] | None = None) -> int:
     except ScopeError as exc:
         print(f"fix-round-scope: {exc}", file=sys.stderr)
         return 2
+    except OSError as exc:
+        print(f"fix-round-scope: cannot read --carried {args.carried}: {exc}; pass the path of the file `bd show <fix bead> --json` wrote", file=sys.stderr)
+        return 2
     if args.command == "owned":
         print(json.dumps(filing))
         return 0
@@ -113,7 +117,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.reviewer not in filing or not args.result:
         print(f"filter needs --reviewer in {tuple(filing)} and --result", file=sys.stderr)
         return 2
-    print(json.dumps(filter_result(args.reviewer, carried, json.load(open(args.result)))))
+    try:
+        text = open(args.result).read()
+    except OSError as exc:
+        print(f"fix-round-scope: cannot read --result {args.result}: {exc}; --result is a file path, not inline JSON: save the "
+              "reviewer's reply verbatim to <scratch>/<task>-<reviewer>-result.json and pass that path", file=sys.stderr)
+        return 2
+    fenced = FENCED.fullmatch(text)
+    try:
+        result = json.loads(fenced.group(1) if fenced else text)
+    except ValueError as exc:
+        print(f"fix-round-scope: --result is not the reviewer's fenced or raw JSON result: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(filter_result(args.reviewer, carried, result)))
     return 0
 
 

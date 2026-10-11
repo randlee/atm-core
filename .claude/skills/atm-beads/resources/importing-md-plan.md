@@ -40,7 +40,7 @@ goes back to the plan's author to supply, with the exact list of gaps.
 4. **Render** each bead strictly and collect the result as JSONL:
 
    ```bash
-   sc-compose render --file .claude/skills/atm-beads/templates/<t>.json.j2 \
+   sc-compose render --strict --file .claude/skills/atm-beads/templates/<t>.json.j2 \
      --var-file <scratch>/<bead>-vars.json --strict --output <scratch>/<bead>.json \
      && jq -e -c . <scratch>/<bead>.json >> <scratch>/plan.jsonl
    ```

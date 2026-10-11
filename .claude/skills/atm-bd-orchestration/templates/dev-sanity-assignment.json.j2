@@ -1,7 +1,7 @@
 ---
 name: dev-sanity-assignment
-version: 1.1.0
-description: Render the fenced-JSON assignment for one sc-sanity-llm or sc-sanity-jev subagent in atm-bd-orchestration. `sanity-split` renders one per numbered deliverable of the checked bead; the subagent judges only `deliverable_number`. `changed_files` is the base..commit file list, `files_outside_owned_paths` the subset outside the bead's `owned_paths` fence, and optional `context` contains `{path, why}` objects for pinned-commit evidence.
+version: 1.1.1
+description: Render the fenced-JSON assignment for one sc-sanity-llm or sc-sanity-jev subagent in atm-bd-orchestration. `sanity-split` renders one per numbered deliverable of the checked bead; the subagent judges only `deliverable_number`. `changed_files` is the base..commit file list, `files_outside_owned_paths` the subset outside the bead's `owned_paths` fence, and optional `context` is a list of repo-relative path strings read at the pinned commit.
 format: json
 required_variables:
   - sanity_bead
@@ -17,8 +17,6 @@ required_variables:
   - branch
   - commit
   - base_sha
-optional_variables:
-  - context
 defaults:
   context: []
 ---
