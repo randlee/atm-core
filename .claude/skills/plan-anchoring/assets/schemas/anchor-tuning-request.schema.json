@@ -6,18 +6,23 @@
   "additionalProperties": false,
   "required": ["schema_version", "operation", "correlation_id", "runtime", "authority"],
   "properties": {
-    "schema_version": {"const": "1.0.0"},
-    "operation": {"enum": ["tune", "triage"]},
+    "schema_version": {"enum": ["1.0.0", "2.0.0"]},
+    "operation": {"enum": ["testability", "tune", "triage"]},
     "correlation_id": {"type": "string", "minLength": 1},
     "runtime": {
       "type": "object",
-      "additionalProperties": true,
-      "required": ["workspace", "script", "version", "sha256"],
+      "additionalProperties": false,
+      "required": ["workspace", "script", "version", "sha256", "contract_script", "contract_sha256", "agent", "harness", "model"],
       "properties": {
         "workspace": {"type": "string", "minLength": 1},
         "script": {"type": "string", "minLength": 1},
         "version": {"type": "string", "minLength": 1},
-        "sha256": {"$ref": "#/$defs/sha256"}
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "contract_script": {"type": "string", "minLength": 1},
+        "contract_sha256": {"$ref": "#/$defs/sha256"},
+        "agent": {"const": "anchor-tuning"},
+        "harness": {"enum": ["claude", "codex"]},
+        "model": {"enum": ["opus", "sol"]}
       }
     },
     "authority": {
@@ -27,7 +32,7 @@
       "properties": {
         "intent": {
           "type": "object",
-          "additionalProperties": true,
+          "additionalProperties": false,
           "required": ["id", "version", "sha256", "content"],
           "properties": {
             "id": {"type": "string", "minLength": 1},
@@ -44,10 +49,10 @@
             "sha256": {"$ref": "#/$defs/sha256"},
             "records": {
               "type": "array",
-              "minItems": 1,
+              "minItems": 0,
               "items": {
                 "type": "object",
-                "additionalProperties": true,
+                "additionalProperties": false,
                 "required": ["id", "version", "state", "statement", "kind", "scope", "check", "fixtures"],
                 "properties": {
                   "id": {"type": "string", "pattern": "^ANC-[0-9]{3}$"},
@@ -57,7 +62,13 @@
                   "kind": {"type": "string", "minLength": 1},
                   "scope": {"type": "string", "minLength": 1},
                   "check": {"type": ["string", "object"]},
-                  "fixtures": {"type": ["array", "object"]}
+                  "fixtures": {"type": ["array", "object"]},
+                  "quote": {"type": "string"},
+                  "summary": {"type": "string"},
+                  "source_ref": {"type": "string"},
+                  "source_type": {"type": "string"},
+                  "deterministic_check": {"type": ["string", "object"]},
+                  "context": {"type": ["string", "object", "array", "null"]}
                 }
               }
             }
@@ -65,13 +76,18 @@
         }
       }
     },
-    "gate": {"enum": ["planning", "development", "testability"]},
+    "gate": {"enum": ["testability", "planning", "development"]},
     "current_questions": {"type": "object"},
     "candidate_minimum": {"type": "integer", "minimum": 3},
     "repeat_count": {"type": "integer", "minimum": 2},
     "acceptance_threshold": {"type": "number", "minimum": 0, "maximum": 1},
-    "diagnostic_plan": {"type": ["object", "null"]},
-    "template": {"$ref": "#/$defs/template"},
+    "tournament_protocol_version": {"const": "plan-anchor/question-tournament/2.0.0"},
+    "production_confidence_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+    "confidence_reference_threshold": {"const": 0.8},
+    "tuning_history": {"$ref": "#/$defs/tuningHistory"},
+    "diagnostic_plan": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/diagnosticPlan"}]},
+    "calibration_corpus": {"$ref": "#/$defs/calibrationCorpus"},
+    "template": {"oneOf": [{"$ref": "#/$defs/testabilityTemplate"}, {"$ref": "#/$defs/tuneTemplate"}, {"$ref": "#/$defs/triageTemplate"}]},
     "sealed_question_set": {"$ref": "#/$defs/sealedQuestionSet"},
     "review": {
       "type": "object",
@@ -96,25 +112,186 @@
   },
   "oneOf": [
     {
-      "properties": {"operation": {"const": "tune"}},
-      "required": ["gate", "current_questions", "candidate_minimum", "repeat_count", "acceptance_threshold"],
-      "not": {"anyOf": [{"required": ["template"]}, {"required": ["sealed_question_set"]}, {"required": ["review"]}, {"required": ["planner_observation"]}]}
+      "properties": {"operation": {"const": "testability"}, "schema_version": {"const": "2.0.0"}, "gate": {"const": "testability"}, "template": {"$ref": "#/$defs/testabilityTemplate"}},
+      "required": ["template", "gate", "calibration_corpus", "current_questions", "candidate_minimum", "repeat_count", "tournament_protocol_version", "production_confidence_threshold", "confidence_reference_threshold"],
+      "not": {"anyOf": [{"required": ["acceptance_threshold"]}, {"required": ["tuning_history"]}, {"required": ["diagnostic_plan"]}, {"required": ["sealed_question_set"]}, {"required": ["review"]}, {"required": ["planner_observation"]}]}
     },
     {
-      "properties": {"operation": {"const": "triage"}},
-      "required": ["template", "sealed_question_set", "review", "planner_observation"],
-      "not": {"anyOf": [{"required": ["gate"]}, {"required": ["current_questions"]}, {"required": ["candidate_minimum"]}, {"required": ["repeat_count"]}, {"required": ["acceptance_threshold"]}, {"required": ["diagnostic_plan"]}]}
+      "properties": {"operation": {"const": "tune"}, "schema_version": {"const": "2.0.0"}, "gate": {"enum": ["planning", "development"]}, "template": {"$ref": "#/$defs/tuneTemplate"}},
+      "required": ["template", "gate", "current_questions", "candidate_minimum", "repeat_count", "tournament_protocol_version", "production_confidence_threshold", "confidence_reference_threshold", "tuning_history", "diagnostic_plan"],
+      "not": {"anyOf": [{"required": ["acceptance_threshold"]}, {"required": ["sealed_question_set"]}, {"required": ["review"]}, {"required": ["planner_observation"]}]}
+    },
+    {
+      "properties": {"operation": {"const": "triage"}, "gate": {"enum": ["planning", "development"]}, "template": {"$ref": "#/$defs/triageTemplate"}},
+      "required": ["template", "gate", "sealed_question_set", "review", "planner_observation"],
+      "not": {"anyOf": [{"required": ["current_questions"]}, {"required": ["candidate_minimum"]}, {"required": ["repeat_count"]}, {"required": ["acceptance_threshold"]}, {"required": ["tournament_protocol_version"]}, {"required": ["production_confidence_threshold"]}, {"required": ["confidence_reference_threshold"]}, {"required": ["tuning_history"]}, {"required": ["diagnostic_plan"]}]}
     }
   ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "template": {
+    "calibrationCorpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "path", "sha256", "case_count", "frozen_before_live"],
+      "properties": {
+        "schema": {"const": "plan-anchor/testability-calibration/2"},
+        "version": {"const": 2},
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "case_count": {"type": "integer", "minimum": 1},
+        "frozen_before_live": {"const": true}
+      }
+    },
+    "tuningHistory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "history_id", "events"],
+      "properties": {
+        "schema": {"const": "plan-anchor/tuning-history/2"},
+        "history_id": {"type": "string", "minLength": 1},
+        "events": {"type": "array", "items": {"$ref": "#/$defs/tuningEvent"}}
+      }
+    },
+    "tuningEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_index", "previous_event_sha256", "event", "protocol_version", "authority", "oracle", "candidate", "evidence", "score", "decision", "supersedes"],
+      "properties": {
+        "event_index": {"type": "integer", "minimum": 1},
+        "previous_event_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "event": {"enum": ["candidate_evaluated", "protocol_re_evaluated", "question_set_sealed", "question_set_rejected"]},
+        "protocol_version": {"const": "plan-anchor/question-tournament/2.0.0"},
+        "authority": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["intent_id", "intent_version", "intent_sha256", "anchor_id", "anchor_version", "anchor_record_sha256"],
+          "properties": {
+            "intent_id": {"type": "string", "minLength": 1},
+            "intent_version": {"type": ["integer", "string"]},
+            "intent_sha256": {"$ref": "#/$defs/sha256"},
+            "anchor_id": {"type": "string", "pattern": "^ANC-[0-9]{3}$"},
+            "anchor_version": {"type": ["integer", "string"]},
+            "anchor_record_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "oracle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sha256", "case_ids", "case_count", "repeat_count"],
+          "properties": {
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "case_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+            "case_count": {"type": "integer", "minimum": 1},
+            "repeat_count": {"type": "integer", "minimum": 2}
+          }
+        },
+        "candidate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["candidate_id", "question_sha256"],
+          "properties": {
+            "candidate_id": {"type": "string", "minLength": 1},
+            "question_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["canonical_request_sha256", "raw_response_sha256", "run_ids"],
+          "properties": {
+            "canonical_request_sha256": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sha256"}},
+            "raw_response_sha256": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sha256"}},
+            "run_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+          }
+        },
+        "score": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["exact_role_cells", "total_role_cells", "exact_semantic_verdicts", "total_semantic_verdicts", "stable_cases", "total_cases", "regressions", "confidence"],
+          "properties": {
+            "exact_role_cells": {"type": "integer", "minimum": 0},
+            "total_role_cells": {"type": "integer", "minimum": 1},
+            "exact_semantic_verdicts": {"type": "integer", "minimum": 0},
+            "total_semantic_verdicts": {"type": "integer", "minimum": 1},
+            "stable_cases": {"type": "integer", "minimum": 0},
+            "total_cases": {"type": "integer", "minimum": 1},
+            "regressions": {"type": "integer", "minimum": 0},
+            "confidence": {"$ref": "#/$defs/confidenceDiagnostics"}
+          }
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "question_set_sha256", "reason_code"],
+          "properties": {
+            "status": {"enum": ["sealed", "rejected", "evidence_incomplete", "unstable"]},
+            "question_set_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+            "reason_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*(\\.[A-Z][A-Z0-9_]*)+$"}
+          }
+        },
+        "supersedes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protocol_version", "decision_sha256"],
+          "properties": {
+            "protocol_version": {"type": "string", "minLength": 1},
+            "decision_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      }
+    },
+    "confidenceDiagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["threshold", "cells_at_or_above_threshold", "total_cells", "minimum", "p10", "median", "mean"],
+      "properties": {
+        "threshold": {"const": 0.8},
+        "cells_at_or_above_threshold": {"type": "integer", "minimum": 0},
+        "total_cells": {"type": "integer", "minimum": 1},
+        "minimum": {"type": "number", "minimum": 0, "maximum": 1},
+        "p10": {"type": "number", "minimum": 0, "maximum": 1},
+        "median": {"type": "number", "minimum": 0, "maximum": 1},
+        "mean": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "tuneTemplate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "sha256"],
+      "properties": {
+        "id": {"const": "anchor-tuning-tune-request"},
+        "version": {"const": "0.4.1"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "testabilityTemplate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "sha256"],
+      "properties": {
+        "id": {"const": "anchor-tuning-testability-request"},
+        "version": {"const": "0.4.1"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "diagnosticPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_kind", "source_ref", "sha256", "read_only"],
+      "properties": {
+        "source_kind": {"enum": ["markdown", "tracker_copy"]},
+        "source_ref": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "read_only": {"const": true}
+      }
+    },
+    "triageTemplate": {
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "version", "sha256"],
       "properties": {
         "id": {"const": "anchor-tuning-review-feedback"},
-        "version": {"const": "0.4.0"},
+        "version": {"const": "0.4.1"},
         "sha256": {"$ref": "#/$defs/sha256"}
       }
     },
@@ -124,7 +301,39 @@
       "required": ["digest", "questions"],
       "properties": {
         "digest": {"$ref": "#/$defs/sha256"},
-        "questions": {"type": "object"}
+        "questions": {"$ref": "#/$defs/productionQuestions"}
+      }
+    },
+    "productionQuestions": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 3,
+      "properties": {
+        "relevant": {"$ref": "#/$defs/question"},
+        "addressed": {"$ref": "#/$defs/question"},
+        "contradicted": {"$ref": "#/$defs/question"},
+        "implemented": {"$ref": "#/$defs/question"},
+        "violated": {"$ref": "#/$defs/question"},
+        "evidenced": {"$ref": "#/$defs/question"}
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "instructions", "criteria"],
+      "properties": {
+        "type": {"const": "choice"},
+        "instructions": {"type": "string", "minLength": 1},
+        "criteria": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["yes", "no", "unclear"],
+          "properties": {
+            "yes": {"type": "string", "minLength": 1},
+            "no": {"type": "string", "minLength": 1},
+            "unclear": {"type": "string", "minLength": 1}
+          }
+        }
       }
     }
   }

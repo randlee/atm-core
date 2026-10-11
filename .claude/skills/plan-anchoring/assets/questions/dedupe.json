@@ -1,17 +1,17 @@
 {
   "schema": "plan-anchoring/questions/1",
   "gate": "dedupe",
-  "version": 1,
-  "notes": "Duplicate-detection question set, used by `jev_judge.py dedupe --jev` on pairs that the deterministic token-Jaccard pass already flagged. The state holds two anchors, `a` and `b`, each with its testable `statement` and the verbatim `quote` it was written from. One judgment: are they the same constraint? jev_judge.py calls a pair a likely duplicate when the answer is yes at or above the confidence threshold.",
+  "version": 2,
+  "notes": "Independently calibrated statement-only duplicate detection. Provenance quotes are excluded because one multi-directive quote may legitimately yield multiple distinct atomic anchors.",
   "questions": {
     "same_constraint": {
-      "type": "choice",
-      "instructions": "The state holds two anchors, `a` and `b`. Each has `statement` (the testable requirement) and `quote` (the user's exact words it was written from). Do `a` and `b` express the same constraint on the plan? Judge the constraint they impose, not the wording: two anchors with different words can be the same constraint, and two anchors sharing most words can differ in one detail that makes a plan satisfy one and not the other. Use the quotes to resolve what each statement means; do not judge whether either anchor is well written.",
       "criteria": {
-        "yes": "A plan item that satisfies one would necessarily satisfy the other, and violating one violates the other; they constrain the same thing in the same way.",
-        "no": "There is a plan that satisfies one and not the other: they constrain different things, or the same thing in different ways, or one adds a condition the other lacks.",
-        "unclear": "The statements or quotes are too vague to tell whether a plan could satisfy one without the other."
-      }
+        "no": "At least one statement can hold while the other does not.",
+        "unclear": "Ambiguity prevents deciding mutual entailment.",
+        "yes": "Each statement entails the other constraint."
+      },
+      "instructions": "Considering only a.statement and b.statement, do the two constraints mutually entail each other? Ignore wording and quote overlap.",
+      "type": "choice"
     }
   }
 }

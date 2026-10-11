@@ -1,62 +1,53 @@
 {
   "schema": "plan-anchoring/questions/1",
   "gate": "testability",
-  "version": 1,
-  "notes": "Testability rubric, used by `jev_judge.py rubric` (and `add --rubric`) before an anchor is locked. The state holds one anchor: `anchor.statement` (the testable requirement the orchestrator wrote), `anchor.quote` (the user's exact words it was written from) and `anchor.scope` (the area of the plan it governs). Jev answers each question independently against the same state; jev_judge.py calls the anchor testable only when every answer is yes at or above the confidence threshold and the deterministic lint found no error. Criteria describe situations, not degrees. The sixth question, positive_form, follows measured behaviour on a real plan (references/measured-behaviour.md): concrete positive anchors got the highest relevance confidence and the only correct satisfieds, while a conditional prohibition could not be contradicted even by the contradicting sentence alone.",
+  "version": 2,
+  "notes": "Independently calibrated against the frozen plan-independent A0 corpus. Requirement form is deterministic lint, not a Jev vote. Each semantic cell is called twice; a third call is made only after choice disagreement. Production confidence is 0.6; 0.8 is diagnostic only.",
   "questions": {
     "single_constraint": {
-      "type": "choice",
-      "instructions": "Does `anchor.statement` express exactly one requirement: one subject and one must / must-not / is / never, rather than two or more requirements joined together? A single requirement may have a condition or an exception; two independent obligations, even about the same subject, are two requirements. Judge the number of constraints only, not their quality.",
       "criteria": {
-        "yes": "The statement imposes one obligation or prohibition on one subject; removing any clause would change that one obligation rather than remove a second one.",
-        "no": "The statement imposes two or more obligations or prohibitions that could each be satisfied or violated on their own.",
-        "unclear": "The statement is too ambiguous to tell how many obligations it imposes."
-      }
+        "no": "At least two independently enforceable duties are joined in the statement.",
+        "unclear": "The statement leaves independence of its duties ambiguous.",
+        "yes": "All details enforce the same invariant and would be evaluated together."
+      },
+      "instructions": "Is anchor.statement one invariant applied to a subject, trigger, and possibly several output surfaces? Do not count the number of nouns or listed artifacts; count independently enforceable duties.",
+      "type": "choice"
     },
     "observable": {
-      "type": "choice",
-      "instructions": "Does `anchor.statement` describe an outcome that a plan item or a diff could visibly show or fail to show: a named artifact, path, crate, module, command, dependency, interface, order of work, or starting point? A quality (clean, robust, simple, maintainable) or an intention (aim to, try to, prefer) is not observable. Judge observability only.",
       "criteria": {
-        "yes": "The statement names something concrete whose presence, absence, location, origin or order could be checked in a plan or a diff.",
-        "no": "The statement names a quality, preference or intention that two reviewers could read differently when looking at the same plan or diff.",
-        "unclear": "The statement mentions something concrete but it is not possible to tell what would count as meeting or breaking it."
-      }
-    },
-    "requirement_form": {
-      "type": "choice",
-      "instructions": "Is `anchor.statement` written as a requirement about the system or the work, in the third person (the crates must, the CLI never, X is Y), rather than as speech, a wish, a question, or an instruction addressed to a person (we should, you need to, let's, I want)? Judge the grammatical form only; the content is judged by the other questions.",
-      "criteria": {
-        "yes": "The statement is a declarative requirement about the system or the work, with no first- or second-person speech and no wish or suggestion wording.",
-        "no": "The statement is phrased as speech, a wish, a suggestion, a question, or an instruction to a person.",
-        "unclear": "The statement mixes requirement wording with speech so that its form cannot be settled."
-      }
+        "no": "It supplies only a subjective quality, undefined shorthand, or an approval with no observable record.",
+        "unclear": "Some evidence is named, but the observation needed to settle compliance remains ambiguous.",
+        "yes": "It names evidence or behavior that can be inspected with a determinate outcome."
+      },
+      "instructions": "Does anchor.statement define a checkable behavior or artifact without relying on an undefined label or an approval that has no identified record? Judge only whether the stated outcome can be observed.",
+      "type": "choice"
     },
     "faithful": {
-      "type": "choice",
-      "instructions": "Does `anchor.statement` preserve the directive in `anchor.quote`? Compare what each requires or forbids. The statement may make the quote precise (name the artifact, the method, the boundary) but may not add a requirement the quote does not contain, drop a requirement the quote does contain, or change what is required or forbidden. Judge fidelity to the quote only, not whether either text is well written.",
       "criteria": {
-        "yes": "Everything the statement requires or forbids is required or forbidden by the quote, read in its plain sense, and nothing the quote requires or forbids is missing from the statement.",
-        "no": "The statement adds a requirement the quote does not contain, drops one the quote contains, or requires something different from what the quote says.",
-        "unclear": "The quote is too vague or too open to several readings to tell whether the statement preserves it."
-      }
+        "no": "Even after ordinary normalization, the statement requires a new policy, implementation choice, strength, trigger, or outcome.",
+        "unclear": "Ordinary normalization does not settle whether the meaning was preserved.",
+        "yes": "Those normalization rules are sufficient and no substantive requirement was invented."
+      },
+      "instructions": "Is anchor.statement a faithful formal requirement derived from anchor.quote? Preserve meaning, not wording: informal directives may become must, print may become emit to stdout, machine-readable JSON may become JSON, and one directive in a compound quote may become one anchor. Do not penalize vagueness here.",
+      "type": "choice"
     },
     "scoped": {
-      "type": "choice",
-      "instructions": "From `anchor.statement` together with `anchor.scope`, can a reader tell which area of the plan the anchor governs: which sprint, component, crate, command, layer or activity it applies to and, by implication, which it does not? A statement that applies to everything or to nothing identifiable is not scoped. Judge whether the area is identifiable, not whether it is the right area.",
       "criteria": {
-        "yes": "The statement and scope name or clearly imply the part of the plan the anchor applies to, so a reader could say of a given plan item whether the anchor could apply to it.",
-        "no": "Neither the statement nor the scope identifies an area; the anchor could apply anywhere or to nothing in particular.",
-        "unclear": "An area is hinted at but a reader could not say of a given plan item whether the anchor applies to it."
-      }
+        "no": "No work area or applicability set is identifiable.",
+        "unclear": "An area is named but its applicability cannot be determined.",
+        "yes": "A reviewer can identify the work area where this anchor applies, including an explicit all-items set."
+      },
+      "instructions": "Do anchor.statement and anchor.scope identify the governed activity, component, artifact, or explicit global set, independent of whether the requirement itself is vague or otherwise defective?",
+      "type": "choice"
     },
-    "positive_form": {
-      "type": "choice",
-      "instructions": "Is `anchor.statement` stated positively, naming concrete tokens that a plan item could literally contain or match (crate names, paths, commands, module names, issue numbers, register ids), rather than as a conditional (\"unless approved\", \"except when\"), a negation of something vague, or shorthand that only its author would recognise? A prohibition may be stated as \"X never does Y\" when X and Y are concrete. Judge the form of the statement only, not whether it is a good requirement.",
+    "self_contained": {
       "criteria": {
-        "yes": "The statement names at least one concrete, matchable token and reads as a direct requirement or prohibition without a condition that depends on a decision outside the plan.",
-        "no": "The statement hinges on a conditional or approval (\"unless\", \"except when agreed\"), or names nothing concrete that a plan item could match, or uses shorthand whose meaning is not in the statement.",
-        "unclear": "The statement has some concrete tokens but its conditional or shorthand parts leave what counts as a match open."
-      }
+        "no": "At least one decisive term is an undefined quality or private label, or compliance depends on an approval with no identified record.",
+        "unclear": "A possible outside-context dependency exists but the statement does not show whether it is decisive.",
+        "yes": "None of those outside-context dependencies is needed; ordinary technical terms, concrete prohibitions, lists, and explicit input/action/outcome conditions are sufficient."
+      },
+      "instructions": "Is anchor.statement independently understandable and applicable without any of these disqualifiers: an undefined subjective quality (for example robust), private shorthand, or a human approval that has no identified recorded artifact? Ignore grammar, bundling, fidelity, and scope.",
+      "type": "choice"
     }
   }
 }

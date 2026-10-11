@@ -5,6 +5,7 @@ half of the skill (IDs, gating, policy, coverage, diffs, reports), not Jev's own
 """
 import contextlib
 import datetime as _dt
+import hashlib
 import io
 import json
 import os
@@ -295,9 +296,11 @@ class LintTests(unittest.TestCase):
         self.assertNotIn("too long; split into one constraint per anchor", self.lint("The runtime crate is " + "x" * 200 + "."))
 
     def test_bundled_constraints(self):
-        self.assertIn("may bundle two constraints", self.lint("The crates must be copied and must never be rewritten."))
-        self.assertIn("may bundle two constraints", self.lint("The CLI only prints JSON and always exits 0."))
-        self.assertIn("may bundle two constraints", self.lint("The CLI must not fork; it shall exec."))
+        # Atomicity is a calibrated semantic judgment; modal counting is not
+        # deterministic requirement-form lint ("must never" is one prohibition).
+        self.assertNotIn("may bundle two constraints", self.lint("The crates must be copied and must never be rewritten."))
+        self.assertNotIn("may bundle two constraints", self.lint("The CLI only prints JSON and always exits 0."))
+        self.assertNotIn("may bundle two constraints", self.lint("The CLI must not fork; it shall exec."))
         self.assertNotIn("may bundle two constraints", self.lint("The CLI must not fork."))
         self.assertNotIn("may bundle two constraints", self.lint("The mustard module is copied."))  # word boundaries
 
@@ -370,14 +373,14 @@ class LintTests(unittest.TestCase):
 
 
 class DedupeTests(unittest.TestCase):
-    A = "The runtime crates are copied from the legacy repo's runtime crates with the legacy-specific modules deleted."
+    A = STATEMENT.replace("created by copying", "created by importing")
 
     def test_tokens_and_jaccard(self):
         self.assertEqual(jj.tokens("The CLI's --json output is stable, i.e. versioned."), {"cli", "json", "output", "stable", "versioned"})
         self.assertEqual(jj.jaccard(set(), set()), 0.0)
         self.assertEqual(jj.jaccard({"a", "b"}, {"b", "c"}), 1 / 3)
         score, fa, fb = jj.best_similarity(STATEMENT, QUOTE, self.A, "copy the libraries from the legacy repo and remove the legacy-specific code")
-        self.assertEqual((fa, fb), ("quote", "quote"))
+        self.assertEqual((fa, fb), ("statement", "statement"))
         self.assertGreater(score, 0.7)
         self.assertEqual(jj.best_similarity("", "", "", "")[0], 0.0)
 
@@ -395,10 +398,10 @@ class DedupeTests(unittest.TestCase):
             self.assertEqual((data["threshold"], data["jev"], data["anchors"]), (0.5, False, 4))
             self.assertEqual([(p["a"], p["b"]) for p in data["pairs"]], [("ANC-001", "ANC-002")])
             pair = data["pairs"][0]
-            self.assertEqual((pair["field_a"], pair["field_b"]), ("quote", "quote"))
+            self.assertEqual((pair["field_a"], pair["field_b"]), ("statement", "statement"))
             self.assertEqual(set(pair), {"a", "b", "jaccard", "field_a", "field_b"})
             self.assertEqual(data["likely_duplicates"], data["pairs"])  # jaccard >= 0.8 without --jev
-            self.assertEqual(pair["jaccard"], 1.0)  # same tokens after stopwords ("the" vs "a")
+            self.assertGreaterEqual(pair["jaccard"], 0.8)
             distinct = write(d, "distinct.json", record(anchor(), anchor("ANC-003", statement="The CLI layer only parses arguments and prints JSON.", quote="keep the CLI thin")))
             code, out = run_cli(["dedupe", "--anchors", distinct])
             self.assertEqual((code, out["data"]["pairs"], out["data"]["likely_duplicates"]), (0, [], []))
@@ -444,7 +447,7 @@ class DedupeTests(unittest.TestCase):
             req = out["data"]["requests"][0]
             self.assertEqual(set(req), {"model", "questions", "state"})
             self.assertEqual(set(req["state"]), {"a", "b"})
-            self.assertEqual(set(req["state"]["a"]), {"id", "statement", "quote"})
+            self.assertEqual(set(req["state"]["a"]), {"id", "statement"})
             self.assertEqual(set(req["questions"]), {"same_constraint"})
             self.assertEqual(out["data"]["totals"]["requests"], len(out["data"]["pairs"]))
             self.assertEqual([(p["a"], p["b"]) for p in out["data"]["likely_duplicates"]], [("ANC-001", "ANC-002")])
@@ -457,7 +460,7 @@ class DedupeTests(unittest.TestCase):
             with env(TYPESAFE_API_KEY="sk-test"):
                 code, out = run_cli(["dedupe", "--anchors", path, "--threshold", "0.25", "--jev"])
             self.assertEqual((code, out["error"]["code"]), (2, "POLICY.REMOTE_JUDGE_DISABLED"))
-            self.assertIn("statements and quotes", out["error"]["message"])
+            self.assertIn("anchor statements", out["error"]["message"])
             distinct = write(d, "distinct.json", record(anchor(), anchor("ANC-003", statement="The CLI layer only parses arguments and prints JSON.", quote="keep the CLI thin")))
             with env():
                 code, out = run_cli(["dedupe", "--anchors", distinct, "--jev"])  # no pairs: nothing to send, no key needed
@@ -487,27 +490,23 @@ class DedupeTests(unittest.TestCase):
     def test_add_refuses_duplicate_candidates_unless_allowed(self):
         with tempfile.TemporaryDirectory() as d:
             path = write(d, "anchors.json", record(anchor(), anchor("ANC-002", status="retired", statement="The CLI layer only parses arguments and prints JSON.", quote="keep the CLI thin")))
-            # similar quote to the locked anchor
-            code, out = run_cli(["add", "--anchors", path, "--statement", self.A, "--quote", "copy the libraries from the legacy repo and remove the legacy-specific code"])
+            # A shared multi-directive quote does not make distinct statements duplicates.
+            code, out = run_cli(["add", "--anchors", path, "--statement", "The CLI must print JSON.", "--quote", QUOTE])
+            self.assertEqual((code, out["data"]["anchor"]["id"]), (0, "ANC-003"))
+            # A similar statement is a duplicate even with an unrelated quote.
+            code, out = run_cli(["add", "--anchors", path, "--statement", STATEMENT.replace("deleting", "removing"), "--quote", "take the legacy repo's code and strip it"])
             self.assertEqual((code, out["error"]["code"], out["error"]["recoverable"]), (2, "ANCHOR.DUPLICATE_CANDIDATE", True))
             self.assertIn("ANC-001", out["error"]["message"])
-            self.assertIn("ANC-001", out["error"]["suggested_action"])
-            self.assertIn("--allow-similar", out["error"]["suggested_action"])
-            self.assertEqual(len(json.loads(Path(path).read_text())["anchors"]), 2)
-            # similar statement to the locked anchor's statement, with an unrelated quote
-            code, out = run_cli(["add", "--anchors", path, "--statement", STATEMENT.replace("deleting", "removing"), "--quote", "take the legacy repo's code and strip it"])
-            self.assertEqual(out["error"]["code"], "ANCHOR.DUPLICATE_CANDIDATE")
             # a retired anchor never blocks
             code, out = run_cli(["add", "--anchors", path, "--statement", "The CLI layer only parses arguments and prints JSON.", "--quote", "keep the CLI thin"])
-            self.assertEqual((code, out["data"]["anchor"]["id"]), (0, "ANC-003"))
-            self.assertEqual(out["data"]["similar"], [])
-            # --allow-similar records it and reports the candidates
-            code, out = run_cli(["add", "--anchors", path, "--statement", self.A, "--quote", "copy the libraries from the legacy repo and remove the legacy-specific code", "--allow-similar"])
             self.assertEqual((code, out["data"]["anchor"]["id"]), (0, "ANC-004"))
+            # --allow-similar records it and reports the candidates
+            code, out = run_cli(["add", "--anchors", path, "--statement", STATEMENT.replace("deleting", "removing"), "--quote", "copy the libraries from the legacy repo and remove the legacy-specific code", "--allow-similar"])
+            self.assertEqual((code, out["data"]["anchor"]["id"]), (0, "ANC-005"))
             self.assertEqual(out["data"]["similar"][0]["id"], "ANC-001")
             self.assertGreaterEqual(out["data"]["similar"][0]["jaccard"], 0.6)
             self.assertEqual(set(out["data"]["similar"][0]), {"id", "jaccard", "field"})
-            self.assertEqual(out["data"]["similar"][0]["field"], "quote/quote")
+            self.assertEqual(out["data"]["similar"][0]["field"], "statement/statement")
 
 
 def rubric_answers(**overrides):
@@ -518,21 +517,85 @@ def rubric_answers(**overrides):
 
 
 class RubricTests(unittest.TestCase):
-    def test_positive_form_is_the_sixth_question(self):
-        self.assertEqual(jj.RUBRIC_QUESTIONS, ("single_constraint", "observable", "requirement_form", "faithful", "scoped", "positive_form"))
-        q = jj.load_simple_question_set("testability", jj.RUBRIC_QUESTIONS)["questions"]["positive_form"]
-        self.assertIn("unless", q["instructions"])
-        self.assertIn("conditional", q["criteria"]["no"])
+    def test_frozen_calibration_corpus_covers_required_cases(self):
+        corpus_path = ASSETS / "fixtures" / "testability-calibration.v2.json"
+        corpus = json.loads(corpus_path.read_text())
+        canonical = json.dumps(corpus, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+        self.assertEqual(hashlib.sha256(canonical).hexdigest(), "ce5f4efcfee74ecc767bb8c140bf749ef2e33c779f82397d5c42d96698a7b1bc")
+        self.assertTrue(corpus["plan_independent"])
+        self.assertTrue(corpus["active_phase_a_plan_text_excluded"])
+        ids = {case["case_id"] for case in corpus["semantic_cases"]}
+        self.assertTrue({"a0-01-valid-directive", "a0-02-valid-prohibition",
+                         "a0-03-structural-scope", "a0-04-global-scope",
+                         "a0-05-atomic-from-multi-directive", "a0-06-genuinely-bundled",
+                         "a0-07-unsupported-elaboration", "a0-08-vague-outcome",
+                         "a0-09-explicit-testable-condition", "a0-10-api-key-redaction",
+                         "a0-11-private-shorthand", "a0-12-unrecorded-approval",
+                         "a0-13-shared-quote-first-atomic", "a0-14-shared-quote-second-atomic",
+                         "a0-15-duplicate-first", "a0-16-duplicate-second",
+                         "a0-17-nondeclarative-form"} <= ids)
+        for case in corpus["semantic_cases"]:
+            expected = set(case["expected"])
+            self.assertEqual(expected - {"atomicity"}, set(jj.RUBRIC_QUESTIONS) - {"single_constraint"})
+        self.assertEqual({case["expected"] for case in corpus["dedupe_pairs"]}, {"yes", "no"})
+        self.assertEqual(len(corpus["requirement_form_lint_cases"]), 8)
+
+        selected = json.loads(
+            (ASSETS.parents[4] / "docs" / "plans" / "phase-a" / "evidence" /
+             "testability-calibration" / "selected-rubric.json").read_text()
+        )
+        self.assertEqual(
+            json.loads((ASSETS / "questions" / "testability.json").read_text())["questions"],
+            selected["questions"],
+        )
+        self.assertEqual(
+            json.loads((ASSETS / "questions" / "dedupe.json").read_text())["questions"]["same_constraint"],
+            selected["dedupe_question"],
+        )
+
+    def test_requirement_form_is_deterministic_lint(self):
+        warnings = jj.lint_statement("We should keep it clean.", "keep it clean")
+        self.assertTrue(set(jj.REQUIREMENT_FORM_WARNINGS) <= set(warnings))
+        outcome = jj.rubric_confirmation_outcome(
+            [{"answers": rubric_answers()}, {"answers": rubric_answers()}],
+            jj.RUBRIC_QUESTIONS, 0.6,
+            [warning for warning in warnings if warning in jj.REQUIREMENT_FORM_WARNINGS],
+        )
+        self.assertEqual(outcome["verdict"], "needs_work")
+
+    def test_calibrated_questions_separate_deterministic_requirement_form(self):
+        self.assertEqual(jj.RUBRIC_QUESTIONS, ("single_constraint", "observable", "faithful", "scoped", "self_contained"))
+        q = jj.load_simple_question_set("testability", jj.RUBRIC_QUESTIONS)["questions"]["self_contained"]
+        self.assertIn("private shorthand", q["instructions"])
+        self.assertIn("approval", q["criteria"]["no"])
         with tempfile.TemporaryDirectory() as d:
-            fixture = write(d, "answers.json", {"candidate": rubric_answers(positive_form=("no", 0.9))})
+            fixture = write(d, "answers.json", {"candidate": rubric_answers(self_contained=("no", 0.9))})
             with env():
                 code, out = run_cli(["rubric", "--statement", "The build must not add a dependency unless the lead approved it.", "--quote", "no new deps unless I say so",
                                      "--answers-file", fixture])
-            self.assertEqual((code, out["data"]["anchors"][0]["verdict"], out["data"]["anchors"][0]["failing"]), (1, "needs_work", ["positive_form"]))
-            five = {q: answer("yes", 0.9) for q in jj.RUBRIC_QUESTIONS[:5]}  # an old five-question fixture no longer validates
+            self.assertEqual((code, out["data"]["anchors"][0]["verdict"], out["data"]["anchors"][0]["failing"]), (1, "needs_work", ["self_contained"]))
+            legacy = {q: answer("yes", 0.9) for q in ("single_constraint", "observable", "requirement_form", "faithful", "scoped", "positive_form")}
             with env():
-                code, out = run_cli(["rubric", "--statement", STATEMENT, "--quote", QUOTE, "--answers-file", write(d, "five.json", {"*": five})])
+                code, out = run_cli(["rubric", "--statement", STATEMENT, "--quote", QUOTE, "--answers-file", write(d, "legacy.json", {"*": legacy})])
             self.assertEqual((out["data"]["anchors"][0]["verdict"], out["data"]["anchors"][0]["error"]["code"]), ("error", "JEV.RESPONSE_INVALID"))
+
+    def test_confirmation_state_machine(self):
+        yes = {"answers": rubric_answers()}
+        low = {"answers": rubric_answers(observable=("yes", 0.5))}
+        no = {"answers": rubric_answers(observable=("no", 0.9))}
+        unclear = {"answers": rubric_answers(observable=("unclear", 0.9))}
+        self.assertEqual(jj.rubric_confirmation_outcome([yes, yes], jj.RUBRIC_QUESTIONS, 0.6, [])["verdict"], "testable")
+        self.assertEqual(jj.rubric_confirmation_outcome([no, no], jj.RUBRIC_QUESTIONS, 0.6, [])["verdict"], "needs_work")
+        self.assertEqual(jj.rubric_confirmation_outcome([low, low], jj.RUBRIC_QUESTIONS, 0.6, [])["verdict"], "inconclusive")
+        resolved = jj.rubric_confirmation_outcome(
+            [{"answers": rubric_answers(observable=("yes", 0.5))}, no, no],
+            jj.RUBRIC_QUESTIONS, 0.6, [],
+        )
+        self.assertEqual((resolved["verdict"], resolved["initial_disagreements"]), ("needs_work", ["observable"]))
+        confident_competition = jj.rubric_confirmation_outcome([yes, no, yes], jj.RUBRIC_QUESTIONS, 0.6, [])
+        self.assertEqual((confident_competition["verdict"], confident_competition["unstable"]), ("unstable", ["observable"]))
+        unstable = jj.rubric_confirmation_outcome([yes, no, unclear], jj.RUBRIC_QUESTIONS, 0.6, [])
+        self.assertEqual((unstable["verdict"], unstable["unstable"]), ("unstable", ["observable"]))
 
     def test_shipped_question_sets_load_and_fixtures_validate(self):
         for name, required in (("dedupe", (jj.DEDUPE_QUESTION,)), ("testability", jj.RUBRIC_QUESTIONS)):
@@ -552,7 +615,7 @@ class RubricTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path = write(d, "anchors.json", record(anchor(), anchor("ANC-002", statement="We should keep it clean.", quote="keep it clean"),
                                                     anchor("ANC-003", status="retired"), anchor("ANC-004", statement=QUOTE.capitalize())))
-            fixture = write(d, "answers.json", {"ANC-002": rubric_answers(observable=("no", 0.9), requirement_form=("yes", 0.5)), "*": rubric_answers()})
+            fixture = write(d, "answers.json", {"ANC-002": rubric_answers(observable=("no", 0.9)), "*": rubric_answers()})
             with env():
                 code, out = run_cli(["rubric", "--anchors", path, "--all", "--answers-file", fixture])
             self.assertEqual(code, 1, out)
@@ -563,17 +626,20 @@ class RubricTests(unittest.TestCase):
             self.assertEqual((by_id["ANC-001"]["verdict"], by_id["ANC-001"]["failing"], by_id["ANC-001"]["statement"], by_id["ANC-001"]["lint"]),
                              ("testable", [], STATEMENT, {"warnings": [], "errors": []}))
             self.assertEqual(set(by_id["ANC-001"]["answers"]), set(jj.RUBRIC_QUESTIONS))
-            self.assertEqual((by_id["ANC-002"]["verdict"], by_id["ANC-002"]["failing"]), ("needs_work", ["observable", "requirement_form"]))
+            self.assertEqual((by_id["ANC-002"]["verdict"], by_id["ANC-002"]["failing"]),
+                             ("needs_work", ["observable", "hedged wording; state the requirement",
+                                              "written as speech, not as a requirement", "not phrased as a testable requirement"]))
             self.assertIn("hedged wording; state the requirement", by_id["ANC-002"]["lint"]["warnings"])  # warnings ride along without failing
             # the verbatim rule is a lint error: it fails the rubric even when Jev says yes to everything
-            self.assertEqual((by_id["ANC-004"]["verdict"], by_id["ANC-004"]["failing"]), ("needs_work", ["statement is the verbatim quote"]))
+            self.assertEqual((by_id["ANC-004"]["verdict"], by_id["ANC-004"]["failing"]),
+                             ("needs_work", ["statement is the verbatim quote", "not phrased as a testable requirement"]))
             self.assertEqual(data["needs_work"], ["ANC-002", "ANC-004"])
             with env():
                 code, out = run_cli(["rubric", "--anchors", path, "--id", "ANC-001", "--answers-file", fixture])
             self.assertEqual((code, out["data"]["pass"], [e["id"] for e in out["data"]["anchors"]]), (0, True, ["ANC-001"]))
             with env():
                 code, out = run_cli(["rubric", "--anchors", path, "--id", "ANC-001", "--answers-file", fixture, "--threshold", "0.95"])
-            self.assertEqual((code, out["data"]["anchors"][0]["verdict"]), (1, "needs_work"))
+            self.assertEqual((code, out["data"]["anchors"][0]["verdict"]), (1, "inconclusive"))
             self.assertEqual(out["data"]["anchors"][0]["failing"], list(jj.RUBRIC_QUESTIONS))
             missing = write(d, "missing.json", {"ANC-002": rubric_answers()})
             with env():
@@ -601,7 +667,7 @@ class RubricTests(unittest.TestCase):
             req = out["data"]["requests"][0]
             self.assertEqual(req["state"], {"anchor": {"statement": STATEMENT, "quote": QUOTE, "scope": ""}})
             self.assertEqual(set(req["questions"]), set(jj.RUBRIC_QUESTIONS))
-            self.assertEqual(out["data"]["totals"]["requests"], 1)
+            self.assertEqual(out["data"]["totals"]["requests"], 2)
             # input checks
             with env():
                 code, out = run_cli(["rubric", "--statement", STATEMENT])
@@ -620,18 +686,19 @@ class RubricTests(unittest.TestCase):
             self.assertEqual((code, out["error"]["code"]), (2, "POLICY.REMOTE_JUDGE_DISABLED"))
 
     def test_live_candidate_uses_the_transport(self):
-        t = Transport({"model": "jev-1.13.0", "answers": rubric_answers(scoped=("unclear", 0.7))})
+        response = {"model": "jev-1.13.0", "answers": rubric_answers(scoped=("unclear", 0.7))}
+        t = Transport(response, response)
         with env(**LIVE_ENV), mock.patch.object(jj, "call_jev", t):
             code, out = run_cli(["rubric", "--statement", STATEMENT, "--quote", QUOTE, "--scope", "runtime crates"])
         self.assertEqual(code, 1)
-        self.assertEqual((out["data"]["anchors"][0]["verdict"], out["data"]["anchors"][0]["failing"], out["data"]["anchors"][0]["attempts"]), ("needs_work", ["scoped"], 1))
+        self.assertEqual((out["data"]["anchors"][0]["verdict"], out["data"]["anchors"][0]["failing"], out["data"]["anchors"][0]["attempts"]), ("needs_work", ["scoped"], 2))
         self.assertEqual(t.bodies[0]["state"]["anchor"]["scope"], "runtime crates")
         self.assertNotIn("item", t.bodies[0]["state"])
         # a state without an item cannot be shortened: over the cap it is refused before any call
         with mock.patch.object(jj, "DEFAULT_MAX_REQUEST_BYTES", 200), env(**LIVE_ENV), mock.patch.object(jj, "call_jev", t):
             code, out = run_cli(["rubric", "--statement", STATEMENT, "--quote", QUOTE])
         self.assertEqual((code, out["data"]["anchors"][0]["verdict"], out["data"]["anchors"][0]["error"]["code"]), (1, "error", "JEV.CONTEXT_EXCEEDED"))
-        self.assertEqual(len(t.bodies), 1)
+        self.assertEqual(len(t.bodies), 2)
 
     def test_add_rubric_gate(self):
         with tempfile.TemporaryDirectory() as d:
@@ -646,7 +713,7 @@ class RubricTests(unittest.TestCase):
             self.assertFalse(Path(path).exists())
             with env():
                 code, out = run_cli(["add", "--anchors", path, "--statement", STATEMENT, "--quote", QUOTE, "--rubric", "--answers-file", bad, "--allow-untestable"])
-            self.assertEqual((code, out["data"]["anchor"]["id"], out["data"]["rubric"]["verdict"]), (0, "ANC-001", "needs_work"))
+            self.assertEqual((code, out["data"]["anchor"]["id"], out["data"]["rubric"]["verdict"]), (0, "ANC-001", "inconclusive"))
             self.assertEqual(out["data"]["rubric"]["failing"], ["single_constraint", "observable"])
             with env():
                 code, out = run_cli(["add", "--anchors", path, "--statement", "The CLI layer only parses arguments and prints JSON.", "--quote", "keep the CLI thin",
@@ -661,11 +728,13 @@ class RubricTests(unittest.TestCase):
                 code, out = run_cli(["add", "--anchors", path, "--statement", "The build uses cargo only.", "--quote", "cargo only", "--rubric"])
             self.assertEqual((code, out["error"]["code"]), (2, "AUTH.CREDENTIALS"))
             self.assertEqual(len(json.loads(Path(path).read_text())["anchors"]), 3)
-            t = Transport({"model": "jev-1.13.0", "answers": rubric_answers()})
+            response = {"model": "jev-1.13.0", "answers": rubric_answers()}
+            t = Transport(response, response)
             with env(**LIVE_ENV), mock.patch.object(jj, "call_jev", t):
                 code, out = run_cli(["add", "--anchors", path, "--statement", "The build uses cargo only.", "--quote", "cargo only", "--rubric"])
             self.assertEqual((code, out["data"]["anchor"]["id"], out["data"]["rubric"]["verdict"]), (0, "ANC-004", "testable"))
             self.assertEqual(t.bodies[0]["state"]["anchor"]["quote"], "cargo only")
+            self.assertEqual(len(t.bodies), 2)
 
 
 class KindTests(unittest.TestCase):

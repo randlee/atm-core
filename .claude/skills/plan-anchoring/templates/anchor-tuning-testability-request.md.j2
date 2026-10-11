@@ -1,0 +1,59 @@
+---
+required_variables:
+  - template.sha256
+  - correlation_id
+  - runtime
+  - authority.intent
+  - authority.anchors
+  - calibration_corpus
+  - current_questions
+  - candidate_minimum
+  - repeat_count
+  - tournament_protocol_version
+  - production_confidence_threshold
+  - confidence_reference_threshold
+metadata:
+  id: anchor-tuning-testability-request
+  version: 0.4.1
+  purpose: Plan-independent bootstrap calibration of the anchor testability rubric
+---
+# Independent testability-rubric calibration
+
+Calibrate the instrument used before anchors enter planning or development
+gates. The frozen corpus and approved intent are normative. Do not use the
+active plan, desired plan verdicts, or already accepted anchors as an oracle.
+Requirement form and duplicate preselection are deterministic checks; do not
+turn either into a stochastic grammar or provenance-overlap vote.
+
+```json
+{
+  "schema_version": "2.0.0",
+  "operation": "testability",
+  "template": {
+    "id": "anchor-tuning-testability-request",
+    "version": "0.4.1",
+    "sha256": {{ template.sha256 | tojson }}
+  },
+  "correlation_id": {{ correlation_id | tojson }},
+  "runtime": {{ runtime | tojson }},
+  "authority": {
+    "intent": {{ authority.intent | tojson }},
+    "anchors": {{ authority.anchors | tojson }}
+  },
+  "gate": "testability",
+  "calibration_corpus": {{ calibration_corpus | tojson }},
+  "current_questions": {{ current_questions | tojson }},
+  "candidate_minimum": {{ candidate_minimum | tojson }},
+  "repeat_count": {{ repeat_count | tojson }},
+  "tournament_protocol_version": {{ tournament_protocol_version | tojson }},
+  "production_confidence_threshold": {{ production_confidence_threshold | tojson }},
+  "confidence_reference_threshold": {{ confidence_reference_threshold | tojson }}
+}
+```
+
+Freeze cases and expected labels before the first response. Evaluate more
+candidates than the released rubric will use, with byte-identical repeat
+requests. Every accepted cell needs two confident agreeing answers matching the
+oracle; make a third call only when the first two choices disagree. Report
+confident `no` or `unclear` as `needs_work`, low-confidence agreement as
+`inconclusive`, and unresolved three-way disagreement as `unstable`.

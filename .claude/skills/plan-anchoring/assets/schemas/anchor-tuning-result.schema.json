@@ -4,126 +4,1229 @@
   "title": "Anchor tuning Standard response envelope",
   "type": "object",
   "additionalProperties": false,
-  "required": ["success", "canceled", "aborted_by", "data", "error", "metadata"],
+  "required": [
+    "success",
+    "canceled",
+    "aborted_by",
+    "data",
+    "error",
+    "metadata"
+  ],
   "properties": {
-    "success": {"type": "boolean"},
-    "canceled": {"type": "boolean"},
-    "aborted_by": {"type": ["string", "null"], "enum": [null, "user", "policy", "timeout"]},
+    "success": {
+      "type": "boolean"
+    },
+    "canceled": {
+      "type": "boolean"
+    },
+    "aborted_by": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        null,
+        "user",
+        "policy",
+        "timeout"
+      ]
+    },
     "data": {
       "oneOf": [
-        {"type": "null"},
-        {"$ref": "#/$defs/tuneData"},
-        {"$ref": "#/$defs/triageData"}
-      ]
-    },
-    "error": {
-      "oneOf": [
-        {"type": "null"},
-        {"$ref": "#/$defs/error"}
-      ]
-    },
-    "metadata": {"$ref": "#/$defs/metadata"}
-  },
-  "allOf": [
-    {
-      "if": {"properties": {"success": {"const": true}}},
-      "then": {"properties": {"canceled": {"const": false}, "aborted_by": {"type": "null"}, "data": {"type": "object"}, "error": {"type": "null"}}}
-    },
-    {
-      "if": {"properties": {"canceled": {"const": true}}},
-      "then": {"properties": {"success": {"const": false}, "aborted_by": {"enum": ["user", "policy", "timeout"]}, "error": {"$ref": "#/$defs/error"}}}
-    },
-    {
-      "if": {"properties": {"success": {"const": false}, "canceled": {"const": false}}, "required": ["success", "canceled"]},
-      "then": {"properties": {"aborted_by": {"type": "null"}, "data": {"type": "null"}, "error": {"$ref": "#/$defs/error"}}}
-    }
-  ],
-  "$defs": {
-    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "sealedQuestionSet": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["digest", "questions"],
-      "properties": {
-        "digest": {"$ref": "#/$defs/sha256"},
-        "questions": {"type": "object"}
-      }
-    },
-    "tuneData": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["operation", "accepted", "authority_citations", "oracle_sha256", "sealed_question_set", "candidate_rankings", "acceptance_table", "evidence", "explanation", "planner_action", "question_action", "sealed_question_set_digest_before", "sealed_question_set_digest_after", "authority_recommendations"],
-      "properties": {
-        "operation": {"const": "tune"},
-        "accepted": {"type": "boolean"},
-        "authority_citations": {"type": "array", "items": {"type": "string"}},
-        "oracle_sha256": {"$ref": "#/$defs/sha256"},
-        "sealed_question_set": {"$ref": "#/$defs/sealedQuestionSet"},
-        "candidate_rankings": {"type": "array"},
-        "acceptance_table": {"type": "array"},
-        "evidence": {"type": "object"},
-        "explanation": {"type": "string"},
-        "planner_action": {"type": "string"},
-        "question_action": {"type": "null"},
-        "sealed_question_set_digest_before": {"type": "null"},
-        "sealed_question_set_digest_after": {"$ref": "#/$defs/sha256"},
-        "authority_recommendations": {"type": "array"}
-      }
-    },
-    "triageData": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["operation", "disposition", "authority_citations", "oracle_sha256", "sealed_question_set", "candidate_rankings", "acceptance_table", "evidence", "explanation", "planner_action", "question_action", "sealed_question_set_digest_before", "sealed_question_set_digest_after", "authority_recommendations"],
-      "properties": {
-        "operation": {"const": "triage"},
-        "disposition": {"enum": ["plan_violation", "question_defect"]},
-        "authority_citations": {"type": "array", "minItems": 1, "items": {"type": "string"}},
-        "oracle_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
-        "sealed_question_set": {"$ref": "#/$defs/sealedQuestionSet"},
-        "candidate_rankings": {"type": "array"},
-        "acceptance_table": {"type": "array"},
-        "evidence": {"type": "object"},
-        "explanation": {"type": "string", "minLength": 1},
-        "planner_action": {"type": "string", "minLength": 1},
-        "question_action": {"enum": ["unchanged", "reopen_affected_tournament"]},
-        "sealed_question_set_digest_before": {"$ref": "#/$defs/sha256"},
-        "sealed_question_set_digest_after": {"$ref": "#/$defs/sha256"},
-        "authority_recommendations": {"type": "array"}
-      },
-      "allOf": [
         {
-          "if": {"properties": {"disposition": {"const": "plan_violation"}}, "required": ["disposition"]},
-          "then": {"properties": {"question_action": {"const": "unchanged"}}}
+          "type": "null"
         },
         {
-          "if": {"properties": {"disposition": {"const": "question_defect"}}, "required": ["disposition"]},
-          "then": {"properties": {"question_action": {"const": "reopen_affected_tournament"}}}
+          "$ref": "#/$defs/testabilityData"
+        },
+        {
+          "$ref": "#/$defs/tuneData"
+        },
+        {
+          "$ref": "#/$defs/triageData"
         }
       ]
     },
     "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/error"
+        }
+      ]
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "success": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "canceled": {
+            "const": false
+          },
+          "aborted_by": {
+            "type": "null"
+          },
+          "data": {
+            "type": "object"
+          },
+          "error": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "canceled": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "success": {
+            "const": false
+          },
+          "aborted_by": {
+            "enum": [
+              "user",
+              "policy",
+              "timeout"
+            ]
+          },
+          "error": {
+            "$ref": "#/$defs/error"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "success": {
+            "const": false
+          },
+          "canceled": {
+            "const": false
+          }
+        },
+        "required": [
+          "success",
+          "canceled"
+        ]
+      },
+      "then": {
+        "properties": {
+          "aborted_by": {
+            "type": "null"
+          },
+          "data": {
+            "type": "null"
+          },
+          "error": {
+            "$ref": "#/$defs/error"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rubricQuestionSet": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["code", "message", "recoverable", "suggested_action"],
+      "required": [
+        "digest",
+        "questions"
+      ],
       "properties": {
-        "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*(\\.[A-Z][A-Z0-9_]*)+$"},
-        "message": {"type": "string", "minLength": 1},
-        "recoverable": {"type": "boolean"},
-        "suggested_action": {"type": "string", "minLength": 1}
+        "digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "questions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "single_constraint",
+            "observable",
+            "faithful",
+            "scoped",
+            "self_contained"
+          ],
+          "properties": {
+            "single_constraint": {
+              "$ref": "#/$defs/question"
+            },
+            "observable": {
+              "$ref": "#/$defs/question"
+            },
+            "faithful": {
+              "$ref": "#/$defs/question"
+            },
+            "scoped": {
+              "$ref": "#/$defs/question"
+            },
+            "self_contained": {
+              "$ref": "#/$defs/question"
+            }
+          }
+        }
+      }
+    },
+    "sealedQuestionSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "digest",
+        "questions"
+      ],
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "questions": {
+          "$ref": "#/$defs/productionQuestions"
+        }
+      }
+    },
+    "productionQuestions": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 3,
+      "properties": {
+        "relevant": {
+          "$ref": "#/$defs/question"
+        },
+        "addressed": {
+          "$ref": "#/$defs/question"
+        },
+        "contradicted": {
+          "$ref": "#/$defs/question"
+        },
+        "implemented": {
+          "$ref": "#/$defs/question"
+        },
+        "violated": {
+          "$ref": "#/$defs/question"
+        },
+        "evidenced": {
+          "$ref": "#/$defs/question"
+        }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "instructions",
+        "criteria"
+      ],
+      "properties": {
+        "type": {
+          "const": "choice"
+        },
+        "instructions": {
+          "type": "string",
+          "minLength": 1
+        },
+        "criteria": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "yes",
+            "no",
+            "unclear"
+          ],
+          "properties": {
+            "yes": {
+              "type": "string",
+              "minLength": 1
+            },
+            "no": {
+              "type": "string",
+              "minLength": 1
+            },
+            "unclear": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "testabilityData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "gate",
+        "accepted",
+        "rubric_version",
+        "tournament_protocol_version",
+        "production_confidence_threshold",
+        "confidence_reference_threshold",
+        "corpus_sha256",
+        "corpus_case_count",
+        "rubric_question_set",
+        "candidate_rankings",
+        "acceptance_table",
+        "confirmation_summary",
+        "deterministic_lint",
+        "dedupe",
+        "evidence",
+        "explanation",
+        "authority_recommendations",
+        "candidate_count",
+        "semantic_score",
+        "dedupe_case_count",
+        "dedupe_score",
+        "repeat_requests_byte_identical"
+      ],
+      "properties": {
+        "operation": {
+          "const": "testability"
+        },
+        "gate": {
+          "const": "testability"
+        },
+        "accepted": {
+          "type": "boolean"
+        },
+        "rubric_version": {
+          "const": 2
+        },
+        "tournament_protocol_version": {
+          "const": "plan-anchor/question-tournament/2.0.0"
+        },
+        "production_confidence_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "confidence_reference_threshold": {
+          "const": 0.8
+        },
+        "corpus_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "corpus_case_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rubric_question_set": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/rubricQuestionSet"
+            }
+          ]
+        },
+        "candidate_rankings": {
+          "type": "array"
+        },
+        "acceptance_table": {
+          "type": "array"
+        },
+        "confirmation_summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "two_call_cells",
+            "third_call_cells",
+            "inconclusive_cells",
+            "unstable_cells"
+          ],
+          "properties": {
+            "two_call_cells": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "third_call_cells": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "inconclusive_cells": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unstable_cells": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "deterministic_lint": {
+          "type": "object"
+        },
+        "dedupe": {
+          "type": "object"
+        },
+        "evidence": {
+          "type": "object"
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_recommendations": {
+          "type": "array"
+        },
+        "candidate_count": {
+          "type": "integer",
+          "minimum": 6
+        },
+        "semantic_score": {
+          "$ref": "#/$defs/rubricScore"
+        },
+        "dedupe_case_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "dedupe_score": {
+          "$ref": "#/$defs/rubricScore"
+        },
+        "repeat_requests_byte_identical": {
+          "const": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "accepted": {
+                "const": true
+              }
+            },
+            "required": [
+              "accepted"
+            ]
+          },
+          "then": {
+            "properties": {
+              "rubric_question_set": {
+                "$ref": "#/$defs/rubricQuestionSet"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "accepted": {
+                "const": false
+              }
+            },
+            "required": [
+              "accepted"
+            ]
+          },
+          "then": {
+            "properties": {
+              "rubric_question_set": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "tuneData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "gate",
+        "accepted",
+        "tournament_protocol_version",
+        "production_confidence_threshold",
+        "confidence_reference_threshold",
+        "semantic_score",
+        "confidence_diagnostics",
+        "tuning_history_before_sha256",
+        "tuning_history_after",
+        "tuning_history_after_sha256",
+        "production_semantics_unchanged",
+        "authority_citations",
+        "oracle_sha256",
+        "sealed_question_set",
+        "candidate_rankings",
+        "acceptance_table",
+        "evidence",
+        "explanation",
+        "planner_action",
+        "question_action",
+        "sealed_question_set_digest_before",
+        "sealed_question_set_digest_after",
+        "authority_recommendations"
+      ],
+      "properties": {
+        "operation": {
+          "const": "tune"
+        },
+        "gate": {
+          "enum": [
+            "planning",
+            "development"
+          ]
+        },
+        "accepted": {
+          "type": "boolean"
+        },
+        "tournament_protocol_version": {
+          "const": "plan-anchor/question-tournament/2.0.0"
+        },
+        "production_confidence_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "confidence_reference_threshold": {
+          "const": 0.8
+        },
+        "semantic_score": {
+          "$ref": "#/$defs/semanticScore"
+        },
+        "confidence_diagnostics": {
+          "$ref": "#/$defs/confidenceDiagnostics"
+        },
+        "tuning_history_before_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "tuning_history_after": {
+          "$ref": "#/$defs/tuningHistory"
+        },
+        "tuning_history_after_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "production_semantics_unchanged": {
+          "const": true
+        },
+        "authority_citations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "oracle_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sealed_question_set": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sealedQuestionSet"
+            }
+          ]
+        },
+        "candidate_rankings": {
+          "type": "array"
+        },
+        "acceptance_table": {
+          "type": "array"
+        },
+        "evidence": {
+          "type": "object"
+        },
+        "explanation": {
+          "type": "string"
+        },
+        "planner_action": {
+          "type": "string"
+        },
+        "question_action": {
+          "type": "null"
+        },
+        "sealed_question_set_digest_before": {
+          "type": "null"
+        },
+        "sealed_question_set_digest_after": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "authority_recommendations": {
+          "type": "array"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "accepted": {
+                "const": true
+              }
+            },
+            "required": [
+              "accepted"
+            ]
+          },
+          "then": {
+            "properties": {
+              "sealed_question_set": {
+                "$ref": "#/$defs/sealedQuestionSet"
+              },
+              "sealed_question_set_digest_after": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "accepted": {
+                "const": false
+              }
+            },
+            "required": [
+              "accepted"
+            ]
+          },
+          "then": {
+            "properties": {
+              "sealed_question_set": {
+                "type": "null"
+              },
+              "sealed_question_set_digest_after": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "triageData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "gate",
+        "disposition",
+        "authority_citations",
+        "oracle_sha256",
+        "sealed_question_set",
+        "candidate_rankings",
+        "acceptance_table",
+        "evidence",
+        "explanation",
+        "planner_action",
+        "question_action",
+        "sealed_question_set_digest_before",
+        "sealed_question_set_digest_after",
+        "authority_recommendations"
+      ],
+      "properties": {
+        "operation": {
+          "const": "triage"
+        },
+        "gate": {
+          "enum": [
+            "planning",
+            "development"
+          ]
+        },
+        "disposition": {
+          "enum": [
+            "plan_violation",
+            "question_defect"
+          ]
+        },
+        "authority_citations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "oracle_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sealed_question_set": {
+          "$ref": "#/$defs/sealedQuestionSet"
+        },
+        "candidate_rankings": {
+          "type": "array"
+        },
+        "acceptance_table": {
+          "type": "array"
+        },
+        "evidence": {
+          "type": "object"
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "planner_action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "question_action": {
+          "enum": [
+            "unchanged",
+            "reopen_affected_tournament"
+          ]
+        },
+        "sealed_question_set_digest_before": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sealed_question_set_digest_after": {
+          "$ref": "#/$defs/sha256"
+        },
+        "authority_recommendations": {
+          "type": "array"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "plan_violation"
+              }
+            },
+            "required": [
+              "disposition"
+            ]
+          },
+          "then": {
+            "properties": {
+              "question_action": {
+                "const": "unchanged"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "question_defect"
+              }
+            },
+            "required": [
+              "disposition"
+            ]
+          },
+          "then": {
+            "properties": {
+              "question_action": {
+                "const": "reopen_affected_tournament"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "semanticScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exact_role_cells",
+        "total_role_cells",
+        "exact_semantic_verdicts",
+        "total_semantic_verdicts",
+        "stable_cases",
+        "total_cases",
+        "regressions"
+      ],
+      "properties": {
+        "exact_role_cells": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_role_cells": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "exact_semantic_verdicts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_semantic_verdicts": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "stable_cases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_cases": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "regressions": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "confidenceDiagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "threshold",
+        "cells_at_or_above_threshold",
+        "total_cells",
+        "minimum",
+        "p10",
+        "median",
+        "mean"
+      ],
+      "properties": {
+        "threshold": {
+          "const": 0.8
+        },
+        "cells_at_or_above_threshold": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_cells": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minimum": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "p10": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "median": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "mean": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "tuningHistory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "history_id",
+        "events"
+      ],
+      "properties": {
+        "schema": {
+          "const": "plan-anchor/tuning-history/2"
+        },
+        "history_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "events": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/tuningEvent"
+          }
+        }
+      }
+    },
+    "tuningEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_index",
+        "previous_event_sha256",
+        "event",
+        "protocol_version",
+        "authority",
+        "oracle",
+        "candidate",
+        "evidence",
+        "score",
+        "decision",
+        "supersedes"
+      ],
+      "properties": {
+        "event_index": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "previous_event_sha256": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sha256"
+            }
+          ]
+        },
+        "event": {
+          "enum": [
+            "candidate_evaluated",
+            "protocol_re_evaluated",
+            "question_set_sealed",
+            "question_set_rejected"
+          ]
+        },
+        "protocol_version": {
+          "const": "plan-anchor/question-tournament/2.0.0"
+        },
+        "authority": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "intent_id",
+            "intent_version",
+            "intent_sha256",
+            "anchor_id",
+            "anchor_version",
+            "anchor_record_sha256"
+          ],
+          "properties": {
+            "intent_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "intent_version": {
+              "type": [
+                "integer",
+                "string"
+              ]
+            },
+            "intent_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "anchor_id": {
+              "type": "string",
+              "pattern": "^ANC-[0-9]{3}$"
+            },
+            "anchor_version": {
+              "type": [
+                "integer",
+                "string"
+              ]
+            },
+            "anchor_record_sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "oracle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "case_ids",
+            "case_count",
+            "repeat_count"
+          ],
+          "properties": {
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "case_ids": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "case_count": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "repeat_count": {
+              "type": "integer",
+              "minimum": 2
+            }
+          }
+        },
+        "candidate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidate_id",
+            "question_sha256"
+          ],
+          "properties": {
+            "candidate_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "question_sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "canonical_request_sha256",
+            "raw_response_sha256",
+            "run_ids"
+          ],
+          "properties": {
+            "canonical_request_sha256": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/sha256"
+              }
+            },
+            "raw_response_sha256": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/sha256"
+              }
+            },
+            "run_ids": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "score": {
+          "$ref": "#/$defs/historyScore"
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "question_set_sha256",
+            "reason_code"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "sealed",
+                "rejected",
+                "evidence_incomplete",
+                "unstable"
+              ]
+            },
+            "question_set_sha256": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/sha256"
+                }
+              ]
+            },
+            "reason_code": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]*(\\.[A-Z][A-Z0-9_]*)+$"
+            }
+          }
+        },
+        "supersedes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "protocol_version",
+            "decision_sha256"
+          ],
+          "properties": {
+            "protocol_version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "decision_sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        }
+      }
+    },
+    "historyScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exact_role_cells",
+        "total_role_cells",
+        "exact_semantic_verdicts",
+        "total_semantic_verdicts",
+        "stable_cases",
+        "total_cases",
+        "regressions",
+        "confidence"
+      ],
+      "properties": {
+        "exact_role_cells": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_role_cells": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "exact_semantic_verdicts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_semantic_verdicts": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "stable_cases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_cases": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "regressions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceDiagnostics"
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "recoverable",
+        "suggested_action"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*(\\.[A-Z][A-Z0-9_]*)+$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recoverable": {
+          "type": "boolean"
+        },
+        "suggested_action": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "metadata": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["duration_ms", "tool_calls", "retry_count", "correlation_id", "jev_run_ids", "planner_observation_trust", "authoritative_sources_unchanged"],
+      "required": [
+        "duration_ms",
+        "tool_calls",
+        "retry_count",
+        "correlation_id",
+        "jev_run_ids",
+        "planner_observation_trust",
+        "authoritative_sources_unchanged"
+      ],
       "properties": {
-        "duration_ms": {"type": "integer", "minimum": 0},
-        "tool_calls": {"type": "integer", "minimum": 0},
-        "retry_count": {"type": "integer", "minimum": 0},
-        "correlation_id": {"type": "string", "minLength": 1},
-        "jev_run_ids": {"type": "array", "items": {"type": "string"}},
-        "planner_observation_trust": {"type": ["string", "null"], "enum": [null, "untrusted"]},
-        "authoritative_sources_unchanged": {"type": "boolean"}
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tool_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "retry_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "correlation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "jev_run_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "planner_observation_trust": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            null,
+            "untrusted"
+          ]
+        },
+        "authoritative_sources_unchanged": {
+          "type": "boolean"
+        }
+      }
+    },
+    "rubricScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exact_cells",
+        "confident_cells",
+        "stable_cells",
+        "total_cells"
+      ],
+      "properties": {
+        "exact_cells": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confident_cells": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stable_cells": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_cells": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     }
   }

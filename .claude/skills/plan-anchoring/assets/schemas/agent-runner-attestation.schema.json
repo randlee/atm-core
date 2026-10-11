@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/randlee/plan-anchor/schemas/agent-runner-attestation-1.0.0.json",
+  "title": "Plan Anchor agent invocation attestation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "runtime", "operation", "correlation_id", "started_at_ms", "finished_at_ms", "duration_ms", "outcome", "source_sha256", "error_code"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "runtime": {"type": "object"},
+    "operation": {"enum": ["plan_review", "sprint_review", "testability", "tune", "triage"]},
+    "correlation_id": {"type": "string"},
+    "started_at_ms": {"type": "integer", "minimum": 0},
+    "finished_at_ms": {"type": "integer", "minimum": 0},
+    "duration_ms": {"type": "integer", "minimum": 0},
+    "outcome": {"enum": ["success", "failure", "timeout", "canceled"]},
+    "source_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "error_code": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_.-]{0,63}$"}
+  }
+}

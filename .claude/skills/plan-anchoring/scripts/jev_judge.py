@@ -141,7 +141,6 @@ DEDUPE_DEFAULT_THRESHOLD = 0.5     # `dedupe` reports pairs at or above this tok
 LIKELY_DUPLICATE_JACCARD = 0.8     # without Jev, `dedupe` calls a pair a likely duplicate at or above this
 SIMILAR_REPORT_FLOOR = DUPLICATE_JACCARD / 2  # `add` lists candidates at or above this in data.similar
 DEDUPE_QUESTION = "same_constraint"
-REQUIREMENT_MODALS = ("must", "never", "always", "only", "shall")
 REQUIREMENT_VERBS = ("must", "never", "always", "only", "shall", "is", "are", "requires", "uses", "does not")
 HEDGES = ("should", "could", "maybe", "probably", "might", "perhaps", "ideally", "try to", "as needed", "if possible",
           "where possible", "when possible", "where appropriate", "as appropriate", "etc", "and so on")
@@ -151,6 +150,11 @@ STOPWORDS = frozenset("the a an and or of to in on for by from with as at be is 
 LINT_VERBATIM = "statement is the verbatim quote"
 LINT_VERBATIM_PROBLEM = LINT_VERBATIM + "; write a testable anchor (see references/anchor-capture.md)"
 QUOTE_MISSING_PROBLEM = "quote missing; record the user's verbatim words"
+REQUIREMENT_FORM_WARNINGS = (
+    "hedged wording; state the requirement",
+    "written as speech, not as a requirement",
+    "not phrased as a testable requirement",
+)
 
 _sleep = time.sleep  # replaced in tests
 
@@ -445,9 +449,6 @@ def lint_statement(statement: str, quote: str, source_type: str = "ANC") -> list
         warnings.append(LINT_VERBATIM)
     if len(text) > MAX_STATEMENT_CHARS:
         warnings.append("too long; split into one constraint per anchor")
-    modal_count = len(re.findall(r"(?<![A-Za-z0-9])(?:" + "|".join(REQUIREMENT_MODALS) + r")(?![A-Za-z0-9])", text, re.IGNORECASE))
-    if modal_count >= 2:
-        warnings.append("may bundle two constraints")
     if any(_has_word(text, h) for h in HEDGES):
         warnings.append("hedged wording; state the requirement")
     if any(_has_word(text, p) for p in SPEECH_PRONOUNS):
@@ -476,16 +477,14 @@ def jaccard(a: set, b: set) -> float:
 
 
 def best_similarity(statement_a: str, quote_a: str, statement_b: str, quote_b: str) -> tuple:
-    """Best token Jaccard over statement/quote of A against statement/quote of B: (score, field_a, field_b)."""
-    best = (0.0, "statement", "statement")
-    sides_a = (("statement", tokens(statement_a)), ("quote", tokens(quote_a)))
-    sides_b = (("statement", tokens(statement_b)), ("quote", tokens(quote_b)))
-    for fa, ta in sides_a:
-        for fb, tb in sides_b:
-            score = jaccard(ta, tb)
-            if score > best[0]:
-                best = (score, fa, fb)
-    return best
+    """Token Jaccard over testable statements only.
+
+    Quotes are immutable provenance, not constraints. One multi-directive quote
+    may legitimately produce several distinct atomic anchors, so quote overlap
+    must never make those anchors duplicates.
+    """
+    del quote_a, quote_b
+    return (jaccard(tokens(statement_a), tokens(statement_b)), "statement", "statement")
 
 
 def similar_anchors(anchors: list, statement: str, quote: str, floor: float = SIMILAR_REPORT_FLOOR) -> list:
@@ -2031,14 +2030,14 @@ def cmd_dedupe(args) -> dict:
             "anchors": len(anchors), "pairs": pairs, "likely_duplicates": []}
     if jev_mode:
         qs = load_simple_question_set("dedupe", (DEDUPE_QUESTION,))
-        api_key = remote_preflight(args, "The anchor statements and quotes") if (pairs and not dry_run and fixture is None) else ""
+        api_key = remote_preflight(args, "The anchor statements") if (pairs and not dry_run and fixture is None) else ""
         by_id = {a.get("id"): a for a in anchors}
         requests_out = []
         for pair in pairs:
             a, b = by_id[pair["a"]], by_id[pair["b"]]
             body = {"model": args.model, "questions": qs["questions"], "state": {
-                "a": {"id": a.get("id"), "statement": a.get("statement") or "", "quote": anchor_quote(a)},
-                "b": {"id": b.get("id"), "statement": b.get("statement") or "", "quote": anchor_quote(b)}}}
+                "a": {"id": a.get("id"), "statement": a.get("statement") or ""},
+                "b": {"id": b.get("id"), "statement": b.get("statement") or ""}}}
             if dry_run:
                 try:
                     fit_request(body, DEFAULT_MAX_REQUEST_BYTES, DEFAULT_MIN_ITEM_CHARS, {})
@@ -2066,22 +2065,113 @@ def cmd_dedupe(args) -> dict:
     return {"success": True, "data": data, "error": None}
 
 
-RUBRIC_QUESTIONS = ("single_constraint", "observable", "requirement_form", "faithful", "scoped", "positive_form")
+RUBRIC_QUESTIONS = ("single_constraint", "observable", "faithful", "scoped", "self_contained")
+
+
+def rubric_confirmation_outcome(responses: list, questions: tuple, threshold: float, lint_errors: list) -> dict:
+    """Classify two rubric confirmations and an optional tie-breaker.
+
+    A third response is meaningful only when the first two choices disagree.
+    Choice disagreement that a third answer cannot resolve is unstable. A
+    resolved choice supported by fewer than two confident matching answers is
+    inconclusive. Confident no/unclear is needs_work; only all-confident yes
+    with no deterministic lint errors is testable.
+    """
+    if len(responses) not in (2, 3):
+        raise JudgeError("RUBRIC.CONFIRMATION", "rubric confirmation needs two responses and an optional third")
+    disagreements = []
+    unstable = []
+    low = []
+    failing = []
+    resolved = {}
+    for qid in questions:
+        cells = [answer_choice(response["answers"][qid]) for response in responses]
+        first_disagrees = cells[0][0] != cells[1][0]
+        if first_disagrees:
+            disagreements.append(qid)
+            if len(cells) != 3:
+                raise JudgeError("RUBRIC.CONFIRMATION", f"third response missing for disagreement on {qid}")
+            confident = {
+                choice: [index + 1 for index, (got, confidence) in enumerate(cells)
+                         if got == choice and confidence >= threshold]
+                for choice in ("yes", "no", "unclear")
+            }
+            supported = [choice for choice, calls in confident.items() if len(calls) >= 2]
+            competing = [choice for choice, calls in confident.items() if calls]
+            if len(supported) == 1 and len(competing) == 1:
+                choice = supported[0]
+                matching = confident[choice]
+                confidences = [cells[index - 1][1] for index in matching]
+            elif len(competing) > 1:
+                unstable.append(qid)
+                resolved[qid] = {"choice": None, "confidence": None, "matching_calls": []}
+                continue
+            else:
+                low.append(qid)
+                resolved[qid] = {"choice": None, "confidence": None, "matching_calls": []}
+                continue
+        else:
+            choice = cells[0][0]
+            matching = [1, 2]
+            confidences = [cells[0][1], cells[1][1]]
+        min_confidence = min(confidences)
+        resolved[qid] = {
+            "choice": choice,
+            "confidence": round(min_confidence, 3),
+            "matching_calls": matching,
+        }
+        if min_confidence < threshold:
+            low.append(qid)
+        elif choice != "yes":
+            failing.append(qid)
+
+    if unstable:
+        verdict = "unstable"
+    elif low:
+        verdict = "inconclusive"
+    elif failing or lint_errors:
+        verdict = "needs_work"
+    else:
+        verdict = "testable"
+    return {
+        "verdict": verdict,
+        "failing": list(dict.fromkeys(failing + low + unstable + list(lint_errors))),
+        "low_confidence": low,
+        "unstable": unstable,
+        "initial_disagreements": disagreements,
+        "resolved": resolved,
+    }
+
+
+def rubric_fixture_response(fixture: dict, keys: tuple, index: int, questions: dict) -> dict:
+    value = None
+    for key in keys:
+        value = fixture.get(key)
+        if value is not None:
+            break
+    if value is None:
+        raise JudgeError("FIXTURE.MISSING", f"answers fixture has no entry for {keys[0]} (or '*')")
+    if isinstance(value, list):
+        if index >= len(value):
+            raise JudgeError("FIXTURE.MISSING", f"answers fixture has no confirmation {index + 1} for {keys[0]}")
+        value = value[index]
+    return validate_response({"model": "fixture", "answers": value}, questions)
 
 
 def rubric_entries(args, candidates: list, threshold: float, dry_run: bool, fixture, what: str) -> tuple:
     """Lint, then one Jev request per candidate {id, statement, quote, scope, source_type}. Returns (entries, requests_out).
 
-    An entry is testable when every rubric question is yes at or above the threshold and the lint has no error
-    (the verbatim rule); `failing` lists the failed question ids and the lint errors. Lint warnings that are not
-    errors ride along in `lint` without changing the verdict. Nothing is written to disk.
+    An entry is testable when every rubric question has two confident yes
+    confirmations and deterministic requirement-form lint has no error. A
+    third call is made only when the first two choices disagree. Nothing is
+    written to disk.
     """
     qs = load_simple_question_set("testability", RUBRIC_QUESTIONS)
     api_key = remote_preflight(args, what) if (candidates and not dry_run and fixture is None) else ""
     entries, requests_out = [], []
     for c in candidates:
         warnings = lint_statement(c["statement"], c["quote"], c.get("source_type") or "ANC")
-        lint_errors = [w for w in warnings if w == LINT_VERBATIM]
+        lint_errors = [w for w in warnings if w == LINT_VERBATIM or w in REQUIREMENT_FORM_WARNINGS]
         entry = {"id": c["id"], "statement": c["statement"], "quote": c["quote"], "scope": c.get("scope") or "",
                  "verdict": None, "failing": list(lint_errors), "answers": None, "lint": {"warnings": warnings, "errors": lint_errors}}
         body = {"model": args.model, "questions": qs["questions"],
@@ -2091,20 +2181,39 @@ def rubric_entries(args, candidates: list, threshold: float, dry_run: bool, fixt
                 fit_request(body, DEFAULT_MAX_REQUEST_BYTES, DEFAULT_MIN_ITEM_CHARS, {})
             except JudgeError as exc:
                 entry["error"] = exc.to_json()["error"]
-            requests_out.append(body)
+            requests_out.extend((body, json.loads(json.dumps(body))))
             entries.append(entry)
             continue
         try:
-            resp, meta = ask_jev_once(args, api_key, body, qs["questions"], fixture, (c["id"], "*"))
-            failed = []
-            for qid in qs["questions"]:
-                choice, conf = answer_choice(resp["answers"][qid])
-                if choice != "yes" or conf < threshold:
-                    failed.append(qid)
-            entry["answers"] = resp["answers"]
-            entry["attempts"] = meta.get("attempts")
-            entry["failing"] = failed + lint_errors
-            entry["verdict"] = "testable" if not entry["failing"] else "needs_work"
+            responses = []
+            attempts = 0
+            for index in range(2):
+                if fixture is not None:
+                    response = rubric_fixture_response(fixture, (c["id"], "*"), index, qs["questions"])
+                    meta = {"attempts": 1}
+                else:
+                    response, meta = ask_jev_once(args, api_key, body, qs["questions"], None, (c["id"], "*"))
+                responses.append(response)
+                attempts += meta.get("attempts", 1)
+            first_choices = [answer_choice(responses[0]["answers"][qid])[0] for qid in qs["questions"]]
+            second_choices = [answer_choice(responses[1]["answers"][qid])[0] for qid in qs["questions"]]
+            if first_choices != second_choices:
+                if fixture is not None:
+                    response = rubric_fixture_response(fixture, (c["id"], "*"), 2, qs["questions"])
+                    meta = {"attempts": 1}
+                else:
+                    response, meta = ask_jev_once(args, api_key, body, qs["questions"], None, (c["id"], "*"))
+                responses.append(response)
+                attempts += meta.get("attempts", 1)
+            outcome = rubric_confirmation_outcome(responses, tuple(qs["questions"]), threshold, lint_errors)
+            entry["answers"] = responses[0]["answers"]
+            entry["answers_second"] = responses[1]["answers"]
+            if len(responses) == 3:
+                entry["answers_third"] = responses[2]["answers"]
+            entry["attempts"] = attempts
+            entry["confirmations"] = outcome
+            entry["failing"] = outcome["failing"]
+            entry["verdict"] = outcome["verdict"]
         except JudgeError as exc:
             if exc.code in ABORT_CODES:
                 raise
@@ -2141,7 +2250,7 @@ def cmd_rubric(args) -> dict:
     dry_run = bool(args.dry_run)
     entries, requests_out = rubric_entries(args, candidates, threshold, dry_run, fixture, "The anchor statements, quotes and scopes")
     data = {"threshold": threshold, "dry_run": dry_run, "fixture": fixture is not None, "path": path, "anchors": entries,
-            "needs_work": [e["id"] for e in entries if e["verdict"] in ("needs_work", "error")],
+            "needs_work": [e["id"] for e in entries if e["verdict"] != "testable"],
             "pass": bool(entries) and all(e["verdict"] == "testable" for e in entries) and not dry_run}
     if dry_run:
         data["requests"] = requests_out

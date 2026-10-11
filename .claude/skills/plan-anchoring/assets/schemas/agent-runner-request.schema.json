@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/randlee/plan-anchor/schemas/agent-runner-request-1.0.0.json",
+  "title": "Plan Anchor agent runner request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "runtime", "operation", "correlation_id", "params"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "runtime": {"$ref": "#/$defs/runtime"},
+    "operation": {"enum": ["plan_review", "sprint_review", "testability", "tune", "triage"]},
+    "correlation_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "params": {"type": "object"}
+  },
+  "$defs": {
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "harness", "path", "version", "model", "sha256"],
+      "properties": {
+        "agent": {"enum": ["anchor-plan-review", "anchor-sprint-review", "anchor-tuning"]},
+        "harness": {"enum": ["claude", "codex"]},
+        "path": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "model": {"enum": ["sonnet", "opus", "luna", "sol"]},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}
