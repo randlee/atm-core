@@ -1,3 +1,18 @@
+---
+name: smoke-report-smoke-thorough
+version: 1.0.0
+description: Thorough-level smoke report markdown rendered from the canonical smoke JSON.
+format: markdown
+required_variables:
+  - report.status
+  - report.timestamp
+  - report.binary_sha
+  - report.duration_secs
+  - report.summary.pass
+  - report.summary.fail
+  - report.summary.skip
+  - report.rows
+---
 # Smoke Thorough
 
 - status: `{{ report.status }}`

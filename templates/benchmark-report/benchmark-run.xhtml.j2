@@ -10,9 +10,16 @@ required_variables:
   - source_revision
   - status
   - started_at
+  - started_at.datetime
+  - started_at.text
   - completed_at
   - rows
   - incomplete_reason
+# completed_at is null for an incomplete campaign; the template reads these
+# only when it is set, so the defaults are never rendered.
+defaults:
+  completed_at.datetime: ""
+  completed_at.text: ""
 ---
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>

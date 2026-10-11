@@ -14,6 +14,8 @@ required_variables:
   - worktree_path
   - branch
   - manifest_path
+defaults:
+  already_published_channels: ""
 ---
 <atm-task id="{{ task_id }}" assignee="publisher">
   <recipient>{{ recipient }}</recipient>
@@ -27,7 +29,7 @@ required_variables:
     <starting-state>{{ starting_state }}</starting-state>
     <stage>{{ preflight_stage }}</stage>
     <manifest>{{ manifest_path }}</manifest>
-    <already-published-channels>{{ already_published_channels | default('') }}</already-published-channels>
+    <already-published-channels>{{ already_published_channels }}</already-published-channels>
   </release>
   <references>
     <policy>.claude/skills/publishing/ref/release-state-strategy.md</policy>
