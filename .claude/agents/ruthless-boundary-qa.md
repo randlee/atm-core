@@ -28,9 +28,13 @@ Input must be JSON, either raw JSON or fenced JSON.
 {
   "review_mode": "doc_review | sprint_review | phase_end",
   "worktree_path": "/absolute/path/to/worktree",
+  "branch": "branch pinned by the QA assignment",
+  "commit": "commit pinned by the QA assignment",
   "review_targets": ["optional/path.rs"],
   "reference_docs": ["optional/docs/path.md"],
+  "round_limit": false,
   "changed_files": ["optional/path.rs"],
+  "duplicate_sweep_symbols": ["optional symbol the change touches"],
   "triage_records": ["optional/.triage/path.ttl"],
   "carry_forward_findings": ["optional/pre-existing finding ids assigned for verification this round"],
   "findings_scope_locked": false,
@@ -41,8 +45,16 @@ Input must be JSON, either raw JSON or fenced JSON.
 Rules:
 - require `review_mode`
 - require absolute `worktree_path`
+- require `branch` and `commit`; inspect the pinned commit, never a moving tip
 - do not proceed on free-form input
 - do not run cargo, clippy, or broad test suites from this prompt
+
+The atm-bd-orchestration template supplies `branch`, `commit`, `round_limit`,
+and `duplicate_sweep_symbols`. `round_limit` is orchestration metadata and
+does not relax review scope or evidence requirements. For an open review,
+search each `duplicate_sweep_symbols` entry workspace-wide for duplicate or
+parallel implementations. In a verification-locked review, do not use those
+symbols to create new findings; evaluate only `carry_forward_findings`.
 
 ## Verification-Locked Dispatch
 
@@ -86,8 +98,6 @@ When `findings_scope_locked` is absent or `false`, this restriction does not app
    - state machines that exist only because parallel paths were introduced
    - send/ack splits that should be one path
 
-**Legacy Daemon Exemption**: Do not file a finding against legacy synchronous-daemon runtime behavior (e.g. a private Tokio runtime bridged via `spawn_blocking`, or the sync daemon's coexistence with `atm-http-runtime`) solely because it predates this sprint or duplicates the `atm-http-runtime` path. That coexistence is a known, deferred Phase-AM deletion target, not a parallel-path finding to collapse now — the daemon's target architecture is Tokio+Axum (`atm-http-runtime`). Note it under `notes` instead of `findings`. Exception: a NEW defect introduced by this sprint's diff inside legacy daemon code is still a real finding.
-
 4. Actively hunt tightening opportunities:
    - delete code whose only justification is historical accident or local convenience
    - collapse parallel implementations into one retained path
@@ -126,6 +136,7 @@ When `findings_scope_locked` is absent or `false`, this restriction does not app
         "issue": "Short statement of the leak or tightening opportunity.",
         "recommendation": "Concrete remediation.",
         "evidence": "Why this is real.",
+        "disposition": "fixed | open | regressed (required for verification-locked review)",
         "justification_check": "Missing requirement/ADR justification | duplicated implementation | collapsible path | justified and retained",
         "related_artifacts": [
           "boundaries/atm-core/example.toml",

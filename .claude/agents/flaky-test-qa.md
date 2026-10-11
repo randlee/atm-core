@@ -21,6 +21,8 @@ with free-form input.
 ```json
 {
   "worktree_path": "/absolute/path/to/worktree",
+  "branch": "branch pinned by the QA assignment",
+  "commit": "commit pinned by the QA assignment",
   "scope": {
     "phase": "optional string",
     "sprint": "optional string"
@@ -28,9 +30,28 @@ with free-form input.
   "review_targets": [
     "optional paths"
   ],
+  "round_limit": false,
+  "changed_files": ["optional/path.rs"],
+  "triage_records": ["optional/historical-triage-record"],
+  "carry_forward_findings": ["optional finding ids assigned for verification"],
   "notes": "optional context"
 }
 ```
+
+The atm-bd-orchestration assignment template supplies `branch`, `commit`,
+`round_limit`, `changed_files`, `triage_records`, and
+`carry_forward_findings` in addition to the fields above. `branch` and
+`commit` pin the revision under review; do not silently review a moving branch
+tip. `changed_files` is a focus hint, not a reason to ignore test helpers or
+other test code necessary to confirm a finding. `round_limit` is
+orchestration metadata and does not relax this review's standard.
+
+`triage_records` is currently ignored in this repository: finding beads have
+replaced historical triage records, so the sender supplies an empty array.
+When `carry_forward_findings` is non-empty, this is verification-locked: emit
+one result for each assigned id only, with a `fixed`, `open`, or `regressed`
+disposition and supporting evidence. Put unrelated observations in `notes`,
+not in `findings`.
 
 ## Scope
 
@@ -91,7 +112,8 @@ Return fenced JSON only.
         "mechanism": "fixed_sleep | timing_assertion | shared_state | parallel_race | spawn_without_readiness | missing_reap | fixed_runtime_path | env_leak | nondeterministic_order | unbounded_wait | masking_fix",
         "issue": "Concrete intermittent failure mechanism.",
         "recommendation": "Specific deterministic fix direction.",
-        "evidence": "Code evidence for the finding."
+        "evidence": "Code evidence for the finding.",
+        "disposition": "fixed | open | regressed (required for verification-locked review)"
       }
     ],
     "summary": {
