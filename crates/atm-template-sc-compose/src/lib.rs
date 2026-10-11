@@ -235,7 +235,7 @@ fn verify_unchanged(source_path: &Path, expected: &[u8]) -> Result<(), AtmError>
 /// caller can loosen it; the only input is the confining root.
 fn strict_policy(root: &TemplateRoot) -> ComposePolicy {
     ComposePolicy {
-        strict_undeclared_variables: false,
+        strict_undeclared_variables: true,
         unknown_variable_policy: UnknownVariablePolicy::Ignore,
         unbound_variable_policy: Some(UnknownVariablePolicy::Error),
         allowed_roots: vec![ConfiningRoot::from_path_buf(root.canonical_path.clone())],
@@ -491,7 +491,8 @@ mod tests {
         vars
     }
 
-    const STRICT_BODY: &str = "hello {{ name }} and {{ missing }}";
+    const STRICT_BODY: &str =
+        "---\nrequired_variables:\n  - name\n  - missing\n---\nhello {{ name }} and {{ missing }}";
 
     #[test]
     fn file_render_paths_reject_an_unbound_variable_and_render_when_all_are_bound() {
@@ -542,9 +543,71 @@ mod tests {
     }
 
     #[test]
+    fn template_without_front_matter_is_rejected_even_with_every_variable_supplied() {
+        let root = temporary_root("no-frontmatter");
+        let path = root.join("bare.md.j2");
+        fs::write(&path, "hello {{ name }}").expect("write template");
+        let source = TemplateSource::file_backed(
+            b"hello {{ name }}".to_vec(),
+            fs::canonicalize(&path).expect("canonical template"),
+        );
+        let template_root = TemplateRoot {
+            canonical_path: fs::canonicalize(&root).expect("canonical root"),
+        };
+        let composer = ScComposeTemplateComposer::new();
+
+        let error = composer
+            .render_within_root(&source, &strict_vars(true), &template_root)
+            .expect_err("a template that declares nothing must be rejected");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(
+            error.message().contains("bare.md.j2"),
+            "{}",
+            error.message()
+        );
+        assert!(
+            error.message().contains("name"),
+            "diagnostic must name the undeclared variable: {}",
+            error.message()
+        );
+        let stored = TemplateSource::stored(
+            b"hello {{ name }}".to_vec(),
+            Some(TemplateOutputFormat::Text),
+        );
+        let error = composer
+            .render_without_includes(&stored, &strict_vars(true))
+            .expect_err("a stored template that declares nothing must be rejected");
+        assert!(error.message().contains("name"), "{}", error.message());
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+    }
+
+    #[test]
+    fn template_declaring_every_variable_renders_unchanged() {
+        let root = temporary_root("declared-frontmatter");
+        let body = "---\nrequired_variables:\n  - name\n  - missing\n---\nhello {{ name }} and {{ missing }}";
+        let path = root.join("declared.md.j2");
+        fs::write(&path, body).expect("write template");
+        let source = TemplateSource::file_backed(
+            body.as_bytes().to_vec(),
+            fs::canonicalize(&path).expect("canonical template"),
+        );
+        let template_root = TemplateRoot {
+            canonical_path: fs::canonicalize(&root).expect("canonical root"),
+        };
+        let rendered = ScComposeTemplateComposer::new()
+            .render_within_root(&source, &strict_vars(true), &template_root)
+            .expect("declared template renders");
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+        assert_eq!(rendered.text, "hello x and y");
+    }
+
+    #[test]
     fn extra_caller_variables_are_still_ignored() {
         let source = TemplateSource::stored(
-            b"hello {{ name }}".to_vec(),
+            b"---\nrequired_variables:\n  - name\n---\nhello {{ name }}".to_vec(),
             Some(TemplateOutputFormat::Text),
         );
         let mut vars = strict_vars(true);
@@ -574,7 +637,7 @@ mod tests {
     #[test]
     fn decomposed_render_uses_upstream_parser_proof() {
         let source = TemplateSource::stored(
-            b"hello {{ name }}".to_vec(),
+            b"---\nrequired_variables:\n  - name\n---\nhello {{ name }}".to_vec(),
             Some(TemplateOutputFormat::Text),
         );
         let composer = ScComposeTemplateComposer::new();
@@ -723,10 +786,14 @@ mod tests {
         // `auto` form is the repaired source; `legacy` preserves a valid
         // migration option for a deliberately manually quoted template.
         for (label, frontmatter, body) in [
-            ("auto", "", r#"{"review_mode": {{ review_mode }}}"#),
+            (
+                "auto",
+                "---\nrequired_variables:\n  - review_mode\n---\n",
+                r#"{"review_mode": {{ review_mode }}}"#,
+            ),
             (
                 "legacy",
-                "---\njson_escape_mode: legacy\n---\n",
+                "---\njson_escape_mode: legacy\nrequired_variables:\n  - review_mode\n---\n",
                 r#"{"review_mode": "{{ review_mode }}"}"#,
             ),
         ] {
@@ -761,8 +828,11 @@ mod tests {
         // agent unable to repair the source.
         let root = temporary_root("an15-historical-auto-escape");
         let template_path = root.join("rust-best-practices-assignment.json.j2");
-        fs::write(&template_path, r#"{"review_mode": "{{ review_mode }}"}"#)
-            .expect("write historical pre-1.4.x auto-escape template");
+        fs::write(
+            &template_path,
+            "---\nrequired_variables:\n  - review_mode\n---\n{\"review_mode\": \"{{ review_mode }}\"}",
+        )
+        .expect("write historical pre-1.4.x auto-escape template");
         let source = TemplateSource::file_backed(
             fs::read(&template_path).expect("read historical template"),
             fs::canonicalize(&template_path).expect("canonical historical template"),
@@ -847,7 +917,7 @@ mod tests {
                 // rejects them as unbound. Declaring them as defaults is the
                 // supported way to compose macros; the macros still shadow
                 // these values inside the template.
-                "---\ndefaults:\n  label: \"\"\n  state: \"\"\n  value: \"\"\n---\n",
+                "---\nrequired_variables:\n  - enabled\n  - report.owner.name\n  - report.title\n  - report.rows\ndefaults:\n  label: \"\"\n  state: \"\"\n  value: \"\"\n---\n",
                 "{% macro label(value) %}{{ value | trim | default(\"none\") }}{% endmacro %}\n",
                 "{% macro state(value) %}{{ \"open\" if value else \"closed\" }}{% endmacro %}\n",
                 "{% set deviations = report.rows | selectattr(\"verdict\", \"ne\", \"PASS\") | list -%}\n",
@@ -905,25 +975,29 @@ mod tests {
         for (file_name, body, expected) in [
             (
                 "workflow.yaml.j2",
-                "title: {{ title }}\r\nitems:\r\n  - {{ item }}\r",
+                "---\nrequired_variables:\n  - title\n  - item\n---\ntitle: {{ title }}\r\nitems:\r\n  - {{ item }}\r",
                 "title: an15",
             ),
             (
                 "notice.xml.j2",
-                "<notice owner=\"{{ owner }}\">{{ title }}</notice>",
+                "---\nrequired_variables:\n  - owner\n  - title\n---\n<notice owner=\"{{ owner }}\">{{ title }}</notice>",
                 "<notice owner=\"dev\">an15</notice>",
             ),
             (
                 "report.html.j2",
-                "<h1>{{ title }}</h1><p>{{ item }}</p>",
+                "---\nrequired_variables:\n  - title\n  - item\n---\n<h1>{{ title }}</h1><p>{{ item }}</p>",
                 "<h1>an15</h1>",
             ),
             (
                 "handler.rs.j2",
-                "const TITLE: &str = \"{{ title }}\";\n",
+                "---\nrequired_variables:\n  - title\n---\nconst TITLE: &str = \"{{ title }}\";\n",
                 "const TITLE: &str = \"an15\";",
             ),
-            ("bom.txt.j2", "\u{feff}title={{ title }}\n", "title=an15"),
+            (
+                "bom.txt.j2",
+                "\u{feff}---\nrequired_variables:\n  - title\n---\ntitle={{ title }}\n",
+                "title=an15",
+            ),
         ] {
             let path = root.join(file_name);
             fs::write(&path, body).expect("write text target template");
@@ -960,7 +1034,7 @@ mod tests {
         let template_path = root.join("payload.json.j2");
         fs::write(
             &template_path,
-            "---\npass: 2\n---\n---\npass: 1\n---\n{\"value\": \"{{{ late | safe }}}\"}",
+            "---\npass: 2\nrequired_variables:\n  - late\n---\n---\npass: 1\nrequired_variables:\n  - late\n---\n{\"value\": \"{{{ late | safe }}}\"}",
         )
         .expect("write multipass JSON template");
         let source = TemplateSource::file_backed(
@@ -1266,7 +1340,11 @@ mod tests {
     fn production_adapter_expands_an_in_root_include_then_renders() {
         let root = temporary_root("in-root-include");
         let template_path = root.join("main.j2");
-        fs::write(&template_path, "@<child.j2>\n").expect("write main template");
+        fs::write(
+            &template_path,
+            "---\nrequired_variables:\n  - name\n---\n@<child.j2>\n",
+        )
+        .expect("write main template");
         fs::write(root.join("child.j2"), "hello {{ name }}").expect("write child template");
 
         let canonical_root = ConfiningRoot::new(&root)

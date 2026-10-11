@@ -136,7 +136,11 @@ fn team_protocol_worked_example_executes_against_checked_in_fixture() {
 
 fn write_strict_fixture(dir: &Path) -> (PathBuf, PathBuf, PathBuf) {
     let template = dir.join("strict.md.j2");
-    std::fs::write(&template, "hello {{ name }} and {{ missing }}").expect("write template");
+    std::fs::write(
+        &template,
+        "---\nrequired_variables:\n  - name\n  - missing\n---\nhello {{ name }} and {{ missing }}",
+    )
+    .expect("write template");
     let partial = dir.join("partial.json");
     std::fs::write(&partial, r#"{"name":"x"}"#).expect("write partial vars");
     let full = dir.join("full.json");
