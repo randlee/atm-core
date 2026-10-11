@@ -13,7 +13,11 @@ import sys
 import tempfile
 import time
 
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.report_runtime import compose_text  # noqa: E402
 
 
 TRACKED_PLATFORMS = ("mac", "win")
@@ -224,14 +228,8 @@ def placeholder_payload(platform_slug: str, commit: str) -> dict[str, object]:
 
 def render_markdown(payload: dict[str, object]) -> str:
     root = repo_root()
-    env = Environment(
-        loader=FileSystemLoader(str(root / "templates" / "coverage-report")),
-        undefined=StrictUndefined,
-        trim_blocks=True,
-        lstrip_blocks=True,
-    )
-    template = env.get_template(f"{payload['platform']}.md.j2")
-    return template.render(report=payload).rstrip() + "\n"
+    template = root / "templates" / "coverage-report" / f"{payload['platform']}.md.j2"
+    return compose_text(template, {"report": payload}, root=root).rstrip() + "\n"
 
 
 def write_json(path: Path, payload: object) -> None:

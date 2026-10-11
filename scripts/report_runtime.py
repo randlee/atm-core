@@ -233,3 +233,16 @@ def compose(
     finally:
         if variables_path is not None:
             variables_path.unlink(missing_ok=True)
+
+
+def compose_text(
+    template: Path,
+    variables: dict[str, Any],
+    root: Path | None = None,
+    error_type: type[E] = ReportRuntimeError,  # type: ignore[assignment]
+) -> str:
+    """Render a checked-in text template through sc-compose and return the text."""
+    with tempfile.TemporaryDirectory(prefix="atm-report-render.") as directory:
+        output = Path(directory) / "rendered.md"
+        compose(template, variables, output, root=root, error_type=error_type)
+        return output.read_text(encoding="utf-8")

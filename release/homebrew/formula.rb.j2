@@ -1,3 +1,26 @@
+---
+name: homebrew-formula
+version: 1.0.0
+description: Homebrew formula rendered by sc-publish for one manifest-declared formula.
+format: ruby
+required_variables:
+  - formula_class
+  - description
+  - homepage
+  - version
+  - license
+  - macos_arm_url
+  - macos_arm_sha256
+  - macos_intel_url
+  - macos_intel_sha256
+  - linux_url
+  - linux_sha256
+  - binary_paths
+  - bundled_paths
+  - test_output
+  - test_binary
+  - test_command
+---
 class {{ formula_class }} < Formula
   desc {{ description | tojson }}
   homepage {{ homepage | tojson }}
