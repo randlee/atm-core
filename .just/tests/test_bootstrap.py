@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import os
 from pathlib import Path
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from contextlib import redirect_stderr
@@ -22,6 +24,20 @@ SPEC.loader.exec_module(bootstrap)
 
 
 class BootstrapTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._test_home = tempfile.TemporaryDirectory()
+        self._test_cargo_home = tempfile.TemporaryDirectory()
+        self._ambient_cargo_home = tempfile.TemporaryDirectory()
+        self._environment = mock.patch.dict(
+            os.environ,
+            {"HOME": self._test_home.name, "CARGO_HOME": self._test_cargo_home.name},
+        )
+        self._environment.start()
+        self.addCleanup(self._environment.stop)
+        self.addCleanup(self._ambient_cargo_home.cleanup)
+        self.addCleanup(self._test_cargo_home.cleanup)
+        self.addCleanup(self._test_home.cleanup)
+
     def test_manifest_has_only_exact_tool_versions(self) -> None:
         manifest = bootstrap.load_manifest()
         versions = [manifest.rust, manifest.python, manifest.windows_python, manifest.just]
@@ -163,6 +179,36 @@ class BootstrapTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "checksum mismatch"):
                 bootstrap.install_sc_compose_release(manifest, dry_run=False)
+
+    def test_sc_compose_install_leaves_ambient_cargo_sentinel_untouched(self) -> None:
+        """Bootstrap test installs stay in the test CARGO_HOME, never the caller's."""
+        ambient_binary = Path(self._ambient_cargo_home.name) / "bin" / "sc-compose"
+        ambient_binary.parent.mkdir(parents=True)
+        ambient_binary.write_bytes(b"ambient-sentinel")
+
+        binary = b"isolated-sc-compose"
+        archive_buffer = io.BytesIO()
+        with tarfile.open(fileobj=archive_buffer, mode="w:gz") as archive:
+            member = tarfile.TarInfo("sc-compose")
+            member.size = len(binary)
+            archive.addfile(member, io.BytesIO(binary))
+        archive = archive_buffer.getvalue()
+        checksum = hashlib.sha256(archive).hexdigest()
+        manifest = bootstrap.load_manifest()
+
+        with (
+            mock.patch.object(bootstrap, "sc_compose_target", return_value="aarch64-apple-darwin"),
+            mock.patch.object(bootstrap, "_release_checksum", return_value=checksum),
+            mock.patch.object(
+                bootstrap,
+                "_download_release",
+                side_effect=[archive, f"{checksum}  sc-compose_1.7.0_aarch64-apple-darwin.tar.gz\n".encode()],
+            ),
+        ):
+            bootstrap.install_sc_compose_release(manifest, dry_run=False)
+
+        self.assertEqual(ambient_binary.read_bytes(), b"ambient-sentinel")
+        self.assertEqual(bootstrap.cargo_bin_path("sc-compose").read_bytes(), binary)
 
     def test_binstall_uses_prebuilt_only_and_exact_version(self) -> None:
         command = bootstrap.cargo_binstall_command("cargo-audit", "0.22.2", force=True)
