@@ -63,7 +63,7 @@ class EcosystemPinTests(unittest.TestCase):
         _latest_wyvern: mock.Mock,
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
-            "sc-composer": "1.6.1",
+            "sc-composer": "1.7.0",
             "sc-observability": "1.5.0",
             "sc-observability-log": "1.5.0",
             "sc-observability-types": "1.5.0",
@@ -89,7 +89,7 @@ class EcosystemPinTests(unittest.TestCase):
         file_issue: mock.Mock,
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
-            "sc-composer": "1.6.1",
+            "sc-composer": "1.7.0",
             "sc-observability": "1.6.0",
             "sc-observability-log": "1.6.0",
             "sc-observability-types": "1.6.0",
@@ -136,7 +136,7 @@ class EcosystemPinTests(unittest.TestCase):
             # known-good map below intentionally models the older recovery pin.
             evidence = root / "evidence.md"
             latest_registry.side_effect = lambda _root, dependency: {
-                "sc-composer": "1.6.1",
+                "sc-composer": "1.7.0",
                 "sc-observability": "1.5.0",
                 "sc-observability-log": "1.5.0",
                 "sc-observability-types": "1.5.0",
@@ -199,7 +199,7 @@ class EcosystemPinTests(unittest.TestCase):
         _latest_wyvern: mock.Mock,
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
-            "sc-composer": "1.6.1",
+            "sc-composer": "1.7.0",
             "sc-observability": "1.5.0",
             "sc-observability-types": "1.5.0",
             "sc-observability-log": "1.5.0",
@@ -251,7 +251,7 @@ class EcosystemPinTests(unittest.TestCase):
                 )
             }
             latest_registry = {
-                "sc-composer": "1.6.1",
+                "sc-composer": "1.7.0",
                 "sc-observability": "1.5.0",
                 "sc-observability-log": "1.5.0",
                 "sc-observability-types": "1.5.0",
