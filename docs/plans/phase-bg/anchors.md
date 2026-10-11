@@ -24,6 +24,9 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-016 | locked | Suppression gets a findings bead | 2026-10-11 |
 | ANC-017 | locked | Small, maintainable sc-lint support code | 2026-10-11 |
 | ANC-018 | locked | Boilerplate goes upstream | 2026-10-11 |
+| ANC-019 | locked | One package at a time | 2026-10-11 |
+| ANC-020 | locked | Gaps filed on sc-lint, team-lead notified | 2026-10-11 |
+| ANC-021 | locked | sc-lint stays general purpose | 2026-10-11 |
 
 ## ANC-001
 
@@ -312,3 +315,51 @@ Scope: any bead that adds boilerplate atm-core needs to use sc-lint
 Fixtures:
 - pass: The per-analyzer config tables are boilerplate, so file an issue on randlee/sc-lint asking for an sc-compose j2 template that renders them for consumers.
 - fail: Hand-write the repeated per-analyzer config boilerplate in atm-core and copy it to each new repo.
+
+## ANC-019
+
+Anchor: The migration must replace atm-core's lint packages with sc-lint packages one package per step, each step recording the gaps and errors it found.
+
+> migrate and replace packages one at a time, noting any gaps or errors.
+
+Said by Rand, planning session (atm-core fenix), 2026-10-11. Status: locked. Version 2.
+
+Summary: One package at a time
+
+Scope: any bead that migrates a lint tool or package to sc-lint
+
+Fixtures:
+- pass: Step 1 replaces only the boundary analyzer with sc-lint boundary and records the two gaps it found; portability follows in step 2.
+- fail: Replace boundary, portability, runtime-waits and the line-count check with sc-lint in one step.
+
+## ANC-020
+
+Anchor: Each sc-lint gap or error found during the migration must be filed as an issue on randlee/sc-lint and sent to team-lead@sc-lint when it is encountered.
+
+> file issues on sc-lint when encountered and notify team-lead so he addresses them quickly (assuming they are valuable additions)
+
+Said by Rand, planning session (atm-core fenix), 2026-10-11. Status: locked. Version 2.
+
+Summary: Gaps filed on sc-lint, team-lead notified
+
+Scope: any bead that finds an sc-lint gap or error during the migration
+
+Fixtures:
+- pass: The missing Windows prefix allowlist found while migrating portability is filed on randlee/sc-lint and sent to team-lead@sc-lint the same day.
+- fail: Work around the missing allowlist with a local wrapper script and note it for later; nothing is filed upstream.
+
+## ANC-021
+
+Anchor: Every change atm-core asks of randlee/sc-lint must be a general-purpose capability; atm-core-specific lint checks stay in atm-core.
+
+> sc-lint is a general purpose tool and atm-core specific concerns do not belong
+
+Said by Rand, planning session (atm-core fenix), 2026-10-11. Status: locked. Version 2.
+
+Summary: sc-lint stays general purpose
+
+Scope: any bead that files an sc-lint issue or decides where an atm-core lint check lives
+
+Fixtures:
+- pass: File sc-lint issue: per-rule path allowlists configurable from sc-lint.toml, for any consumer; atm-core's daemon-signing coupling check stays an atm-core step.
+- fail: File sc-lint issue: add an atm-daemon signing-coupling analyzer to sc-lint for atm-core.

@@ -8,6 +8,8 @@ atm-core moves its lint onto the published sc-lint crates (0.7.0, released 2026-
 
 Legacy tools are phased out, not cut over blind: each runs beside its sc-lint replacement until their output is compared, then the duplicate is deleted. Code that sc-lint flags is fixed properly, with a small refactor where length limits fire. Suppression attributes are a last resort to keep CI green, and each one gets a findings bead.
 
+The move is swift and decisive (Rand: "I also expect the move to sc-lint packages to be swift and decisive"): one package at a time, each gap filed upstream as it is found.
+
 This replaces the stalled phase-be plan, which waited on sc-lint 0.6.x releases.
 
 ## What success looks like
