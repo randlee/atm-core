@@ -1,0 +1,57 @@
+{
+  "schema": "plan-anchoring/anchors/1",
+  "plan": "phase-current",
+  "intent_ref": "doc/plan/phase-current/intent.md",
+  "anchors": [
+    {
+      "id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The runtime crates are created by copying the legacy repo's runtime crates and deleting the legacy-specific modules; no runtime crate is written from scratch.",
+      "quote": "copy the libraries from the legacy repo as the starting point and remove the legacy-specific code",
+      "stated_by": "the user",
+      "stated_at": "2026-10-09",
+      "context": "planning session",
+      "summary": "Runtime crates copied from the legacy repo, not rewritten",
+      "scope": "the runtime crates sprint and any bead that creates the core library implementation",
+      "deterministic_check": "diff -r <legacy>/crates/runtime crates/runtime is mostly deletions",
+      "fixtures": {
+        "pass": [
+          "Sprint 2 copies the legacy repo's crates/runtime into crates/runtime and deletes the legacy-specific modules."
+        ],
+        "fail": [
+          "Sprint 2 implements a new runtime crate from scratch following the legacy design notes."
+        ]
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {"anchor": "bd-10", "plan_questions": "bd-11", "dev_questions": "bd-12"},
+      "history": [
+        {"at": "2026-10-09T18:30:00+00:00", "event": "created", "status": "proposed"},
+        {"at": "2026-10-09T18:41:00+00:00", "event": "locked"}
+      ]
+    },
+    {
+      "id": "REQ-014",
+      "source_type": "REQ",
+      "source_ref": "REQ-014",
+      "statement": "All public CLI commands must support --json output with a stable schema.",
+      "quote": "All public CLI commands must support --json output with a stable schema.",
+      "stated_by": "requirements register",
+      "stated_at": "2026-08-02",
+      "context": "requirements register",
+      "summary": "JSON output on every public command",
+      "scope": "any sprint that adds or changes a CLI command",
+      "deterministic_check": "",
+      "fixtures": {"pass": [], "fail": []},
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {"anchor": null, "plan_questions": null, "dev_questions": null},
+      "history": []
+    }
+  ]
+}
