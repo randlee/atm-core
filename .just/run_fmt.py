@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the published fmt command directly."""
+"""Run the published fmt command directly (delete when randlee/sc-lint#198 ships)."""
 from __future__ import annotations
 
 import os

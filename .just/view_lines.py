@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the published RULE-003 output for the legacy view entry point."""
+"""Render the published RULE-003 output for the legacy view entry point (delete when randlee/sc-lint#198 ships)."""
 from __future__ import annotations
 
 from pathlib import Path

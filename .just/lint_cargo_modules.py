@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Delegate module-cycle checks to the published sc-lint wheel."""
+"""Delegate module-cycle checks to the published sc-lint wheel (delete when randlee/sc-lint#198 ships)."""
 from __future__ import annotations
 
 from pathlib import Path
