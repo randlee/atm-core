@@ -30,6 +30,25 @@ class ScLintBinaryTests(unittest.TestCase):
             [str(binary), "lint", "function-length", "--root", str(repo_root), "--write-baseline"],
         )
 
+    def test_explicit_managed_binary_ignores_a_path_decoy(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            managed = root / "managed" / "sc-lint"
+            decoy = root / "decoy" / "sc-lint"
+            managed.parent.mkdir()
+            decoy.parent.mkdir()
+            managed.touch(mode=0o755)
+            decoy.touch(mode=0o755)
+            with mock.patch.dict(
+                "os.environ",
+                {"SC_LINT_BIN": str(managed), "PATH": str(decoy.parent)},
+                clear=True,
+            ):
+                resolved, argv = lint_argv(Path("/repo"), "sc-boundary", ["--config", "sc-lint.toml"])
+
+        self.assertEqual(resolved, managed)
+        self.assertNotIn(str(decoy), argv)
+
     def test_missing_managed_binary_tells_the_user_to_setup(self) -> None:
         with mock.patch.dict("os.environ", {"SC_LINT_INSTALL_DIR": "/missing"}, clear=True):
             with self.assertRaisesRegex(FileNotFoundError, "run just setup"):
