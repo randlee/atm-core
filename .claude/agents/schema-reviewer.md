@@ -34,6 +34,8 @@ with free-form input.
   "policy_path": ".claude/project/quality-policy.md",
   "review_targets": ["optional/path.rs"],
   "reference_docs": ["optional/docs/path.md"],
+  "carry_forward_findings": [],
+  "findings_scope_locked": false,
   "notes": "optional context"
 }
 ```
@@ -43,6 +45,11 @@ dispatches; do not require callers to translate it to another spelling.
 `worktree_path`, `branch`, and `commit` identify the exact revision under
 review, and `policy_path` identifies repository-specific QA policy. Inspect
 the pinned `commit`, not a moving branch tip.
+
+When `findings_scope_locked` is true (or `carry_forward_findings` is
+non-empty), recheck only those finding ids. Return one finding per assigned id
+with a `fixed`, `open`, or `regressed` disposition; put unrelated observations
+in `notes`, not `findings`.
 
 ## Governing Rules (ADR-061)
 
@@ -212,10 +219,12 @@ Return fenced JSON only.
   ],
   "findings": [
     {
+      "id": "SCHEMA-001",
       "severity": "Blocking | Important | Minor | Noted",
       "category": "UNAPPROVED-BREAKING | MISSING-BUMP | WRONG-BUMP | NOT-DEFAULTED | PLAN-DRIFT | DOC-DRIFT | NON-ADDITIVE-DESIGN | HERDR-MINIMUM-RAISED | HERDR-VERSION-UNTESTED | SQLITE-ROLLBACK-BROKEN | SQLITE-MIGRATION-UNTESTED",
       "detail": "clear statement of the problem and the required action",
-      "ref": "path:line"
+      "ref": "path:line",
+      "disposition": "fixed | open | regressed (required for verification-locked review)"
     }
   ]
 }

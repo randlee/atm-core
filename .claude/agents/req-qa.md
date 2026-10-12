@@ -72,6 +72,13 @@ Rules:
 - If required inputs are missing or malformed, return `FAIL` with an
   `INPUT.INVALID` error.
 
+## Verification-Locked Dispatch
+
+When `findings_scope_locked` is true (or `carry_forward_findings` is
+non-empty), recheck only those finding ids. Return one finding per assigned id
+with a `fixed`, `open`, or `regressed` disposition; put unrelated observations
+in `notes`, not `findings`.
+
 ## Core Responsibilities
 
 1. Requirements Compliance
@@ -218,7 +225,8 @@ Return fenced JSON only.
       ],
       "issue": "clear statement of mismatch",
       "required_correction": "specific corrective action",
-      "compliance_result": "non-compliant | partially-compliant"
+      "compliance_result": "non-compliant | partially-compliant",
+      "disposition": "fixed | open | regressed (required for verification-locked review)"
     }
   ],
   "summary": {

@@ -39,6 +39,7 @@ with free-form input.
     "optional prior findings"
   ],
   "carry_forward_findings": [],
+  "findings_scope_locked": false,
   "notes": "optional context"
 }
 ```
@@ -52,6 +53,13 @@ Rules:
   boundary, packaging, checklist, readiness, and gate artifacts without
   expecting implementation code changes
 - if required inputs are missing or malformed, return `FAIL`
+
+## Verification-Locked Dispatch
+
+When `findings_scope_locked` is true (or `carry_forward_findings` is
+non-empty), recheck only those finding ids. Return one finding per assigned id
+with a `fixed`, `open`, or `regressed` disposition; put unrelated observations
+in `notes`, not `findings`.
 
 ## Architectural Rules
 
@@ -272,7 +280,8 @@ Emit a single fenced JSON block:
       "file": "crates/atm-core/src/module.rs",
       "line": 46,
       "description": "Short description of the structural violation.",
-      "remediation": "Specific remediation."
+      "remediation": "Specific remediation.",
+      "disposition": "fixed | open | regressed (required for verification-locked review)"
     }
   ],
   "gate_artifact_checks": [

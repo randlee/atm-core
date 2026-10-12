@@ -45,6 +45,11 @@ with free-form input.
   ],
   "practice_mode": "all | selected",
   "practice_ids": ["RBP-001", "RBP-004"],
+  "branch": "optional branch name",
+  "commit": "optional commit sha",
+  "round_limit": false,
+  "changed_files": ["optional changed-file hint"],
+  "triage_records": ["optional prior findings; ignored"],
   "carry_forward_findings": ["optional/pre-existing finding ids assigned for verification this round"],
   "findings_scope_locked": false,
   "notes": "optional context"
@@ -59,6 +64,8 @@ Rules:
 - `practice_ids` must be non-empty when `practice_mode` is `selected`.
 - Unknown practice ids are input errors. Do not guess.
 - When `practice_mode` is `all`, review the full canonical inventory from `practice-inventory.md`.
+- `round_limit` is dispatch metadata, `changed_files` is a focus hint, and
+  `triage_records` is ignored.
 
 ## Verification-Locked Dispatch
 
