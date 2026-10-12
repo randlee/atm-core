@@ -4,9 +4,13 @@
 //! this protects the public command from drifting away from the template
 //! contract that the later decomposed-message sprints consume.
 
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Child, Command, Output, Stdio};
+use std::sync::mpsc;
+use std::time::Duration;
 
+use atm_core::list::ListOutcome;
 use serial_test::serial;
 
 fn workspace_root() -> PathBuf {
@@ -39,18 +43,92 @@ fn run_atm(args: &[&str]) -> Output {
 
 fn run_atm_as(args: &[&str], identity: &str, team: &str) -> Output {
     let fixture = tempfile::tempdir().expect("temporary ATM environment");
+    run_atm_in_home(args, identity, team, fixture.path())
+}
+
+fn run_atm_in_home(args: &[&str], identity: &str, team: &str, home: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_atm"))
         .current_dir(workspace_root())
         .args(args)
-        .env("HOME", fixture.path())
-        .env("ATM_HOME", fixture.path())
-        .env("ATM_CONFIG_HOME", fixture.path().join("config"))
-        .env("ATM_LOG_DIR", fixture.path().join("logs"))
-        .env("ATM_TEAMS_DIR", fixture.path().join("teams"))
+        .env("HOME", home)
+        .env("ATM_HOME", home)
+        .env("ATM_CONFIG_HOME", home.join("config"))
+        .env("ATM_LOG_DIR", home.join("logs"))
+        .env("ATM_TEAMS_DIR", home.join("teams"))
         .env("ATM_IDENTITY", identity)
         .env("ATM_TEAM", team)
         .output()
         .expect("run the built atm binary")
+}
+
+fn list_recipient(home: &Path, recipient: &str, team: &str) -> Output {
+    run_atm_in_home(
+        &["list", "--all", "--team", team, "--as", recipient, "--json"],
+        recipient,
+        team,
+        home,
+    )
+}
+
+struct OwnedDaemon(Option<Child>);
+
+impl Drop for OwnedDaemon {
+    fn drop(&mut self) {
+        if let Some(child) = &mut self.0 {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+fn ensure_daemon(home: &Path, recipient: &str, team: &str) -> OwnedDaemon {
+    if list_recipient(home, recipient, team).status.success() {
+        return OwnedDaemon(None);
+    }
+
+    let daemon_name = if cfg!(windows) {
+        "atm-daemon.exe"
+    } else {
+        "atm-daemon"
+    };
+    let daemon_path = PathBuf::from(env!("CARGO_BIN_EXE_atm")).with_file_name(daemon_name);
+    let mut child = Command::new(daemon_path)
+        .args(["--peer-wire-security", "plaintext-test"])
+        .current_dir(workspace_root())
+        .env("HOME", home)
+        .env("ATM_HOME", home)
+        .env("ATM_CONFIG_HOME", home.join("config"))
+        .env("ATM_LOG_DIR", home.join("logs"))
+        .env("ATM_TEAMS_DIR", home.join("teams"))
+        .env("ATM_IDENTITY", recipient)
+        .env("ATM_TEAM", team)
+        .env("ATM_DAEMON_READY_STDOUT", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("start the built Tokio/Axum daemon for the process test");
+    let stdout = child.stdout.take().expect("daemon readiness pipe");
+    let (ready_sender, ready_receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if line.trim() == "ATM_DAEMON_READY" {
+                let _ = ready_sender.send(true);
+                return;
+            }
+        }
+        let _ = ready_sender.send(false);
+    });
+    let owned = OwnedDaemon(Some(child));
+    let ready = ready_receiver
+        .recv_timeout(Duration::from_secs(30))
+        .unwrap_or(false);
+    let listed = list_recipient(home, recipient, team);
+    assert!(
+        listed.status.success(),
+        "Tokio/Axum daemon ready={ready}, recipient list failed: {}",
+        String::from_utf8_lossy(&listed.stderr)
+    );
+    owned
 }
 
 #[test]
@@ -219,9 +297,20 @@ fn send_render_fails_closed_on_missing_variables() {
     let identity = format!("render-reader-{unique}");
     let team = format!("render-test-{unique}");
     let dir = tempfile::tempdir().expect("temp dir");
+    let home = tempfile::tempdir().expect("temporary ATM environment");
+    let recipient_identity = "recipient";
+    let _daemon = ensure_daemon(home.path(), recipient_identity, &team);
+    let before = list_recipient(home.path(), recipient_identity, &team);
+    assert!(
+        before.status.success(),
+        "recipient list failed: {}",
+        String::from_utf8_lossy(&before.stderr)
+    );
+    let before: ListOutcome = serde_json::from_slice(&before.stdout).expect("recipient list JSON");
+    assert!(before.rows.is_empty(), "recipient mailbox must start empty");
     let (template, partial, _) = write_strict_fixture(dir.path());
     let recipient = format!("recipient@{team}");
-    let output = run_atm_as(
+    let output = run_atm_in_home(
         &[
             "send",
             &recipient,
@@ -233,6 +322,7 @@ fn send_render_fails_closed_on_missing_variables() {
         ],
         &identity,
         &team,
+        home.path(),
     );
 
     assert!(!output.status.success(), "unbound variable must fail");
@@ -249,5 +339,16 @@ fn send_render_fails_closed_on_missing_variables() {
     assert!(
         stderr.contains("strict.md.j2"),
         "must name the template: {stderr}"
+    );
+    let after = list_recipient(home.path(), recipient_identity, &team);
+    assert!(
+        after.status.success(),
+        "recipient list failed after rejected send: {}",
+        String::from_utf8_lossy(&after.stderr)
+    );
+    let after: ListOutcome = serde_json::from_slice(&after.stdout).expect("recipient list JSON");
+    assert!(
+        after.rows.is_empty(),
+        "rejected send must not persist a recipient mailbox row"
     );
 }
