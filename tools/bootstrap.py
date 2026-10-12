@@ -674,7 +674,7 @@ def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
     """Prove every installed external tool reports the exact manifest version."""
     if not cargo_binstall_matches(manifest):
         raise BootstrapError(f"cargo-binstall is not the exact pinned prebuilt release {manifest.cargo_binstall}.")
-    for name, version in manifest.cargo_tools:
+    for name, version in cargo_tools_for_host(manifest):
         if not binstall_tool_matches(name, version):
             raise BootstrapError(f"{name} is not the exact pinned prebuilt version {version}.")
     sc_compose = cargo_bin_path("sc-compose")
@@ -718,6 +718,18 @@ def install_git_hooks(*, dry_run: bool) -> None:
 
 
 WINDOWS_MSVC_TARGET = "x86_64-pc-windows-msvc"
+CARGO_XWIN = "cargo-xwin"
+
+
+def cargo_tools_for_host(manifest: BootstrapManifest) -> tuple[tuple[str, str], ...]:
+    """Return the manifest tools that apply to the current bootstrap host.
+
+    cargo-xwin is used to cross-compile Windows artifacts from non-Windows
+    hosts. It has no Windows release, and native Windows CI does not need it.
+    """
+    if sys.platform == "win32":
+        return tuple((name, version) for name, version in manifest.cargo_tools if name != CARGO_XWIN)
+    return manifest.cargo_tools
 
 
 def install_windows_msvc_target(*, dry_run: bool) -> None:
@@ -735,7 +747,7 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     if not cargo_binstall_matches(manifest):
         install_cargo_binstall_release(manifest, dry_run=dry_run)
     allowed_strategies = dict(manifest.cargo_allowed_strategies)
-    for name, version in manifest.cargo_tools:
+    for name, version in cargo_tools_for_host(manifest):
         if binstall_tool_matches(name, version):
             continue
         run(

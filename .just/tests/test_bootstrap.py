@@ -315,6 +315,13 @@ class BootstrapTests(IsolatedHomeTests):
                 bootstrap.install_windows_msvc_target(dry_run=False)
         run.assert_not_called()
 
+    def test_cargo_xwin_is_required_only_off_windows(self) -> None:
+        manifest = bootstrap.load_manifest()
+        with mock.patch.object(bootstrap.sys, "platform", "win32"):
+            self.assertNotIn(bootstrap.CARGO_XWIN, dict(bootstrap.cargo_tools_for_host(manifest)))
+        with mock.patch.object(bootstrap.sys, "platform", "linux"):
+            self.assertIn(bootstrap.CARGO_XWIN, dict(bootstrap.cargo_tools_for_host(manifest)))
+
     def test_bootstrap_installs_pinned_binstall_before_cargo_tools(self) -> None:
         manifest = bootstrap.load_manifest()
         with (
