@@ -6,6 +6,8 @@ import re
 import subprocess
 import unittest
 
+from rendering import render
+
 
 ROOT = Path(__file__).parents[2]
 
@@ -62,18 +64,14 @@ class TemplateContractTests(unittest.TestCase):
         loader = importlib.machinery.SourceFileLoader("sanity_split", str(ROOT / "scripts/sanity-split"))
         split = importlib.util.module_from_spec(importlib.util.spec_from_loader("sanity_split", loader))
         loader.exec_module(split)
-        result = subprocess.run(["sc-compose", "render", "--file", str(ROOT / "templates/finding-bead.json.j2"),
-                                 "--var-file", str(ROOT / "examples/finding-bead-vars.json"), "--strict"],
-                                capture_output=True, text=True)
+        result = render(ROOT / "templates/finding-bead.json.j2", ROOT / "examples/finding-bead-vars.json")
         self.assertEqual(result.returncode, 0, result.stderr)
         items = split.parse_deliverables(json.loads(result.stdout)["description"])
         self.assertEqual(len(items), 1)
 
     def test_a_finding_bead_is_a_child_of_the_phase_or_feature_bead_not_the_sprint(self):
         import json, subprocess
-        result = subprocess.run(["sc-compose", "render", "--file", str(ROOT / "templates/finding-bead.json.j2"),
-                                 "--var-file", str(ROOT / "examples/finding-bead-vars.json"), "--strict"],
-                                capture_output=True, text=True)
+        result = render(ROOT / "templates/finding-bead.json.j2", ROOT / "examples/finding-bead-vars.json")
         self.assertEqual(result.returncode, 0, result.stderr)
         bead = json.loads(result.stdout)
         edges = {d["type"]: d["depends_on_id"] for d in bead["dependencies"]}
@@ -148,9 +146,7 @@ class TemplateContractTests(unittest.TestCase):
                     if not valid:
                         self.assertIn("review completion:", checked.stderr)
                         continue
-                    result = subprocess.run([
-                        "sc-compose", "render", "--file", str(template),
-                        "--var-file", str(variables), "--strict"], capture_output=True, text=True)
+                    result = render(template, variables)
                     self.assertEqual(result.returncode == 0, valid, result.stderr)
                     if valid:
                         machine = json.loads(result.stdout.split("```json\n", 1)[1].split("```", 1)[0])
@@ -167,9 +163,7 @@ class TemplateContractTests(unittest.TestCase):
                 if not include:
                     del candidate["post_mortem_jev"]
                 path.write_text(json.dumps(candidate))
-                result = subprocess.run([
-                    "sc-compose", "render", "--file", str(ROOT / "templates/review-complete.md.j2"),
-                    "--var-file", str(path), "--strict"], capture_output=True, text=True)
+                result = render(ROOT / "templates/review-complete.md.j2", path)
                 self.assertEqual(result.returncode == 0, include, result.stderr)
                 if include:
                     machine = json.loads(result.stdout.split("```json\n", 1)[1].split("```", 1)[0])
@@ -184,9 +178,7 @@ class TemplateContractTests(unittest.TestCase):
             variables = examples / fixture_name
             with self.subTest(template=template_path.name):
                 self.assertTrue(variables.is_file(), f"missing strict-render fixture: {fixture_name}")
-                result = subprocess.run([
-                    "sc-compose", "render", "--file", str(template_path),
-                    "--var-file", str(variables), "--strict"], capture_output=True, text=True)
+                result = render(template_path, variables)
                 self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_sanity_assignment_context_shape_matches_reviewer_inputs(self):
@@ -194,12 +186,9 @@ class TemplateContractTests(unittest.TestCase):
         examples = ROOT / "examples"
         rendered_values = []
         for fixture, expected_context in (("dev-sanity-assignment-vars.json", []),
-                                          ("dev-sanity-assignment-context-vars.json", [{"path": "docs/retry.md", "why": "The deliverable delegates retry policy here."}])):
+                                          ("dev-sanity-assignment-context-vars.json", ["docs/retry.md"])):
             with self.subTest(fixture=fixture):
-                result = subprocess.run([
-                    "sc-compose", "render", "--strict", "--file", str(assignment),
-                    "--var-file", str(examples / fixture),
-                ], capture_output=True, text=True)
+                result = render(assignment, examples / fixture)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 rendered = json.loads(result.stdout)
                 self.assertEqual(rendered["context"], expected_context)
@@ -227,25 +216,31 @@ class TemplateContractTests(unittest.TestCase):
         spec.loader.exec_module(client)
         # every field the client reads is in the documented input; only the example's paths are not a repository
         with self.assertRaises(client.JevError) as raised:
-            client.assignment_request(assignment)
+            client.assignment_requests(assignment)
         self.assertEqual(raised.exception.message, "Committed evidence unreadable at the pinned commits")
-        for code in ("SANITY.JEV_UNAVAILABLE", "SANITY.JEV_RESPONSE_INVALID", "SANITY.JEV_INCONCLUSIVE"):
+        for code in ("SANITY.JEV_UNAVAILABLE", "SANITY.JEV_RESPONSE_INVALID", "SANITY.JEV_REQUEST_TOO_LARGE"):
             self.assertIn(code, text)
 
 
 def _render(template: str, values: dict) -> subprocess.CompletedProcess:
-    import json
-    import tempfile
-    with tempfile.TemporaryDirectory() as directory:
-        variables = Path(directory) / "vars.json"
-        variables.write_text(json.dumps(values))
-        return subprocess.run(["sc-compose", "render", "--file", str(ROOT / "templates" / template),
-                               "--var-file", str(variables), "--strict"], capture_output=True, text=True)
+    return render(ROOT / "templates" / template, values)
 
 
 def _example(name: str) -> dict:
     import json
     return json.loads((ROOT / "examples" / name).read_text())
+
+
+class TaskRefusedLayoutTests(unittest.TestCase):
+    def test_the_machine_status_heading_starts_its_own_line(self):
+        values = _example("task-refused-vars.json")
+        for branch, commit in (("sprint/d-4-x", "abc1234"), ("sprint/d-4-x", ""), ("", "")):
+            with self.subTest(branch=branch, commit=commit):
+                out = _render("task-refused.md.j2", {**values, "branch": branch, "commit": commit})
+                self.assertEqual(out.returncode, 0, out.stderr)
+                self.assertIn("\n## Machine Status (JSON)\n", out.stdout)
+                if branch:
+                    self.assertIn(f"Branch: `{branch}`" + (f" at `{commit}`" if commit else "") + "\n", out.stdout)
 
 
 class FixRoundReviewerScopeTests(unittest.TestCase):
@@ -335,6 +330,27 @@ class FixRoundReviewerScopeTests(unittest.TestCase):
         self.assertEqual(qa.returncode, 0, qa.stderr)
         self.assertIn("This is a sprint review: run the full reviewer set", qa.stdout)
         self.assertNotIn("fix-round-scope", qa.stdout)
+
+    def test_without_a_pr_number_step_a_reads_the_branch_head(self):
+        values = _example("qa-template-fix-round-vars.json")
+        for given in ({k: v for k, v in values.items() if k != "pr_number"}, {**values, "pr_number": 41}):
+            qa = _render(self.QA, given)
+            self.assertEqual(qa.returncode, 0, qa.stderr)
+            step_a = qa.stdout[qa.stdout.index('<step id="a">'):qa.stdout.index('<step id="a1">')]
+            self.assertNotIn("gh pr view  ", step_a)
+            if "pr_number" in given:
+                self.assertIn("`gh pr view 41 --json baseRefName,headRefOid", step_a)
+            else:
+                self.assertNotIn("gh pr view", step_a)
+                self.assertIn(f"`git rev-parse origin/{values['branch']}` (no PR given", step_a)
+
+    def test_fix_verification_passes_each_reply_by_path_and_rust_best_practices_reviews_all(self):
+        qa = _render(self.QA, _example("qa-template-fix-round-vars.json"))
+        self.assertEqual(qa.returncode, 0, qa.stderr)
+        task = _example("qa-template-fix-round-vars.json")["task_id"]
+        self.assertIn(f"--result <scratch>/{task}-<reviewer>-result.json`", qa.stdout)
+        self.assertNotIn("--result <its result>", qa.stdout)
+        self.assertIn("`rust-best-practices-agent` also gets `practice_mode` = `all`", qa.stdout)
 
     def test_carried_finding_on_a_sprint_branch_is_fix_verification(self):
         qa = _render(self.QA, {**_example("qa-template-vars.json"), "carry_forward": "x-d-4.qa1-f1-r1-fix"})
@@ -436,12 +452,14 @@ class DevAssignmentTests(unittest.TestCase):
                 self.assertNotEqual(_render("fix-complete.md.j2", values).returncode, 0)
 
     def test_every_dev_lands_its_pr_on_the_current_stack_top(self):
+        primary = "/repo/primary"  # the examples' primary_checkout holds an install-time placeholder only the installer renders
         for name in ("dev-template.xml.j2", "dev-fix.xml.j2", "fix-assignment.xml.j2"):
-            result = _render(name, _example(name.removesuffix(".j2").rsplit(".", 1)[0] + "-vars.json"))
+            values = _example(name.removesuffix(".j2").rsplit(".", 1)[0] + "-vars.json")
+            result = _render(name, {**values, "primary_checkout": primary})
             with self.subTest(template=name):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("Rebase onto the stack's current top (it may have moved since dispatch)", result.stdout)
-                self.assertRegex(result.stdout, r"the top is what `\S+/\.claude/skills/atm-bd-orchestration/scripts/assignment-gates\.py stack-top --pr-target \S+` prints on exit 0")
+                self.assertRegex(result.stdout, r"the top is what `" + re.escape(primary) + r"/\.claude/skills/atm-bd-orchestration/scripts/assignment-gates\.py stack-top --pr-target \S+` prints on exit 0")
                 self.assertIn("any other exit prints a code (`STACK_AMBIGUOUS`, `GATE_CANNOT_RUN`): never guess, refuse with it by step ", result.stdout)
                 self.assertNotIn("no output means the top is", result.stdout)
                 self.assertNotIn("gh_stack_view.py", result.stdout)
@@ -561,6 +579,17 @@ class PlanFixRoundTests(unittest.TestCase):
         plan = _render(self.PLAN, _example("plan-review-template-fix-round-vars.json"))
         self.assertIn("`round_index` = 2", plan.stdout)
 
+    def test_ceremony_qa_fix_round_gets_its_contract_keys_and_the_plan_file_is_named(self):
+        values = _example("plan-review-template-fix-round-vars.json")
+        plan = _render(self.PLAN, values)
+        self.assertEqual(plan.returncode, 0, plan.stderr)
+        self.assertIn("`carry_forward_findings` for `ceremony-qa`", plan.stdout)
+        self.assertIn(f"`ceremony-qa`, when it filed a carried finding, also gets `review_mode` = `doc_review`, "
+                      f"`worktree_path` = `{values['worktree_path']}`", plan.stdout)
+        for given in (values, _example("plan-review-template-vars.json")):
+            out = _render(self.PLAN, given).stdout
+            self.assertIn(f"the plan file `{given['plans_dir']}/phase-{given['phase']}.jsonl`", out)
+
     def test_removed_variable_is_not_required(self):
         values = {**_example("plan-review-template-fix-round-vars.json"), "reviewers_scope_locked": ["x"]}
         self.assertEqual(_render(self.PLAN, values).returncode, 0)
@@ -568,9 +597,9 @@ class PlanFixRoundTests(unittest.TestCase):
 
 # Config-backed dispatch variables (the lead fills them from .claude/project/atm-bd-orchestration.yaml).
 CONFIG_VARS = {
-    "dev-template.xml.j2": ("test_command", "policy_path"),
-    "fix-assignment.xml.j2": ("test_command", "policy_path", "requirements_globs", "adr_globs"),
-    "dev-fix.xml.j2": ("test_command",),
+    "dev-template.xml.j2": ("test_command", "lint_command", "policy_path"),
+    "fix-assignment.xml.j2": ("test_command", "lint_command", "policy_path", "requirements_globs", "adr_globs"),
+    "dev-fix.xml.j2": ("test_command", "lint_command"),
     "dev-sanity-template.xml.j2": ("lint_command",),
     "qa-template.xml.j2": ("policy_path", "reviewers_round1"),
     "plan-review-template.xml.j2": ("integration_branch", "plans_dir", "requirements_globs", "adr_globs"),
@@ -655,7 +684,7 @@ class QaLogContractTests(unittest.TestCase):
 
     ROUND_ROW = ("'{completed_at:$completed_at, completed_local:$completed_local, duration:$duration, phase:$phase, sprint:$sprint,\n"
                  "    task:$task, pr_number:(($pr_number|tonumber?)//null), iteration:$iteration, verdict:$verdict, tested:$tested,\n"
-                 "    fnd:$fnd, blk:$blk, imp:$imp, min:$min}' >> .sc/qa-log/phase-d.jsonl")
+                 "    fnd:$fnd, blk:$blk, imp:$imp, min:$min}')\nprintf '%s\\n' \"$ROW\" >> .sc/qa-log/phase-d.jsonl")
     STATS_ROW = ("  {snapshot_at: $completed_at, snapshot_local: $completed_local, phase: $ph, trigger_task: $task,\n"
                  "   tot: ($f | length),\n")
 
@@ -665,10 +694,11 @@ class QaLogContractTests(unittest.TestCase):
                 result = _render("qa-template.xml.j2", _example(example))
                 self.assertEqual(result.returncode, 0, result.stderr)
                 step = result.stdout[result.stdout.index('<step id="j">'):]
-                self.assertIn("mkdir -p .sc/qa-log\nLOCKDIR=.sc/qa-log/.append.lock\n", step)
+                self.assertIn("mkdir -p .sc/qa-log\n", step)
+                self.assertNotIn("LOCKDIR", step)   # one printf append per row; no lock
                 self.assertIn(self.ROUND_ROW, step)
                 self.assertIn(self.STATS_ROW, step)
-                self.assertIn("min: ([$f[] | select(.status==\"open\" and .metadata.severity==\"minor\")] | length)}' >> .sc/qa-log/phase-d-stats.jsonl", step)
+                self.assertIn("min: ([$f[] | select(.status==\"open\" and .metadata.severity==\"minor\")] | length)}')\nprintf '%s\\n' \"$STATS\" >> .sc/qa-log/phase-d-stats.jsonl", step)
 
 
 if __name__ == "__main__":

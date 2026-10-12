@@ -12,7 +12,8 @@ import time
 import unittest
 from unittest.mock import patch
 
-from jev_receipts import CLIENT, env as receipt_env, receipted
+from jev_receipts import CLIENT, env as receipt_env, receipted, split
+from rendering import render
 
 ROOT = Path(__file__).parents[2]
 SCRIPTS = ROOT / "scripts"
@@ -83,11 +84,7 @@ class SanityHistory(unittest.TestCase):
 
     def test_assignment_selection_renders_without_legacy_reviewers(self):
         variables = json.loads((SCRIPTS.parent / "examples/dev-sanity-template-vars.json").read_text())
-        var_file = self.root / "vars.json"
-        var_file.write_text(json.dumps(variables))
-        rendered = subprocess.run(["sc-compose", "render", "--strict", "--file",
-                                   str(SCRIPTS.parent / "templates/dev-sanity-template.xml.j2"),
-                                   "--var-file", str(var_file)], capture_output=True, text=True)
+        rendered = render(SCRIPTS.parent / "templates/dev-sanity-template.xml.j2", variables)
         self.assertEqual(rendered.returncode, 0, rendered.stderr)
         self.assertNotIn("<reviewers>", rendered.stdout)
         self.assertIn("canonical coordinator", rendered.stdout)
@@ -105,6 +102,20 @@ class SanityHistory(unittest.TestCase):
         with self.assertRaises(SystemExit):
             HISTORY.append_record(self.log, record(run_id="new"))
         self.assertEqual(self.log.read_bytes(), before + b'{"truncated"')
+
+    def test_a_log_without_a_final_newline_is_refused_with_the_fix(self):
+        HISTORY.append_record(self.log, record())
+        before = self.log.read_bytes().rstrip(b"\n")
+        self.log.write_bytes(before)
+        with self.assertRaises(SystemExit) as caught:
+            HISTORY.append_record(self.log, record(run_id="new"))
+        self.assertIn("append the newline", str(caught.exception))
+        self.assertIn("ERR_RENDER_APPEND_NO_FINAL_NEWLINE", str(caught.exception))
+        self.assertEqual(self.log.read_bytes(), before)
+        with self.log.open("ab") as log:
+            log.write(b"\n")
+        HISTORY.append_record(self.log, record(run_id="new"))
+        self.assertEqual([json.loads(line)["run_id"] for line in self.log.read_text().splitlines()], ["run-one", "new"])
 
     def test_cli_real_render_concurrent_appends(self):
         # Real separate writer processes and installed sc-compose. The only fake
@@ -162,6 +173,9 @@ class SanityHistory(unittest.TestCase):
                                                                {"success": False, "data": None, "error": {}}]}
         self.assertEqual(HISTORY.jev_receipts(vars), [jev_reply(1)["data"]["jev"], jev_reply(2, [{"kind": "skipped"}])["data"]["jev"]])
         self.assertEqual(HISTORY.jev_receipts(dict(vars, reviewer="sanity-llm")), [])
+        parted = split(jev_reply(3), ["yes", "no"])
+        self.assertEqual(HISTORY.jev_receipts({"reviewer": "sanity-jev", "reviewer_results": [jev_reply(1), parted]}),
+                         [RECEIPT] + [part["receipt"] for part in parted["data"]["jev"]])  # every part's receipt
         jev = record(reviewer="sanity-jev", jev_receipts=[RECEIPT])
         self.assertEqual(HISTORY.render_record(jev), jev)
         for invalid in (record(reviewer="sanity-jev"), record(reviewer="sanity-jev", verdict="FAIL", findings=1),
@@ -195,10 +209,7 @@ class SanityHistory(unittest.TestCase):
     def test_table_skips_pre_0_8_2_rows(self):
         legacy = {key: value for key, value in record().items() if key not in ("completed_local", "final_verdict")}
         runs = [dict(legacy, reviewer="sanity-selected"), legacy]
-        table = subprocess.run(["sc-compose", "render", "--strict", "--root", str(SCRIPTS.parent),
-                                "--file", str(SCRIPTS.parent / "templates/sanity-run-table.md.j2"),
-                                "--var-file", "/dev/stdin"],
-                               input=json.dumps({"runs": runs}), capture_output=True, text=True)
+        table = render(SCRIPTS.parent / "templates/sanity-run-table.md.j2", {"runs": runs})
         self.assertEqual(table.returncode, 0, table.stderr)
         self.assertEqual(table.stdout.splitlines()[2:],
                          ["| d-4 | #42 | LLM | 0 | ✅ | — | 2026-09-30T16:01:05Z · 1m05s | 1 |"])

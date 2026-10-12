@@ -14,8 +14,8 @@ Reads the checked bead (`bd show <bead> --json`, or `--bead-json`), parses the
 numbered list under `## Deliverables` (a poured bead without one, or without
 `owned_paths`, takes it from its sprint container `metadata.sprint_bead`), pins the target commit, lists the files
 changed since the base (with `--layer-pr`, the union of those PRs' own ranges,
-`gh pr view <n> --json baseRefOid,headRefOid`, the checked PR last), renders `dev-sanity-assignment.json.j2` once per
-deliverable with `sc-compose`, starts the lint command detached in the
+one `gh api repos/{owner}/{repo}/pulls --paginate` listing joined locally, the checked PR last), renders `dev-sanity-assignment.json.j2` once per
+deliverable with the sc-compose wheel, starts the lint command detached in the
 worktree, and prints one JSON manifest to stdout:
 
   {run_id, reviewers, operational_reviewer, sha, base_sha, sanity_bead, dev_bead, branch, worktree_path,
@@ -60,7 +60,6 @@ import re
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 import uuid
 
@@ -68,6 +67,9 @@ import uuid
 IGNORED_STATUS_PATHS = (".beads.gate.lock", ".sc-compose/")
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parents[1] / "atm-beads" / "scripts"))
+import sc_render  # noqa: E402
+
 TEMPLATE = HERE.parent / "templates" / "dev-sanity-assignment.json.j2"
 CODES = {2: "SANITY.PLAN_INVALID", 3: "SANITY.TARGET_UNREADABLE", 4: "SANITY.COMMIT_MISMATCH", 5: "RENDER_FAILED"}
 
@@ -203,24 +205,35 @@ def pin(args):
     return sha, base_sha
 
 
-def layer_range(worktree, pr):
-    """One stack layer's own range: its PR's (baseRefOid, headRefOid)."""
+PULLS = ("gh", "api", "repos/{owner}/{repo}/pulls?state=all&per_page=100", "--paginate",
+         "--jq", ".[] | {number: .number, base: .base.sha, head: .head.sha}")
+
+
+def layer_ranges(worktree, prs):
+    """Each stack layer's own range, (base.sha, head.sha), from one paginated pulls listing joined locally."""
     try:
-        run = subprocess.run(["gh", "pr", "view", pr, "--json", "baseRefOid,headRefOid"], capture_output=True, text=True, cwd=worktree)
+        run = subprocess.run(PULLS, capture_output=True, text=True, cwd=worktree)
     except OSError as exc:
         raise Fail(3, f"gh unavailable: {exc}")
     if run.returncode != 0:
-        raise Fail(3, f"gh pr view {pr} failed: {run.stderr.strip()}")
+        raise Fail(3, f"gh api pulls failed: {run.stderr.strip()}")
+    listed = {}
     try:
-        data = json.loads(run.stdout)
-        return str(data["baseRefOid"]), str(data["headRefOid"])
+        for line in run.stdout.splitlines():
+            if line.strip():
+                row = json.loads(line)
+                listed[str(row["number"])] = (str(row["base"]), str(row["head"]))
     except (ValueError, KeyError, TypeError):
-        raise Fail(3, f"gh pr view {pr} returned no baseRefOid/headRefOid")
+        raise Fail(3, f"gh api pulls returned a row without number/base.sha/head.sha: {line[:200]}")
+    missing = [pr for pr in prs if pr not in listed]
+    if missing:
+        raise Fail(3, f"layer PR(s) {', '.join(missing)} not in the repository's pull request listing")
+    return [listed[pr] for pr in prs]
 
 
 def layer_files(worktree, prs, sha):
     """The union of the changed files of each layer PR's own range; the last (checked) PR's head must be the pinned sha."""
-    ranges = [layer_range(worktree, pr) for pr in prs]
+    ranges = layer_ranges(worktree, prs)
     if ranges[-1][1] != sha:
         raise Fail(4, f"PR {prs[-1]} head is {ranges[-1][1]}, not {sha}")
     return sorted(set().union(*(changed_files(worktree, base, head) for base, head in ranges)))
@@ -266,22 +279,13 @@ def outside_fence(files, owned_paths):
 
 
 def render(template, variables):
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
-        json.dump(variables, handle)
-        var_file = handle.name
     try:
-        run = subprocess.run(
-            ["sc-compose", "render", "--strict", "--root", str(template.parent), "--file", template.name,
-             "--var-file", var_file], capture_output=True, text=True)
-    except OSError as exc:
-        raise Fail(5, f"sc-compose unavailable: {exc}")
-    finally:
-        os.unlink(var_file)
-    if run.returncode != 0:
+        text = sc_render.render(template, variables)
+    except sc_render.RenderError as exc:
         raise Fail(5, f"sc-compose render failed for deliverable {variables['deliverable_number']}: "
-                      f"{run.stderr.strip().splitlines()[0] if run.stderr.strip() else run.returncode}")
+                      f"{sc_render.error_text(exc).splitlines()[0]}")
     try:
-        return json.loads(run.stdout)
+        return json.loads(text)
     except ValueError:
         raise Fail(5, f"rendered assignment {variables['deliverable_number']} is not JSON")
 

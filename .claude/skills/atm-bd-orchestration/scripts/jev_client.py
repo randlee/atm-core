@@ -28,6 +28,12 @@ class JevError(Exception):
 
 REPORT = "Report this error unchanged; the coordinator records the slot unavailable."
 RETRY = "Transient: wait 60 seconds and run the same command once more. If it fails again, " + REPORT[0].lower() + REPORT[1:]
+REBUILD = ("Rebuild `context` and rerun `--assignment <file>`: narrow each entry to the line ranges the deliverable "
+           "needs (`path:start-end`, e.g. `docs/x.md:120-180`), drop entries the deliverable does not need, and never "
+           "remove `deliverable.text` or `changed_files`. Leave `context` empty only when nothing in it is needed: "
+           "with `context` empty the client splits `changed_files` into requests that each fit.")
+CONTEXT_RANGE = re.compile(r"(?P<path>.+):(?P<start>[0-9]+)-(?P<end>[0-9]+)")  # a `context` entry naming lines
+FENCED = re.compile(r"\s*```(?:json)?[ \t]*\n(.*?)\n```\s*", re.S)  # an assignment as received: fenced JSON
 FIXES = (  # message prefix -> what the calling agent does next
     ("TYPESAFE_API_KEY is missing", "No Jev call is possible without TYPESAFE_API_KEY. " + REPORT),
     ("TYPESAFE_API_KEY has invalid formatting", "TYPESAFE_API_KEY holds whitespace, quotes or control characters. " + REPORT),
@@ -35,6 +41,8 @@ FIXES = (  # message prefix -> what the calling agent does next
      "`commit`, `base_sha`, `changed_files` and `context`. If the received assignment lacks one, " + REPORT[0].lower() + REPORT[1:]),
     ("Committed evidence unreadable", "Run `git -C <worktree_path> fetch origin` so `commit` and `base_sha` exist, then run "
      "the same command again. If it still fails, a `changed_files` or `context` path is missing at `commit`: " + REPORT[0].lower() + REPORT[1:]),
+    ("Context entry", "Fix that `context` entry: `path:start-end` names lines 1 <= start <= end <= the file's line "
+     "count at `commit`; a plain `path` sends the whole file. Then run the same command again."),
     ("Request file unavailable", "Write the file as the JSON object you were given, outside the worktree, and run the command again."),
     ("Jev connection failed", RETRY),
     ("Jev retry budget exhausted", RETRY),
@@ -43,9 +51,9 @@ FIXES = (  # message prefix -> what the calling agent does next
 
 def suggested_action(exc):
     if exc.message.startswith("Request exceeds"):
-        return (f"The request is {exc.size} bytes. Reduce context and retry: remove entries from the assignment's "
-                "`context` list, largest file first, and rerun `--assignment <file>` until it fits. Never remove the "
-                "deliverable text or `changed_files`. If it still exceeds with `context` empty, report this error unchanged.")
+        return getattr(exc, "fix", None) or (
+            f"The request is {exc.size} bytes. Rebuild it under 96000 bytes: send only the state the question needs, "
+            "or run `--assignment <file>`, whose `context` entries may name line ranges (`path:start-end`).")
     if exc.message.startswith("Jev HTTP"):
         return RETRY if exc.recoverable else "Jev rejected the request or the key. " + REPORT
     return next((fix for prefix, fix in FIXES if exc.message.startswith(prefix)), REPORT)
@@ -110,9 +118,7 @@ def validate_request(request):
     except (TypeError, ValueError):
         raise JevError("VALIDATION.INPUT", "Request must contain finite JSON values") from None
     if len(body) > MAX_REQUEST_BYTES:
-        exc = JevError("SANITY.JEV_INCONCLUSIVE", "Request exceeds 96000 bytes, the Jev state budget; no Jev evaluation ran", True)
-        exc.size = len(body)
-        raise exc
+        raise oversize(request)
     return body
 
 
@@ -165,6 +171,7 @@ CLIENT_MESSAGES = re.compile("|".join([
     r"Startup probe returned the wrong literal choice", r"Request file unavailable or invalid JSON",
     r"Assignment lacks deliverable text, worktree, commits or file lists",
     r"Committed evidence unreadable at the pinned commits",
+    r"Context entry .+ names lines outside its file at the pinned commit",
 ]))
 RECEIPT_KEYS = ("model", "question", "choice", "probabilities", "response_id", "request_sha256", "mac")
 
@@ -206,9 +213,71 @@ def startup_request():
     }}
 
 
-def assignment_request(assignment):
-    """The sanity request, built from the assignment so no agent writes it: the deliverable text verbatim,
-    the committed diff of the changed files and the context files at the pinned commit."""
+def written_request(text, evidence, context=None, part=None):
+    state = {"deliverable": text, "evidence": evidence}
+    if context:
+        state["context"] = context
+    instructions = "Does the committed evidence deliver the deliverable?"
+    if part:
+        state["part"], state["changed_files"] = part
+        instructions = ("The evidence is one part of the committed diff of `changed_files`, split to fit the request "
+                        "budget. Does this part deliver its share of the deliverable?")
+    return {"model": MODEL, "state": state, "questions": {"written": {
+        "type": "choice", "instructions": instructions, "criteria": {"yes": "delivered", "no": "not delivered"}}}}
+
+
+def size(request):
+    return len(json.dumps(request, allow_nan=False).encode("utf-8"))
+
+
+def oversize(request, fix=None):
+    exc = JevError("SANITY.JEV_REQUEST_TOO_LARGE", "Request exceeds 96000 bytes, the Jev state budget; no Jev evaluation ran", True)
+    exc.size = size(request)
+    exc.fix = fix and fix.format(size=exc.size)
+    return exc
+
+
+def diff_pieces(diff, budget):
+    """`diff` (one file's) as pieces each under `budget` encoded bytes: the file header with one hunk, a hunk too large
+    for that cut by lines under its header and @@ line, and a line too large for that cut by characters."""
+    def cost(text):
+        return len(json.dumps(text).encode("utf-8")) - 2
+    head, _, rest = diff.partition("\n@@")
+    if not rest:
+        head, rest = "", diff
+    else:
+        head, rest = head + "\n", "@@" + rest
+    hunks = [h if i == 0 else "@@" + h for i, h in enumerate(rest.split("\n@@"))] if head else [rest]
+    hunks = [h if h.endswith("\n") or i == len(hunks) - 1 else h + "\n" for i, h in enumerate(hunks)]
+    pieces = []
+    for hunk in hunks:
+        if cost(head + hunk) <= budget:
+            pieces.append(head + hunk)
+            continue
+        at, _, body = hunk.partition("\n")
+        prefix = head + at + "\n"
+        room = budget - cost(prefix)
+        lines = []
+        for line in body.splitlines(keepends=True):
+            step = max(1, room // 6)  # a character encodes to at most 6 JSON bytes
+            lines += [line] if cost(line) <= room else [line[i:i + step] for i in range(0, len(line), step)]
+        chunk = ""
+        for line in lines:
+            if chunk and cost(chunk + line) > room:
+                pieces.append(prefix + chunk)
+                chunk = ""
+            chunk += line
+        if chunk:
+            pieces.append(prefix + chunk)
+    return pieces
+
+
+def assignment_requests(assignment):
+    """The sanity requests, built from the assignment so no agent writes them: the deliverable text verbatim, the
+    committed diff of the changed files and the context entries at the pinned commit (a `path:start-end` entry only
+    those lines, labelled with the entry). One request when it fits under
+    MAX_REQUEST_BYTES; with `context` empty and the diff over the cap, `changed_files` split into groups (a file whose
+    diff alone is over the cap split by hunks) whose requests each fit, one Jev call per part."""
     try:
         text, worktree = assignment["deliverable"]["text"], assignment["worktree_path"]
         commit, base, changed, context = (assignment[k] for k in ("commit", "base_sha", "changed_files", "context"))
@@ -224,12 +293,48 @@ def assignment_request(assignment):
             raise JevError("VALIDATION.INPUT", "Committed evidence unreadable at the pinned commits")
         return proc.stdout
 
-    state = {"deliverable": text, "evidence": git("diff", "--no-color", f"{base}...{commit}", "--", *changed) if changed else ""}
+    def diff(*paths):
+        return git("diff", "--no-color", f"{base}...{commit}", "--", *paths) if paths else ""
+
+    def excerpt(entry):
+        """A plain path's whole file at `commit`, or only lines start..end (1-based, inclusive) of `path:start-end`."""
+        lines = CONTEXT_RANGE.fullmatch(entry)
+        if not lines:
+            return git("show", f"{commit}:{entry}")
+        text, start, end = git("show", f"{commit}:{lines['path']}"), int(lines["start"]), int(lines["end"])
+        kept = text.splitlines(keepends=True)
+        if not 1 <= start <= end <= len(kept):
+            raise JevError("VALIDATION.INPUT", f"Context entry {entry} names lines outside its file at the pinned commit")
+        return "".join(kept[start - 1:end])
+
+    request = written_request(text, diff(*changed), {entry: excerpt(entry) for entry in context})
+    if size(request) <= MAX_REQUEST_BYTES:
+        return [request]
     if context:
-        state["context"] = {path: git("show", f"{commit}:{path}") for path in context}
-    return {"model": MODEL, "state": state, "questions": {"written": {
-        "type": "choice", "instructions": "Does the committed evidence deliver the deliverable?",
-        "criteria": {"yes": "delivered", "no": "not delivered"}}}}
+        raise oversize(request, "The request is {size} bytes, over the 96000-byte Jev budget. " + REBUILD)
+    label = (f"{len(changed) * 1000} of {len(changed) * 1000}", changed)  # the widest part label, so every part fits
+    budget = MAX_REQUEST_BYTES - size(written_request(text, "", part=label))
+    if budget <= 0:
+        raise oversize(request, "The deliverable text alone makes the request {size} bytes, over the 96000-byte Jev "
+                       "budget, so no split of `changed_files` fits. Tell the task assigner this deliverable's text "
+                       "must be split into smaller numbered deliverables in the plan.")
+    groups, evidence = [], ""
+    for piece in (p for path in changed for p in diff_pieces(diff(path), budget)):
+        if evidence and size(written_request(text, evidence + piece, part=label)) > MAX_REQUEST_BYTES:
+            groups.append(evidence)
+            evidence = ""
+        evidence += piece
+    groups.append(evidence)
+    return [written_request(text, part, part=(f"{i} of {len(groups)}", changed)) for i, part in enumerate(groups, 1)]
+
+
+def parts(requests, responses, key):
+    """Every part's full result, in order, with its own receipt: no part is reduced into another. Reconciling parts
+    that disagree is the sanity teammate's triage, never this client's."""
+    return {"model": MODEL, "parts": [
+        {"part": request["state"]["part"], "changed_files": request["state"]["changed_files"],
+         "response": response, "receipt": receipt(request, response, key)}
+        for request, response in zip(requests, responses)]}
 
 
 def escalation_recipients():
@@ -285,11 +390,17 @@ def main(argv=None):
         if args.startup:
             request = startup_request()
         elif args.assignment:
-            request = assignment_request(json.loads(args.assignment.read_text()))
+            text = args.assignment.read_text()
+            fenced = FENCED.fullmatch(text)
+            requests = assignment_requests(json.loads(fenced.group(1) if fenced else text))
+            request = requests[0]
         else:
             request = json.loads(args.request.read_text())
-        data = evaluate(request)
-        if not args.startup and len(request["questions"]) == 1:
+        if args.assignment and len(requests) > 1:
+            data = parts(requests, [evaluate(r) for r in requests], api_key())
+        else:
+            data = evaluate(request)
+        if not args.startup and len(request["questions"]) == 1 and "parts" not in data:
             data = {**data, "receipt": receipt(request, data, api_key())}
         if args.startup:
             if data["answers"]["startup"]["choice"] != "ready":

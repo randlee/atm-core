@@ -11,6 +11,8 @@ import time
 import unittest
 import unittest.mock
 
+from rendering import render
+
 SCRIPTS = Path(__file__).parents[1]
 SCRIPT = SCRIPTS / "sanity-split"
 MERGE = SCRIPTS / "sanity-merge"
@@ -241,7 +243,7 @@ class SanitySplit(unittest.TestCase):
         manifest_file = self.root / "manifest.json"
         manifest_file.write_text(out.stdout)
         assignment = json.loads(out.stdout)["assignments"][1]["assignment"]
-        context = [{"path": "crates/types/src/lib.rs", "why": "declares the module"}]
+        context = ["crates/types/src/lib.rs"]
         # agents/dev-sanity.md step 4, rerun
         rerun = subprocess.run(["jq", "--argjson", "n", "2", "--argjson", "context", json.dumps(context),
                                 ".assignments[] | select(.number == $n) | .assignment | .context = $context",
@@ -254,9 +256,7 @@ class SanitySplit(unittest.TestCase):
                                                          "files_outside_owned_paths", "worktree_path", "branch",
                                                          "commit", "base_sha")},
                      "context": context}
-        rendered = subprocess.run(["sc-compose", "render", "--strict", "--root", str(SCRIPTS.parent / "templates"),
-                                   "--file", "dev-sanity-assignment.json.j2", "--var-file", "/dev/stdin"],
-                                  input=json.dumps(variables), capture_output=True, text=True)
+        rendered = render(SCRIPTS.parent / "templates/dev-sanity-assignment.json.j2", variables)
         self.assertEqual(rendered.returncode, 0, rendered.stderr)
         self.assertEqual(json.loads(rerun.stdout), json.loads(rendered.stdout))
         self.assertEqual(json.loads(rerun.stdout)["context"], context)
@@ -394,19 +394,35 @@ class SanitySplit(unittest.TestCase):
         self.repo.commit("crates/types/src/retry_tests.rs", "// 503\n", "fix")
         git(self.repo.wt, "push", "-q", "-u", "origin", "fix/x")
         f_head = git(self.repo.wt, "rev-parse", "HEAD")
-        prs = self.root / "prs.json"
-        prs.write_text(json.dumps({"1": {"baseRefOid": la[0], "headRefOid": la[1]}, "3": {"baseRefOid": lb_head, "headRefOid": f_head}}))
+        prs = self.root / "prs.json"     # what one `gh api .../pulls --paginate --jq ...` prints: a row per PR, any order
+        prs.write_text("".join(json.dumps(row) + "\n" for row in (
+            {"number": 3, "base": lb_head, "head": f_head}, {"number": 2, "base": la[1], "head": lb_head},
+            {"number": 1, "base": la[0], "head": la[1]})))
+        calls = self.root / "gh-calls.jsonl"
         fake = self.root / "bin"
         fake.mkdir()
-        (fake / "gh").write_text(f"#!{sys.executable}\nimport json, sys\nprs = json.load(open({str(prs)!r}))\n"
-                                 "sys.exit(1) if sys.argv[3] not in prs else print(json.dumps(prs[sys.argv[3]]))\n")
+        (fake / "gh").write_text(f"#!{sys.executable}\nimport json, sys\nopen({str(calls)!r}, 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                                 f"sys.stdout.write(open({str(prs)!r}).read())\n")
         (fake / "gh").chmod(0o755)
         path = f"{fake}{os.pathsep}{os.environ['PATH']}"
+
+        def split(*extra):
+            calls.unlink(missing_ok=True)
+            out = self.run_split(None, None, f_head, "fix/x", *extra)
+            return out, [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
+
         with unittest.mock.patch.dict(os.environ, {"PATH": path}):
-            whole = self.run_split(None, None, f_head, "fix/x", "develop")
-            own = self.run_split(None, None, f_head, "fix/x", "sprint/y", "--layer-pr", "1", "--layer-pr", "3")
-            stale = self.run_split(None, None, f_head, "fix/x", "sprint/y", "--layer-pr", "3", "--layer-pr", "1")
-            missing = self.run_split(None, None, f_head, "fix/x", "sprint/y", "--layer-pr", "1", "--layer-pr", "9")
+            whole, _ = split("develop")
+            stack, stack_calls = split("sprint/y", "--layer-pr", "1", "--layer-pr", "2", "--layer-pr", "3")
+            own, own_calls = split("sprint/y", "--layer-pr", "1", "--layer-pr", "3")
+            stale, _ = split("sprint/y", "--layer-pr", "3", "--layer-pr", "1")
+            missing, _ = split("sprint/y", "--layer-pr", "1", "--layer-pr", "9")
+        pulls = ["api", "repos/{owner}/{repo}/pulls?state=all&per_page=100", "--paginate",
+                 "--jq", ".[] | {number: .number, base: .base.sha, head: .head.sha}"]
+        self.assertEqual(stack_calls, [pulls])         # three layers, one listing
+        self.assertEqual(own_calls, [pulls])
+        self.assertEqual(stack.returncode, 0, stack.stderr)
+        self.assertEqual(json.loads(stack.stdout)["changed_files"], json.loads(whole.stdout)["changed_files"])
         self.assertIn("docs/other-sprint.md", json.loads(whole.stdout)["changed_files"])  # one span carries the other sprint
         self.assertEqual(own.returncode, 0, own.stderr)
         manifest = json.loads(own.stdout)
@@ -414,7 +430,8 @@ class SanitySplit(unittest.TestCase):
         self.assertEqual(manifest["files_outside_owned_paths"], [])
         self.assertEqual(stale.returncode, 4, stale.stderr)  # the checked PR goes last and must be at the pinned sha
         self.assertEqual(missing.returncode, 3, missing.stderr)
-        for out in (whole, own):
+        self.assertIn("layer PR(s) 9 not in", missing.stderr)
+        for out in (whole, stack, own):
             self.wait_lint(json.loads(out.stdout)["lint"]["exit_file"])
 
     def test_renames_list_source_and_destination(self):

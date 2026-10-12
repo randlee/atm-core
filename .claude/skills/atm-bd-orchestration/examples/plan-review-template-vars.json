@@ -4,6 +4,7 @@
   "phase": "d",
   "round": 1,
   "integration_branch": "integrate/phase-d",
+  "worktree_path": "../atm-core-worktrees/integrate/phase-d",
   "plans_dir": "docs/plans",
   "requirements_globs": [
     "docs/requirements.md",

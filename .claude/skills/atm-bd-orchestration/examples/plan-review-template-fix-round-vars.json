@@ -5,6 +5,7 @@
   "round": 2,
   "carry_forward": "atm-d-4 blocking validate-plan requirements: empty; list the governing REQ ids or [\"NONE\"]\natm-d-5 blocking arch-qa adrs: ADR-020 is not in docs/architecture.md",
   "integration_branch": "integrate/phase-d",
+  "worktree_path": "../atm-core-worktrees/integrate/phase-d",
   "plans_dir": "docs/plans",
   "requirements_globs": [
     "docs/requirements.md",

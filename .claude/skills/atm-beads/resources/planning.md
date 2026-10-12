@@ -30,7 +30,7 @@ rather than reaching an agent:
    and render each strictly into one JSONL file:
 
    ```bash
-   sc-compose render --file .claude/skills/atm-beads/templates/<t>.json.j2 \
+   sc-compose render --strict --file .claude/skills/atm-beads/templates/<t>.json.j2 \
      --var-file <scratch>/<bead>-vars.json --strict --output <scratch>/<bead>.json \
      && jq -e -c . <scratch>/<bead>.json >> <scratch>/plan.jsonl
    ```
