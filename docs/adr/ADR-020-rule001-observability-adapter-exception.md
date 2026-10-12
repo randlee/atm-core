@@ -127,8 +127,9 @@ The exception remains acceptable only while all of the following stay true:
   `crates/atm-daemon-bootstrap/src/daemon_observability.rs`
 - downstream daemon modules consume only the sanctioned crate-visible adapter
   surface
-- `.just/lint_boundaries.py` and its fixture/allowlist keep enforcing the
-  boundary
+- `.just/lint_boundaries.py` (rule `SCB-OBSERVABILITY-001`, run by `just
+  lint boundaries`) and its fixture/allowlist keep enforcing the boundary;
+  the published `sc-lint lint sc-boundary` analyzer has no equivalent rule
 - no public API outside the crate starts requiring consumers to name
   `sc_observability_types::ActionName` or `OutcomeLabel` directly
 

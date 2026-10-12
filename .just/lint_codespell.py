@@ -1,56 +1,20 @@
 #!/usr/bin/env python3
+"""Delegate spelling checks to sc-lint."""
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 import subprocess
 import sys
 
-from lint_common import discover_repo_root
-from lint_common import workspace_crate_section_lines
-
-
-def build_command(repo_root: Path) -> list[str]:
-    return [
-        sys.executable,
-        "-c",
-        "import sys; from codespell_lib import _script_main; sys.exit(_script_main())",
-    ]
-
-
-def emit_console_text(text: str, *, stream = sys.stdout) -> None:
-    if not text:
-        return
-    encoding = getattr(stream, "encoding", None) or "utf-8"
-    if hasattr(stream, "buffer"):
-        stream.buffer.write(text.encode(encoding, errors="replace"))
-        stream.flush()
-        return
-    stream.write(text.encode(encoding, errors="replace").decode(encoding))
-    stream.flush()
-
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description="Run codespell with the repo policy.")
-    parser.add_argument("--root", help="Repo root to inspect.")
-    args = parser.parse_args(argv[1:])
-    repo_root = discover_repo_root(args.root)
-
-    for line in workspace_crate_section_lines(repo_root):
-        print(line)
-
-    completed = subprocess.run(
-        build_command(repo_root),
+    repo_root = Path(__file__).resolve().parent.parent
+    venv_python = repo_root / ".sc-lint/venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    return subprocess.run(
+        [str(venv_python), "-m", "sc_lint.lint_codespell", "--root", str(repo_root), *argv[1:]],
         cwd=repo_root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
-    if completed.stdout:
-        emit_console_text(completed.stdout)
-    if completed.stderr:
-        emit_console_text(completed.stderr, stream=sys.stderr)
-    return completed.returncode
+        check=False,
+    ).returncode
 
 
 if __name__ == "__main__":

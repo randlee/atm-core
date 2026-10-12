@@ -371,8 +371,10 @@ supporting override-lifecycle identifiers introduced above.
   `LocalSteer` rename lands; it enforces both the retired-identifier list
   and the frozen nudge-family inventory this ADR references.
 - Boundary evidence: `boundaries/atm-storage/pending-nudge-store.toml` and
-  `boundaries/atm-core/message-received-hook-emitter.toml` pass
-  `.just/lint_boundaries.py`; `boundary-guard` review recorded before merge
+  `boundaries/atm-core/message-received-hook-emitter.toml` pass the
+  published `sc-lint lint sc-boundary` analyzer (inventory schema and
+  workspace dependency edges) and `.just/lint_boundaries.py` (atm-only
+  boundary rules); `boundary-guard` review recorded before merge
   per (d).
 - `atm queue <to> <msg>` full-surface parity truth-table against `atm send`
   (AC 3), including `--attach` parity arriving free from the shared

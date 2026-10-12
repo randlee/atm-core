@@ -858,7 +858,9 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             self.assertIn("boundary doc count: 2", joined)
             self.assertIn("boundary records validated: 2", joined)
 
-    def test_parse_boundary_records_flags_missing_required_field(self) -> None:
+    def test_parse_boundary_records_reports_undecodable_record(self) -> None:
+        # Schema errors belong to `sc-lint lint sc-boundary`; this lint still
+        # reports a record it cannot decode instead of skipping it.
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
@@ -866,12 +868,11 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             broken_doc = BASE_BOUNDARY_DOC.replace("owner_crate_path: atm_storage_rusqlite\n", "")
             self.write_doc(repo_root, "atm-storage-rusqlite", broken_doc)
 
-            _records, violations = parse_boundary_records(repo_root)
+            records, violations = parse_boundary_records(repo_root)
             rendered = [violation.render() for violation in violations]
-            self.assertTrue(
-                any("missing required field: owner_crate_path" in item for item in rendered),
-                rendered,
-            )
+            self.assertEqual(records, [])
+            self.assertEqual(len(rendered), 1, rendered)
+            self.assertIn("record does not decode (owner_crate_path)", rendered[0])
 
     def test_parse_boundary_records_requires_declared_io_forbidden_policy(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -909,21 +910,6 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
                 rendered,
             )
 
-    def test_parse_boundary_records_flags_invalid_edge_syntax(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            self.write_repo(repo_root)
-            self.write_manifests(repo_root)
-            broken_doc = BASE_BOUNDARY_DOC.replace("- atm -> atm-storage-rusqlite", "- atm => atm-storage-rusqlite")
-            self.write_doc(repo_root, "atm-storage-rusqlite", broken_doc)
-
-            _records, violations = parse_boundary_records(repo_root)
-            rendered = [violation.render() for violation in violations]
-            self.assertTrue(
-                any("invalid dependencies.forbidden_edges entry" in item for item in rendered),
-                rendered,
-            )
-
     def test_parse_boundary_records_flags_doc_owner_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -935,16 +921,60 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             rendered = [violation.render() for violation in violations]
             self.assertTrue(any("document path owner mismatch" in item for item in rendered), rendered)
 
-    def test_parse_boundary_records_flags_toml_owner_mismatch(self) -> None:
+    def test_parse_boundary_records_keeps_checks_the_published_loader_lacks(self) -> None:
+        # Each case is accepted by the published sc-lint 0.7.0 loader
+        # (randlee/sc-lint#377); delete with those checks.
+        cases = (
+            ('trait = "MailStore"', 'trait = "Mail Store"', "invalid public.trait: 'Mail Store'"),
+            (
+                'roots = ["atm_daemon::bootstrap"]',
+                'roots = ["atm daemon"]',
+                "invalid composition.roots entry: 'atm daemon'",
+            ),
+            (
+                'roots = ["atm_daemon::bootstrap"]',
+                'roots = ["atm_graft::bootstrap"]',
+                "composition root 'atm_graft::bootstrap' must also appear in dependencies.allowed_dependents",
+            ),
+            (
+                '"atm -> atm-storage-rusqlite", ',
+                '"atm-graft -> atm-graft", ',
+                "invalid dependencies.forbidden_edges self-edge: 'atm-graft -> atm-graft'",
+            ),
+            (
+                'type = "SqliteMailStore"\nmodule = "atm_storage_rusqlite::mail_store"\nvisibility = "private"\nconstructor = "private"',
+                'visibility = "trait_only"\nconstructor = "public"',
+                "implementation.constructor must be none when implementation.visibility is trait_only",
+            ),
+        )
+        for old, new, expected in cases:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as tempdir:
+                repo_root = Path(tempdir)
+                self.write_repo(repo_root)
+                self.write_manifests(repo_root)
+                self.assertIn(old, BASE_BOUNDARY_TOML)
+                self.write_toml_record(repo_root, "atm-storage-rusqlite", text=BASE_BOUNDARY_TOML.replace(old, new))
+
+                _records, violations = parse_boundary_records(repo_root)
+                rendered = [violation.render() for violation in violations]
+                self.assertTrue(any(expected in item for item in rendered), rendered)
+
+    def test_forbidden_edge_between_package_names_is_left_to_published_analyzer(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_toml_record(repo_root, "atm", text=BASE_BOUNDARY_TOML)
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace(
+                    '"atm -> atm-storage-rusqlite", ',
+                    '"atm-storage-rusqlite -> agent-team-mail-core", ',
+                ),
+            )
 
-            _records, violations = parse_boundary_records(repo_root)
-            rendered = [violation.render() for violation in violations]
-            self.assertTrue(any("document path owner mismatch: boundaries/atm/mail-store.toml" in item for item in rendered), rendered)
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertFalse(any("forbids edge" in item for item in rendered), rendered)
 
     def test_collect_boundary_violations_accepts_allowed_layout(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -1132,38 +1162,58 @@ allowed_dependencies = ["atm-core", "rusqlite"]
                 ],
             )
 
-    def test_collect_boundary_violations_flags_duplicate_boundary_ids(self) -> None:
+    def test_collect_boundary_violations_flags_duplicate_name_within_owner(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-storage-rusqlite")
-            self.write_doc(repo_root, "atm-daemon", BASE_BOUNDARY_DOC.replace("owner_package: atm-storage-rusqlite", "owner_package: atm-daemon").replace("owner_crate_path: atm_storage_rusqlite", "owner_crate_path: atm_daemon"))
-
-            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
-            self.assertTrue(any("duplicate boundary_id" in item for item in rendered), rendered)
-
-    def test_collect_boundary_violations_flags_duplicate_boundary_ids_across_markdown_and_toml(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            self.write_repo(repo_root)
-            self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-storage-rusqlite")
             self.write_toml_record(repo_root, "atm-storage-rusqlite")
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                file_name="mail-store-twin.toml",
+                text=BASE_BOUNDARY_TOML.replace("BOUNDARY-MailStore-Sqlite", "BOUNDARY-MailStore-Sqlite-Twin"),
+            )
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
-            self.assertTrue(any("duplicate boundary_id" in item for item in rendered), rendered)
+            self.assertTrue(
+                any("duplicate boundary name 'SqliteMailStoreAdapter'" in item for item in rendered),
+                rendered,
+            )
 
-    def test_collect_boundary_violations_flags_owner_crate_path_mismatch_for_existing_crate(self) -> None:
+    def test_collect_boundary_violations_flags_owner_crate_path_mismatch_for_directory_named_owner(self) -> None:
+        # crates/atm-core is package agent-team-mail-core: the published
+        # loader skips this owner (randlee/sc-lint#375), so this lint checks it.
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
             self.write_manifests(repo_root)
-            broken_doc = BASE_BOUNDARY_DOC.replace("owner_crate_path: atm_storage_rusqlite", "owner_crate_path: bad_path")
-            self.write_doc(repo_root, "atm-storage-rusqlite", broken_doc)
+            self.write_toml_record(
+                repo_root,
+                "atm-core",
+                text=BASE_BOUNDARY_TOML.replace('owner_package = "atm-storage-rusqlite"', 'owner_package = "atm-core"')
+                .replace('owner_crate_path = "atm_storage_rusqlite"', 'owner_crate_path = "bad_path"'),
+            )
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
-            self.assertTrue(any("does not match workspace crate path" in item for item in rendered), rendered)
+            self.assertTrue(
+                any("owner_crate_path 'bad_path' does not match workspace crate path 'atm_core'" in item for item in rendered),
+                rendered,
+            )
+
+    def test_owner_crate_path_for_package_named_owner_is_left_to_published_loader(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace('owner_crate_path = "atm_storage_rusqlite"', 'owner_crate_path = "bad_path"'),
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertFalse(any("does not match workspace crate path" in item for item in rendered), rendered)
 
     def test_collect_boundary_violations_flags_unexpected_allowed_dependent(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -1274,7 +1324,7 @@ message = "{message}"
             for package, message in (
                 ("atm-storage", "atm-http-runtime must not depend on atm-storage in production; it is a test-only fixture dependency"),
                 ("atm-runtime-test-support", "atm-http-runtime must not depend on atm-runtime-test-support in production; it is a test-only fixture dependency"),
-                ("serde_yaml", "atm-http-runtime must not depend on serde_yaml in production; it is a test-only fixture dependency"),
+                ("noyalib", "atm-http-runtime must not depend on noyalib in production; it is a test-only fixture dependency"),
                 ("tempfile", "atm-http-runtime must not depend on tempfile in production; it is a test-only fixture dependency"),
             )
         )
@@ -1301,7 +1351,7 @@ version = "0.1.0"
 [dependencies]
 atm-storage = { path = "../atm-storage" }
 atm-runtime-test-support = { path = "../atm-runtime-test-support" }
-serde_yaml = "0.9"
+noyalib = "0.0.57"
 tempfile = "3"
 """,
                 encoding="utf-8",
@@ -1316,7 +1366,7 @@ tempfile = "3"
             for message in (
                 "atm-http-runtime must not depend on atm-storage in production; it is a test-only fixture dependency",
                 "atm-http-runtime must not depend on atm-runtime-test-support in production; it is a test-only fixture dependency",
-                "atm-http-runtime must not depend on serde_yaml in production; it is a test-only fixture dependency",
+                "atm-http-runtime must not depend on noyalib in production; it is a test-only fixture dependency",
                 "atm-http-runtime must not depend on tempfile in production; it is a test-only fixture dependency",
             ):
                 self.assertIn(f"crates/atm-http-runtime/Cargo.toml [dependencies]: {message}", rendered)
@@ -1800,10 +1850,9 @@ constructor = \"none\"""",
                 'io_forbidden = ["socket_io"]',
                 'io_forbidden = ["write_capable_connection"]',
             )
-            boundary = boundary.replace(
-                "[enforcement]\n",
-                "[enforcement]\n"
-                "io_forbidden_source_modules = { write_capable_connection = [\"atm_storage_rusqlite::reader_lane\"] }\n",
+            boundary += (
+                "\n[extensions.atm]\n"
+                "io_forbidden_source_modules = { write_capable_connection = [\"atm_storage_rusqlite::reader_lane\"] }\n"
             )
             boundary = boundary.replace('state = "planned"', 'state = "active"')
             self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
@@ -2100,11 +2149,10 @@ constructor = "private"''',
 visibility = "trait_only"
 constructor = "none"''',
             )
-            boundary = boundary.replace(
-                "[enforcement]\n",
-                "[enforcement]\n"
-                "io_forbidden_source_modules = { socket_io = [\"atm_storage_rusqlite::reader_lane\"], process_spawn = [\"atm_storage_rusqlite::reader_lane\"] }\n",
-            ).replace('state = "planned"', 'state = "active"')
+            boundary = boundary.replace('state = "planned"', 'state = "active"') + (
+                "\n[extensions.atm]\n"
+                "io_forbidden_source_modules = { socket_io = [\"atm_storage_rusqlite::reader_lane\"], process_spawn = [\"atm_storage_rusqlite::reader_lane\"] }\n"
+            )
             self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
             source_path = repo_root / "crates/atm-storage-rusqlite/src/reader_lane.rs"
             source_path.write_text(
@@ -2142,10 +2190,7 @@ constructor = \"private\"""",
 visibility = \"trait_only\"
 constructor = \"none\"""",
             )
-            boundary = boundary.replace(
-                "[enforcement]\n",
-                "[enforcement]\nno_in_repo_implementation = true\n",
-            )
+            boundary += "\n[extensions.atm]\nno_in_repo_implementation = true\n"
             boundary = boundary.replace('state = "planned"', 'state = "active"')
             self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
 
@@ -2185,9 +2230,8 @@ constructor = "private"''',
 visibility = "trait_only"
 constructor = "none"''',
             )
-            boundary = boundary.replace(
-                "[enforcement]\n", "[enforcement]\nno_in_repo_implementation = true\n"
-            ).replace('state = "planned"', 'state = "active"')
+            boundary = boundary.replace('state = "planned"', 'state = "active"')
+            boundary += "\n[extensions.atm]\nno_in_repo_implementation = true\n"
             self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
             (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text(
                 "pub trait TestOnlyStore {}\n"

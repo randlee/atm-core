@@ -10,6 +10,8 @@ SECTIONS = (
         (
             ("help", "Show this help."),
             ("bootstrap", "Install and verify the exact pinned CI tool contract."),
+            ("setup", "Install the pinned sc-lint adoption tools."),
+            ("upgrade", "Upgrade the managed sc-lint installation."),
             ("build", "Build the full workspace."),
             ("test", "Run the full workspace test suite."),
             ("clean", "Remove workspace build artifacts."),
@@ -32,10 +34,9 @@ SECTIONS = (
         "Lint",
         (
             ("lint", "Run the full repo lint suite."),
-            ("lint fast", "Run the low-latency lint subset."),
             ("lint fmt", "Run only the format check."),
             ("lint clippy", "Run only Clippy with warnings denied."),
-            ("lint modules", "Run cargo-modules internal acyclic checks (advisory/manual)."),
+            ("lint clippy-windows", "Run the Windows-target Clippy profile."),
             ("lint deny", "Run cargo-deny advisories/bans/source checks."),
             ("lint shear", "Run cargo-shear unused-dependency checks."),
             ("lint boundaries", "Run the crate/source boundary checks."),

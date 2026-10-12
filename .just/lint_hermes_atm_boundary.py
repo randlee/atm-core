@@ -15,7 +15,7 @@ from check_version_sync import validate_workspace_version
 
 
 LINT_NAME = "hermes-atm-boundary"
-BOUNDARY_PATH = Path("boundaries/hermes-atm/runtime-composition.toml")
+BOUNDARY_PATH = Path("policy/hermes-atm/runtime-composition.toml")
 PACKAGE_PATH = Path("crates/hermes-atm/pyproject.toml")
 SOURCE_ROOT = Path("crates/hermes-atm/src/hermes_atm")
 EXPECTED_RULE = "LINT-BOUNDARY-HERMES-ATM-IMPORTS"
