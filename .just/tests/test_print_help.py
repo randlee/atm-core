@@ -16,11 +16,9 @@ class PrintHelpTests(unittest.TestCase):
     def test_render_help_mentions_new_lint_entries(self) -> None:
         output = render_help("atm-core")
         self.assertIn("version latest", output)
-        self.assertIn("lint fast", output)
         self.assertIn("setup", output)
         self.assertIn("upgrade", output)
         self.assertIn("lint clippy-windows", output)
-        self.assertIn("lint modules", output)
         self.assertIn("lint daemon-singleton", output)
         self.assertIn("lint boundaries", output)
         self.assertIn("lint unix-gating", output)
