@@ -8,6 +8,9 @@ yanked = "deny"
 # AN.3) pins quick-xml 0.38.4. Remove both entries when upstream releases an
 # advisory-compatible sc-composer; ATM carries no local quick-xml patch.
 ignore = [
+  # Temporary: serde_yaml's unsafe-libyaml dependency is migrated by atm-phase-bg.10.
+  # Delete when that finding's serde_yaml migration lands.
+  "RUSTSEC-2024-0449",
   "RUSTSEC-2026-0194",
   "RUSTSEC-2026-0195",
 ]

@@ -14,5 +14,5 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 exec_lint(
     REPO_ROOT,
     "sc-portability",
-    ["--config", str(REPO_ROOT / "sc-lint.toml"), *sys.argv[1:]],
+    sys.argv[1:],
 )
