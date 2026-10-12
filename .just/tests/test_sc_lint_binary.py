@@ -11,6 +11,7 @@ JUST_DIR = Path(__file__).resolve().parents[1]
 if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
+from lint_sc_boundary import main as sc_boundary_main
 from sc_lint_binary import lint_argv
 from sc_lint_binary import resolve_sc_lint_binary
 
@@ -43,11 +44,22 @@ class ScLintBinaryTests(unittest.TestCase):
                 "os.environ",
                 {"SC_LINT_BIN": str(managed), "PATH": str(decoy.parent)},
                 clear=True,
-            ):
-                resolved, argv = lint_argv(Path("/repo"), "sc-boundary", ["--config", "sc-lint.toml"])
+            ), mock.patch("sc_lint_binary.os.execv") as execv:
+                sc_boundary_main(["lint_sc_boundary.py", "--root", "/repo"])
 
-        self.assertEqual(resolved, managed)
-        self.assertNotIn(str(decoy), argv)
+        execv.assert_called_once_with(
+            str(managed),
+            [
+                str(managed),
+                "lint",
+                "sc-boundary",
+                "--root",
+                "/repo",
+                "--config",
+                "/repo/sc-lint.toml",
+            ],
+        )
+        self.assertNotIn(str(decoy), execv.call_args.args[1])
 
     def test_missing_managed_binary_tells_the_user_to_setup(self) -> None:
         with mock.patch.dict("os.environ", {"SC_LINT_INSTALL_DIR": "/missing"}, clear=True):
