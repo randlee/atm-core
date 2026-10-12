@@ -131,15 +131,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bootstrap-
 
-      - name: Cache xwin SDK
-        if: ${{ runner.os != 'Windows' }}
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.XWIN_CACHE_DIR }}
-          key: ${{ runner.os }}-cargo-xwin-${{ hashFiles('tools/bootstrap.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-xwin-
-
       # The prerelease-tag candidate check runs cargo update --offline. Keep
       # the registry available on fresh just-lint runners so that check is not
       # dependent on an incidental warm local Cargo cache.
@@ -165,9 +156,6 @@ jobs:
         run: just bootstrap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up sc-lint
-        run: just setup
 
       - name: Verify pinned ecosystem tools
         shell: bash
@@ -351,15 +339,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bootstrap-
 
-      - name: Cache xwin SDK
-        if: ${{ runner.os != 'Windows' }}
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.XWIN_CACHE_DIR }}
-          key: ${{ runner.os }}-cargo-xwin-${{ hashFiles('tools/bootstrap.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-xwin-
-
       - name: Pre-seed pinned cargo-binstall (bootstrap also verifies)
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c # v1.22.0
@@ -371,10 +350,6 @@ jobs:
         run: just bootstrap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up sc-lint
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        run: just setup
 
       - name: Verify pinned ecosystem tools
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
