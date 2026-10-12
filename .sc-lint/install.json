@@ -62,13 +62,13 @@
       "capability-degradation"
     ],
     "clippy": [
-      "sc-lint",
-      "clippy",
+      "just",
+      "_sc-lint-clippy",
       "native"
     ],
     "clippy-windows": [
-      "sc-lint",
-      "clippy",
+      "just",
+      "_sc-lint-clippy",
       "xwin"
     ],
     "daemon-signing-coupling": [

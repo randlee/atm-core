@@ -155,6 +155,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up sc-lint
+        run: just setup
+
       - name: Verify pinned ecosystem tools
         shell: bash
         run: |

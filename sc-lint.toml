@@ -36,11 +36,11 @@ command = ["just", "_py", ".just/run_lint.py", "capability-degradation"]
 
 [[tool.sc-lint.lint]]
 name = "clippy"
-command = ["sc-lint", "clippy", "native"]
+command = ["just", "_sc-lint-clippy", "native"]
 
 [[tool.sc-lint.lint]]
 name = "clippy-windows"
-command = ["sc-lint", "clippy", "xwin"]
+command = ["just", "_sc-lint-clippy", "xwin"]
 
 [[tool.sc-lint.lint]]
 name = "daemon-signing-coupling"

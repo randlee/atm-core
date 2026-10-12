@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -12,7 +14,6 @@ import unittest
 from contextlib import redirect_stderr
 from io import StringIO
 from unittest import mock
-import hashlib
 
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "bootstrap.py"
@@ -388,6 +389,10 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertIn("cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c", workflow)
         self.assertEqual(workflow.count("Pre-seed pinned cargo-binstall (bootstrap also verifies)"), 2)
         self.assertGreaterEqual(workflow.count("run: just bootstrap"), 2)
+        just_lint = workflow.split("\n  fmt:", 1)[0]
+        self.assertIn("- name: Set up sc-lint\n        run: just setup", just_lint)
+        self.assertLess(just_lint.index("run: just bootstrap"), just_lint.index("run: just setup"))
+        self.assertLess(just_lint.index("run: just setup"), just_lint.index("sc-compose --version"))
 
     def test_just_recipes_propagate_the_bootstrap_python_to_children(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
@@ -398,6 +403,16 @@ class BootstrapTests(IsolatedHomeTests):
             "    {{python_cmd}} -m unittest scripts/smoke/test_run_admission_capacity.py",
             justfile,
         )
+
+    def test_sc_lint_clippy_profiles_keep_pyo3_on_the_bootstrap_interpreter(self) -> None:
+        root = SCRIPT.parents[1]
+        profiles = json.loads((root / ".sc-lint" / "install.json").read_text(encoding="utf-8"))["profiles"]
+        self.assertEqual(profiles["clippy"], ["just", "_sc-lint-clippy", "native"])
+        self.assertEqual(profiles["clippy-windows"], ["just", "_sc-lint-clippy", "xwin"])
+        justfile = (root / "Justfile").read_text(encoding="utf-8")
+        self.assertIn("PYO3_PYTHON", justfile)
+        self.assertIn("sc-lint clippy", justfile)
+        self.assertIn("Delete when randlee/sc-lint#198 ships.", justfile)
 
     def test_ci_uses_bootstrap_python_and_requirements_for_all_pydantic_consumers(self) -> None:
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
