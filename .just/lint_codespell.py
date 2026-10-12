@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Delegate spelling checks to sc-lint (delete when randlee/sc-lint#349 ships)."""
+"""Delegate spelling checks to sc-lint."""
 from __future__ import annotations
 
 from pathlib import Path

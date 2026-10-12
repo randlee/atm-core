@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Delegate cargo-shear to sc-lint (delete when randlee/sc-lint#346 ships)."""
+"""Delegate cargo-shear to sc-lint."""
 from __future__ import annotations
 
 from pathlib import Path

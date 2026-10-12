@@ -114,7 +114,6 @@ Current execution model:
   - distinguishes `total`, `prod`, `test`, and `prod+test`
 - `sc-lint lint identity-literals`
   - enforces `RULE-008` and `RULE-009`
-  - retains the `concat!` coverage gap until randlee/sc-lint#347 ships
 - `.just/check_version_sync.py`
   - verifies workspace/crate/release-version alignment
 - `.just/lint_boundaries.py`
@@ -125,9 +124,7 @@ Current execution model:
 - the published `sc_lint.lint_cargo_deny` runner
   - wraps `cargo-deny`; the DNS retry gap is tracked by randlee/sc-lint#371
 - the published `sc_lint.lint_cargo_shear` runner
-  - retains the reviewed unused-dependency allowlist gap until randlee/sc-lint#346 ships
 - the published `sc_lint.lint_codespell` runner
-  - retains the Windows console-output gap until randlee/sc-lint#349 ships
 - `cargo fmt --all [--check]`
   - is the direct formatting entrypoint
 - `.just/run_pytests.py`
