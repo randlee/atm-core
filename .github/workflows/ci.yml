@@ -128,7 +128,7 @@ jobs:
             ~/.cargo/binstall
             .bootstrap-venv
             ${{ env.SC_LINT_INSTALL_DIR }}
-          key: ${{ runner.os }}-bootstrap-${{ hashFiles('tools/bootstrap.toml', 'tools/bootstrap-requirements.txt') }}
+          key: ${{ runner.os }}-bootstrap-${{ hashFiles('tools/bootstrap.toml', 'tools/bootstrap-requirements.txt', 'sc-lint.toml') }}
           restore-keys: |
             ${{ runner.os }}-bootstrap-
 
