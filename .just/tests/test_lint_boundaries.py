@@ -1800,10 +1800,9 @@ constructor = \"none\"""",
                 'io_forbidden = ["socket_io"]',
                 'io_forbidden = ["write_capable_connection"]',
             )
-            boundary = boundary.replace(
-                "[enforcement]\n",
-                "[enforcement]\n"
-                "io_forbidden_source_modules = { write_capable_connection = [\"atm_storage_rusqlite::reader_lane\"] }\n",
+            boundary += (
+                "\n[extensions.atm]\n"
+                "io_forbidden_source_modules = { write_capable_connection = [\"atm_storage_rusqlite::reader_lane\"] }\n"
             )
             boundary = boundary.replace('state = "planned"', 'state = "active"')
             self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
@@ -2100,11 +2099,10 @@ constructor = "private"''',
 visibility = "trait_only"
 constructor = "none"''',
             )
-            boundary = boundary.replace(
-                "[enforcement]\n",
-                "[enforcement]\n"
-                "io_forbidden_source_modules = { socket_io = [\"atm_storage_rusqlite::reader_lane\"], process_spawn = [\"atm_storage_rusqlite::reader_lane\"] }\n",
-            ).replace('state = "planned"', 'state = "active"')
+            boundary = boundary.replace('state = "planned"', 'state = "active"') + (
+                "\n[extensions.atm]\n"
+                "io_forbidden_source_modules = { socket_io = [\"atm_storage_rusqlite::reader_lane\"], process_spawn = [\"atm_storage_rusqlite::reader_lane\"] }\n"
+            )
             self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
             source_path = repo_root / "crates/atm-storage-rusqlite/src/reader_lane.rs"
             source_path.write_text(
@@ -2142,10 +2140,7 @@ constructor = \"private\"""",
 visibility = \"trait_only\"
 constructor = \"none\"""",
             )
-            boundary = boundary.replace(
-                "[enforcement]\n",
-                "[enforcement]\nno_in_repo_implementation = true\n",
-            )
+            boundary += "\n[extensions.atm]\nno_in_repo_implementation = true\n"
             boundary = boundary.replace('state = "planned"', 'state = "active"')
             self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
 
@@ -2185,9 +2180,8 @@ constructor = "private"''',
 visibility = "trait_only"
 constructor = "none"''',
             )
-            boundary = boundary.replace(
-                "[enforcement]\n", "[enforcement]\nno_in_repo_implementation = true\n"
-            ).replace('state = "planned"', 'state = "active"')
+            boundary = boundary.replace('state = "planned"', 'state = "active"')
+            boundary += "\n[extensions.atm]\nno_in_repo_implementation = true\n"
             self.write_toml_record(repo_root, "atm-storage-rusqlite", text=boundary)
             (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text(
                 "pub trait TestOnlyStore {}\n"

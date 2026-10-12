@@ -44,6 +44,9 @@ REQUIRED_BOUNDARY_FIELDS = (
     ("enforcement", "review_gates"),
     ("status", "state"),
 )
+# atm-only per-record policy lives in the opaque [extensions.atm] table that
+# the published sc-lint boundary loader ignores (randlee/sc-lint#203).
+ATM_EXTENSION_PATH = ("extensions", "atm")
 VISIBILITY_VALUES = {"private", "pub(crate)", "public", "trait_only"}
 CONSTRUCTOR_VALUES = {"private", "pub(crate)", "public", "none"}
 REFERENCE_SCOPE_VALUES = {"global", "inside_owner_crate", "outside_owner_crate"}
@@ -1412,40 +1415,40 @@ def build_boundary_record(
         allow_empty=False,
     )
     raw_io_forbidden_source_modules = nested_get(
-        data, ("enforcement", "io_forbidden_source_modules")
+        data, ATM_EXTENSION_PATH + ("io_forbidden_source_modules",)
     )
     raw_no_in_repo_implementation = nested_get(
-        data, ("enforcement", "no_in_repo_implementation")
+        data, ATM_EXTENSION_PATH + ("no_in_repo_implementation",)
     )
     no_in_repo_implementation = raw_no_in_repo_implementation is True
     if raw_no_in_repo_implementation is not None and not isinstance(
         raw_no_in_repo_implementation, bool
     ):
-        errors.append("enforcement.no_in_repo_implementation must be a boolean")
+        errors.append("extensions.atm.no_in_repo_implementation must be a boolean")
     io_forbidden_source_modules: list[tuple[str, tuple[str, ...]]] = []
     io_forbidden_source_module_errors: list[str] = []
     if raw_io_forbidden_source_modules is not None:
         if not isinstance(raw_io_forbidden_source_modules, dict):
             io_forbidden_source_module_errors.append(
-                "enforcement.io_forbidden_source_modules must map io_forbidden tags to source-module lists"
+                "extensions.atm.io_forbidden_source_modules must map io_forbidden tags to source-module lists"
             )
         else:
             for tag, raw_modules in raw_io_forbidden_source_modules.items():
                 if not isinstance(tag, str) or tag not in io_forbidden:
                     io_forbidden_source_module_errors.append(
-                        "enforcement.io_forbidden_source_modules keys must name declared ownership.io_forbidden tags"
+                        "extensions.atm.io_forbidden_source_modules keys must name declared ownership.io_forbidden tags"
                     )
                     continue
                 modules = as_string_list(raw_modules)
                 if not modules:
                     io_forbidden_source_module_errors.append(
-                        f"enforcement.io_forbidden_source_modules.{tag} must be a non-empty list of strings"
+                        f"extensions.atm.io_forbidden_source_modules.{tag} must be a non-empty list of strings"
                     )
                     continue
                 for module in modules:
                     error = validate_rust_path(
                         module,
-                        field_name=f"enforcement.io_forbidden_source_modules.{tag} entry",
+                        field_name=f"extensions.atm.io_forbidden_source_modules.{tag} entry",
                     )
                     if error:
                         io_forbidden_source_module_errors.append(error)
@@ -1525,7 +1528,7 @@ def build_boundary_record(
         if implementation_constructor != "none":
             errors.append("implementation.constructor must be none when implementation.visibility is trait_only")
     elif no_in_repo_implementation:
-        errors.append("enforcement.no_in_repo_implementation is only valid for trait_only boundaries")
+        errors.append("extensions.atm.no_in_repo_implementation is only valid for trait_only boundaries")
     else:
         if implementation_type is None:
             errors.append("implementation.type is required for concrete boundaries")
@@ -2165,7 +2168,7 @@ def collect_io_forbidden_source_violations(
     """Enforce ``ownership.io_forbidden`` against concrete implementation modules.
 
     A boundary record may declare tag-specific concrete source modules in
-    ``enforcement.io_forbidden_source_modules``. This lets a trait-only
+    ``extensions.atm.io_forbidden_source_modules``. This lets a trait-only
     contract guard its authorized adapter and lets a concrete boundary include
     a private helper without scanning unrelated sibling ownership. Unknown
     tags are reported as policy errors instead of being silently ignored,

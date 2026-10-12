@@ -2,8 +2,9 @@
 minimum_version = "0.7.0"
 
 [tool.sc-lint.analyzers.boundary]
-enabled = false
-reason = "Phase BG-2 owns boundary analyzer migration."
+enabled = true
+fail_rules = ["SCB-CYCLE-001", "SCB-BOUNDARY-001", "SCB-BOUNDARY-002", "SCB-BOUNDARY-003", "SCB-CALLER-001", "SCB-DEPENDENCY-003", "SCB-MANIFEST-001", "SCB-MANIFEST-002"]
+reason = "Boundary inventory, crate cycles and forbidden crate edges for the atm-core workspace."
 
 [tool.sc-lint.analyzers.portability]
 config_home_env = "ATM_CONFIG_HOME"
