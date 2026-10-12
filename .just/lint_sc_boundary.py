@@ -5,25 +5,18 @@ from __future__ import annotations
 
 from pathlib import Path
 import argparse
-import os
-import subprocess
 import sys
 
 from lint_common import discover_repo_root
+from sc_lint_binary import exec_lint
 
 
-def command(repo_root: Path) -> list[str]:
-    # `.sc-lint/bootstrap` exports SC_LINT_BIN for the resolved product binary.
-    binary = os.environ.get("SC_LINT_BIN") or "sc-lint"
-    return [binary, "lint", "sc-boundary", "--config", str(repo_root / "sc-lint.toml")]
-
-
-def main(argv: list[str]) -> int:
+def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(description="Run the published sc-lint boundary analyzer.")
     parser.add_argument("--root", help="Repo root to inspect.")
     args = parser.parse_args(argv[1:])
     repo_root = discover_repo_root(args.root)
-    return subprocess.run(command(repo_root), cwd=repo_root, check=False).returncode
+    exec_lint(repo_root, "sc-boundary", ["--config", str(repo_root / "sc-lint.toml")])
 
 
 if __name__ == "__main__":
