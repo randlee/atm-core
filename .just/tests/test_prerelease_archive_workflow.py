@@ -6,13 +6,13 @@ import importlib.util
 import io
 import json
 import os
-from pathlib import Path
-from contextlib import redirect_stderr
 import subprocess
 import sys
 import tempfile
 import tomllib
 import unittest
+from contextlib import contextmanager, redirect_stderr
+from pathlib import Path
 from unittest import mock
 
 JUST_DIR = Path(__file__).resolve().parents[1]
@@ -80,6 +80,27 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         except subprocess.TimeoutExpired as error:
             output = (error.stdout or "") + (error.stderr or "")
             self.fail(f"fixture command timed out: {command!r}\n{output}")
+
+    @contextmanager
+    def fixture_repo(self, *, branch: str | None = None):
+        """Create an isolated Git fixture whose setup commands are all bounded."""
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            home = repo / ".home"
+            home.mkdir()
+            env = self.fixture_env(home)
+            init = ["git", "init", "-q"]
+            if branch is not None:
+                init.extend(["-b", branch])
+            for command in (
+                init,
+                ["git", "config", "commit.gpgsign", "false"],
+                ["git", "config", "core.hooksPath", os.devnull],
+                ["git", "config", "user.email", "test@example.invalid"],
+                ["git", "config", "user.name", "AS1.1 test"],
+            ):
+                self.run_fixture(command, cwd=repo, env=env, check=True)
+            yield repo, env
 
     def test_wait_for_archive_returns_after_a_successful_run(self) -> None:
         prerelease = prerelease_script()
@@ -393,9 +414,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertEqual(patch_bump("9.99.0"), "9.99.1")
 
     def test_prerelease_tag_dry_run_rejects_remote_tag_collision(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            repo = Path(directory)
-            subprocess.run(["git", "init", "-q", "-b", "fixture"], cwd=repo, check=True)
+        with self.fixture_repo(branch="fixture") as (repo, _env):
             with (
                 mock.patch.object(prerelease_tag, "current_branch", return_value="fixture"),
                 mock.patch.object(prerelease_tag, "require_clean_tree"),
@@ -514,19 +533,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                     self.assertNotIn("path", dependency)
 
     def test_write_and_commit_restores_files_when_commit_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            repo = Path(directory)
-            home = repo / ".home"
-            home.mkdir()
-            env = self.fixture_env(home)
-            for command in (
-                ["git", "init", "-q"],
-                ["git", "config", "commit.gpgsign", "false"],
-                ["git", "config", "core.hooksPath", os.devnull],
-                ["git", "config", "user.email", "test@example.invalid"],
-                ["git", "config", "user.name", "AS1.1 test"],
-            ):
-                self.run_fixture(command, cwd=repo, env=env, check=True)
+        with self.fixture_repo() as (repo, env):
             manifest = repo / "Cargo.toml"
             # Fixture-local versions: this test exercises rollback after a failed commit.
             original = "[workspace.package]\nversion = \"1.4.5\"\n"
