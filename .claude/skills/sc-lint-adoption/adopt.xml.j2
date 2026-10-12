@@ -1,0 +1,14 @@
+<sc-lint-adoption repository="{{ repository }}">
+  <goal>Install the managed sc-lint consumer contract without deleting consumer-owned files.</goal>
+  <input>{{ install_json }}</input>
+  <procedure>
+    <step id="1">Collect workspace members, Just recipes, CI platforms, and Rust toolchain facts.</step>
+    <step id="2">Write and validate install.json from those facts.</step>
+    <step id="3">Run the installer with --dry-run and record its exit code and diff.</step>
+    <step id="4">Apply the reviewed managed-file change.</step>
+    <step id="5">Run just setup, just lint, and just test.</step>
+    <step id="6">List any consumer-local scaffolding removed in the consumer PR; never let the kit delete it.</step>
+    <step id="7">Open a consumer PR containing facts, dry-run evidence, validation output, and remaining drift.</step>
+  </procedure>
+  <completion-recipient>{{ completion_recipient }}</completion-recipient>
+</sc-lint-adoption>

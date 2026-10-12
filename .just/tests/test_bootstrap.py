@@ -251,12 +251,14 @@ class BootstrapTests(IsolatedHomeTests):
             "cargo-audit": "0.22.2",
             "cargo-shear": "1.13.3",
             "cargo-modules": "0.26.0",
+            "cargo-xwin": "0.18.4",
         })
         self.assertEqual(dict(manifest.cargo_allowed_strategies), {
             "cargo-deny": (),
             "cargo-audit": ("quick-install",),
             "cargo-shear": (),
             "cargo-modules": ("quick-install",),
+            "cargo-xwin": (),
         })
         self.assertEqual(manifest.cargo_binstall, "1.22.0")
         self.assertEqual(
@@ -299,6 +301,18 @@ class BootstrapTests(IsolatedHomeTests):
             bootstrap.bootstrap(manifest, dry_run=True)
         run.assert_not_called()
         verify.assert_not_called()
+
+    def test_windows_target_is_installed_only_off_windows(self) -> None:
+        with mock.patch.object(bootstrap, "run") as run:
+            with mock.patch.object(bootstrap.sys, "platform", "linux"):
+                bootstrap.install_windows_msvc_target(dry_run=False)
+        run.assert_called_once_with(
+            ["rustup", "target", "add", bootstrap.WINDOWS_MSVC_TARGET], dry_run=False
+        )
+        with mock.patch.object(bootstrap, "run") as run:
+            with mock.patch.object(bootstrap.sys, "platform", "win32"):
+                bootstrap.install_windows_msvc_target(dry_run=False)
+        run.assert_not_called()
 
     def test_bootstrap_installs_pinned_binstall_before_cargo_tools(self) -> None:
         manifest = bootstrap.load_manifest()

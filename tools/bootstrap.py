@@ -65,6 +65,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
         ("cargo-audit", cargo["cargo-audit"]),
         ("cargo-shear", cargo["cargo-shear"]),
         ("cargo-modules", cargo["cargo-modules"]),
+        ("cargo-xwin", cargo["cargo-xwin"]),
     )
     if set(cargo_allowed) != {name for name, _version in cargo_tools}:
         raise BootstrapError("cargo-allowed-strategies must name every cargo tool exactly once.")
@@ -716,6 +717,15 @@ def install_git_hooks(*, dry_run: bool) -> None:
     run(["git", "config", "core.hooksPath", HOOKS_DIR], dry_run=dry_run)
 
 
+WINDOWS_MSVC_TARGET = "x86_64-pc-windows-msvc"
+
+
+def install_windows_msvc_target(*, dry_run: bool) -> None:
+    """Install the cross-host Windows target; Windows already ships it."""
+    if sys.platform != "win32":
+        run(["rustup", "target", "add", WINDOWS_MSVC_TARGET], dry_run=dry_run)
+
+
 def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     """Install the complete contract, then verify it rather than trusting installs."""
     synchronize_macos_seed_tools(manifest, dry_run=dry_run)
@@ -737,6 +747,7 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
             ),
             dry_run=dry_run,
         )
+    install_windows_msvc_target(dry_run=dry_run)
     if not sc_compose_matches(manifest):
         install_sc_compose_release(manifest, dry_run=dry_run)
     if not wyvern_matches(manifest):

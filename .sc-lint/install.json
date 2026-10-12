@@ -1,0 +1,273 @@
+{
+  "analyzers": {
+    "boundary": {
+      "enabled": false,
+      "reason": "Phase BG-2 owns boundary analyzer migration."
+    },
+    "portability": {
+      "enabled": false,
+      "reason": "Phase BG-3 owns portability analyzer migration.",
+      "targets": [
+        "linux",
+        "macos",
+        "windows"
+      ]
+    },
+    "runtime": {
+      "enabled": false,
+      "reason": "Phase BG-4 owns runtime analyzer migration."
+    }
+  },
+  "ci": {
+    "enabled": false,
+    "os": [
+      "linux",
+      "macos",
+      "windows"
+    ]
+  },
+  "justfile": {
+    "windows_shell": false
+  },
+  "minimum_version": "0.7.0",
+  "profiles": {
+    "adr-index": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "adr-index"
+    ],
+    "arch-gates": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "arch-gates"
+    ],
+    "atm-graft-python-boundary": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "atm-graft-python-boundary"
+    ],
+    "boundaries": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "boundaries"
+    ],
+    "capability-degradation": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "capability-degradation"
+    ],
+    "clippy": [
+      "sc-lint",
+      "clippy",
+      "native"
+    ],
+    "clippy-windows": [
+      "sc-lint",
+      "clippy",
+      "xwin"
+    ],
+    "daemon-signing-coupling": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "daemon-signing-coupling"
+    ],
+    "daemon-singleton": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "daemon-singleton"
+    ],
+    "deny": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "deny"
+    ],
+    "env-var-boundary": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "env-var-boundary"
+    ],
+    "fixed-sleep": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "fixed-sleep"
+    ],
+    "fmt": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "fmt"
+    ],
+    "function-length": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "function-length"
+    ],
+    "hermes-adapter": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "hermes-adapter"
+    ],
+    "hermes-atm-boundary": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "hermes-atm-boundary"
+    ],
+    "identities": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "identities"
+    ],
+    "legacy-mailbox-paths": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "legacy-mailbox-paths"
+    ],
+    "legacy-transport-removal": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "legacy-transport-removal"
+    ],
+    "lines": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "lines"
+    ],
+    "manifests": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "manifests"
+    ],
+    "nudge-taxonomy": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "nudge-taxonomy"
+    ],
+    "peer-dial-seam": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "peer-dial-seam"
+    ],
+    "pytests": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "pytests"
+    ],
+    "read-concurrency-gates": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "read-concurrency-gates"
+    ],
+    "runtime-observation-boundary": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "runtime-observation-boundary"
+    ],
+    "runtime-stderr": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "runtime-stderr"
+    ],
+    "runtime-waits": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "runtime-waits"
+    ],
+    "same-host-portability": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "same-host-portability"
+    ],
+    "sc-boundary": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "sc-boundary"
+    ],
+    "sc-portability": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "sc-portability"
+    ],
+    "shear": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "shear"
+    ],
+    "silent-emit": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "silent-emit"
+    ],
+    "site-generated": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "site-generated"
+    ],
+    "site-links": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "site-links"
+    ],
+    "spell": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "spell"
+    ],
+    "ttl-triage": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "ttl-triage"
+    ],
+    "unix-gating": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "unix-gating"
+    ],
+    "version": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "version"
+    ]
+  },
+  "test": {
+    "default": [
+      "just",
+      "test"
+    ]
+  }
+}

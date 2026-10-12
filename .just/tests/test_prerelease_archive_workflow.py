@@ -537,6 +537,14 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             repo = Path(directory) / "atm-core"
 
             prerelease_tag.copy_tracked_files(root, repo)
+            managed_justfile = root / ".sc-lint" / "justfile"
+            self.assertTrue(
+                managed_justfile.is_file(),
+                "just setup must generate .sc-lint/justfile before the prerelease fixture is copied",
+            )
+            fixture_managed_justfile = repo / ".sc-lint" / "justfile"
+            fixture_managed_justfile.parent.mkdir(parents=True, exist_ok=True)
+            fixture_managed_justfile.write_bytes(managed_justfile.read_bytes())
             subprocess.run(["git", "init", "-q", "-b", "fixture"], cwd=repo, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
             subprocess.run(["git", "config", "user.name", "AS1.1 test"], cwd=repo, check=True)
