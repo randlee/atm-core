@@ -1746,6 +1746,7 @@ def collect_allowed_dependent_violations(repo_root: Path, records: list[Boundary
     return violations
 
 
+# delete when randlee/sc-lint#136 ships
 def collect_manifest_dependency_allowlist_violations(
     repo_root: Path,
     records: list[BoundaryRecord],
