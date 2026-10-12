@@ -82,6 +82,9 @@ jobs:
 
   just-lint:
     name: Just lint (${{ matrix.os }})
+    env:
+      SC_LINT_INSTALL_DIR: ${{ runner.temp }}/sc-lint/bin
+      XWIN_CACHE_DIR: ${{ runner.temp }}/cargo-xwin
     strategy:
       fail-fast: false
       matrix:
@@ -123,11 +126,19 @@ jobs:
             ~/.cargo/.crates2.json
             ~/.cargo/binstall
             .bootstrap-venv
-            ~/.local/share/sc-lint/bin
-            ~/.cache/cargo-xwin
+            ${{ env.SC_LINT_INSTALL_DIR }}
           key: ${{ runner.os }}-bootstrap-${{ hashFiles('tools/bootstrap.toml', 'tools/bootstrap-requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-bootstrap-
+
+      - name: Cache xwin SDK
+        if: ${{ runner.os != 'Windows' }}
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.XWIN_CACHE_DIR }}
+          key: ${{ runner.os }}-cargo-xwin-${{ hashFiles('tools/bootstrap.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-xwin-
 
       # The prerelease-tag candidate check runs cargo update --offline. Keep
       # the registry available on fresh just-lint runners so that check is not
@@ -247,6 +258,9 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
   test:
+    env:
+      SC_LINT_INSTALL_DIR: ${{ runner.temp }}/sc-lint/bin
+      XWIN_CACHE_DIR: ${{ runner.temp }}/cargo-xwin
     name: Test (${{ matrix.os }})
     needs: [clippy, ci-scope, hermes-atm-release-wheels]
     if: ${{ always() && !cancelled() && needs.clippy.result == 'success' && (needs.ci-scope.outputs.runtime != 'true' || needs.hermes-atm-release-wheels.result == 'success' || needs.hermes-atm-release-wheels.result == 'skipped') }}
@@ -332,11 +346,19 @@ jobs:
             ~/.cargo/.crates2.json
             ~/.cargo/binstall
             .bootstrap-venv
-            ~/.local/share/sc-lint/bin
-            ~/.cache/cargo-xwin
+            ${{ env.SC_LINT_INSTALL_DIR }}
           key: ${{ runner.os }}-bootstrap-${{ hashFiles('tools/bootstrap.toml', 'tools/bootstrap-requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-bootstrap-
+
+      - name: Cache xwin SDK
+        if: ${{ runner.os != 'Windows' }}
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.XWIN_CACHE_DIR }}
+          key: ${{ runner.os }}-cargo-xwin-${{ hashFiles('tools/bootstrap.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-xwin-
 
       - name: Pre-seed pinned cargo-binstall (bootstrap also verifies)
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
