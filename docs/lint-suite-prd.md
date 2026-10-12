@@ -108,29 +108,28 @@ Current execution model:
 
 ### Current custom Python lint tools
 
-- `.just/check_line_counts.py`
-  - enforces `RULE-003`
+- `sc-lint lint line-counts`
+  - is the published `RULE-003` authority
   - reports per-file and per-crate totals
   - distinguishes `total`, `prod`, `test`, and `prod+test`
-- `.just/check_test_identity_literals.py`
+- `sc-lint lint identity-literals`
   - enforces `RULE-008` and `RULE-009`
-  - supports comment-based suppression directives
+  - retains the `concat!` coverage gap until randlee/sc-lint#347 ships
 - `.just/check_version_sync.py`
   - verifies workspace/crate/release-version alignment
 - `.just/lint_boundaries.py`
   - parses crate-local boundary records from `docs/*/boundaries.md`
   - validates schema and enforces current boundary rules
-- `.just/lint_manifests.py`
+- the published `sc_lint.lint_manifests` runner
   - enforces Cargo manifest policy beyond Cargo/Clippy defaults
-- `.just/lint_cargo_deny.py`
-  - wraps `cargo-deny`
-- `.just/lint_cargo_shear.py`
-  - wraps `cargo-shear`
-  - promotes selected warnings to repo-policy failures
-- `.just/lint_codespell.py`
-  - wraps `codespell`
-- `.just/run_fmt.py`
-  - portable formatting entrypoint
+- the published `sc_lint.lint_cargo_deny` runner
+  - wraps `cargo-deny`; the DNS retry gap is tracked by randlee/sc-lint#371
+- the published `sc_lint.lint_cargo_shear` runner
+  - retains the reviewed unused-dependency allowlist gap until randlee/sc-lint#346 ships
+- the published `sc_lint.lint_codespell` runner
+  - retains the Windows console-output gap until randlee/sc-lint#349 ships
+- `cargo fmt --all [--check]`
+  - is the direct formatting entrypoint
 - `.just/run_pytests.py`
   - Python lint-tool test runner with fixture inventory logging
 - `.just/run_view.py`

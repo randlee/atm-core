@@ -1,0 +1,4 @@
+# function-length baseline: functions at or over 80 code lines.
+# columns: path, name, code_lines. A name may repeat; each row is one allowance.
+# regenerate: python -m sc_lint.lint_function_length --write-baseline
+crates/atm-core/src/observability.rs	normalize_json_number	104
