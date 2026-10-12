@@ -82,9 +82,6 @@ jobs:
 
   just-lint:
     name: Just lint (${{ matrix.os }})
-    env:
-      SC_LINT_INSTALL_DIR: ${{ runner.temp }}/sc-lint/bin
-      XWIN_CACHE_DIR: ${{ runner.temp }}/cargo-xwin
     strategy:
       fail-fast: false
       matrix:
@@ -113,6 +110,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+
+      - name: Configure platform cache directories
+        run: >-
+          python -c "import os; from pathlib import Path; cache_root = Path(os.environ['RUNNER_TEMP']); sc_lint = cache_root / 'sc-lint' / 'bin'; Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8').write('SC_LINT_INSTALL_DIR=' + str(sc_lint) + os.linesep)"
 
       - name: Expose Cargo binaries on PATH
         run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
@@ -246,9 +247,6 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
   test:
-    env:
-      SC_LINT_INSTALL_DIR: ${{ runner.temp }}/sc-lint/bin
-      XWIN_CACHE_DIR: ${{ runner.temp }}/cargo-xwin
     name: Test (${{ matrix.os }})
     needs: [clippy, ci-scope, hermes-atm-release-wheels]
     if: ${{ always() && !cancelled() && needs.clippy.result == 'success' && (needs.ci-scope.outputs.runtime != 'true' || needs.hermes-atm-release-wheels.result == 'success' || needs.hermes-atm-release-wheels.result == 'skipped') }}
@@ -292,6 +290,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+
+      - name: Configure platform cache directories
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: >-
+          python -c "import os; from pathlib import Path; cache_root = Path(os.environ['RUNNER_TEMP']); sc_lint = cache_root / 'sc-lint' / 'bin'; Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8').write('SC_LINT_INSTALL_DIR=' + str(sc_lint) + os.linesep)"
 
       - name: Install just
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}

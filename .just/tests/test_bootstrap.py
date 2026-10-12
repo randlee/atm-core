@@ -397,9 +397,18 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertEqual(workflow.count("Pre-seed pinned cargo-binstall (bootstrap also verifies)"), 2)
         self.assertGreaterEqual(workflow.count("run: just bootstrap"), 2)
         just_lint = workflow.split("\n  fmt:", 1)[0]
-        self.assertIn("- name: Set up sc-lint\n        run: just setup", just_lint)
-        self.assertLess(just_lint.index("run: just bootstrap"), just_lint.index("run: just setup"))
-        self.assertLess(just_lint.index("run: just setup"), just_lint.index("sc-compose --version"))
+        self.assertNotIn("- name: Set up sc-lint", just_lint)
+        self.assertLess(just_lint.index("run: just bootstrap"), just_lint.index("sc-compose --version"))
+
+    def test_ci_configures_portable_cache_directories_in_steps(self) -> None:
+        workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        self.assertNotIn("SC_LINT_INSTALL_DIR: ${{ runner.temp }}", workflow)
+        self.assertEqual(workflow.count("- name: Configure platform cache directories"), 2)
+        self.assertEqual(workflow.count("os.environ['RUNNER_TEMP']"), 2)
+        self.assertEqual(workflow.count("os.environ['GITHUB_ENV']"), 2)
+        self.assertEqual(workflow.count("${{ env.SC_LINT_INSTALL_DIR }}"), 2)
+        self.assertNotIn("XWIN_CACHE_DIR", workflow)
+        self.assertNotIn("Cache xwin SDK", workflow)
 
     def test_just_recipes_propagate_the_bootstrap_python_to_children(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
