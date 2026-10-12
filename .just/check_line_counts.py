@@ -6,11 +6,16 @@ import os
 from pathlib import Path
 import sys
 
+from sc_lint_binary import exec_lint
+
 
 def main(argv: list[str]) -> int:
     repo_root = Path(__file__).resolve().parent.parent
     os.chdir(repo_root)
-    os.execvp("sc-lint", ["sc-lint", "lint", "line-counts", "--root", str(repo_root), *argv[1:]])
+    try:
+        exec_lint(repo_root, "line-counts", argv[1:])
+    except FileNotFoundError as error:
+        print(error, file=sys.stderr)
     return 127
 
 
