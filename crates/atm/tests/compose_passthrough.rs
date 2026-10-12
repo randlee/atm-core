@@ -298,9 +298,20 @@ fn send_render_fails_closed_on_missing_variables() {
     let team = format!("render-test-{unique}");
     let dir = tempfile::tempdir().expect("temp dir");
     let home = tempfile::tempdir().expect("temporary ATM environment");
-    let recipient_identity = "recipient";
-    let _daemon = ensure_daemon(home.path(), recipient_identity, &team);
-    let before = list_recipient(home.path(), recipient_identity, &team);
+    let recipient_identity = format!("recipient-{unique}");
+    let _daemon = ensure_daemon(home.path(), &recipient_identity, &team);
+    let registered = run_atm_in_home(
+        &["teams", "add-member", &team, &recipient_identity, "--json"],
+        &identity,
+        &team,
+        home.path(),
+    );
+    assert!(
+        registered.status.success(),
+        "register recipient: {}",
+        String::from_utf8_lossy(&registered.stderr)
+    );
+    let before = list_recipient(home.path(), &recipient_identity, &team);
     assert!(
         before.status.success(),
         "recipient list failed: {}",
@@ -308,8 +319,8 @@ fn send_render_fails_closed_on_missing_variables() {
     );
     let before: ListOutcome = serde_json::from_slice(&before.stdout).expect("recipient list JSON");
     assert!(before.rows.is_empty(), "recipient mailbox must start empty");
-    let (template, partial, _) = write_strict_fixture(dir.path());
-    let recipient = format!("recipient@{team}");
+    let (template, partial, full) = write_strict_fixture(dir.path());
+    let recipient = format!("{recipient_identity}@{team}");
     let output = run_atm_in_home(
         &[
             "send",
@@ -340,7 +351,7 @@ fn send_render_fails_closed_on_missing_variables() {
         stderr.contains("strict.md.j2"),
         "must name the template: {stderr}"
     );
-    let after = list_recipient(home.path(), recipient_identity, &team);
+    let after = list_recipient(home.path(), &recipient_identity, &team);
     assert!(
         after.status.success(),
         "recipient list failed after rejected send: {}",
@@ -350,5 +361,38 @@ fn send_render_fails_closed_on_missing_variables() {
     assert!(
         after.rows.is_empty(),
         "rejected send must not persist a recipient mailbox row"
+    );
+
+    let accepted = run_atm_in_home(
+        &[
+            "send",
+            &recipient,
+            "--template",
+            template.to_str().expect("utf-8"),
+            "--vars",
+            full.to_str().expect("utf-8"),
+            "--json",
+        ],
+        &identity,
+        &team,
+        home.path(),
+    );
+    assert!(
+        accepted.status.success(),
+        "fully bound send must succeed: {}",
+        String::from_utf8_lossy(&accepted.stderr)
+    );
+    let delivered = list_recipient(home.path(), &recipient_identity, &team);
+    assert!(
+        delivered.status.success(),
+        "recipient list failed after accepted send: {}",
+        String::from_utf8_lossy(&delivered.stderr)
+    );
+    let delivered: ListOutcome =
+        serde_json::from_slice(&delivered.stdout).expect("recipient list JSON");
+    assert_eq!(
+        delivered.rows.len(),
+        1,
+        "accepted send must appear in the same recipient mailbox"
     );
 }
