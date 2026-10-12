@@ -14,8 +14,8 @@ targets = ["linux", "macos", "windows"]
 unix_path_prefixes = ["/tmp/", "/home/", "/usr/", "/etc/"]
 
 [tool.sc-lint.analyzers.runtime]
-enabled = true
-reason = "Published sc-lint runtime analysis replaces the vendored runtime-waits checker."
+enabled = false
+reason = "Published sc-lint runtime analysis is not runnable until randlee/sc-lint#373 ships; retain the vendored runtime-waits check until bg-6 performs the cutover."
 
 [[tool.sc-lint.lint]]
 name = "adr-index"

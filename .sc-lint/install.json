@@ -42,8 +42,8 @@
       ]
     },
     "runtime": {
-      "enabled": true,
-      "reason": "Published sc-lint runtime analysis replaces the vendored runtime-waits checker."
+      "enabled": false,
+      "reason": "Published sc-lint runtime analysis is not runnable until randlee/sc-lint#373 ships; retain the vendored runtime-waits check until bg-6 performs the cutover."
     }
   },
   "ci": {

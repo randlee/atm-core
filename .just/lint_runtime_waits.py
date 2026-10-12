@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Run the temporary runtime-waits gap check for randlee/sc-lint#373."""
 
+from __future__ import annotations
+
+
 from datetime import datetime, timezone
 from pathlib import Path
 import argparse
