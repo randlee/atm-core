@@ -24,43 +24,21 @@ from lint_common import workspace_manifest_paths
 LINT_NAME = "boundaries"
 YAML_FENCE_START = "```yaml"
 YAML_FENCE_END = "```"
-REQUIRED_BOUNDARY_FIELDS = (
-    ("boundary_id",),
-    ("owner_package",),
-    ("owner_crate_path",),
-    ("name",),
-    ("implementation", "visibility"),
-    ("implementation", "constructor"),
-    ("dependencies", "allowed_dependents"),
-    ("dependencies", "allowed_dependencies"),
-    ("dependencies", "forbidden_edges"),
+# Record schema (required fields, value enums, trait/facade presence,
+# trait_only/concrete implementation shape, owner directory, duplicate
+# boundary_id, TOML syntax, unknown keys) is enforced by the published sc-lint
+# boundary loader (`sc-lint lint sc-boundary`). This script only decodes a
+# record far enough to run the atm-only rules and the gap checks below.
+# The [ownership] table is atm policy: every atm record declares its IO.
+ATM_REQUIRED_BOUNDARY_FIELDS = (
     ("ownership", "io_owns"),
     ("ownership", "io_forbidden"),
-    ("references", "scope"),
-    ("references", "forbidden"),
-    ("testing", "allowed_test_double_paths"),
-    ("testing", "forbidden_test_bypasses"),
-    ("enforcement", "lint_rules"),
-    ("enforcement", "review_gates"),
-    ("status", "state"),
 )
 # atm-only per-record policy lives in the opaque [extensions.atm] table that
 # the published sc-lint boundary loader ignores (randlee/sc-lint#203).
 ATM_EXTENSION_PATH = ("extensions", "atm")
-VISIBILITY_VALUES = {"private", "pub(crate)", "public", "trait_only"}
-CONSTRUCTOR_VALUES = {"private", "pub(crate)", "public", "none"}
-REFERENCE_SCOPE_VALUES = {"global", "inside_owner_crate", "outside_owner_crate"}
-STATE_VALUES = {
-    "planned",
-    "active",
-    "deferred",
-    "retired",
-    "stub_landed",
-    "concrete_landed",
-    "unix_implemented_windows_pending",
-}
+# delete when randlee/sc-lint#375 ships (names that resolve to no crate are findings)
 PACKAGE_NAME_RE = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
-CRATE_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 RUST_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 FORBIDDEN_EDGE_RE = re.compile(
@@ -1275,20 +1253,11 @@ def as_string_list(value: object) -> list[str] | None:
     return None
 
 
-def validate_required_fields(data: dict[str, object]) -> list[str]:
+def validate_atm_required_fields(data: dict[str, object]) -> list[str]:
     errors: list[str] = []
-    for path in REQUIRED_BOUNDARY_FIELDS:
-        value = nested_get(data, path)
-        if value is None:
+    for path in ATM_REQUIRED_BOUNDARY_FIELDS:
+        if nested_get(data, path) is None:
             errors.append(f"missing required field: {'.'.join(path)}")
-            continue
-        if isinstance(value, str) and not value.strip():
-            errors.append(f"missing required field: {'.'.join(path)}")
-
-    public_trait = nested_get(data, ("public", "trait"))
-    public_facade = nested_get(data, ("public", "facade"))
-    if public_trait is None and public_facade is None:
-        errors.append("missing required field: public.(trait|facade)")
     return errors
 
 
@@ -1310,20 +1279,37 @@ def validate_identifier(value: str, *, field_name: str) -> str | None:
     return None
 
 
-def validate_list_field(
+def decode_string_list(
     data: dict[str, object],
     path: tuple[str, ...],
+    undecodable: list[str],
     *,
-    field_name: str,
-    allow_empty: bool = True,
-) -> tuple[list[str], list[str]]:
+    optional: bool = False,
+) -> list[str]:
     value = nested_get(data, path)
+    if value is None and optional:
+        return []
     rendered = as_string_list(value)
     if rendered is None:
-        return [], [f"{field_name} must be a list of strings"]
-    if not allow_empty and not rendered:
-        return rendered, [f"{field_name} must not be empty"]
-    return rendered, []
+        undecodable.append(".".join(path))
+        return []
+    return rendered
+
+
+def decode_string(
+    data: dict[str, object],
+    path: tuple[str, ...],
+    undecodable: list[str],
+    *,
+    optional: bool = False,
+) -> str | None:
+    value = nested_get(data, path)
+    if value is None and optional:
+        return None
+    rendered = as_string(value)
+    if rendered is None:
+        undecodable.append(".".join(path))
+    return rendered
 
 
 def build_boundary_record(
@@ -1333,87 +1319,85 @@ def build_boundary_record(
     start_line: int,
 ) -> tuple[BoundaryRecord | None, list[BoundaryViolation]]:
     base_location = f"{source_path.as_posix()}:{start_line}"
-    errors = validate_required_fields(data)
+    errors = validate_atm_required_fields(data)
+    # Fields the published loader requires. A record that does not decode is
+    # reported once, pointing at the published loader for the schema error.
+    undecodable: list[str] = []
 
-    boundary_id = as_string(nested_get(data, ("boundary_id",)))
-    owner_package = as_string(nested_get(data, ("owner_package",)))
-    owner_crate_path = as_string(nested_get(data, ("owner_crate_path",)))
-    name = as_string(nested_get(data, ("name",)))
-    public_trait = as_string(nested_get(data, ("public", "trait")))
-    public_facade = as_string(nested_get(data, ("public", "facade")))
-    implementation_type = as_string(nested_get(data, ("implementation", "type")))
-    implementation_module = as_string(nested_get(data, ("implementation", "module")))
-    implementation_visibility = as_string(nested_get(data, ("implementation", "visibility")))
-    implementation_constructor = as_string(nested_get(data, ("implementation", "constructor")))
-    references_scope = as_string(nested_get(data, ("references", "scope")))
-    status_state = as_string(nested_get(data, ("status", "state")))
+    boundary_id = decode_string(data, ("boundary_id",), undecodable)
+    owner_package = decode_string(data, ("owner_package",), undecodable)
+    owner_crate_path = decode_string(data, ("owner_crate_path",), undecodable)
+    name = decode_string(data, ("name",), undecodable)
+    public_trait = decode_string(data, ("public", "trait"), undecodable, optional=True)
+    public_facade = decode_string(data, ("public", "facade"), undecodable, optional=True)
+    implementation_type = decode_string(data, ("implementation", "type"), undecodable, optional=True)
+    implementation_module = decode_string(data, ("implementation", "module"), undecodable, optional=True)
+    implementation_visibility = decode_string(data, ("implementation", "visibility"), undecodable)
+    implementation_constructor = decode_string(
+        data, ("implementation", "constructor"), undecodable, optional=True
+    )
+    references_scope = decode_string(data, ("references", "scope"), undecodable)
+    status_state = decode_string(data, ("status", "state"), undecodable)
 
-    composition_roots, composition_errors = validate_list_field(
-        data,
-        ("composition", "roots"),
-        field_name="composition.roots",
+    composition_roots = decode_string_list(data, ("composition", "roots"), undecodable)
+    io_owns: list[str] = []
+    io_forbidden: list[str] = []
+    for path, target in ((("ownership", "io_owns"), io_owns), (("ownership", "io_forbidden"), io_forbidden)):
+        value = nested_get(data, path)
+        if value is None:
+            continue
+        rendered = as_string_list(value)
+        if rendered is None:
+            errors.append(f"{'.'.join(path)} must be a list of strings")
+        else:
+            target.extend(rendered)
+    allowed_dependents = decode_string_list(data, ("dependencies", "allowed_dependents"), undecodable)
+    allowed_dependencies = decode_string_list(data, ("dependencies", "allowed_dependencies"), undecodable)
+    allowed_dev_dependencies = decode_string_list(
+        data, ("dependencies", "allowed_dev_dependencies"), undecodable, optional=True
     )
-    io_owns, io_owns_errors = validate_list_field(
-        data,
-        ("ownership", "io_owns"),
-        field_name="ownership.io_owns",
+    forbidden_edges = decode_string_list(data, ("dependencies", "forbidden_edges"), undecodable)
+    forbidden_references = decode_string_list(data, ("references", "forbidden"), undecodable)
+    allowed_test_double_paths = decode_string_list(
+        data, ("testing", "allowed_test_double_paths"), undecodable
     )
-    io_forbidden, io_forbidden_errors = validate_list_field(
-        data,
-        ("ownership", "io_forbidden"),
-        field_name="ownership.io_forbidden",
+    forbidden_test_bypasses = decode_string_list(
+        data, ("testing", "forbidden_test_bypasses"), undecodable
     )
-    allowed_dependents, allowed_dependent_errors = validate_list_field(
-        data,
-        ("dependencies", "allowed_dependents"),
-        field_name="dependencies.allowed_dependents",
-    )
-    allowed_dependencies, allowed_dependency_errors = validate_list_field(
-        data,
-        ("dependencies", "allowed_dependencies"),
-        field_name="dependencies.allowed_dependencies",
-    )
-    raw_allowed_dev_dependencies = nested_get(data, ("dependencies", "allowed_dev_dependencies"))
-    if raw_allowed_dev_dependencies is None:
-        allowed_dev_dependencies, allowed_dev_dependency_errors = [], []
-    else:
-        allowed_dev_dependencies, allowed_dev_dependency_errors = validate_list_field(
-            data,
-            ("dependencies", "allowed_dev_dependencies"),
-            field_name="dependencies.allowed_dev_dependencies",
-        )
-    forbidden_edges, forbidden_edge_errors = validate_list_field(
-        data,
-        ("dependencies", "forbidden_edges"),
-        field_name="dependencies.forbidden_edges",
-    )
-    forbidden_references, forbidden_reference_errors = validate_list_field(
-        data,
-        ("references", "forbidden"),
-        field_name="references.forbidden",
-    )
-    allowed_test_double_paths, test_double_errors = validate_list_field(
-        data,
-        ("testing", "allowed_test_double_paths"),
-        field_name="testing.allowed_test_double_paths",
-    )
-    forbidden_test_bypasses, test_bypass_errors = validate_list_field(
-        data,
-        ("testing", "forbidden_test_bypasses"),
-        field_name="testing.forbidden_test_bypasses",
-    )
-    lint_rules, lint_rule_errors = validate_list_field(
-        data,
-        ("enforcement", "lint_rules"),
-        field_name="enforcement.lint_rules",
-        allow_empty=False,
-    )
-    review_gates, review_gate_errors = validate_list_field(
-        data,
-        ("enforcement", "review_gates"),
-        field_name="enforcement.review_gates",
-        allow_empty=False,
-    )
+    lint_rules = decode_string_list(data, ("enforcement", "lint_rules"), undecodable)
+    review_gates = decode_string_list(data, ("enforcement", "review_gates"), undecodable)
+
+    if undecodable:
+        identifier = boundary_id or name or "unknown-boundary"
+        return None, [
+            BoundaryViolation(
+                base_location,
+                f"[{identifier}] record does not decode ({', '.join(undecodable)}); "
+                "`sc-lint lint sc-boundary` reports the schema error",
+            )
+        ]
+    assert boundary_id is not None
+    assert owner_package is not None
+    assert owner_crate_path is not None
+    assert name is not None
+    assert implementation_visibility is not None
+    assert references_scope is not None
+    assert status_state is not None
+
+    # atm policy: every boundary names the lint rules and review gates that
+    # enforce it, and those names resolve to registered runners.
+    if not lint_rules:
+        errors.append("enforcement.lint_rules must not be empty")
+    if not review_gates:
+        errors.append("enforcement.review_gates must not be empty")
+    for rule_name in lint_rules:
+        if validate_identifier(rule_name.replace("-", "_"), field_name="enforcement.lint_rules entry"):
+            errors.append(f"invalid enforcement.lint_rules entry: {rule_name!r}")
+    for gate_name in review_gates:
+        if validate_identifier(gate_name.replace("-", "_"), field_name="enforcement.review_gates entry"):
+            errors.append(f"invalid enforcement.review_gates entry: {gate_name!r}")
+
+    # atm-only [extensions.atm] policy (randlee/sc-lint#203 keeps it opaque).
     raw_io_forbidden_source_modules = nested_get(
         data, ATM_EXTENSION_PATH + ("io_forbidden_source_modules",)
     )
@@ -1425,23 +1409,24 @@ def build_boundary_record(
         raw_no_in_repo_implementation, bool
     ):
         errors.append("extensions.atm.no_in_repo_implementation must be a boolean")
+    if no_in_repo_implementation and implementation_visibility != "trait_only":
+        errors.append("extensions.atm.no_in_repo_implementation is only valid for trait_only boundaries")
     io_forbidden_source_modules: list[tuple[str, tuple[str, ...]]] = []
-    io_forbidden_source_module_errors: list[str] = []
     if raw_io_forbidden_source_modules is not None:
         if not isinstance(raw_io_forbidden_source_modules, dict):
-            io_forbidden_source_module_errors.append(
+            errors.append(
                 "extensions.atm.io_forbidden_source_modules must map io_forbidden tags to source-module lists"
             )
         else:
             for tag, raw_modules in raw_io_forbidden_source_modules.items():
                 if not isinstance(tag, str) or tag not in io_forbidden:
-                    io_forbidden_source_module_errors.append(
+                    errors.append(
                         "extensions.atm.io_forbidden_source_modules keys must name declared ownership.io_forbidden tags"
                     )
                     continue
                 modules = as_string_list(raw_modules)
                 if not modules:
-                    io_forbidden_source_module_errors.append(
+                    errors.append(
                         f"extensions.atm.io_forbidden_source_modules.{tag} must be a non-empty list of strings"
                     )
                     continue
@@ -1451,102 +1436,39 @@ def build_boundary_record(
                         field_name=f"extensions.atm.io_forbidden_source_modules.{tag} entry",
                     )
                     if error:
-                        io_forbidden_source_module_errors.append(error)
+                        errors.append(error)
                 io_forbidden_source_modules.append((tag, tuple(modules)))
 
-    errors.extend(
-        composition_errors
-        + io_owns_errors
-        + io_forbidden_errors
-        + allowed_dependent_errors
-        + allowed_dependency_errors
-        + allowed_dev_dependency_errors
-        + forbidden_edge_errors
-        + forbidden_reference_errors
-        + test_double_errors
-        + test_bypass_errors
-        + lint_rule_errors
-        + review_gate_errors
-        + io_forbidden_source_module_errors
-    )
+    # delete when randlee/sc-lint#375 ships: a name that resolves to no crate.
+    error = validate_package_name(owner_package, field_name="owner_package")
+    if error:
+        errors.append(error)
 
+    # delete when randlee/sc-lint#377 ships: identifier and Rust path syntax,
+    # trait_only constructor, forbidden-edge self-edges, composition roots.
     for label, value in (
-        ("boundary_id", boundary_id),
-        ("owner_package", owner_package),
-        ("name", name),
+        ("owner_crate_path", owner_crate_path),
+        ("public.trait", public_trait),
+        ("public.facade", public_facade),
+        ("implementation.type", implementation_type),
     ):
-        if value is None:
-            continue
-        error = validate_package_name(value, field_name=label) if label == "owner_package" else None
-        if error:
-            errors.append(error)
-
-    if owner_crate_path is not None:
-        error = validate_identifier(owner_crate_path, field_name="owner_crate_path")
-        if error:
-            errors.append(error)
-    if public_trait is not None:
-        error = validate_identifier(public_trait, field_name="public.trait")
-        if error:
-            errors.append(error)
-    if public_facade is not None:
-        error = validate_identifier(public_facade, field_name="public.facade")
-        if error:
-            errors.append(error)
-    if implementation_type is not None:
-        error = validate_identifier(implementation_type, field_name="implementation.type")
-        if error:
-            errors.append(error)
+        if value is not None:
+            error = validate_identifier(value, field_name=label)
+            if error:
+                errors.append(error)
     if implementation_module is not None:
         error = validate_rust_path(implementation_module, field_name="implementation.module")
         if error:
             errors.append(error)
-
-    if implementation_visibility is not None and implementation_visibility not in VISIBILITY_VALUES:
-        errors.append(
-            "implementation.visibility must be one of: "
-            + ", ".join(sorted(VISIBILITY_VALUES))
-        )
-    if implementation_constructor is not None and implementation_constructor not in CONSTRUCTOR_VALUES:
-        errors.append(
-            "implementation.constructor must be one of: "
-            + ", ".join(sorted(CONSTRUCTOR_VALUES))
-        )
-    if references_scope is not None and references_scope not in REFERENCE_SCOPE_VALUES:
-        errors.append("references.scope must be one of: " + ", ".join(sorted(REFERENCE_SCOPE_VALUES)))
-    if status_state is not None and status_state not in STATE_VALUES:
-        errors.append("status.state must be one of: " + ", ".join(sorted(STATE_VALUES)))
-
-    if public_trait is None and public_facade is None:
-        errors.append("one of public.trait or public.facade must be provided")
-
-    if implementation_visibility == "trait_only":
-        if implementation_type is not None:
-            errors.append("implementation.type must be null when implementation.visibility is trait_only")
-        if implementation_module is not None:
-            errors.append("implementation.module must be null when implementation.visibility is trait_only")
-        if implementation_constructor != "none":
-            errors.append("implementation.constructor must be none when implementation.visibility is trait_only")
-    elif no_in_repo_implementation:
-        errors.append("extensions.atm.no_in_repo_implementation is only valid for trait_only boundaries")
-    else:
-        if implementation_type is None:
-            errors.append("implementation.type is required for concrete boundaries")
-        if implementation_module is None:
-            errors.append("implementation.module is required for concrete boundaries")
-
-    for path_name in composition_roots:
-        error = validate_rust_path(path_name, field_name="composition.roots entry")
-        if error:
-            errors.append(error)
-    for path_name in allowed_test_double_paths:
-        error = validate_rust_path(path_name, field_name="testing.allowed_test_double_paths entry")
-        if error:
-            errors.append(error)
-    for path_name in forbidden_test_bypasses:
-        error = validate_rust_path(path_name, field_name="testing.forbidden_test_bypasses entry")
-        if error:
-            errors.append(error)
+    for label, values in (
+        ("composition.roots entry", composition_roots),
+        ("testing.allowed_test_double_paths entry", allowed_test_double_paths),
+        ("testing.forbidden_test_bypasses entry", forbidden_test_bypasses),
+    ):
+        for path_name in values:
+            error = validate_rust_path(path_name, field_name=label)
+            if error:
+                errors.append(error)
     for ref_name in forbidden_references:
         if "::" not in ref_name:
             error = validate_identifier(ref_name, field_name="references.forbidden entry")
@@ -1554,61 +1476,33 @@ def build_boundary_record(
             error = validate_rust_path(ref_name, field_name="references.forbidden entry")
         if error:
             errors.append(error)
-    for rule_name in lint_rules:
-        error = validate_identifier(rule_name.replace("-", "_"), field_name="enforcement.lint_rules entry")
-        if error:
-            errors.append(f"invalid enforcement.lint_rules entry: {rule_name!r}")
-    for gate_name in review_gates:
-        error = validate_identifier(gate_name.replace("-", "_"), field_name="enforcement.review_gates entry")
-        if error:
-            errors.append(f"invalid enforcement.review_gates entry: {gate_name!r}")
+    if implementation_visibility == "trait_only" and implementation_constructor not in (None, "none"):
+        errors.append("implementation.constructor must be none when implementation.visibility is trait_only")
     for edge in forbidden_edges:
         match = FORBIDDEN_EDGE_RE.match(edge)
-        if match is None:
-            errors.append(f"invalid dependencies.forbidden_edges entry: {edge!r}")
-        else:
-            left_alias = match.group("left")
-            right_alias = match.group("right")
-            if left_alias == right_alias:
-                errors.append(f"invalid dependencies.forbidden_edges self-edge: {edge!r}")
-
-    if owner_package:
-        source_parts = source_path.parts
-        if len(source_parts) >= 3 and source_parts[0] == "docs" and source_parts[-1] == "boundaries.md":
-            doc_owner = source_path.parent.name
-            if doc_owner != owner_package:
-                errors.append(
-                    f"document path owner mismatch: docs/{doc_owner}/boundaries.md declares owner_package {owner_package!r}"
-                )
-        elif len(source_parts) >= 3 and source_parts[0] == "boundaries" and source_path.suffix == ".toml":
-            file_owner = source_parts[1]
-            if file_owner != owner_package:
-                errors.append(
-                    f"document path owner mismatch: boundaries/{file_owner}/{source_path.name} declares owner_package {owner_package!r}"
-                )
-
-    if owner_package and composition_roots:
-        owner_crate_prefix = owner_crate_path or ""
+        if match is not None and match.group("left") == match.group("right"):
+            errors.append(f"invalid dependencies.forbidden_edges self-edge: {edge!r}")
+    if composition_roots:
         allowed_dependent_set = set(allowed_dependents)
         for root in composition_roots:
             crate_prefix = root.split("::", 1)[0]
-            if crate_prefix != owner_crate_prefix and crate_prefix.replace("_", "-") not in allowed_dependent_set:
+            if crate_prefix != owner_crate_path and crate_prefix.replace("_", "-") not in allowed_dependent_set:
                 errors.append(
                     f"composition root {root!r} must also appear in dependencies.allowed_dependents"
                 )
 
-    if errors:
-        identifier = boundary_id or name or "unknown-boundary"
-        return None, [BoundaryViolation(base_location, f"[{identifier}] {error}") for error in errors]
+    # Markdown records are not read by the published loader; keep their
+    # owner-directory check here until the markdown loader is removed.
+    source_parts = source_path.parts
+    if len(source_parts) >= 3 and source_parts[0] == "docs" and source_parts[-1] == "boundaries.md":
+        doc_owner = source_path.parent.name
+        if doc_owner != owner_package:
+            errors.append(
+                f"document path owner mismatch: docs/{doc_owner}/boundaries.md declares owner_package {owner_package!r}"
+            )
 
-    assert boundary_id is not None
-    assert owner_package is not None
-    assert owner_crate_path is not None
-    assert name is not None
-    assert implementation_visibility is not None
-    assert implementation_constructor is not None
-    assert references_scope is not None
-    assert status_state is not None
+    if errors:
+        return None, [BoundaryViolation(base_location, f"[{boundary_id}] {error}") for error in errors]
 
     record = BoundaryRecord(
         boundary_id=boundary_id,
@@ -1620,7 +1514,7 @@ def build_boundary_record(
         implementation_type=implementation_type,
         implementation_module=implementation_module,
         implementation_visibility=implementation_visibility,
-        implementation_constructor=implementation_constructor,
+        implementation_constructor=implementation_constructor or "none",
         composition_roots=tuple(composition_roots),
         io_owns=tuple(io_owns),
         io_forbidden=tuple(io_forbidden),
@@ -1670,13 +1564,13 @@ def parse_boundary_records(repo_root: Path) -> tuple[list[BoundaryRecord], list[
         try:
             data = tomllib_load(toml_path)
         except Exception as error:
+            # The published loader owns TOML syntax; report once so the
+            # record is never skipped silently here.
             violations.append(
-                BoundaryViolation(rel_toml.as_posix(), f"invalid boundary TOML: {error}")
-            )
-            continue
-        if not isinstance(data, dict):
-            violations.append(
-                BoundaryViolation(rel_toml.as_posix(), "invalid boundary TOML: top-level document must be a table")
+                BoundaryViolation(
+                    rel_toml.as_posix(),
+                    f"boundary TOML does not parse ({error}); `sc-lint lint sc-boundary` reports the schema error",
+                )
             )
             continue
         record, record_errors = build_boundary_record(
@@ -1751,21 +1645,11 @@ def dedupe_violations(violations: list[BoundaryViolation]) -> list[BoundaryViola
 
 
 def collect_duplicate_record_violations(records: list[BoundaryRecord]) -> list[BoundaryViolation]:
+    # Duplicate boundary_id is rejected by the published loader. Duplicate
+    # names within one owner are not: delete when randlee/sc-lint#377 ships.
     violations: list[BoundaryViolation] = []
-    by_id: dict[str, BoundaryRecord] = {}
     by_owner_name: dict[tuple[str, str], BoundaryRecord] = {}
     for record in records:
-        existing = by_id.get(record.boundary_id)
-        if existing is not None:
-            violations.append(
-                BoundaryViolation(
-                    record.location,
-                    f"duplicate boundary_id {record.boundary_id!r}; first declared at {existing.location}",
-                )
-            )
-        else:
-            by_id[record.boundary_id] = record
-
         key = (record.owner_package, record.name)
         existing_owner_name = by_owner_name.get(key)
         if existing_owner_name is not None:
@@ -1781,11 +1665,14 @@ def collect_duplicate_record_violations(records: list[BoundaryRecord]) -> list[B
 
 
 def collect_manifest_consistency_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
+    # The published loader checks owner_crate_path when owner_package is a
+    # Cargo package name. It skips owners named by crate directory:
+    # delete when randlee/sc-lint#375 ships.
     violations: list[BoundaryViolation] = []
     alias_map = manifest_by_alias(repo_root)
     for record in records:
         info = alias_map.get(record.owner_package)
-        if info is None:
+        if info is None or record.owner_package == info.package_name:
             continue
         if record.owner_crate_path != info.crate_path_name:
             violations.append(
@@ -1798,6 +1685,10 @@ def collect_manifest_consistency_violations(repo_root: Path, records: list[Bound
 
 
 def collect_allowed_dependent_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
+    # Package-level dependents (union over a package's records, runtime edges
+    # only, stale entries reported). The published SCB-DEPENDENCY-002 checks
+    # each record separately and counts dev edges, so it is reported but not
+    # failing in .sc-lint/install.json: delete when randlee/sc-lint#376 ships.
     violations: list[BoundaryViolation] = []
     infos = manifest_info(repo_root)
     alias_map = manifest_by_alias(repo_root)
@@ -2010,8 +1901,12 @@ def collect_manifest_dependency_allowlist_violations(
 
 
 def collect_forbidden_edge_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
+    # The published SCB-DEPENDENCY-003 enforces a forbidden edge when the
+    # record's owner and both edge sides are Cargo package names. It skips
+    # every other edge: delete when randlee/sc-lint#375 ships.
     violations: list[BoundaryViolation] = []
     alias_map = manifest_by_alias(repo_root)
+    package_names = {info.package_name for info in manifest_info(repo_root)}
     for record in records:
         for edge in record.forbidden_edges:
             match = FORBIDDEN_EDGE_RE.match(edge)
@@ -2019,6 +1914,8 @@ def collect_forbidden_edge_violations(repo_root: Path, records: list[BoundaryRec
                 continue
             left_alias = match.group("left")
             right_alias = match.group("right")
+            if {record.owner_package, left_alias, right_alias} <= package_names:
+                continue
             left_manifest = alias_map.get(left_alias)
             if left_manifest is None:
                 continue
