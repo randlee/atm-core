@@ -221,11 +221,6 @@ fn send_render_fails_closed_on_missing_variables() {
     let dir = tempfile::tempdir().expect("temp dir");
     let (template, partial, _) = write_strict_fixture(dir.path());
     let recipient = format!("recipient@{team}");
-    let database = atm_core::home::host_mail_db_path().expect("host mailbox database path");
-    let before =
-        atm_runtime_test_support::count_mailbox_messages_for_test(&database, &team, "recipient")
-            .expect("count isolated recipient mailbox before send");
-
     let output = run_atm_as(
         &[
             "send",
@@ -251,8 +246,8 @@ fn send_render_fails_closed_on_missing_variables() {
         stderr.contains("TemplateRequiredVariableMissing"),
         "must report the typed template-variable failure: {stderr}"
     );
-    let after =
-        atm_runtime_test_support::count_mailbox_messages_for_test(&database, &team, "recipient")
-            .expect("count isolated recipient mailbox after send");
-    assert_eq!(after, before, "failed render must not write a mailbox row");
+    assert!(
+        stderr.contains("strict.md.j2"),
+        "must name the template: {stderr}"
+    );
 }

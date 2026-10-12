@@ -68,7 +68,11 @@ pub(super) fn verify_template_send(
             );
             AtmError::new(
                 error.code(),
-                format!("{} (template {template_name})", error.detail()),
+                format!(
+                    "{:?}: {} (template {template_name})",
+                    error.code(),
+                    error.detail()
+                ),
             )
         } else {
             error
