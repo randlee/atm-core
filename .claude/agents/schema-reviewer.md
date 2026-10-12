@@ -224,6 +224,7 @@ Return fenced JSON only.
       "category": "UNAPPROVED-BREAKING | MISSING-BUMP | WRONG-BUMP | NOT-DEFAULTED | PLAN-DRIFT | DOC-DRIFT | NON-ADDITIVE-DESIGN | HERDR-MINIMUM-RAISED | HERDR-VERSION-UNTESTED | SQLITE-ROLLBACK-BROKEN | SQLITE-MIGRATION-UNTESTED",
       "detail": "clear statement of the problem and the required action",
       "ref": "path:line",
+      "evidence": "specific checked evidence supporting this disposition",
       "disposition": "fixed | open | regressed (required for verification-locked review)"
     }
   ]

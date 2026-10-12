@@ -28,7 +28,13 @@ SUBJECTIVE_TEMPLATES = (
 )
 QA_TEMPLATE = ".claude/skills/codex-orchestration/qa-template.xml.j2"
 PLAN_SCOPE_TEMPLATE = ".claude/skills/codex-orchestration/plan-scope-reviewer-assignment.json.j2"
-REVIEWER_BASE = {"review_mode": "sprint_review", "worktree_path": "/w", "review_targets": ["src/"]}
+REVIEWER_BASE = {
+    "review_mode": "sprint_review",
+    "worktree_path": "/w",
+    "branch": "sprint/s-1-x",
+    "commit": "abc1234",
+    "review_targets": ["src/"],
+}
 QA_BASE = {
     "task_id": "t", "sprint": "s", "sprint_doc": "d.md", "review_mode": "sprint",
     "description": "x", "pr_number": "1", "branch": "sprint/s-1-x", "worktree_path": "/w",

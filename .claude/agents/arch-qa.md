@@ -281,6 +281,7 @@ Emit a single fenced JSON block:
       "line": 46,
       "description": "Short description of the structural violation.",
       "remediation": "Specific remediation.",
+      "evidence": "Specific checked evidence supporting this disposition.",
       "disposition": "fixed | open | regressed (required for verification-locked review)"
     }
   ],
