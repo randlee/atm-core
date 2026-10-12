@@ -129,13 +129,15 @@ pub fn synthesized_transfer_script_env(env: &dyn EnvSource) -> Vec<(&'static str
 #[cfg(unix)]
 fn unix_synthesized_transfer_script_path() -> OsString {
     let root = PathBuf::from(std::path::MAIN_SEPARATOR.to_string());
-    let mut paths = vec![
+    let paths = vec![
         root.join("usr").join("bin"),
         root.join("bin"),
         root.join("usr").join("local").join("bin"),
     ];
     #[cfg(target_os = "macos")]
-    paths.push(root.join("opt").join("homebrew").join("bin"));
+    let paths = paths.into_iter().chain(std::iter::once(
+        root.join("opt").join("homebrew").join("bin"),
+    ));
     std::env::join_paths(paths)
         .expect("static Unix PATH entries cannot contain a path-list separator")
 }
