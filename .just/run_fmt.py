@@ -2,8 +2,8 @@
 """Run the published fmt command directly."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
-import subprocess
 import sys
 
 
@@ -17,7 +17,9 @@ def main(argv: list[str]) -> int:
     else:
         print(f"unknown fmt mode: {mode}", file=sys.stderr)
         return 2
-    return subprocess.run(command, cwd=repo_root, check=False).returncode
+    os.chdir(repo_root)
+    os.execvp(command[0], command)
+    return 127
 
 
 if __name__ == "__main__":

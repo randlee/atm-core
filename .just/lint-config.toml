@@ -110,6 +110,9 @@ max_scoped_code_lines = 0
 "src/schema/settings.rs" = "deferred settings schema models; placeholder module reserved for future phase"
 
 [cargo_shear.allowed_unlinked_files]
+"src/peer_pool_config.rs" = "randlee/sc-lint#346: peer-pool configuration is linked by the runtime feature boundary, which cargo-shear does not model."
+"tests/ui/macro_rejected.rs" = "randlee/sc-lint#346: trybuild fixture consumed by the macro UI harness, which cargo-shear does not model."
+"tests/ui/macro_supported.rs" = "randlee/sc-lint#346: trybuild fixture consumed by the macro UI harness, which cargo-shear does not model."
 
 [cargo_shear.allowed_unused_dependencies]
 "crates/atm-http-runtime/Cargo.toml:atm-herdr" = "AQ2.6 keeps the direct boundary dependency and dev test-utils dependency declared for the Herdr consumer contract; cargo-shear cannot see the boundary-only composition use."

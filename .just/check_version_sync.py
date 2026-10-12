@@ -330,7 +330,9 @@ def workspace_tracked_python_packages(repo_root: Path, workspace_version: str) -
 
 
 def validate_python_dependency_pins(repo_root: Path, workspace_version: str) -> bool:
-    """Fail if any in-workspace pyproject.toml pins a workspace-tracked Python
+    """Keep the ATM-specific Python pin gap until randlee/sc-lint#137 ships.
+
+    Fail if any in-workspace pyproject.toml pins a workspace-tracked Python
     package (e.g. hermes-atm's ``atm-graft`` dependency) with a specifier the
     current workspace version no longer satisfies. Prevents the class of bug
     where a crate's own ``version`` field is bumped but a sibling's dependency
@@ -521,21 +523,28 @@ def success_message(workspace_version: str, executed_checks: list[str]) -> str:
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
-    config = version_sync_config(repo_root)
-    workspace_version = validate_workspace_version(repo_root)
-    validate_release_version_lockstep(repo_root)
-    validate_crate_versions(repo_root, workspace_version)
-    validate_lockfile(repo_root, workspace_version)
+    venv_python = repo_root / ".sc-lint/venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    if not venv_python.is_file():
+        bootstrap = repo_root / ".sc-lint" / ("bootstrap.ps1" if sys.platform == "win32" else "bootstrap")
+        if sys.platform == "win32":
+            setup_command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(bootstrap), "setup", "--config", "sc-lint.toml"]
+        else:
+            setup_command = [str(bootstrap), "setup", "--config", "sc-lint.toml"]
+        setup = subprocess.run(setup_command, cwd=repo_root, check=False)
+        if setup.returncode != 0:
+            return setup.returncode
+    published = subprocess.run(
+        [str(venv_python), "-m", "sc_lint.check_version_sync"],
+        cwd=repo_root,
+        check=False,
+    )
+    if published.returncode != 0:
+        return published.returncode
 
-    executed_checks = [
-        "installed release-contract version lockstep",
-        "internal path deps",
-        "Cargo.lock",
-    ]
-    if validate_winget_manifests(repo_root, workspace_version, config):
-        executed_checks.append("winget")
-    if validate_release_wiring(repo_root, config):
-        executed_checks.append("release wiring")
+    # delete when randlee/sc-lint#137 ships: the published version check does
+    # not yet verify workspace-tracked Python dependency specifiers.
+    workspace_version = validate_workspace_version(repo_root)
+    executed_checks = ["published sc-lint version check"]
     if validate_python_dependency_pins(repo_root, workspace_version):
         executed_checks.append("Python registry dependency pins")
 
