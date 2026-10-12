@@ -1,5 +1,6 @@
 ---
 required_variables:
+  - template.sha256
   - correlation_id
   - runtime
   - authority.intent
@@ -8,10 +9,14 @@ required_variables:
   - current_questions
   - candidate_minimum
   - repeat_count
-  - acceptance_threshold
+  - tournament_protocol_version
+  - production_confidence_threshold
+  - confidence_reference_threshold
+  - tuning_history
+  - diagnostic_plan
 metadata:
   id: anchor-tuning-tune-request
-  version: 0.4.0
+  version: 0.4.1
   purpose: Authority-only planner-to-anchor-tuning calibration request
 ---
 # Independent anchor-question calibration
@@ -22,8 +27,13 @@ non-normative and may be changed only in disposable copies.
 
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "2.0.0",
   "operation": "tune",
+  "template": {
+    "id": "anchor-tuning-tune-request",
+    "version": "0.4.1",
+    "sha256": {{ template.sha256 | tojson }}
+  },
   "correlation_id": {{ correlation_id | tojson }},
   "runtime": {{ runtime | tojson }},
   "authority": {
@@ -34,10 +44,16 @@ non-normative and may be changed only in disposable copies.
   "current_questions": {{ current_questions | tojson }},
   "candidate_minimum": {{ candidate_minimum | tojson }},
   "repeat_count": {{ repeat_count | tojson }},
-  "acceptance_threshold": {{ acceptance_threshold | tojson }}
+  "tournament_protocol_version": {{ tournament_protocol_version | tojson }},
+  "production_confidence_threshold": {{ production_confidence_threshold | tojson }},
+  "confidence_reference_threshold": {{ confidence_reference_threshold | tojson }},
+  "tuning_history": {{ tuning_history | tojson }},
+  "diagnostic_plan": {{ diagnostic_plan | tojson }}
 }
 ```
 
 Freeze the oracle before the first Jev response. Evaluate a larger candidate
 pool in parallel, retain the evidence, and down-select the smallest accurate
-role-complete question set.
+role-complete question set. Tournament acceptance uses exact semantic labels,
+threshold-free derived verdicts, repeat stability, and zero regressions.
+Confidence remains diagnostic here; the production threshold remains fail-closed.
