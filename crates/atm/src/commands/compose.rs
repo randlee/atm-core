@@ -65,7 +65,7 @@ impl ComposeCommand {
         };
         let composer = atm_daemon_bootstrap::template_composer();
         let rendered = composer
-            .compose_file(&source.source, &source.vars, &root)
+            .render_within_root(&source.source, &source.vars, &root)
             .map_err(anyhow::Error::from)?;
         let max_bytes = atm_core::load_atm_config(&current_dir)?
             .map(|config| {

@@ -3,6 +3,8 @@
 //! The storage layer supplies immutable bytes and merged variables while the
 //! composition root supplies the renderer port. Keeping this operation here
 //! prevents read surfaces from depending on SQLite or the sc-compose adapter.
+//! Legacy rows with referenced variables that are undeclared or absent fail
+//! closed on every render-on-read surface with a typed template error.
 
 use atm_storage::{MergedVarsJson, StoredTemplate, TemplateCatalogStore};
 
@@ -25,7 +27,18 @@ pub fn render_decomposed(
         )
     })?;
     let source = TemplateSource::stored(template.content_bytes.clone(), Some(output_format));
-    composer.render_without_includes(&source, vars.as_map())
+    composer
+        .render_without_includes(&source, vars.as_map())
+        .map_err(|error| {
+            let template_name = template
+                .template_name
+                .as_deref()
+                .unwrap_or(template.sha.as_str());
+            AtmError::new(
+                error.code(),
+                format!("stored template {template_name}: {}", error.detail()),
+            )
+        })
 }
 
 /// Render a durable envelope when its message key has decomposition columns.
@@ -121,9 +134,14 @@ mod tests {
 
         fn render_without_includes(
             &self,
-            _source: &TemplateSource,
+            source: &TemplateSource,
             vars: &Map<String, Value>,
         ) -> Result<RenderedBody, crate::error::AtmError> {
+            if source.raw_file_bytes == b"{{ missing }}" {
+                return Err(crate::error::AtmError::template_render_variable_failed(
+                    "undeclared variable missing",
+                ));
+            }
             if self.includes {
                 return Err(crate::error::AtmError::decomposed_template_include_forbidden());
             }
@@ -200,6 +218,25 @@ mod tests {
         .expect_err("legacy rows must be re-registered before checked rendering");
 
         assert!(error.detail().contains("legacy/unverified"));
+    }
+
+    #[test]
+    fn legacy_row_with_undeclared_variable_returns_typed_error_with_template_name() {
+        let composer = FixtureComposer { includes: false };
+        let mut stored = template();
+        stored.template_name = Some("legacy-template".to_owned());
+        stored.content_bytes = b"{{ missing }}".to_vec();
+        stored.content_text = "{{ missing }}".to_owned();
+
+        let error = render_decomposed(&composer, &stored, &atm_storage::MergedVarsJson::default())
+            .expect_err("undeclared variable in legacy row must fail closed");
+
+        assert_eq!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(error.detail().contains("missing"));
+        assert!(error.detail().contains("legacy-template"));
     }
 
     #[test]

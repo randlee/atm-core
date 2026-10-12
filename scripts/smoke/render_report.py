@@ -4,8 +4,13 @@ from __future__ import annotations
 from pathlib import Path
 import argparse
 import json
+import sys
 
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.report_runtime import compose_text  # noqa: E402
 
 from fixtures import ensure_parent
 from fixtures import level_slug
@@ -22,14 +27,8 @@ def template_name(level: str) -> str:
 
 def render_markdown(payload: dict) -> str:
     root = repo_root()
-    env = Environment(
-        loader=FileSystemLoader(str(root / "templates" / "smoke-report")),
-        undefined=StrictUndefined,
-        trim_blocks=True,
-        lstrip_blocks=True,
-    )
-    template = env.get_template(template_name(payload["level"]))
-    return template.render(report=payload).rstrip() + "\n"
+    template = root / "templates" / "smoke-report" / template_name(payload["level"])
+    return compose_text(template, {"report": payload}, root=root).rstrip() + "\n"
 
 
 def parse_args() -> argparse.Namespace:

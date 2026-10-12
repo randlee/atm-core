@@ -1,3 +1,28 @@
+---
+name: coverage-report-mac
+version: 1.0.0
+description: macOS coverage report markdown rendered from the canonical coverage JSON.
+format: markdown
+required_variables:
+  - report.status
+  - report.coverage_level
+  - report.timestamp_display
+  - report.commit
+  - report.duration_secs
+  - report.collector
+  - report.summary
+  - report.crates
+  - report.notes
+# report.summary is null on a placeholder report; the template reads these
+# only inside the report.summary branch, so the defaults are never rendered.
+defaults:
+  report.summary.line_percent: ""
+  report.summary.line_covered: ""
+  report.summary.line_count: ""
+  report.summary.function_percent: ""
+  report.summary.function_covered: ""
+  report.summary.function_count: ""
+---
 # Coverage Report: mac
 
 - status: `{{ report.status }}`
