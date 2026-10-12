@@ -39,6 +39,7 @@ with free-form input.
     "optional prior findings"
   ],
   "carry_forward_findings": [],
+  "findings_scope_locked": false,
   "notes": "optional context"
 }
 ```
@@ -52,6 +53,13 @@ Rules:
   boundary, packaging, checklist, readiness, and gate artifacts without
   expecting implementation code changes
 - if required inputs are missing or malformed, return `FAIL`
+
+## Verification-Locked Dispatch
+
+When `findings_scope_locked` is true (or `carry_forward_findings` is
+non-empty), recheck only those finding ids. Return one finding per assigned id
+with a `fixed`, `open`, or `regressed` disposition; put unrelated observations
+in `notes`, not `findings`.
 
 ## Architectural Rules
 
@@ -249,8 +257,6 @@ Rules:
 - List each finding with `file:line` and a remediation note.
 - The pre-existing/new distinction is informational only.
 
-**Legacy Daemon Exemption**: Do not file a finding against legacy synchronous-daemon runtime behavior (e.g. a private Tokio runtime bridged via `spawn_blocking`, duplicate sync/async dispatch paths, or the sync daemon's coexistence with `atm-http-runtime`) solely because it predates this sprint. That code is a known, deferred Phase-AM deletion target — the daemon's target architecture is Tokio+Axum (`atm-http-runtime`); remodeling the legacy path invalidates the AM deletion plan. Note it under `notes` instead of `findings`, and never propose remediation that patches or restructures the legacy daemon in place. Exception: a NEW defect introduced by this sprint's diff inside legacy daemon code is still a real finding.
-
 ## Output Contract
 
 Emit a single fenced JSON block:
@@ -274,7 +280,9 @@ Emit a single fenced JSON block:
       "file": "crates/atm-core/src/module.rs",
       "line": 46,
       "description": "Short description of the structural violation.",
-      "remediation": "Specific remediation."
+      "remediation": "Specific remediation.",
+      "evidence": "Specific checked evidence supporting this disposition.",
+      "disposition": "fixed | open | regressed (required for verification-locked review)"
     }
   ],
   "gate_artifact_checks": [

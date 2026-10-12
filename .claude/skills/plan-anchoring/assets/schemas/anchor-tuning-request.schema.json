@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synaptic-canvas.dev/plan-anchor/anchor-tuning-request.schema.json",
+  "title": "Anchor tuning request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "operation", "correlation_id", "runtime", "authority"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "operation": {"enum": ["tune", "triage"]},
+    "correlation_id": {"type": "string", "minLength": 1},
+    "runtime": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["workspace", "script", "version", "sha256"],
+      "properties": {
+        "workspace": {"type": "string", "minLength": 1},
+        "script": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intent", "anchors"],
+      "properties": {
+        "intent": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["id", "version", "sha256", "content"],
+          "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "version": {"type": ["integer", "string"]},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "content": {"type": "string", "minLength": 1}
+          }
+        },
+        "anchors": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sha256", "records"],
+          "properties": {
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "records": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["id", "version", "state", "statement", "kind", "scope", "check", "fixtures"],
+                "properties": {
+                  "id": {"type": "string", "pattern": "^ANC-[0-9]{3}$"},
+                  "version": {"type": ["integer", "string"]},
+                  "state": {"const": "locked"},
+                  "statement": {"type": "string", "minLength": 1},
+                  "kind": {"type": "string", "minLength": 1},
+                  "scope": {"type": "string", "minLength": 1},
+                  "check": {"type": ["string", "object"]},
+                  "fixtures": {"type": ["array", "object"]}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "gate": {"enum": ["planning", "development", "testability"]},
+    "current_questions": {"type": "object"},
+    "candidate_minimum": {"type": "integer", "minimum": 3},
+    "repeat_count": {"type": "integer", "minimum": 2},
+    "acceptance_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+    "diagnostic_plan": {"type": ["object", "null"]},
+    "template": {"$ref": "#/$defs/template"},
+    "sealed_question_set": {"$ref": "#/$defs/sealedQuestionSet"},
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "source_digest", "canonical_request", "raw_response"],
+      "properties": {
+        "role": {"type": "string", "minLength": 1},
+        "source_digest": {"$ref": "#/$defs/sha256"},
+        "canonical_request": {"type": "object"},
+        "raw_response": {"type": "object"}
+      }
+    },
+    "planner_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trust", "text"],
+      "properties": {
+        "trust": {"const": "untrusted"},
+        "text": {"type": "string"}
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {"operation": {"const": "tune"}},
+      "required": ["gate", "current_questions", "candidate_minimum", "repeat_count", "acceptance_threshold"],
+      "not": {"anyOf": [{"required": ["template"]}, {"required": ["sealed_question_set"]}, {"required": ["review"]}, {"required": ["planner_observation"]}]}
+    },
+    {
+      "properties": {"operation": {"const": "triage"}},
+      "required": ["template", "sealed_question_set", "review", "planner_observation"],
+      "not": {"anyOf": [{"required": ["gate"]}, {"required": ["current_questions"]}, {"required": ["candidate_minimum"]}, {"required": ["repeat_count"]}, {"required": ["acceptance_threshold"]}, {"required": ["diagnostic_plan"]}]}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "sha256"],
+      "properties": {
+        "id": {"const": "anchor-tuning-review-feedback"},
+        "version": {"const": "0.4.0"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sealedQuestionSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["digest", "questions"],
+      "properties": {
+        "digest": {"$ref": "#/$defs/sha256"},
+        "questions": {"type": "object"}
+      }
+    }
+  }
+}

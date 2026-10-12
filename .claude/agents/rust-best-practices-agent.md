@@ -45,6 +45,11 @@ with free-form input.
   ],
   "practice_mode": "all | selected",
   "practice_ids": ["RBP-001", "RBP-004"],
+  "branch": "optional branch name",
+  "commit": "optional commit sha",
+  "round_limit": false,
+  "changed_files": ["optional changed-file hint"],
+  "triage_records": ["optional prior findings; ignored"],
   "carry_forward_findings": ["optional/pre-existing finding ids assigned for verification this round"],
   "findings_scope_locked": false,
   "notes": "optional context"
@@ -59,6 +64,8 @@ Rules:
 - `practice_ids` must be non-empty when `practice_mode` is `selected`.
 - Unknown practice ids are input errors. Do not guess.
 - When `practice_mode` is `all`, review the full canonical inventory from `practice-inventory.md`.
+- `round_limit` is dispatch metadata, `changed_files` is a focus hint, and
+  `triage_records` is ignored.
 
 ## Verification-Locked Dispatch
 
@@ -120,7 +127,8 @@ Return fenced JSON only.
         "line": 42,
         "issue": "Semantic user id is represented as a raw String across public boundaries.",
         "recommendation": "Introduce a validated newtype and move parsing/validation behind that type.",
-        "evidence": "Three public functions accept raw String and re-run the same validation logic."
+        "evidence": "Three public functions accept raw String and re-run the same validation logic.",
+        "disposition": "fixed | open | regressed (required for verification-locked review)"
       }
     ],
     "summary": {
@@ -144,6 +152,9 @@ Output rules:
 - `data.status` is `pass` only when no real findings remain in scope.
 - `data.status` is `findings` if any real finding exists.
 - `practice_id` is required for every finding.
+- `disposition` is required for every finding when `findings_scope_locked` is
+  true; use `fixed`, `open`, or `regressed` and retain the evidence supporting
+  that result.
 - Findings must be ordered by severity, then remediation priority.
 
 If the input is invalid or the review cannot be completed, return:

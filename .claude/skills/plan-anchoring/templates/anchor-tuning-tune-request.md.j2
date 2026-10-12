@@ -1,0 +1,43 @@
+---
+required_variables:
+  - correlation_id
+  - runtime
+  - authority.intent
+  - authority.anchors
+  - gate
+  - current_questions
+  - candidate_minimum
+  - repeat_count
+  - acceptance_threshold
+metadata:
+  id: anchor-tuning-tune-request
+  version: 0.4.0
+  purpose: Authority-only planner-to-anchor-tuning calibration request
+---
+# Independent anchor-question calibration
+
+Tune for accurate detection of approved INTENT and locked ANC requirements.
+Do not optimize for the current plan to pass. The optional diagnostic plan is
+non-normative and may be changed only in disposable copies.
+
+```json
+{
+  "schema_version": "1.0.0",
+  "operation": "tune",
+  "correlation_id": {{ correlation_id | tojson }},
+  "runtime": {{ runtime | tojson }},
+  "authority": {
+    "intent": {{ authority.intent | tojson }},
+    "anchors": {{ authority.anchors | tojson }}
+  },
+  "gate": {{ gate | tojson }},
+  "current_questions": {{ current_questions | tojson }},
+  "candidate_minimum": {{ candidate_minimum | tojson }},
+  "repeat_count": {{ repeat_count | tojson }},
+  "acceptance_threshold": {{ acceptance_threshold | tojson }}
+}
+```
+
+Freeze the oracle before the first Jev response. Evaluate a larger candidate
+pool in parallel, retain the evidence, and down-select the smallest accurate
+role-complete question set.
