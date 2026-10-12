@@ -1324,7 +1324,7 @@ message = "{message}"
             for package, message in (
                 ("atm-storage", "atm-http-runtime must not depend on atm-storage in production; it is a test-only fixture dependency"),
                 ("atm-runtime-test-support", "atm-http-runtime must not depend on atm-runtime-test-support in production; it is a test-only fixture dependency"),
-                ("serde_yaml", "atm-http-runtime must not depend on serde_yaml in production; it is a test-only fixture dependency"),
+                ("noyalib", "atm-http-runtime must not depend on noyalib in production; it is a test-only fixture dependency"),
                 ("tempfile", "atm-http-runtime must not depend on tempfile in production; it is a test-only fixture dependency"),
             )
         )
@@ -1351,7 +1351,7 @@ version = "0.1.0"
 [dependencies]
 atm-storage = { path = "../atm-storage" }
 atm-runtime-test-support = { path = "../atm-runtime-test-support" }
-serde_yaml = "0.9"
+noyalib = "0.0.57"
 tempfile = "3"
 """,
                 encoding="utf-8",
@@ -1366,7 +1366,7 @@ tempfile = "3"
             for message in (
                 "atm-http-runtime must not depend on atm-storage in production; it is a test-only fixture dependency",
                 "atm-http-runtime must not depend on atm-runtime-test-support in production; it is a test-only fixture dependency",
-                "atm-http-runtime must not depend on serde_yaml in production; it is a test-only fixture dependency",
+                "atm-http-runtime must not depend on noyalib in production; it is a test-only fixture dependency",
                 "atm-http-runtime must not depend on tempfile in production; it is a test-only fixture dependency",
             ):
                 self.assertIn(f"crates/atm-http-runtime/Cargo.toml [dependencies]: {message}", rendered)

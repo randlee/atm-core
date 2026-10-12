@@ -7,9 +7,11 @@ yanked = "deny"
 # sc-composer 1.3.0 (the published containment/render adapter required by
 # AN.3) pins quick-xml 0.38.4. Remove both entries when upstream releases an
 # advisory-compatible sc-composer; ATM carries no local quick-xml patch.
+# sc-composer still pins deprecated serde_yaml, the sole remaining source of
+# unsafe-libyaml after ATM's direct migration. randlee/sc-compose#817 tracks
+# the upstream remediation; delete when an sc-composer release without
+# serde_yaml is pinned.
 ignore = [
-  # Temporary: serde_yaml's unsafe-libyaml dependency is migrated by atm-phase-bg.10.
-  # Delete when that finding's serde_yaml migration lands.
   "RUSTSEC-2024-0449",
   "RUSTSEC-2026-0194",
   "RUSTSEC-2026-0195",

@@ -121,7 +121,7 @@ toml_glob = "boundaries/*/*.toml"
 # by one named implementation seam.
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm/Cargo.toml"
-allowed_dependencies = ["anyhow", "async-trait", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-graft", "atm-http-runtime", "atm-observability", "atm-runtime-test-support", "atm-storage", "chrono", "clap", "libc", "opentelemetry-proto", "sc-observability", "sc-observability-types", "serde", "serde_json", "serde_yaml", "serial_test", "tempfile", "time", "toml", "tokio", "tokio-stream", "tonic", "tracing", "tracing-subscriber", "ulid"]
+allowed_dependencies = ["anyhow", "async-trait", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-graft", "atm-http-runtime", "atm-observability", "atm-runtime-test-support", "atm-storage", "chrono", "clap", "libc", "noyalib", "opentelemetry-proto", "sc-observability", "sc-observability-types", "serde", "serde_json", "serial_test", "tempfile", "time", "toml", "tokio", "tokio-stream", "tonic", "tracing", "tracing-subscriber", "ulid"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-core/Cargo.toml"
@@ -161,7 +161,7 @@ allowed_dependencies = ["atm-storage", "atm-storage-rusqlite", "pyo3", "tempfile
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
 boundary_record_path = "boundaries/atm-http-runtime/http-runtime.toml"
-allowed_dependencies = ["async-trait", "atm-core", "atm-herdr", "atm-observability", "atm-runtime", "atm-runtime-test-support", "axum", "base64", "fs4", "http-body-util", "hyper", "hyper-util", "reqwest", "serde", "serde_json", "serde_yaml", "tempfile", "tokio", "tower", "tracing", "tracing-subscriber", "ulid", "windows-sys"]
+allowed_dependencies = ["async-trait", "atm-core", "atm-herdr", "atm-observability", "atm-runtime", "atm-runtime-test-support", "axum", "base64", "fs4", "http-body-util", "hyper", "hyper-util", "noyalib", "reqwest", "serde", "serde_json", "tempfile", "tokio", "tower", "tracing", "tracing-subscriber", "ulid", "windows-sys"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-herdr/Cargo.toml"
@@ -247,9 +247,9 @@ message = "atm-http-runtime must not depend on atm-runtime-test-support in produ
 
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
-dependency_package = "serde_yaml"
+dependency_package = "noyalib"
 allowed_sections = ["dev-dependencies"]
-message = "atm-http-runtime must not depend on serde_yaml in production; it is a test-only fixture dependency"
+message = "atm-http-runtime must not depend on noyalib in production; it is a test-only fixture dependency"
 
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm-http-runtime/Cargo.toml"
