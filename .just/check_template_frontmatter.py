@@ -12,9 +12,7 @@ import sys
 from lint_common import discover_repo_root
 
 
-# The installed atm-bd-orchestration copy is fixed upstream, never edited here.
-EXCLUDED_PREFIXES = (".claude/skills/atm-bd-orchestration/",)
-# sc-compose 1.6.1 reports these Jinja keywords as undeclared tokens
+# sc-compose 1.7.0 reports these Jinja keywords as undeclared tokens
 # (randlee/sc-compose#784). Drop this set when that issue is fixed.
 SC_COMPOSE_784_TOKENS = frozenset({"autoescape", "endautoescape", "is", "defined"})
 UNDECLARED = re.compile(r"ERR_VAL_UNDECLARED_TOKEN: undeclared referenced token: (\S+)")
@@ -25,23 +23,41 @@ def tracked_templates(repo_root: Path) -> list[str]:
     listed = subprocess.run(
         ["git", "-C", str(repo_root), "ls-files", "*.j2"], capture_output=True, text=True, check=True
     ).stdout.splitlines()
-    return [name for name in listed if not name.startswith(EXCLUDED_PREFIXES)]
+    return listed
 
 
 def template_violations(repo_root: Path, template: str) -> list[str]:
-    """Run sc-compose's strict validation and keep only the front-matter findings."""
+    """Run strict validation, retaining front-matter findings and unknown failures."""
     completed = subprocess.run(
         ["sc-compose", "validate", "--strict", "--root", str(repo_root), "--file", template],
         cwd=repo_root, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
     )
+    output = completed.stdout + completed.stderr
     violations: list[str] = []
-    for line in (completed.stdout + completed.stderr).splitlines():
+    for line in output.splitlines():
         if MISSING_FRONTMATTER in line:
             violations.append(f"{template}: no front matter declaring its variables")
             continue
         token = UNDECLARED.search(line)
-        if token and token.group(1) not in SC_COMPOSE_784_TOKENS:
-            violations.append(f"{template}: variable `{token.group(1)}` is used but not declared in front matter")
+        if token:
+            if token.group(1) in SC_COMPOSE_784_TOKENS:
+                continue
+            else:
+                violations.append(
+                    f"{template}: variable `{token.group(1)}` is used but not declared in front matter"
+                )
+    if completed.returncode and not violations:
+        diagnostic_codes = re.findall(r"ERR_[A-Z0-9_]+", output)
+        recognized_codes = {
+            "ERR_VAL_MISSING_FRONTMATTER",
+            "ERR_VAL_MISSING_REQUIRED",
+            "ERR_VAL_UNDECLARED_TOKEN",
+        }
+        if not diagnostic_codes or any(code not in recognized_codes for code in diagnostic_codes):
+            violations.append(
+                f"{template}: sc-compose strict validation failed (exit {completed.returncode}):\n"
+                f"{output.rstrip()}"
+            )
     return violations
 
 

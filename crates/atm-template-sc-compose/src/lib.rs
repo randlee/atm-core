@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 //! `sc-composer` implementation of ATM's template-composition port.
 //!
-//! The adapter uses the exact crates.io `sc-composer` and `sc-sha` 1.4.1
+//! The adapter uses the exact crates.io `sc-composer` and `sc-sha` 1.7.0
 //! releases for inspection, rendering, and root-confinement operations. ATM
 //! translates their public results into its small storage DTOs; it does not
 //! maintain a second parser, hash implementation, or fixture-backed
@@ -99,9 +99,15 @@ fn validation_error(error: &sc_composer::ValidationError) -> AtmError {
         })
         .collect::<Vec<_>>();
     if diagnostics.is_empty() {
-        return AtmError::template_render_verification_failed(error);
+        return validation_error_without_diagnostics();
     }
     AtmError::template_render_variable_failed(diagnostics.join("; "))
+}
+
+fn validation_error_without_diagnostics() -> AtmError {
+    AtmError::template_render_verification_failed(
+        "sc-compose returned a validation failure without structured diagnostics",
+    )
 }
 
 fn composition_error(error: ComposeError) -> AtmError {
@@ -178,8 +184,8 @@ fn upstream_frontmatter(
 }
 
 fn upstream_references(raw_file_bytes: &[u8]) -> Result<Vec<TemplateReference>, AtmError> {
-    inspect_template_directives(raw_file_bytes)
-        .map_err(inspection_error)?
+    let references = inspect_template_directives(raw_file_bytes).map_err(inspection_error)?;
+    Ok(references
         .into_iter()
         .map(|reference| {
             let directive = match reference.directive {
@@ -187,15 +193,15 @@ fn upstream_references(raw_file_bytes: &[u8]) -> Result<Vec<TemplateReference>, 
                 TemplateDirectiveKind::Import => TemplateReferenceKind::Import,
                 TemplateDirectiveKind::FromImport => TemplateReferenceKind::FromImport,
             };
-            Ok(TemplateReference {
+            TemplateReference {
                 directive,
                 source_span: SourceSpan {
                     byte_start: reference.source_span.byte_start,
                     byte_end: reference.source_span.byte_end,
                 },
-            })
+            }
         })
-        .collect()
+        .collect())
 }
 
 fn inspect_raw_file(
@@ -239,7 +245,10 @@ fn strict_policy(root: &TemplateRoot) -> ComposePolicy {
         unknown_variable_policy: UnknownVariablePolicy::Ignore,
         unbound_variable_policy: Some(UnknownVariablePolicy::Error),
         allowed_roots: vec![ConfiningRoot::from_path_buf(root.canonical_path.clone())],
-        ..ComposePolicy::default()
+        max_include_depth: sc_composer::IncludeDepth::new(32),
+        resolver_policy: sc_composer::ResolverPolicy::default(),
+        passes: Vec::new(),
+        json_escape_mode: None,
     }
 }
 
@@ -345,30 +354,6 @@ impl TemplateComposer for ScComposeTemplateComposer {
         )
     }
 
-    fn compose_file(
-        &self,
-        template: &TemplateSource,
-        vars: &Map<String, Value>,
-        root: &TemplateRoot,
-    ) -> Result<RenderedBody, AtmError> {
-        let source_path = template.canonical_file_path.as_deref().ok_or_else(|| {
-            AtmError::new(
-                atm_storage::AtmErrorCode::TemplateClassificationInvalid,
-                "composition requires a canonical source-file path",
-            )
-        })?;
-        verify_unchanged(source_path, &template.raw_file_bytes)?;
-
-        let request = compose_request(source_path, vars, root)?;
-        let result = sc_composer::compose(&request).map_err(composition_error)?;
-        checked_body(
-            &result.rendered_text,
-            from_sc_output_format(OutputFormat::from_template_path(source_path)),
-            source_path,
-            result.failing_pass,
-        )
-    }
-
     fn render_without_includes(
         &self,
         source: &TemplateSource,
@@ -379,8 +364,7 @@ impl TemplateComposer for ScComposeTemplateComposer {
                 "stored template has legacy/unverified output_format; re-register the source through the current adapter before claiming checked-render compatibility",
             )
         })?;
-        let inspection = inspect_raw_file(&source.raw_file_bytes, output_format)?;
-        if !inspection.include_references.is_empty() {
+        if !upstream_references(&source.raw_file_bytes)?.is_empty() {
             return Err(AtmError::decomposed_template_include_forbidden());
         }
         let source_text = source_text(source)?;
@@ -428,6 +412,7 @@ impl TemplateComposer for ScComposeTemplateComposer {
 mod tests {
     use std::fs;
     use std::path::PathBuf;
+    use std::process::Command;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use atm_core::boundary::{
@@ -437,13 +422,55 @@ mod tests {
     use sc_composer::ConfiningRoot;
     use serde_json::{Map, Value, json};
 
-    use super::ScComposeTemplateComposer;
+    use super::{ScComposeTemplateComposer, UnknownVariablePolicy};
+
+    const TEST_TEAM: &str = "atm-template-fixture";
 
     fn source() -> TemplateSource {
         TemplateSource::stored(
             b"{% include 'child.j2' %}".to_vec(),
             Some(TemplateOutputFormat::Text),
         )
+    }
+
+    #[test]
+    fn strict_policy_sets_variable_handling_and_confinement_explicitly() {
+        let root = temporary_root("strict-policy");
+        let policy = super::strict_policy(&TemplateRoot {
+            canonical_path: root.clone(),
+        });
+
+        assert!(policy.strict_undeclared_variables);
+        assert_eq!(
+            policy.unknown_variable_policy,
+            UnknownVariablePolicy::Ignore
+        );
+        assert_eq!(
+            policy.unbound_variable_policy,
+            Some(UnknownVariablePolicy::Error)
+        );
+        assert_eq!(policy.allowed_roots.len(), 1);
+        fs::remove_dir_all(&root).expect("remove isolated policy root");
+    }
+
+    #[test]
+    fn empty_validation_diagnostics_use_a_path_safe_fallback() {
+        let error = super::validation_error_without_diagnostics();
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+        );
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("without structured diagnostics"))
+        );
+        assert!(
+            !error
+                .message()
+                .contains(std::env::temp_dir().to_str().expect("temp path is UTF-8"))
+        );
     }
 
     fn temporary_root(label: &str) -> PathBuf {
@@ -507,8 +534,8 @@ mod tests {
         let composer = ScComposeTemplateComposer::new();
 
         let error = composer
-            .compose_file(&source, &strict_vars(false), &template_root)
-            .expect_err("compose_file must reject an unbound variable");
+            .render_within_root(&source, &strict_vars(false), &template_root)
+            .expect_err("file render must reject an unbound variable");
         assert_names_missing(&error, "strict.md.j2");
         let error = composer
             .render_within_root(&source, &strict_vars(false), &template_root)
@@ -516,7 +543,7 @@ mod tests {
         assert_names_missing(&error, "strict.md.j2");
 
         for rendered in [
-            composer.compose_file(&source, &strict_vars(true), &template_root),
+            composer.render_within_root(&source, &strict_vars(true), &template_root),
             composer.render_within_root(&source, &strict_vars(true), &template_root),
         ] {
             assert_eq!(rendered.expect("all variables bound").text, "hello x and y");
@@ -540,6 +567,19 @@ mod tests {
             .render_without_includes(&source, &strict_vars(true))
             .expect("all variables bound");
         assert_eq!(rendered.text, "hello x and y");
+    }
+
+    #[test]
+    fn stored_render_rejects_an_undeclared_variable() {
+        let source = TemplateSource::stored(
+            b"---\nrequired_variables: []\n---\nhello {{ missing }}".to_vec(),
+            Some(TemplateOutputFormat::Text),
+        );
+        let error = ScComposeTemplateComposer::new()
+            .render_without_includes(&source, &Map::new())
+            .expect_err("stored rows with undeclared variables must fail closed");
+
+        assert_names_missing(&error, "stored-template.txt");
     }
 
     #[test]
@@ -708,7 +748,7 @@ mod tests {
         );
         let canonical_root = fs::canonicalize(&root).expect("canonical root");
         let error = ScComposeTemplateComposer::new()
-            .compose_file(
+            .render_within_root(
                 &source,
                 &Map::new(),
                 &TemplateRoot {
@@ -807,7 +847,7 @@ mod tests {
             let mut vars = Map::new();
             vars.insert("review_mode".to_owned(), Value::String(injected.to_owned()));
             let rendered = ScComposeTemplateComposer::new()
-                .compose_file(
+                .render_within_root(
                     &source,
                     &vars,
                     &TemplateRoot {
@@ -838,7 +878,7 @@ mod tests {
             fs::canonicalize(&template_path).expect("canonical historical template"),
         );
         let error = ScComposeTemplateComposer::new()
-            .compose_file(
+            .render_within_root(
                 &source,
                 &Map::from_iter([("review_mode".to_owned(), Value::String(injected.to_owned()))]),
                 &TemplateRoot {
@@ -894,7 +934,7 @@ mod tests {
             eprintln!("AN15_CASE_SHAPE={shape}");
             let vars = Map::from_iter([("value".to_owned(), Value::String(value.clone()))]);
             let rendered = composer
-                .compose_file(&source, &vars, &root)
+                .render_within_root(&source, &vars, &root)
                 .expect("checked JSON must remain valid");
             assert_eq!(
                 serde_json::from_str::<Value>(&rendered.text).expect("checked JSON")["value"],
@@ -911,7 +951,7 @@ mod tests {
         fs::write(
             &primary_path,
             concat!(
-                // sc-composer 1.6.1 counts macro names and parameters as
+                // sc-composer 1.7.0 counts macro names and parameters as
                 // referenced variables, and every fail-closed render (this
                 // adapter and `sc-compose render --unknown-var-mode error`)
                 // rejects them as unbound. Declaring them as defaults is the
@@ -953,7 +993,7 @@ mod tests {
                 ),
             ]);
             let rendered = composer
-                .compose_file(&source, &vars, &template_root)
+                .render_within_root(&source, &vars, &template_root)
                 .expect("realistic supported Jinja constructs must compose");
             let expected_state = if case_index % 2 == 0 {
                 "open"
@@ -1006,7 +1046,7 @@ mod tests {
                 fs::canonicalize(&path).expect("canonical text target template"),
             );
             let rendered = composer
-                .compose_file(
+                .render_within_root(
                     &text_source,
                     &Map::from_iter([
                         ("title".to_owned(), Value::String("an15".to_owned())),
@@ -1047,7 +1087,7 @@ mod tests {
             Value::String("unterminated\" value".to_owned()),
         );
         let error = ScComposeTemplateComposer::new()
-            .compose_file(
+            .render_within_root(
                 &source,
                 &vars,
                 &TemplateRoot {
@@ -1138,13 +1178,14 @@ mod tests {
             "  workflow: dev-start\n",
             "  tags:\n",
             "    - phase:an\n",
-            "    - team:atm-dev\n",
+            "    - team:TEST_TEAM\n",
             "---\n",
             "{% include \"child.j2\" %}\n",
             "{% import \"macros.j2\" as macros %}\n",
             "{% from \"helpers.j2\" import helper %}\n",
             "{# {% include \"commented-out.j2\" %} #}\n",
-        );
+        )
+        .replace("team:TEST_TEAM", &format!("team:{TEST_TEAM}"));
         let inspection = ScComposeTemplateComposer::new()
             .inspect(&TemplateSource::file_backed(
                 raw.as_bytes().to_vec(),
@@ -1168,7 +1209,7 @@ mod tests {
         );
         assert_eq!(
             inspection.frontmatter.metadata["tags"],
-            json!(["phase:an", "team:atm-dev"])
+            json!(["phase:an", format!("team:{TEST_TEAM}")])
         );
         assert_eq!(
             inspection
@@ -1401,7 +1442,7 @@ mod tests {
             .render_within_root(&source, &Map::new(), &root)
             .expect_err("stored source cannot load dependencies");
         let compose_error = composer
-            .compose_file(&source, &Map::new(), &root)
+            .render_within_root(&source, &Map::new(), &root)
             .expect_err("stored source cannot compose from the filesystem");
         fs::remove_dir_all(&root.canonical_path).expect("remove isolated template root");
 
@@ -1439,7 +1480,7 @@ mod tests {
         let composer = ScComposeTemplateComposer::new();
         let canonical_root = fs::canonicalize(&root).expect("canonical root");
         let rendered = composer
-            .compose_file(
+            .render_within_root(
                 &source,
                 &vars,
                 &TemplateRoot {
@@ -1472,7 +1513,7 @@ mod tests {
         let composer = ScComposeTemplateComposer::new();
 
         for rendered in [
-            composer.compose_file(&source, &vars, &template_root),
+            composer.render_within_root(&source, &vars, &template_root),
             composer.render_within_root(&source, &vars, &template_root),
         ] {
             assert_eq!(
@@ -1480,6 +1521,58 @@ mod tests {
                 "false true {\"checker_defect\":false} false"
             );
         }
+        fs::remove_dir_all(&root).expect("remove isolated template root");
+    }
+
+    #[test]
+    fn boolean_lists_and_stored_render_match_sc_compose_cli_output() {
+        let root = temporary_root("compose-boolean-list-parity");
+        let template_path = root.join("boolean-list.md.j2");
+        let raw = "---\nrequired_variables:\n  - flags\n---\n{{ flags | tojson }}";
+        fs::write(&template_path, raw).expect("write template");
+        let vars_path = root.join("vars.json");
+        fs::write(&vars_path, r#"{"flags":[true,false,true]}"#).expect("write vars");
+        let direct = Command::new("sc-compose")
+            .args([
+                "render",
+                "--root",
+                root.to_str().expect("root path is UTF-8"),
+                "--file",
+                template_path.to_str().expect("template path is UTF-8"),
+                "--var-file",
+                vars_path.to_str().expect("vars path is UTF-8"),
+            ])
+            .output()
+            .expect("CI installs pinned sc-compose before running parity tests");
+        assert!(
+            direct.status.success(),
+            "direct sc-compose render failed: {}",
+            String::from_utf8_lossy(&direct.stderr)
+        );
+        let direct_text = String::from_utf8(direct.stdout).expect("sc-compose output is UTF-8");
+        let direct_body = direct_text.strip_suffix('\n').unwrap_or(&direct_text);
+
+        let source = TemplateSource::file_backed(
+            raw.as_bytes().to_vec(),
+            fs::canonicalize(&template_path).expect("canonical template"),
+        );
+        let template_root = TemplateRoot {
+            canonical_path: fs::canonicalize(&root).expect("canonical root"),
+        };
+        let composer = ScComposeTemplateComposer::new();
+        let vars = Map::from_iter([("flags".to_owned(), json!([true, false, true]))]);
+        let file_render = composer
+            .render_within_root(&source, &vars, &template_root)
+            .expect("file render");
+        let stored_render = composer
+            .render_without_includes(
+                &TemplateSource::stored(raw.as_bytes().to_vec(), Some(TemplateOutputFormat::Text)),
+                &vars,
+            )
+            .expect("stored render");
+
+        assert_eq!(file_render.text, direct_body);
+        assert_eq!(stored_render.text, direct_body);
         fs::remove_dir_all(&root).expect("remove isolated template root");
     }
 
@@ -1534,7 +1627,7 @@ mod tests {
             fs::canonicalize(&template_path).expect("canonical template"),
         );
         let error = ScComposeTemplateComposer::new()
-            .compose_file(
+            .render_within_root(
                 &source,
                 &Map::new(),
                 &TemplateRoot {
@@ -1560,7 +1653,7 @@ mod tests {
             fs::canonicalize(&template_path).expect("canonical template"),
         );
         let error = ScComposeTemplateComposer::new()
-            .compose_file(
+            .render_within_root(
                 &source,
                 &Map::new(),
                 &TemplateRoot {
@@ -1679,7 +1772,7 @@ mod tests {
         );
 
         let error = ScComposeTemplateComposer::new()
-            .compose_file(
+            .render_within_root(
                 &source,
                 &Map::new(),
                 &TemplateRoot {
@@ -1712,7 +1805,7 @@ mod tests {
         let source = TemplateSource::file_backed(raw.to_vec(), canonical_template);
 
         let error = ScComposeTemplateComposer::new()
-            .compose_file(
+            .render_within_root(
                 &source,
                 &Map::new(),
                 &TemplateRoot {

@@ -60,7 +60,20 @@ pub(super) fn verify_template_send(
         request.canonical_template_path.clone(),
     );
     let inspection = composer.inspect(&source)?;
-    let vars = resolve_merged_vars(&inspection.frontmatter, request)?;
+    let vars = resolve_merged_vars(&inspection.frontmatter, request).map_err(|error| {
+        if error.code() == atm_storage::AtmErrorCode::TemplateRequiredVariableMissing {
+            let template_name = request.canonical_template_path.file_name().map_or_else(
+                || "<unknown>".to_owned(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+            AtmError::new(
+                error.code(),
+                format!("{} (template {template_name})", error.detail()),
+            )
+        } else {
+            error
+        }
+    })?;
     let root = TemplateRoot {
         canonical_path: request.canonical_template_root.clone(),
     };
