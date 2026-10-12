@@ -7,6 +7,8 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use serial_test::serial;
+
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -32,14 +34,21 @@ fn run_sc_compose(args: &[&str]) -> Output {
 }
 
 fn run_atm(args: &[&str]) -> Output {
+    run_atm_as(args, "test-sender", "test-team")
+}
+
+fn run_atm_as(args: &[&str], identity: &str, team: &str) -> Output {
     let fixture = tempfile::tempdir().expect("temporary ATM environment");
     Command::new(env!("CARGO_BIN_EXE_atm"))
         .current_dir(workspace_root())
         .args(args)
+        .env("HOME", fixture.path())
         .env("ATM_HOME", fixture.path())
         .env("ATM_CONFIG_HOME", fixture.path().join("config"))
         .env("ATM_LOG_DIR", fixture.path().join("logs"))
         .env("ATM_TEAMS_DIR", fixture.path().join("teams"))
+        .env("ATM_IDENTITY", identity)
+        .env("ATM_TEAM", team)
         .output()
         .expect("run the built atm binary")
 }
@@ -117,7 +126,12 @@ fn team_protocol_worked_example_executes_against_checked_in_fixture() {
     let template = "docs/plans/phase-an/fixtures/task-assignment.xml.j2";
     let vars = "docs/plans/phase-an/fixtures/task-vars.json";
     assert!(docs.contains(&format!("atm compose --template {template}")));
-    assert!(docs.contains(&format!("atm send teammate@atm-dev --template {template}")));
+    let send_example = docs
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with("atm send teammate@") && line.contains("--template"))
+        .expect("team protocol documents a templated send example");
+    assert!(send_example.contains(&format!("--template {template}")));
     assert!(docs.contains(&format!("--vars {vars}")));
     assert!(root.join(template).is_file());
     assert!(root.join(vars).is_file());
@@ -188,5 +202,48 @@ fn compose_fails_closed_on_a_variable_with_no_value_and_names_it() {
     assert_eq!(
         String::from_utf8_lossy(&output.stdout).trim_end(),
         "hello x and y"
+    );
+}
+
+#[test]
+#[serial]
+fn send_render_fails_closed_on_missing_variables() {
+    let runtime_scope = atm_core::home::current_host_runtime_scope().expect("host runtime scope");
+    if runtime_scope.socket.exists() {
+        eprintln!("skipping process render test beside the shared host daemon");
+        return;
+    }
+
+    let identity = format!("render-reader-{}", std::process::id());
+    let team = format!("render-test-{}", std::process::id());
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (template, partial, _) = write_strict_fixture(dir.path());
+    let recipient = format!("recipient@{team}");
+
+    let output = run_atm_as(
+        &[
+            "send",
+            &recipient,
+            "--template",
+            template.to_str().expect("utf-8"),
+            "--vars",
+            partial.to_str().expect("utf-8"),
+            "--dry-run",
+            "--json",
+        ],
+        &identity,
+        &team,
+    );
+
+    assert!(!output.status.success(), "unbound variable must fail");
+    assert!(output.stdout.is_empty(), "failed send has no body");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("missing"),
+        "must name the variable: {stderr}"
+    );
+    assert!(
+        stderr.contains("strict.md.j2"),
+        "must name the template: {stderr}"
     );
 }
