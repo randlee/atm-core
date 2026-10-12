@@ -27,6 +27,12 @@ TEMPLATES = {
     Path("templates/Justfile.import.j2"): Path("Justfile"),
     Path("templates/sc-lint-workflow.yml.j2"): Path(".github/workflows/sc-lint.yml"),
 }
+TEMPLATE_PLACEHOLDERS = {
+    "sc-lint.toml.j2": {"minimum_version", "analyzers", "profiles", "test_layers"},
+    "Justfile.import.j2": {"windows_shell"},
+    "sc-lint-workflow.yml.j2": {"ci_os"},
+}
+TEMPLATE_VARIABLE = re.compile(r"{{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}")
 
 
 @dataclass(frozen=True)
@@ -75,7 +81,25 @@ def toml_value(value: object) -> str:
     return json.dumps(value)
 
 
+def substitute_template_variables(source: str, replacements: dict[str, str]) -> str:
+    return TEMPLATE_VARIABLE.sub(
+        lambda match: replacements.get(match.group(1), match.group(0)), source
+    )
+
+
 def render(template: Path, data: dict) -> str:
+    source = template.read_text()
+    expected = TEMPLATE_PLACEHOLDERS.get(template.name)
+    if expected is None:
+        raise ValueError(f"{template.name}: no declared template variables")
+    observed = set(TEMPLATE_VARIABLE.findall(source))
+    missing = expected - observed
+    unknown = observed - expected
+    if missing or unknown:
+        problems = []
+        if missing: problems.append(f"missing template variables: {sorted(missing)}")
+        if unknown: problems.append(f"unknown template variables: {sorted(unknown)}")
+        raise ValueError(f"{template.name}: {'; '.join(problems)}")
     analyzers = "\n\n".join(
         f"[tool.sc-lint.analyzers.{name}]\n" + "\n".join(f"{key} = {toml_value(item)}" for key, item in value.items())
         for name, value in data["analyzers"].items()
@@ -83,8 +107,17 @@ def render(template: Path, data: dict) -> str:
     profiles = "\n\n".join(f'[[tool.sc-lint.lint]]\nname = {json.dumps(name)}\ncommand = {json.dumps(command)}' for name, command in data["profiles"].items())
     layers = "\n\n".join(f'[[tool.sc-lint.test]]\nname = {json.dumps(name)}\ncommand = {json.dumps(command)}' for name, command in data.get("test", {}).items())
     runners = [ {"linux":"ubuntu-latest", "macos":"macos-latest", "windows":"windows-latest"}.get(item, item) for item in data["ci"]["os"] ]
-    return (template.read_text().replace("{{ minimum_version }}", data["minimum_version"]).replace("{{ analyzers }}", analyzers)
-            .replace("{{ profiles }}", profiles).replace("{{ test_layers }}", layers).replace("{{ ci_os }}", json.dumps(runners)))
+    replacements = {
+        "minimum_version": data["minimum_version"],
+        "analyzers": analyzers,
+        "profiles": profiles,
+        "test_layers": layers,
+        "ci_os": json.dumps(runners),
+    }
+    deferred = {"windows_shell"} if template.name == "Justfile.import.j2" else set()
+    if observed - replacements.keys() != deferred:
+        raise ValueError(f"{template.name}: unresolved template variables after rendering")
+    return substitute_template_variables(source, replacements)
 
 
 def unmanaged(text: str) -> str:
@@ -123,7 +156,10 @@ def desired(data: dict, repo: Path, input_path: Path) -> Desired:
     if not re.search(r"^test(?![\w-])[^:\n]*:(?!=)", unmanaged(original), re.M): original = (original.rstrip() + "\n\n" + (ROOT / "templates/test.just").read_text()).lstrip("\n")
     if original.count(MARKER_START) != original.count(MARKER_END) or original.count(MARKER_START) > 1: raise RuntimeError(f"{justfile}: marker conflict")
     shell = data.get("justfile", {}).get("windows_shell", True) and not re.search(r"^set\s+windows-shell\b", unmanaged(original), re.M)
-    block = render(ROOT / Path("templates/Justfile.import.j2"), data).replace("{{ windows_shell }}", WINDOWS_SHELL if shell else "").strip()
+    block = substitute_template_variables(
+        render(ROOT / Path("templates/Justfile.import.j2"), data),
+        {"windows_shell": WINDOWS_SHELL if shell else ""},
+    ).strip()
     result[Path("Justfile")] = (re.sub(re.escape(MARKER_START) + r".*?" + re.escape(MARKER_END), block, original, flags=re.S) if MARKER_START in original else (original.rstrip() + "\n\n" + block).lstrip("\n")).encode()
     persisted = frozenset({INSTALL_INPUT}) if input_path.resolve() == (repo / INSTALL_INPUT).resolve() else frozenset()
     return Desired(result, frozenset({Path("Justfile")}), persisted)

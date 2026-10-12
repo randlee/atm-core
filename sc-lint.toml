@@ -1,5 +1,5 @@
 [tool.sc-lint]
-minimum_version = "0.7.0"
+minimum_version = "0.7.1"
 
 [tool.sc-lint.analyzers.boundary]
 enabled = true

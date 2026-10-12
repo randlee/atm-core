@@ -40,6 +40,7 @@ minimum_version() {
 install_dir="${SC_LINT_INSTALL_DIR:-${XDG_DATA_HOME:-${HOME:-}/.local/share}/sc-lint/bin}"
 managed_binary="$install_dir/sc-lint"
 product_binary=""
+product_binary_override="false"
 
 # Python helper package (sc_lint wheel) provisioned next to the config file.
 venv_dir="$(cd "$(dirname "$config")" && pwd)/.sc-lint/venv"
@@ -99,8 +100,10 @@ provision_venv() {
 }
 
 resolve_product_binary() {
+    product_binary_override="false"
     if [ -n "${SC_LINT_BIN:-}" ] && command -v "$SC_LINT_BIN" >/dev/null 2>&1; then
         product_binary="$(command -v "$SC_LINT_BIN")"
+        product_binary_override="true"
     elif [ -x "$managed_binary" ]; then
         product_binary="$managed_binary"
     elif command -v sc-lint >/dev/null 2>&1; then
@@ -187,10 +190,19 @@ ensure_product() {
             fi
         done
         bootstrap_install setup "$@"
+    elif [ "$product_binary_override" = "true" ]; then
+        "$product_binary" --config "$config" setup "$@"
     else
-        "$product_binary" --config "$config" setup
+        for argument in "$@"; do
+            if [ "$argument" = "--check" ] || [ "$argument" = "--dry-run" ]; then
+                "$product_binary" --config "$config" setup "$@"
+                return
+            fi
+        done
+        bootstrap_install setup "$@"
     fi
-    [ -x "$managed_binary" ] && product_binary="$managed_binary"
+    if [ -x "$managed_binary" ]; then product_binary="$managed_binary"; fi
+    return 0
 }
 
 activate_product_env() {
@@ -225,14 +237,27 @@ case "$operation" in
             bootstrap_install upgrade "$@"
             exit $?
         fi
-        if ! "$product_binary" --config "$config" compatibility check --binary "$product_binary" && [ "$product_binary" = "$managed_binary" ]; then
-            for argument in "$@"; do
-                if [ "$argument" = "--check" ] || [ "$argument" = "--dry-run" ]; then
-                    exec "$product_binary" --config "$config" upgrade "$@"
+        if ! "$product_binary" --config "$config" compatibility check --binary "$product_binary"; then
+            if [ "$product_binary" = "$managed_binary" ]; then
+                for argument in "$@"; do
+                    if [ "$argument" = "--check" ] || [ "$argument" = "--dry-run" ]; then
+                        exec "$product_binary" --config "$config" upgrade "$@"
+                    fi
+                done
+                bootstrap_install upgrade "$@"
+                exit $?
+            elif [ "$product_binary_override" = "false" ]; then
+                has_nonmutating_flag="false"
+                for argument in "$@"; do
+                    if [ "$argument" = "--check" ] || [ "$argument" = "--dry-run" ]; then
+                        has_nonmutating_flag="true"
+                    fi
+                done
+                if [ "$has_nonmutating_flag" = "false" ]; then
+                    bootstrap_install upgrade "$@"
+                    exit $?
                 fi
-            done
-            bootstrap_install upgrade "$@"
-            exit $?
+            fi
         fi
         "$product_binary" --config "$config" upgrade "$@" || exit $?
         provision_venv "$(venv_mode "$@")"
