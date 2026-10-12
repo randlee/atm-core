@@ -1,11 +1,13 @@
 ---
 name: ruthless-boundary-qa-assignment
-version: 1.1.0
+version: 1.2.0
 description: Render a fenced-JSON assignment for ruthless-boundary-qa.
 format: json
 required_variables:
   - review_mode
   - worktree_path
+  - branch
+  - commit
   - review_targets
   - qa_round
 optional_variables:
@@ -32,6 +34,8 @@ defaults:
 {
   "review_mode": "{% if review_mode == "plan" %}doc_review{% elif review_mode == "phase_end" %}phase_end{% else %}sprint_review{% endif %}",
   "worktree_path": {{ worktree_path }},
+  "branch": {{ branch }},
+  "commit": {{ commit }},
   "review_targets": [{% for target in review_targets %}{{ target }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "reference_docs": [{% for doc in reference_docs %}{{ doc }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "round_limit": {% if round_limit %}true{% else %}false{% endif %},
