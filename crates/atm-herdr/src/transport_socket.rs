@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use atm_core::{HerdrSession, RequestDeadline};
+use atm_core::{EnvSource, HerdrSession, ProcessEnvSource, RequestDeadline};
 use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::Semaphore;
@@ -36,10 +36,25 @@ pub(crate) struct HerdrHostEnv {
 
 impl HerdrHostEnv {
     pub(crate) fn capture() -> Self {
+        let process_env = ProcessEnvSource;
+        let home = atm_core::home::resolve_user_home_via(&process_env);
+        let xdg_config_home = process_env
+            .var("XDG_CONFIG_HOME")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from);
+        let appdata = process_env
+            .var("APPDATA")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from);
+        let (xdg_config_home, appdata) = if cfg!(windows) {
+            (None, appdata)
+        } else {
+            (xdg_config_home, None)
+        };
         Self {
-            xdg_config_home: std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
-            appdata: std::env::var_os("APPDATA").map(PathBuf::from),
-            home: std::env::var_os("HOME").map(PathBuf::from),
+            xdg_config_home,
+            appdata,
+            home,
             platform: if cfg!(windows) {
                 Platform::Windows
             } else {
