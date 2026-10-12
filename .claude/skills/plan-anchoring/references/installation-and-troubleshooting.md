@@ -1,7 +1,7 @@
 ---
 name: installation-and-troubleshooting
-version: 0.4.0
-description: Installing and locating the CLIs and credentials plan-anchoring depends on (python3, beads bd, TypeSafe API key), minimum versions, PATH issues in Claude Code, Codex environment policy, validation, and known issues.
+version: 0.4.1
+description: Installing and locating the CLIs and credentials plan-anchoring depends on (python3, beads, sc-compose, TypeSafe API key), minimum versions, PATH issues in Claude Code, Codex environment policy, validation, and known issues.
 ---
 
 # Installation and troubleshooting
@@ -11,6 +11,7 @@ description: Installing and locating the CLIs and credentials plan-anchoring dep
 ```bash
 which python3 && python3 --version
 which bd && bd --version
+which sc-compose && sc-compose --version
 test -n "$TYPESAFE_API_KEY" && echo "key set" || echo "key missing"
 ```
 
@@ -23,6 +24,7 @@ Claude Code's bash inherits a minimal PATH that can miss Homebrew, Go, pyenv, an
 ```bash
 for p in /opt/homebrew/bin/bd "$HOME/go/bin/bd" "$HOME/.local/bin/bd" /usr/local/bin/bd; do [ -x "$p" ] && echo "bd at $p"; done
 for p in /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3 "$HOME/.pyenv/shims/python3"; do [ -x "$p" ] && echo "python3 at $p"; done
+for p in /opt/homebrew/bin/sc-compose "$HOME/.local/bin/sc-compose" /usr/local/bin/sc-compose; do [ -x "$p" ] && echo "sc-compose at $p"; done
 ```
 
 Use the full path, or `export PATH="/opt/homebrew/bin:$PATH"` for the session.
@@ -40,6 +42,13 @@ Use the full path, or `export PATH="/opt/homebrew/bin:$PATH"` for the session.
 - macOS: `brew install steveyegge/beads/bd` (or your team's tap)
 - Any platform with Go: `go install github.com/steveyegge/beads/cmd/bd@latest`, then add `$HOME/go/bin` to PATH
 - Initialise once per repo: `bd init`. An error mentioning CGO or embedded Dolt means your binary needs `bd init --proxied-server` (or a Homebrew build). `bd init` also writes and commits `.claude/settings.json`, `CLAUDE.md`, `AGENTS.md` and git hooks; `--skip-agents --skip-hooks` avoids that. The issue prefix defaults to the directory name.
+
+**sc-compose** (1.6.0 or newer)
+
+- Install it from the Synaptic Canvas `sc-compose` release or team package
+  source, then confirm `sc-compose --version` reports at least 1.6.0.
+- The skill uses strict checked-in Jinja2 templates for every anchor-tuning
+  request/result. Do not continue with hand-built JSON when this CLI is absent.
 
 **TypeSafe API key**
 
@@ -63,11 +72,14 @@ Use the full path, or `export PATH="/opt/homebrew/bin:$PATH"` for the session.
 | --- | --- | --- |
 | python3 | 3.9 | tested floor; standard library only |
 | bd | 1.x | `--parent`, `--labels`, `--silent`, `--body-file`, `show --json`, `children --json`, `comment --file`, `ready --exclude-label` |
+| sc-compose | 1.6.0 | strict render, declared-variable validation, and `--check-render` |
 | Jev | `jev-latest` | pin a version once thresholds are tuned |
 
 ## PATH troubleshooting
 
 - A tool works in your terminal but not in the skill: Claude Code's bash did not source the shell init that added it to PATH. Export the directory in the session or use the full path.
+- `sc-compose` is missing: install 1.6.0 or newer and rerun the dependency
+  gate; do not hand-assemble the fenced tuning payload.
 - `bd show --json` errors with "no database": run from the repo root that has `.beads/`, or pass `-C <repo root>` (or `--db <path>`).
 - The key works in your terminal but the skill says it is missing: it was exported after Claude Code started, or only in an interactive rc file. Put it in `~/.zshenv`; restart Claude Code.
 

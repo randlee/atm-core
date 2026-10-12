@@ -1,6 +1,6 @@
 ---
 name: question-tuning
-version: 0.4.0
+version: 0.4.2
 description: When and how to replace the generic Jev questions with anchor-specific wording, where the overrides live, how to test a question set with fixtures and known beads before trusting it, and when to stop tuning.
 ---
 
@@ -17,11 +17,42 @@ python3 "$S" rubric --anchors "$A" --id ANC-012            # a locked anchor
 python3 "$S" rubric --statement "<candidate>" --quote "<words>" --scope "<scope>"   # before add
 ```
 
-It runs the deterministic lint and asks Jev six questions about the statement: one constraint, observable outcome, requirement form, faithful to the quote (no added or dropped requirement), scoped, and positive form. `testable` means every answer is yes at confidence 0.6 or higher and the lint has no errors; `needs_work` lists what failed. `add --rubric` refuses a failing statement. Fix the statement before tuning a single question.
+It first runs deterministic requirement-form linting, then asks Jev five
+semantic questions about the statement: one constraint, observable outcome,
+faithful to the quote (no added or dropped requirement), scoped, and
+self-contained. Requirement form is deliberately not a Jev question: syntax
+and required fields are deterministic properties. A prohibition or explicit
+condition can be a valid positive requirement; the rubric does not require a
+literal token such as “must”.
+
+Each semantic question is called twice with byte-identical request content. A
+third call is made only when the first two choices disagree; it diagnoses the
+instability and never acts as a majority vote. `testable` means every question
+has two agreeing `yes` answers at confidence 0.6 or higher and the deterministic
+lint has no errors. Any semantic `no`, `unclear`, or sub-threshold answer is
+`needs_work`; agreeing low-confidence answers are `inconclusive`; any choice
+disagreement is `unstable`. `add --rubric` refuses every non-testable outcome.
+Fix the statement before tuning a plan or development question.
+
+Before changing the rubric questions, delegate an `operation: testability`
+request through `templates/anchor-tuning-testability-request.md.j2`. The
+independent tuner freezes a plan-independent calibration corpus and its digest
+before the first Jev response, exercises multiple candidate question sets, and
+returns only a candidate whose result is accepted by the testability-result
+contract. The corpus must cover each of the five semantic judgments, valid and
+invalid requirement forms, and statement-level deduplication. Quote text is
+provenance, not deduplication input.
 
 ## Who tunes
 
-The planner never tunes questions. The skill launches `anchor-question-tune` as a separate higher-reasoning evaluator (Claude: Opus; Codex: Sol) for each locked anchor and gate. It receives approved intent and anchor material, not a target plan result. Before the first Jev call it exercises judgment to derive expected role answers and verdicts for approved fixtures, calibration examples, and adversarial boundary probes, then freezes their text, labels, rationales, and digest. It may not relabel or discard cases after seeing Jev. The skill writes an override only after presenting the frozen oracle and acceptance table.
+The planner never tunes questions. It launches the harness-specific
+`anchor-tuning` subagent (Claude: Opus; Codex: Sol) for each locked anchor and
+gate. The tuner receives approved intent and anchor material, not a target plan
+result. Before the first Jev call it uses judgment to derive expected role
+answers and verdicts for approved fixtures, calibration examples, and boundary
+probes, then freezes their text, labels, rationales, and digest. It may not
+relabel or discard cases after seeing Jev. The skill writes an override only
+after presenting the frozen oracle and acceptance table.
 
 ## When to tune
 
@@ -42,7 +73,10 @@ Do not tune to make a bead pass. The active plan's desired verdict is not an inp
 
 An override has the shape of the default set and contains only the questions to replace, keyed by the same IDs (`relevant`, `addressed`, `contradicted` for plan; `relevant`, `implemented`, `violated`, `evidenced` for dev), each keeping `yes`, `no`, `unclear`. IDs and options are fixed because `decide()` depends on them (`verdict-gating.md`).
 
-- **Per anchor, per gate, in the question bead** (preferred): the fenced ```json block in the plan-questions or dev-questions bead (`bead-layout.md`). Edit with `bd update <bead> --body-file <file>`.
+- **Per anchor, per gate, in the question bead** (preferred): the fenced
+  `json` block in the plan-questions or dev-questions bead
+  (`bead-layout.md`). Use the tracker selected at the orchestration boundary:
+  `bd update <id> --body-file <file>` or the equivalent `br update` operation.
 - **In the record**: `question_overrides.plan` / `.dev` in `anchors.json`, for a plan with no beads. The bead wins if both exist.
 - **For a whole plan**: a complete alternative set passed with `--questions <file>`. Rare.
 
@@ -98,18 +132,50 @@ Rules (Jev reads literally):
 - Put vocabulary variants in the criteria, not the instructions.
 - Keep `instructions` and `criteria` consistent.
 - Never ask Jev to count, compare numbers, or look across beads.
+- Never put a confidence target, role-to-verdict mapping, or instruction to
+  classify another role inside a production question.
 
 ## How to test a question set
 
 Never deploy an override unread by Jev. Test in this order; each step is one command.
 
 1. **Inspect the request.** `judge --anchor ANC-012 --item-file <known bead> --dry-run`, then read `requests[0].questions` in the run file. The override must appear verbatim and the other questions must still be the defaults.
-2. **Fixtures.** With at least one `fixtures.pass` and one `fixtures.fail` sentence on the anchor (`update --fixture-pass/--fixture-fail`), run `check-fixtures --gate plan --id ANC-012` with the override in place. Expected: pass -> `satisfied`, fail -> `not_addressed` or `contradicted`, each at confidence 0.8 or higher. A fixture that lands wrong means the question is wrong, unless the user agrees the fixture misstates the anchor.
+2. **Fixtures.** With at least one `fixtures.pass` and one `fixtures.fail`
+   sentence on the anchor (`update --fixture-pass/--fixture-fail`), run
+   `check-fixtures --gate plan --id ANC-012` with the override in place.
+   Expected raw roles and threshold-`0.0` semantic verdicts must match the
+   frozen oracle; retain confidence against the `0.8` reference as a diagnostic.
+   A semantic mismatch means the question is wrong unless the user agrees the
+   fixture misstates the anchor.
 3. **Known beads.** Judge one bead the user says clearly satisfies the anchor and one that clearly does not. Keep both runs.
 4. **A/B against the default.** Run the same two beads with the default set (`--questions assets/questions/plan.json`, or move the override aside) and `diff` the pairs. The override must fix the symptom without flipping a correct verdict.
 5. **Whole-gate regression.** Re-run the planning gate for all beads and `coverage`. Compare the uncovered list before and after.
 
-Acceptance: every Jev role answer and derived verdict matches the frozen oracle, `min_confidence` is 0.8 or higher, and no previously correct cell changed. The tuner cannot add, relabel, weaken, or remove a probe after seeing an answer. Judge "changed" against what is correct, not the previous run: `diff --expected <json>` reports corrections and regressions. The script re-asks cells within 0.10 of the threshold once; disagreement is `unstable` and is not accepted. Record the oracle digest, rationales, acceptance table, and run IDs on the question bead.
+Question-tournament acceptance uses protocol
+`plan-anchor/question-tournament/2.0.0`: every raw role answer must match the
+frozen oracle; the existing role-to-verdict mapping evaluated at threshold
+`0.0` must produce the expected semantic verdict; repeated role tuples must be
+identical; and regressions must be zero. A third call may diagnose disagreement
+but cannot vote an unstable candidate into acceptance. Confidence is retained
+as a distribution and ranking diagnostic after semantic correctness, not as a
+tournament rejection by itself. The tuner cannot add, relabel, weaken, or
+remove a probe after seeing an answer.
+
+This does not change production review. Every required production answer below
+the configured gate threshold (currently `0.6` by default) remains
+inconclusive/failing. The separate `0.8` confidence reference only ranks
+tournament candidates. Production review must not use the
+threshold-free projection, average confidence, vote across repeats, or borrow a
+tournament result.
+
+Record the protocol version, oracle and question digests, semantic score,
+confidence diagnostics, rationales, acceptance table, request/response digests,
+and run IDs in an append-only canonical `plan-anchor/tuning-history/2` object.
+Markdown and `bd`/`br` copies store byte-identical canonical JSON and SHA-256;
+paths, tracker IDs/revisions, timestamps that differ by source, credentials, and
+source kind remain outside it as local bindings. A v1 result can become a v2
+seal only through digest-verified offline re-evaluation that preserves the
+original decision and all raw evidence.
 
 ## Testing a new anchor before the first gate run
 
@@ -119,7 +185,9 @@ Before any gate uses a freshly locked anchor: `lint` clean, fixtures written and
 
 - Stop when acceptance holds. Further specificity matches only today's wording of the bead.
 - If `max_rounds` (default five) do not reach acceptance, the evaluator distinguishes an ambiguous or bundled anchor from a question set that cannot express the oracle. Return the diagnosis; the planner does not keep tuning. A prohibition judged by `addressed` fails on every compliant bead, while a structural anchor is a deterministic check rather than a planning-gate question (`anchor-capture.md`).
-- Once every anchor has tuned questions, the planning-gate threshold may drop from 0.6 to 0.5 (measured-behaviour.md). Report the `leaning` of any cell still `underspecified`.
+- Never lower the production threshold to obtain a pass. Report the `leaning`
+  of any cell that remains `underspecified`, fix a genuine plan defect, and use
+  evidence-bound `anchor-tuning triage` only for a plausible question defect.
 - If Jev's answers on the fixtures swing between runs at the same wording, the fixtures are ambiguous; rewrite them with the user.
 
 A tuned question is a plan artifact: it lives in the question bead, versions with the work, and travels with the anchor on promotion to an ADR.

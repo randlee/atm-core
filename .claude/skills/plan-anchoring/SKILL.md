@@ -2,7 +2,7 @@
 name: plan-anchoring
 description: Capture the facts a user states while planning as numbered anchors (ANC-001...), one clear, testable requirement each, with the user's verbatim words kept as provenance, alongside existing requirements (REQ) and ADRs. Turn them into Jev-judged questions, tune and test the questions per anchor, and enforce them at two gates with a triage-apply-rerun loop. The planning gate checks each plan bead still says what the user said; the development gate checks the delivered sprint work followed it. Use when planning a phase or sprint with beads, when the user says "anchor this", "lock this", "don't let this drift", or "remember I said", when re-opening a plan after context compression, or when reviewing a sprint against its plan. Not for general code review, and not a replacement for plan hardening.
 metadata:
-  version: "0.4.1"
+  version: "0.4.3"
 ---
 
 # Plan Anchoring
@@ -18,6 +18,7 @@ Run before any capture, delegation, or gate. On a missing dependency, surface th
 ```bash
 which python3 && python3 --version          # 3.9 or newer
 which bd && bd --version                    # beads CLI, 1.x ("(dev)" suffix is fine)
+which sc-compose && sc-compose --version    # 1.6.0 or newer
 test -n "$TYPESAFE_API_KEY" && echo "TYPESAFE_API_KEY set" || echo "TYPESAFE_API_KEY missing"
 echo "remote judge opt-in: ${PLAN_ANCHOR_ALLOW_REMOTE_JUDGE:-unset}"
 ```
@@ -26,6 +27,9 @@ If `bd` is not on PATH, Claude Code's bash may not share your shell's PATH. Chec
 
 ```bash
 for p in "/opt/homebrew/bin/bd" "$HOME/go/bin/bd" "$HOME/.local/bin/bd" "/usr/local/bin/bd"; do
+  [ -x "$p" ] && echo "Found at: $p" && break
+done
+for p in "/opt/homebrew/bin/sc-compose" "$HOME/.local/bin/sc-compose" "/usr/local/bin/sc-compose"; do
   [ -x "$p" ] && echo "Found at: $p" && break
 done
 ```
@@ -69,7 +73,7 @@ Beads hold the questions: one anchor bead per fact, with a plan-questions child 
 
 ### A. Capture anchors while planning (main session, interactive)
 
-Read `references/anchor-capture.md`. Watch for directives about how the work must be done; a phase needs five to fifteen, not one per sentence. For each candidate, write one testable requirement (`statement`) and keep the user's exact words as the `quote`. Before proposing, run `python3 "$S" rubric --statement "<candidate>" --quote "<words>" --scope "<scope>"`: it lints and asks Jev whether the statement is one constraint, observable, in requirement form, faithful to the quote, scoped, and positive. Fix anything `needs_work`. Propose both texts together, check `anchors.md` for duplicates, and record only when the user confirms or says "lock this". The statement is never the quote; `add` refuses that, and `add --rubric` refuses a statement the rubric rejects.
+Read `references/anchor-capture.md`. Watch for directives about how the work must be done; a phase needs five to fifteen, not one per sentence. For each candidate, write one testable requirement (`statement`) and keep the user's exact words as the `quote`. Before proposing, run `python3 "$S" rubric --statement "<candidate>" --quote "<words>" --scope "<scope>"`: deterministic lint checks requirement form, while two Jev confirmations judge one constraint, observable behavior, fidelity, scope, and self-contained conditions. A third call occurs only on choice disagreement. Fix `needs_work`; clarify `inconclusive` or `unstable` rather than treating either as a pass. Propose both texts together, check `anchors.md` for duplicates, and record only when the user confirms or says "lock this". The statement is never the quote; `add` refuses that, and `add --rubric` refuses any result except `testable`.
 
 ### B. Lock and record
 
@@ -91,7 +95,25 @@ Then create the bead tree and record its IDs with `set-beads` (`references/bead-
 
 ### B2. Tune and test the questions per anchor
 
-Read `references/question-tuning.md`. Each anchor's plan-questions and dev-questions beads start at `{}`; the generic defaults must be proven adequate per anchor. As soon as an anchor is locked with approved fixtures, spin off the independent higher-reasoning `anchor-question-tune` agent (Claude: Opus; Codex: Sol), one per anchor and gate, up to three at once. Pass the approved intent and anchor, never a goal to make the current plan pass. Before its first Jev call it exercises judgment to derive and freeze an oracle of expected role answers and verdicts from the intent, anchor, fixtures, and adversarial boundary probes. It then loops over Jev calls, rewriting one misjudging question per round and retaining only changes that improve alignment with the frozen oracle. On return, show the oracle and acceptance table, verify its digest and run IDs, then write the override into the question bead (`bd update <bead> --body-file`) and post the evidence. On an ambiguous or untestable anchor, return to the user; the planner never tunes questions itself. Do not run a gate on an anchor whose questions have not passed this step.
+Read `references/question-tuning.md`. After the first draft and approved
+INTENT/ANC packet exist, launch one named `anchor-tuning` planner subagent
+(Claude: Opus; Codex: Sol) and continue authoring concurrently. Render its one
+fenced request from `templates/anchor-tuning-tune-request.md.j2`; never supply a
+desired plan verdict. The tuner freezes an oracle, evaluates a larger candidate
+pool through parallel Jev calls, and returns the smallest semantically exact,
+stable role-complete set plus canonical history. Validate its schema and
+`anchor_tuning_contract.py` result before writing the selected questions to the
+`bd` or `br` question record. Leaf review waits for current protocol seals. On
+ambiguous authority, present the tuner's clarity-only recommendation to the
+user; the planner never tunes questions itself.
+
+Before this per-anchor tuning, a changed or unsealed testability rubric must be
+calibrated by the same Opus/Sol agent with operation `testability`, rendered
+from `templates/anchor-tuning-testability-request.md.j2`. Its frozen
+plan-independent corpus is the authority: two confident agreeing answers are
+required per accepted cell, with a third call only to resolve disagreement.
+Requirement form remains deterministic lint and dedupe compares statements,
+never shared provenance quotes.
 
 ### C. Planning gate
 
@@ -124,11 +146,16 @@ Reports quote the user's own words back (`references/report-format.md`). Post th
 
 Capture (A) and locking (B) stay in the main session. Question tuning (B2) and the gates (C, D) run in isolated agents that return fenced JSON; the tuner runs in the background. The skill presents results and makes every write to beads and the record.
 
+Before invoking any bundled agent, resolve it once and use the single-envelope
+boundary in `references/agent-runner-contract.md`. The planner owns trust
+resolution and attestation. Leaf agents receive the immutable descriptor; they
+do not search installation paths or repeat registry/frontmatter validation.
+
 | Operation | Agent | Inputs | Returns |
 | --- | --- | --- | --- |
 | Planning gate, one bead | `anchor-plan-review` | `script`, `bead_id`, `anchor_ids` or `all`, `anchors_path`, optional `run_dir`, `threshold`, `dry_run`, `correlation_id` | fenced JSON: run path, pass flag, per-anchor verdicts, report markdown |
 | Development gate, one sprint | `anchor-sprint-review` | `script`, `sprint_id`, `evidence` paths or `pr_number`, `anchor_ids` or `all`, `anchors_path`, optional `run_dir`, `threshold`, `dry_run`, `correlation_id` | fenced JSON: run path, pass flag, per-anchor verdicts, deterministic checks to pair, report markdown |
-| Independent question tuning, one anchor and gate (background; Opus/Sol) | `anchor-question-tune` | `script`, `anchors_path`, `intent_path`, `anchor_id`, `gate`, optional approved calibration examples and `current_override`, `max_rounds`, `threshold`, `correlation_id` | fenced JSON: frozen oracle and digest, accepted flag, tested override JSON, baseline/final table, run IDs, or an anchor ambiguity/problem |
+| Independent rubric calibration, question tuning, and evidence triage (Opus/Sol) | `anchor-tuning` | one strict fenced JSON object rendered from the checked-in testability, tune, or triage template, including resolved runtime, authority packet or frozen corpus, protocol/history where applicable, and correlation ID | strict Standard-envelope fenced JSON rendered from the result template and validated by schema plus `anchor_tuning_contract.py` |
 
 In Claude Code, invoke the plugin's harness-specific file in `.claude/agents/` with the **Agent** tool, never the Task tool; the manifest registers gate agents with `model: sonnet` and the independent tuner with `model: opus`. In Codex, read the matching plugin-owned definition in `.codex/agents/` and launch it with the Agent tool; gate agents specify `model: luna` and the tuner `model: sol`. Codex plugins discover the skill but do not auto-register these agent profiles, so the skill owns this explicit launch step. Example gate input: "Invoke `anchor-plan-review` with script `$S`, bead_id proj-a3f8, anchor_ids all, anchors_path doc/plan/phase-current/anchors.json, correlation_id proj-a3f8." Cursor has no bundled agent definition in this release and follows the relevant gate steps inline; question tuning requires an independent higher-reasoning agent and does not fall back to the planner.
 
@@ -173,6 +200,7 @@ Parallel runs: at most 3 agents at once, `correlation_id` set to the bead ID, 30
 - `references/report-format.md` - the provenance-quoting report and what to do with each verdict
 - `references/jev-api.md` - endpoint, request and response, limits, retries, privacy opt-in, every flag and error code
 - `references/installation-and-troubleshooting.md` - installing python3, bd, and the API key; PATH; Codex
+- `references/agent-runner-contract.md` - one trusted agent resolution, strict fenced envelopes, and redacted attestation
 - `assets/questions/plan.json`, `assets/questions/dev.json`, `assets/questions/testability.json`, `assets/questions/dedupe.json` - the question wording of record
 - `assets/templates/intent.md`, `assets/templates/anchor-questions-bead.md`, `assets/examples/` - starting points and a worked example
 - `tests/test_jev_judge.py` - offline test suite; `python3 -m unittest discover -s <skill dir>/tests`

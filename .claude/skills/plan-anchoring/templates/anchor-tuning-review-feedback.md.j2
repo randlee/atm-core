@@ -6,6 +6,7 @@ required_variables:
   - authority.intent
   - authority.anchors
   - sealed_question_set
+  - review.gate
   - review.role
   - review.source_digest
   - review.canonical_request
@@ -13,7 +14,7 @@ required_variables:
   - planner.observation
 metadata:
   id: anchor-tuning-review-feedback
-  version: 0.4.0
+  version: 0.4.1
   purpose: Evidence-bound planner-to-anchor-tuning triage handoff
 ---
 # Independent anchor-tuning triage
@@ -43,7 +44,7 @@ observation or from the fact that review is failing.
   "operation": "triage",
   "template": {
     "id": "anchor-tuning-review-feedback",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "sha256": {{ template.sha256 | tojson }}
   },
   "correlation_id": {{ correlation_id | tojson }},
@@ -53,6 +54,7 @@ observation or from the fact that review is failing.
     "anchors": {{ authority.anchors | tojson }}
   },
   "sealed_question_set": {{ sealed_question_set | tojson }},
+  "gate": {{ review.gate | tojson }},
   "review": {
     "role": {{ review.role | tojson }},
     "source_digest": {{ review.source_digest | tojson }},
