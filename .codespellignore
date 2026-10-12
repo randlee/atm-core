@@ -16,3 +16,7 @@ afte
 
 # Plural of `static` (Rust storage-duration item), not a typo for "statistics".
 statics
+# Anchor id prefix in docs/plans/*/anchors.* (ANC-001), not a typo for "and".
+anc
+# Verbatim operator quote in docs/plans/phase-bg/anchors.*; anchor quotes are never edited.
+shold
