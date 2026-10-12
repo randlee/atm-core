@@ -15,13 +15,12 @@ required_variables:
   - round_id
   - round_index
   - replay_nonce
+optional_variables:
+  - lead
+  - cc
 defaults:
   lead: team-lead
   cc: team-lead
-  supersedes_task_id: ""
-  previous_reviewed_commit: ""
-  questions_or_concerns: ""
-  reviewer_findings_json: ""
 metadata:
   type: plan-scope-review
   tags:
@@ -42,14 +41,14 @@ metadata:
   <worktree>{{ worktree_path }}</worktree>
   <branch>{{ branch }}</branch>
   <pr-target>{{ pr_target }}</pr-target>
-  <round id="{{ round_id }}" index="{{ round_index }}" reviewer="plan-scope-reviewer" supersedes="{{ supersedes_task_id }}"/>
+  <round id="{{ round_id }}" index="{{ round_index }}" reviewer="plan-scope-reviewer" supersedes="{{ supersedes_task_id | default('') }}"/>
   <replay-nonce>{{ replay_nonce }}</replay-nonce>
 
   <source-of-truth>
 {{ source_of_truth }}
   </source-of-truth>
 
-{% if questions_or_concerns | trim %}
+{% if questions_or_concerns is defined and questions_or_concerns | trim %}
   <questions-or-concerns>
 {{ questions_or_concerns }}
   </questions-or-concerns>
@@ -59,7 +58,7 @@ metadata:
 {{ references }}
   </references>
 
-{% if reviewer_findings_json | trim %}
+{% if reviewer_findings_json is defined and reviewer_findings_json | trim %}
   <reviewer-findings-json>
 <![CDATA[
 {{ reviewer_findings_json }}
@@ -121,7 +120,7 @@ metadata:
       "round_id": "{{ round_id }}",
       "round_index": {{ round_index }},
       "reviewed_commit": "<commit-sha>",
-      "previous_reviewed_commit": "{{ previous_reviewed_commit }}",
+      "previous_reviewed_commit": "{{ previous_reviewed_commit | default('') }}",
       "iterations": 0,
       "docs_modified": [],
       "docs_created": [],
