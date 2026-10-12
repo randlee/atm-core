@@ -44,6 +44,12 @@ with free-form input.
     "actix-web",
     "reqwest"
   ],
+  "branch": "optional branch name",
+  "commit": "optional commit sha",
+  "round_limit": false,
+  "changed_files": ["optional changed-file hint"],
+  "triage_records": ["optional prior findings; ignored"],
+  "service_indicators_extra": ["optional extra service-indicator hints"],
   "carry_forward_findings": [],
   "findings_scope_locked": false,
   "notes": "optional context"
@@ -56,6 +62,8 @@ Rules:
 - `topics` is optional. Omit to use the default topic set for the selected review mode.
 - `service_indicator_dependencies` is optional. Omit to use the default service-indicator dependency list shown above.
 - `review_targets` is optional. Omit to review default changed-file scope plus directly impacted runtime boundaries.
+- `round_limit` is dispatch metadata, `changed_files` and
+  `service_indicators_extra` are focus hints, and `triage_records` is ignored.
 
 ## Verification-Locked Dispatch
 
