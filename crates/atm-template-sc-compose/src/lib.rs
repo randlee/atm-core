@@ -1528,7 +1528,7 @@ mod tests {
     fn boolean_lists_and_stored_render_match_sc_compose_cli_output() {
         let root = temporary_root("compose-boolean-list-parity");
         let template_path = root.join("boolean-list.md.j2");
-        let raw = "---\nrequired_variables:\n  - flags\n---\n{{ flags | tojson }}";
+        let raw = "---\nrequired_variables:\n  - flags\n---\n{{ flags | tojson }}\n{% for flag in flags %}{{ flag }}{% if not loop.last %} {% endif %}{% endfor %}";
         fs::write(&template_path, raw).expect("write template");
         let vars_path = root.join("vars.json");
         fs::write(&vars_path, r#"{"flags":[true,false,true]}"#).expect("write vars");
@@ -1571,6 +1571,7 @@ mod tests {
             )
             .expect("stored render");
 
+        assert_eq!(direct_body, "[true,false,true]\ntrue false true");
         assert_eq!(file_render.text, direct_body);
         assert_eq!(stored_render.text, direct_body);
         fs::remove_dir_all(&root).expect("remove isolated template root");

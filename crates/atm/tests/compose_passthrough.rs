@@ -208,17 +208,23 @@ fn compose_fails_closed_on_a_variable_with_no_value_and_names_it() {
 #[test]
 #[serial]
 fn send_render_fails_closed_on_missing_variables() {
-    let runtime_scope = atm_core::home::current_host_runtime_scope().expect("host runtime scope");
-    if runtime_scope.socket.exists() {
-        eprintln!("skipping process render test beside the shared host daemon");
-        return;
-    }
-
-    let identity = format!("render-reader-{}", std::process::id());
-    let team = format!("render-test-{}", std::process::id());
+    let unique = format!(
+        "{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock after Unix epoch")
+            .as_nanos()
+    );
+    let identity = format!("render-reader-{unique}");
+    let team = format!("render-test-{unique}");
     let dir = tempfile::tempdir().expect("temp dir");
     let (template, partial, _) = write_strict_fixture(dir.path());
     let recipient = format!("recipient@{team}");
+    let database = atm_core::home::host_mail_db_path().expect("host mailbox database path");
+    let before =
+        atm_runtime_test_support::count_mailbox_messages_for_test(&database, &team, "recipient")
+            .expect("count isolated recipient mailbox before send");
 
     let output = run_atm_as(
         &[
@@ -228,7 +234,6 @@ fn send_render_fails_closed_on_missing_variables() {
             template.to_str().expect("utf-8"),
             "--vars",
             partial.to_str().expect("utf-8"),
-            "--dry-run",
             "--json",
         ],
         &identity,
@@ -243,7 +248,11 @@ fn send_render_fails_closed_on_missing_variables() {
         "must name the variable: {stderr}"
     );
     assert!(
-        stderr.contains("strict.md.j2"),
-        "must name the template: {stderr}"
+        stderr.contains("TemplateRequiredVariableMissing"),
+        "must report the typed template-variable failure: {stderr}"
     );
+    let after =
+        atm_runtime_test_support::count_mailbox_messages_for_test(&database, &team, "recipient")
+            .expect("count isolated recipient mailbox after send");
+    assert_eq!(after, before, "failed render must not write a mailbox row");
 }

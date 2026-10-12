@@ -385,6 +385,15 @@ pub fn inspect_template_admission_for_test(
     atm_storage_rusqlite::inspect_template_admission_for_test(path, message_keys)
 }
 
+/// Counts rows in one mailbox through the SQLite test-support boundary.
+pub fn count_mailbox_messages_for_test(
+    path: impl AsRef<Path>,
+    team: &str,
+    agent: &str,
+) -> Result<usize, AtmError> {
+    atm_storage_rusqlite::count_mailbox_messages_for_test(path, team, agent)
+}
+
 /// Inspects the durable pending marker without exposing SQLite to a runtime
 /// crate's behavior test.
 pub fn inspect_pending_marker_state_for_test(
