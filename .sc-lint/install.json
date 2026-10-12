@@ -14,8 +14,8 @@
       ]
     },
     "runtime": {
-      "enabled": false,
-      "reason": "Phase BG-4 owns runtime analyzer migration."
+      "enabled": true,
+      "reason": "Published sc-lint runtime analysis replaces the vendored runtime-waits checker."
     }
   },
   "ci": {

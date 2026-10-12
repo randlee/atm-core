@@ -11,8 +11,8 @@ reason = "Phase BG-3 owns portability analyzer migration."
 targets = ["linux", "macos", "windows"]
 
 [tool.sc-lint.analyzers.runtime]
-enabled = false
-reason = "Phase BG-4 owns runtime analyzer migration."
+enabled = true
+reason = "Published sc-lint runtime analysis replaces the vendored runtime-waits checker."
 
 [[tool.sc-lint.lint]]
 name = "adr-index"
