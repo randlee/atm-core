@@ -397,7 +397,10 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertEqual(workflow.count("Pre-seed pinned cargo-binstall (bootstrap also verifies)"), 2)
         self.assertGreaterEqual(workflow.count("run: just bootstrap"), 2)
         just_lint = workflow.split("\n  fmt:", 1)[0]
-        self.assertNotIn("- name: Set up sc-lint", just_lint)
+        sc_lint_setup = "- name: Set up sc-lint\n        run: just setup"
+        self.assertIn(sc_lint_setup, just_lint)
+        self.assertLess(just_lint.index("SC_LINT_INSTALL_DIR"), just_lint.index(sc_lint_setup))
+        self.assertLess(just_lint.index(sc_lint_setup), just_lint.index("- name: Run just lint"))
         self.assertLess(just_lint.index("run: just bootstrap"), just_lint.index("sc-compose --version"))
 
     def test_ci_configures_portable_cache_directories_in_steps(self) -> None:
