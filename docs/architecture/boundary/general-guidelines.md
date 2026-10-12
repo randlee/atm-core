@@ -68,11 +68,14 @@ Prioritize findings in this order:
 Treat these as mandatory evidence:
 
 - `boundaries/**/*.toml`
-- `.just/lint_boundaries.py`
+- `sc-lint lint sc-boundary` (published analyzer, configured by
+  `analyzers.boundary` in `.sc-lint/install.json`): boundary inventory schema
+  and workspace dependency edges
+- `.just/lint_boundaries.py`: atm-only rules (impl sites, `SCB-*` rule
+  families) and the gap checks the published analyzer does not cover yet
 - `.just/lint_manifests.py`
 - `.just/run_lint.py`
 - `crates/atm-architecture/tests/boundary_enforcement.rs`
-- `crates/sc-lint-boundary/config/defaults.toml`
 - `docs/sc-lint/README.md`
 - `docs/sc-lint/boundary-enforcement-model.md`
 - `.claude/agents/boundary-guard.md`
