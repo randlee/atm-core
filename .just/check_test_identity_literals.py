@@ -13,10 +13,10 @@ def main(argv: list[str]) -> int:
     repo_root = Path(__file__).resolve().parent.parent
     os.chdir(repo_root)
     try:
-        exec_lint(repo_root, "identity-literals", argv[1:])
+        return exec_lint(repo_root, "identity-literals", argv[1:])
     except FileNotFoundError as error:
         print(error, file=sys.stderr)
-    return 127
+        return 1
 
 
 if __name__ == "__main__":

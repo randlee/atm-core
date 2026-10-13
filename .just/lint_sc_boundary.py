@@ -11,12 +11,16 @@ from lint_common import discover_repo_root
 from sc_lint_binary import exec_lint
 
 
-def main(argv: list[str]) -> None:
+def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Run the published sc-lint boundary analyzer.")
     parser.add_argument("--root", help="Repo root to inspect.")
     args = parser.parse_args(argv[1:])
     repo_root = discover_repo_root(args.root)
-    exec_lint(repo_root, "sc-boundary", ["--config", str(repo_root / "sc-lint.toml")])
+    try:
+        return exec_lint(repo_root, "sc-boundary", ["--config", str(repo_root / "sc-lint.toml")])
+    except FileNotFoundError as error:
+        print(error, file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
