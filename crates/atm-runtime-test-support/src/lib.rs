@@ -26,17 +26,6 @@ pub use atm_storage::testing::InMemoryTaskLedgerReader;
 pub use atm_storage_rusqlite::{TemplateAdmissionMessage, TemplateAdmissionSnapshot};
 pub use task_telemetry::{RecordingTaskTelemetrySink, StallRelease, StalledTaskTelemetrySink};
 
-/// Seeds a malformed persisted-decomposed-message fixture for a black-box
-/// render-on-read test. Production callers have no access to this seam.
-#[doc(hidden)]
-pub fn replace_decomposed_message_vars_for_test(
-    path: impl AsRef<Path>,
-    message_id: &str,
-    vars_json: &str,
-) -> Result<(), AtmError> {
-    atm_storage_rusqlite::replace_decomposed_message_vars_for_test(path, message_id, vars_json)
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RecordedWriterOutcome {
     Applied,

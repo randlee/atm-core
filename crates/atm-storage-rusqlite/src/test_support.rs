@@ -100,36 +100,6 @@ pub fn inspect_template_admission_for_test(
     })
 }
 
-/// Replaces a stored decomposed message's captured variables for a black-box
-/// render-on-read fixture. The production admission path never uses this.
-#[doc(hidden)]
-pub fn replace_decomposed_message_vars_for_test(
-    path: impl AsRef<Path>,
-    message_id: &str,
-    vars_json: &str,
-) -> Result<(), AtmError> {
-    let connection = Connection::open(path.as_ref()).map_err(|error| {
-        AtmError::mailbox_read(format!("failed to open decomposed render fixture: {error}"))
-    })?;
-    let changed = connection
-        .execute(
-            "UPDATE mail_messages SET vars_json = ?1 WHERE message_id = ?2 AND template_sha IS NOT NULL",
-            params![vars_json, message_id],
-        )
-        .map_err(|error| {
-            AtmError::mailbox_read(format!(
-                "failed to seed decomposed render fixture: {error}"
-            ))
-        })?;
-    if changed == 1 {
-        Ok(())
-    } else {
-        Err(AtmError::mailbox_read(format!(
-            "expected one decomposed message for fixture message_id '{message_id}', updated {changed}"
-        )))
-    }
-}
-
 /// Reads the durable pending marker used by black-box queue tests.
 #[doc(hidden)]
 pub fn inspect_pending_marker_state_for_test(

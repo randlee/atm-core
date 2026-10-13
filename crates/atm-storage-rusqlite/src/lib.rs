@@ -90,7 +90,7 @@ pub use test_support::{
     TemplateAdmissionMessage, TemplateAdmissionSnapshot, count_mailbox_messages_for_test,
     diagnostic_queue_batches_for_test, inspect_mail_message_state_columns_for_test,
     inspect_message_ack_state_for_test, inspect_pending_marker_state_for_test,
-    inspect_template_admission_for_test, replace_decomposed_message_vars_for_test,
+    inspect_template_admission_for_test,
 };
 pub use writer::DiagnosticTimelinePersistenceStats;
 
