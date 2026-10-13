@@ -328,6 +328,13 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertEqual(Path(command[0]), python)
         self.assertIn("--no-deps", command)
 
+    def test_sc_compose_wheel_uses_the_manifest_floor(self) -> None:
+        python = Path("/repo/.bootstrap-venv/bin/python")
+        command = bootstrap.sc_compose_wheel_install_command(python, "1.7.0")
+        self.assertEqual(Path(command[0]), python)
+        self.assertIn("sc-compose>=1.7.0", command)
+        self.assertNotIn("sc-compose==1.7.0", command)
+
     def test_seed_version_mismatch_refuses_before_any_installs(self) -> None:
         manifest = bootstrap.load_manifest()
         with mock.patch.object(bootstrap, "platform") as platform_module:

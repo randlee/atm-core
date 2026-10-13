@@ -9,6 +9,12 @@ from pathlib import Path
 
 import pytest
 
+_CLAUDE_DIR = Path(__file__).resolve().parents[3]
+if str(_CLAUDE_DIR) not in os.sys.path:
+    os.sys.path.insert(0, str(_CLAUDE_DIR))
+
+from lib.sc_compose_dependency import MIN_SC_COMPOSE_BINDING, SC_COMPOSE_BINDING_INSTALL
+
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 TEMPLATE = ".claude/skills/triaging-findings/triage-record.ttl.j2"
@@ -119,11 +125,10 @@ def test_python_binding_renders_canonical_template() -> None:
     except (ImportError, importlib.metadata.PackageNotFoundError) as exc:  # pragma: no cover - dependency preflight owns setup
         pytest.fail(
             "sc-compose Python bindings not installed. Run: "
-            "python3 -m pip install --user --break-system-packages "
-            "'sc-compose==1.6.1' before running binding tests: "
+            f"{SC_COMPOSE_BINDING_INSTALL} before running binding tests: "
             f"{exc}"
         )
-    assert tuple(int(part) for part in importlib.metadata.version("sc-compose").split(".")[:3]) >= (1, 6, 1)
+    assert tuple(int(part) for part in importlib.metadata.version("sc-compose").split(".")[:3]) >= MIN_SC_COMPOSE_BINDING
     rendered = sc_compose.render_template(
         (REPO_ROOT / TEMPLATE).read_text(encoding="utf-8"), _vars()
     )

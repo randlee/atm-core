@@ -933,7 +933,7 @@ def configured_known_good_pin(dependency: str) -> str | None:
     return value if isinstance(value, str) and semantic_version(value) is not None else None
 
 
-def replace_cargo_exact_pin(path: Path, dependency: str, version: str) -> bool:
+def replace_cargo_pin(path: Path, dependency: str, version: str, *, exact: bool) -> bool:
     text = path.read_text(encoding="utf-8")
     pattern = re.compile(
         rf'(?m)^(?P<prefix>[ \t]*{re.escape(dependency)}[ \t]*=[ \t]*(?:\{{[^\n]*?version[ \t]*=[ \t]*)?")'
@@ -941,8 +941,9 @@ def replace_cargo_exact_pin(path: Path, dependency: str, version: str) -> bool:
     )
     matches = list(pattern.finditer(text))
     if len(matches) != 1:
-        raise ValueError(f"expected exactly one exact Cargo pin for {dependency} in {path}; found {len(matches)}")
-    updated = pattern.sub(rf"\g<prefix>={version}\g<suffix>", text, count=1)
+        raise ValueError(f"expected exactly one Cargo pin for {dependency} in {path}; found {len(matches)}")
+    requirement = "=" if exact else ""
+    updated = pattern.sub(rf"\g<prefix>{requirement}{version}\g<suffix>", text, count=1)
     if updated == text:
         return False
     path.write_text(updated, encoding="utf-8")
@@ -998,7 +999,12 @@ def pin_back_ecosystem_dependency(
             path = root / relative_path
             if not path.is_file():
                 raise ValueError(f"missing Cargo pin file: {relative_path}")
-            if replace_cargo_exact_pin(path, cargo_dependency, last_known_good):
+            if replace_cargo_pin(
+                path,
+                cargo_dependency,
+                last_known_good,
+                exact=dependency != "sc-composer",
+            ):
                 if relative_path not in changed:
                     changed.append(relative_path)
 
