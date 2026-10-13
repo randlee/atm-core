@@ -464,13 +464,8 @@ impl AtmError {
         .with_cause(cause)
     }
 
-    /// Reports a strict-render validation failure (an undeclared or unbound
-    /// variable). The diagnostic names the variable and the template and holds
-    /// no rendered content, so it is carried in the message the CLI prints.
-    pub fn template_render_variable_failed(diagnostic: impl fmt::Display) -> Self {
-        Self::template_variable_resolution_failed(diagnostic)
-    }
-
+    /// Reports a strict-render validation failure other than a missing required
+    /// frontmatter variable. The diagnostic holds no rendered content.
     pub fn template_variable_resolution_failed(diagnostic: impl fmt::Display) -> Self {
         Self::new(
             AtmErrorCode::TemplateVariableResolutionFailed,
@@ -625,7 +620,7 @@ mod tests {
 
     #[test]
     fn template_variable_resolution_uses_one_diagnostic_and_recovery_guidance() {
-        let error = AtmError::template_render_variable_failed("unbound variable 'missing'");
+        let error = AtmError::template_variable_resolution_failed("unbound variable 'missing'");
 
         assert_eq!(error.code(), AtmErrorCode::TemplateVariableResolutionFailed);
         assert_eq!(

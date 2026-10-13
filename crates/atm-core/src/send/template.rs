@@ -314,7 +314,7 @@ mod tests {
             include_references: Vec::new(),
             output_format: atm_storage::TemplateOutputFormat::Text,
         };
-        let named = AtmError::template_render_variable_failed(
+        let named = AtmError::template_variable_resolution_failed(
             "ERR_VAL_UNBOUND_VARIABLE: unbound variable: missing",
         );
         let composer = FixtureComposer {

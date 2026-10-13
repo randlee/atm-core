@@ -127,7 +127,7 @@ mod tests {
             vars: &Map<String, Value>,
         ) -> Result<RenderedBody, crate::error::AtmError> {
             if source.raw_file_bytes == b"{{ missing }}" {
-                return Err(crate::error::AtmError::template_render_variable_failed(
+                return Err(crate::error::AtmError::template_variable_resolution_failed(
                     "undeclared variable missing",
                 ));
             }

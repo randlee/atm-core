@@ -88,7 +88,7 @@ fn validation_error(error: &sc_composer::ValidationError) -> AtmError {
     if diagnostics.is_empty() {
         return validation_error_without_diagnostics();
     }
-    AtmError::template_render_variable_failed(diagnostics.join("; "))
+    AtmError::template_variable_resolution_failed(diagnostics.join("; "))
 }
 
 fn validation_error_without_diagnostics() -> AtmError {

@@ -121,6 +121,7 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         // configuration/validation exit category so callers can distinguish
         // them from ATM request validation (3) and internal failures (1).
         | AtmErrorCode::TemplateLoadFailed
+        | AtmErrorCode::TemplateRequiredVariableMissing
         | AtmErrorCode::TemplateVariableResolutionFailed
         | AtmErrorCode::TemplateRenderVerificationFailed
         | AtmErrorCode::TemplateIncludeUnresolved => 2,
@@ -1417,6 +1418,15 @@ mod adapter_tests {
             )),
             2
         );
+        for code in [
+            AtmErrorCode::TemplateRequiredVariableMissing,
+            AtmErrorCode::TemplateVariableResolutionFailed,
+        ] {
+            assert_eq!(
+                exit_code_for_atm_error(&AtmError::new(code, "template rejected")),
+                2
+            );
+        }
         assert_eq!(
             exit_code_for_atm_error(&AtmError::daemon_unavailable("daemon down")),
             4

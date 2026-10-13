@@ -1429,7 +1429,7 @@ pub(crate) mod tests {
                     .and_then(std::path::Path::file_name)
                     .map(|name| name.to_string_lossy())
                     .unwrap_or_else(|| "<unknown>".into());
-                return Err(AtmError::template_render_variable_failed(format!(
+                return Err(AtmError::template_variable_resolution_failed(format!(
                     "ERR_VAL_MISSING_REQUIRED: missing required variable: {} (template {template})",
                     required.as_str()
                 )));
