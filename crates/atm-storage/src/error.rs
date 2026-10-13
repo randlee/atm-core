@@ -442,9 +442,10 @@ impl AtmError {
     }
 
     pub fn template_required_variable_missing(variable: &str) -> Self {
-        Self::template_variable_resolution_failed(format!(
-            "template required variable '{variable}' is missing"
-        ))
+        Self::new(
+            AtmErrorCode::TemplateRequiredVariableMissing,
+            format!("template required variable '{variable}' is missing"),
+        )
     }
 
     pub fn template_render_verification_failed(cause: impl fmt::Display) -> Self {
@@ -628,6 +629,14 @@ mod tests {
         );
         assert!(error.cause().is_none());
         assert!(error.remediation().contains("provide values"));
+    }
+
+    #[test]
+    fn template_required_variable_missing_preserves_its_stable_code() {
+        let error = AtmError::template_required_variable_missing("ATM_TEAM");
+
+        assert_eq!(error.code(), AtmErrorCode::TemplateRequiredVariableMissing);
+        assert!(error.message().contains("ATM_TEAM"));
     }
 
     #[test]

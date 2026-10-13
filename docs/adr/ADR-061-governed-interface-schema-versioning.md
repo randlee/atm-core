@@ -100,6 +100,13 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-10-13 — Phase E4E template variable resolution:** `HTTP_API_VERSION`
+  moves from `1.11.0` to `1.12.0`. The new additive
+  `TEMPLATE_VARIABLE_RESOLUTION_FAILED` code identifies template-variable
+  failures that had no prior stable code. A missing required variable retains
+  its established `TEMPLATE_REQUIRED_VARIABLE_MISSING` code, so a frozen
+  1.11 consumer continues to decode the rejection. This is a minor,
+  backward-compatible bump.
 - **2026-10-07 — Phase BD.1 task telemetry health:** `HTTP_API_VERSION`
   moves from `1.10.0` to `1.11.0`. `AtmObservabilityHealth` gains the additive
   optional `export` projection. It defaults to `None` when omitted, so a

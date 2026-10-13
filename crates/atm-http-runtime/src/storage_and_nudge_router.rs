@@ -5018,10 +5018,31 @@ pub(crate) mod tests {
             "missing required input must reject the write: {}",
             String::from_utf8_lossy(&error)
         );
+        #[derive(Debug, serde::Deserialize, PartialEq, Eq)]
+        enum Pre112ErrorCode {
+            #[serde(rename = "TEMPLATE_REQUIRED_VARIABLE_MISSING")]
+            TemplateRequiredVariableMissing,
+        }
+
+        #[derive(Debug, serde::Deserialize, PartialEq, Eq)]
+        struct Pre112Error {
+            code: Pre112ErrorCode,
+            message: String,
+        }
+
+        let pre_1_12_consumer: Pre112Error =
+            serde_json::from_slice(&error).expect("pre-1.12 consumer decodes rejection");
+        assert_eq!(
+            pre_1_12_consumer.code,
+            Pre112ErrorCode::TemplateRequiredVariableMissing,
+            "the 1.11 consumer keeps decoding the established rejection code"
+        );
+        assert!(pre_1_12_consumer.message.contains("ATM_TEAM"));
+
         let error: serde_json::Value = serde_json::from_slice(&error).expect("rejection JSON");
         assert_eq!(
             error["code"].as_str(),
-            Some("TEMPLATE_VARIABLE_RESOLUTION_FAILED"),
+            Some("TEMPLATE_REQUIRED_VARIABLE_MISSING"),
             "the stable admission error explains the rejected write"
         );
         eprintln!(

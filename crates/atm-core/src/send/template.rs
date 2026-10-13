@@ -61,7 +61,11 @@ pub(super) fn verify_template_send(
     );
     let inspection = composer.inspect(&source)?;
     let vars = resolve_merged_vars(&inspection.frontmatter, request).map_err(|error| {
-        if error.code() == atm_storage::AtmErrorCode::TemplateVariableResolutionFailed {
+        if matches!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
+                | atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
+        ) {
             let template_name = request.canonical_template_path.file_name().map_or_else(
                 || "<unknown>".to_owned(),
                 |name| name.to_string_lossy().into_owned(),
@@ -252,7 +256,7 @@ mod tests {
         let error = resolve_merged_vars(&frontmatter, &source()).expect_err("missing var");
         assert_eq!(
             error.code(),
-            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
+            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
         );
         assert!(error.message().contains("required variable 'missing'"));
     }
@@ -293,7 +297,7 @@ mod tests {
             resolve_merged_vars(&frontmatter, &missing).expect_err("missing admission value");
         assert_eq!(
             error.code(),
-            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
+            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
         );
     }
 
