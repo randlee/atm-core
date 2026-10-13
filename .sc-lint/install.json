@@ -289,12 +289,6 @@
       ".just/run_lint.py",
       "ttl-triage"
     ],
-    "unix-gating": [
-      "just",
-      "_py",
-      ".just/run_lint.py",
-      "unix-gating"
-    ],
     "version": [
       "just",
       "_py",

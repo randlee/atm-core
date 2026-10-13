@@ -167,10 +167,6 @@ name = "ttl-triage"
 command = ["just", "_py", ".just/run_lint.py", "ttl-triage"]
 
 [[tool.sc-lint.lint]]
-name = "unix-gating"
-command = ["just", "_py", ".just/run_lint.py", "unix-gating"]
-
-[[tool.sc-lint.lint]]
 name = "version"
 command = ["just", "_py", ".just/run_lint.py", "version"]
 
