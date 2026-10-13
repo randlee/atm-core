@@ -257,6 +257,10 @@ fn compose_fails_closed_on_a_variable_with_no_value_and_names_it() {
     assert!(output.stdout.is_empty(), "failed composition has no body");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
+        stderr.contains("ERR_VAL_MISSING_REQUIRED: missing required variable: missing"),
+        "must preserve the stable adapter validation code: {stderr}"
+    );
+    assert!(
         stderr.contains("missing"),
         "must name the variable: {stderr}"
     );
@@ -285,6 +289,113 @@ fn compose_fails_closed_on_a_variable_with_no_value_and_names_it() {
     assert_eq!(
         String::from_utf8_lossy(&output.stdout).trim_end(),
         "hello x and y"
+    );
+}
+
+#[test]
+#[serial]
+fn read_fails_closed_on_a_stored_decomposed_message_with_a_missing_variable() {
+    let unique = format!(
+        "{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock after Unix epoch")
+            .as_nanos()
+    );
+    let identity = format!("stored-render-sender-{unique}");
+    let team = format!("stored-render-test-{unique}");
+    let dir = tempfile::tempdir().expect("temp dir");
+    let home = tempfile::tempdir().expect("temporary ATM environment");
+    let recipient_identity = format!("stored-render-reader-{unique}");
+    let daemon = ensure_daemon(home.path(), &recipient_identity, &team);
+    let registered = run_atm_in_home(
+        &["teams", "add-member", &team, &recipient_identity, "--json"],
+        &identity,
+        &team,
+        home.path(),
+    );
+    assert!(
+        registered.status.success(),
+        "register recipient: {}",
+        String::from_utf8_lossy(&registered.stderr)
+    );
+    let (template, _partial, full) = write_strict_fixture(dir.path());
+    let recipient = format!("{recipient_identity}@{team}");
+    let admitted = run_atm_in_home(
+        &[
+            "send",
+            &recipient,
+            "--template",
+            template.to_str().expect("utf-8"),
+            "--vars",
+            full.to_str().expect("utf-8"),
+            "--json",
+        ],
+        &identity,
+        &team,
+        home.path(),
+    );
+    assert!(
+        admitted.status.success(),
+        "fully bound send must seed a decomposed message: {}",
+        String::from_utf8_lossy(&admitted.stderr)
+    );
+    let admitted: serde_json::Value =
+        serde_json::from_slice(&admitted.stdout).expect("send outcome JSON");
+    let message_id = admitted["message_id"]
+        .as_str()
+        .expect("send outcome has message ID")
+        .to_owned();
+
+    drop(daemon);
+    atm_runtime_test_support::replace_decomposed_message_vars_for_test(
+        atm_core::home::host_mail_db_path().expect("host-scoped mailbox database path"),
+        &message_id,
+        r#"{"name":"x"}"#,
+    )
+    .expect("seed stored missing-variable fixture");
+    let _daemon = ensure_daemon(home.path(), &recipient_identity, &team);
+    let reload_member = format!("stored-render-reload-{unique}");
+    let reloaded = run_atm_in_home(
+        &["teams", "add-member", &team, &reload_member, "--json"],
+        &identity,
+        &team,
+        home.path(),
+    );
+    assert!(
+        reloaded.status.success(),
+        "reload daemon state after seeding fixture: {}",
+        String::from_utf8_lossy(&reloaded.stderr)
+    );
+
+    let output = run_atm_in_home(
+        &["read", "--all", "--message-id", &message_id],
+        &recipient_identity,
+        &team,
+        home.path(),
+    );
+    atm_runtime_test_support::replace_decomposed_message_vars_for_test(
+        atm_core::home::host_mail_db_path().expect("host-scoped mailbox database path"),
+        &message_id,
+        r#"{"name":"x","missing":"y"}"#,
+    )
+    .expect("restore stored render fixture");
+    assert!(
+        !output.status.success(),
+        "stored render with an unbound variable must fail; stdout: {}; stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stdout.is_empty(), "failed read has no rendered body");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("missing"),
+        "must name the stored missing variable: {stderr}"
+    );
+    assert!(
+        stderr.contains("ERR_VAL_MISSING_REQUIRED: missing required variable: missing"),
+        "must preserve the stable adapter validation code: {stderr}"
     );
 }
 
