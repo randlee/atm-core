@@ -105,7 +105,7 @@ fn validation_error(error: &sc_composer::ValidationError) -> AtmError {
 }
 
 fn validation_error_without_diagnostics() -> AtmError {
-    AtmError::template_render_verification_failed(
+    AtmError::template_variable_resolution_failed(
         "sc-compose returned a validation failure without structured diagnostics",
     )
 }
@@ -261,7 +261,9 @@ fn compose_request(
         .iter()
         .map(|(name, value)| {
             let name = sc_composer::VariableName::new(name.clone()).map_err(|error| {
-                AtmError::validation(format!("invalid template variable '{name}': {error}"))
+                AtmError::template_variable_resolution_failed(format!(
+                    "invalid template variable '{name}': {error}"
+                ))
             })?;
             Ok((name, value.clone()))
         })
@@ -411,7 +413,7 @@ impl TemplateComposer for ScComposeTemplateComposer {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -454,18 +456,36 @@ mod tests {
     }
 
     #[test]
+    fn invalid_variable_names_use_the_variable_resolution_code() {
+        let vars = Map::from_iter([("bad name".to_owned(), Value::Null)]);
+        let error = super::compose_request(
+            Path::new("invalid-variable.md.j2"),
+            &vars,
+            &TemplateRoot {
+                canonical_path: PathBuf::from("."),
+            },
+        )
+        .expect_err("invalid variable names must fail");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
+        );
+        assert!(error.message().contains("bad name"));
+        assert!(error.cause().is_none());
+        assert!(error.remediation().contains("provide values"));
+    }
+
+    #[test]
     fn empty_validation_diagnostics_use_a_path_safe_fallback() {
         let error = super::validation_error_without_diagnostics();
 
         assert_eq!(
             error.code(),
-            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
         );
-        assert!(
-            error
-                .cause()
-                .is_some_and(|cause| cause.contains("without structured diagnostics"))
-        );
+        assert!(error.cause().is_none());
+        assert!(error.message().contains("without structured diagnostics"));
         assert!(
             !error
                 .message()
@@ -488,7 +508,7 @@ mod tests {
     fn assert_names_missing(error: &atm_core::error::AtmError, template: &str) {
         assert_eq!(
             error.code(),
-            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
         );
         assert!(
             error.message().contains("missing"),
@@ -601,7 +621,7 @@ mod tests {
             .expect_err("a template that declares nothing must be rejected");
         assert_eq!(
             error.code(),
-            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
         );
         assert!(
             error.message().contains("bare.md.j2"),
@@ -1757,7 +1777,7 @@ mod tests {
     }
 
     #[test]
-    fn production_adapter_retains_upstream_validation_diagnostic_as_a_typed_cause() {
+    fn production_adapter_reports_missing_required_variable_once() {
         let root = temporary_root("missing-required-variable");
         let template_path = root.join("main.j2");
         fs::write(
@@ -1785,14 +1805,10 @@ mod tests {
 
         assert_eq!(
             error.code(),
-            atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
         );
-        assert!(
-            error
-                .cause()
-                .is_some_and(|cause| cause.contains("ERR_VAL_MISSING_REQUIRED")),
-            "the typed ATM error must retain the upstream diagnostic in its cause"
-        );
+        assert!(error.message().contains("required"));
+        assert!(error.cause().is_none());
     }
 
     #[test]

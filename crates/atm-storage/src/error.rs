@@ -442,10 +442,9 @@ impl AtmError {
     }
 
     pub fn template_required_variable_missing(variable: &str) -> Self {
-        Self::new(
-            AtmErrorCode::TemplateRequiredVariableMissing,
-            format!("template required variable '{variable}' is missing"),
-        )
+        Self::template_variable_resolution_failed(format!(
+            "template required variable '{variable}' is missing"
+        ))
     }
 
     pub fn template_render_verification_failed(cause: impl fmt::Display) -> Self {
@@ -460,12 +459,14 @@ impl AtmError {
     /// variable). The diagnostic names the variable and the template and holds
     /// no rendered content, so it is carried in the message the CLI prints.
     pub fn template_render_variable_failed(diagnostic: impl fmt::Display) -> Self {
-        let diagnostic = diagnostic.to_string();
+        Self::template_variable_resolution_failed(diagnostic)
+    }
+
+    pub fn template_variable_resolution_failed(diagnostic: impl fmt::Display) -> Self {
         Self::new(
-            AtmErrorCode::TemplateRenderVerificationFailed,
-            format!("template verification render failed: {diagnostic}"),
+            AtmErrorCode::TemplateVariableResolutionFailed,
+            format!("template variable resolution failed: {diagnostic}"),
         )
-        .with_cause(diagnostic)
     }
 
     /// Reports invalid checked JSON without exposing rendered template content.
@@ -611,6 +612,22 @@ mod tests {
         let error = AtmError::member_not_found("test-agent", "test-team");
 
         assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
+    }
+
+    #[test]
+    fn template_variable_resolution_uses_one_diagnostic_and_recovery_guidance() {
+        let error = AtmError::template_render_variable_failed("unbound variable 'missing'");
+
+        assert_eq!(error.code(), AtmErrorCode::TemplateVariableResolutionFailed);
+        assert_eq!(
+            error
+                .message()
+                .matches("unbound variable 'missing'")
+                .count(),
+            1
+        );
+        assert!(error.cause().is_none());
+        assert!(error.remediation().contains("provide values"));
     }
 
     #[test]

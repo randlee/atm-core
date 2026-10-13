@@ -197,10 +197,13 @@ const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
         AtmErrorCode::DecomposedTemplateIncludeForbidden => Some(
             "Remove template dependencies or use the confined render operation before retrying.",
         ),
+        AtmErrorCode::TemplateRequiredVariableMissing
+        | AtmErrorCode::TemplateVariableResolutionFailed => Some(
+            "Correct the template variable names and provide values for required or referenced variables, then retry.",
+        ),
         AtmErrorCode::TemplateLoadFailed
         | AtmErrorCode::TemplateHashApiFailed
         | AtmErrorCode::TemplateInspectionParseFailed
-        | AtmErrorCode::TemplateRequiredVariableMissing
         | AtmErrorCode::TemplateRenderVerificationFailed
         | AtmErrorCode::TemplateIncludeUnresolved
         | AtmErrorCode::TemplateClassificationInvalid

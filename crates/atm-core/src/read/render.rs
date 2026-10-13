@@ -74,14 +74,18 @@ pub(crate) fn render_message_body(
         // Preserve the renderer's stable typed code (notably
         // DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN) while adding the durable
         // identifiers needed to diagnose a corrupt row.
-        AtmError::new(
+        let contextual = AtmError::new(
             error.code(),
             format!(
                 "decomposed message_id {message_label} template_sha {template_sha}: {}",
                 error.detail()
             ),
-        )
-        .with_cause(error.message())
+        );
+        if error.code() == crate::error_codes::AtmErrorCode::TemplateVariableResolutionFailed {
+            contextual
+        } else {
+            contextual.with_cause(error.message())
+        }
     })?;
     let mut envelope = envelope.clone();
     envelope.text = rendered.text;
@@ -233,7 +237,7 @@ mod tests {
 
         assert_eq!(
             error.code(),
-            crate::error_codes::AtmErrorCode::TemplateRenderVerificationFailed
+            crate::error_codes::AtmErrorCode::TemplateVariableResolutionFailed
         );
         assert!(error.detail().contains("missing"));
         assert!(error.detail().contains("legacy-template"));

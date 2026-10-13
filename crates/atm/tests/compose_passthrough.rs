@@ -187,7 +187,7 @@ fn compose_matches_validation_failure_status_and_diagnostic() {
         "direct sc-compose must report the validation diagnostic"
     );
     assert!(
-        atm_stderr.contains("template verification render failed"),
+        atm_stderr.contains("template variable resolution failed"),
         "ATM must map the upstream validation diagnostic to its stable typed error"
     );
     assert!(
@@ -344,8 +344,8 @@ fn send_render_fails_closed_on_missing_variables() {
         "must name the variable: {stderr}"
     );
     assert!(
-        stderr.contains("TemplateRequiredVariableMissing"),
-        "must report the typed template-variable failure: {stderr}"
+        stderr.contains("template variable resolution failed"),
+        "must report the stable template-variable failure: {stderr}"
     );
     assert!(
         stderr.contains("strict.md.j2"),

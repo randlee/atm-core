@@ -121,6 +121,7 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         // configuration/validation exit category so callers can distinguish
         // them from ATM request validation (3) and internal failures (1).
         | AtmErrorCode::TemplateLoadFailed
+        | AtmErrorCode::TemplateVariableResolutionFailed
         | AtmErrorCode::TemplateRenderVerificationFailed
         | AtmErrorCode::TemplateIncludeUnresolved => 2,
         AtmErrorCode::IdentityUnavailable

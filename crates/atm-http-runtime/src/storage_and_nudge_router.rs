@@ -5021,7 +5021,7 @@ pub(crate) mod tests {
         let error: serde_json::Value = serde_json::from_slice(&error).expect("rejection JSON");
         assert_eq!(
             error["code"].as_str(),
-            Some("TEMPLATE_REQUIRED_VARIABLE_MISSING"),
+            Some("TEMPLATE_VARIABLE_RESOLUTION_FAILED"),
             "the stable admission error explains the rejected write"
         );
         eprintln!(

@@ -1,7 +1,7 @@
 //! Core-owned templated-send composition.
 //!
 //! The CLI only captures caller input. This module owns the deterministic
-//! merge, required-variable validation, and renderer-port invocation.
+//! merge and renderer-port invocation.
 
 use serde_json::{Map, Value};
 
@@ -61,18 +61,14 @@ pub(super) fn verify_template_send(
     );
     let inspection = composer.inspect(&source)?;
     let vars = resolve_merged_vars(&inspection.frontmatter, request).map_err(|error| {
-        if error.code() == atm_storage::AtmErrorCode::TemplateRequiredVariableMissing {
+        if error.code() == atm_storage::AtmErrorCode::TemplateVariableResolutionFailed {
             let template_name = request.canonical_template_path.file_name().map_or_else(
                 || "<unknown>".to_owned(),
                 |name| name.to_string_lossy().into_owned(),
             );
             AtmError::new(
                 error.code(),
-                format!(
-                    "{:?}: {} (template {template_name})",
-                    error.code(),
-                    error.detail()
-                ),
+                format!("{} (template {template_name})", error.detail()),
             )
         } else {
             error
@@ -88,7 +84,11 @@ pub(super) fn verify_template_send(
         .map_err(|error| {
             // The adapter's own verification failure already names the
             // variable and template; re-wrapping would drop that text.
-            if error.code() == atm_storage::AtmErrorCode::TemplateRenderVerificationFailed {
+            if matches!(
+                error.code(),
+                atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
+                    | atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
+            ) {
                 error
             } else if !inspection.include_references.is_empty() {
                 AtmError::template_include_unresolved(error)
@@ -250,6 +250,10 @@ mod tests {
             ..atm_storage::TemplateFrontmatter::default()
         };
         let error = resolve_merged_vars(&frontmatter, &source()).expect_err("missing var");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
+        );
         assert!(error.message().contains("required variable 'missing'"));
     }
 
@@ -289,7 +293,7 @@ mod tests {
             resolve_merged_vars(&frontmatter, &missing).expect_err("missing admission value");
         assert_eq!(
             error.code(),
-            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
+            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
         );
     }
 
