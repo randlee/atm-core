@@ -64,8 +64,16 @@ impl ComposeCommand {
                 .to_path_buf(),
         };
         let composer = atm_daemon_bootstrap::template_composer();
+        let template_name = source
+            .source
+            .canonical_file_path
+            .as_deref()
+            .and_then(Path::file_name)
+            .and_then(|name| name.to_str())
+            .unwrap_or("<unnamed-template>");
         let rendered = composer
             .render_within_root(&source.source, &source.vars, &root)
+            .map_err(|error| error.with_context(format!("template {template_name}")))
             .map_err(anyhow::Error::from)?;
         let max_bytes = atm_core::load_atm_config(&current_dir)?
             .map(|config| {

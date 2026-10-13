@@ -67,6 +67,14 @@ impl AtmError {
         self
     }
 
+    /// Adds caller-owned detail without changing the error's typed code,
+    /// recovery guidance, or adapter-provided cause.
+    #[must_use]
+    pub fn with_context(mut self, prefix: impl fmt::Display) -> Self {
+        self.message = format!("{prefix}: {}", self.message);
+        self
+    }
+
     /// Returns the detail portion for a higher-level constructor. This avoids
     /// embedding catalog-rendered recovery guidance into another catalog error.
     #[must_use]
@@ -758,6 +766,17 @@ mod tests {
                 .expect("serialize error")
                 .contains(r#""cause":"connection refused""#)
         );
+    }
+
+    #[test]
+    fn context_preserves_code_cause_detail_and_recovery() {
+        let error = AtmError::template_render_verification_failed("adapter rejected body")
+            .with_context("stored template notice.md.j2");
+
+        assert_eq!(error.code(), AtmErrorCode::TemplateRenderVerificationFailed);
+        assert_eq!(error.cause(), Some("adapter rejected body"));
+        assert!(error.detail().starts_with("stored template notice.md.j2:"));
+        assert_eq!(error.message().matches("Recovery:").count(), 1);
     }
 
     #[test]

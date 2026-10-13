@@ -64,25 +64,15 @@ pub(super) fn verify_template_send(
     let root = TemplateRoot {
         canonical_path: request.canonical_template_root.clone(),
     };
+    let template_name = request.canonical_template_path.file_name().map_or_else(
+        || "<unknown>".to_owned(),
+        |name| name.to_string_lossy().into_owned(),
+    );
     // A loader-constrained render is mandatory even for the include fallback:
     // it proves each dependency is in-root before returning the plain body.
     let rendered = composer
         .render_within_root(&source, vars.as_map(), &root)
-        .map_err(|error| {
-            // The adapter's own verification failure already names the
-            // variable and template; re-wrapping would drop that text.
-            if matches!(
-                error.code(),
-                atm_storage::AtmErrorCode::TemplateRenderVerificationFailed
-                    | atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
-            ) {
-                error
-            } else if !inspection.include_references.is_empty() {
-                AtmError::template_include_unresolved(error)
-            } else {
-                AtmError::template_render_verification_failed(error)
-            }
-        })?;
+        .map_err(|error| error.with_context(format!("template {template_name}")))?;
     let rendered = RenderedBody {
         text: super::input::validate_message_text_with_limit(rendered.text, max_message_bytes)?,
     };
@@ -315,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn variable_verification_failure_reaches_the_sender_unchanged() {
+    fn variable_verification_failure_keeps_its_code_and_gets_one_template_context() {
         let inspection = TemplateInspection {
             sha: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
                 .parse()
@@ -325,7 +315,7 @@ mod tests {
             output_format: atm_storage::TemplateOutputFormat::Text,
         };
         let named = AtmError::template_render_variable_failed(
-            "ERR_VAL_UNBOUND_VARIABLE: unbound variable: missing (template t.md.j2)",
+            "ERR_VAL_UNBOUND_VARIABLE: unbound variable: missing",
         );
         let composer = FixtureComposer {
             inspection,
@@ -337,9 +327,12 @@ mod tests {
         let error = verify_template_send(&composer, &source(), input::default_message_max_bytes())
             .expect_err("an unbound variable must fail the send");
 
-        assert_eq!(error, named);
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
+        );
         assert!(error.message().contains("missing"));
-        assert!(error.message().contains("t.md.j2"));
+        assert_eq!(error.message().matches("template template.j2").count(), 1);
     }
 
     #[test]
@@ -361,7 +354,9 @@ mod tests {
         let composer = FixtureComposer {
             inspection,
             inspection_error: None,
-            render_result: Err(AtmError::config("include escaped declared root")),
+            render_result: Err(AtmError::template_include_unresolved(
+                "include escaped declared root",
+            )),
             renders: AtomicUsize::new(0),
         };
 

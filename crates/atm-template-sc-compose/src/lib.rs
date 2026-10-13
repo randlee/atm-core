@@ -77,26 +77,13 @@ fn template_load_error(cause: impl std::fmt::Display) -> AtmError {
     .with_cause(cause)
 }
 
-/// Names each failed variable and its template by file name. The upstream
-/// `Display` embeds the absolute template path, which ATM's public diagnostic
-/// must not carry.
+/// Names each failed variable without exposing the upstream absolute path.
+/// ATM's public send and read boundaries add the durable template context.
 fn validation_error(error: &sc_composer::ValidationError) -> AtmError {
     let diagnostics = error
         .diagnostics()
         .iter()
-        .map(|diagnostic| {
-            let template = diagnostic
-                .path
-                .as_deref()
-                .and_then(Path::file_name)
-                .map(|name| format!(" (template {})", name.to_string_lossy()))
-                .unwrap_or_default();
-            format!(
-                "{}: {}{template}",
-                diagnostic.code.as_str(),
-                diagnostic.message
-            )
-        })
+        .map(|diagnostic| format!("{}: {}", diagnostic.code.as_str(), diagnostic.message))
         .collect::<Vec<_>>();
     if diagnostics.is_empty() {
         return validation_error_without_diagnostics();
@@ -503,9 +490,9 @@ mod tests {
         root
     }
 
-    /// Every render path fails closed on a referenced variable with no value,
-    /// and names the variable and the template by file name.
-    fn assert_names_missing(error: &atm_core::error::AtmError, template: &str) {
+    /// Every render path fails closed on a referenced variable with no value
+    /// without exposing an upstream template path.
+    fn assert_rejects_missing(error: &atm_core::error::AtmError) {
         assert_eq!(
             error.code(),
             atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
@@ -513,11 +500,6 @@ mod tests {
         assert!(
             error.message().contains("missing"),
             "diagnostic must name the variable: {}",
-            error.message()
-        );
-        assert!(
-            error.message().contains(template),
-            "diagnostic must name the template: {}",
             error.message()
         );
         assert!(
@@ -556,11 +538,11 @@ mod tests {
         let error = composer
             .render_within_root(&source, &strict_vars(false), &template_root)
             .expect_err("file render must reject an unbound variable");
-        assert_names_missing(&error, "strict.md.j2");
+        assert_rejects_missing(&error);
         let error = composer
             .render_within_root(&source, &strict_vars(false), &template_root)
             .expect_err("render_within_root must reject an unbound variable");
-        assert_names_missing(&error, "strict.md.j2");
+        assert_rejects_missing(&error);
 
         for rendered in [
             composer.render_within_root(&source, &strict_vars(true), &template_root),
@@ -582,7 +564,7 @@ mod tests {
         let error = composer
             .render_without_includes(&source, &strict_vars(false))
             .expect_err("stored render must reject an unbound variable");
-        assert_names_missing(&error, "stored-template.txt");
+        assert_rejects_missing(&error);
         let rendered = composer
             .render_without_includes(&source, &strict_vars(true))
             .expect("all variables bound");
@@ -599,7 +581,7 @@ mod tests {
             .render_without_includes(&source, &Map::new())
             .expect_err("stored rows with undeclared variables must fail closed");
 
-        assert_names_missing(&error, "stored-template.txt");
+        assert_rejects_missing(&error);
     }
 
     #[test]
@@ -622,11 +604,6 @@ mod tests {
         assert_eq!(
             error.code(),
             atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
-        );
-        assert!(
-            error.message().contains("bare.md.j2"),
-            "{}",
-            error.message()
         );
         assert!(
             error.message().contains("name"),

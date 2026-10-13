@@ -264,6 +264,11 @@ fn compose_fails_closed_on_a_variable_with_no_value_and_names_it() {
         stderr.contains("strict.md.j2"),
         "must name the template: {stderr}"
     );
+    assert_eq!(
+        stderr.matches("strict.md.j2").count(),
+        1,
+        "the composition boundary must add its template context exactly once: {stderr}"
+    );
 
     let output = run_atm(&[
         "compose",

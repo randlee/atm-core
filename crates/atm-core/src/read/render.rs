@@ -34,10 +34,7 @@ pub fn render_decomposed(
                 .template_name
                 .as_deref()
                 .unwrap_or(template.sha.as_str());
-            AtmError::new(
-                error.code(),
-                format!("stored template {template_name}: {}", error.detail()),
-            )
+            error.with_context(format!("stored template {template_name}"))
         })
 }
 
@@ -71,21 +68,9 @@ pub(crate) fn render_message_body(
         ))
     })?;
     let rendered = render_decomposed(composer, &template, &decomposed.vars).map_err(|error| {
-        // Preserve the renderer's stable typed code (notably
-        // DECOMPOSED_TEMPLATE_INCLUDE_FORBIDDEN) while adding the durable
-        // identifiers needed to diagnose a corrupt row.
-        let contextual = AtmError::new(
-            error.code(),
-            format!(
-                "decomposed message_id {message_label} template_sha {template_sha}: {}",
-                error.detail()
-            ),
-        );
-        if error.code() == crate::error_codes::AtmErrorCode::TemplateVariableResolutionFailed {
-            contextual
-        } else {
-            contextual.with_cause(error.message())
-        }
+        error.with_context(format!(
+            "decomposed message_id {message_label} template_sha {template_sha}"
+        ))
     })?;
     let mut envelope = envelope.clone();
     envelope.text = rendered.text;
@@ -147,7 +132,9 @@ mod tests {
                 ));
             }
             if self.includes {
-                return Err(crate::error::AtmError::decomposed_template_include_forbidden());
+                return Err(crate::error::AtmError::template_include_unresolved(
+                    "include escaped declared root",
+                ));
             }
             Ok(RenderedBody {
                 text: vars.get("ATM_TEAM").and_then(Value::as_str).map_or_else(
@@ -195,7 +182,7 @@ mod tests {
     }
 
     #[test]
-    fn include_rejection_keeps_the_typed_error_contract() {
+    fn include_rejection_keeps_the_typed_error_and_adapter_cause() {
         let composer = FixtureComposer { includes: true };
         let error = render_decomposed(
             &composer,
@@ -205,8 +192,10 @@ mod tests {
         .expect_err("include-bearing stored source");
         assert_eq!(
             error.code(),
-            crate::error_codes::AtmErrorCode::DecomposedTemplateIncludeForbidden
+            crate::error_codes::AtmErrorCode::TemplateIncludeUnresolved
         );
+        assert!(error.detail().starts_with("stored template "));
+        assert_eq!(error.cause(), Some("include escaped declared root"));
     }
 
     #[test]
@@ -241,6 +230,8 @@ mod tests {
         );
         assert!(error.detail().contains("missing"));
         assert!(error.detail().contains("legacy-template"));
+        assert_eq!(error.message().matches("legacy-template").count(), 1);
+        assert!(!error.message().contains("stored-template"));
     }
 
     #[test]
