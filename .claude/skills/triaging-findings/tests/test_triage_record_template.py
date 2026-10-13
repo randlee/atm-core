@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 from pathlib import Path
@@ -17,6 +16,11 @@ from lib.sc_compose_dependency import MIN_SC_COMPOSE_BINDING, SC_COMPOSE_BINDING
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(REPO_ROOT) not in os.sys.path:
+    os.sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.sc_compose_render import render_file
+
 TEMPLATE = ".claude/skills/triaging-findings/triage-record.ttl.j2"
 
 
@@ -56,27 +60,17 @@ def _vars() -> dict:
 
 
 def _render(tmp_path: Path, variables: dict) -> subprocess.CompletedProcess[str]:
-    vars_path = tmp_path / "vars.json"
     output_path = tmp_path / "FTQ-001.ttl"
-    vars_path.write_text(json.dumps(variables), encoding="utf-8")
-    return subprocess.run(
-        [
-            "sc-compose",
-            "render",
-            "--root",
-            str(REPO_ROOT),
-            "--file",
-            TEMPLATE,
-            "--var-file",
-            str(vars_path),
-            "--output",
-            str(output_path),
-        ],
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        env={**os.environ, "NO_COLOR": "1"},
-    )
+    try:
+        rendered = render_file(REPO_ROOT / TEMPLATE, variables, root=REPO_ROOT, strict=False)
+        output_path.write_text(rendered, encoding="utf-8")
+        return subprocess.CompletedProcess(
+            args=["sc-compose", "wheel-render", TEMPLATE], returncode=0, stdout=rendered, stderr=""
+        )
+    except Exception as error:
+        return subprocess.CompletedProcess(
+            args=["sc-compose", "wheel-render", TEMPLATE], returncode=1, stdout="", stderr=str(error)
+        )
 
 
 def _parse_turtle(

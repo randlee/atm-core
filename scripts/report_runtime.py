@@ -16,6 +16,8 @@ import shutil
 import tempfile
 from typing import Any, TypeVar
 
+from scripts.sc_compose_render import render_file
+
 
 class ReportRuntimeError(RuntimeError):
     """A report could not be rendered or its provenance could not be read."""
@@ -215,24 +217,14 @@ def compose(
     root: Path | None = None,
     error_type: type[E] = ReportRuntimeError,  # type: ignore[assignment]
 ) -> None:
-    """Render a checked-in template through the repository sc-compose binary."""
+    """Render a checked-in template through the root-confined Python wheel."""
     checkout = root or Path(__file__).resolve().parents[1]
     output.parent.mkdir(parents=True, exist_ok=True)
-    variables_path: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8", delete=False) as handle:
-            json.dump(variables, handle, sort_keys=True)
-            variables_path = Path(handle.name)
-        completed = subprocess.run(
-            ["sc-compose", "render", "--root", str(checkout), "--file", str(template),
-             "--var-file", str(variables_path), "--output", str(output)],
-            cwd=checkout, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
-        )
-        if completed.returncode != 0:
-            raise error_type(f"sc-compose render failed: {completed.stderr.strip() or completed.stdout.strip()}")
-    finally:
-        if variables_path is not None:
-            variables_path.unlink(missing_ok=True)
+        rendered = render_file(template, variables, root=checkout, strict=False)
+    except Exception as error:
+        raise error_type(f"sc-compose wheel render failed: {error}") from error
+    output.write_text(rendered, encoding="utf-8")
 
 
 def compose_text(

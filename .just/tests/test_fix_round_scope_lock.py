@@ -17,10 +17,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
-import tempfile
+import sys
 import unittest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.sc_compose_render import render_file
 SUBJECTIVE_TEMPLATES = (
     ".claude/assets/sc-rust/quality-mgr/templates/rust-best-practices-assignment.json.j2",
     ".claude/assets/sc-rust/quality-mgr/templates/rust-service-hardening-assignment.json.j2",
@@ -37,15 +41,28 @@ QA_BASE = {
 
 
 def render(template: str, values: dict[str, object], strict: bool = True) -> subprocess.CompletedProcess[str]:
-    with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8", delete=False) as handle:
-        json.dump(values, handle)
-    command = ["sc-compose", "render", "--root", str(REPO_ROOT), "--file", str(REPO_ROOT / template),
-               "--var-file", handle.name]
     try:
-        return subprocess.run(command + (["--strict"] if strict else []),
-                              capture_output=True, text=True, check=False)
-    finally:
-        Path(handle.name).unlink()
+        rendered = render_file(REPO_ROOT / template, values, root=REPO_ROOT, strict=strict)
+        if template.endswith(".json.j2"):
+            try:
+                json.loads(rendered)
+            except json.JSONDecodeError as error:
+                return subprocess.CompletedProcess(
+                    args=["sc-compose", "wheel-render", template],
+                    returncode=1,
+                    stdout=rendered,
+                    stderr=f"ERR_RENDER_JSON_MALFORMED: {error}",
+                )
+        return subprocess.CompletedProcess(
+            args=["sc-compose", "wheel-render", template],
+            returncode=0,
+            stdout=rendered,
+            stderr="",
+        )
+    except Exception as error:
+        return subprocess.CompletedProcess(
+            args=["sc-compose", "wheel-render", template], returncode=1, stdout="", stderr=str(error)
+        )
 
 
 def rendered_json(template: str, values: dict[str, object]) -> dict[str, object]:

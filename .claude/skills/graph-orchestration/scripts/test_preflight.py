@@ -14,6 +14,8 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).parent
 REPO_ROOT = SCRIPTS.resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 def _module():
@@ -142,7 +144,7 @@ def test_python_binding_render_integration_when_1_6_1_or_newer_is_installed():
     assert sc_compose.render_template("Hello {{ name }}", {"name": "graph"}) == "Hello graph"
 
 
-def test_cli_renders_graph_dev_template(tmp_path):
+def test_wheel_renders_graph_dev_template(tmp_path):
     variables = {
         "task_id": "GO-TEST",
         "sprint": "AICH-S1",
@@ -156,27 +158,14 @@ def test_cli_renders_graph_dev_template(tmp_path):
         "ttl_dir": ".sprints/AICH",
         "finding_ids": "",
     }
-    vars_path = tmp_path / "vars.json"
     output_path = tmp_path / "task.xml"
-    vars_path.write_text(json.dumps(variables), encoding="utf-8")
-    result = subprocess.run(
-        [
-            "sc-compose",
-            "render",
-            "--root",
-            str(REPO_ROOT),
-            "--file",
-            ".claude/skills/graph-orchestration/dev-task.xml.j2",
-            "--var-file",
-            str(vars_path),
-            "--output",
-            str(output_path),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
+    from scripts.sc_compose_render import render_file
+
+    rendered = render_file(
+        REPO_ROOT / ".claude/skills/graph-orchestration/dev-task.xml.j2",
+        variables,
+        root=REPO_ROOT,
+        strict=False,
     )
-    assert result.returncode == 0, result.stderr or result.stdout
-    rendered = output_path.read_text(encoding="utf-8")
+    output_path.write_text(rendered, encoding="utf-8")
     assert '<atm-task id="GO-TEST" sprint="AICH-S1"' in rendered
