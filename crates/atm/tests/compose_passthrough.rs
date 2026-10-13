@@ -111,8 +111,8 @@ fn compose_matches_validation_failure_status_and_diagnostic() {
         "direct sc-compose must report the validation diagnostic"
     );
     assert!(
-        atm_stderr.contains("template variable resolution failed"),
-        "ATM must map the upstream validation diagnostic to its stable typed error"
+        atm_stderr.contains("template required variable"),
+        "ATM must preserve the missing-required-variable code's stable diagnostic"
     );
     assert!(
         !atm_stderr.contains(template),

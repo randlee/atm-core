@@ -80,6 +80,10 @@ fn template_load_error(cause: impl std::fmt::Display) -> AtmError {
 /// Names each failed variable without exposing the upstream absolute path.
 /// ATM's public send and read boundaries add the durable template context.
 fn validation_error(error: &sc_composer::ValidationError) -> AtmError {
+    let missing_required = error
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code.as_str() == "ERR_VAL_MISSING_REQUIRED");
     let diagnostics = error
         .diagnostics()
         .iter()
@@ -88,7 +92,12 @@ fn validation_error(error: &sc_composer::ValidationError) -> AtmError {
     if diagnostics.is_empty() {
         return validation_error_without_diagnostics();
     }
-    AtmError::template_variable_resolution_failed(diagnostics.join("; "))
+    let diagnostics = diagnostics.join("; ");
+    if missing_required {
+        AtmError::template_required_variable_missing(&diagnostics)
+    } else {
+        AtmError::template_variable_resolution_failed(diagnostics)
+    }
 }
 
 fn validation_error_without_diagnostics() -> AtmError {
@@ -495,7 +504,7 @@ mod tests {
     fn assert_rejects_missing(error: &atm_core::error::AtmError) {
         assert_eq!(
             error.code(),
-            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
+            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
         );
         assert!(
             error.message().contains("missing"),
@@ -538,7 +547,10 @@ mod tests {
         let error = composer
             .render_within_root(&source, &strict_vars(false), &template_root)
             .expect_err("file render must reject an unbound variable");
-        assert_rejects_missing(&error);
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
+        );
         let error = composer
             .render_within_root(&source, &strict_vars(false), &template_root)
             .expect_err("render_within_root must reject an unbound variable");
@@ -581,7 +593,10 @@ mod tests {
             .render_without_includes(&source, &Map::new())
             .expect_err("stored rows with undeclared variables must fail closed");
 
-        assert_rejects_missing(&error);
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
+        );
     }
 
     #[test]
@@ -1782,7 +1797,7 @@ mod tests {
 
         assert_eq!(
             error.code(),
-            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
+            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
         );
         assert!(error.message().contains("required"));
         assert!(error.cause().is_none());

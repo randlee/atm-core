@@ -1207,6 +1207,19 @@ pub(crate) mod tests {
 
     struct CounterFixture(DiagnosticCounters);
 
+    /// Frozen 1.11 consumer model: it predates the generic variable-resolution
+    /// code and must continue to decode a missing-required-variable rejection.
+    #[derive(Debug, serde::Deserialize, Eq, PartialEq)]
+    enum Pre112ErrorCode {
+        #[serde(rename = "TEMPLATE_REQUIRED_VARIABLE_MISSING")]
+        TemplateRequiredVariableMissing,
+    }
+
+    #[derive(Debug, serde::Deserialize)]
+    struct Pre112ErrorResponse {
+        code: Pre112ErrorCode,
+    }
+
     #[derive(Clone, Default)]
     struct PromptHandoffErrorLayer {
         events: Arc<Mutex<Vec<PromptHandoffErrorEvent>>>,
@@ -1429,10 +1442,11 @@ pub(crate) mod tests {
                     .and_then(std::path::Path::file_name)
                     .map(|name| name.to_string_lossy())
                     .unwrap_or_else(|| "<unknown>".into());
-                return Err(AtmError::template_variable_resolution_failed(format!(
+                let diagnostic = format!(
                     "ERR_VAL_MISSING_REQUIRED: missing required variable: {} (template {template})",
                     required.as_str()
-                )));
+                );
+                return Err(AtmError::template_required_variable_missing(&diagnostic));
             }
             let text = std::str::from_utf8(&source.raw_file_bytes)
                 .map_err(|_| AtmError::template_content_not_utf8())?
@@ -5039,7 +5053,7 @@ pub(crate) mod tests {
         let error: serde_json::Value = serde_json::from_slice(&error).expect("rejection JSON");
         assert_eq!(
             error["code"].as_str(),
-            Some("TEMPLATE_VARIABLE_RESOLUTION_FAILED"),
+            Some("TEMPLATE_REQUIRED_VARIABLE_MISSING"),
             "the adapter-owned strict-policy error explains the rejected write"
         );
         assert!(
@@ -5047,6 +5061,13 @@ pub(crate) mod tests {
                 .as_str()
                 .unwrap_or_default()
                 .contains("ATM_TEAM")
+        );
+        let pre112: Pre112ErrorResponse = serde_json::from_value(error.clone())
+            .expect("frozen 1.11 consumer decodes a missing-required-variable rejection");
+        assert_eq!(
+            pre112.code,
+            Pre112ErrorCode::TemplateRequiredVariableMissing,
+            "the 1.12 server preserves the frozen 1.11 consumer's required-variable code"
         );
         eprintln!(
             "AN15_DIAGNOSTIC missing-required-input code={} message={}",

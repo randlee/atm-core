@@ -32,32 +32,6 @@ pub struct TemplateAdmissionMessage {
     pub message_text: Option<String>,
 }
 
-/// Counts rows in one mailbox for process-level admission tests.
-#[doc(hidden)]
-pub fn count_mailbox_messages_for_test(
-    path: impl AsRef<Path>,
-    team: &str,
-    agent: &str,
-) -> Result<usize, AtmError> {
-    if !path.as_ref().exists() {
-        return Ok(0);
-    }
-    let connection = Connection::open(path.as_ref()).map_err(|error| {
-        AtmError::mailbox_read(format!("failed to inspect mailbox fixture: {error}"))
-    })?;
-    let count: i64 = connection
-        .query_row(
-            "SELECT COUNT(*) FROM mail_messages WHERE team = ?1 AND agent = ?2",
-            params![team, agent],
-            |row| row.get(0),
-        )
-        .map_err(|error| {
-            AtmError::mailbox_read(format!("failed to count mailbox fixture rows: {error}"))
-        })?;
-    usize::try_from(count)
-        .map_err(|_| AtmError::mailbox_read("mailbox fixture row count exceeds usize range"))
-}
-
 /// Reads only durable template-admission projections for black-box tests.
 #[doc(hidden)]
 pub fn inspect_template_admission_for_test(
