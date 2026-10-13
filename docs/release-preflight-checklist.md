@@ -130,7 +130,7 @@ tracking issue and evidence before release continues.
 ## `just lint` Gate Breakdown
 
 `just validate` delegates linting to `just lint`, and `just lint all`
-currently gates these 21 subchecks:
+currently gates these 20 subchecks:
 
 - `fmt`
 - `clippy`
@@ -140,7 +140,6 @@ currently gates these 21 subchecks:
 - `identities`
 - `lines`
 - `boundaries`
-- `unix-gating`
 - `same-host-portability`
 - `runtime-waits`
 - `manifests`

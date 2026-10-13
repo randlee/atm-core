@@ -21,7 +21,6 @@ class PrintHelpTests(unittest.TestCase):
         self.assertIn("lint clippy-windows", output)
         self.assertIn("lint daemon-singleton", output)
         self.assertIn("lint boundaries", output)
-        self.assertIn("lint unix-gating", output)
         self.assertIn("lint runtime-waits", output)
         self.assertIn("lint sc-boundary", output)
         self.assertIn("lint sc-portability", output)

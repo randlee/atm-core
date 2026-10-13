@@ -92,10 +92,6 @@ _lint-sc-portability:
     {{python_cmd}} .just/lint_sc_portability.py
 
 [private]
-_lint-unix-gating:
-    {{python_cmd}} .just/lint_unix_gating.py
-
-[private]
 _lint-runtime-waits:
     {{python_cmd}} .just/lint_runtime_waits.py
 

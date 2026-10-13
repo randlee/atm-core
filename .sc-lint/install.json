@@ -67,7 +67,7 @@
   "justfile": {
     "windows_shell": false
   },
-  "minimum_version": "0.7.2",
+  "minimum_version": "0.7.3",
   "profiles": {
     "adr-index": [
       "just",
@@ -288,12 +288,6 @@
       "_py",
       ".just/run_lint.py",
       "ttl-triage"
-    ],
-    "unix-gating": [
-      "just",
-      "_py",
-      ".just/run_lint.py",
-      "unix-gating"
     ],
     "version": [
       "just",

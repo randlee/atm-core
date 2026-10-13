@@ -40,7 +40,6 @@ SECTIONS = (
             ("lint deny", "Run cargo-deny advisories/bans/source checks."),
             ("lint shear", "Run cargo-shear unused-dependency checks."),
             ("lint boundaries", "Run the crate/source boundary checks."),
-            ("lint unix-gating", "Run the Unix platform-gating lint subset."),
             ("lint runtime-waits", "Run the production Condvar wait lint subset."),
             ("lint sc-boundary", "Run the preliminary syn-based boundary analyzer."),
             ("lint sc-portability", "Run the preliminary syn-based portability analyzer."),

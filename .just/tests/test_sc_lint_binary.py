@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 import sys
 import tempfile
@@ -12,6 +14,7 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from lint_sc_boundary import main as sc_boundary_main
+from sc_lint_binary import exec_lint
 from sc_lint_binary import lint_argv
 from sc_lint_binary import resolve_sc_lint_binary
 
@@ -44,11 +47,10 @@ class ScLintBinaryTests(unittest.TestCase):
                 "os.environ",
                 {"SC_LINT_BIN": str(managed), "PATH": str(decoy.parent)},
                 clear=True,
-            ), mock.patch("sc_lint_binary.os.execv") as execv:
-                sc_boundary_main(["lint_sc_boundary.py", "--root", "/repo"])
+            ), mock.patch("sc_lint_binary.subprocess.run", return_value=mock.Mock(returncode=0)) as run:
+                self.assertEqual(sc_boundary_main(["lint_sc_boundary.py", "--root", "/repo"]), 0)
 
-        execv.assert_called_once_with(
-            str(managed),
+        run.assert_called_once_with(
             [
                 str(managed),
                 "lint",
@@ -58,13 +60,40 @@ class ScLintBinaryTests(unittest.TestCase):
                 "--config",
                 "/repo/sc-lint.toml",
             ],
+            check=False,
         )
-        self.assertNotIn(str(decoy), execv.call_args.args[1])
+        self.assertNotIn(str(decoy), run.call_args.args[0])
+
+    def test_windows_default_resolves_exe_and_propagates_child_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            local_app_data = Path(tempdir) / "AppData" / "Local"
+            binary = local_app_data / "sc-lint" / "bin" / "sc-lint.exe"
+            binary.parent.mkdir(parents=True)
+            binary.touch(mode=0o755)
+            with mock.patch("sc_lint_binary.sys.platform", "win32"), mock.patch.dict(
+                "os.environ", {"LOCALAPPDATA": str(local_app_data)}, clear=True
+            ), mock.patch("sc_lint_binary.subprocess.run", return_value=mock.Mock(returncode=23)) as run:
+                self.assertEqual(exec_lint(Path("/repo"), "sc-boundary", []), 23)
+
+        run.assert_called_once_with(
+            [str(binary), "lint", "sc-boundary", "--root", "/repo"],
+            check=False,
+        )
 
     def test_missing_managed_binary_tells_the_user_to_setup(self) -> None:
         with mock.patch.dict("os.environ", {"SC_LINT_INSTALL_DIR": "/missing"}, clear=True):
             with self.assertRaisesRegex(FileNotFoundError, "run just setup"):
                 resolve_sc_lint_binary()
+
+    def test_boundary_wrapper_reports_missing_binary_without_a_traceback(self) -> None:
+        stderr = StringIO()
+        with mock.patch.dict("os.environ", {"SC_LINT_INSTALL_DIR": "/missing"}, clear=True), redirect_stderr(stderr):
+            self.assertEqual(sc_boundary_main(["lint_sc_boundary.py", "--root", "/repo"]), 1)
+
+        self.assertEqual(
+            stderr.getvalue(),
+            "sc-lint binary is unavailable at /missing/sc-lint; run just setup\n",
+        )
 
 
 if __name__ == "__main__":

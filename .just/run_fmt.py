@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import subprocess
 import sys
 
 
@@ -18,8 +19,7 @@ def main(argv: list[str]) -> int:
         print(f"unknown fmt mode: {mode}", file=sys.stderr)
         return 2
     os.chdir(repo_root)
-    os.execvp(command[0], command)
-    return 127
+    return subprocess.run(command, check=False).returncode
 
 
 if __name__ == "__main__":
