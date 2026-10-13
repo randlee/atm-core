@@ -344,8 +344,8 @@ fn send_render_fails_closed_on_missing_variables() {
         "must name the variable: {stderr}"
     );
     assert!(
-        stderr.contains("template required variable 'missing' is missing"),
-        "must report the stable missing-required-variable failure: {stderr}"
+        stderr.contains("ERR_VAL_MISSING_REQUIRED: missing required variable: missing"),
+        "must report the adapter-owned strict-policy failure: {stderr}"
     );
     assert!(
         stderr.contains("strict.md.j2"),

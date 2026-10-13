@@ -1413,9 +1413,27 @@ pub(crate) mod tests {
         fn render_within_root(
             &self,
             source: &atm_core::TemplateSource,
-            _vars: &serde_json::Map<String, serde_json::Value>,
+            vars: &serde_json::Map<String, serde_json::Value>,
             _root: &atm_core::TemplateRoot,
         ) -> Result<atm_core::RenderedBody, AtmError> {
+            if let Some(required) = self
+                .inspection
+                .frontmatter
+                .required_variables
+                .iter()
+                .find(|required| !vars.contains_key(required.as_str()))
+            {
+                let template = source
+                    .canonical_file_path
+                    .as_deref()
+                    .and_then(std::path::Path::file_name)
+                    .map(|name| name.to_string_lossy())
+                    .unwrap_or_else(|| "<unknown>".into());
+                return Err(AtmError::template_render_variable_failed(format!(
+                    "ERR_VAL_MISSING_REQUIRED: missing required variable: {} (template {template})",
+                    required.as_str()
+                )));
+            }
             let text = std::str::from_utf8(&source.raw_file_bytes)
                 .map_err(|_| AtmError::template_content_not_utf8())?
                 .to_owned();
@@ -5018,37 +5036,26 @@ pub(crate) mod tests {
             "missing required input must reject the write: {}",
             String::from_utf8_lossy(&error)
         );
-        #[derive(Debug, serde::Deserialize, PartialEq, Eq)]
-        enum Pre112ErrorCode {
-            #[serde(rename = "TEMPLATE_REQUIRED_VARIABLE_MISSING")]
-            TemplateRequiredVariableMissing,
-        }
-
-        #[derive(Debug, serde::Deserialize, PartialEq, Eq)]
-        struct Pre112Error {
-            code: Pre112ErrorCode,
-            message: String,
-        }
-
-        let pre_1_12_consumer: Pre112Error =
-            serde_json::from_slice(&error).expect("pre-1.12 consumer decodes rejection");
-        assert_eq!(
-            pre_1_12_consumer.code,
-            Pre112ErrorCode::TemplateRequiredVariableMissing,
-            "the 1.11 consumer keeps decoding the established rejection code"
-        );
-        assert!(pre_1_12_consumer.message.contains("ATM_TEAM"));
-
         let error: serde_json::Value = serde_json::from_slice(&error).expect("rejection JSON");
         assert_eq!(
             error["code"].as_str(),
-            Some("TEMPLATE_REQUIRED_VARIABLE_MISSING"),
-            "the stable admission error explains the rejected write"
+            Some("TEMPLATE_VARIABLE_RESOLUTION_FAILED"),
+            "the adapter-owned strict-policy error explains the rejected write"
+        );
+        assert!(
+            error["message"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("ATM_TEAM")
         );
         eprintln!(
             "AN15_DIAGNOSTIC missing-required-input code={} message={}",
-            error["code"].as_str().expect("stable rejection code"),
-            error["message"].as_str().expect("stable rejection message"),
+            error["code"]
+                .as_str()
+                .expect("strict-policy rejection code"),
+            error["message"]
+                .as_str()
+                .expect("strict-policy rejection message"),
         );
 
         let snapshot = inspect_template_admission_for_test(&fixture.database_path, &[])

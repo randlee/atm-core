@@ -60,24 +60,7 @@ pub(super) fn verify_template_send(
         request.canonical_template_path.clone(),
     );
     let inspection = composer.inspect(&source)?;
-    let vars = resolve_merged_vars(&inspection.frontmatter, request).map_err(|error| {
-        if matches!(
-            error.code(),
-            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
-                | atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
-        ) {
-            let template_name = request.canonical_template_path.file_name().map_or_else(
-                || "<unknown>".to_owned(),
-                |name| name.to_string_lossy().into_owned(),
-            );
-            AtmError::new(
-                error.code(),
-                format!("{} (template {template_name})", error.detail()),
-            )
-        } else {
-            error
-        }
-    })?;
+    let vars = resolve_merged_vars(&inspection.frontmatter, request);
     let root = TemplateRoot {
         canonical_path: request.canonical_template_root.clone(),
     };
@@ -115,20 +98,13 @@ pub(super) fn verify_template_send(
 pub fn resolve_merged_vars(
     frontmatter: &atm_storage::TemplateFrontmatter,
     request: &TemplateSendSource,
-) -> Result<MergedVars, AtmError> {
+) -> MergedVars {
     let mut merged = frontmatter.defaults.clone();
     merged.extend(request.input_defaults.clone());
     merged.extend(request.environment_values.clone());
     merged.extend(request.var_file_values.clone());
     merged.extend(request.explicit_values.clone());
-    for required in &frontmatter.required_variables {
-        if !merged.contains_key(required.as_str()) {
-            return Err(AtmError::template_required_variable_missing(
-                required.as_str(),
-            ));
-        }
-    }
-    Ok(MergedVars(merged))
+    MergedVars(merged)
 }
 
 #[cfg(test)]
@@ -211,7 +187,7 @@ mod tests {
             metadata: Map::new(),
             ..atm_storage::TemplateFrontmatter::default()
         };
-        let merged = resolve_merged_vars(&frontmatter, &source()).expect("merged vars");
+        let merged = resolve_merged_vars(&frontmatter, &source());
         assert_eq!(merged.as_map().get("name"), Some(&json!("flag")));
         assert_eq!(merged.as_map().get("region"), Some(&json!("captured")));
     }
@@ -221,8 +197,7 @@ mod tests {
         let mut request = source();
         request.explicit_values.remove("name");
 
-        let merged = resolve_merged_vars(&atm_storage::TemplateFrontmatter::default(), &request)
-            .expect("merged vars");
+        let merged = resolve_merged_vars(&atm_storage::TemplateFrontmatter::default(), &request);
 
         assert_eq!(merged.as_map().get("name"), Some(&json!("file")));
     }
@@ -240,25 +215,9 @@ mod tests {
             .input_defaults
             .insert("priority".to_string(), json!("input"));
 
-        let merged = resolve_merged_vars(&frontmatter, &request).expect("merged vars");
+        let merged = resolve_merged_vars(&frontmatter, &request);
 
         assert_eq!(merged.as_map().get("priority"), Some(&json!("input")));
-    }
-
-    #[test]
-    fn missing_required_variable_fails_before_render() {
-        let frontmatter = atm_storage::TemplateFrontmatter {
-            required_variables: vec![variable("missing")],
-            defaults: Map::<String, Value>::new(),
-            metadata: Map::new(),
-            ..atm_storage::TemplateFrontmatter::default()
-        };
-        let error = resolve_merged_vars(&frontmatter, &source()).expect_err("missing var");
-        assert_eq!(
-            error.code(),
-            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
-        );
-        assert!(error.message().contains("required variable 'missing'"));
     }
 
     #[test]
@@ -284,21 +243,12 @@ mod tests {
             let mut request = source();
             request.environment_values =
                 Map::from_iter([("ATM_TEAM".to_owned(), Value::String(captured.clone()))]);
-            let merged = resolve_merged_vars(&frontmatter, &request).expect("captured admission");
+            let merged = resolve_merged_vars(&frontmatter, &request);
             assert_eq!(
                 merged.as_map().get("ATM_TEAM"),
                 Some(&Value::String(captured))
             );
         }
-
-        let mut missing = source();
-        missing.environment_values.remove("ATM_TEAM");
-        let error =
-            resolve_merged_vars(&frontmatter, &missing).expect_err("missing admission value");
-        assert_eq!(
-            error.code(),
-            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
-        );
     }
 
     #[test]
