@@ -332,8 +332,26 @@ class BootstrapTests(IsolatedHomeTests):
         python = Path("/repo/.bootstrap-venv/bin/python")
         command = bootstrap.sc_compose_wheel_install_command(python, "1.7.0")
         self.assertEqual(Path(command[0]), python)
-        self.assertIn("sc-compose>=1.7.0", command)
+        self.assertIn("sc-compose>=1.7.0,<2.0.0", command)
         self.assertNotIn("sc-compose==1.7.0", command)
+
+    def test_sc_compose_cli_accepts_the_supported_release_line(self) -> None:
+        manifest = bootstrap.load_manifest()
+        with mock.patch.object(bootstrap, "command_output", side_effect=["sc-compose 1.7.0"]):
+            self.assertTrue(bootstrap.sc_compose_matches(manifest))
+        with mock.patch.object(bootstrap, "command_output", side_effect=["sc-compose 1.8.0"]):
+            self.assertTrue(bootstrap.sc_compose_matches(manifest))
+        with mock.patch.object(bootstrap, "command_output", side_effect=["sc-compose 1.6.9"]):
+            self.assertFalse(bootstrap.sc_compose_matches(manifest))
+        with mock.patch.object(bootstrap, "command_output", side_effect=["sc-compose 2.0.0"]):
+            self.assertFalse(bootstrap.sc_compose_matches(manifest))
+
+    def test_sc_compose_wheel_accepts_the_supported_release_line(self) -> None:
+        manifest = bootstrap.load_manifest()
+        python = Path("/repo/.bootstrap-venv/bin/python")
+        for version, expected in (("1.7.0", True), ("1.8.0", True), ("1.6.9", False), ("2.0.0", False)):
+            with self.subTest(version=version), mock.patch.object(bootstrap, "python_package_version", return_value=version):
+                self.assertEqual(bootstrap.sc_compose_wheel_matches(manifest, python), expected)
 
     def test_seed_version_mismatch_refuses_before_any_installs(self) -> None:
         manifest = bootstrap.load_manifest()

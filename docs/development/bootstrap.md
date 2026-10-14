@@ -2,7 +2,8 @@
 
 `just bootstrap` is the sole repository-owned installation contract for the
 tools used by the normal CI lint/test lanes and by an isolated benchmark OS
-account. Its complete, exact version set is in
+account. Its exact toolchain and cargo-tool versions, and its sc-compose
+compatibility floor, are in
 [`tools/bootstrap.toml`](../../tools/bootstrap.toml); Python's exact dependency
 closure is in [`tools/bootstrap-requirements.txt`](../../tools/bootstrap-requirements.txt).
 
@@ -13,11 +14,13 @@ exact binary to install the manifest's Cargo tools from prebuilt artifacts;
 compiling from Cargo source is never allowed. It also installs the released
 `sc-compose` CLI from its platform-matching GitHub release archive (never Cargo
 source or a Git revision). Release archive SHA256 values are pinned in
-`tools/bootstrap.toml`; a mismatch or missing asset is a hard failure. It creates a
+`tools/bootstrap.toml`; a mismatch or missing asset is a hard failure. An
+already installed sc-compose CLI or wheel is accepted when it is at least that
+release and below 2.0.0. It creates a
 repository-local `.bootstrap-venv`, installs the exact Python packages there
-with `--no-deps`, then verifies every reported version against Cargo or
-Binstall's installation receipt; the sc-compose release binary is verified by
-its pinned SHA256 and its `--version` output.
+with `--no-deps`, then verifies Cargo and Binstall tools against their exact
+installation receipts; the sc-compose release binary is verified by its pinned
+SHA256 and its supported release line (`>=` the manifest pin, `< 2.0.0`).
 
 CI may pre-seed the same pinned `cargo-binstall`, while `just bootstrap` always
 installs or verifies it itself. CI restores the bootstrap outputs (`~/.cargo/bin`, Binstall receipts, and

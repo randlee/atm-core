@@ -27,8 +27,8 @@ The required runtime dependencies are:
 
 | Dependency | Minimum | Used for |
 |---|---:|---|
-| `sc-compose` CLI | **released version in `tools/bootstrap.toml` prebuilt binary** | Rendering fenced Jinja templates and agent prompts |
-| `sc_compose` Python binding | **at least 1.7.0** | Python/maturin rendering integrations and wrappers |
+| `sc-compose` CLI | **at least the `tools/bootstrap.toml` pin and below 2.0.0** | Rendering fenced Jinja templates and agent prompts |
+| `sc_compose` Python binding | **at least the `tools/bootstrap.toml` pin and below 2.0.0** | Python/maturin rendering integrations and wrappers |
 | Python + `rdflib` | **3.11+** | RDF/Turtle parsing and SPARQL queries |
 | `jq` | any current release | Reading the JSON cursor contract |
 | `pytest` | any current release | Unit tests (only required with `--for-tests`) |
@@ -84,7 +84,7 @@ For the Python/maturin binding (a one-time per-machine setup; no activation
 step):
 
 ```bash
-python3 -m pip install --user --break-system-packages 'sc-compose>=1.7.0'
+python3 -m pip install --user --break-system-packages 'sc-compose>=1.7.0,<2.0.0'
 brew install jq
 ```
 
@@ -98,7 +98,7 @@ callers only perform a guarded `import sc_compose` on each invocation.
 ### Linux
 
 ```bash
-python3 -m pip install --user --break-system-packages 'sc-compose>=1.7.0'
+python3 -m pip install --user --break-system-packages 'sc-compose>=1.7.0,<2.0.0'
 sudo apt-get install jq                 # Debian/Ubuntu; use the native package manager otherwise
 ```
 
@@ -114,7 +114,7 @@ one-time install command and in the preflight.
 ### Windows (PowerShell)
 
 ```powershell
-py -m pip install --user --break-system-packages "sc-compose>=1.7.0"
+py -m pip install --user --break-system-packages "sc-compose>=1.7.0,<2.0.0"
 Download and verify the platform-matching release archive named by `tools/bootstrap.toml` as described
 above; do not compile the CLI from source.
 winget install jqlang.jq
@@ -145,7 +145,7 @@ preflight: dependency errors are distinct from expected validation failures.
   `python3 -m pip --version`, then use the same interpreter for installation or
   set `GRAPH_ORCH_PYTHON`.
 - **PEP 668 blocks `pip install`.** Run the sanctioned one-time user install:
-  `python3 -m pip install --user --break-system-packages 'sc-compose>=1.7.0'`.
+  `python3 -m pip install --user --break-system-packages 'sc-compose>=1.7.0,<2.0.0'`.
   No venv or activation step is required.  If that interpreter is not the one
   used by the skill, repeat the command with the exact invoking interpreter.
 - **The CLI works in Terminal but not in Claude Code.** Add the discovered

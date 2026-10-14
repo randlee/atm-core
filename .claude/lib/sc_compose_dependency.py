@@ -34,13 +34,14 @@ def _version_tuple(version: str) -> tuple[int, int, int]:
 
 SC_COMPOSE_PIN = _bootstrap_sc_compose_pin()
 MIN_SC_COMPOSE = _version_tuple(SC_COMPOSE_PIN)
-MIN_SC_COMPOSE_TEXT = f">= {SC_COMPOSE_PIN} (pinned prebuilt release binary)"
+MAX_SC_COMPOSE_EXCLUSIVE = (2, 0, 0)
+MIN_SC_COMPOSE_TEXT = f">= {SC_COMPOSE_PIN}, < 2.0.0"
 MIN_SC_COMPOSE_BINDING = MIN_SC_COMPOSE
-MIN_SC_COMPOSE_BINDING_TEXT = f">= {SC_COMPOSE_PIN}"
+MIN_SC_COMPOSE_BINDING_TEXT = MIN_SC_COMPOSE_TEXT
 SC_COMPOSE_INSTALL = f"download sc-compose v{SC_COMPOSE_PIN} prebuilt release asset and verify SHA256"
 SC_COMPOSE_BINDING_INSTALL = (
     "python3 -m pip install --user --break-system-packages "
-    f"'sc-compose>={SC_COMPOSE_PIN}'"
+    f"'sc-compose>={SC_COMPOSE_PIN},<2.0.0'"
 )
 
 
@@ -51,3 +52,8 @@ def parse_version(text: str | None) -> tuple[int, int, int] | None:
         return None
     match = _VERSION_RE.search(text)
     return tuple(int(part) for part in match.groups()) if match else None
+
+
+def is_supported_sc_compose_version(version: tuple[int, int, int] | None) -> bool:
+    """Return whether a CLI or wheel is on the supported 1.x release line."""
+    return version is not None and MIN_SC_COMPOSE <= version < MAX_SC_COMPOSE_EXCLUSIVE
