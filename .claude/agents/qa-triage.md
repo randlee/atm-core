@@ -315,11 +315,9 @@ EVENTS_PATH="$INTEGRATION_WORKTREE_PATH/.sprints/R/events.ttl"
 FINDING_ID=FTQ-001
 OUTPUT="$TRIAGE_ROOT/$PHASE_ID/findings/$FINDING_ID.ttl"
 mkdir -p "$(dirname "$OUTPUT")"
-sc-compose render \
-  --root . \
-  --file .claude/skills/triaging-findings/triage-record.ttl.j2 \
-  --var-file /tmp/triage-record-vars.json \
-  --output "$OUTPUT"
+atm compose \
+  --template .claude/skills/triaging-findings/triage-record.ttl.j2 \
+  --vars /tmp/triage-record-vars.json > "$OUTPUT"
 
 PARSED=$(mktemp)
 trap 'rm -f "$PARSED"' EXIT

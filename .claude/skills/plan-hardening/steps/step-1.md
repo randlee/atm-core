@@ -5,11 +5,9 @@
 **1. Render the message**
 
 ```bash
-sc-compose render \
-  --root .claude/skills/plan-hardening \
-  --file 01-plan-scope-review.xml.j2 \
-  --var-file /tmp/plan-hardening-vars.json \
-  --output /tmp/step-1-message.xml
+atm compose \
+  --template .claude/skills/plan-hardening/01-plan-scope-review.xml.j2 \
+  --vars /tmp/plan-hardening-vars.json > /tmp/step-1-message.xml
 ```
 
 If `/tmp/plan-hardening-vars.json` does not exist, start from:

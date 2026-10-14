@@ -31,7 +31,8 @@ The report package uses two checked-in templates:
 
 1. `templates/fuzz-run-agent.xhtml.j2` renders one worker panel per worker.
 2. `templates/fuzz-run-report.html.j2` renders the complete top-level HTML
-   shell through `sc-compose render --file ... --var-file ... --output ...`.
+   shell through the sc-compose Python wheel helper
+   `scripts/sc_compose_render.py`.
 
 The shell receives top-level arrays only. `rows` and `metadata_rows` are
 arrays of objects; `sections` is an array of already-rendered worker-panel

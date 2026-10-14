@@ -141,7 +141,7 @@ render manually, write a variables JSON in the shape of "Table variables" or
 root:
 
 ```bash
-sc-compose render --strict --file .claude/skills/sprint-report/report.md.j2 --var-file <json>
+atm compose --template .claude/skills/sprint-report/report.md.j2 --vars <json>
 ```
 
 ## Table variables

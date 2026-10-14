@@ -5,11 +5,9 @@
 **1. Render the message**
 
 ```bash
-sc-compose render \
-  --root .claude/skills/plan-hardening \
-  --file 03-consistency-hardening.xml.j2 \
-  --var-file /tmp/plan-hardening-vars.json \
-  --output /tmp/step-5-message.xml
+atm compose \
+  --template .claude/skills/plan-hardening/03-consistency-hardening.xml.j2 \
+  --vars /tmp/plan-hardening-vars.json > /tmp/step-5-message.xml
 ```
 
 The vars file or rendered task must include `step-4` fenced JSON as the

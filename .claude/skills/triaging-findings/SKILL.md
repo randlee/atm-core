@@ -136,11 +136,9 @@ PHASE_ID=phase-R
 FINDING_ID=FTQ-001
 OUTPUT="$TRIAGE_ROOT/$PHASE_ID/findings/$FINDING_ID.ttl"
 mkdir -p "$(dirname "$OUTPUT")"
-sc-compose render \
-  --root . \
-  --file .claude/skills/triaging-findings/triage-record.ttl.j2 \
-  --var-file /tmp/triage-record-vars.json \
-  --output "$OUTPUT"
+atm compose \
+  --template .claude/skills/triaging-findings/triage-record.ttl.j2 \
+  --vars /tmp/triage-record-vars.json > "$OUTPUT"
 PARSED=$(mktemp)
 trap 'rm -f "$PARSED"' EXIT
 oxigraph convert \
@@ -269,10 +267,9 @@ For each promoted branch with open work:
 Recommended render pattern:
 
 ```bash
-sc-compose render \
-  --root .claude/skills/codex-orchestration \
-  --file fix-assignment.xml.j2 \
-  --var-file /tmp/fix-vars.json
+atm compose \
+  --template .claude/skills/codex-orchestration/fix-assignment.xml.j2 \
+  --vars /tmp/fix-vars.json
 ```
 
 For follow-up QA or reviewer rechecks, build the carry-forward payload from the
