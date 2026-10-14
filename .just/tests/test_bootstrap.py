@@ -9,7 +9,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from unittest import mock
 import hashlib
@@ -38,6 +38,8 @@ class IsolatedHomeTests(unittest.TestCase):
         self.addCleanup(prepatch_home.cleanup)
         self._test_home = tempfile.TemporaryDirectory()
         self._test_cargo_home = tempfile.TemporaryDirectory()
+        self._test_venv = tempfile.TemporaryDirectory()
+        self._test_python = Path(self._test_venv.name) / "bin" / "python"
         self._environment = mock.patch.dict(
             os.environ,
             {"HOME": self._test_home.name, "CARGO_HOME": self._test_cargo_home.name},
@@ -45,6 +47,7 @@ class IsolatedHomeTests(unittest.TestCase):
         self._environment.start()
         self.addCleanup(self._environment.stop)
         self.addCleanup(self._test_cargo_home.cleanup)
+        self.addCleanup(self._test_venv.cleanup)
         self.addCleanup(self._test_home.cleanup)
 
 
@@ -311,12 +314,117 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(bootstrap, "binstall_tool_matches", return_value=True),
             mock.patch.object(bootstrap, "sc_compose_matches", return_value=True),
             mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
+            mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=True),
             mock.patch.object(bootstrap, "verify_installed_tools"),
             mock.patch.object(bootstrap, "install_git_hooks"),
             mock.patch.object(bootstrap, "run"),
         ):
             bootstrap.bootstrap(manifest, dry_run=False)
         install_binstall.assert_called_once_with(manifest, dry_run=False)
+
+    def test_bootstrap_keeps_newer_sc_compose_cli_in_the_temporary_cargo_home(self) -> None:
+        manifest = bootstrap.load_manifest()
+        installed = bootstrap.cargo_bin_path("sc-compose")
+        installed.parent.mkdir(parents=True)
+        installed.write_bytes(b"newer-fake-cli")
+
+        output = StringIO()
+        with (
+            mock.patch.object(bootstrap, "synchronize_macos_seed_tools"),
+            mock.patch.object(bootstrap, "verify_seed_tools"),
+            mock.patch.object(bootstrap, "ensure_bootstrap_venv", return_value=self._test_python),
+            mock.patch.object(bootstrap, "cargo_binstall_matches", return_value=True),
+            mock.patch.object(bootstrap, "binstall_tool_matches", return_value=True),
+            mock.patch.object(bootstrap, "command_output", return_value="sc-compose 1.8.0"),
+            mock.patch.object(bootstrap, "install_sc_compose_release") as install_cli,
+            mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
+            mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=True),
+            mock.patch.object(bootstrap, "verify_installed_tools"),
+            mock.patch.object(bootstrap, "install_git_hooks"),
+            mock.patch.object(bootstrap, "run"),
+            redirect_stdout(output),
+        ):
+            bootstrap.bootstrap(manifest, dry_run=False)
+
+        install_cli.assert_not_called()
+        self.assertEqual(installed.read_bytes(), b"newer-fake-cli")
+        self.assertIn("keeping installed sc-compose CLI", output.getvalue())
+
+    def test_bootstrap_replaces_old_sc_compose_cli_in_the_temporary_cargo_home(self) -> None:
+        manifest = bootstrap.load_manifest()
+        installed = bootstrap.cargo_bin_path("sc-compose")
+        installed.parent.mkdir(parents=True)
+        installed.write_bytes(b"older-fake-cli")
+
+        def replace_cli(_: bootstrap.BootstrapManifest, *, dry_run: bool) -> None:
+            self.assertFalse(dry_run)
+            installed.write_bytes(b"pinned-replacement")
+
+        with (
+            mock.patch.object(bootstrap, "synchronize_macos_seed_tools"),
+            mock.patch.object(bootstrap, "verify_seed_tools"),
+            mock.patch.object(bootstrap, "ensure_bootstrap_venv", return_value=self._test_python),
+            mock.patch.object(bootstrap, "cargo_binstall_matches", return_value=True),
+            mock.patch.object(bootstrap, "binstall_tool_matches", return_value=True),
+            mock.patch.object(bootstrap, "command_output", return_value="sc-compose 1.6.9"),
+            mock.patch.object(bootstrap, "install_sc_compose_release", side_effect=replace_cli) as install_cli,
+            mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
+            mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=True),
+            mock.patch.object(bootstrap, "verify_installed_tools"),
+            mock.patch.object(bootstrap, "install_git_hooks"),
+            mock.patch.object(bootstrap, "run"),
+        ):
+            bootstrap.bootstrap(manifest, dry_run=False)
+
+        install_cli.assert_called_once_with(manifest, dry_run=False)
+        self.assertEqual(installed.read_bytes(), b"pinned-replacement")
+
+    def test_bootstrap_keeps_newer_sc_compose_wheel_in_the_temporary_venv(self) -> None:
+        manifest = bootstrap.load_manifest()
+        output = StringIO()
+        with (
+            mock.patch.object(bootstrap, "synchronize_macos_seed_tools"),
+            mock.patch.object(bootstrap, "verify_seed_tools"),
+            mock.patch.object(bootstrap, "ensure_bootstrap_venv", return_value=self._test_python),
+            mock.patch.object(bootstrap, "cargo_binstall_matches", return_value=True),
+            mock.patch.object(bootstrap, "binstall_tool_matches", return_value=True),
+            mock.patch.object(bootstrap, "sc_compose_matches", return_value=True),
+            mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
+            mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=True),
+            mock.patch.object(bootstrap, "verify_installed_tools"),
+            mock.patch.object(bootstrap, "install_git_hooks"),
+            mock.patch.object(bootstrap, "run") as run,
+            redirect_stdout(output),
+        ):
+            bootstrap.bootstrap(manifest, dry_run=False)
+
+        self.assertEqual(run.call_args_list, [mock.call(bootstrap.pip_install_command(self._test_python), dry_run=False)])
+        self.assertIn("keeping installed sc-compose wheel", output.getvalue())
+
+    def test_bootstrap_replaces_old_sc_compose_wheel_in_the_temporary_venv(self) -> None:
+        manifest = bootstrap.load_manifest()
+        with (
+            mock.patch.object(bootstrap, "synchronize_macos_seed_tools"),
+            mock.patch.object(bootstrap, "verify_seed_tools"),
+            mock.patch.object(bootstrap, "ensure_bootstrap_venv", return_value=self._test_python),
+            mock.patch.object(bootstrap, "cargo_binstall_matches", return_value=True),
+            mock.patch.object(bootstrap, "binstall_tool_matches", return_value=True),
+            mock.patch.object(bootstrap, "sc_compose_matches", return_value=True),
+            mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
+            mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=False),
+            mock.patch.object(bootstrap, "verify_installed_tools"),
+            mock.patch.object(bootstrap, "install_git_hooks"),
+            mock.patch.object(bootstrap, "run") as run,
+        ):
+            bootstrap.bootstrap(manifest, dry_run=False)
+
+        self.assertEqual(
+            run.call_args_list,
+            [
+                mock.call(bootstrap.pip_install_command(self._test_python), dry_run=False),
+                mock.call(bootstrap.sc_compose_wheel_install_command(self._test_python, manifest.sc_compose), dry_run=False),
+            ],
+        )
 
     def test_pip_installs_inside_the_repository_venv(self) -> None:
         python = (

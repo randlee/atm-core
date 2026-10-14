@@ -774,10 +774,15 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
         )
     if not sc_compose_matches(manifest):
         install_sc_compose_release(manifest, dry_run=dry_run)
+    else:
+        print("bootstrap: keeping installed sc-compose CLI within the supported release line.")
     if not wyvern_matches(manifest):
         install_wyvern_release(manifest, dry_run=dry_run)
     run(pip_install_command(python), dry_run=dry_run)
-    run(sc_compose_wheel_install_command(python, manifest.sc_compose), dry_run=dry_run)
+    if dry_run or not sc_compose_wheel_matches(manifest, python):
+        run(sc_compose_wheel_install_command(python, manifest.sc_compose), dry_run=dry_run)
+    else:
+        print("bootstrap: keeping installed sc-compose wheel within the supported release line.")
     if not dry_run:
         verify_installed_tools(manifest, python)
     install_git_hooks(dry_run=dry_run)
