@@ -68,7 +68,7 @@ For Rust phase-end review:
 
 ## Rendering Assignments
 
-Render Rust reviewer assignment previews with `atm compose` from these templates:
+Render Rust reviewer assignments with `sc-compose` from these installed templates:
 
 - `.claude/assets/sc-rust/quality-mgr/templates/rust-qa-assignment.json.j2`
 - `.claude/assets/sc-rust/quality-mgr/templates/rust-best-practices-assignment.json.j2`
@@ -87,9 +87,10 @@ cat > "$_VARS" <<'JSON'
   "review_targets": ["src/", "Cargo.toml"]
 }
 JSON
-atm compose \
-  --template .claude/assets/sc-rust/quality-mgr/templates/rust-qa-assignment.json.j2 \
-  --vars "$_VARS"
+sc-compose render \
+  --root .claude/assets/sc-rust/quality-mgr/templates \
+  --file rust-qa-assignment.json.j2 \
+  --var-file "$_VARS"
 rm -f "$_VARS"
 ```
 
@@ -107,9 +108,10 @@ cat > "$_VARS" <<'JSON'
   "practice_ids": ["RBP-001", "RBP-004", "RBP-006", "RBP-007"]
 }
 JSON
-atm compose \
-  --template .claude/assets/sc-rust/quality-mgr/templates/rust-best-practices-assignment.json.j2 \
-  --vars "$_VARS"
+sc-compose render \
+  --root .claude/assets/sc-rust/quality-mgr/templates \
+  --file rust-best-practices-assignment.json.j2 \
+  --var-file "$_VARS"
 rm -f "$_VARS"
 ```
 
@@ -125,15 +127,16 @@ cat > "$_VARS" <<'JSON'
   "qa_round": 1
 }
 JSON
-atm compose \
-  --template .claude/assets/sc-rust/quality-mgr/templates/rust-service-hardening-assignment.json.j2 \
-  --vars "$_VARS"
+sc-compose render \
+  --root .claude/assets/sc-rust/quality-mgr/templates \
+  --file rust-service-hardening-assignment.json.j2 \
+  --var-file "$_VARS"
 rm -f "$_VARS"
 ```
 
 ## Render Verification Rule
 
-When editing either Rust assignment template, verify rendering with `atm compose` before stopping.
+When editing either Rust assignment template, verify rendering with `sc-compose` before stopping.
 
 At minimum, render:
 - `doc_review`

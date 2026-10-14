@@ -22,8 +22,7 @@ Supply exactly one fenced JSON params object. `operation` is `testability`,
 `skills/plan-anchoring/templates/anchor-tuning-testability-request.md.j2`, `tune` with
 `skills/plan-anchoring/templates/anchor-tuning-tune-request.md.j2` and `triage`
 with `skills/plan-anchoring/templates/anchor-tuning-review-feedback.md.j2`,
-using `atm compose --template <path> --vars <params.json>`. Validate the
-fenced object
+using `sc-compose render --strict --check-render`. Validate the fenced object
 against
 `skills/plan-anchoring/assets/schemas/anchor-tuning-request.schema.json`;
 reject a free-form replacement.
@@ -152,8 +151,7 @@ user approval versions authority and invalidates only affected evidence.
 
 ## Output Format
 
-Render `anchor-tuning-result.md.j2` using
-`atm compose --template <path> --vars <result.json>`,
+Render `anchor-tuning-result.md.j2` using `sc-compose --strict --check-render`,
 validate the fenced object with the result schema and `anchor_tuning_contract.py
 result`, then return it verbatim. Do not hand-assemble it; the contract owns
 hashing, history chains, role completeness, score relations, and invariants.

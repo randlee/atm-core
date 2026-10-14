@@ -298,9 +298,10 @@ children:
    whose merge printed no report has no row, so report that to the task assigner. The same
    task attempt/iteration applies to both. `sanity-run-history` appends
    to the same ignored phase JSONL, keyed by shared `run_id` and explicit
-   reviewer: strict `sanity-run-record.json.j2` render through the
-   `sanity-run-history` helper, typed JSON validation and UTC timestamps,
-   compact serialization (one object per line), appended under a lock. A
+   reviewer: strict `sanity-run-record.json.j2` render through `sc-compose
+   render`, typed JSON validation and UTC timestamps, compact serialization
+   (one object per line), appended under a lock by `sc-compose render
+   --strict --append`. A
    failed render or validation appends nothing; retrying the identical append
    is safe. CANNOT_RUN is logged with null findings and its error, never as
    PASS or FAIL; each row's `errors` lists every failed slot's `code`,
@@ -364,8 +365,8 @@ After the selected task closes, render the last ten runs (two rows each):
 
 ```bash
 set -o pipefail
-test -s "$log" && tail -n 20 "$log" | jq -s '{runs: .}' | atm compose \
-  --template .claude/skills/atm-bd-orchestration/templates/sanity-run-table.md.j2 --vars -
+test -s "$log" && tail -n 20 "$log" | jq -s '{runs: .}' | sc-compose render --strict \
+  --file .claude/skills/atm-bd-orchestration/templates/sanity-run-table.md.j2 --var-file /dev/stdin
 ```
 
 Include the entire rendered table in the user-visible completion reply before
