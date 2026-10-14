@@ -11,6 +11,8 @@ import re
 import subprocess
 import tempfile
 
+from scripts.sc_compose_render import render_file as render_wheel_file
+
 
 ROOT = Path(__file__).resolve().parents[2]
 ATM_DOCS = ROOT / "docs" / "atm"
@@ -105,58 +107,11 @@ def rel_from_root(path: Path) -> str:
 
 
 def render_file(template: Path, vars_obj: dict, output: Path) -> None:
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
-        json.dump(vars_obj, handle)
-        handle.flush()
-        var_file = Path(handle.name)
-    try:
-        subprocess.run(
-            [
-                "sc-compose",
-                "render",
-                "--root",
-                str(ROOT),
-                "--file",
-                str(template),
-                "--var-file",
-                str(var_file),
-                "--output",
-                str(output),
-            ],
-            check=True,
-            cwd=ROOT,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    finally:
-        var_file.unlink(missing_ok=True)
+    output.write_text(render_wheel_file(template, vars_obj, root=ROOT, strict=False), encoding="utf-8")
 
 
 def render_string(template: Path, vars_obj: dict) -> str:
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
-        json.dump(vars_obj, handle)
-        handle.flush()
-        var_file = Path(handle.name)
-    try:
-        result = subprocess.run(
-            [
-                "sc-compose",
-                "render",
-                "--root",
-                str(ROOT),
-                "--file",
-                str(template),
-                "--var-file",
-                str(var_file),
-            ],
-            check=True,
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-        )
-        return result.stdout
-    finally:
-        var_file.unlink(missing_ok=True)
+    return render_wheel_file(template, vars_obj, root=ROOT, strict=False)
 
 
 def parse_metadata(source_path: Path) -> dict[str, str]:

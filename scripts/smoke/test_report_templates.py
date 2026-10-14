@@ -9,31 +9,29 @@ that way).
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
-import subprocess
+import sys
 import tempfile
 import unittest
 import xml.dom.minidom
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.sc_compose_render import render_file
 TEMPLATES = REPO_ROOT / "templates/smoke-report"
 JUST_TEMPLATES = REPO_ROOT / ".just/templates"
 FRAGMENT = '<h1>host — smoke</h1><table><tr class="pass"><td>✓</td><td>a &amp; b</td></tr></table>'
 
 
 def render(template: Path, variables: dict[str, str], output: Path) -> str:
-    with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8", delete=False) as handle:
-        json.dump(variables, handle)
-    completed = subprocess.run(
-        ["sc-compose", "render", "--root", str(REPO_ROOT), "--file", str(template),
-         "--var-file", handle.name, "--output", str(output)],
-        capture_output=True, text=True, check=False,
-    )
-    Path(handle.name).unlink()
-    if completed.returncode != 0:
-        raise AssertionError(f"sc-compose render failed: {completed.stderr.strip() or completed.stdout.strip()}")
-    return output.read_text(encoding="utf-8")
+    try:
+        rendered = render_file(template, variables, root=REPO_ROOT, strict=False)
+    except Exception as error:
+        raise AssertionError(f"sc-compose wheel render failed: {error}") from error
+    output.write_text(rendered, encoding="utf-8")
+    return rendered
 
 
 class FragmentPassThroughTests(unittest.TestCase):

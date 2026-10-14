@@ -155,7 +155,7 @@ fn live_surface() -> Value {
             json!({ "required": required(schema), "properties": properties }),
         );
     }
-    json!({ "paths": paths, "schemas": schemas })
+    json!({ "version": document["info"]["version"], "paths": paths, "schemas": schemas })
 }
 
 fn documented_route_surface(document: &Value) -> BTreeSet<(String, String)> {

@@ -275,6 +275,14 @@ impl SendCommand {
                     error
                 }
             })?;
+        if let SendMessageSource::Template(source) = &request.message_source {
+            let composer = atm_daemon_bootstrap::template_composer();
+            atm_core::send::preflight_template_send(
+                composer.as_ref(),
+                source,
+                request.max_message_bytes,
+            )?;
+        }
         let peer_host = request
             .to
             .as_ref()

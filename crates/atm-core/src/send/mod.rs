@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use tracing::warn;
 
 use crate::address::AgentAddress;
-use crate::boundary;
+use crate::boundary::{self, TemplateComposer};
 use crate::caller_context::ActivityObservation;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
@@ -63,6 +63,15 @@ pub(crate) use request::resolve_message_body;
 use template::{requires_plain_template_fallback, verify_template_send};
 pub(crate) use write_context::{SendExecutionContext, prepare_send_context};
 use write_context::{build_send_delivery_plan, build_send_outcome};
+
+/// Verifies and renders a templated send before the CLI contacts the daemon.
+pub fn preflight_template_send(
+    composer: &dyn TemplateComposer,
+    request: &TemplateSendSource,
+    max_message_bytes: usize,
+) -> Result<(), AtmError> {
+    verify_template_send(composer, request, max_message_bytes).map(|_| ())
+}
 
 // The canonical write pipeline lives in `crate::write`; `send` re-exports the
 // public entry points so external paths are unchanged.

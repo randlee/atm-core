@@ -63,7 +63,7 @@ class EcosystemPinTests(unittest.TestCase):
         _latest_wyvern: mock.Mock,
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
-            "sc-composer": "1.6.1",
+            "sc-composer": "1.7.0",
             "sc-observability": "1.5.0",
             "sc-observability-log": "1.5.0",
             "sc-observability-types": "1.5.0",
@@ -89,7 +89,7 @@ class EcosystemPinTests(unittest.TestCase):
         file_issue: mock.Mock,
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
-            "sc-composer": "1.6.1",
+            "sc-composer": "1.7.0",
             "sc-observability": "1.6.0",
             "sc-observability-log": "1.6.0",
             "sc-observability-types": "1.6.0",
@@ -136,7 +136,7 @@ class EcosystemPinTests(unittest.TestCase):
             # known-good map below intentionally models the older recovery pin.
             evidence = root / "evidence.md"
             latest_registry.side_effect = lambda _root, dependency: {
-                "sc-composer": "1.6.1",
+                "sc-composer": "1.7.0",
                 "sc-observability": "1.5.0",
                 "sc-observability-log": "1.5.0",
                 "sc-observability-types": "1.5.0",
@@ -182,8 +182,8 @@ class EcosystemPinTests(unittest.TestCase):
             self.assertFalse(dependencies["sc-observability"]["default-features"])
             self.assertEqual(dependencies["opentelemetry_sdk"]["version"], "=0.33.0")
             compose_text = (root / "crates/atm-template-sc-compose/Cargo.toml").read_text()
-            self.assertIn('sc-composer = "=1.4.1"', compose_text)
-            self.assertIn('sc-sha = "=1.4.1"', compose_text)
+            self.assertIn('sc-composer = "1.4.1"', compose_text)
+            self.assertIn('sc-sha = "1.4.1"', compose_text)
             evidence_text = evidence.read_text()
             self.assertIn("pinned back to last known-good: `0.5.0`", evidence_text)
             self.assertIn("https://example.test/issue/2", evidence_text)
@@ -199,7 +199,7 @@ class EcosystemPinTests(unittest.TestCase):
         _latest_wyvern: mock.Mock,
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
-            "sc-composer": "1.6.1",
+            "sc-composer": "1.7.0",
             "sc-observability": "1.5.0",
             "sc-observability-types": "1.5.0",
             "sc-observability-log": "1.5.0",
@@ -251,7 +251,7 @@ class EcosystemPinTests(unittest.TestCase):
                 )
             }
             latest_registry = {
-                "sc-composer": "1.6.1",
+                "sc-composer": "1.7.0",
                 "sc-observability": "1.5.0",
                 "sc-observability-log": "1.5.0",
                 "sc-observability-types": "1.5.0",
@@ -328,7 +328,7 @@ class EcosystemPinTests(unittest.TestCase):
             cargo = root / "Cargo.toml"
             cargo.write_text('sc-observability = "=1.4.0"\nsc-observability = "=1.4.0"\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "exactly one"):
-                VALIDATE_RELEASE.replace_cargo_exact_pin(cargo, "sc-observability", "1.3.0")
+                VALIDATE_RELEASE.replace_cargo_pin(cargo, "sc-observability", "1.3.0", exact=True)
             wyvern = root / "send-to.sh"
             wyvern.write_text('WYVERN_PIN="0.5.0"\nWYVERN_PIN="0.5.0"\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "exactly one"):

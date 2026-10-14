@@ -103,7 +103,13 @@ Error codes should describe the failure class, not a specific prose message.
   rejected frontmatter or body/directive syntax before any identity or message
   row could be admitted.
 - `TEMPLATE_REQUIRED_VARIABLE_MISSING` — a required frontmatter variable was
-  absent after deterministic merge.
+  absent after deterministic merge. This established code remains specific to
+  the missing-required-variable case.
+- `TEMPLATE_VARIABLE_RESOLUTION_FAILED` — template-variable resolution failed
+  for a reason other than a missing required frontmatter variable. Correct the
+  reported variable input or template expression and retry; the
+  missing-required-variable case continues to use
+  `TEMPLATE_REQUIRED_VARIABLE_MISSING`.
 - `TEMPLATE_RENDER_VERIFICATION_FAILED` — rendering or the adapter-owned
   checked-emission verification failed before a body can be admitted, sent, or
   returned.  For malformed JSON the retained cause is redacted and identifies
@@ -630,6 +636,7 @@ Classification rules:
 | `TEMPLATE_HASH_API_FAILED` | `operator_actionable` |
 | `TEMPLATE_INSPECTION_PARSE_FAILED` | `operator_actionable` |
 | `TEMPLATE_REQUIRED_VARIABLE_MISSING` | `operator_actionable` |
+| `TEMPLATE_VARIABLE_RESOLUTION_FAILED` | `operator_actionable` |
 | `TEMPLATE_RENDER_VERIFICATION_FAILED` | `fail_closed` |
 | `TEMPLATE_INCLUDE_UNRESOLVED` | `operator_actionable` |
 | `TEMPLATE_CLASSIFICATION_INVALID` | `operator_actionable` |

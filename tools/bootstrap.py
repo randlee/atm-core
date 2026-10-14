@@ -280,6 +280,19 @@ def pip_install_command(python: Path) -> list[str]:
     ]
 
 
+def sc_compose_wheel_install_command(python: Path, version: str) -> list[str]:
+    """Install the Python binding without downgrading a newer compatible wheel."""
+    return [
+        str(python),
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "--no-deps",
+        f"sc-compose>={version}",
+    ]
+
+
 def cargo_bin_path(name: str) -> Path:
     """Locate the binary installed by Cargo without trusting PATH precedence."""
     cargo_home = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo"))
@@ -684,6 +697,14 @@ def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
     command_output([str(wyvern), "--version"])
     if not wyvern_matches(manifest):
         raise BootstrapError(f"Wyvern is not the exact pinned prebuilt release version {manifest.wyvern}.")
+    try:
+        binding_version = python_package_version(python, "sc-compose")
+    except BootstrapError as error:
+        raise BootstrapError("Python package sc-compose is not installed.") from error
+    if binding_version != manifest.sc_compose:
+        raise BootstrapError(
+            f"Python package sc-compose must be exactly {manifest.sc_compose}; found {binding_version}."
+        )
     for package, version in manifest.python_packages:
         try:
             actual = python_package_version(python, package)
@@ -742,6 +763,7 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     if not wyvern_matches(manifest):
         install_wyvern_release(manifest, dry_run=dry_run)
     run(pip_install_command(python), dry_run=dry_run)
+    run(sc_compose_wheel_install_command(python, manifest.sc_compose), dry_run=dry_run)
     if not dry_run:
         verify_installed_tools(manifest, python)
     install_git_hooks(dry_run=dry_run)

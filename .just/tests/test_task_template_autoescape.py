@@ -11,14 +11,16 @@ through the real binary.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import re
-import subprocess
-import tempfile
+import sys
 import unittest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.sc_compose_render import render_file
 TEMPLATE_DIRS = (
     ".claude/skills/codex-orchestration",
     ".claude/skills/graph-orchestration",
@@ -50,17 +52,10 @@ def variables(template: Path) -> dict[str, object]:
 
 
 def render(template: Path, values: dict[str, object]) -> str:
-    with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8", delete=False) as handle:
-        json.dump(values, handle)
-    completed = subprocess.run(
-        ["sc-compose", "render", "--root", str(REPO_ROOT), "--file", str(template),
-         "--var-file", handle.name],
-        capture_output=True, text=True, check=False,
-    )
-    Path(handle.name).unlink()
-    if completed.returncode != 0:
-        raise AssertionError(f"sc-compose render failed: {completed.stderr.strip() or completed.stdout.strip()}")
-    return completed.stdout
+    try:
+        return render_file(template, values, root=REPO_ROOT, strict=False)
+    except Exception as error:
+        raise AssertionError(f"sc-compose wheel render failed: {error}") from error
 
 
 class TaskTemplateAutoescapeTests(unittest.TestCase):

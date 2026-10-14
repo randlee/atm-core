@@ -11,6 +11,12 @@ import subprocess
 import sys
 from typing import Any
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from scripts.sc_compose_render import render_file as render_wheel_file
+
 from lint_common import discover_repo_root
 from view_common import VIEW_ROOT
 from view_common import relative_artifact_path
@@ -360,28 +366,13 @@ def section_html(panel: ToolPanel, index_path: Path) -> str:
 
 
 def render_template(repo_root: Path, template_path: Path, var_path: Path, output_path: Path) -> None:
-    result = subprocess.run(
-        [
-            "sc-compose",
-            "render",
-            "--root",
-            str(repo_root),
-            "--file",
-            str(template_path),
-            "--var-file",
-            str(var_path),
-            "--strict",
-            "--output",
-            str(output_path),
-        ],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
-    if result.returncode != 0:
-        raise SystemExit(result.stderr.strip() or result.stdout.strip())
+    try:
+        variables = json.loads(var_path.read_text(encoding="utf-8"))
+        if not isinstance(variables, dict):
+            raise ValueError("template variables must be a JSON object")
+        output_path.write_text(render_wheel_file(template_path, variables, root=repo_root), encoding="utf-8")
+    except Exception as error:
+        raise SystemExit(str(error)) from error
 
 
 def validate_xhtml(path: Path) -> None:
