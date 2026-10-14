@@ -26,7 +26,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -35,12 +35,12 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:55+00:00",
+          "at": "2026-10-14T23:40:28+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:41+00:00",
+          "at": "2026-10-14T23:40:28+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -71,7 +71,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -80,12 +80,12 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:55+00:00",
+          "at": "2026-10-14T23:40:28+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:41+00:00",
+          "at": "2026-10-14T23:40:28+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -116,7 +116,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -125,12 +125,12 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:55+00:00",
+          "at": "2026-10-14T23:40:28+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:42+00:00",
+          "at": "2026-10-14T23:40:28+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -161,7 +161,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -170,12 +170,12 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:55+00:00",
+          "at": "2026-10-14T23:40:28+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:42+00:00",
+          "at": "2026-10-14T23:40:28+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -206,7 +206,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -215,12 +215,12 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:55+00:00",
+          "at": "2026-10-14T23:40:28+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:42+00:00",
+          "at": "2026-10-14T23:40:28+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -232,18 +232,18 @@
       "id": "ANC-006",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "atm-bd-console must make no GitHub call on a tick that dispatches nothing.",
+      "statement": "atm-bd-console must call GitHub only to look up the PR of a bead it is dispatching or holding.",
       "quote": "I thought there were no gh calls",
       "kind": "prohibition",
       "stated_by": "Rand",
       "stated_at": "2026-10-14",
       "context": "planning session 2026-10-14 (fenix)",
-      "summary": "No gh calls when idle",
+      "summary": "GitHub only for dispatch PRs",
       "scope": "any bead that adds a gh or GitHub API call",
       "deterministic_check": "",
       "fixtures": {
         "pass": [
-          "An idle tick reads only bd and atm; GitHub is called once per sanity or QA dispatch."
+          "An idle tick reads only bd and atm; GitHub is called once per sanity or QA dispatch and once per held bead recheck."
         ],
         "fail": [
           "Each tick fetches open PRs from GitHub to refresh the dashboard."
@@ -251,7 +251,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -260,12 +260,12 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:55+00:00",
+          "at": "2026-10-14T23:40:28+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:42+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -296,7 +296,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -305,12 +305,12 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:56+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:42+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -341,7 +341,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -350,12 +350,12 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:56+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:42+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -386,7 +386,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -395,12 +395,12 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:56+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:42+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -431,7 +431,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -440,12 +440,12 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:56+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:42+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -476,7 +476,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -485,12 +485,12 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:56+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:42+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -521,7 +521,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -530,12 +530,12 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:56+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:42+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -566,7 +566,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -575,12 +575,57 @@
       },
       "history": [
         {
-          "at": "2026-10-14T23:26:56+00:00",
+          "at": "2026-10-14T23:40:29+00:00",
           "event": "created",
-          "status": "proposed"
+          "status": "locked"
         },
         {
-          "at": "2026-10-14T23:28:42+00:00",
+          "at": "2026-10-14T23:40:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "After the atm-bd-console app has started, no error may stop it: each error must be shown on the dashboard and the app must continue with its next tick.",
+      "quote": "tui can not fail after it starts.  error w/ good message when launch is fine.  after launch, errors should be displayed and it continues w/ best effort.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "App never fails after launch",
+      "scope": "any bead that defines error handling in the tick, the app loop or the CLI",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "A failed bd read during a tick appears in the dashboard's Errors section and the next tick runs on schedule."
+        ],
+        "fail": [
+          "If atm task list fails mid-run, the app exits with code 2."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:30+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:30+00:00",
           "event": "updated",
           "fields": [
             "fixtures"

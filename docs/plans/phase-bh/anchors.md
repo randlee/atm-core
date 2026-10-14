@@ -6,19 +6,20 @@ Intent: `doc/plan/phase-current/intent.md`
 
 | ID | Status | Summary | Stated |
 | --- | --- | --- | --- |
-| ANC-001 | proposed | No logic chains | 2026-10-14 |
-| ANC-002 | proposed | Business logic in one place | 2026-10-14 |
-| ANC-003 | proposed | Same behavior cron or TUI | 2026-10-14 |
-| ANC-004 | proposed | Production rules only | 2026-10-14 |
-| ANC-005 | proposed | No bd list --all | 2026-10-14 |
-| ANC-006 | proposed | No gh calls when idle | 2026-10-14 |
-| ANC-007 | proposed | --as mandatory | 2026-10-14 |
-| ANC-008 | proposed | Per-agent queue shown | 2026-10-14 |
-| ANC-009 | proposed | Non-sprint tasks marked | 2026-10-14 |
-| ANC-010 | proposed | Escalation cadence | 2026-10-14 |
-| ANC-011 | proposed | Phase end stops polling | 2026-10-14 |
-| ANC-012 | proposed | No line wrap | 2026-10-14 |
-| ANC-013 | proposed | No unnecessary text | 2026-10-14 |
+| ANC-001 | locked | No logic chains | 2026-10-14 |
+| ANC-002 | locked | Business logic in one place | 2026-10-14 |
+| ANC-003 | locked | Same behavior cron or TUI | 2026-10-14 |
+| ANC-004 | locked | Production rules only | 2026-10-14 |
+| ANC-005 | locked | No bd list --all | 2026-10-14 |
+| ANC-006 | locked | GitHub only for dispatch PRs | 2026-10-14 |
+| ANC-007 | locked | --as mandatory | 2026-10-14 |
+| ANC-008 | locked | Per-agent queue shown | 2026-10-14 |
+| ANC-009 | locked | Non-sprint tasks marked | 2026-10-14 |
+| ANC-010 | locked | Escalation cadence | 2026-10-14 |
+| ANC-011 | locked | Phase end stops polling | 2026-10-14 |
+| ANC-012 | locked | No line wrap | 2026-10-14 |
+| ANC-013 | locked | No unnecessary text | 2026-10-14 |
+| ANC-014 | locked | App never fails after launch | 2026-10-14 |
 
 ## ANC-001
 
@@ -26,7 +27,7 @@ Anchor: Each atm-bd-console dispatch, hold, marker or section rule must be a sin
 
 > avoid complicated logic chains.
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
 Summary: No logic chains
 
@@ -42,7 +43,7 @@ Anchor: Every atm-bd-console dispatch, escalation and section rule must be imple
 
 > business logic defined clearly in a single place.
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
 Summary: Business logic in one place
 
@@ -58,7 +59,7 @@ Anchor: Running atm-bd-console as the cron job and as the TUI app must produce t
 
 > identical behavior when run as cron or tui
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
 Summary: Same behavior cron or TUI
 
@@ -74,7 +75,7 @@ Anchor: The atm-bd-console dispatcher must not hold or skip a sanity or QA dispa
 
 > we are working off a set of rules already in production.
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
 Summary: Production rules only
 
@@ -90,7 +91,7 @@ Anchor: atm-bd-console must never run `bd list --all`.
 
 > Do NOT use `bd list --all`
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
 Summary: No bd list --all
 
@@ -102,18 +103,18 @@ Fixtures:
 
 ## ANC-006
 
-Anchor: atm-bd-console must make no GitHub call on a tick that dispatches nothing.
+Anchor: atm-bd-console must call GitHub only to look up the PR of a bead it is dispatching or holding.
 
 > I thought there were no gh calls
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
-Summary: No gh calls when idle
+Summary: GitHub only for dispatch PRs
 
 Scope: any bead that adds a gh or GitHub API call
 
 Fixtures:
-- pass: An idle tick reads only bd and atm; GitHub is called once per sanity or QA dispatch.
+- pass: An idle tick reads only bd and atm; GitHub is called once per sanity or QA dispatch and once per held bead recheck.
 - fail: Each tick fetches open PRs from GitHub to refresh the dashboard.
 
 ## ANC-007
@@ -122,7 +123,7 @@ Anchor: atm-bd-console must refuse to start without `--as` and must print a mess
 
 > I would prefer that bead-dispatch makes --as a mandetory arg w/ good console message if it is not set
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
 Summary: --as mandatory
 
@@ -138,7 +139,7 @@ Anchor: The dashboard must show, for each agent, its total number of assigned ta
 
 > what i want to see is what tasks agents are assigned. i.e. queue per agent (up to a limit around ~3. if > 3 tasks, I still want to know queue depth).
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
 Summary: Per-agent queue shown
 
@@ -154,7 +155,7 @@ Anchor: The dashboard must mark each assigned task whose bead is not part of the
 
 > I also want to know if these are not sprint tasks.
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
 Summary: Non-sprint tasks marked
 
@@ -170,7 +171,7 @@ Anchor: Unresolved problems must be resent to the lead together in one message 1
 
 > one message per problem, then resent after 10 minutes. if more issues show up, batch them into same 10 minute interval after 1st send.
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
 Summary: Escalation cadence
 
@@ -186,7 +187,7 @@ Anchor: Once the phase root bead is closed, atm-bd-console must not poll, dispat
 
 > app would stop polling and cron would do nothing when phase ended.
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
 Summary: Phase end stops polling
 
@@ -202,7 +203,7 @@ Anchor: Every dashboard line must fit the terminal width without wrapping, with 
 
 > for all descriptions, we need to truncate so no line wrap occurs
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
 Summary: No line wrap
 
@@ -218,7 +219,7 @@ Anchor: Each dashboard row must contain only an icon, a task id, an age, a tag a
 
 > avoid any text that is not necessary. concise and narrower
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
 Summary: No unnecessary text
 
@@ -227,3 +228,19 @@ Scope: any bead that defines dashboard output
 Fixtures:
 - pass: A row is: icon, id, age, tag, description.
 - fail: Each row also shows the assignee name, bead status and full bead labels.
+
+## ANC-014
+
+Anchor: After the atm-bd-console app has started, no error may stop it: each error must be shown on the dashboard and the app must continue with its next tick.
+
+> tui can not fail after it starts.  error w/ good message when launch is fine.  after launch, errors should be displayed and it continues w/ best effort.
+
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
+
+Summary: App never fails after launch
+
+Scope: any bead that defines error handling in the tick, the app loop or the CLI
+
+Fixtures:
+- pass: A failed bd read during a tick appears in the dashboard's Errors section and the next tick runs on schedule.
+- fail: If atm task list fails mid-run, the app exits with code 2.

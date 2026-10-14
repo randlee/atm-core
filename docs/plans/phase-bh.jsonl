@@ -1,3 +1,4 @@
 {"sprint": "bh-1"}
-{"sprint": "bh-2", "depends_on": ["bh-1"]}
-{"sprint": "bh-3", "depends_on": ["bh-2"]}
+{"sprint": "bh-2"}
+{"sprint": "bh-3", "depends_on": ["bh-1"]}
+{"sprint": "bh-4", "depends_on": ["bh-3"]}
