@@ -1,0 +1,449 @@
+{
+  "schema": "plan-anchoring/anchors/1",
+  "plan": "phase-current",
+  "intent_ref": "doc/plan/phase-current/intent.md",
+  "anchors": [
+    {
+      "id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each atm-bd-console dispatch, hold, marker or section rule must be a single check on snapshot fields that does not depend on the result of any other rule.",
+      "quote": "avoid complicated logic chains.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "No logic chains",
+      "scope": "any bead that defines or changes a dispatch, hold, escalation, marker or section rule",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:55+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every atm-bd-console dispatch, escalation and section rule must be implemented in exactly one module, and the app, the cron mode and bead-queues must call that module rather than contain their own copy of any rule.",
+      "quote": "business logic defined clearly in a single place.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Business logic in one place",
+      "scope": "any bead that adds code to render.py, cli.py, app.py or bead-queues",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:55+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Running atm-bd-console as the cron job and as the TUI app must produce the same dispatches, messages and state for the same beads and tasks.",
+      "quote": "identical behavior when run as cron or tui",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Same behavior cron or TUI",
+      "scope": "any bead that changes the tick, the app loop or the cron mode",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:55+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd-console dispatcher must not hold or skip a sanity or QA dispatch for any reason that the production atm-bd-orchestration rules do not already use.",
+      "quote": "we are working off a set of rules already in production.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Production rules only",
+      "scope": "any bead that defines when sanity or QA is dispatched or held",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:55+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must never run `bd list --all`.",
+      "quote": "Do NOT use `bd list --all`",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "No bd list --all",
+      "scope": "any bead that adds a bd read",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:55+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must make no GitHub call on a tick that dispatches nothing.",
+      "quote": "I thought there were no gh calls",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "No gh calls when idle",
+      "scope": "any bead that adds a gh or GitHub API call",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:55+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-007",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must refuse to start without `--as` and must print a message explaining what `--as` is.",
+      "quote": "I would prefer that bead-dispatch makes --as a mandetory arg w/ good console message if it is not set",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "--as mandatory",
+      "scope": "any bead that defines the CLI arguments or the assigning identity",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:56+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dashboard must show, for each agent, its total number of assigned tasks and at most 3 of those tasks.",
+      "quote": "what i want to see is what tasks agents are assigned. i.e. queue per agent (up to a limit around ~3. if > 3 tasks, I still want to know queue depth).",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Per-agent queue shown",
+      "scope": "any bead that defines the agent blocks",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:56+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dashboard must mark each assigned task whose bead is not part of the current phase's sprints.",
+      "quote": "I also want to know if these are not sprint tasks.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Non-sprint tasks marked",
+      "scope": "any bead that defines the snapshot rows or the agent blocks",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:56+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Unresolved problems must be resent to the lead together in one message 10 minutes after the first escalation, and every 10 minutes after that.",
+      "quote": "one message per problem, then resent after 10 minutes. if more issues show up, batch them into same 10 minute interval after 1st send.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Escalation cadence",
+      "scope": "any bead that defines escalation or hold messages",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:56+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Once the phase root bead is closed, atm-bd-console must not poll, dispatch or send messages, whether it runs as the app or as the cron job.",
+      "quote": "app would stop polling and cron would do nothing when phase ended.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Phase end stops polling",
+      "scope": "any bead that defines the tick start, the app loop or the cron mode",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:56+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every dashboard line must fit the terminal width without wrapping, with descriptions truncated to fit.",
+      "quote": "for all descriptions, we need to truncate so no line wrap occurs",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "No line wrap",
+      "scope": "any bead that defines dashboard output",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:56+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each dashboard row must contain only an icon, a task id, an age, a tag and a description.",
+      "quote": "avoid any text that is not necessary. concise and narrower",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "No unnecessary text",
+      "scope": "any bead that defines dashboard output",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:26:56+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    }
+  ]
+}
