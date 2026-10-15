@@ -1,6 +1,6 @@
 ---
 name: atm-bd-orchestration
-version: 0.14.0
+version: 0.15.0
 description: Bead-driven phase orchestration for the lead. Use when running a phase whose plan is in beads, dispatching from `bd ready` with ATM tasks, and landing it as one gh stack.
 requires:
   cli:

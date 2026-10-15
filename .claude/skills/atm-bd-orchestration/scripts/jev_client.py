@@ -30,8 +30,9 @@ REPORT = "Report this error unchanged; the coordinator records the slot unavaila
 RETRY = "Transient: wait 60 seconds and run the same command once more. If it fails again, " + REPORT[0].lower() + REPORT[1:]
 REBUILD = ("Rebuild `context` and rerun `--assignment <file>`: narrow each entry to the line ranges the deliverable "
            "needs (`path:start-end`, e.g. `docs/x.md:120-180`), drop entries the deliverable does not need, and never "
-           "remove `deliverable.text` or `changed_files`. Leave `context` empty only when nothing in it is needed: "
-           "with `context` empty the client splits `changed_files` into requests that each fit.")
+           "remove `deliverable.text` or `changed_files`. Drop `external_evidence` entries the deliverable does not need. "
+           "Leave `context` empty only when nothing in it is needed: with `context` empty the client splits "
+           "`changed_files` into requests that each fit, when `external_evidence` is empty too.")
 CONTEXT_RANGE = re.compile(r"(?P<path>.+):(?P<start>[0-9]+)-(?P<end>[0-9]+)")  # a `context` entry naming lines
 FENCED = re.compile(r"\s*```(?:json)?[ \t]*\n(.*?)\n```\s*", re.S)  # an assignment as received: fenced JSON
 FIXES = (  # message prefix -> what the calling agent does next
@@ -41,6 +42,12 @@ FIXES = (  # message prefix -> what the calling agent does next
      "`commit`, `base_sha`, `changed_files` and `context`. If the received assignment lacks one, " + REPORT[0].lower() + REPORT[1:]),
     ("Committed evidence unreadable", "Run `git -C <worktree_path> fetch origin` so `commit` and `base_sha` exist, then run "
      "the same command again. If it still fails, a `changed_files` or `context` path is missing at `commit`: " + REPORT[0].lower() + REPORT[1:]),
+    ("Assignment external_evidence", "Each `external_evidence` entry is one of {\"kind\": \"bead_notes\", \"bead\": <id>}, "
+     "{\"kind\": \"pr_body\", \"repo\": \"owner/name\", \"pr\": <n>} or {\"kind\": \"pr_comment\", \"repo\": "
+     "\"owner/name\", \"comment_id\": <n>}. If the received assignment holds another shape, " + REPORT[0].lower() + REPORT[1:]),
+    ("External evidence unreadable", "Run `bd show <bead> --json` from `worktree_path`, or `gh api` for the PR or comment, "
+     "fix what it reports (a missing bead, `gh auth status`), then run the same command again. If it still fails, "
+     + REPORT[0].lower() + REPORT[1:]),
     ("Context entry", "Fix that `context` entry: `path:start-end` names lines 1 <= start <= end <= the file's line "
      "count at `commit`; a plain `path` sends the whole file. Then run the same command again."),
     ("Request file unavailable", "Write the file as the JSON object you were given, outside the worktree, and run the command again."),
@@ -171,6 +178,8 @@ CLIENT_MESSAGES = re.compile("|".join([
     r"Startup probe returned the wrong literal choice", r"Request file unavailable or invalid JSON",
     r"Assignment lacks deliverable text, worktree, commits or file lists",
     r"Committed evidence unreadable at the pinned commits",
+    r"Assignment external_evidence entry is not a bead_notes, pr_body or pr_comment reference",
+    r"External evidence unreadable: \S+ \S+",
     r"Context entry .+ names lines outside its file at the pinned commit",
 ]))
 RECEIPT_KEYS = ("model", "question", "choice", "probabilities", "response_id", "request_sha256", "mac")
@@ -213,10 +222,12 @@ def startup_request():
     }}
 
 
-def written_request(text, evidence, context=None, part=None):
+def written_request(text, evidence, context=None, part=None, external=None):
     state = {"deliverable": text, "evidence": evidence}
     if context:
         state["context"] = context
+    if external:
+        state["external_evidence"] = external
     instructions = "Does the committed evidence deliver the deliverable?"
     if part:
         state["part"], state["changed_files"] = part
@@ -272,11 +283,44 @@ def diff_pieces(diff, budget):
     return pieces
 
 
+EVIDENCE_REFS = {"bead_notes": ("bead",), "pr_body": ("repo", "pr"), "pr_comment": ("repo", "comment_id")}
+
+
+def evidence_ref(ref):
+    """True for one well-formed `external_evidence` reference."""
+    keys = EVIDENCE_REFS.get(ref.get("kind")) if isinstance(ref, dict) else None
+    return keys is not None and set(ref) == {"kind", *keys} and all(
+        type(ref[k]) is int and ref[k] > 0 if k in ("pr", "comment_id")
+        else isinstance(ref[k], str) and ref[k] and not ref[k].startswith("-") for k in keys)
+
+
+def external_evidence(ref, worktree):
+    """One bead's notes, PR body or PR comment, fetched here so no agent writes it, labelled with where it came from."""
+    kind = ref["kind"]
+    label = ref["bead"] if kind == "bead_notes" else f"{ref['repo']}#{ref.get('pr', ref.get('comment_id'))}"
+    argv = (["bd", "show", ref["bead"], "--json"] if kind == "bead_notes" else
+            ["gh", "api", f"repos/{ref['repo']}/pulls/{ref['pr']}"] if kind == "pr_body" else
+            ["gh", "api", f"repos/{ref['repo']}/issues/comments/{ref['comment_id']}"])
+    try:
+        proc = subprocess.run(argv, cwd=worktree, capture_output=True, text=True, timeout=60)
+        value = json.loads(proc.stdout) if proc.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        value = None
+    if isinstance(value, list):
+        value = next((v for v in value if isinstance(v, dict) and v.get("id") == ref.get("bead")), None)
+    text = value.get("notes" if kind == "bead_notes" else "body") if isinstance(value, dict) else None
+    if not isinstance(text, str):
+        raise JevError("VALIDATION.INPUT", f"External evidence unreadable: {kind} {label}")
+    return {"kind": kind, "ref": label, "url": value.get("html_url"), "updated_at": value.get("updated_at"),
+            "author": (value.get("user") or {}).get("login"), "text": text}
+
+
 def assignment_requests(assignment):
     """The sanity requests, built from the assignment so no agent writes them: the deliverable text verbatim, the
     committed diff of the changed files and the context entries at the pinned commit (a `path:start-end` entry only
     those lines, labelled with the entry). One request when it fits under
-    MAX_REQUEST_BYTES; with `context` empty and the diff over the cap, `changed_files` split into groups (a file whose
+    MAX_REQUEST_BYTES; each `external_evidence` reference (bead notes, PR body, PR comment) fetched with its source.
+    With `context` and `external_evidence` empty and the diff over the cap, `changed_files` split into groups (a file whose
     diff alone is over the cap split by hunks) whose requests each fit, one Jev call per part."""
     try:
         text, worktree = assignment["deliverable"]["text"], assignment["worktree_path"]
@@ -286,6 +330,9 @@ def assignment_requests(assignment):
             raise TypeError
     except (KeyError, TypeError):
         raise JevError("VALIDATION.INPUT", "Assignment lacks deliverable text, worktree, commits or file lists") from None
+    refs = assignment.get("external_evidence", [])
+    if not isinstance(refs, list) or not all(evidence_ref(ref) for ref in refs):
+        raise JevError("VALIDATION.INPUT", "Assignment external_evidence entry is not a bead_notes, pr_body or pr_comment reference")
 
     def git(*args):
         proc = subprocess.run(["git", "-C", worktree, *args], capture_output=True, text=True)
@@ -307,10 +354,11 @@ def assignment_requests(assignment):
             raise JevError("VALIDATION.INPUT", f"Context entry {entry} names lines outside its file at the pinned commit")
         return "".join(kept[start - 1:end])
 
-    request = written_request(text, diff(*changed), {entry: excerpt(entry) for entry in context})
+    external = [external_evidence(ref, worktree) for ref in refs]
+    request = written_request(text, diff(*changed), {entry: excerpt(entry) for entry in context}, external=external)
     if size(request) <= MAX_REQUEST_BYTES:
         return [request]
-    if context:
+    if context or external:
         raise oversize(request, "The request is {size} bytes, over the 96000-byte Jev budget. " + REBUILD)
     label = (f"{len(changed) * 1000} of {len(changed) * 1000}", changed)  # the widest part label, so every part fits
     budget = MAX_REQUEST_BYTES - size(written_request(text, "", part=label))
