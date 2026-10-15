@@ -129,7 +129,7 @@ Fixtures:
 
 Anchor: atm-bd-console must refuse to start without `--as` and must print a message explaining what `--as` is.
 
-> I would prefer that bead-dispatch makes --as a mandetory arg w/ good console message if it is not set
+> I would prefer that bead-dispatch makes --as a mandatory arg w/ good console message if it is not set
 
 Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
