@@ -1,0 +1,1130 @@
+{
+  "schema": "plan-anchoring/anchors/1",
+  "plan": "phase-current",
+  "intent_ref": "doc/plan/phase-current/intent.md",
+  "anchors": [
+    {
+      "id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each atm-bd-console dispatch, hold, marker or section rule must be a single check on snapshot fields (one condition, possibly over several fields) that does not depend on the result of any other rule.",
+      "quote": "avoid complicated logic chains.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "No logic chains",
+      "scope": "any bead that defines or changes a dispatch, hold, escalation, marker or section rule",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Each dispatch and hold rule is one independent check on snapshot fields: the bead is in bd ready, its branch is on origin, its worktree exists, its merge state is clean; no rule reads another rule's result."
+        ],
+        "fail": [
+          "QA is dispatched only if sanity passed, and if that check fails the dispatcher then checks CI before deciding whether to retry the stack-top check."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:28+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:28+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-15T00:51:31+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "Each atm-bd-console dispatch, hold, marker or section rule must be a single check on snapshot fields that does not depend on the result of any other rule."
+        },
+        {
+          "at": "2026-10-15T00:53:09+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every atm-bd-console dispatch, escalation and section rule must be implemented in exactly one module, and the app, the cron mode and bead-queues must call that module rather than contain their own copy of any rule.",
+      "quote": "business logic defined clearly in a single place.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Business logic in one place",
+      "scope": "any bead that adds code to render.py, cli.py, app.py or bead-queues",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "All dispatch and section rules live in dispatch.py and model.py; render.py, cli.py and bead-queues only call them."
+        ],
+        "fail": [
+          "bead-queues keeps its own copy of the section rules so it can run without the app installed."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:28+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:28+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Running atm-bd-console as the cron job and as the TUI app must produce the same dispatches, messages and state for the same beads and tasks.",
+      "quote": "identical behavior when run as cron or tui",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Same behavior cron or TUI",
+      "scope": "any bead that changes the tick, the app loop or the cron mode",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "The app loop and --once --headless call the same tick function and a test runs both against one fixture and compares dispatches, messages and state."
+        ],
+        "fail": [
+          "The cron mode skips escalation batching to stay fast; only the app batches resends."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:28+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:28+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd-console dispatcher must hold a sanity or QA dispatch only when the bead is not in bd ready, its branch is not on origin, its worktree is missing, or its branch has a merge conflict with its PR target; PR and CI state never hold it.",
+      "quote": "we are working off a set of rules already in production.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Holds: production reasons plus merge conflict",
+      "scope": "any bead that defines when sanity or QA is dispatched or held",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "The dispatcher sends sanity when bd ready lists the bead, the branch is on origin, the worktree exists and merge-tree is clean; a missing PR only adds a reminder."
+        ],
+        "fail": [
+          "QA waits until the PR's CI is green and the layer is the top of the stack."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:28+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:28+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-15T00:51:32+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "fixtures"
+          ],
+          "previous_statement": "The atm-bd-console dispatcher must not hold or skip a sanity or QA dispatch for any reason that the production atm-bd-orchestration rules do not already use."
+        },
+        {
+          "at": "2026-10-15T00:52:13+00:00",
+          "event": "updated",
+          "fields": [
+            "summary"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must never run `bd list --all`.",
+      "quote": "Do NOT use `bd list --all`",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "No bd list --all",
+      "scope": "any bead that adds a bd read",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Each tick reads open beads with bd list -l phase-bh and fetches needed closed ids with one batched bd show."
+        ],
+        "fail": [
+          "Each tick runs bd list --all to find closed predecessors."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:28+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:28+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must make at most one GitHub call per 10-minute cycle (the open-PR list), plus one each time the PRs tab opens or is refreshed.",
+      "quote": "I thought there were no gh calls",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "One GitHub call per cycle",
+      "scope": "any bead that adds a gh or GitHub API call",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "One GraphQL query per 10-minute cycle returns every open PR with its branches and CI rollup; the PRs tab makes one more call on open and on r."
+        ],
+        "fail": [
+          "Each tick calls GitHub once per held bead to see whether its PR exists."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:28+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-15T00:51:32+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "fixtures"
+          ],
+          "previous_statement": "atm-bd-console must call GitHub only to look up the PR of a bead it is dispatching or holding."
+        },
+        {
+          "at": "2026-10-15T00:52:13+00:00",
+          "event": "updated",
+          "fields": [
+            "summary"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-007",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must refuse to start without `--as` and must print a message explaining what `--as` is.",
+      "quote": "I would prefer that bead-dispatch makes --as a mandetory arg w/ good console message if it is not set",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "--as mandatory",
+      "scope": "any bead that defines the CLI arguments or the assigning identity",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Without --as the CLI exits 3 and prints what --as is and an example command."
+        ],
+        "fail": [
+          "Without --as the CLI uses $ATM_IDENTITY as the lead."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dashboard must show, for each agent, its total number of assigned tasks and at most 3 of those tasks.",
+      "quote": "what i want to see is what tasks agents are assigned. i.e. queue per agent (up to a limit around ~3. if > 3 tasks, I still want to know queue depth).",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Per-agent queue shown",
+      "scope": "any bead that defines the agent blocks",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Each agent block shows the agent's queue depth and up to 3 task rows, then '… +N more'."
+        ],
+        "fail": [
+          "The dashboard lists only the running task of each agent."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dashboard must mark each assigned task whose bead has no top epic or whose top epic is not the current phase root.",
+      "quote": "I also want to know if these are not sprint tasks.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Non-sprint tasks marked",
+      "scope": "any bead that defines the snapshot rows or the agent blocks",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Every task row is checked against the phase: a task whose bead has no top epic, or whose top epic is not the phase root, shows a red marker; a task with no bead at all shows a yellow marker."
+        ],
+        "fail": [
+          "Tasks are listed by agent without any phase check."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-15T00:51:32+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "The dashboard must mark each assigned task whose bead is not part of the current phase's sprints."
+        },
+        {
+          "at": "2026-10-15T00:53:09+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each new problem must be sent to its recipient (the lead, or the assignee for a merge conflict or a missing PR) in its own message when it is first seen; per recipient, problems still unresolved must be resent together in one message 10 minutes after that recipient's first send of the cycle and every 10 minutes after that.",
+      "quote": "one message per problem, then resent after 10 minutes. if more issues show up, batch them into same 10 minute interval after 1st send.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Escalation cadence",
+      "scope": "any bead that defines escalation or hold messages",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Problems first seen at 1m, 2m and 3m are each sent to their recipient in their own message at once; the lead's unresolved ones are resent together at 11m and 21m, and an assignee's at 10 minutes after its own first send."
+        ],
+        "fail": [
+          "Each unresolved problem is resent individually every tick until resolved."
+        ]
+      },
+      "question_overrides": {},
+      "version": 5,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-15T00:53:09+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-15T00:53:38+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "Unresolved problems must be resent to the lead together in one message 10 minutes after the first escalation, and every 10 minutes after that."
+        },
+        {
+          "at": "2026-10-15T01:21:40+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "fixtures"
+          ],
+          "previous_statement": "Each new problem must be sent to the lead in its own message when it is first seen; problems still unresolved must be resent together in one message 10 minutes after the cycle's first send and every 10 minutes after that."
+        }
+      ]
+    },
+    {
+      "id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must stop polling, dispatching and sending once the phase root bead is closed, or once the phase has had no ready and no in-progress bead for 60 minutes, whether it runs as the app or as the cron job; after the root check it makes no further reads.",
+      "quote": "app would stop polling and cron would do nothing when phase ended.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Phase end or 60-min idle stops polling",
+      "scope": "any bead that defines the tick start, the app loop or the cron mode",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Root closed: the cron run exits 0 after the root check; 61 minutes with nothing ready or in progress: the app shows stopped: idle 60 min and stops ticking until r.",
+          "The idle stop counts only time with no ready and no in-progress bead, so a phase with one bead in progress for 2 hours keeps ticking, and it stops 60 minutes after that bead closes if nothing else is ready."
+        ],
+        "fail": [
+          "When the root closes, the app keeps polling every 60 s and shows no new rows."
+        ]
+      },
+      "question_overrides": {},
+      "version": 5,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-15T00:51:32+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "fixtures"
+          ],
+          "previous_statement": "Once the phase root bead is closed, atm-bd-console must not poll, dispatch or send messages, whether it runs as the app or as the cron job."
+        },
+        {
+          "at": "2026-10-15T00:52:14+00:00",
+          "event": "updated",
+          "fields": [
+            "summary"
+          ]
+        },
+        {
+          "at": "2026-10-15T00:53:10+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every dashboard line must fit the terminal width without wrapping, with descriptions truncated to fit.",
+      "quote": "for all descriptions, we need to truncate so no line wrap occurs",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "No line wrap",
+      "scope": "any bead that defines dashboard output",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Line width is read from the terminal on every redraw and descriptions are truncated with an ellipsis."
+        ],
+        "fail": [
+          "Long descriptions wrap onto a second indented line."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each dashboard row must contain only an icon, a task id, an age, a tag (a marker counts as part of the tag) and a description.",
+      "quote": "avoid any text that is not necessary. concise and narrower",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "No unnecessary text",
+      "scope": "any bead that defines dashboard output",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "A row is: icon, id, age, tag, description."
+        ],
+        "fail": [
+          "Each row also shows the assignee name, bead status and full bead labels."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:29+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-15T00:51:32+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "Each dashboard row must contain only an icon, a task id, an age, a tag and a description."
+        }
+      ]
+    },
+    {
+      "id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "After the atm-bd-console app has started, no error may stop it: each error must be shown on the dashboard and the app must continue with its next tick; only a launch check may exit, with a message.",
+      "quote": "tui can not fail after it starts.  error w/ good message when launch is fine.  after launch, errors should be displayed and it continues w/ best effort.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "App never fails after launch",
+      "scope": "any bead that defines error handling in the tick, the app loop or the CLI",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "A failed bd read during a tick appears in the dashboard's Errors section and the next tick runs on schedule."
+        ],
+        "fail": [
+          "If atm task list fails mid-run, the app exits with code 2."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-14T23:40:30+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-14T23:40:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-15T00:51:32+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "After the atm-bd-console app has started, no error may stop it: each error must be shown on the dashboard and the app must continue with its next tick."
+        }
+      ]
+    },
+    {
+      "id": "ANC-015",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every 10-minute cycle atm-bd-console must check each pushed bead branch for merge conflicts against its PR target with git (no GitHub call), report a conflict to the assignee naming the conflicted files, and hold that bead's dispatch.",
+      "quote": "checking for mergeability is important.  big mistake agents make.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Merge check each cycle",
+      "scope": "any bead that defines the reminder cycle, holds or the PRs tab",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Each cycle runs git fetch and git merge-tree --write-tree origin/<pr_target> origin/<branch>; exit 1 records the files in merge.json, holds the dispatch and tells the assignee."
+        ],
+        "fail": [
+          "Mergeability is read from GitHub's mergeable field for each PR."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-15T00:52:09+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-15T00:52:09+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must report a red CI state only for the head of the top layer of the phase stack, to the lead, and must not report or act on CI state of lower layers.",
+      "quote": "ci failed is tricky w/ stack.  we do not fix lower layers, we do need to report if top of stack is red.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Report red stack top only",
+      "scope": "any bead that reads or reports CI state",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "The top PR's head rollup is FAILURE: the lead gets one problem for it; a red lower layer appears only in the PRs tab with no message."
+        ],
+        "fail": [
+          "Each red layer's dev is told to fix CI on that layer."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-15T00:52:10+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-15T00:52:10+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When GitHub is disabled or unavailable (no connectivity, timeout, rejected), atm-bd-console must still dispatch, check merges and send problems, and must show the GitHub state in the status bar.",
+      "quote": "yes, if gh disabled or not available (no connectivity, timeout, rejected) we proceed with work.  gh status should show up in status bar at bottom.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Work proceeds without GitHub",
+      "scope": "any bead that makes a GitHub call or reads the github setting",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "With github = off the tick dispatches sanity from bd and git facts and the status bar reads gh: off."
+        ],
+        "fail": [
+          "A GitHub timeout makes the tick skip dispatch until the next successful call."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-15T00:52:10+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-15T00:52:10+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must have a setting that turns off GraphQL (falling back to REST) and one that turns off every GitHub call.",
+      "quote": "we should add some config flags that disable graphql and optionally gh so we can shut them down if necessary.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "GitHub off switches",
+      "scope": "any bead that defines configuration or a GitHub call",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "github = graphql | rest | off in .atm-bd/console.toml, overridden by --github <mode>."
+        ],
+        "fail": [
+          "GitHub access can only be stopped by revoking the gh token."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-15T00:52:10+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-15T00:52:11+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-019",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The status bar must show the GitHub state, done and total work as a count, percent and bar, where total includes the average findings per finished sprint projected onto unfinished sprints, and the phase's active time excluding time with nothing in progress.",
+      "quote": "we should probably define a few metrics for status bar at bottom including , # & % complete (project average # of findings per sprint for all unfinished sprints) i.e. 2/8 [xx-----] , time (how long phase has been running - paused time).",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Status bar metrics",
+      "scope": "any bead that defines the status bar or its metrics",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "The status bar shows the GitHub state (gh: graphql ✅), done/total beads as 3/9 with a bar and 33% where total adds each unfinished sprint's projected findings (average findings per finished sprint), and active 14h20m counting only time with a bead in progress."
+        ],
+        "fail": [
+          "The status bar shows sprints closed out of sprints planned and wall-clock time since the root was created."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-15T00:52:11+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-15T00:52:11+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-15T00:53:10+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-020",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must show times on screen in 24-hour local time and store every time in logs and JSON files in UTC.",
+      "quote": "time in 24h local time.  logs/under the hood in utc.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Local 24h on screen, UTC stored",
+      "scope": "any bead that shows or stores a time",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "The status bar shows 14:04:31 and snapshot.json stores 2026-10-14T21:04:31Z."
+        ],
+        "fail": [
+          "snapshot.json stores 2:04 PM local time."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-15T00:52:11+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-15T00:52:12+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must show each agent's status (busy, stalling, blocked, offline) as an icon next to its name and must not send messages about agent status, which ATM already nudges and escalates.",
+      "quote": "stalled w/ active task, atm nudge should kick in, atm already has escellation in place.  so this should just show up as busy/stalling/blocked/offline w/ appropriate icons next to name",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "Agent status shown, not messaged",
+      "scope": "any bead that defines agent status or messages about agents",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "An agent idle with a task shows a yellow half circle next to its name and no message is sent."
+        ],
+        "fail": [
+          "An agent idle 15 minutes with a task triggers a message to the lead."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-15T00:52:12+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-15T00:52:12+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-022",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Everything atm-bd-console shows on screen must come from JSON files it writes (a current snapshot plus detail files), so oversight can read the same data.",
+      "quote": "Note all the data we are showing in tui should be in json. for oversight to read.  I expect there is a current state snapshot, then more extensive separate files for things like ci failure data, ...",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "summary": "TUI data is JSON",
+      "scope": "any bead that adds something to the dashboard or tabs",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "render.py reads only snapshot.json and the detail files merge.json, ci.json and prs.json; a CI failure's check names are in ci.json."
+        ],
+        "fail": [
+          "The PRs tab calls gh itself and shows results that are written nowhere."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-15T00:52:12+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-15T00:52:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    }
+  ]
+}
