@@ -220,6 +220,11 @@ class SanitySplit(unittest.TestCase):
         self.assertIn("in the types crate.", first["deliverable"]["text"])
         self.assertEqual(first["deliverables_total"], 2)
         self.assertEqual(first["context"], [])
+        self.assertEqual(first["external_evidence"], [])  # no notes, no --layer-pr
+        noted = self.run_split([{**bead()[0], "notes": "Ran the retry tests: 12 passed."}], None, self.repo.sha)
+        self.assertEqual(noted.returncode, 0, noted.stderr)
+        self.assertEqual(json.loads(noted.stdout)["assignments"][0]["assignment"]["external_evidence"],
+                         [{"kind": "bead_notes", "bead": "atm-x-1"}])
         self.assertNotIn("acceptance_criteria", first)
         self.assertNotIn("design", first)
         self.assertEqual(first["commit"], self.repo.sha)
@@ -428,6 +433,8 @@ class SanitySplit(unittest.TestCase):
         manifest = json.loads(own.stdout)
         self.assertEqual(manifest["changed_files"], ["crates/types/src/retry.rs", "crates/types/src/retry_tests.rs"])
         self.assertEqual(manifest["files_outside_owned_paths"], [])
+        for item in manifest["assignments"]:  # the checked PR's body
+            self.assertEqual(item["assignment"]["external_evidence"], [{"kind": "pr_body", "repo": "{owner}/{repo}", "pr": 3}])
         self.assertEqual(stale.returncode, 4, stale.stderr)  # the checked PR goes last and must be at the pinned sha
         self.assertEqual(missing.returncode, 3, missing.stderr)
         self.assertIn("layer PR(s) 9 not in", missing.stderr)

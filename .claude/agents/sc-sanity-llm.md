@@ -33,6 +33,7 @@ Fenced or raw JSON, rendered by `sanity-split` from
   "changed_files": ["crates/example/src/error.rs", "..."],
   "files_outside_owned_paths": [],
   "context": [],
+  "external_evidence": [],
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "sprint/d-4-slug",
   "commit": "<full 40-char sha>",

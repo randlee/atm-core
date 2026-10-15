@@ -391,6 +391,108 @@ class JevClientTests(unittest.TestCase):
             self.assertIn("split into smaller numbered deliverables", action)
             self.assertNotIn("unchanged", action)
 
+    REFS = [{"kind": "bead_notes", "bead": "lint-k7"}, {"kind": "pr_body", "repo": "o/r", "pr": 460},
+            {"kind": "pr_comment", "repo": "o/r", "comment_id": 77}]
+
+    def fetched(self, failing=()):
+        """`subprocess.run` answering bd/gh for REFS (git passes through); a command naming a `failing` id exits 1."""
+        real = client.subprocess.run
+        answers = {"lint-k7": [{"id": "lint-k7", "notes": "Ran `just test`: 412 passed at abc123.", "updated_at": "2026-10-13T01:00:00Z"}],
+                   "repos/o/r/pulls/460": {"body": "Evidence: smoke log attached.", "html_url": "https://github.com/o/r/pull/460",
+                                           "updated_at": "2026-10-13T02:00:00Z", "user": {"login": "dev"}},
+                   "repos/o/r/issues/comments/77": {"body": "Re-ran on Windows: green.", "html_url": "https://github.com/o/r/pull/460#c77",
+                                                    "updated_at": "2026-10-13T03:00:00Z", "user": {"login": "qa"}}}
+
+        def run(argv, **kwargs):
+            if argv[0] == "git":
+                return real(argv, **kwargs)
+            key = argv[2]
+            if key in failing:
+                return MagicMock(returncode=1, stdout="", stderr="not found")
+            return MagicMock(returncode=0, stdout=json.dumps(answers[key]), stderr="")
+        return patch.object(client.subprocess, "run", side_effect=run)
+
+    def test_evidence_only_deliverable_sends_bead_notes_and_pr_text_with_their_source(self):
+        assignment = {"deliverable": {"number": 1, "text": "Record the Windows re-run result."}, "worktree_path": "/nonexistent",
+                      "commit": "c" * 40, "base_sha": "b" * 40, "changed_files": [], "context": [], "external_evidence": self.REFS}
+        with self.fetched() as run:
+            (request,) = client.assignment_requests(assignment)
+        self.assertEqual([c.args[0][:2] for c in run.call_args_list], [["bd", "show"], ["gh", "api"], ["gh", "api"]])
+        self.assertTrue(all(c.kwargs["cwd"] == "/nonexistent" for c in run.call_args_list))
+        client.validate_request(request)
+        self.assertEqual(request["state"]["evidence"], "")
+        self.assertEqual(request["state"]["external_evidence"], [
+            {"kind": "bead_notes", "ref": "lint-k7", "url": None, "updated_at": "2026-10-13T01:00:00Z", "author": None,
+             "text": "Ran `just test`: 412 passed at abc123."},
+            {"kind": "pr_body", "ref": "o/r#460", "url": "https://github.com/o/r/pull/460", "updated_at": "2026-10-13T02:00:00Z",
+             "author": "dev", "text": "Evidence: smoke log attached."},
+            {"kind": "pr_comment", "ref": "o/r#77", "url": "https://github.com/o/r/pull/460#c77", "updated_at": "2026-10-13T03:00:00Z",
+             "author": "qa", "text": "Re-ran on Windows: green."}])
+        with self.fetched():
+            (without,) = client.assignment_requests({k: v for k, v in assignment.items() if k != "external_evidence"})
+        self.assertNotIn("external_evidence", without["state"])
+
+    def test_external_evidence_that_cannot_be_read_or_is_malformed_fails_before_any_jev_call(self):
+        assignment = {"deliverable": {"number": 1, "text": "d"}, "worktree_path": "/nonexistent", "commit": "c" * 40,
+                      "base_sha": "b" * 40, "changed_files": [], "context": [], "external_evidence": self.REFS}
+        with self.fetched(failing=("repos/o/r/pulls/460",)), patch.object(client.http.client, "HTTPSConnection") as https:
+            with self.assertRaises(client.JevError) as raised:
+                client.assignment_requests(assignment)
+            https.assert_not_called()
+        error = client.failure(raised.exception)["error"]
+        self.assertEqual((error["code"], error["message"]), ("VALIDATION.INPUT", "External evidence unreadable: pr_body o/r#460"))
+        self.assertTrue(client.is_client_message(error["message"]))
+        self.assertIn("gh auth status", error["suggested_action"])
+        for bad in ([{"kind": "pr_body", "repo": "o/r"}], [{"kind": "pr_body", "repo": "o/r", "pr": "460"}],
+                    [{"kind": "issue", "repo": "o/r", "pr": 1}], [{"kind": "bead_notes", "bead": "--all"}],
+                    [{"kind": "bead_notes", "bead": "x", "text": "agent-written"}], {"kind": "bead_notes", "bead": "x"}):
+            with self.subTest(bad=bad), self.fetched() as run, self.assertRaises(client.JevError) as raised:
+                client.assignment_requests({**assignment, "external_evidence": bad})
+            run.assert_not_called()
+            self.assertEqual(raised.exception.message,
+                             "Assignment external_evidence entry is not a bead_notes, pr_body or pr_comment reference")
+            self.assertIn("pr_comment", client.failure(raised.exception)["error"]["suggested_action"])
+
+    def test_layered_source_reads_lower_layer_context_at_the_pinned_top(self):
+        import subprocess, tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            def git(*args):
+                return subprocess.run(["git", "-C", tmp, "-c", "user.name=t", "-c", "user.email=t@t", *args],
+                                      check=True, capture_output=True, text=True).stdout.strip()
+            git("init", "-q")
+            Path(tmp, "lib.py").write_text("def old(): pass\n")
+            Path(tmp, "server.py").write_text("old()\n")
+            git("add", "-A"); git("commit", "-qm", "trunk")
+            trunk = git("rev-parse", "HEAD")
+            Path(tmp, "lib.py").write_text("def hand_off(fd): pass\n")  # lower layer
+            git("commit", "-qam", "layer 1")
+            lower = git("rev-parse", "HEAD")
+            Path(tmp, "server.py").write_text("hand_off(3)\n")  # top layer, the one checked
+            git("commit", "-qam", "layer 2")
+            top = git("rev-parse", "HEAD")
+            assignment = {"deliverable": {"number": 1, "text": "Call hand_off with the listener fd."}, "worktree_path": tmp,
+                          "commit": top, "base_sha": lower, "changed_files": ["server.py"], "context": ["lib.py"]}
+            (request,) = client.assignment_requests(assignment)
+            self.assertEqual(request["state"]["context"], {"lib.py": "def hand_off(fd): pass\n"})
+            self.assertIn("+hand_off(3)", request["state"]["evidence"])
+            self.assertNotIn("lib.py", request["state"]["evidence"])
+            (layered,) = client.assignment_requests({**assignment, "base_sha": trunk, "changed_files": ["lib.py", "server.py"]})
+            self.assertIn("+def hand_off(fd): pass", layered["state"]["evidence"])
+            self.assertIn("+hand_off(3)", layered["state"]["evidence"])
+
+    def test_external_evidence_over_the_cap_asks_for_a_rebuild_not_a_split(self):
+        assignment = {"deliverable": {"number": 1, "text": "d"}, "worktree_path": "/nonexistent", "commit": "c" * 40,
+                      "base_sha": "b" * 40, "changed_files": [], "context": [],
+                      "external_evidence": [{"kind": "bead_notes", "bead": "lint-k7"}]}
+        real = client.subprocess.run
+        huge = MagicMock(returncode=0, stdout=json.dumps({"id": "lint-k7", "notes": "n" * client.MAX_REQUEST_BYTES}))
+        with patch.object(client.subprocess, "run", return_value=huge), self.assertRaises(client.JevError) as raised:
+            client.assignment_requests(assignment)
+        self.assertIs(client.subprocess.run, real)
+        error = client.failure(raised.exception)["error"]
+        self.assertEqual(error["code"], "SANITY.JEV_REQUEST_TOO_LARGE")
+        self.assertIn("Drop `external_evidence` entries", error["suggested_action"])
+
     def test_each_known_error_returns_its_fix(self):
         cases = {
             ("SANITY.JEV_UNAVAILABLE", "Jev connection failed or timed out", True): "wait 60 seconds and run the same command once more",
