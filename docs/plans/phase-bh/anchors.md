@@ -1,8 +1,8 @@
-# Anchors - phase-current
+# Anchors - phase-bh
 
 Constraints captured during planning. Each anchor is a testable statement written by the orchestrator and approved by the user; the user's verbatim words are kept beneath it as provenance. Every anchor is judged at the planning gate and again at the development gate. Edit `anchors.json`, not this file; this file is rendered.
 
-Intent: `doc/plan/phase-current/intent.md`
+Intent: `docs/plans/phase-bh/intent.md`
 
 | ID | Status | Summary | Stated |
 | --- | --- | --- | --- |
@@ -129,7 +129,7 @@ Fixtures:
 
 Anchor: atm-bd-console must refuse to start without `--as` and must print a message explaining what `--as` is.
 
-> I would prefer that bead-dispatch makes --as a mandetory arg w/ good console message if it is not set
+> I would prefer that bead-dispatch makes --as a mandatory arg w/ good console message if it is not set
 
 Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
 
