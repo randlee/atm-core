@@ -1,7 +1,7 @@
 ---
 name: dev-sanity-assignment
-version: 1.1.1
-description: Render the fenced-JSON assignment for one sc-sanity-llm or sc-sanity-jev subagent in atm-bd-orchestration. `sanity-split` renders one per numbered deliverable of the checked bead; the subagent judges only `deliverable_number`. `changed_files` is the base..commit file list, `files_outside_owned_paths` the subset outside the bead's `owned_paths` fence, and optional `context` is a list of repo-relative path strings read at the pinned commit.
+version: 1.2.0
+description: Render the fenced-JSON assignment for one sc-sanity-llm or sc-sanity-jev subagent in atm-bd-orchestration. `sanity-split` renders one per numbered deliverable of the checked bead; the subagent judges only `deliverable_number`. `changed_files` is the base..commit file list, `files_outside_owned_paths` the subset outside the bead's `owned_paths` fence, and optional `context` is a list of repo-relative path strings read at the pinned commit. Optional `external_evidence` lists bead notes, PR body or PR comment references (`kind` bead_notes with `bead`, pr_body with `repo` and `pr`, pr_comment with `repo` and `comment_id`) that `jev_client.py` fetches itself.
 format: json
 required_variables:
   - sanity_bead
@@ -19,6 +19,7 @@ required_variables:
   - base_sha
 defaults:
   context: []
+  external_evidence: []
 ---
 {
   "sanity_bead": {{ sanity_bead }},
@@ -29,6 +30,7 @@ defaults:
   "changed_files": [{% for f in changed_files %}{{ f }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "files_outside_owned_paths": [{% for f in files_outside_owned_paths %}{{ f }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "context": {{ context | tojson }},
+  "external_evidence": {{ external_evidence | tojson }},
   "worktree_path": {{ worktree_path }},
   "branch": {{ branch }},
   "commit": {{ commit }},

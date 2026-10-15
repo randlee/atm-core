@@ -20,8 +20,8 @@ QA tasks of one sprint, poured directly under its existing sprint container.
 Poured ids are <parent>.<ref>-<step> (see bead_formulas.attach_id).
 
 `{{{ ... }}}` are compose variables, baked at render time; sc-compose escapes
-them for TOML strings. `sc-compose bead attach` runs no Beads substitution
-(double-brace text stays literal), so every value here is a compose variable;
+them for TOML strings. This formula declares no bead variables, so every
+value here is a compose variable;
 this comment names no double-brace example because sc-compose --strict reads
 tokens inside comments (sc-compose#785). layer and priority
 are written bare and must be integers.

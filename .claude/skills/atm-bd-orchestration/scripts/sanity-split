@@ -15,7 +15,8 @@ numbered list under `## Deliverables` (a poured bead without one, or without
 `owned_paths`, takes it from its sprint container `metadata.sprint_bead`), pins the target commit, lists the files
 changed since the base (with `--layer-pr`, the union of those PRs' own ranges,
 one `gh api repos/{owner}/{repo}/pulls --paginate` listing joined locally, the checked PR last), renders `dev-sanity-assignment.json.j2` once per
-deliverable with the sc-compose wheel, starts the lint command detached in the
+deliverable with the sc-compose wheel (`external_evidence`: the checked bead's notes when it has any,
+and the checked PR's body with `--layer-pr`), starts the lint command detached in the
 worktree, and prints one JSON manifest to stdout:
 
   {run_id, reviewers, operational_reviewer, sha, base_sha, sanity_bead, dev_bead, branch, worktree_path,
@@ -412,6 +413,8 @@ def main():
             files = layer_files(args.worktree, args.layer_pr, sha) if args.layer_pr else changed_files(args.worktree, base_sha, sha)
             lint = None
         outside = outside_fence(files, owned)
+        external = ([{"kind": "bead_notes", "bead": bead["id"]}] if bead.get("notes") else []) + (
+            [{"kind": "pr_body", "repo": "{owner}/{repo}", "pr": int(args.layer_pr[-1])}] if args.layer_pr and args.layer_pr[-1].isdigit() else [])
         assignments = []
         for item in deliverables:
             assignments.append({"number": item["number"], "assignment": render(args.template, {
@@ -419,7 +422,7 @@ def main():
                 "deliverable_number": item["number"], "deliverable_text": item["text"],
                 "deliverables_total": len(deliverables),
                 "owned_paths": owned, "changed_files": files, "files_outside_owned_paths": outside,
-                "context": [],
+                "context": [], "external_evidence": external,
                 "worktree_path": args.worktree, "branch": args.branch, "commit": sha, "base_sha": base_sha,
             })})
         if not args.split_only:
