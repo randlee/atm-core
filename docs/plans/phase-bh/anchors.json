@@ -1,7 +1,7 @@
 {
   "schema": "plan-anchoring/anchors/1",
-  "plan": "phase-current",
-  "intent_ref": "doc/plan/phase-current/intent.md",
+  "plan": "phase-bh",
+  "intent_ref": "docs/plans/phase-bh/intent.md",
   "anchors": [
     {
       "id": "ANC-001",

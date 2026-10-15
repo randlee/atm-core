@@ -1,8 +1,8 @@
-# Anchors - phase-current
+# Anchors - phase-bh
 
 Constraints captured during planning. Each anchor is a testable statement written by the orchestrator and approved by the user; the user's verbatim words are kept beneath it as provenance. Every anchor is judged at the planning gate and again at the development gate. Edit `anchors.json`, not this file; this file is rendered.
 
-Intent: `doc/plan/phase-current/intent.md`
+Intent: `docs/plans/phase-bh/intent.md`
 
 | ID | Status | Summary | Stated |
 | --- | --- | --- | --- |
