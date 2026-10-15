@@ -175,18 +175,18 @@ Fixtures:
 
 ## ANC-010
 
-Anchor: Each new problem must be sent to the lead in its own message when it is first seen; problems still unresolved must be resent together in one message 10 minutes after the cycle's first send and every 10 minutes after that.
+Anchor: Each new problem must be sent to its recipient (the lead, or the assignee for a merge conflict or a missing PR) in its own message when it is first seen; per recipient, problems still unresolved must be resent together in one message 10 minutes after that recipient's first send of the cycle and every 10 minutes after that.
 
 > one message per problem, then resent after 10 minutes. if more issues show up, batch them into same 10 minute interval after 1st send.
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 4.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 5.
 
 Summary: Escalation cadence
 
 Scope: any bead that defines escalation or hold messages
 
 Fixtures:
-- pass: Problems first seen at 1m, 2m and 3m are each sent to the lead in its own message at 1m, 2m and 3m; those still unresolved are resent together in one message at 11m, 21m and every 10 minutes after.
+- pass: Problems first seen at 1m, 2m and 3m are each sent to their recipient in their own message at once; the lead's unresolved ones are resent together at 11m and 21m, and an assignee's at 10 minutes after its own first send.
 - fail: Each unresolved problem is resent individually every tick until resolved.
 
 ## ANC-011
