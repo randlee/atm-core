@@ -325,7 +325,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "atm-bd-console must refuse to start without `--as` and must print a message explaining what `--as` is.",
-      "quote": "I would prefer that bead-dispatch makes --as a mandetory arg w/ good console message if it is not set",
+      "quote": "I would prefer that bead-dispatch makes --as a mandatory arg w/ good console message if it is not set",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-14",
