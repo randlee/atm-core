@@ -426,7 +426,7 @@ class FeatureSmokeTests(unittest.TestCase):
 
     def test_localhost_live_attempt_never_discovers_or_targets_advertised_host(self):
         doctor = {
-            "summary": {"status": "healthy"},
+            "summary": {"status": "healthy", "error_count": 0},
             "runtime_status": {"readiness": "ready"},
             "client_context": {"version": "1.4.1-beta-ai-1"},
             "daemon_context": {"version": "1.4.1-beta-ai-1"},
@@ -443,7 +443,7 @@ class FeatureSmokeTests(unittest.TestCase):
 
     def test_local_ip_live_attempt_uses_current_non_loopback_address(self):
         doctor = {
-            "summary": {"status": "healthy"},
+            "summary": {"status": "healthy", "error_count": 0},
             "runtime_status": {"readiness": "ready"},
             "client_context": {"version": "1.4.1-beta-ai-1"},
             "daemon_context": {"version": "1.4.1-beta-ai-1"},
@@ -481,7 +481,7 @@ class FeatureSmokeTests(unittest.TestCase):
 
     def test_doctor_ready_requires_health_readiness_and_matching_pair(self):
         report = {
-            "summary": {"status": "healthy"},
+            "summary": {"status": "healthy", "error_count": 0},
             "runtime_status": {"readiness": "ready"},
             "client_context": {"version": "1.3.2-beta.28"},
             "daemon_context": {"version": "1.3.2-beta.28"},
@@ -489,6 +489,59 @@ class FeatureSmokeTests(unittest.TestCase):
         self.assertTrue(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
         report["daemon_context"]["version"] = "1.3.2-beta.27"
         self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
+        report["daemon_context"]["version"] = "1.3.2-beta.28"
+        report["client_context"]["version"] = "1.3.2-beta.27"
+        self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
+        report["client_context"]["version"] = "1.3.2-beta.28"
+        report["summary"]["status"] = "error"
+        self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
+        report["summary"]["status"] = "healthy"
+        report["summary"]["error_count"] = 1
+        self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
+        del report["summary"]["error_count"]
+        self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
+        report["summary"]["error_count"] = 0
+        report["runtime_status"]["readiness"] = "starting"
+        self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
+        self.assertFalse(RUNNER.doctor_ready(["not", "an", "object"], "1.3.2-beta.28"))
+
+    def test_advisory_warnings_do_not_block_a_matched_ready_pair(self):
+        report = {
+            "summary": {"status": "warning", "error_count": 0, "warning_count": 3},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.6.2"},
+            "daemon_context": {"version": "1.6.2"},
+            "findings": [
+                {"severity": "warning", "code": "ATM_HERDR_AGENT_NOT_VISIBLE", "message": "cipher2"},
+                {"severity": "warning", "code": "ATM_HERDR_AGENT_NOT_VISIBLE", "message": "dev-fast"},
+                {"severity": "warning", "code": "ATM_HERDR_AGENT_NOT_VISIBLE", "message": "dev-opus"},
+                {"severity": "info", "code": "ATM_INFO_EXAMPLE", "message": "not counted"},
+            ],
+        }
+        self.assertTrue(RUNNER.doctor_ready(report, "1.6.2"))
+        self.assertEqual(
+            RUNNER.doctor_detail(report, "1.6.2"),
+            "READY · ATM 1.6.2 · warnings: ATM_HERDR_AGENT_NOT_VISIBLE x3",
+        )
+
+    def test_doctor_detail_names_each_failed_condition(self):
+        report = {
+            "summary": {"status": "error", "error_count": 2},
+            "runtime_status": {"readiness": "starting"},
+            "client_context": {"version": "1.6.2"},
+            "daemon_context": {"version": "1.6.1"},
+        }
+        detail = RUNNER.doctor_detail(report, "1.6.2")
+        self.assertEqual(
+            detail.split("; "),
+            [
+                "summary.status='error'",
+                "readiness='starting'",
+                "error_count=2",
+                "daemon version '1.6.1' != expected '1.6.2'",
+            ],
+        )
+        self.assertEqual(RUNNER.doctor_detail({"summary": {"status": "healthy", "error_count": 0}}, "1.6.2").split("; ")[0], "readiness=None")
 
     def test_advertised_host_from_json_requires_enabled_host(self):
         self.assertEqual(
@@ -564,7 +617,7 @@ class FeatureSmokeTests(unittest.TestCase):
 
     def test_curl_doctor_records_real_route_evidence_in_both_directions(self):
         doctor = {
-            "summary": {"status": "healthy"},
+            "summary": {"status": "healthy", "error_count": 0},
             "runtime_status": {"readiness": "ready"},
             "client_context": {"version": "1.4.0-beta-ai"},
             "daemon_context": {"version": "1.4.0-beta-ai"},
