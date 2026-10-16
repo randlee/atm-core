@@ -1,0 +1,90 @@
+{
+  "feature": "local-ip",
+  "host": "rand-m5.local",
+  "platform": "macos",
+  "run_id": "20261016T194456280573Z",
+  "status": "FAIL",
+  "source_revision": "9be243b0f13797b7c642e7e2077e0c342b6423e4",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "expected=1.6.2; cli=1.6.2; daemon=1.6.2",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 1
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "expected=1.6.2; cli=1.6.2; daemon=1.6.2",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 2
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "expected=1.6.2; cli=1.6.2; daemon=1.6.2",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 3
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "expected=1.6.2; cli=1.6.2; daemon=1.6.2",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 4
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "expected=1.6.2; cli=1.6.2; daemon=1.6.2",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 5
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "expected=1.6.2; cli=1.6.2; daemon=1.6.2",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 6
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "expected=1.6.2; cli=1.6.2; daemon=1.6.2",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 7
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "expected=1.6.2; cli=1.6.2; daemon=1.6.2",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 8
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "expected=1.6.2; cli=1.6.2; daemon=1.6.2",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 9
+    },
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "expected=1.6.2; cli=1.6.2; daemon=1.6.2",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local",
+      "attempt": 10
+    }
+  ]
+}
