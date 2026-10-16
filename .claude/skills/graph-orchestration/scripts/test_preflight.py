@@ -14,6 +14,8 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).parent
 REPO_ROOT = SCRIPTS.resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 def _module():
@@ -28,8 +30,12 @@ def _module():
 def test_version_floor_is_semver_and_inclusive():
     preflight = _module()
     assert preflight._version("sc-compose 1.2.0") == (1, 2, 0)
-    assert preflight._version("sc-compose 1.6.2") > preflight.MIN_SC_COMPOSE
+    assert preflight._version("sc-compose 1.7.1") > preflight.MIN_SC_COMPOSE
     assert preflight._version("sc-compose 1.2.9") < preflight.MIN_SC_COMPOSE
+    assert preflight.is_supported_sc_compose_version(preflight.MIN_SC_COMPOSE)
+    assert preflight.is_supported_sc_compose_version((1, 8, 0))
+    assert not preflight.is_supported_sc_compose_version((1, 6, 9))
+    assert not preflight.is_supported_sc_compose_version((2, 0, 0))
     assert preflight._version("unknown") is None
 
 
@@ -46,6 +52,15 @@ def test_sc_compose_rejects_old_cli(monkeypatch):
     assert f"required {preflight.MIN_SC_COMPOSE_TEXT}" in result.detail
 
 
+def test_sc_compose_rejects_next_major_cli(monkeypatch):
+    preflight = _module()
+    monkeypatch.setattr(preflight, "_find_command", lambda *_args: "/fake/sc-compose")
+    monkeypatch.setattr(preflight, "_run", lambda *_args, **_kwargs: (0, "sc-compose 2.0.0", ""))
+    result = preflight.check_sc_compose()
+    assert not result.ok
+    assert f"required {preflight.MIN_SC_COMPOSE_TEXT}" in result.detail
+
+
 def test_binding_rejects_old_python_wheel(monkeypatch):
     preflight = _module()
     monkeypatch.setattr(preflight, "_python_candidates", lambda: ["/fake/python3"])
@@ -56,7 +71,16 @@ def test_binding_rejects_old_python_wheel(monkeypatch):
     )
     result = preflight.check_sc_compose_binding()
     assert not result.ok
-    assert "required >= 1.6.1" in result.detail
+    assert f"required {preflight.MIN_SC_COMPOSE_BINDING_TEXT}" in result.detail
+
+
+def test_binding_rejects_next_major_python_wheel(monkeypatch):
+    preflight = _module()
+    monkeypatch.setattr(preflight, "_python_candidates", lambda: ["/fake/python3"])
+    monkeypatch.setattr(preflight, "_run", lambda *_args, **_kwargs: (0, "2.0.0", ""))
+    result = preflight.check_sc_compose_binding()
+    assert not result.ok
+    assert f"required {preflight.MIN_SC_COMPOSE_BINDING_TEXT}" in result.detail
 
 
 def test_binding_failure_has_actionable_install_hint(monkeypatch):
@@ -131,16 +155,18 @@ def test_python_binding_render_integration_when_1_6_1_or_newer_is_installed():
     except (importlib.metadata.PackageNotFoundError, ImportError) as exc:
         raise AssertionError(
             "sc-compose Python bindings not installed. Run: "
-            "python3 -m pip install --user --break-system-packages "
-            "'sc-compose==1.6.1' before running binding integration tests: "
+            f"{_module().SC_COMPOSE_BINDING_INSTALL} before running binding integration tests: "
             f"{exc}"
         ) from exc
-    if _module()._version(version) < (1, 6, 1):
-        raise AssertionError(f"sc-compose Python binding {version} is below 1.6.1")
+    if _module()._version(version) < _module().MIN_SC_COMPOSE_BINDING:
+        raise AssertionError(
+            f"sc-compose Python binding {version} is below "
+            f"{_module().MIN_SC_COMPOSE_BINDING_TEXT}"
+        )
     assert sc_compose.render_template("Hello {{ name }}", {"name": "graph"}) == "Hello graph"
 
 
-def test_cli_renders_graph_dev_template(tmp_path):
+def test_wheel_renders_graph_dev_template(tmp_path):
     variables = {
         "task_id": "GO-TEST",
         "sprint": "AICH-S1",
@@ -154,27 +180,14 @@ def test_cli_renders_graph_dev_template(tmp_path):
         "ttl_dir": ".sprints/AICH",
         "finding_ids": "",
     }
-    vars_path = tmp_path / "vars.json"
     output_path = tmp_path / "task.xml"
-    vars_path.write_text(json.dumps(variables), encoding="utf-8")
-    result = subprocess.run(
-        [
-            "sc-compose",
-            "render",
-            "--root",
-            str(REPO_ROOT),
-            "--file",
-            ".claude/skills/graph-orchestration/dev-task.xml.j2",
-            "--var-file",
-            str(vars_path),
-            "--output",
-            str(output_path),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
+    from scripts.sc_compose_render import render_file
+
+    rendered = render_file(
+        REPO_ROOT / ".claude/skills/graph-orchestration/dev-task.xml.j2",
+        variables,
+        root=REPO_ROOT,
+        strict=False,
     )
-    assert result.returncode == 0, result.stderr or result.stdout
-    rendered = output_path.read_text(encoding="utf-8")
+    output_path.write_text(rendered, encoding="utf-8")
     assert '<atm-task id="GO-TEST" sprint="AICH-S1"' in rendered

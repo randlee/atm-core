@@ -20,7 +20,7 @@ def test_version_parser():
 
 def test_preflight_passes_in_current_environment(monkeypatch):
     monkeypatch.setattr(check_dependencies, "_find", lambda name: Path("/bin/true"))
-    monkeypatch.setattr(check_dependencies, "_run_version", lambda path: ("tool 1.6.1", "tool 1.6.1"))
+    monkeypatch.setattr(check_dependencies, "_run_version", lambda path: ("tool 1.7.0", "tool 1.7.0"))
     monkeypatch.setattr(check_dependencies, "_python_binding_entry", lambda: {"name": "sc_compose", "ok": True})
     result = check_dependencies.run()
     assert result["success"] is True
@@ -37,6 +37,15 @@ def test_old_sc_compose_is_a_structured_failure(monkeypatch):
     assert any(item["name"] == "sc-compose" for item in result["error"]["failures"])
 
 
+def test_next_major_sc_compose_is_a_structured_failure(monkeypatch):
+    monkeypatch.setattr(check_dependencies, "_find", lambda name: Path("/bin/true"))
+    monkeypatch.setattr(check_dependencies, "_run_version", lambda path: ("sc-compose 2.0.0", "sc-compose 2.0.0"))
+    monkeypatch.setattr(check_dependencies, "_python_binding_entry", lambda: {"name": "sc_compose", "ok": True})
+    result = check_dependencies.run()
+    assert result["success"] is False
+    assert any(item["name"] == "sc-compose" for item in result["error"]["failures"])
+
+
 def test_missing_python_binding_has_actionable_install_hint(monkeypatch):
     def missing(_name):
         raise check_dependencies.importlib.metadata.PackageNotFoundError("sc-compose")
@@ -45,6 +54,13 @@ def test_missing_python_binding_has_actionable_install_hint(monkeypatch):
     result = check_dependencies._python_binding_entry()
     assert result["ok"] is False
     assert "python3 -m pip install --user --break-system-packages" in result["error"]
+
+
+def test_next_major_python_binding_is_rejected(monkeypatch):
+    monkeypatch.setattr(check_dependencies.importlib.metadata, "version", lambda _name: "2.0.0")
+    result = check_dependencies._python_binding_entry()
+    assert result["ok"] is False
+    assert "< 2.0.0" in result["error"]
 
 
 def test_cli_emits_json_success_contract():

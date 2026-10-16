@@ -103,6 +103,7 @@ pub enum AtmErrorCode {
     /// The upstream template inspection parser rejected frontmatter or body/directive syntax.
     TemplateInspectionParseFailed,
     TemplateRequiredVariableMissing,
+    TemplateVariableResolutionFailed,
     TemplateRenderVerificationFailed,
     TemplateIncludeUnresolved,
     TemplateClassificationInvalid,
@@ -289,6 +290,7 @@ impl AtmErrorCode {
             Self::TemplateHashApiFailed => "TEMPLATE_HASH_API_FAILED",
             Self::TemplateInspectionParseFailed => "TEMPLATE_INSPECTION_PARSE_FAILED",
             Self::TemplateRequiredVariableMissing => "TEMPLATE_REQUIRED_VARIABLE_MISSING",
+            Self::TemplateVariableResolutionFailed => "TEMPLATE_VARIABLE_RESOLUTION_FAILED",
             Self::TemplateRenderVerificationFailed => "TEMPLATE_RENDER_VERIFICATION_FAILED",
             Self::TemplateIncludeUnresolved => "TEMPLATE_INCLUDE_UNRESOLVED",
             Self::TemplateClassificationInvalid => "TEMPLATE_CLASSIFICATION_INVALID",
@@ -485,6 +487,7 @@ fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
         "TEMPLATE_HASH_API_FAILED" => AtmErrorCode::TemplateHashApiFailed,
         "TEMPLATE_INSPECTION_PARSE_FAILED" => AtmErrorCode::TemplateInspectionParseFailed,
         "TEMPLATE_REQUIRED_VARIABLE_MISSING" => AtmErrorCode::TemplateRequiredVariableMissing,
+        "TEMPLATE_VARIABLE_RESOLUTION_FAILED" => AtmErrorCode::TemplateVariableResolutionFailed,
         "TEMPLATE_RENDER_VERIFICATION_FAILED" => AtmErrorCode::TemplateRenderVerificationFailed,
         "TEMPLATE_INCLUDE_UNRESOLVED" => AtmErrorCode::TemplateIncludeUnresolved,
         "TEMPLATE_CLASSIFICATION_INVALID" => AtmErrorCode::TemplateClassificationInvalid,

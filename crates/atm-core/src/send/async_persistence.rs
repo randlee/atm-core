@@ -504,7 +504,7 @@ mod tests {
                 include_references: Vec::new(),
                 output_format: atm_storage::TemplateOutputFormat::Text,
             },
-            vars: template::resolve_merged_vars(&frontmatter, &source).expect("merged vars"),
+            vars: template::resolve_merged_vars(&frontmatter, &source),
             rendered: crate::boundary::RenderedBody {
                 text: "rendered task".to_owned(),
             },
@@ -588,7 +588,7 @@ mod tests {
                 include_references: Vec::new(),
                 output_format: atm_storage::TemplateOutputFormat::Text,
             },
-            vars: template::resolve_merged_vars(&frontmatter, &source).expect("merged vars"),
+            vars: template::resolve_merged_vars(&frontmatter, &source),
             rendered: crate::boundary::RenderedBody {
                 text: "plain rendered".to_owned(),
             },

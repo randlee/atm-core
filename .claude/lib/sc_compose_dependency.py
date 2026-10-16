@@ -2,21 +2,46 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import re
+import tomllib
 
 
-SC_COMPOSE_PIN = "1.6.1"
-MIN_SC_COMPOSE = (1, 6, 1)
-MIN_SC_COMPOSE_TEXT = ">= 1.6.1 (pinned prebuilt release binary)"
-MIN_SC_COMPOSE_BINDING = (1, 6, 1)
-MIN_SC_COMPOSE_BINDING_TEXT = ">= 1.6.1"
+_VERSION_RE = re.compile(
+    r"(?<!\d)(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?"
+)
+
+
+def _bootstrap_sc_compose_pin() -> str:
+    """Read the only CLI and wheel version pin from the bootstrap contract."""
+
+    manifest = Path(__file__).resolve().parents[2] / "tools" / "bootstrap.toml"
+    try:
+        version = tomllib.loads(manifest.read_text(encoding="utf-8"))["sc-compose"]["version"]
+    except (KeyError, OSError, tomllib.TOMLDecodeError) as error:
+        raise RuntimeError(f"cannot read sc-compose version from {manifest}") from error
+    if not isinstance(version, str) or _VERSION_RE.fullmatch(version) is None:
+        raise RuntimeError(f"{manifest} [sc-compose].version must be a release version")
+    return version
+
+
+def _version_tuple(version: str) -> tuple[int, int, int]:
+    match = _VERSION_RE.fullmatch(version)
+    if match is None:
+        raise ValueError(f"not a release version: {version}")
+    return tuple(int(part) for part in match.groups())
+
+
+SC_COMPOSE_PIN = _bootstrap_sc_compose_pin()
+MIN_SC_COMPOSE = _version_tuple(SC_COMPOSE_PIN)
+MAX_SC_COMPOSE_EXCLUSIVE = (2, 0, 0)
+MIN_SC_COMPOSE_TEXT = f">= {SC_COMPOSE_PIN}, < 2.0.0"
+MIN_SC_COMPOSE_BINDING = MIN_SC_COMPOSE
+MIN_SC_COMPOSE_BINDING_TEXT = MIN_SC_COMPOSE_TEXT
 SC_COMPOSE_INSTALL = f"download sc-compose v{SC_COMPOSE_PIN} prebuilt release asset and verify SHA256"
 SC_COMPOSE_BINDING_INSTALL = (
     "python3 -m pip install --user --break-system-packages "
-    "'sc-compose==1.6.1'"
-)
-_VERSION_RE = re.compile(
-    r"(?<!\d)(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?"
+    f"'sc-compose>={SC_COMPOSE_PIN},<2.0.0'"
 )
 
 
@@ -27,3 +52,8 @@ def parse_version(text: str | None) -> tuple[int, int, int] | None:
         return None
     match = _VERSION_RE.search(text)
     return tuple(int(part) for part in match.groups()) if match else None
+
+
+def is_supported_sc_compose_version(version: tuple[int, int, int] | None) -> bool:
+    """Return whether a CLI or wheel is on the supported 1.x release line."""
+    return version is not None and MIN_SC_COMPOSE <= version < MAX_SC_COMPOSE_EXCLUSIVE

@@ -5,7 +5,7 @@ name = "TemplateScCompose"
 
 [public]
 facade = "ScComposeTemplateComposer"
-notes = "The sole production implementation of atm-core's sealed TemplateComposer port. Exact-pinned sc-composer 1.4.1 supplies frontmatter/directive inspection, render, confinement, file-path output classification, and checked emission after complete final-body assembly; exact-pinned sc-sha 1.4.1 supplies strict UTF-8 and LF-normalized template identity."
+notes = "The sole production implementation of atm-core's sealed TemplateComposer port. Exact-pinned sc-composer 1.7.0 supplies frontmatter/directive inspection, render, confinement, file-path output classification, and checked emission after complete final-body assembly; exact-pinned sc-sha 1.7.0 supplies strict UTF-8 and LF-normalized template identity."
 
 [implementation]
 type = "ScComposeTemplateComposer"
@@ -41,7 +41,7 @@ forbidden = []
 request_types = ["TemplateSource", "TemplateRoot", "serde_json::Map<String, Value>"]
 response_types = ["TemplateInspection", "TemplateOutputFormat", "RenderedBody"]
 error_types = ["AtmError"]
-notes = ["The exact-pinned sc-composer 1.4.1 adapter owns frontmatter parsing, classified directive kind/span inspection, root-constrained rendering, and OutputFormat::from_template_path classification. Exact-pinned sc-sha 1.4.1 owns strict UTF-8 and CRLF/lone-CR-to-LF-normalized template identity. ATM must not reimplement any of those operations."]
+notes = ["The exact-pinned sc-composer 1.7.0 adapter owns frontmatter parsing, classified directive kind/span inspection, root-constrained rendering, and OutputFormat::from_template_path classification. Exact-pinned sc-sha 1.7.0 owns strict UTF-8 and CRLF/lone-CR-to-LF-normalized template identity. ATM must not reimplement any of those operations."]
 
 [testing]
 allowed_test_double_paths = ["atm_template_sc_compose::ScComposeTemplateComposer"]
@@ -53,4 +53,4 @@ review_gates = ["exact_upstream_pin", "upstream_golden_vectors", "core_port_only
 
 [status]
 state = "concrete_landed"
-notes = ["The exact crates.io sc-composer/sc-sha 1.4.1 releases serve the complete production inspection and checked-render path. This adapter supplies source and root paths to sc-composer but performs no local parser, hash, path-prefix, or confinement check. No local path or git dependency is permitted."]
+notes = ["The exact crates.io sc-composer/sc-sha 1.7.0 releases serve the complete production inspection and checked-render path. This adapter supplies source and root paths to sc-composer but performs no local parser, hash, path-prefix, or confinement check. No local path or git dependency is permitted."]

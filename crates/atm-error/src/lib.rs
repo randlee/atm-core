@@ -139,6 +139,10 @@ mod tests {
                 "TEMPLATE_REQUIRED_VARIABLE_MISSING",
             ),
             (
+                AtmErrorCode::TemplateVariableResolutionFailed,
+                "TEMPLATE_VARIABLE_RESOLUTION_FAILED",
+            ),
+            (
                 AtmErrorCode::TemplateRenderVerificationFailed,
                 "TEMPLATE_RENDER_VERIFICATION_FAILED",
             ),

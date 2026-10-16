@@ -67,6 +67,14 @@ impl AtmError {
         self
     }
 
+    /// Adds caller-owned detail without changing the error's typed code,
+    /// recovery guidance, or adapter-provided cause.
+    #[must_use]
+    pub fn with_context(mut self, prefix: impl fmt::Display) -> Self {
+        self.message = format!("{prefix}: {}", self.message);
+        self
+    }
+
     /// Returns the detail portion for a higher-level constructor. This avoids
     /// embedding catalog-rendered recovery guidance into another catalog error.
     #[must_use]
@@ -456,6 +464,15 @@ impl AtmError {
         .with_cause(cause)
     }
 
+    /// Reports a strict-render validation failure other than a missing required
+    /// frontmatter variable. The diagnostic holds no rendered content.
+    pub fn template_variable_resolution_failed(diagnostic: impl fmt::Display) -> Self {
+        Self::new(
+            AtmErrorCode::TemplateVariableResolutionFailed,
+            format!("template variable resolution failed: {diagnostic}"),
+        )
+    }
+
     /// Reports invalid checked JSON without exposing rendered template content.
     ///
     /// `sc-composer` 1.4.x automatically emits complete JSON values. Older
@@ -602,6 +619,30 @@ mod tests {
     }
 
     #[test]
+    fn template_variable_resolution_uses_one_diagnostic_and_recovery_guidance() {
+        let error = AtmError::template_variable_resolution_failed("unbound variable 'missing'");
+
+        assert_eq!(error.code(), AtmErrorCode::TemplateVariableResolutionFailed);
+        assert_eq!(
+            error
+                .message()
+                .matches("unbound variable 'missing'")
+                .count(),
+            1
+        );
+        assert!(error.cause().is_none());
+        assert!(error.remediation().contains("provide values"));
+    }
+
+    #[test]
+    fn template_required_variable_missing_preserves_its_stable_code() {
+        let error = AtmError::template_required_variable_missing("ATM_TEAM");
+
+        assert_eq!(error.code(), AtmErrorCode::TemplateRequiredVariableMissing);
+        assert!(error.message().contains("ATM_TEAM"));
+    }
+
+    #[test]
     fn agent_not_found_names_the_roster_repair_command() {
         let error = AtmError::agent_not_found("test-agent", "test-team");
 
@@ -720,6 +761,17 @@ mod tests {
                 .expect("serialize error")
                 .contains(r#""cause":"connection refused""#)
         );
+    }
+
+    #[test]
+    fn context_preserves_code_cause_detail_and_recovery() {
+        let error = AtmError::template_render_verification_failed("adapter rejected body")
+            .with_context("stored template notice.md.j2");
+
+        assert_eq!(error.code(), AtmErrorCode::TemplateRenderVerificationFailed);
+        assert_eq!(error.cause(), Some("adapter rejected body"));
+        assert!(error.detail().starts_with("stored template notice.md.j2:"));
+        assert_eq!(error.message().matches("Recovery:").count(), 1);
     }
 
     #[test]

@@ -38,6 +38,10 @@ if sys.argv[1] == "stack" and os.getcwd() in os.environ.get("FAKE_GH_NOT_STACK",
 key = {"api": "FAKE_GH_STACKS", "stack": "FAKE_GH_VIEW"}[sys.argv[1]]
 sys.stdout.write(open(os.environ[key]).read())
 """
+FAKE_BD = """#!/bin/sh
+printf '%s\\n' "$*" >> "$FAKE_BD_LOG"
+exec {real} "$@"
+"""
 
 
 class Queues:
@@ -58,6 +62,7 @@ class Queues:
         self.tasks([])
         self.github([], [])
         self.state = self.dir / "state.json"
+        self.flags: list[str] = []   # e.g. ["--stack"], passed on every run
 
     def sprint(self, n: int) -> str:
         bead = self.ws.sprint(self.phase, n)
@@ -79,8 +84,9 @@ class Queues:
         bin_dir = self.ws.root / "fake-bin"
         e = {**self.ws.env, "PATH": f"{bin_dir}{os.pathsep}{self.ws.env['PATH']}", "ATM_IDENTITY": "lead1",
              "FAKE_ATM_TASKS": str(self.dir / "tasks.json"), "FAKE_GH_STACKS": str(self.dir / "stacks.json"),
-             "FAKE_GH_VIEW": str(self.dir / "view.json"), "FAKE_GH_LOG": str(self.dir / "gh.log"), **(env or {})}
-        return subprocess.run([sys.executable, str(self.ws.scripts / "bead-queues"), "--phase", self.phase, *args],
+             "FAKE_GH_VIEW": str(self.dir / "view.json"), "FAKE_GH_LOG": str(self.dir / "gh.log"),
+             "FAKE_BD_LOG": str(self.dir / "bd.log"), **(env or {})}
+        return subprocess.run([sys.executable, str(self.ws.scripts / "bead-queues"), "--phase", self.phase, *self.flags, *args],
                               cwd=self.ws.root, env=e, text=True, capture_output=True)
 
     def queues(self) -> dict[str, set[str]]:
@@ -132,7 +138,8 @@ class BeadQueuesTests(unittest.TestCase):
         subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "init"], cwd=root, check=True)
         bin_dir = root / "fake-bin"
         bin_dir.mkdir()
-        for name, body in (("atm", FAKE_ATM), ("gh", FAKE_GH)):
+        real_bd = shutil.which("bd", path=cls.ws.env["PATH"])
+        for name, body in (("atm", FAKE_ATM), ("gh", FAKE_GH), ("bd", FAKE_BD.format(real=real_bd))):
             (bin_dir / name).write_text(body)
             (bin_dir / name).chmod(0o755)
 
@@ -164,12 +171,9 @@ class BeadQueuesTests(unittest.TestCase):
 
         self.ws.close(dev, "dev complete at abc1234")
         got = q.queues()
-        assert got.get("dev_no_pr") == {dev} and got.get("needs_sanity") == {sanity}
-        assert qa not in str(got)                                    # QA waits on the sanity PASS
-        self.ws.bd("update", dev, "--append-notes", "layer PR #7 https://example/pull/7")
-        assert "dev_no_pr" not in q.queues()
+        assert got == {"needs_sanity": {sanity}}                     # QA waits on the sanity PASS
 
-        q.tasks([dev])                                               # the dev never closed its ATM task
+        q.tasks([dev])                                               # the dev never closed its ATM task: one targeted closed read
         assert q.queues().get("task_bead_closed") == {dev}
         q.tasks([])
         self.ws.close(sanity, "PASS at abc1234")
@@ -188,10 +192,10 @@ class BeadQueuesTests(unittest.TestCase):
         assert got.get("needs_finding_fix") == {f"{sprint}.imp1"} and got.get("minor_backlog") == {f"{sprint}.min1"}
         assert f"{sprint}.qa1-f1-r1-sanity" not in str(got)
 
-        # an important finding fixed with no sanity bead imported for it
-        self.ws.bd("update", f"{sprint}.imp1", "--assignee", "dev1")
-        self.ws.close(f"{sprint}.imp1", "fixed at def5678 (PR #8)")
-        assert q.queues().get("finding_no_sanity") == {f"{sprint}.imp1"}
+        reads = (q.dir / "bd.log").read_text().splitlines()
+        assert reads and not any("--all" in r.split() for r in reads), reads      # closed beads are never listed
+        closed_reads = [r for r in reads if "--status closed" in r]
+        assert closed_reads and all(f"--id {dev}" in r for r in closed_reads), closed_reads   # only the task's bead
 
     def test_sanity_fail_children_and_closable_container(self):
         q = Queues(self.ws, "sf")
@@ -210,28 +214,51 @@ class BeadQueuesTests(unittest.TestCase):
             self.ws.close(bead, reason)
         assert q.queues() == {"container_closable": {sprint}}
 
-    def test_sanity_pass_with_no_qa_bead(self):
-        q = Queues(self.ws, "nq")
-        sprint = q.sprint(1)
-        dev, sanity, qa = group(sprint)
-        self.ws.bd("delete", qa, "--force")
-        self.ws.close(dev, "dev complete (PR #5)")
-        self.ws.close(sanity, "PASS at 1234567")
-        assert q.queues().get("no_qa_record") == {sanity}
+    def test_anchor_beads_are_not_actionable_ready_work(self):
+        q = Queues(self.ws, "anchor")
+        anchor = f"{q.root}-anchor"
+        normal = f"{q.root}-normal"
+        held = f"{q.root}-held"
+        phase_label = f"phase-{q.phase}"
+        child(self.ws, anchor, q.root, "--type", "decision", "-l", f"{phase_label},anchor")
+        child(self.ws, normal, q.root, "-l", f"{phase_label},stage:dev")
+        child(self.ws, held, q.root, "-l", f"{phase_label},stage:dev")
+        self.ws.bd("dep", "add", held, anchor)
+        anchor_before = self.ws.snapshot(anchor)
 
-    def test_a_descendant_without_the_phase_label_is_not_read(self):
+        raw_ready = self.ws.ready()
+        assert anchor in raw_ready                                # reference state stays visible to bd itself
+        assert normal in raw_ready and held not in raw_ready      # its dependency still blocks ordinary work
+        got = q.queues()
+        assert got == {"needs_dev": {normal}}                    # no anchor in actionable or cron queues
+        self.ws.unchanged(anchor_before)                          # never close, defer or otherwise rewrite it
+
+    def test_a_bead_without_the_phase_label_is_not_read(self):
         q = Queues(self.ws, "nl")
         sprint = q.sprint(1)
         dev, sanity, qa = group(sprint)
-        self.ws.bd("delete", qa, "--force")
         self.ws.close(dev, "dev complete (PR #6)")
-        self.ws.close(sanity, "PASS at 1234567")
-        assert q.queues().get("no_qa_record") == {sanity}
+        assert q.queues().get("needs_sanity") == {sanity}
         self.ws.bd("update", sanity, "--remove-label", "phase-nl")
         assert sanity not in str(q.queues())
 
+    def test_stack_is_opt_in(self):
+        """Without --stack no gh command runs and the report says the stack was not checked."""
+        q = Queues(self.ws, "so")
+        l1, l2 = layer(1, "so-a"), layer(2, "so-b")
+        q.github([], [l1, l2])
+        dev = group(q.sprint(1))[0]
+        assert q.queues() == {"needs_dev": {dev}}
+        proc = q.run()
+        assert proc.returncode == 0 and "stack: not checked (--stack reads it)" in proc.stdout, proc.stdout
+        assert not (q.dir / "gh.log").exists()
+        q.flags = ["--stack"]
+        assert q.queues().get("pr_unlinked") == {"pr#1", "pr#2"}
+        assert (q.dir / "gh.log").exists()
+
     def test_stack_rows(self):
         q = Queues(self.ws, "st")
+        q.flags = ["--stack"]
         l1, l2, l3, l4 = layer(1, "a"), layer(2, "b"), layer(3, "c", rebase=True), layer(4, "d")
         q.github([stack(10, l1, l2, l3), stack(12, layer(9, "z"))], [l1, l2, l3, l4])
         assert q.queues() == {"stack_incoherent": {"stack#10"}, "pr_unlinked": {"pr#4"}}   # stack 12 is elsewhere
@@ -252,6 +279,7 @@ class BeadQueuesTests(unittest.TestCase):
     def test_stack_view_falls_back_to_a_layer_worktree(self):
         """gh-stack 0.1 does not count the trunk as a stack member: view from a worktree on an open stack's layer."""
         q = Queues(self.ws, "lw")
+        q.flags = ["--stack"]
         l1, l2 = layer(1, "lw-a"), layer(2, "lw-b", rebase=True)
         q.github([stack(10, l1, l2)], [l1, l2])
         env = {"FAKE_GH_NOT_STACK": str(q.worktree)}
@@ -269,6 +297,7 @@ class BeadQueuesTests(unittest.TestCase):
 
     def test_stack_not_checked_keeps_the_report(self):
         q = Queues(self.ws, "nc")
+        q.flags = ["--stack"]
         dev = group(q.sprint(1))[0]
         for env, why in (({"FAKE_GH_FAIL": "1"}, "gh: HTTP 502"), ({}, "trunk develop")):
             q.github([], [layer(1, "a"), layer(2, "b")], trunk="develop")

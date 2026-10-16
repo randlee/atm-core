@@ -6,7 +6,7 @@ Both `atm-beads` and `atm-bd-orchestration` need these CLIs:
 | --- | --- | --- | --- |
 | `bd` | 1.3.0 | `brew install beads` | the plan, the work graph, `bd sync` |
 | `atm` | 1.6.1 | `brew install randlee/tap/atm` | tasks, messages, `atm compose` |
-| `sc-compose` | 1.7.0 (below 2), CLI and `python3` wheel the same version | `brew install randlee/tap/sc-compose` and `python3 -m pip install 'sc-compose==<the CLI version>'` | strict renders of bead and reviewer templates (CLI), the scripts' renders (wheel) |
+| `sc-compose` | version in `tools/bootstrap.toml` (below 2), CLI and `python3` wheel the same version | `brew install randlee/tap/sc-compose` and `python3 -m pip install 'sc-compose>=<the bootstrap version>'` | strict renders of bead and reviewer templates (CLI), the scripts' renders (wheel) |
 | `jq` | 1.6 | `brew install jq` | every bead query |
 | `gh` + gh-stack | gh 2.0, gh-stack 0.1.0 | `brew install gh`, then `gh extension install github/gh-stack` | the phase stack (lead only) |
 

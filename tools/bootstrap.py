@@ -109,6 +109,16 @@ def require_version(label: str, actual: str, expected: str) -> None:
         raise BootstrapError(f"{label} must be exactly {expected}; found {actual or 'no version output'}.")
 
 
+def sc_compose_version_matches(actual: str, minimum: str) -> bool:
+    """Accept the supported sc-compose release line, not one exact release."""
+    observed = re.search(r"(?<!\d)(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?", actual)
+    if observed is None:
+        return False
+    expected = tuple(int(part) for part in minimum.split("."))
+    version = tuple(int(part) for part in observed.groups())
+    return expected <= version < (2, 0, 0)
+
+
 def seed_python_version(manifest: BootstrapManifest) -> str:
     """Return the exact interpreter pin for the executing operating system."""
     return manifest.windows_python if sys.platform == "win32" else manifest.python
@@ -278,6 +288,19 @@ def pip_install_command(python: Path) -> list[str]:
         "--no-deps",
         "--requirement",
         str(REQUIREMENTS_PATH),
+    ]
+
+
+def sc_compose_wheel_install_command(python: Path, version: str) -> list[str]:
+    """Install the Python binding without leaving its supported release line."""
+    return [
+        str(python),
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "--no-deps",
+        f"sc-compose>={version},<2.0.0",
     ]
 
 
@@ -520,12 +543,22 @@ def binstall_tool_matches(name: str, version: str) -> bool:
 
 
 def sc_compose_matches(manifest: BootstrapManifest) -> bool:
-    """Prove the installed release binary reports the exact pinned version."""
+    """Prove the installed release binary is within the supported release line."""
     try:
-        require_version("sc-compose", command_output([str(cargo_bin_path("sc-compose")), "--version"]), manifest.sc_compose)
+        return sc_compose_version_matches(
+            command_output([str(cargo_bin_path("sc-compose")), "--version"]),
+            manifest.sc_compose,
+        )
     except (BootstrapError, OSError):
         return False
-    return True
+
+
+def sc_compose_wheel_matches(manifest: BootstrapManifest, python: Path) -> bool:
+    """Prove the isolated Python wheel is within the supported release line."""
+    try:
+        return sc_compose_version_matches(python_package_version(python, "sc-compose"), manifest.sc_compose)
+    except BootstrapError:
+        return False
 
 
 WYVERN_RELEASE_REPOSITORY = "randlee/wyvern"
@@ -671,7 +704,7 @@ def python_package_version(python: Path, package: str) -> str:
 
 
 def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
-    """Prove every installed external tool reports the exact manifest version."""
+    """Prove installed tools meet their manifest compatibility contracts."""
     if not cargo_binstall_matches(manifest):
         raise BootstrapError(f"cargo-binstall is not the exact pinned prebuilt release {manifest.cargo_binstall}.")
     for name, version in cargo_tools_for_host(manifest):
@@ -680,11 +713,13 @@ def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
     sc_compose = cargo_bin_path("sc-compose")
     command_output([str(sc_compose), "--version"])
     if not sc_compose_matches(manifest):
-        raise BootstrapError(f"sc-compose is not the exact pinned prebuilt release version {manifest.sc_compose}.")
+        raise BootstrapError(f"sc-compose must be >= {manifest.sc_compose} and < 2.0.0.")
     wyvern = cargo_bin_path("wyvern")
     command_output([str(wyvern), "--version"])
     if not wyvern_matches(manifest):
         raise BootstrapError(f"Wyvern is not the exact pinned prebuilt release version {manifest.wyvern}.")
+    if not sc_compose_wheel_matches(manifest, python):
+        raise BootstrapError(f"Python package sc-compose must be >= {manifest.sc_compose} and < 2.0.0.")
     for package, version in manifest.python_packages:
         try:
             actual = python_package_version(python, package)
@@ -762,9 +797,15 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     install_windows_msvc_target(dry_run=dry_run)
     if not sc_compose_matches(manifest):
         install_sc_compose_release(manifest, dry_run=dry_run)
+    else:
+        print("bootstrap: keeping installed sc-compose CLI within the supported release line.")
     if not wyvern_matches(manifest):
         install_wyvern_release(manifest, dry_run=dry_run)
     run(pip_install_command(python), dry_run=dry_run)
+    if dry_run or not sc_compose_wheel_matches(manifest, python):
+        run(sc_compose_wheel_install_command(python, manifest.sc_compose), dry_run=dry_run)
+    else:
+        print("bootstrap: keeping installed sc-compose wheel within the supported release line.")
     if not dry_run:
         verify_installed_tools(manifest, python)
     install_git_hooks(dry_run=dry_run)

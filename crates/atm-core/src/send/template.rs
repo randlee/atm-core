@@ -1,7 +1,7 @@
 //! Core-owned templated-send composition.
 //!
 //! The CLI only captures caller input. This module owns the deterministic
-//! merge, required-variable validation, and renderer-port invocation.
+//! merge and renderer-port invocation.
 
 use serde_json::{Map, Value};
 
@@ -60,21 +60,19 @@ pub(super) fn verify_template_send(
         request.canonical_template_path.clone(),
     );
     let inspection = composer.inspect(&source)?;
-    let vars = resolve_merged_vars(&inspection.frontmatter, request)?;
+    let vars = resolve_merged_vars(&inspection.frontmatter, request);
     let root = TemplateRoot {
         canonical_path: request.canonical_template_root.clone(),
     };
+    let template_name = request.canonical_template_path.file_name().map_or_else(
+        || "<unknown>".to_owned(),
+        |name| name.to_string_lossy().into_owned(),
+    );
     // A loader-constrained render is mandatory even for the include fallback:
     // it proves each dependency is in-root before returning the plain body.
     let rendered = composer
         .render_within_root(&source, vars.as_map(), &root)
-        .map_err(|error| {
-            if !inspection.include_references.is_empty() {
-                AtmError::template_include_unresolved(error)
-            } else {
-                AtmError::template_render_verification_failed(error)
-            }
-        })?;
+        .map_err(|error| error.with_context(format!("template {template_name}")))?;
     let rendered = RenderedBody {
         text: super::input::validate_message_text_with_limit(rendered.text, max_message_bytes)?,
     };
@@ -90,20 +88,13 @@ pub(super) fn verify_template_send(
 pub fn resolve_merged_vars(
     frontmatter: &atm_storage::TemplateFrontmatter,
     request: &TemplateSendSource,
-) -> Result<MergedVars, AtmError> {
+) -> MergedVars {
     let mut merged = frontmatter.defaults.clone();
     merged.extend(request.input_defaults.clone());
     merged.extend(request.environment_values.clone());
     merged.extend(request.var_file_values.clone());
     merged.extend(request.explicit_values.clone());
-    for required in &frontmatter.required_variables {
-        if !merged.contains_key(required.as_str()) {
-            return Err(AtmError::template_required_variable_missing(
-                required.as_str(),
-            ));
-        }
-    }
-    Ok(MergedVars(merged))
+    MergedVars(merged)
 }
 
 #[cfg(test)]
@@ -186,7 +177,7 @@ mod tests {
             metadata: Map::new(),
             ..atm_storage::TemplateFrontmatter::default()
         };
-        let merged = resolve_merged_vars(&frontmatter, &source()).expect("merged vars");
+        let merged = resolve_merged_vars(&frontmatter, &source());
         assert_eq!(merged.as_map().get("name"), Some(&json!("flag")));
         assert_eq!(merged.as_map().get("region"), Some(&json!("captured")));
     }
@@ -196,8 +187,7 @@ mod tests {
         let mut request = source();
         request.explicit_values.remove("name");
 
-        let merged = resolve_merged_vars(&atm_storage::TemplateFrontmatter::default(), &request)
-            .expect("merged vars");
+        let merged = resolve_merged_vars(&atm_storage::TemplateFrontmatter::default(), &request);
 
         assert_eq!(merged.as_map().get("name"), Some(&json!("file")));
     }
@@ -215,21 +205,9 @@ mod tests {
             .input_defaults
             .insert("priority".to_string(), json!("input"));
 
-        let merged = resolve_merged_vars(&frontmatter, &request).expect("merged vars");
+        let merged = resolve_merged_vars(&frontmatter, &request);
 
         assert_eq!(merged.as_map().get("priority"), Some(&json!("input")));
-    }
-
-    #[test]
-    fn missing_required_variable_fails_before_render() {
-        let frontmatter = atm_storage::TemplateFrontmatter {
-            required_variables: vec![variable("missing")],
-            defaults: Map::<String, Value>::new(),
-            metadata: Map::new(),
-            ..atm_storage::TemplateFrontmatter::default()
-        };
-        let error = resolve_merged_vars(&frontmatter, &source()).expect_err("missing var");
-        assert!(error.message().contains("required variable 'missing'"));
     }
 
     #[test]
@@ -255,21 +233,12 @@ mod tests {
             let mut request = source();
             request.environment_values =
                 Map::from_iter([("ATM_TEAM".to_owned(), Value::String(captured.clone()))]);
-            let merged = resolve_merged_vars(&frontmatter, &request).expect("captured admission");
+            let merged = resolve_merged_vars(&frontmatter, &request);
             assert_eq!(
                 merged.as_map().get("ATM_TEAM"),
                 Some(&Value::String(captured))
             );
         }
-
-        let mut missing = source();
-        missing.environment_values.remove("ATM_TEAM");
-        let error =
-            resolve_merged_vars(&frontmatter, &missing).expect_err("missing admission value");
-        assert_eq!(
-            error.code(),
-            atm_storage::AtmErrorCode::TemplateRequiredVariableMissing
-        );
     }
 
     #[test]
@@ -336,6 +305,37 @@ mod tests {
     }
 
     #[test]
+    fn variable_verification_failure_keeps_its_code_and_gets_one_template_context() {
+        let inspection = TemplateInspection {
+            sha: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                .parse()
+                .expect("sha"),
+            frontmatter: atm_storage::TemplateFrontmatter::default(),
+            include_references: Vec::new(),
+            output_format: atm_storage::TemplateOutputFormat::Text,
+        };
+        let named = AtmError::template_variable_resolution_failed(
+            "ERR_VAL_UNBOUND_VARIABLE: unbound variable: missing",
+        );
+        let composer = FixtureComposer {
+            inspection,
+            inspection_error: None,
+            render_result: Err(named.clone()),
+            renders: AtomicUsize::new(0),
+        };
+
+        let error = verify_template_send(&composer, &source(), input::default_message_max_bytes())
+            .expect_err("an unbound variable must fail the send");
+
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::TemplateVariableResolutionFailed
+        );
+        assert!(error.message().contains("missing"));
+        assert_eq!(error.message().matches("template template.j2").count(), 1);
+    }
+
+    #[test]
     fn include_render_failure_is_mapped_to_the_closed_containment_error() {
         let inspection = TemplateInspection {
             sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -354,7 +354,9 @@ mod tests {
         let composer = FixtureComposer {
             inspection,
             inspection_error: None,
-            render_result: Err(AtmError::config("include escaped declared root")),
+            render_result: Err(AtmError::template_include_unresolved(
+                "include escaped declared root",
+            )),
             renders: AtomicUsize::new(0),
         };
 

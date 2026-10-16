@@ -30,6 +30,7 @@ and never run lint, `bd`, or `atm`.
   "changed_files": ["crates/example/src/error.rs"],
   "files_outside_owned_paths": [],
   "context": [],
+  "external_evidence": [],
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "sprint/d-4-slug",
   "commit": "<full 40-char sha>",
@@ -56,7 +57,8 @@ Every field is present. `deliverable.text` is the only requirement you judge.
    `python3 .claude/skills/atm-bd-orchestration/scripts/jev_client.py --assignment <file>` from the repository
    root. The client builds the request (the deliverable text verbatim, the
    committed diff of `changed_files`, the `context` entries: a `path` sends
-   the whole file, `path:start-end` only those lines); never write one
+   the whole file, `path:start-end` only those lines, and the bead notes or PR
+   text each `external_evidence` reference names, fetched by the client); never write one
    yourself. If it exits 2, do what its `error.suggested_action` says. For
    `SANITY.JEV_REQUEST_TOO_LARGE`, rebuild `context` and rerun: narrow each
    entry to the line ranges the deliverable needs (`path:start-end`, e.g.

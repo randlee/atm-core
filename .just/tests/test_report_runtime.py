@@ -115,7 +115,7 @@ class ReportRuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             temp = Path(tempdir)
             with mock.patch.object(MODULE.tempfile, "tempdir", tempdir):
-                with self.assertRaisesRegex(FixtureError, "sc-compose render failed"):
+                with self.assertRaisesRegex(FixtureError, "sc-compose wheel render failed"):
                     MODULE.compose(
                         temp / "missing-template.j2", {"value": "fixture"}, temp / "out.html",
                         root=ROOT, error_type=FixtureError,
