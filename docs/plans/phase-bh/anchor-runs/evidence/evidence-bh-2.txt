@@ -1,0 +1,17 @@
+Evidence for sprint atm-bh-2 assembled by team-lead from the landed phase tree. Commands and their verbatim output follow; owned_paths come from the sprint bead metadata.
+
+$ git diff --stat ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/bead-queues plugins/atm-bd-orchestration/skills/atm-bd-orchestration/SKILL.md plugins/atm-bd-orchestration/install.py plugins/atm-bd-orchestration/tests/ plugins/atm-bd-orchestration/.claude-plugin/plugin.json plugins/atm-bd-orchestration/manifest.yaml plugins/atm-bd-orchestration/CHANGELOG.md
+ .../.claude-plugin/plugin.json                     |   2 +-
+ plugins/atm-bd-orchestration/CHANGELOG.md          |   7 +
+ plugins/atm-bd-orchestration/install.py            |  29 ++
+ plugins/atm-bd-orchestration/manifest.yaml         |   2 +-
+ .../skills/atm-bd-orchestration/SKILL.md           |   6 +-
+ .../atm-bd-orchestration/scripts/bead-queues       | 463 +++------------------
+ plugins/atm-bd-orchestration/tests/test_install.py |  40 +-
+ 7 files changed, 125 insertions(+), 424 deletions(-)
+
+$ git log --oneline ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/bead-queues plugins/atm-bd-orchestration/skills/atm-bd-orchestration/SKILL.md plugins/atm-bd-orchestration/install.py plugins/atm-bd-orchestration/tests/ plugins/atm-bd-orchestration/.claude-plugin/plugin.json plugins/atm-bd-orchestration/manifest.yaml plugins/atm-bd-orchestration/CHANGELOG.md | head -40
+5c85d38 fix(bh-2): render shared console install command
+247d78e fix(bh-2): move mmdflux requirement to console
+7166049 fix(bead-queues): require supported console version
+2081f40 feat: make bead queues a console viewer

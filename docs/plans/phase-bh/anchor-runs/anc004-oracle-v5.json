@@ -1,0 +1,85 @@
+{
+  "schema": "plan-anchor/anc004-oracle/1",
+  "anchor_id": "ANC-004",
+  "anchor_version": 5,
+  "gate": "planning",
+  "authority": {
+    "native_ruling": "01M508P4HBYKVEKKFZ1EMFGBJ9",
+    "oversight_ruling": "01M509HD0YR2ZFQRNAVSXBSB1W",
+    "intent": "docs/plans/phase-bh/intent.md",
+    "record": "docs/plans/phase-bh/anchors.json"
+  },
+  "frozen_before_live": true,
+  "cases": [
+    {
+      "id": "approved-pass-pr-reminder",
+      "text": "The dispatcher sends sanity when bd ready lists the bead, the branch is on origin, the worktree exists and merge-tree is clean; a missing PR only adds a reminder.",
+      "roles": {"relevant": "yes", "addressed": "yes", "contradicted": "no"},
+      "verdict": "satisfied",
+      "rationale": "The original approved pass fixture dispatches under the production preconditions; a missing PR is informational."
+    },
+    {
+      "id": "approved-fail-ci",
+      "text": "QA waits until the PR's CI is green and the layer is the top of the stack.",
+      "roles": {"relevant": "yes", "addressed": "no", "contradicted": "yes"},
+      "verdict": "contradicted",
+      "rationale": "The original approved fail fixture adds two prohibited hold reasons."
+    },
+    {
+      "id": "ruling-pass-unavailable",
+      "text": "When fetch of the PR target fails, branch safety is unavailable and the dispatcher holds sanity and QA; it never treats a clean merge against stale refs as proof of safety.",
+      "roles": {"relevant": "yes", "addressed": "yes", "contradicted": "no"},
+      "verdict": "satisfied",
+      "rationale": "The ruling requires unavailable branch safety to hold dispatch and forbids stale-reference fallback."
+    },
+    {
+      "id": "ruling-fail-stale-ref",
+      "text": "When fetch of the PR target fails, the dispatcher uses a stale origin ref, treats a clean merge-tree as safe, and sends QA.",
+      "roles": {"relevant": "yes", "addressed": "no", "contradicted": "yes"},
+      "verdict": "contradicted",
+      "rationale": "A failed fetch leaves the merge check unavailable, so dispatch violates the ruling."
+    },
+    {
+      "id": "clean-evidence",
+      "text": "After a successful target fetch, git merge-tree returns ok, bd ready lists the bead, its pushed branch and worktree exist, and the dispatcher sends QA despite failing CI.",
+      "roles": {"relevant": "yes", "addressed": "yes", "contradicted": "no"},
+      "verdict": "satisfied",
+      "rationale": "All branch checks are established and CI cannot hold."
+    },
+    {
+      "id": "topical-only",
+      "text": "The dashboard shows PR and CI status beside the bead while the dispatcher rules are specified elsewhere.",
+      "roles": {"relevant": "yes", "addressed": "no", "contradicted": "no"},
+      "verdict": "satisfied",
+      "rationale": "Topic overlap is present, but this item states no conflicting dispatch behavior; prohibition gating ignores compliance."
+    },
+    {
+      "id": "irrelevant",
+      "text": "The renderer truncates long agent names to fit an 80-column terminal.",
+      "roles": {"relevant": "no", "addressed": "no", "contradicted": "no"},
+      "verdict": "not_applicable",
+      "rationale": "Rendering width cannot follow or break dispatch hold policy."
+    },
+    {
+      "id": "silence-dispatch",
+      "text": "The dispatcher records the last tick timestamp in JSON; no eligibility or hold behavior is described.",
+      "roles": {"relevant": "yes", "addressed": "no", "contradicted": "no"},
+      "verdict": "satisfied",
+      "rationale": "Dispatch is in scope, but silence on the policy is not conflict under prohibition gating."
+    },
+    {
+      "id": "conflicted-hold",
+      "text": "The PR target fetch succeeds, merge-tree reports a conflict, and sanity dispatch is held until the conflict is resolved.",
+      "roles": {"relevant": "yes", "addressed": "yes", "contradicted": "no"},
+      "verdict": "satisfied",
+      "rationale": "A proven merge conflict is an allowed hold reason."
+    },
+    {
+      "id": "unavailable-as-conflict",
+      "text": "The fetch command times out. The dispatcher reports branch safety as a confirmed merge conflict and lists old conflict files without a new merge-tree result.",
+      "roles": {"relevant": "yes", "addressed": "no", "contradicted": "yes"},
+      "verdict": "contradicted",
+      "rationale": "The required state is unavailable, not conflict; old refs cannot prove a current conflict."
+    }
+  ]
+}
