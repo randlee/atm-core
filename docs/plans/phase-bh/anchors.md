@@ -9,10 +9,10 @@ Intent: `docs/plans/phase-bh/intent.md`
 | ANC-001 | locked | No logic chains | 2026-10-14 |
 | ANC-002 | locked | Business logic in one place | 2026-10-14 |
 | ANC-003 | locked | Same behavior cron or TUI | 2026-10-14 |
-| ANC-004 | locked | Holds: production reasons plus merge conflict | 2026-10-14 |
+| ANC-004 | locked | Holds: production reasons and proven merge state | 2026-10-14 |
 | ANC-005 | locked | No bd list --all | 2026-10-14 |
 | ANC-006 | locked | One GitHub call per cycle | 2026-10-14 |
-| ANC-007 | locked | --as mandatory | 2026-10-14 |
+| ANC-007 | retired | --as mandatory | 2026-10-14 |
 | ANC-008 | locked | Per-agent queue shown | 2026-10-14 |
 | ANC-009 | locked | Non-sprint tasks marked | 2026-10-14 |
 | ANC-010 | locked | Escalation cadence | 2026-10-14 |
@@ -28,6 +28,7 @@ Intent: `docs/plans/phase-bh/intent.md`
 | ANC-020 | locked | Local 24h on screen, UTC stored | 2026-10-14 |
 | ANC-021 | locked | Agent status shown, not messaged | 2026-10-14 |
 | ANC-022 | locked | TUI data is JSON | 2026-10-14 |
+| ANC-023 | locked | lead and template paths from the phase settings file; no --as | 2026-10-15 |
 
 ## ANC-001
 
@@ -67,31 +68,33 @@ Anchor: Running atm-bd-console as the cron job and as the TUI app must produce t
 
 > identical behavior when run as cron or tui
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 3.
 
 Summary: Same behavior cron or TUI
 
 Scope: any bead that changes the tick, the app loop or the cron mode
 
 Fixtures:
-- pass: The app loop and --once --headless call the same tick function and a test runs both against one fixture and compares dispatches, messages and state.
+- pass: The app loop and the cron one-shot (--headless; spelled --once --headless at plan time, flag removed in bh-9 qa1-f1-r2-fix, PR #171) call the same tick function and a test runs both against one fixture and compares dispatches, messages and state.
 - fail: The cron mode skips escalation batching to stay fast; only the app batches resends.
 
 ## ANC-004
 
-Anchor: The atm-bd-console dispatcher must hold a sanity or QA dispatch only when the bead is not in bd ready, its branch is not on origin, its worktree is missing, or its branch has a merge conflict with its PR target; PR and CI state never hold it.
+Anchor: atm-bd-console must hold sanity/QA only if the bead is not in bd ready, branch not on origin, worktree missing, or PR-target merge check conflicted/unavailable; failed fetch means unavailable, not stale-ref fallback; PR/CI never hold.
 
 > we are working off a set of rules already in production.
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 4.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 5.
 
-Summary: Holds: production reasons plus merge conflict
+Summary: Holds: production reasons and proven merge state
 
 Scope: any bead that defines when sanity or QA is dispatched or held
 
 Fixtures:
 - pass: The dispatcher sends sanity when bd ready lists the bead, the branch is on origin, the worktree exists and merge-tree is clean; a missing PR only adds a reminder.
+- pass: When fetch of the PR target fails, branch safety is unavailable and the dispatcher holds sanity and QA; it never treats a clean merge against stale refs as proof of safety.
 - fail: QA waits until the PR's CI is green and the layer is the top of the stack.
+- fail: When fetch of the PR target fails, the dispatcher uses a stale origin ref, treats a clean merge-tree as safe, and sends QA.
 
 ## ANC-005
 
@@ -131,7 +134,7 @@ Anchor: atm-bd-console must refuse to start without `--as` and must print a mess
 
 > I would prefer that bead-dispatch makes --as a mandatory arg w/ good console message if it is not set
 
-Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: locked. Version 2.
+Said by Rand, planning session 2026-10-14 (fenix), 2026-10-14. Status: retired. Version 3.
 
 Summary: --as mandatory
 
@@ -381,3 +384,15 @@ Scope: any bead that adds something to the dashboard or tabs
 Fixtures:
 - pass: render.py reads only snapshot.json and the detail files merge.json, ci.json and prs.json; a CI failure's check names are in ci.json.
 - fail: The PRs tab calls gh itself and shows results that are written nowhere.
+
+## ANC-023
+
+Anchor: The phase lead and the dispatch template paths (one per purpose: dev assign, dev fix, sanity assign, qa assign) must be read from the phase settings file .atm-bd/phase-<x>.toml; atm-bd-console and bead-queues must not take --as, must not infer the lead from $ATM_IDENTITY or from the install-generated repository yaml (which must not carry a lead), and must pass the template path, never a hard-coded name, to atm task assign --template.
+
+> since we run the cli per phase, the phase settings are where all phase specific info comes from.  as i said lead changes phase to phase, so .atm-bd/phase-gh.toml is where this info needs to come from.  the install-generated yaml should not specify lead at all and any use of it should be mapped elsewhere.  either the lead in .atm-bd/phase-bh.toml who orchestrates the phase, or lead role in atm db.  after thinking about it, we should remove --as from bead-queues and from the cli and use the phase-lead consistently.
+
+Said by Rand, post phase-end review r4, PR #216 open (fenix session, 2026-10-15), 2026-10-15. Status: locked. Version 1.
+
+Summary: lead and template paths from the phase settings file; no --as
+
+Scope: any bead that defines where the console, bead-queues or any dispatch script takes the assigning identity or a template path

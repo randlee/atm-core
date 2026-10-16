@@ -1,0 +1,28 @@
+Evidence for sprint atm-bh-7 assembled by team-lead from the landed phase tree. Commands and their verbatim output follow; owned_paths come from the sprint bead metadata.
+
+$ git diff --stat ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/state.py apps/atm-bd-console/src/atm_bd_console/config.py apps/atm-bd-console/src/atm_bd_console/log.py apps/atm-bd-console/tests/test_state.py apps/atm-bd-console/tests/test_config.py apps/atm-bd-console/tests/test_log.py
+ apps/atm-bd-console/src/atm_bd_console/config.py |  79 +++++++++
+ apps/atm-bd-console/src/atm_bd_console/log.py    |  50 ++++++
+ apps/atm-bd-console/src/atm_bd_console/state.py  | 144 +++++++++++++++++
+ apps/atm-bd-console/tests/test_config.py         |  93 +++++++++++
+ apps/atm-bd-console/tests/test_log.py            |  23 +++
+ apps/atm-bd-console/tests/test_state.py          | 195 +++++++++++++++++++++++
+ 6 files changed, 584 insertions(+)
+
+$ git log --oneline ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/state.py apps/atm-bd-console/src/atm_bd_console/config.py apps/atm-bd-console/src/atm_bd_console/log.py apps/atm-bd-console/tests/test_state.py apps/atm-bd-console/tests/test_config.py apps/atm-bd-console/tests/test_log.py | head -40
+b271f91 fix(console): centralize CLI repository root
+833b3d2 test(console): cover _team error branches
+3570690 fix(console): use configured ATM team
+3ebf2ef fix(console): align app and runner lock roots
+e8c64e1 refactor(bh-7): hide the raw sc-observability Logger behind ConsoleLogger
+f127a4c fix(bh-7): remove the temp file when a state write fails
+a2974ef fix(bh-7): malformed console.toml is ConfigInvalid naming the file
+d5301f9 test(bh-7): reap the lock test child on every path
+86ef6a8 test(bh-7): bound the lock test's readiness read with a deadline
+e5978f2 refactor(bh-7): one owner for console runtime paths
+1499af5 fix(bh-7): typed errors for undecodable state and config files
+ac3afec test(bh-7): assert UTC Z datetimes and a real flush result
+fb6171a test(bh-7): prove LockHeld snapshot age and mid-write atomicity
+00f5e22 test: read-only state directory returns IoFailed with the path (bh-7 qa1 f1)
+3ec2e0c fix(bh-4): state, config and log import PHASE_DIR from atm_bd
+51701f3 feat: add console runtime files

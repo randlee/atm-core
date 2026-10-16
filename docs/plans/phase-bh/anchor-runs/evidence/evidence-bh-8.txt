@@ -1,0 +1,28 @@
+Evidence for sprint atm-bh-8 assembled by team-lead from the landed phase tree. Commands and their verbatim output follow; owned_paths come from the sprint bead metadata.
+
+$ git diff --stat ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/render.py apps/atm-bd-console/src/atm_bd_console/status.py apps/atm-bd-console/src/atm_bd_console/prs.py apps/atm-bd-console/tests/test_render.py apps/atm-bd-console/tests/test_status.py apps/atm-bd-console/tests/test_prs.py apps/atm-bd-console/tests/fixtures/render/
+ apps/atm-bd-console/src/atm_bd_console/prs.py      |  37 ++++
+ apps/atm-bd-console/src/atm_bd_console/render.py   | 195 ++++++++++++++++++
+ apps/atm-bd-console/src/atm_bd_console/status.py   |  88 ++++++++
+ .../tests/fixtures/render/status-bar-ok.txt        |   1 +
+ .../tests/fixtures/render/status-fallback.txt      |   3 +
+ apps/atm-bd-console/tests/test_prs.py              |  57 ++++++
+ apps/atm-bd-console/tests/test_render.py           | 223 +++++++++++++++++++++
+ apps/atm-bd-console/tests/test_status.py           | 101 ++++++++++
+ 8 files changed, 705 insertions(+)
+
+$ git log --oneline ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/render.py apps/atm-bd-console/src/atm_bd_console/status.py apps/atm-bd-console/src/atm_bd_console/prs.py apps/atm-bd-console/tests/test_render.py apps/atm-bd-console/tests/test_status.py apps/atm-bd-console/tests/test_prs.py apps/atm-bd-console/tests/fixtures/render/ | head -40
+247d78e fix(bh-2): move mmdflux requirement to console
+9b4b87a fix: _error_text fails loudly on an unknown error variant (bh-8 qa f10)
+e4745b1 refactor: prs.py reuses render._fit for truncation (bh-8 qa f9)
+2058e39 refactor: one short_id helper for bead-prefix strips (bh-8 qa f8)
+7403be1 test: pin the fallback row order and the merge error glyph (bh-8 qa f7)
+60bb3db test: assert the mermaid text piped to mmdflux (bh-8 qa f6)
+a623293 docs: record the Errors row time choice in render (bh-8 qa f5)
+e0b9889 test: cover gh ok with truncated in the status bar (bh-8 qa f4)
+f189415 test: clip long titles with wide chars and emoji at 80 and 120 (bh-8 qa f2)
+b89ccba test: render the contract running snapshot unmodified (bh-8 qa f1)
+e4d2d79 test(console): use shared fake binary fixture
+1e42a22 fix(console): preserve mmdflux output verbatim
+b455ec5 fix(console): preserve renderer error details
+02724c3 feat(console): render snapshot dashboard status and PRs

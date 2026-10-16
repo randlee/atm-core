@@ -10,7 +10,7 @@ Why now: on sc-lint 2026-10-14, 11 of 19 open tasks were on beads outside phase-
 
 ## What success looks like
 
-- One tick function; the app (60 s) and the cron (`--once --headless`, 10-15 min) produce the same dispatches, messages and state.
+- One tick function; the app (60 s) and the cron (`--headless`, one-shot, 10-15 min; the plan-time spelling `--once --headless` was removed in bh-9 qa1-f1-r2-fix, PR #171) produce the same dispatches, messages and state.
 - The dashboard shows every agent's open tasks and marks the ones outside the phase or without a bead.
 - The dispatcher automates the production rules and adds none; GitHub is called only at dispatch.
 

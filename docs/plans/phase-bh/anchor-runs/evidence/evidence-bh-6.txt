@@ -1,0 +1,28 @@
+Evidence for sprint atm-bh-6 assembled by team-lead from the landed phase tree. Commands and their verbatim output follow; owned_paths come from the sprint bead metadata.
+
+$ git diff --stat ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/model.py apps/atm-bd-console/src/atm_bd_console/dispatch.py apps/atm-bd-console/tests/test_model.py apps/atm-bd-console/tests/test_dispatch.py apps/atm-bd-console/tests/fixtures/tick/
+ apps/atm-bd-console/src/atm_bd_console/dispatch.py | 128 ++++++
+ apps/atm-bd-console/src/atm_bd_console/model.py    | 401 ++++++++++++++++++
+ .../atm-bd-console/tests/fixtures/tick/mermaid.txt |   7 +
+ apps/atm-bd-console/tests/test_dispatch.py         | 131 ++++++
+ apps/atm-bd-console/tests/test_model.py            | 456 +++++++++++++++++++++
+ 5 files changed, 1123 insertions(+)
+
+$ git log --oneline ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/model.py apps/atm-bd-console/src/atm_bd_console/dispatch.py apps/atm-bd-console/tests/test_model.py apps/atm-bd-console/tests/test_dispatch.py apps/atm-bd-console/tests/fixtures/tick/ | head -40
+10d23ee fix(console): allow absent roster timestamps
+3d03abf test(bh-6): tick() PR row for a sprint layer above holding no step
+c7639ad test: strengthen model coverage
+52f8d71 fix: report independent dispatch holds
+14db296 fix: use tasks when selecting due reads
+d389add fix: centralize cycle due decision
+2058e39 refactor: one short_id helper for bead-prefix strips (bh-8 qa f8)
+a647695 fix(console): one sprint_of lookup for due, dispatch and sprint views
+ef495b8 fix(console): mark out-of-phase task beads red, missing beads yellow
+aed07ba fix(console): keep not-ready holds silent
+18476ef fix(console): deduplicate branch problems by work owner
+e38ee81 fix(console): retain read-derived problems between refreshes
+4928dc7 test(console): cover agent task status over presence
+9b95c40 fix(bh-1): atm-bh-1.qf-tick-context-qa-f1 one owner for the stack
+c157e04 fix(console): preserve dispatch and merge invariants
+33c9c26 test(console): guard tick errors and problem reporting
+c706489 feat(console): implement pure tick rules and dispatch
