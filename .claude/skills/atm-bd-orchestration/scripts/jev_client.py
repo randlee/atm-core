@@ -14,6 +14,10 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"))
+import repo_config
+from sprint_index_common import load_phase_config
+
 MODEL = "jev-1.13.0"
 HOST = "api.typesafe.ai"
 MAX_REQUEST_BYTES = 96000  # Jev documents 32k state tokens of a 64k request budget; ~3 bytes per token of code.
@@ -423,15 +427,21 @@ def main(argv=None):
     mode.add_argument("--assignment", type=Path, help="a sanity assignment (fenced JSON body); the client builds the request")
     mode.add_argument("--error", help="with --announce: announce this JEV child error verbatim; no probe runs")
     parser.add_argument("--announce", action="store_true",
-                        help="with --startup or --error: send a failure to ATM's escalation recipients (else --lead)")
-    parser.add_argument("--lead", help="ATM lead identity; required with --announce, the fallback recipient")
+                        help="with --startup or --error: send a failure to ATM's escalation recipients (else the phase lead)")
+    parser.add_argument("--phase", help="phase whose tracked settings name the lead; required with --announce")
     args = parser.parse_args(argv)
-    if args.announce and (args.request or args.assignment or not args.lead or args.lead.startswith("-")):
-        parser.error("--announce requires --startup or --error and an explicit --lead identity")
+    if args.announce and (args.request or args.assignment or not args.phase):
+        parser.error("--announce requires --startup or --error and an explicit --phase")
     if args.error is not None and (not args.announce or not args.error.strip()):
         parser.error("--error requires --announce and a nonempty error")
+    phase_lead = None
+    if args.phase:
+        try:
+            phase_lead = load_phase_config(repo_config.repo_root(), args.phase)["lead"]
+        except (repo_config.ConfigError, RuntimeError, OSError, ValueError) as exc:
+            parser.error(str(exc))
     if args.error is not None:
-        announce(f"dev-sanity Jev child failed: {args.error}. Selection takes the LLM reply for JEV slots until a Jev child succeeds.", args.lead)
+        announce(f"dev-sanity Jev child failed: {args.error}. Selection takes the LLM reply for JEV slots until a Jev child succeeds.", phase_lead)
         print(json.dumps({"success": True, "data": {"announced": args.error}, "error": None}))
         return 0
     try:
@@ -461,7 +471,7 @@ def main(argv=None):
         result = failure(JevError("VALIDATION.INPUT", "Request file unavailable or invalid JSON"))
     if args.announce and not result["success"]:
         error = result["error"]
-        announce(f"dev-sanity Jev startup failed: {error['code']}: {error['message']}. No sc-sanity-jev checks run; dev-sanity records every JEV slot as unavailable until a startup probe passes.", args.lead)
+        announce(f"dev-sanity Jev startup failed: {error['code']}: {error['message']}. No sc-sanity-jev checks run; dev-sanity records every JEV slot as unavailable until a startup probe passes.", phase_lead)
     print(json.dumps(result, allow_nan=False))
     return 0 if result["success"] else 2
 

@@ -38,8 +38,9 @@ rather than reaching an agent:
    Stop on any failure; never pipe a render straight into `jq`, which drops
    a failed bead silently.
 
-3. Write the plan file `<plans_dir>/phase-<x>.jsonl` and the phase file
-   `.atm-bd/phase-<x>.toml` by hand (see "Phase definition" below).
+3. Write the plan file `<plans_dir>/phase-<x>.jsonl`. Create the phase file with
+   `.claude/skills/atm-beads/scripts/phase-config init --phase <x> --lead <appointed-lead>`
+   before validation or pouring (see "Phase definition" below).
 4. Validate the rendered plan against it. This step is mandatory:
 
    ```bash
@@ -89,7 +90,26 @@ The tracked phase file `.atm-bd/phase-<x>.toml` holds exactly:
 plan = "<plans_dir>/phase-<x>.jsonl"
 root = "<prefix>-phase-<x>"
 integration_branch = "integrate/phase-<x>"
+lead = "appointed-phase-lead"
+
+[templates]
+dev = ".claude/skills/atm-bd-orchestration/templates/dev-template.xml.j2"
+dev_fix = ".claude/skills/atm-bd-orchestration/templates/dev-fix.xml.j2"
+fix = ".claude/skills/atm-bd-orchestration/templates/fix-assignment.xml.j2"
+sanity = ".claude/skills/atm-bd-orchestration/templates/dev-sanity-template.xml.j2"
+qa = ".claude/skills/atm-bd-orchestration/templates/qa-template.xml.j2"
+plan_review = ".claude/skills/atm-bd-orchestration/templates/plan-review-template.xml.j2"
+review = ".claude/skills/atm-bd-orchestration/templates/review-template.xml.j2"
 ```
+
+`phase-config init --phase <x> --lead <appointed-lead>` writes these seven
+default template paths and the explicit phase lead. It derives `plan`, `root`
+and `integration_branch` from the repository's `plans_dir`, `bead_prefix` and
+`integration_branch_pattern`, and refuses to overwrite an existing phase file.
+Review the resulting paths and branch before validation. All fields are required;
+template paths must name existing files inside the installed template directory.
+Runtime readers never substitute defaults, repository YAML or environment identities
+for missing phase settings. A lead handoff updates this tracked file.
 
 The file is never generated from beads and beads are never generated from the
 file. A plan change is one planner transaction: change the beads, edit the

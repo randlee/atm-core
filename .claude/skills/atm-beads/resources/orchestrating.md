@@ -163,8 +163,8 @@ refusal) is defined once, in the `atm-bd-orchestration` skill ("Dispatch").
 
 1. `bd ready -l phase-<x> -n 0` lists the dev, sanity check, QA and finding beads
    whose blockers are closed, highest priority first.
-2. Assign each ready bead to the agent the lead picks with the matching assignment
-   template, using the bead id as `task_id`.
+2. Assign each ready bead to the agent the phase lead picks with the matching
+   purpose from `.atm-bd/phase-<x>.toml` `[templates]`, using the bead id as `task_id`.
 3. When a task closes, its bead closes with it, except after a failed sanity check or plan review, which leaves the bead open. Run `bd sync`, then `bd ready` again. After a
    green sanity check or a triaged QA, create and wire the QA or finding beads
    first, then run `bd ready`.

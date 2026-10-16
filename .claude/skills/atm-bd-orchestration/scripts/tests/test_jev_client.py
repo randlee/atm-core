@@ -4,12 +4,16 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import sys
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
 spec = importlib.util.spec_from_file_location("jev_client", Path(__file__).parents[1] / "jev_client.py")
 client = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(client)
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "atm-beads/tests"))
+from phase_fixtures import write_phase
 
 
 def reply():
@@ -26,13 +30,23 @@ class JevClientTests(unittest.TestCase):
                 client.evaluate(client.startup_request())
             http.assert_not_called()
 
-    def startup(self, argv, team, daemon, environ=None):
+    def startup(self, argv, team, daemon, environ=None, phase_lead="appointed-lead"):
         """Run the startup probe without a key; `atm escalation list` answers with `team` / `daemon` recipients."""
         def run(cmd, **kwargs):
             listed = {"--team": team} if "--team" in cmd else {"": daemon}
             recipients = next(iter(listed.values()))
             return MagicMock(returncode=0 if recipients is not None else 1, stdout=json.dumps({"recipients": recipients or []}))
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            write_phase(repo, "x", lead=phase_lead)
+            config = repo / ".claude/project/atm-bd-orchestration.yaml"
+            config.parent.mkdir(parents=True)
+            config.write_text("lead: stale-repository-lead\n")
+            return self.run_startup(argv, environ, repo, run)
+
+    def run_startup(self, argv, environ, repo, run):
         with patch.dict(client.os.environ, environ if environ is not None else {"ATM_TEAM": "t"}, clear=True), \
+             patch.object(client.repo_config, "repo_root", return_value=repo), \
              patch.object(client.subprocess, "run", side_effect=run) as send:
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
@@ -41,18 +55,18 @@ class JevClientTests(unittest.TestCase):
         return rc, json.loads(output.getvalue()), sends
 
     def test_startup_announces_to_escalation_recipients_else_lead(self):
-        rc, result, sends = self.startup(["--startup", "--announce", "--lead", "appointed-lead"], ["oversight@team"], ["daemon@host"])
+        rc, result, sends = self.startup(["--startup", "--announce", "--phase", "x"], ["oversight@team"], ["daemon@host"])
         self.assertEqual(rc, 2)
         self.assertTrue(result["error"]["recoverable"])
         self.assertEqual(set(result["error"]), {"code", "message", "recoverable", "suggested_action"})
         self.assertEqual([to for to, _ in sends], ["oversight@team"])
         self.assertIn(result["error"]["message"], sends[0][1])
-        _, _, sends = self.startup(["--startup", "--announce", "--lead", "appointed-lead"], [], ["daemon@host"])
+        _, _, sends = self.startup(["--startup", "--announce", "--phase", "x"], [], ["daemon@host"])
         self.assertEqual([to for to, _ in sends], ["daemon@host"])
-        _, _, sends = self.startup(["--startup", "--announce", "--lead", "appointed-lead"], [], None)
+        _, _, sends = self.startup(["--startup", "--announce", "--phase", "x"], [], None)
         self.assertEqual([to for to, _ in sends], ["appointed-lead"])
         self.assertTrue(sends[0][1].endswith("No escalation recipient is set."))
-        _, _, sends = self.startup(["--startup", "--announce", "--lead", "appointed-lead"], None, ["daemon@host"], environ={})
+        _, _, sends = self.startup(["--startup", "--announce", "--phase", "x"], None, ["daemon@host"], environ={})
         self.assertEqual([to for to, _ in sends], ["daemon@host"])
 
     def test_startup_without_announce_sends_nothing(self):
@@ -64,21 +78,49 @@ class JevClientTests(unittest.TestCase):
     def test_error_announces_a_child_failure_verbatim_without_probing(self):
         error = "SANITY.JEV_UNAVAILABLE: Jev HTTP 503; response body withheld"
         with patch.object(client.http.client, "HTTPSConnection") as http:
-            rc, result, sends = self.startup(["--announce", "--error", error, "--lead", "appointed-lead"], ["oversight@team"], ["daemon@host"],
+            rc, result, sends = self.startup(["--announce", "--error", error, "--phase", "x"], ["oversight@team"], ["daemon@host"],
                                              environ={"ATM_TEAM": "t", "TYPESAFE_API_KEY": "test-only-key"})
             http.assert_not_called()
         self.assertEqual((rc, result), (0, {"success": True, "data": {"announced": error}, "error": None}))
         self.assertEqual([to for to, _ in sends], ["oversight@team"])
         self.assertIn(error, sends[0][1])
-        _, _, sends = self.startup(["--announce", "--error", error, "--lead", "appointed-lead"], [], None)
+        _, _, sends = self.startup(["--announce", "--error", error, "--phase", "x"], [], None)
         self.assertEqual([to for to, _ in sends], ["appointed-lead"])
         self.assertIn(error, sends[0][1])
         self.assertTrue(sends[0][1].endswith("No escalation recipient is set."))
-        for argv in (["--error", error], ["--announce", "--error", "", "--lead", "appointed-lead"],
-                     ["--announce", "--error", error], ["--startup", "--error", error, "--announce", "--lead", "appointed-lead"],
-                     ["--request", "r.json", "--announce", "--lead", "appointed-lead"]):
+        for argv in (["--error", error], ["--announce", "--error", "", "--phase", "x"],
+                     ["--announce", "--error", error], ["--startup", "--error", error, "--announce", "--phase", "x"],
+                     ["--request", "r.json", "--announce", "--phase", "x"]):
             with self.subTest(argv=argv), self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                 client.main(argv)
+
+    def test_announcement_uses_the_selected_phase_lead_despite_environment_and_yaml(self):
+        for lead in ("phase-owner-one", "phase-owner-two"):
+            with self.subTest(lead=lead):
+                _, _, sends = self.startup(["--startup", "--announce", "--phase", "x"], [], None,
+                                           environ={"ATM_IDENTITY": "wrong-environment-lead"}, phase_lead=lead)
+                self.assertEqual([recipient for recipient, _ in sends], [lead])
+
+    def test_missing_phase_settings_stop_before_probe_or_send(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            path = write_phase(repo, "x")
+            for invalid in ("lead = ''\n", "not valid TOML"):
+                with self.subTest(invalid=invalid):
+                    path.write_text(invalid)
+                    with patch.object(client.repo_config, "repo_root", return_value=repo), \
+                         patch.object(client, "evaluate") as evaluate, \
+                         patch.object(client.subprocess, "run") as send, \
+                         contextlib.redirect_stderr(io.StringIO()) as stderr, self.assertRaises(SystemExit):
+                        client.main(["--startup", "--announce", "--phase", "x"])
+                    self.assertIn("phase-x.toml", stderr.getvalue())
+                    evaluate.assert_not_called()
+                    send.assert_not_called()
+
+    def test_legacy_lead_override_is_rejected(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()) as stderr:
+            client.main(["--startup", "--announce", "--lead", "wrong-lead"])
+        self.assertIn("unrecognized arguments: --lead", stderr.getvalue())
 
     def test_successful_transport(self):
         conn = MagicMock()
