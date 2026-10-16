@@ -9,10 +9,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from phase_fixtures import phase_data, phase_toml, write_phase
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "validate-plan"
 PLAN = [{"sprint": "t-1"}, {"sprint": "t-2", "depends_on": ["t-1"]}]
-TOML = 'plan = "plans/phase-t.jsonl"\nroot = "x-phase-t"\nintegration_branch = "integrate/phase-t"\n'
+TOML = phase_toml(phase_data())
 
 
 def container(bid: str) -> dict:
@@ -60,8 +62,7 @@ class Repo(unittest.TestCase):
         config = self.repo / ".claude/project/atm-bd-orchestration.yaml"
         config.parent.mkdir(parents=True)
         config.write_text("plans_dir: plans\nbead_prefix: x\n")
-        (self.repo / ".atm-bd").mkdir()
-        (self.repo / ".atm-bd/phase-t.toml").write_text(TOML)
+        write_phase(self.repo)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -236,6 +237,29 @@ class CiCheck(Repo):
         self.assertEqual(len(got), 2, got)
         self.assertIn("plans/phase-t.jsonl: t-1 depends_on unknown sprint(s): t-9", got[0])
         self.assertTrue(got[1].startswith(".atm-bd/phase-u.toml: "), got)
+
+    def test_missing_phase_lead_and_each_template_are_named(self):
+        for key in ("lead", *phase_data()["templates"]):
+            with self.subTest(key=key):
+                data = phase_data()
+                target = data if key == "lead" else data["templates"]
+                target.pop(key)
+                (self.repo / ".atm-bd/phase-t.toml").write_text(phase_toml(data))
+                out = self.ci(".atm-bd/phase-t.toml", "plans/phase-t.jsonl")
+                self.assertEqual(out.returncode, 5, out.stdout + out.stderr)
+                self.assertIn(".atm-bd/phase-t.toml", out.stdout)
+                self.assertIn(f"{key}: required", out.stdout)
+
+    def test_each_dangling_template_is_named_before_bead_queries(self):
+        for key in phase_data()["templates"]:
+            with self.subTest(key=key):
+                data = phase_data()
+                data["templates"][key] = f".claude/skills/atm-bd-orchestration/templates/missing-{key}.xml.j2"
+                (self.repo / ".atm-bd/phase-t.toml").write_text(phase_toml(data))
+                out = self.ci(".atm-bd/phase-t.toml", "plans/phase-t.jsonl")
+                self.assertEqual(out.returncode, 5, out.stdout + out.stderr)
+                self.assertIn(f"templates.{key}", out.stdout)
+                self.assertIn(f"missing-{key}.xml.j2", out.stdout)
 
     def test_ci_takes_no_other_option(self):
         out = self.run_vp("--ci", "--phase", "t", env=self.env)

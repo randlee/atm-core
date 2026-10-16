@@ -1,0 +1,50 @@
+Evidence for sprint atm-bh-9 assembled by team-lead from the landed phase tree. Commands and their verbatim output follow; owned_paths come from the sprint bead metadata.
+
+$ git diff --stat ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/runner.py apps/atm-bd-console/src/atm_bd_console/cli.py apps/atm-bd-console/tests/test_runner.py apps/atm-bd-console/tests/test_cli.py
+ apps/atm-bd-console/src/atm_bd_console/cli.py    |  81 ++++++++
+ apps/atm-bd-console/src/atm_bd_console/runner.py | 113 +++++++++++
+ apps/atm-bd-console/tests/test_cli.py            | 162 ++++++++++++++++
+ apps/atm-bd-console/tests/test_runner.py         | 230 +++++++++++++++++++++++
+ 4 files changed, 586 insertions(+)
+
+$ git log --oneline ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/runner.py apps/atm-bd-console/src/atm_bd_console/cli.py apps/atm-bd-console/tests/test_runner.py apps/atm-bd-console/tests/test_cli.py | head -40
+b9598ba fix(console): bind runner store for interactive app
+69221c2 fix(console): load interactive state once
+a300079 test(console): name stubbed write failure accurately
+37d098c test(console): cover real read-only runner store
+f0f6008 test(console): exercise real held lock
+e98d67c test(console): inject clocks for stopped paths
+e7f4da0 fix(console): report headless lock failures
+7fc7de7 test(console): cover CLI launch paths
+df0395c test(console): exercise lazy textual CLI modes
+dbaaa2c fix(console): require caller-owned runner store
+b271f91 fix(console): centralize CLI repository root
+92a7928 test(console): cover headless stopped paths
+d9ee0e8 test(console): cover closed root write failure
+ed24d53 fix(console): expose persistence failures
+c3f2bcc fix(console): retain merge read errors
+3772b93 test(console): cover show state paths
+5375f0f test(console): cover closed root persistence
+4f71f2d fix(console): remove unused once flag
+d813712 test(atm-source-team): pin runner.step's members and task list to config.team
+ab907f3 fix(atm-source-team): pass Config.team to send and assign
+3570690 fix(console): use configured ATM team
+867d781 fix(console): define once headless mode
+b816e2a fix(console): return config read snapshots
+65ba619 fix(console): preserve phase read failures
+ea49acc fix(console): centralize initial state
+d9e1151 fix(console): report lock acquisition errors
+b64b0fd test(console): cover cli launch paths
+d8b9a5b test(console): cover github runner modes
+ef2ea56 test(console): cover headless tick parity
+4560079 fix(console): surface snapshot write failures
+a386cf7 fix(console): show stopped snapshots when stale
+9196c6e fix(console): limit headless output to tick actions
+908a118 fix(console): persist closed-root tick
+b1fae3d test(console): guard lazy TUI import
+226e825 fix(console): lazy load interactive app
+6da0520 fix(console): retain lock through headless tick
+b2f9339 fix(console): validate missing phase argument
+a54d317 fix(console): validate CLI launch prerequisites
+3586b44 fix(console): report headless stale locks
+215fbcb test(console): cover failed action errors

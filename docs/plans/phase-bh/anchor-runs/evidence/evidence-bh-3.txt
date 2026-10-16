@@ -1,0 +1,27 @@
+Evidence for sprint atm-bh-3 assembled by team-lead from the landed phase tree. Commands and their verbatim output follow; owned_paths come from the sprint bead metadata.
+
+$ git diff --stat ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/atm_source.py apps/atm-bd-console/tests/test_atm_source.py apps/atm-bd-console/tests/fixtures/atm/
+ .../src/atm_bd_console/atm_source.py               | 116 +++++++++++
+ .../atm-bd-console/tests/fixtures/atm/members.json |   9 +
+ apps/atm-bd-console/tests/fixtures/atm/tasks.json  |  30 +++
+ apps/atm-bd-console/tests/test_atm_source.py       | 220 +++++++++++++++++++++
+ 4 files changed, 375 insertions(+)
+
+$ git log --oneline ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/atm_source.py apps/atm-bd-console/tests/test_atm_source.py apps/atm-bd-console/tests/fixtures/atm/ | head -40
+2069be1 test(console): pin --team on every atm entry point
+ab907f3 fix(atm-source-team): pass Config.team to send and assign
+10d23ee fix(console): allow absent roster timestamps
+3570690 fix(console): use configured ATM team
+62fa3a4 test: drop the invented closed-task fixture (bh-3 f4 round 3)
+3dbd368 fix: match ATM task list keys to real output (bh-3 f4 round 2)
+95f47cb docs: say why atm_source keeps its own subprocess runner (bh-3 qa f9)
+dea8365 refactor: split ATM source comprehensions and unfold one-line ifs (bh-3 qa f8)
+ba0ae27 fix: name the command in ATM Err fixes and match ParseFailed source (bh-3 qa f7)
+9deb9a4 fix: reject naive and null ATM timestamps (bh-3 qa f6)
+c3babef docs: record atm_source team resolution (bh-3 qa f5)
+5aa3ac7 fix: validate ATM task states
+87d08d8 fix: allow ATM operation timeout injection
+3b417d7 fix: clean failed dispatch vars
+fa1b842 fix: type ATM launch failures
+2e8749f test: cover ATM source adapter
+26e8db2 feat: add ATM source adapter

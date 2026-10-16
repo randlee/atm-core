@@ -1,0 +1,26 @@
+Evidence for sprint atm-bh-5 assembled by team-lead from the landed phase tree. Commands and their verbatim output follow; owned_paths come from the sprint bead metadata.
+
+$ git diff --stat ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/git_source.py apps/atm-bd-console/src/atm_bd_console/github_source.py apps/atm-bd-console/tests/test_git_source.py apps/atm-bd-console/tests/test_github_source.py apps/atm-bd-console/tests/fixtures/github/
+ .../src/atm_bd_console/git_source.py               |  88 ++++++++++
+ .../src/atm_bd_console/github_source.py            |  80 +++++++++
+ .../tests/fixtures/github/graphql-open-prs.json    |  87 ++++++++++
+ .../tests/fixtures/github/rest-open-prs.json       |  53 ++++++
+ apps/atm-bd-console/tests/test_git_source.py       | 110 ++++++++++++
+ apps/atm-bd-console/tests/test_github_source.py    | 186 +++++++++++++++++++++
+ 6 files changed, 604 insertions(+)
+
+$ git log --oneline ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/git_source.py apps/atm-bd-console/src/atm_bd_console/github_source.py apps/atm-bd-console/tests/test_git_source.py apps/atm-bd-console/tests/test_github_source.py apps/atm-bd-console/tests/fixtures/github/ | head -40
+89ba887 test(bh-5): gh timeout test blocks until killed, no wall-clock race
+3671581 fix(bh-5): open_prs names no repository; gh fills {owner}/{repo} from the checkout
+2ddc212 refactor(bh-5): one subprocess runner with a timeout for the git, gh and bd sources
+af57e6e fix(bh-5): worktrees() skips a bare repository's HEAD-less record
+94b4c9d fix(bh-5): gh-reported timeouts carry REQUEST_TIMEOUT_S, not a literal 20
+62ae8b0 fix(bh-5): a wrong-shape GitHub body is ParseFailed, never an exception
+a04e5be test(bh-5): count gh invocations, not argv lines
+45b9a90 test(bh-5): load recorded GitHub GraphQL and REST bodies
+db96703 fix(console): name failing commit statuses from StatusContext (bh-5 f5)
+d5327ab fix(console): classify gh failures by the parsed HTTP status (bh-5 qa1-f4)
+ca247d2 test(console): graphql totalCount 101 sets truncated, 100 does not (bh-5 qa1-f3)
+2c17572 test(console): git_source on a real repo with a bare origin
+235f3a7 test: cover GitHub source outcomes
+718f5fc feat: add git and github sources

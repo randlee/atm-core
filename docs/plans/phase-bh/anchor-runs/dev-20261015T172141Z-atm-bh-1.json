@@ -1,0 +1,1920 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261015T172141Z-atm-bh-1",
+  "gate": "dev",
+  "created_at": "2026-10-15T17:21:41+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core/docs/plans/phase-bh/anchors.json",
+  "plan": "phase-current",
+  "item": {
+    "id": "atm-bh-1",
+    "title": "bh-1: contract: Result, source and tick types, JSON codec",
+    "source": "/var/folders/3q/0f7c3v_j6ps28gtz8xfz99km0000gn/T/plan-anchoring-atm-bh-1.fS37NC/item.txt",
+    "chars": 21237,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When GitHub is disabled or unavailable (no connectivity, timeout, rejected), atm-bd-console must still dispatch, check merges and send problems, and must show the GitHub state in the status bar.",
+      "quote": "yes, if gh disabled or not available (no connectivity, timeout, rejected) we proceed with work.  gh status should show up in status bar at bottom.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "verdict": "not_addressed",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.72,
+          "probabilities": {
+            "yes": 0.81,
+            "no": 0.19,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.85,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.9,
+            "unclear": 0.1
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.98,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.97,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.72,
+      "explanation": "The delivered work does not show the directive was followed.",
+      "usage": {
+        "input_tokens": 8043,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25492
+    },
+    {
+      "anchor_id": "ANC-020",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must show times on screen in 24-hour local time and store every time in logs and JSON files in UTC.",
+      "quote": "time in 24h local time.  logs/under the hood in utc.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "verdict": "not_addressed",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.85,
+          "probabilities": {
+            "yes": 0.9,
+            "no": 0.1,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.77,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.85,
+            "unclear": 0.14
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.77,
+          "probabilities": {
+            "yes": 0.12,
+            "no": 0.85,
+            "unclear": 0.03
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.06,
+            "no": 0.93,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.77,
+      "explanation": "The delivered work does not show the directive was followed.",
+      "usage": {
+        "input_tokens": 8025,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25387
+    },
+    {
+      "anchor_id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must show each agent's status (busy, stalling, blocked, offline) as an icon next to its name and must not send messages about agent status, which ATM already nudges and escalates.",
+      "quote": "stalled w/ active task, atm nudge should kick in, atm already has escellation in place.  so this should just show up as busy/stalling/blocked/offline w/ appropriate icons next to name",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "verdict": "not_addressed",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.93,
+            "no": 0.07,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.86,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.91,
+            "unclear": 0.09
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.86,
+          "probabilities": {
+            "yes": 0.07,
+            "no": 0.91,
+            "unclear": 0.02
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.86,
+      "explanation": "The delivered work does not show the directive was followed.",
+      "usage": {
+        "input_tokens": 8045,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25490
+    },
+    {
+      "anchor_id": "ANC-022",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Everything atm-bd-console shows on screen must come from JSON files it writes (a current snapshot plus detail files), so oversight can read the same data.",
+      "quote": "Note all the data we are showing in tui should be in json. for oversight to read.  I expect there is a current state snapshot, then more extensive separate files for things like ci failure data, ...",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "not_addressed",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.86,
+          "probabilities": {
+            "yes": 0.91,
+            "no": 0.09,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.61,
+          "probabilities": {
+            "yes": 0.1,
+            "no": 0.74,
+            "unclear": 0.16
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.86,
+          "probabilities": {
+            "yes": 0.08,
+            "no": 0.91,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.76,
+          "probabilities": {
+            "yes": 0.15,
+            "no": 0.84,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.61,
+      "explanation": "The delivered work does not show the directive was followed.",
+      "usage": {
+        "input_tokens": 8030,
+        "output_tokens": 152
+      },
+      "attempts": 2,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25444
+    },
+    {
+      "anchor_id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Running atm-bd-console as the cron job and as the TUI app must produce the same dispatches, messages and state for the same beads and tasks.",
+      "quote": "identical behavior when run as cron or tui",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.4,
+          "probabilities": {
+            "yes": 0.6,
+            "no": 0.39,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.96,
+            "unclear": 0.04
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.03,
+            "no": 0.96,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.03,
+            "no": 0.97,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.4,
+      "explanation": "Jev was not confident (min confidence 0.40); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8036,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.4
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25438
+    },
+    {
+      "anchor_id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd-console dispatcher must hold a sanity or QA dispatch only when the bead is not in bd ready, its branch is not on origin, its worktree is missing, or its branch has a merge conflict with its PR target; PR and CI state never hold it.",
+      "quote": "we are working off a set of rules already in production.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 4,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "prohibition",
+      "leaning": "not_applicable",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.31,
+          "probabilities": {
+            "yes": 0.45,
+            "no": 0.54,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.98,
+            "unclear": 0.02
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.31,
+      "explanation": "Jev was not confident (min confidence 0.31); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8057,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.31
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25540
+    },
+    {
+      "anchor_id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must make at most one GitHub call per 10-minute cycle (the open-PR list), plus one each time the PRs tab opens or is refreshed.",
+      "quote": "I thought there were no gh calls",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 4,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "prohibition",
+      "leaning": "not_applicable",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.45,
+          "probabilities": {
+            "yes": 0.36,
+            "no": 0.63,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.98,
+            "unclear": 0.02
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.98,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.45,
+      "explanation": "Jev was not confident (min confidence 0.45); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8038,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.45
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25421
+    },
+    {
+      "anchor_id": "ANC-007",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must refuse to start without `--as` and must print a message explaining what `--as` is.",
+      "quote": "I would prefer that bead-dispatch makes --as a mandetory arg w/ good console message if it is not set",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.55,
+          "probabilities": {
+            "yes": 0.3,
+            "no": 0.7,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.95,
+            "unclear": 0.05
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.98,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.55,
+      "explanation": "Jev was not confident (min confidence 0.55); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8026,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.55
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25404
+    },
+    {
+      "anchor_id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dashboard must show, for each agent, its total number of assigned tasks and at most 3 of those tasks.",
+      "quote": "what i want to see is what tasks agents are assigned. i.e. queue per agent (up to a limit around ~3. if > 3 tasks, I still want to know queue depth).",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.46,
+          "probabilities": {
+            "yes": 0.35,
+            "no": 0.64,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.98,
+            "unclear": 0.02
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.98,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.46,
+      "explanation": "Jev was not confident (min confidence 0.46); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8020,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.46
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25380
+    },
+    {
+      "anchor_id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dashboard must mark each assigned task whose bead has no top epic or whose top epic is not the current phase root.",
+      "quote": "I also want to know if these are not sprint tasks.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 4,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.31,
+          "probabilities": {
+            "yes": 0.54,
+            "no": 0.45,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.8,
+          "probabilities": {
+            "yes": 0.08,
+            "no": 0.87,
+            "unclear": 0.05
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.06,
+            "no": 0.9299999999999999,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.31,
+      "explanation": "Jev was not confident (min confidence 0.31); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8024,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.31
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25414
+    },
+    {
+      "anchor_id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each new problem must be sent to its recipient (the lead, or the assignee for a merge conflict or a missing PR) in its own message when it is first seen; per recipient, problems still unresolved must be resent together in one message 10 minutes after that recipient's first send of the cycle and every 10 minutes after that.",
+      "quote": "one message per problem, then resent after 10 minutes. if more issues show up, batch them into same 10 minute interval after 1st send.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 5,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.45,
+          "probabilities": {
+            "yes": 0.63,
+            "no": 0.37,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.83,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.89,
+            "unclear": 0.09
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.98,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.45,
+      "explanation": "Jev was not confident (min confidence 0.45); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8068,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.45
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25610
+    },
+    {
+      "anchor_id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must stop polling, dispatching and sending once the phase root bead is closed, or once the phase has had no ready and no in-progress bead for 60 minutes, whether it runs as the app or as the cron job; after the root check it makes no further reads.",
+      "quote": "app would stop polling and cron would do nothing when phase ended.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 5,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.46,
+          "probabilities": {
+            "yes": 0.35,
+            "no": 0.64,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.99,
+            "unclear": 0.01
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.46,
+      "explanation": "Jev was not confident (min confidence 0.46); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8066,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.46
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25567
+    },
+    {
+      "anchor_id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every dashboard line must fit the terminal width without wrapping, with descriptions truncated to fit.",
+      "quote": "for all descriptions, we need to truncate so no line wrap occurs",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.48,
+          "probabilities": {
+            "yes": 0.34,
+            "no": 0.65,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.98,
+            "unclear": 0.02
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.88,
+          "probabilities": {
+            "yes": 0.06,
+            "no": 0.92,
+            "unclear": 0.02
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.48,
+      "explanation": "Jev was not confident (min confidence 0.48); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8012,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.48
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25377
+    },
+    {
+      "anchor_id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each dashboard row must contain only an icon, a task id, an age, a tag (a marker counts as part of the tag) and a description.",
+      "quote": "avoid any text that is not necessary. concise and narrower",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 3,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "near_threshold": true,
+      "unstable": true,
+      "answers_second": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.64,
+          "probabilities": {
+            "yes": 0.76,
+            "no": 0.23,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.93,
+            "unclear": 0.06
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.51,
+          "probabilities": {
+            "yes": 0.27,
+            "no": 0.67,
+            "unclear": 0.05
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "verdict_first": "underspecified",
+      "verdict_second": "not_addressed",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.52,
+          "probabilities": {
+            "yes": 0.68,
+            "no": 0.31,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.93,
+            "unclear": 0.06
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.58,
+          "probabilities": {
+            "yes": 0.22,
+            "no": 0.72,
+            "unclear": 0.06
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.51,
+      "explanation": "Jev was not confident (min confidence 0.51); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8027,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.52
+        },
+        {
+          "ask": "first",
+          "role": "conflict",
+          "question_id": "violated",
+          "choice": "no",
+          "confidence": 0.58
+        },
+        {
+          "ask": "second",
+          "role": "conflict",
+          "question_id": "violated",
+          "choice": "no",
+          "confidence": 0.51
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25401
+    },
+    {
+      "anchor_id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "After the atm-bd-console app has started, no error may stop it: each error must be shown on the dashboard and the app must continue with its next tick; only a launch check may exit, with a message.",
+      "quote": "tui can not fail after it starts.  error w/ good message when launch is fine.  after launch, errors should be displayed and it continues w/ best effort.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 3,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "near_threshold": true,
+      "unstable": true,
+      "answers_second": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.66,
+          "probabilities": {
+            "yes": 0.22,
+            "no": 0.77,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.97,
+            "unclear": 0.03
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.98,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "verdict_first": "underspecified",
+      "verdict_second": "not_applicable",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.53,
+          "probabilities": {
+            "yes": 0.3,
+            "no": 0.69,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.97,
+            "unclear": 0.03
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.98,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.53,
+      "explanation": "Jev was not confident (min confidence 0.53); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8050,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.53
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25507
+    },
+    {
+      "anchor_id": "ANC-015",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every 10-minute cycle atm-bd-console must check each pushed bead branch for merge conflicts against its PR target with git (no GitHub call), report a conflict to the assignee naming the conflicted files, and hold that bead's dispatch.",
+      "quote": "checking for mergeability is important.  big mistake agents make.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.49,
+          "probabilities": {
+            "yes": 0.66,
+            "no": 0.33,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.97,
+            "unclear": 0.03
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.06,
+            "no": 0.93,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.49,
+      "explanation": "Jev was not confident (min confidence 0.49); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8055,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.49
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25533
+    },
+    {
+      "anchor_id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must report a red CI state only for the head of the top layer of the phase stack, to the lead, and must not report or act on CI state of lower layers.",
+      "quote": "ci failed is tricky w/ stack.  we do not fix lower layers, we do need to report if top of stack is red.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.45,
+          "probabilities": {
+            "yes": 0.63,
+            "no": 0.36,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.93,
+            "unclear": 0.07
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.93,
+            "unclear": 0.03
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.45,
+      "explanation": "Jev was not confident (min confidence 0.45); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8037,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.45
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25441
+    },
+    {
+      "anchor_id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must have a setting that turns off GraphQL (falling back to REST) and one that turns off every GitHub call.",
+      "quote": "we should add some config flags that disable graphql and optionally gh so we can shut them down if necessary.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.59,
+          "probabilities": {
+            "yes": 0.73,
+            "no": 0.26,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.69,
+          "probabilities": {
+            "yes": 0.07,
+            "no": 0.79,
+            "unclear": 0.14
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.86,
+          "probabilities": {
+            "yes": 0.06,
+            "no": 0.91,
+            "unclear": 0.03
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.95,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.59,
+      "explanation": "Jev was not confident (min confidence 0.59); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8030,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.59
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25411
+    },
+    {
+      "anchor_id": "ANC-019",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The status bar must show the GitHub state, done and total work as a count, percent and bar, where total includes the average findings per finished sprint projected onto unfinished sprints, and the phase's active time excluding time with nothing in progress.",
+      "quote": "we should probably define a few metrics for status bar at bottom including , # & % complete (project average # of findings per sprint for all unfinished sprints) i.e. 2/8 [xx-----] , time (how long phase has been running - paused time).",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 3,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.43,
+          "probabilities": {
+            "yes": 0.62,
+            "no": 0.37,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.83,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.89,
+            "unclear": 0.1
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.62,
+          "probabilities": {
+            "yes": 0.18,
+            "no": 0.75,
+            "unclear": 0.07
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.43,
+      "explanation": "Jev was not confident (min confidence 0.43); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 8049,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.43
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25545
+    },
+    {
+      "anchor_id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-console must never run `bd list --all`.",
+      "quote": "Do NOT use `bd list --all`",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.73,
+          "probabilities": {
+            "yes": 0.82,
+            "no": 0.18,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.85,
+          "probabilities": {
+            "yes": 0.9,
+            "no": 0.05,
+            "unclear": 0.05
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.96,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.38,
+          "probabilities": {
+            "yes": 0.59,
+            "no": 0.39,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.73,
+      "explanation": "The directive was followed and evidenced.",
+      "usage": {
+        "input_tokens": 8009,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25311
+    },
+    {
+      "anchor_id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each atm-bd-console dispatch, hold, marker or section rule must be a single check on snapshot fields (one condition, possibly over several fields) that does not depend on the result of any other rule.",
+      "quote": "avoid complicated logic chains.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 4,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "verdict": "not_applicable",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.85,
+          "probabilities": {
+            "yes": 0.1,
+            "no": 0.9,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.98,
+            "unclear": 0.02
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.85,
+      "explanation": "The anchor does not govern this work.",
+      "usage": {
+        "input_tokens": 8048,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25522
+    },
+    {
+      "anchor_id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every atm-bd-console dispatch, escalation and section rule must be implemented in exactly one module, and the app, the cron mode and bead-queues must call that module rather than contain their own copy of any rule.",
+      "quote": "business logic defined clearly in a single place.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-14",
+      "context": "planning session 2026-10-14 (fenix)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "verdict": "not_applicable",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.83,
+          "probabilities": {
+            "yes": 0.11,
+            "no": 0.89,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.98,
+            "unclear": 0.02
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.83,
+      "explanation": "The anchor does not govern this work.",
+      "usage": {
+        "input_tokens": 8053,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 21237,
+      "item_shortened": false,
+      "request_bytes": 25518
+    }
+  ],
+  "summary": {
+    "counts": {
+      "not_addressed": 4,
+      "underspecified": 15,
+      "satisfied": 1,
+      "not_applicable": 2
+    },
+    "failing": [
+      "ANC-017",
+      "ANC-020",
+      "ANC-021",
+      "ANC-022",
+      "ANC-003",
+      "ANC-004",
+      "ANC-006",
+      "ANC-007",
+      "ANC-008",
+      "ANC-009",
+      "ANC-010",
+      "ANC-011",
+      "ANC-012",
+      "ANC-013",
+      "ANC-014",
+      "ANC-015",
+      "ANC-016",
+      "ANC-018",
+      "ANC-019"
+    ],
+    "leaning_counts": {
+      "not_addressed": 12,
+      "not_applicable": 9,
+      "satisfied": 1
+    },
+    "unstable": [
+      "ANC-013",
+      "ANC-014"
+    ],
+    "errors": [],
+    "shortened": [],
+    "pass": false
+  }
+}

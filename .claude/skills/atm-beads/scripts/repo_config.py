@@ -76,6 +76,8 @@ def load(repo: Path | None = None) -> RepoConfig:
         raise ConfigError(f"{path}: invalid YAML: {exc}") from exc
     if not isinstance(data, dict):
         raise ConfigError(f"{path}: expected a mapping at the top level")
+    if "lead" in data:
+        raise ConfigError(f"{path}: lead belongs in .atm-bd/phase-<x>.toml; set each phase's lead and re-run the installer to remove the repository lead")
     return RepoConfig(path, data)
 
 

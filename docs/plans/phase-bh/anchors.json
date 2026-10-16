@@ -123,14 +123,14 @@
       "deterministic_check": "",
       "fixtures": {
         "pass": [
-          "The app loop and --once --headless call the same tick function and a test runs both against one fixture and compares dispatches, messages and state."
+          "The app loop and the cron one-shot (--headless; spelled --once --headless at plan time, flag removed in bh-9 qa1-f1-r2-fix, PR #171) call the same tick function and a test runs both against one fixture and compares dispatches, messages and state."
         ],
         "fail": [
           "The cron mode skips escalation batching to stay fast; only the app batches resends."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -150,6 +150,13 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-15T18:49:34+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -157,25 +164,27 @@
       "id": "ANC-004",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The atm-bd-console dispatcher must hold a sanity or QA dispatch only when the bead is not in bd ready, its branch is not on origin, its worktree is missing, or its branch has a merge conflict with its PR target; PR and CI state never hold it.",
+      "statement": "atm-bd-console must hold sanity/QA only if the bead is not in bd ready, branch not on origin, worktree missing, or PR-target merge check conflicted/unavailable; failed fetch means unavailable, not stale-ref fallback; PR/CI never hold.",
       "quote": "we are working off a set of rules already in production.",
       "kind": "prohibition",
       "stated_by": "Rand",
       "stated_at": "2026-10-14",
       "context": "planning session 2026-10-14 (fenix)",
-      "summary": "Holds: production reasons plus merge conflict",
+      "summary": "Holds: production reasons and proven merge state",
       "scope": "any bead that defines when sanity or QA is dispatched or held",
       "deterministic_check": "",
       "fixtures": {
         "pass": [
-          "The dispatcher sends sanity when bd ready lists the bead, the branch is on origin, the worktree exists and merge-tree is clean; a missing PR only adds a reminder."
+          "The dispatcher sends sanity when bd ready lists the bead, the branch is on origin, the worktree exists and merge-tree is clean; a missing PR only adds a reminder.",
+          "When fetch of the PR target fails, branch safety is unavailable and the dispatcher holds sanity and QA; it never treats a clean merge against stale refs as proof of safety."
         ],
         "fail": [
-          "QA waits until the PR's CI is green and the layer is the top of the stack."
+          "QA waits until the PR's CI is green and the layer is the top of the stack.",
+          "When fetch of the PR target fails, the dispatcher uses a stale origin ref, treats a clean merge-tree as safe, and sends QA."
         ]
       },
       "question_overrides": {},
-      "version": 4,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -211,6 +220,16 @@
           "fields": [
             "summary"
           ]
+        },
+        {
+          "at": "2026-10-15T17:29:17+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "fixtures"
+          ],
+          "previous_statement": "The atm-bd-console dispatcher must hold a sanity or QA dispatch only when the bead is not in bd ready, its branch is not on origin, its worktree is missing, or its branch has a merge conflict with its PR target; PR and CI state never hold it."
         }
       ]
     },
@@ -342,8 +361,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -362,6 +381,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-16T03:33:57+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-023",
+          "reason": "Rand 2026-10-15: --as removed from the console and bead-queues; the lead comes from .atm-bd/phase-<x>.toml (finding atm-phase-bh.cfg-f1)"
         }
       ]
     },
@@ -1123,6 +1148,40 @@
           "fields": [
             "fixtures"
           ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-023",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The phase lead and the dispatch template paths (one per purpose: dev assign, dev fix, sanity assign, qa assign) must be read from the phase settings file .atm-bd/phase-<x>.toml; atm-bd-console and bead-queues must not take --as, must not infer the lead from $ATM_IDENTITY or from the install-generated repository yaml (which must not carry a lead), and must pass the template path, never a hard-coded name, to atm task assign --template.",
+      "quote": "since we run the cli per phase, the phase settings are where all phase specific info comes from.  as i said lead changes phase to phase, so .atm-bd/phase-gh.toml is where this info needs to come from.  the install-generated yaml should not specify lead at all and any use of it should be mapped elsewhere.  either the lead in .atm-bd/phase-bh.toml who orchestrates the phase, or lead role in atm db.  after thinking about it, we should remove --as from bead-queues and from the cli and use the phase-lead consistently.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-15",
+      "context": "post phase-end review r4, PR #216 open (fenix session, 2026-10-15)",
+      "summary": "lead and template paths from the phase settings file; no --as",
+      "scope": "any bead that defines where the console, bead-queues or any dispatch script takes the assigning identity or a template path",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-16T03:33:57+00:00",
+          "event": "created",
+          "status": "locked"
         }
       ]
     }

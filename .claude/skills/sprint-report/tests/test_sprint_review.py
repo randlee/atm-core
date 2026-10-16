@@ -179,9 +179,9 @@ class PlanCheckTests(unittest.TestCase):
             config = repo / '.claude/project/atm-bd-orchestration.yaml'
             config.parent.mkdir(parents=True)
             config.write_text('plans_dir: work/plans\n')
-            (repo / '.atm-bd').mkdir()
-            (repo / '.atm-bd/phase-test.toml').write_text(
-                'plan = "work/plans/phase-test.jsonl"\nroot = "tp-phase-test"\nintegration_branch = "integrate/phase-test"\n')
+            sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'atm-beads/tests'))
+            from phase_fixtures import write_phase
+            write_phase(repo, 'test', 'tp', 'work/plans')
             plan = repo / 'work/plans/phase-test.jsonl'
             plan.parent.mkdir(parents=True)
             plan.write_text('{"sprint": "test-1"}\n')

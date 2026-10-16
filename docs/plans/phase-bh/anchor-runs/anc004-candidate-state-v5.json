@@ -1,0 +1,39 @@
+{
+  "schema": "plan-anchoring/questions/1",
+  "gate": "plan",
+  "version": 1,
+  "roles": {
+    "relevance": "relevant",
+    "compliance": "addressed",
+    "conflict": "contradicted"
+  },
+  "questions": {
+    "relevant": {
+      "type": "choice",
+      "instructions": "Does `item.text` specify, change, or depend on when atm-bd-console sends or holds sanity or QA? Judge subject overlap with `anchor.statement`, not correctness.",
+      "criteria": {
+        "yes": "The item describes dispatch eligibility, hold reasons, branch or merge status used for dispatch, or a prerequisite that controls one of those.",
+        "no": "The item concerns presentation, storage, or another activity without changing or depending on dispatch eligibility.",
+        "unclear": "The item mentions dispatch but does not reveal whether it affects eligibility or hold behavior."
+      }
+    },
+    "addressed": {
+      "type": "choice",
+      "instructions": "Does `item.text` explicitly state an allowed dispatch decision under `anchor.statement`? An unavailable PR-target merge check includes fetch failure; old refs cannot turn it into ok or conflict. Judge stated policy, not whether it is correct in code.",
+      "criteria": {
+        "yes": "The item states that dispatch proceeds with ready bead, origin branch, worktree, and a verified ok merge state despite PR or CI status, or that dispatch holds for a missing prerequisite, verified conflict, or unavailable merge check.",
+        "no": "The item gives no eligibility decision or explicitly gives a different policy, such as waiting for CI or dispatching after failed fetch using old refs.",
+        "unclear": "The item mentions branch or merge status but leaves the resulting dispatch decision unspecified."
+      }
+    },
+    "contradicted": {
+      "type": "choice",
+      "instructions": "Does `item.text` prescribe a sanity or QA dispatch decision incompatible with `anchor.statement`? Distinguish ok, conflict, and unavailable merge states against the PR target; a failed fetch is unavailable. Silence is not conflict.",
+      "criteria": {
+        "yes": "The item holds dispatch for PR, CI, or stack position alone; sends despite a failed prerequisite or unavailable/conflicted merge check; or treats a failed fetch as ok or conflict by using stale refs.",
+        "no": "The item states no incompatible decision, including an allowed hold, an allowed dispatch, or silence about eligibility.",
+        "unclear": "A dispatch decision is mentioned, but the state or hold reason is too ambiguous to decide compatibility."
+      }
+    }
+  }
+}
