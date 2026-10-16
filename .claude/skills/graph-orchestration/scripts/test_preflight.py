@@ -32,6 +32,10 @@ def test_version_floor_is_semver_and_inclusive():
     assert preflight._version("sc-compose 1.2.0") == (1, 2, 0)
     assert preflight._version("sc-compose 1.7.1") > preflight.MIN_SC_COMPOSE
     assert preflight._version("sc-compose 1.2.9") < preflight.MIN_SC_COMPOSE
+    assert preflight.is_supported_sc_compose_version(preflight.MIN_SC_COMPOSE)
+    assert preflight.is_supported_sc_compose_version((1, 8, 0))
+    assert not preflight.is_supported_sc_compose_version((1, 6, 9))
+    assert not preflight.is_supported_sc_compose_version((2, 0, 0))
     assert preflight._version("unknown") is None
 
 
@@ -48,6 +52,15 @@ def test_sc_compose_rejects_old_cli(monkeypatch):
     assert f"required {preflight.MIN_SC_COMPOSE_TEXT}" in result.detail
 
 
+def test_sc_compose_rejects_next_major_cli(monkeypatch):
+    preflight = _module()
+    monkeypatch.setattr(preflight, "_find_command", lambda *_args: "/fake/sc-compose")
+    monkeypatch.setattr(preflight, "_run", lambda *_args, **_kwargs: (0, "sc-compose 2.0.0", ""))
+    result = preflight.check_sc_compose()
+    assert not result.ok
+    assert f"required {preflight.MIN_SC_COMPOSE_TEXT}" in result.detail
+
+
 def test_binding_rejects_old_python_wheel(monkeypatch):
     preflight = _module()
     monkeypatch.setattr(preflight, "_python_candidates", lambda: ["/fake/python3"])
@@ -56,6 +69,15 @@ def test_binding_rejects_old_python_wheel(monkeypatch):
         "_run",
         lambda *_args, **_kwargs: (0, "1.1.0", ""),
     )
+    result = preflight.check_sc_compose_binding()
+    assert not result.ok
+    assert f"required {preflight.MIN_SC_COMPOSE_BINDING_TEXT}" in result.detail
+
+
+def test_binding_rejects_next_major_python_wheel(monkeypatch):
+    preflight = _module()
+    monkeypatch.setattr(preflight, "_python_candidates", lambda: ["/fake/python3"])
+    monkeypatch.setattr(preflight, "_run", lambda *_args, **_kwargs: (0, "2.0.0", ""))
     result = preflight.check_sc_compose_binding()
     assert not result.ok
     assert f"required {preflight.MIN_SC_COMPOSE_BINDING_TEXT}" in result.detail

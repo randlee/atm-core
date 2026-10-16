@@ -29,6 +29,7 @@ from lib.sc_compose_dependency import (  # noqa: E402
     MIN_SC_COMPOSE_BINDING_TEXT,
     MIN_SC_COMPOSE_TEXT,
     SC_COMPOSE_BINDING_INSTALL,
+    is_supported_sc_compose_version,
     parse_version as _version,
 )
 
@@ -100,7 +101,7 @@ def check_sc_compose() -> Check:
             f"{path} did not return a parseable version: {stderr or stdout or 'no output'}",
             path,
         )
-    if version < MIN_SC_COMPOSE:
+    if not is_supported_sc_compose_version(version):
         return Check(
             "sc-compose",
             False,
@@ -187,7 +188,7 @@ def check_sc_compose_binding() -> Check:
         rc, stdout, stderr = _run([path, "-c", probe])
         parsed = _version(stdout)
         if rc == 0 and parsed is not None:
-            if parsed < MIN_SC_COMPOSE_BINDING:
+            if not is_supported_sc_compose_version(parsed):
                 return Check(
                     "python3/sc_compose",
                     False,
