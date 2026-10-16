@@ -415,6 +415,7 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=True),
             mock.patch.object(bootstrap, "verify_installed_tools"),
             mock.patch.object(bootstrap, "install_git_hooks"),
+            mock.patch.object(bootstrap, "install_windows_msvc_target"),
             mock.patch.object(bootstrap, "run") as run,
             redirect_stdout(output),
         ):
@@ -436,6 +437,7 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=False),
             mock.patch.object(bootstrap, "verify_installed_tools"),
             mock.patch.object(bootstrap, "install_git_hooks"),
+            mock.patch.object(bootstrap, "install_windows_msvc_target"),
             mock.patch.object(bootstrap, "run") as run,
         ):
             bootstrap.bootstrap(manifest, dry_run=False)
