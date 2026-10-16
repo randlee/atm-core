@@ -43,13 +43,7 @@ def doctor_case(cases: list[dict[str, Any]]) -> bool:
         report = feature_smoke.parse_json(feature_smoke.command([atm, "doctor", "--json"]), "doctor")
         expected_version = feature_smoke.branch_version()
         ready = feature_smoke.doctor_ready(report, expected_version)
-        daemon_version = report.get("daemon_context", {}).get("version") if isinstance(report, dict) else None
-        detail = (
-            f"READY · ATM {daemon_version}"
-            if ready
-            else f"expected={expected_version}; doctor did not report the selected pair ready"
-        )
-        feature_smoke.add_case(cases, "doctor", ready, detail)
+        feature_smoke.add_case(cases, "doctor", ready, feature_smoke.doctor_detail(report, expected_version))
         return ready
     except feature_smoke.SmokeError as error:
         feature_smoke.add_case(cases, "doctor", False, str(error))

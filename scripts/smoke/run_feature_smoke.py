@@ -13,6 +13,7 @@ fixtures can override it with ``ATM_SMOKE_DIRECT_PEER_PORT`` (1-65535).
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from html import escape
@@ -225,15 +226,53 @@ def local_non_loopback_ipv4() -> str:
     raise SmokeError("could not discover a current non-loopback IPv4 address for local-IP smoke")
 
 
+def doctor_problems(report: Any, expected_version: str) -> list[str]:
+    """Name each condition one doctor response fails; an empty list is a matched ready pair.
+
+    Advisory warnings never block: summary.status may be healthy or warning, and
+    only readiness, a zero error_count and the matched client/daemon versions decide.
+    """
+    if not isinstance(report, dict):
+        return ["doctor response was not a JSON object"]
+    summary = report.get("summary", {})
+    status = summary.get("status")
+    readiness = report.get("runtime_status", {}).get("readiness")
+    errors = summary.get("error_count")
+    cli = report.get("client_context", {}).get("version")
+    daemon = report.get("daemon_context", {}).get("version")
+    problems = []
+    if status not in ("healthy", "warning"):
+        problems.append(f"summary.status={status!r}")
+    if readiness != "ready":
+        problems.append(f"readiness={readiness!r}")
+    if type(errors) is not int or errors != 0:
+        problems.append(f"error_count={errors!r}")
+    if cli != expected_version:
+        problems.append(f"cli version {cli!r} != expected {expected_version!r}")
+    if daemon != expected_version:
+        problems.append(f"daemon version {daemon!r} != expected {expected_version!r}")
+    return problems
+
+
 def doctor_ready(report: Any, expected_version: str) -> bool:
     """Return whether one public doctor response proves a matched ready pair."""
-    return (
-        isinstance(report, dict)
-        and report.get("summary", {}).get("status") == "healthy"
-        and report.get("runtime_status", {}).get("readiness") == "ready"
-        and report.get("client_context", {}).get("version") == expected_version
-        and report.get("daemon_context", {}).get("version") == expected_version
+    return not doctor_problems(report, expected_version)
+
+
+def doctor_detail(report: Any, expected_version: str) -> str:
+    """Name the failed conditions, or the ready version with each advisory warning code counted."""
+    problems = doctor_problems(report, expected_version)
+    if problems:
+        return "; ".join(problems)
+    warnings = Counter(
+        finding.get("code")
+        for finding in report.get("findings", [])
+        if isinstance(finding, dict) and finding.get("severity") == "warning"
     )
+    detail = f"READY · ATM {report['daemon_context']['version']}"
+    if warnings:
+        detail += " · warnings: " + ", ".join(f"{code} x{count}" for code, count in warnings.items())
+    return detail
 
 
 
@@ -301,14 +340,14 @@ def curl_doctor(
                 remote_curl.extend(["--resolve", f"{local_authority}:{port}:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url])
                 remote_result = remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl))
                 remote_report = parse_json(remote_result, f"{peer} curl doctor to local")
-                add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready", origin=peer, destination=platform.node())
+                add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not a ready matched pair", origin=peer, destination=platform.node())
                 local_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
                 if not plaintext:
                     local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
                 local_curl.extend(["--resolve", f"{remote_authority}:{port}:{remote_host}", "--data", DOCTOR_BODY, remote_url])
                 local_result = command(local_curl)
                 local_report = parse_json(local_result, f"curl doctor to {peer}")
-                add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready", origin=platform.node(), destination=peer)
+                add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not a ready matched pair", origin=platform.node(), destination=peer)
                 if not plaintext:
                     # Deliberately omit --cert but retain the peer CA and the
                     # exact target address. --write-out emits 000 only when
@@ -381,7 +420,7 @@ def curl_doctor(
                 cases,
                 f"local DNS curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor",
                 doctor_ready(dns_report, expected_version),
-                "HTTP 200 real daemon doctor via DNS" if doctor_ready(dns_report, expected_version) else "doctor response was not healthy/ready",
+                "HTTP 200 real daemon doctor via DNS" if doctor_ready(dns_report, expected_version) else "doctor response was not a ready matched pair",
                 origin=platform.node(),
                 destination=peer,
             )
@@ -799,14 +838,7 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
     try:
         report = parse_json(doctor, "doctor")
         expected_version = branch_version()
-        daemon_version = report.get("daemon_context", {}).get("version")
-        healthy = doctor_ready(report, expected_version)
-        detail = (
-            f"READY · ATM {daemon_version}"
-            if healthy
-            else f"expected={expected_version}; cli={report.get('client_context', {}).get('version')}; daemon={daemon_version}"
-        )
-        add_case(cases, "doctor", healthy, detail)
+        add_case(cases, "doctor", doctor_ready(report, expected_version), doctor_detail(report, expected_version))
     except SmokeError as error:
         add_case(cases, "doctor", False, str(error))
     if not all(case["status"] == "PASS" for case in cases):
