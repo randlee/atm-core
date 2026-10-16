@@ -18,7 +18,7 @@ Run before any capture, delegation, or gate. On a missing dependency, surface th
 ```bash
 which python3 && python3 --version          # 3.9 or newer
 which bd && bd --version                    # beads CLI, 1.x ("(dev)" suffix is fine)
-which sc-compose && sc-compose --version    # 1.6.0 or newer
+which sc-compose && sc-compose --version    # 1.7.0 or newer
 test -n "$TYPESAFE_API_KEY" && echo "TYPESAFE_API_KEY set" || echo "TYPESAFE_API_KEY missing"
 echo "remote judge opt-in: ${PLAN_ANCHOR_ALLOW_REMOTE_JUDGE:-unset}"
 ```

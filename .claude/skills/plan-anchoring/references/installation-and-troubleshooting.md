@@ -43,10 +43,10 @@ Use the full path, or `export PATH="/opt/homebrew/bin:$PATH"` for the session.
 - Any platform with Go: `go install github.com/steveyegge/beads/cmd/bd@latest`, then add `$HOME/go/bin` to PATH
 - Initialise once per repo: `bd init`. An error mentioning CGO or embedded Dolt means your binary needs `bd init --proxied-server` (or a Homebrew build). `bd init` also writes and commits `.claude/settings.json`, `CLAUDE.md`, `AGENTS.md` and git hooks; `--skip-agents --skip-hooks` avoids that. The issue prefix defaults to the directory name.
 
-**sc-compose** (1.6.0 or newer)
+**sc-compose** (1.7.0 or newer)
 
 - Install it from the Synaptic Canvas `sc-compose` release or team package
-  source, then confirm `sc-compose --version` reports at least 1.6.0.
+  source, then confirm `sc-compose --version` reports at least 1.7.0.
 - The skill uses strict checked-in Jinja2 templates for every anchor-tuning
   request/result. Do not continue with hand-built JSON when this CLI is absent.
 
@@ -72,13 +72,13 @@ Use the full path, or `export PATH="/opt/homebrew/bin:$PATH"` for the session.
 | --- | --- | --- |
 | python3 | 3.9 | tested floor; standard library only |
 | bd | 1.x | `--parent`, `--labels`, `--silent`, `--body-file`, `show --json`, `children --json`, `comment --file`, `ready --exclude-label` |
-| sc-compose | 1.6.0 | strict render, declared-variable validation, and `--check-render` |
+| sc-compose | 1.7.0 | strict render, declared-variable validation, and `--check-render` |
 | Jev | `jev-latest` | pin a version once thresholds are tuned |
 
 ## PATH troubleshooting
 
 - A tool works in your terminal but not in the skill: Claude Code's bash did not source the shell init that added it to PATH. Export the directory in the session or use the full path.
-- `sc-compose` is missing: install 1.6.0 or newer and rerun the dependency
+- `sc-compose` is missing: install 1.7.0 or newer and rerun the dependency
   gate; do not hand-assemble the fenced tuning payload.
 - `bd show --json` errors with "no database": run from the repo root that has `.beads/`, or pass `-C <repo root>` (or `--db <path>`).
 - The key works in your terminal but the skill says it is missing: it was exported after Claude Code started, or only in an interactive rc file. Put it in `~/.zshenv`; restart Claude Code.
