@@ -1,6 +1,6 @@
 ---
 name: atm-beads
-version: 0.15.0
+version: 0.16.0
 description: Plans written as beads. Use when writing, validating or importing a phase plan into beads, or when pairing an ATM task with its bead (claim, start, close).
 requires:
   cli:
@@ -36,7 +36,7 @@ before proceeding.**
 ## Identity
 
 - `ATM_IDENTITY` and `BEADS_ACTOR` are already in every agent's environment
-  and are equal: the bare pane name (`team-lead`), never an alias (`atm-lead`) and
+  and are equal: the bare pane name (for example `worker-1`), never an alias (`atm-lead`) and
   never a model class (`terra`).
 - A bead's assignee is the recipient's `ATM_IDENTITY`, set at dispatch; a planned bead carries only `difficulty`.
 

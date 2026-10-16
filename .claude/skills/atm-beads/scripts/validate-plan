@@ -24,7 +24,8 @@ before import (--file).
                                                      <plans_dir>/phase-*.jsonl has its tracked phase file;
                                                      one "<file>: <problem>" line per problem
 
-The phase file `.atm-bd/phase-<x>.toml` (tracked) names the plan file, the root and the integration branch.
+The phase file `.atm-bd/phase-<x>.toml` (tracked) names the plan file, root,
+integration branch, lead and seven existing installed assignment templates.
 Without --index the plan file is read from origin/<integration_branch>:<plan>. The bead prefix is taken
 from the root id. Prints one "<bead>: <problem>" line per problem. Exit 0 valid, 5 problems, 2 validation
 could not run (no phase file, no plan file, bd or git failed). Report problems to the lead; never edit

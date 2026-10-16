@@ -44,7 +44,9 @@ wait behind their work.
 ## Startup
 
 At session start, and again whenever credentials change, prove Jev access:
-`python3 .claude/skills/atm-bd-orchestration/scripts/jev_client.py --startup`. Exit 0: JEV children may run.
+`python3 .claude/skills/atm-bd-orchestration/scripts/jev_client.py --startup --phase <x>`
+for the active task's phase. Before any phase task is assigned, omit `--phase`
+for the synthetic startup probe. Exit 0: JEV children may run.
 Exit 2 is probe-failed mode, and so is a JEV child failing with
 `SANITY.JEV_UNAVAILABLE`: keep taking tasks, but dispatch no `sc-sanity-jev`
 child until a later probe passes; every JEV slot gets the coordinator-origin
@@ -58,11 +60,18 @@ its class bead: `atm-workflow-issues-jev-outage` for a failed probe,
 `SANITY.JEV_UNAVAILABLE`. When the bead does not
 exist, create it from `workflow-issue-bead.json.j2` with the error as
 description; when it is closed, `bd reopen` it. In either case announce:
-`python3 .claude/skills/atm-bd-orchestration/scripts/jev_client.py --startup --announce --lead team-lead` (failed
+`python3 .claude/skills/atm-bd-orchestration/scripts/jev_client.py --startup --announce --phase <x>` (failed
 probe) or `python3 .claude/skills/atm-bd-orchestration/scripts/jev_client.py --announce --error "<code>: <message>"
---lead team-lead` (the child's error verbatim, no probe) sends
-its error to the escalation recipients (else to `team-lead`, saying no
-escalation recipient is set). When it is open, append the task id and the
+--phase <x>` (the child's error verbatim, no probe) sends
+its error to the escalation recipients (else to the phase lead, saying no
+escalation recipient is set). The command resolves the phase lead from `lead`
+in the active task's `.atm-bd/phase-<x>.toml` using
+`sprint_index_common.load_phase_config`; it never uses a repository role,
+generated YAML value or environment identity. Missing phase settings stop
+before any probe or announcement.
+Before any phase task is assigned, run the startup probe without `--announce`;
+record its result and announce any outstanding outage with the first task's phase lead.
+When the class bead is open, append the task id and the
 error to it (`bd update <bead> --append-notes`) and announce nothing. While in
 probe-failed mode, run the probe again at the start of each sanity task; when
 it passes, close `-jev-outage` if open with `bd close <bead> --reason "probe PASS"`
@@ -73,7 +82,7 @@ lead's passing Loop re-test probe (the skill's Loop).
 
 ## Tasks
 
-Every task is a sanity check bead rendered from `dev-sanity-template.xml.j2`,
+Every task is a sanity check bead rendered from the phase file's `templates.sanity`,
 and the task id is the bead id. The template carries the task values and the
 bead and task lifecycle; this prompt says how the check runs.
 

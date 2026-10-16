@@ -49,8 +49,9 @@ goes back to the plan's author to supply, with the exact list of gaps.
    which exits 0 on empty input and drops the bead silently.
 
 5. **Gate** the rendered plan. Write the plan file `<plans_dir>/phase-<x>.jsonl`
-   and the phase file `.atm-bd/phase-<x>.toml` now (step 9 commits and pushes
-   them), then run from the repository root:
+   and initialize `.atm-bd/phase-<x>.toml` with
+   `.claude/skills/atm-beads/scripts/phase-config init --phase <x> --lead <appointed-lead>`
+   now (step 9 commits and pushes them), then run from the repository root:
 
    ```bash
    .claude/skills/atm-beads/scripts/validate-plan --file <scratch>/plan.jsonl --phase <x> --index <plans_dir>/phase-<x>.jsonl
@@ -86,7 +87,7 @@ goes back to the plan's author to supply, with the exact list of gaps.
    - one plan into a running phase: `<root>-plan-qa` is already closed, so
      create `<root>-plan-qa-<n>` (the next free number), blocking every new
      sprint container.
-   **Mandatory:** write the plan file `<plans_dir>/phase-<x>.jsonl` (one `{"sprint", "depends_on"?}` line per imported sprint) and the phase file `.atm-bd/phase-<x>.toml` by hand (`resources/planning.md` "Phase definition") in the same commit as the plan, push it to the root's `integration_branch`, then run `.claude/skills/atm-beads/scripts/validate-plan --phase <x>` followed by `.claude/skills/sprint-review/scripts/sprint-review --root <root>`. It writes `<plans_dir>/phase-<x>/phase-<x>-dag.html` locally; it never commits or pushes. Do not open a viewer unless `--view` is requested. The plan is never exported from Beads.
+   **Mandatory:** commit the plan file `<plans_dir>/phase-<x>.jsonl` (one `{"sprint", "depends_on"?}` line per imported sprint) and the initialized phase file `.atm-bd/phase-<x>.toml` (`resources/planning.md` "Phase definition") in the same commit as the plan, push it to the root's `integration_branch`, then run `.claude/skills/atm-beads/scripts/validate-plan --phase <x>` followed by `.claude/skills/sprint-review/scripts/sprint-review --root <root>`. It writes `<plans_dir>/phase-<x>/phase-<x>-dag.html` locally; it never commits or pushes. Do not open a viewer unless `--view` is requested. The plan is never exported from Beads.
 10. **Verify** with `.claude/skills/atm-beads/scripts/validate-plan --phase
     <x>`, then check the graph:
     - `bd ready -l phase-<x> -n 0` lists the plan-review bead and no dev bead

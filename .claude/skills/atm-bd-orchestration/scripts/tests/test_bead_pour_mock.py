@@ -25,6 +25,8 @@ from rendering import render
 
 SKILL = Path(__file__).resolve().parents[2]
 ATM_BEADS = SKILL.parent / "atm-beads"
+sys.path.insert(0, str(ATM_BEADS / "tests"))
+from phase_fixtures import write_phase
 
 MISSING = [tool for tool in ("bd", "dolt", "sc-compose") if shutil.which(tool) is None]
 SKIP_REASON = f"{', '.join(MISSING)} not on PATH: real-bd pour tests not run"
@@ -107,9 +109,7 @@ class Workspace:
         plan.parent.mkdir(parents=True, exist_ok=True)
         with plan.open("a") as fh:
             fh.write(json.dumps({"sprint": name, **({"depends_on": [f"{phase}-{d}" for d in deps]} if deps else {})}) + "\n")
-        toml = self.root / ".atm-bd" / f"phase-{phase}.toml"
-        toml.parent.mkdir(exist_ok=True)
-        toml.write_text(f'plan = "docs/plans/phase-{phase}.jsonl"\nroot = "t-phase-{phase}"\nintegration_branch = "integrate/phase-{phase}"\n')
+        write_phase(self.root, phase, "t", "docs/plans", "pour-lead")
         return bead
 
     def groups(self, *args, expect: int = 0) -> dict:
