@@ -25,12 +25,12 @@ dependencies = [
  "chrono",
  "clap",
  "libc",
+ "noyalib",
  "opentelemetry-proto",
  "sc-observability",
  "sc-observability-types",
  "serde",
  "serde_json",
- "serde_yaml",
  "serial_test",
  "tempfile",
  "time",
@@ -319,10 +319,10 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "noyalib",
  "reqwest",
  "serde",
  "serde_json",
- "serde_yaml",
  "tempfile",
  "tokio",
  "tower",
@@ -1353,6 +1353,8 @@ checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
 dependencies = [
  "equivalent",
  "hashbrown 0.17.1",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -1427,6 +1429,12 @@ name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
+
+[[package]]
+name = "libm"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libsqlite3-sys"
@@ -1543,6 +1551,24 @@ checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
 dependencies = [
  "memchr",
  "minimal-lexical",
+]
+
+[[package]]
+name = "noyalib"
+version = "0.0.57"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70b8960f9f4668b69cae4ca71106c84d38ca1ea9f41a9acc20ce55473b967849"
+dependencies = [
+ "hashbrown 0.17.1",
+ "indexmap",
+ "itoa",
+ "libm",
+ "memchr",
+ "rustc-hash",
+ "ryu",
+ "serde_core",
+ "serde_ignored",
+ "smallvec",
 ]
 
 [[package]]
@@ -2438,6 +2464,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.3",
+]
+
+[[package]]
+name = "serde_ignored"
+version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "115dffd5f3853e06e746965a20dcbae6ee747ae30b543d91b0e089668bb07798"
+dependencies = [
+ "serde",
+ "serde_core",
 ]
 
 [[package]]

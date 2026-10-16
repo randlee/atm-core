@@ -1,0 +1,305 @@
+{
+  "analyzers": {
+    "boundary": {
+      "enabled": true,
+      "fail_rules": [
+        "SCB-CYCLE-001",
+        "SCB-BOUNDARY-001",
+        "SCB-BOUNDARY-002",
+        "SCB-BOUNDARY-003",
+        "SCB-CALLER-001",
+        "SCB-DEPENDENCY-003",
+        "SCB-MANIFEST-001",
+        "SCB-MANIFEST-002"
+      ],
+      "reason": "Boundary inventory, crate cycles and forbidden crate edges for the atm-core workspace."
+    },
+    "portability": {
+      "config_home_env": "ATM_CONFIG_HOME",
+      "enabled": true,
+      "exclude_paths": [
+        "crates/atm-core/src/doctor/herdr_state.rs",
+        "crates/atm-herdr/src/transport.rs",
+        "crates/atm-herdr/src/transport_socket.rs",
+        "crates/atm-core/src/atm_temp.rs",
+        "crates/atm-core/src/atm_temp_sweeper.rs",
+        "crates/atm-core/src/descriptor_limit.rs",
+        "crates/atm-core/src/persistence.rs",
+        "crates/atm-core/src/transfer_script.rs",
+        "crates/atm-daemon-bootstrap/src/lib.rs",
+        "crates/atm-daemon-client/src/lib.rs",
+        "crates/atm-http-runtime/src/client.rs",
+        "crates/atm-http-runtime/src/client_tail.rs",
+        "crates/atm-http-runtime/src/http1_server.rs",
+        "crates/atm-http-runtime/src/lib.rs",
+        "crates/atm-http-runtime/src/loopback_tcp.rs",
+        "crates/atm-http-runtime/src/runtime_listener.rs",
+        "crates/atm-http-runtime/src/runtime_setup.rs",
+        "crates/atm-http-runtime/src/unix_socket.rs",
+        "crates/atm/src/main.rs"
+      ],
+      "reason": "sc-lint 0.7.0 has analyzer-wide exclude_paths only; per-rule path exceptions are requested in sc-lint#385. PORT-007 baseline exceptions: crates/atm-core/src/doctor/herdr_state.rs, crates/atm-herdr/src/transport.rs, and crates/atm-herdr/src/transport_socket.rs; tracked by atm-phase-bg.2 / sc-lint#192 and remove the PORT-007-only paths when #192 ships; keep transport_socket.rs until both #192 and #372 ship. PORT-010 baseline exceptions: crates/atm-core/src/atm_temp.rs, crates/atm-core/src/atm_temp_sweeper.rs, crates/atm-core/src/descriptor_limit.rs, crates/atm-core/src/persistence.rs, crates/atm-core/src/transfer_script.rs, crates/atm-daemon-bootstrap/src/lib.rs, crates/atm-daemon-client/src/lib.rs, crates/atm-http-runtime/src/client.rs, crates/atm-http-runtime/src/client_tail.rs, crates/atm-http-runtime/src/http1_server.rs, crates/atm-http-runtime/src/lib.rs, crates/atm-http-runtime/src/loopback_tcp.rs, crates/atm-http-runtime/src/runtime_listener.rs, crates/atm-http-runtime/src/runtime_setup.rs, crates/atm-http-runtime/src/unix_socket.rs, and crates/atm-herdr/src/transport_socket.rs, crates/atm/src/main.rs; tracked by atm-phase-bg.3 / sc-lint#372 and remove the PORT-010-only paths when #372 ships. Every listed file has a baseline finding in PR #1793; all other files remain checked.",
+      "targets": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "unix_path_prefixes": [
+        "/tmp/",
+        "/home/",
+        "/usr/",
+        "/etc/"
+      ]
+    },
+    "runtime": {
+      "enabled": false,
+      "reason": "Published sc-lint runtime analysis is not runnable until randlee/sc-lint#373 ships; retain the vendored runtime-waits check until bg-6 performs the cutover."
+    }
+  },
+  "ci": {
+    "enabled": false,
+    "os": [
+      "linux",
+      "macos",
+      "windows"
+    ]
+  },
+  "justfile": {
+    "windows_shell": false
+  },
+  "minimum_version": "0.7.3",
+  "profiles": {
+    "adr-index": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "adr-index"
+    ],
+    "arch-gates": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "arch-gates"
+    ],
+    "atm-graft-python-boundary": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "atm-graft-python-boundary"
+    ],
+    "boundaries": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "boundaries"
+    ],
+    "capability-degradation": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "capability-degradation"
+    ],
+    "clippy": [
+      "just",
+      "_sc-lint-clippy",
+      "native"
+    ],
+    "clippy-windows": [
+      "just",
+      "_sc-lint-clippy",
+      "xwin"
+    ],
+    "daemon-signing-coupling": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "daemon-signing-coupling"
+    ],
+    "daemon-singleton": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "daemon-singleton"
+    ],
+    "deny": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "deny"
+    ],
+    "env-var-boundary": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "env-var-boundary"
+    ],
+    "fixed-sleep": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "fixed-sleep"
+    ],
+    "fmt": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "fmt"
+    ],
+    "function-length": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "function-length"
+    ],
+    "hermes-adapter": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "hermes-adapter"
+    ],
+    "hermes-atm-boundary": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "hermes-atm-boundary"
+    ],
+    "identities": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "identities"
+    ],
+    "legacy-mailbox-paths": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "legacy-mailbox-paths"
+    ],
+    "legacy-transport-removal": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "legacy-transport-removal"
+    ],
+    "lines": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "lines"
+    ],
+    "manifests": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "manifests"
+    ],
+    "nudge-taxonomy": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "nudge-taxonomy"
+    ],
+    "peer-dial-seam": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "peer-dial-seam"
+    ],
+    "pytests": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "pytests"
+    ],
+    "read-concurrency-gates": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "read-concurrency-gates"
+    ],
+    "runtime-observation-boundary": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "runtime-observation-boundary"
+    ],
+    "runtime-stderr": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "runtime-stderr"
+    ],
+    "runtime-waits": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "runtime-waits"
+    ],
+    "same-host-portability": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "same-host-portability"
+    ],
+    "sc-boundary": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "sc-boundary"
+    ],
+    "sc-portability": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "sc-portability"
+    ],
+    "shear": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "shear"
+    ],
+    "silent-emit": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "silent-emit"
+    ],
+    "site-generated": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "site-generated"
+    ],
+    "site-links": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "site-links"
+    ],
+    "spell": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "spell"
+    ],
+    "ttl-triage": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "ttl-triage"
+    ],
+    "version": [
+      "just",
+      "_py",
+      ".just/run_lint.py",
+      "version"
+    ]
+  },
+  "test": {
+    "default": [
+      "just",
+      "test"
+    ]
+  }
+}

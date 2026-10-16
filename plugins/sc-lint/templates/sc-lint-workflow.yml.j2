@@ -1,0 +1,27 @@
+name: sc-lint
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+jobs:
+  sc-lint:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: {{ ci_os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - uses: ./plugins/sc-lint/.github/actions/setup-sc-lint
+        with:
+          config: sc-lint.toml
+      - run: just setup
+      - run: just lint
+      - run: just test

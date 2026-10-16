@@ -1,0 +1,10 @@
+bootstrap_command := if os_family() == "windows" { "& .\\.sc-lint\\bootstrap.ps1" } else { ".sc-lint/bootstrap" }
+
+setup:
+    {{bootstrap_command}} setup --config sc-lint.toml
+
+lint *profile:
+    {{bootstrap_command}} lint --config sc-lint.toml {{profile}}
+
+upgrade:
+    {{bootstrap_command}} upgrade --config sc-lint.toml

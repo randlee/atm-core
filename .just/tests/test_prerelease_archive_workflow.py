@@ -6,13 +6,13 @@ import importlib.util
 import io
 import json
 import os
-from pathlib import Path
-from contextlib import redirect_stderr
 import subprocess
 import sys
 import tempfile
 import tomllib
 import unittest
+from contextlib import contextmanager, redirect_stderr
+from pathlib import Path
 from unittest import mock
 
 JUST_DIR = Path(__file__).resolve().parents[1]
@@ -57,6 +57,50 @@ def packaging_script(workflow: str, step_name: str) -> str:
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
     SUBPROCESS_TIMEOUT_SECONDS = 30
+
+    def fixture_env(self, home: Path) -> dict[str, str]:
+        env = os.environ.copy()
+        env.update({
+            "HOME": str(home),
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_SYSTEM": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+        })
+        return env
+
+    def run_fixture(self, command: list[str], *, cwd: Path, env: dict[str, str], **kwargs):
+        try:
+            return subprocess.run(
+                command,
+                cwd=cwd,
+                env=env,
+                timeout=self.SUBPROCESS_TIMEOUT_SECONDS,
+                **kwargs,
+            )
+        except subprocess.TimeoutExpired as error:
+            output = (error.stdout or "") + (error.stderr or "")
+            self.fail(f"fixture command timed out: {command!r}\n{output}")
+
+    @contextmanager
+    def fixture_repo(self, *, branch: str | None = None):
+        """Create an isolated Git fixture whose setup commands are all bounded."""
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            home = repo / ".home"
+            home.mkdir()
+            env = self.fixture_env(home)
+            init = ["git", "init", "-q"]
+            if branch is not None:
+                init.extend(["-b", branch])
+            for command in (
+                init,
+                ["git", "config", "commit.gpgsign", "false"],
+                ["git", "config", "core.hooksPath", os.devnull],
+                ["git", "config", "user.email", "test@example.invalid"],
+                ["git", "config", "user.name", "AS1.1 test"],
+            ):
+                self.run_fixture(command, cwd=repo, env=env, check=True)
+            yield repo, env
 
     def test_wait_for_archive_returns_after_a_successful_run(self) -> None:
         prerelease = prerelease_script()
@@ -370,9 +414,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertEqual(patch_bump("9.99.0"), "9.99.1")
 
     def test_prerelease_tag_dry_run_rejects_remote_tag_collision(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            repo = Path(directory)
-            subprocess.run(["git", "init", "-q", "-b", "fixture"], cwd=repo, check=True)
+        with self.fixture_repo(branch="fixture") as (repo, _env):
             with (
                 mock.patch.object(prerelease_tag, "current_branch", return_value="fixture"),
                 mock.patch.object(prerelease_tag, "require_clean_tree"),
@@ -491,17 +533,13 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                     self.assertNotIn("path", dependency)
 
     def test_write_and_commit_restores_files_when_commit_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            repo = Path(directory)
-            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.name", "AS1.1 test"], cwd=repo, check=True)
+        with self.fixture_repo() as (repo, env):
             manifest = repo / "Cargo.toml"
             # Fixture-local versions: this test exercises rollback after a failed commit.
             original = "[workspace.package]\nversion = \"1.4.5\"\n"
             manifest.write_text(original, encoding="utf-8")
-            subprocess.run(["git", "add", "Cargo.toml"], cwd=repo, check=True)
-            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True)
+            self.run_fixture(["git", "add", "Cargo.toml"], cwd=repo, env=env, check=True)
+            self.run_fixture(["git", "commit", "-qm", "fixture"], cwd=repo, env=env, check=True)
 
             real_git = prerelease_tag.git
 
@@ -519,9 +557,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                     )
             self.assertEqual(manifest.read_text(encoding="utf-8"), original)
             self.assertEqual(
-                subprocess.run(
+                self.run_fixture(
                     ["git", "status", "--porcelain"],
                     cwd=repo,
+                    env=env,
                     text=True,
                     capture_output=True,
                     check=True,
@@ -535,17 +574,34 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         new_version = patch_bump(old_version)
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory) / "atm-core"
+            home = Path(directory) / ".home"
+            home.mkdir()
+            env = self.fixture_env(home)
 
             prerelease_tag.copy_tracked_files(root, repo)
-            subprocess.run(["git", "init", "-q", "-b", "fixture"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.name", "AS1.1 test"], cwd=repo, check=True)
-            subprocess.run(["git", "add", "."], cwd=repo, check=True)
-            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True)
+            managed_justfile = root / ".sc-lint" / "justfile"
+            self.assertTrue(
+                managed_justfile.is_file(),
+                "just setup must generate .sc-lint/justfile before the prerelease fixture is copied",
+            )
+            fixture_managed_justfile = repo / ".sc-lint" / "justfile"
+            fixture_managed_justfile.parent.mkdir(parents=True, exist_ok=True)
+            fixture_managed_justfile.write_bytes(managed_justfile.read_bytes())
+            for command in (
+                ["git", "init", "-q", "-b", "fixture"],
+                ["git", "config", "commit.gpgsign", "false"],
+                ["git", "config", "core.hooksPath", os.devnull],
+                ["git", "config", "user.email", "test@example.invalid"],
+                ["git", "config", "user.name", "AS1.1 test"],
+                ["git", "add", "."],
+                ["git", "commit", "-qm", "fixture"],
+            ):
+                self.run_fixture(command, cwd=repo, env=env, check=True)
             python_command = "python" if os.name == "nt" else "python3"
-            result = subprocess.run(
+            result = self.run_fixture(
                 ["just", "--set", "python_cmd", python_command, "prerelease-tag", "--dry-run"],
                 cwd=repo,
+                env=env,
                 text=True,
                 capture_output=True,
                 check=False,
@@ -554,9 +610,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             self.assertIn(f"workspace version: {old_version} -> {new_version}", result.stdout)
             self.assertIn(f"would create tag: prerelease/v{new_version}", result.stdout)
             self.assertEqual(
-                subprocess.run(
+                self.run_fixture(
                     ["git", "status", "--porcelain"],
                     cwd=repo,
+                    env=env,
                     text=True,
                     capture_output=True,
                     check=True,

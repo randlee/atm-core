@@ -1,0 +1,6 @@
+{"sprint":"bg-1"}
+{"sprint":"bg-2","depends_on":["bg-1"]}
+{"sprint":"bg-3","depends_on":["bg-1"]}
+{"sprint":"bg-4","depends_on":["bg-1"]}
+{"sprint":"bg-5","depends_on":["bg-1"]}
+{"sprint":"bg-6","depends_on":["bg-2","bg-3","bg-4","bg-5"]}

@@ -5,7 +5,6 @@ name = "MessageReceivedHookEmitter"
 
 [public]
 trait = "MessageReceivedHookEmitter"
-facade = "AsyncMessageReceivedHookEmitter"
 notes = "Sealed recipient-side notification contract invoked only after a newly persisted immutable message. MessageReceivedHookEmitter is the retained sync trait (atm_graft::nudge_sink::GraftReceiveHook); AsyncMessageReceivedHookEmitter is the accepted Tokio-native async extension point selected by daemon composition (crates/atm-daemon-bootstrap/src/received_hook_selector.rs)."
 
 [implementation]

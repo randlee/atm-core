@@ -1929,9 +1929,10 @@ mod tests {
 
     #[test]
     fn openapi_and_serde_keep_the_existing_typed_write_and_search_contracts() {
-        let openapi: Value =
-            serde_yaml::from_str(include_str!("../../../docs/atm-http-runtime/openapi.yaml"))
-                .expect("parse checked-in OpenAPI document");
+        let openapi: Value = noyalib::compat::serde_yaml::from_str(include_str!(
+            "../../../docs/atm-http-runtime/openapi.yaml"
+        ))
+        .expect("parse checked-in OpenAPI document");
         let write_operation = openapi
             .pointer("/paths/~1messages/post")
             .expect("OpenAPI must declare POST /messages");

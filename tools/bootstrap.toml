@@ -13,6 +13,7 @@ cargo-deny = "0.20.2"
 cargo-audit = "0.22.2"
 cargo-shear = "1.13.3"
 cargo-modules = "0.26.0"
+cargo-xwin = "0.18.4"
 
 # Binstall strategies allowed for each cargo tool.  `compile` is never allowed
 # in CI; cargo-audit and cargo-modules need Binstall's third-party quick-install
@@ -22,6 +23,7 @@ cargo-deny = []
 cargo-audit = ["quick-install"]
 cargo-shear = []
 cargo-modules = ["quick-install"]
+cargo-xwin = []
 
 [cargo-binstall]
 version = "1.22.0"

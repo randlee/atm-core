@@ -12,6 +12,9 @@ seed_python_cmd := if os_family() == "windows" { "py -3.12" } else { "env PATH=\
 # PyO3 additionally receives its interpreter explicitly.
 python_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; & \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" \"$PWD/.bootstrap-venv/bin/python\"" }
 clippy_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\" cargo clippy --workspace --all-targets -- -D warnings" }
+# sc-lint delegates clippy to cargo, so its process must receive the same
+# interpreter PyO3 uses in the legacy lint recipe. Delete when randlee/sc-lint#198 ships.
+sc_lint_clippy_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; sc-lint clippy" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\" sc-lint clippy" }
 
 # Show the curated repo task help.
 default: help
@@ -25,6 +28,13 @@ help:
 # must already match tools/bootstrap.toml; this recipe never selects "latest".
 bootstrap *args:
     {{seed_python_cmd}} tools/bootstrap.py {{args}}
+
+# Execute a repository Python command through the pinned bootstrap environment.
+# The sc-lint adoption profiles use this private bridge until sc-lint provides
+# a repository-runner setting (randlee/sc-lint#198).
+[private]
+_py *args:
+    {{python_cmd}} {{args}}
 
 # Install the tracked git hooks (pre-push fmt + clippy gate). `just bootstrap`
 # does this too; use this recipe to (re)install without a full bootstrap.
@@ -51,6 +61,12 @@ _lint-fmt:
 _lint-clippy:
     {{clippy_cmd}}
 
+# Preserve PyO3's pinned interpreter while the adoption kit runs its published
+# clippy profiles. Delete when randlee/sc-lint#198 ships.
+[private]
+_sc-lint-clippy target:
+    {{sc_lint_clippy_cmd}} {{target}}
+
 [private]
 _lint-modules:
     {{python_cmd}} .just/lint_cargo_modules.py
@@ -74,10 +90,6 @@ _lint-sc-boundary:
 [private]
 _lint-sc-portability:
     {{python_cmd}} .just/lint_sc_portability.py
-
-[private]
-_lint-unix-gating:
-    {{python_cmd}} .just/lint_unix_gating.py
 
 [private]
 _lint-runtime-waits:
@@ -220,10 +232,6 @@ verify-hermes-bridge-deployment profile_registry *args:
 clean:
     cargo clean
 
-# Run the repo lint suite.
-lint target='all':
-    {{python_cmd}} .just/run_lint.py {{target}}
-
 # Run the retained release validation / preflight suite.
 validate target='all':
     {{python_cmd}} scripts/validate_release.py {{target}}
@@ -300,3 +308,7 @@ view target='all':
 
 # Run the local CI-equivalent command set.
 ci: lint test
+
+# >>> sc-lint managed integration >>>
+import '.sc-lint/justfile'
+# <<< sc-lint managed integration <<<

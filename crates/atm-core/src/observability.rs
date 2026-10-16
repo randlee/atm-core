@@ -851,28 +851,43 @@ impl ObservabilityPort for NullObservability {
 /// This function does not panic on malformed exponents. If exponent parsing
 /// fails unexpectedly, it logs a warning and preserves the original string.
 fn normalize_json_number(raw: &str) -> String {
-    const MAX_ABS_NORMALIZED_JSON_EXPONENT: i64 = 128;
-    const MAX_NORMALIZED_JSON_NUMBER_LEN: usize = 64;
-
     let (negative, unsigned) = match raw.strip_prefix('-') {
         Some(rest) => (true, rest),
         None => (false, raw),
     };
-    let (base, exponent) = match unsigned.find(['e', 'E']) {
-        Some(index) => match unsigned[index + 1..].parse::<i64>() {
-            Ok(exponent) => (&unsigned[..index], exponent),
-            Err(error) => {
-                warn!(
-                    code = %AtmErrorCode::WarningMalformedAtmFieldIgnored,
-                    raw,
-                    %error,
-                    "failed to normalize JSON number exponent; preserving original value"
-                );
-                return raw.to_string();
-            }
-        },
-        None => (unsigned, 0),
+    let Some((base, exponent)) = split_json_number_exponent(raw, unsigned) else {
+        return raw.to_string();
     };
+    let Some((digits, scale)) = normalize_json_number_digits(raw, base, exponent) else {
+        return raw.to_string();
+    };
+    if digits == "0" {
+        return "0".to_string();
+    }
+
+    render_normalized_json_number(raw, negative, &digits, scale)
+}
+
+fn split_json_number_exponent<'a>(raw: &str, unsigned: &'a str) -> Option<(&'a str, i64)> {
+    let Some(index) = unsigned.find(['e', 'E']) else {
+        return Some((unsigned, 0));
+    };
+    match unsigned[index + 1..].parse::<i64>() {
+        Ok(exponent) => Some((&unsigned[..index], exponent)),
+        Err(error) => {
+            warn!(
+                code = %AtmErrorCode::WarningMalformedAtmFieldIgnored,
+                raw,
+                %error,
+                "failed to normalize JSON number exponent; preserving original value"
+            );
+            None
+        }
+    }
+}
+
+fn normalize_json_number_digits(raw: &str, base: &str, exponent: i64) -> Option<(String, i64)> {
+    const MAX_ABS_NORMALIZED_JSON_EXPONENT: i64 = 128;
     if !(-MAX_ABS_NORMALIZED_JSON_EXPONENT..=MAX_ABS_NORMALIZED_JSON_EXPONENT).contains(&exponent) {
         warn!(
             code = %AtmErrorCode::WarningMalformedAtmFieldIgnored,
@@ -881,53 +896,50 @@ fn normalize_json_number(raw: &str) -> String {
             max_abs_exponent = MAX_ABS_NORMALIZED_JSON_EXPONENT,
             "JSON number exponent exceeds supported normalization range; preserving original value"
         );
-        return raw.to_string();
+        return None;
     }
-    let (integer, fraction) = match base.split_once('.') {
-        Some((integer, fraction)) => (integer, fraction),
-        None => (base, ""),
-    };
 
-    let mut digits = format!("{integer}{fraction}");
-    let mut scale = match exponent.checked_sub(fraction.len() as i64) {
-        Some(scale) => scale,
-        None => {
-            warn!(
-                code = %AtmErrorCode::WarningMalformedAtmFieldIgnored,
-                raw,
-                exponent,
-                fraction_len = fraction.len(),
-                "JSON number exponent scaling overflowed; preserving original value"
-            );
-            return raw.to_string();
-        }
+    let (integer, fraction) = base.split_once('.').unwrap_or((base, ""));
+    let digits = format!("{integer}{fraction}");
+    let Some(mut scale) = exponent.checked_sub(fraction.len() as i64) else {
+        warn!(
+            code = %AtmErrorCode::WarningMalformedAtmFieldIgnored,
+            raw,
+            exponent,
+            fraction_len = fraction.len(),
+            "JSON number exponent scaling overflowed; preserving original value"
+        );
+        return None;
     };
 
     let trimmed = digits.trim_start_matches('0');
-    digits = if trimmed.is_empty() {
+    let mut digits = if trimmed.is_empty() {
         "0".to_string()
     } else {
         trimmed.to_string()
     };
     if digits == "0" {
-        return "0".to_string();
+        return Some((digits, scale));
     }
 
     while digits.ends_with('0') {
         digits.pop();
-        scale = match scale.checked_add(1) {
-            Some(scale) => scale,
-            None => {
-                warn!(
-                    code = %AtmErrorCode::WarningMalformedAtmFieldIgnored,
-                    raw,
-                    "JSON number exponent normalization overflowed; preserving original value"
-                );
-                return raw.to_string();
-            }
+        let Some(next_scale) = scale.checked_add(1) else {
+            warn!(
+                code = %AtmErrorCode::WarningMalformedAtmFieldIgnored,
+                raw,
+                "JSON number exponent normalization overflowed; preserving original value"
+            );
+            return None;
         };
+        scale = next_scale;
     }
 
+    Some((digits, scale))
+}
+
+fn render_normalized_json_number(raw: &str, negative: bool, digits: &str, scale: i64) -> String {
+    const MAX_NORMALIZED_JSON_NUMBER_LEN: usize = 64;
     if normalized_number_len_exceeds_limit(
         negative,
         digits.len(),

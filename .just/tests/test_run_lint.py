@@ -38,7 +38,6 @@ resolver = "2"
     def test_resolve_task_names_all_includes_new_targets(self) -> None:
         names = resolve_task_names("all")
         self.assertIn("boundaries", names)
-        self.assertIn("unix-gating", names)
         self.assertIn("runtime-waits", names)
         self.assertIn("manifests", names)
         self.assertIn("daemon-signing-coupling", names)
@@ -232,7 +231,6 @@ resolver = "2"
             tasks = build_tasks(repo_root)
             self.assertEqual(tasks["modules"].command[-1], str(repo_root / ".just/lint_cargo_modules.py"))
             self.assertEqual(tasks["boundaries"].command[-1], str(repo_root / ".just/lint_boundaries.py"))
-            self.assertEqual(tasks["unix-gating"].command[-1], str(repo_root / ".just/lint_unix_gating.py"))
             self.assertEqual(tasks["runtime-waits"].command[-1], str(repo_root / ".just/lint_runtime_waits.py"))
             self.assertEqual(tasks["sc-boundary"].command[-1], str(repo_root / ".just/lint_sc_boundary.py"))
             self.assertEqual(tasks["sc-portability"].command[-1], str(repo_root / ".just/lint_sc_portability.py"))

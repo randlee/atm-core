@@ -39,10 +39,12 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
 [enforcement]
-no_in_repo_implementation = true
 lint_rules = ["LINT-BOUNDARY-DISPATCHER-REFERENCES"]
 review_gates = ["no_socket_specific_dispatch_logic"]
 
 [status]
 state = "retired"
 notes = ["Historical custom-frame dispatcher boundary retired by AI.6 in favor of ADR-033 ApiRouter handling.", "Dispatcher semantics are now represented by the HTTP/OpenAPI router and canonical typed handler path, not this atm-core trait boundary.", "Tokio listener ownership is enforced by active BOUNDARY-HttpRuntime; this retired boundary has no live reference prohibition."]
+
+[extensions.atm]
+no_in_repo_implementation = true

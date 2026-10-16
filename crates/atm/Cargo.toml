@@ -83,7 +83,7 @@ sc-observability.workspace = true
 sc-observability-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_yaml = "0.9"
+noyalib = { version = "0.0.57", features = ["compat-serde-yaml"] }
 time = "0.3"
 toml = "0.8"
 tracing.workspace = true

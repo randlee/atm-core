@@ -36,7 +36,6 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["atm_daemon::client"]
 
 [enforcement]
-no_in_repo_implementation = true
 lint_rules = ["LINT-BOUNDARY-CLIENT-TRANSPORT-REFERENCES"]
 review_gates = ["no_cli_to_daemon_internal_edge"]
 
@@ -46,3 +45,6 @@ notes = [
   "Historical custom-frame client boundary retired by AI.6 in favor of ADR-033 HTTP/OpenAPI routing.",
   "same-host daemon launch/bootstrap helpers shared by atm and atm-graft now live below the atm-daemon-client adapter, not this atm-core boundary.",
 ]
+
+[extensions.atm]
+no_in_repo_implementation = true
