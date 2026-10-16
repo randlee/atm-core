@@ -107,6 +107,7 @@ env = { ATM_IDENTITY = "fenix", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID =
 
 [[rmux.windows.panes]]
 name = "atm-sanity"
+alias = "atm-sanity"
 model = "sonnet"
 color = "green"
 env = { ATM_IDENTITY = "atm-sanity", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
