@@ -33,6 +33,8 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-025 | locked | unmatched model: sonnet on claude-code, terra on codex-cli | 2026-10-16 |
 | ANC-026 | locked | sanity agent icon is the Jev icon | 2026-10-16 |
 | ANC-027 | locked | bead statuses use the BEAD_STATUS icons | 2026-10-16 |
+| ANC-028 | locked | icons for the remaining states | 2026-10-16 |
+| ANC-029 | locked | merge conflict = merged glyph in red | 2026-10-16 |
 
 ## ANC-001
 
@@ -400,14 +402,42 @@ Deterministic check to pair with the development gate: render sanity members wit
 
 ## ANC-027
 
-Anchor: The console must show each bead status in Rand's BEAD_STATUS table with that status's icon and colour: blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed and ready, and must not change how open is shown.
+Anchor: The console must show each bead status in Rand's BEAD_STATUS table with that status's icon and colour: blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed and ready.
 
 > "blocked":     "[#FA8537]\U000f033e[/]",  # lock
 
-Said by Rand, planning session 2026-10-17: BEAD_STATUS pasted; open not chosen yet, 2026-10-16. Status: locked. Version 1.
+Said by Rand, planning session 2026-10-17: BEAD_STATUS pasted; open not chosen yet, 2026-10-16. Status: locked. Version 2.
 
 Summary: bead statuses use the BEAD_STATUS icons
 
 Scope: edits how a bead or sprint status is rendered
 
 Deterministic check to pair with the development gate: render one bead per status in the table and assert each glyph code point and colour; render open and assert it is unchanged
+
+## ANC-028
+
+Anchor: The console must show bead open with U+F0766 in #2D81E0, sprint not_ready with U+F137C in #D97757, PR open with U+F04C2 in #2D81E0, PR draft with U+F0CB6 in #FFA60D and CI none with U+F01D8 in #2D81E0.
+
+> "bead_open":        "[#2D81E0]\U000f0766[/]",
+
+Said by Rand, planning session 2026-10-17: REMAINING pasted, 2026-10-16. Status: locked. Version 1.
+
+Summary: icons for the remaining states
+
+Scope: edits how bead, sprint, PR or CI states are rendered
+
+Deterministic check to pair with the development gate: render each of the five states and assert its code point and colour
+
+## ANC-029
+
+Anchor: The console must show a merge check of conflict with the merged icon U+F062D in red #F85149.
+
+> merge conflict would be merged (w/ red)
+
+Said by Rand, planning session 2026-10-17; red taken as the GitHub red already in the theme, 2026-10-16. Status: locked. Version 1.
+
+Summary: merge conflict = merged glyph in red
+
+Scope: edits how the merge check is rendered
+
+Deterministic check to pair with the development gate: render a merge check of conflict and assert U+F062D in #F85149

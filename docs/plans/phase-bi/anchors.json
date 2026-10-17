@@ -1011,7 +1011,7 @@
       "id": "ANC-027",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The console must show each bead status in Rand's BEAD_STATUS table with that status's icon and colour: blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed and ready, and must not change how open is shown.",
+      "statement": "The console must show each bead status in Rand's BEAD_STATUS table with that status's icon and colour: blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed and ready.",
       "quote": "\"blocked\":     \"[#FA8537]\\U000f033e[/]\",  # lock",
       "kind": "directive",
       "stated_by": "Rand",
@@ -1020,6 +1020,48 @@
       "summary": "bead statuses use the BEAD_STATUS icons",
       "scope": "edits how a bead or sprint status is rendered",
       "deterministic_check": "render one bead per status in the table and assert each glyph code point and colour; render open and assert it is unchanged",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T05:18:19+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:27:49+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "The console must show each bead status in Rand's BEAD_STATUS table with that status's icon and colour: blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed and ready, and must not change how open is shown."
+        }
+      ]
+    },
+    {
+      "id": "ANC-028",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show bead open with U+F0766 in #2D81E0, sprint not_ready with U+F137C in #D97757, PR open with U+F04C2 in #2D81E0, PR draft with U+F0CB6 in #FFA60D and CI none with U+F01D8 in #2D81E0.",
+      "quote": "\"bead_open\":        \"[#2D81E0]\\U000f0766[/]\",",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: REMAINING pasted",
+      "summary": "icons for the remaining states",
+      "scope": "edits how bead, sprint, PR or CI states are rendered",
+      "deterministic_check": "render each of the five states and assert its code point and colour",
       "fixtures": {
         "pass": [],
         "fail": []
@@ -1035,7 +1077,41 @@
       },
       "history": [
         {
-          "at": "2026-10-17T05:18:19+00:00",
+          "at": "2026-10-17T05:27:49+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-029",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show a merge check of conflict with the merged icon U+F062D in red #F85149.",
+      "quote": "merge conflict would be merged (w/ red)",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17; red taken as the GitHub red already in the theme",
+      "summary": "merge conflict = merged glyph in red",
+      "scope": "edits how the merge check is rendered",
+      "deterministic_check": "render a merge check of conflict and assert U+F062D in #F85149",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T05:27:49+00:00",
           "event": "created",
           "status": "locked"
         }
