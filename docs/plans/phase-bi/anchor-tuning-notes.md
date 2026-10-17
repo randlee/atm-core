@@ -110,6 +110,22 @@ What did not fix bi-2: it builds the data the skill subcommand reads, so the ski
 
 Open for Rand: bi-2 fails on relevance noise for the skill anchors. Options are (a) accept those cells as applicability noise for a non-owning bead, (b) scope the skill anchors (ANC-011..014) to the bead that owns them, which is an anchor change, or (c) keep editing bi-2. Not applied.
 
+### bi-2 iterations 11 and 12, with the haiku follow-up turns
+
+| Iteration | bi-2 text change | Jev failing | Haiku turn 1 (relevant / addressed) |
+| --- | --- | --- | --- |
+| 11 | per-option bullets deleted; one fence line "adds no subcommand and no option; builds the data `atm-bd skill` reads (bi-3)" | ANC-011 (relevant yes 0.54), ANC-013 (no 0.55 / 0.64, unstable) | 003 yes 0.93 / unclear 0.50; 011 yes 0.65 / no 0.85; 012 no 0.45; 013 no 0.60; 014 yes 0.65 / no 0.85 |
+| 12 | fence line names the mode: "builds the bundled data that bare `atm-bd skill` installs from, offline (bi-3, ANC-010)" | ANC-011 (no 0.59), ANC-012 (no 0.71) | 011 yes 0.70 / no 0.90; 013 no 0.55 / no 0.92 |
+
+Findings from the follow-up turns (iteration 9 and 11 agents, one cell each):
+- All five agents said the anchors' scope ("adds or changes the --list option", the version argument, `--latest`, `--orchestration") is CLI behaviour that belongs to bi-3; they sit on bi-2 only because the bead mentions them.
+- Cutting a per-option bullet moved `relevant` toward no (about 0.65 to 0.80 predicted). What remains is the bead naming `atm-bd skill` at all, which the ANC-003 line requires.
+- Haiku's own `REF` suggestion for ANC-003 was its invention: nothing in the bead or the anchor asks for it. Not applied.
+- Haiku's predictions from a counterfactual ("with the bullet deleted, no 0.65") did not match its later first-turn answer on the real edited text (yes 0.65). Treat counterfactuals as weak evidence; the first turn on the real text is the measurement.
+- Process error recorded: I twice asked a fresh agent to reconcile numbers given by a different agent. A follow-up goes only to the agent that gave the answer, about its own answer.
+
+Jev result by run, bi-2: 5, 5, 6, 4, 4, 2, 2 failing cells. The failing set changes every run and `to_fix` flips between "add" and "drop", so these cells sit on the 0.6 relevance line and wording moves them either side. Awaiting Rand: accept as applicability noise, scope ANC-011..014 to bi-3 (anchor change), or continue.
+
 ## Rules followed while tuning
 
 - No question or anchor wording was changed to make a cell pass; changes are to the bead text only, each citing a locked anchor that predates the run.
