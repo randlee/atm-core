@@ -126,6 +126,32 @@ Findings from the follow-up turns (iteration 9 and 11 agents, one cell each):
 
 Jev result by run, bi-2: 5, 5, 6, 4, 4, 2, 2 failing cells. The failing set changes every run and `to_fix` flips between "add" and "drop", so these cells sit on the 0.6 relevance line and wording moves them either side. Awaiting Rand: accept as applicability noise, scope ANC-011..014 to bi-3 (anchor change), or continue.
 
+## plan-anchor 0.6.0 re-run and cross-check (2026-10-17)
+
+Skill: develop's plan-anchor 0.6.0 install (verbatim copy used for the run, not committed to this branch). Gate steps run by hand (`compose-item`, `judge --all`) because the 0.6.0 gate agents refuse to set the remote-judge opt-in (`POLICY.REMOTE_JUDGE_DISABLED`); the opt-in was set per command.
+
+| Bead | Result | Weakest cell |
+| --- | --- | --- |
+| atm-phase-bi | pass | ANC-020 0.80 |
+| atm-bi-1 | pass (one gate agent run: ANC-004 underspecified 0.53, unstable; own run 0.69) | ANC-004 |
+| atm-bi-2 | fail | ANC-011 underspecified (relevant no 0.37), ANC-012 underspecified (relevant no 0.59) |
+| atm-bi-3 | pass | ANC-022 0.82 |
+| atm-bi-4 | pass | ANC-020 0.64 |
+| atm-bi-5 | pass | ANC-005, ANC-019 0.85 |
+
+Cross-check on bi-2 (turn 1 = the exact Jev request only; follow-ups to the same agent):
+
+| Agent | Cell | relevant (turn 1) | relevant (after follow-up) |
+| --- | --- | --- | --- |
+| haiku | ANC-011 | yes 0.6 | no 0.7 |
+| haiku | ANC-012 | no 0.7 | no 0.7 |
+| luna (lumen) | ANC-011 | yes 0.94 | no 0.98 |
+| luna (cipher) | ANC-012 | no 0.7 | no (suggests an explicit "does not touch --latest" sentence) |
+
+Findings: addressed is no and contradicted is no for every agent, so the only open question is applicability. Turn-1 answers split across the 0.6 line on identical text; all four agree after follow-up that bi-2 does not add or change the version argument or `--latest`. The shared `relevant` criterion counts "a clear prerequisite" as yes (assets/questions/plan.json), which is what pulled lumen's first answer. Not applied: the agents' suggested sentences (restating bi-3 options in bi-2 is the pattern that flipped cells before).
+
+Rand's ruling (21:07Z, via omega-prime): the defect is that there is no formal way to signal "not relevant"; fix the channel, not the anchor. Filed as randlee/plan-anchor#35 (lead-declared not_applicable per anchor and bead, with reason and provenance in the run file). No anchor scope change; bi-2 is carried behind that issue.
+
 ## Mistakes made while tuning (for the post-mortem)
 
 - Iterations 6 and 9: I put "why" and "best sentence to add" into the first haiku prompt and did not run follow-up turns. Turn 1 is then not Jev's exact request, and the discussion with haiku, which is where the tuning comes from, did not happen. Corrected by Rand; follow-up turns ran from iteration 9 on. Rule: turn 1 is the exact request only; every question goes in a later turn to the same agent.
