@@ -26,7 +26,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-018 | locked | PR list uses Rand's GH_THEME icons | 2026-10-16 |
 | ANC-019 | locked | claude agents get a per-model icon and colour | 2026-10-16 |
 | ANC-020 | locked | codex agents get a celestial icon and colour per model class | 2026-10-16 |
-| ANC-021 | locked | QA status icon: running blue, pass green, fail red | 2026-10-16 |
+| ANC-021 | locked | QA status icons: jev, running, pass, fail | 2026-10-16 |
 
 ## ANC-001
 
@@ -310,13 +310,13 @@ Deterministic check to pair with the development gate: render codex-cli members 
 
 ## ANC-021
 
-Anchor: The console must show a QA status icon, U+F029B, in #4A5AF8 while QA is running, in #2EA043 when QA has passed and in #F85149 when QA has failed.
+Anchor: The console must show a QA status icon of U+F01A6 in #E551BA for the jev state, and U+F029B in #4A5AF8 while QA is running, in #2EA043 when QA has passed and in #F85149 when QA has failed.
 
 > "qa_running": "[#4A5AF8]\U000f029b[/]",
 
-Said by Rand, planning session 2026-10-17: JEV_QA pasted; placement and the Jev icon still to be agreed, 2026-10-16. Status: locked. Version 1.
+Said by Rand, planning session 2026-10-17: JEV_QA pasted; placement and the Jev icon still to be agreed, 2026-10-16. Status: locked. Version 2.
 
-Summary: QA status icon: running blue, pass green, fail red
+Summary: QA status icons: jev, running, pass, fail
 
 Scope: edits how QA state is rendered
 
