@@ -394,7 +394,7 @@
       "context": "planning session 2026-10-17: cron is unused, so rename it to fit the atm-bd layout instead of leaving it",
       "summary": "atm-bd cron --phase <x> replaces console --headless",
       "scope": "edits the headless tick, the console CLI options, or the README cron examples",
-      "deterministic_check": "atm-bd cron --help succeeds; atm-bd console --help lists no --headless; rg -- '--headless' apps/ plugins/ returns nothing",
+      "deterministic_check": "atm-bd cron --help succeeds; atm-bd console --help lists no --headless; rg -n -g '!**/tests/**' -g '!**/CHANGELOG.md' -- '--headless' apps plugins .github returns nothing; a test asserts atm-bd cron --headless is rejected",
       "fixtures": {
         "pass": [
           "Adds the atm-bd cron --phase <x> subcommand that runs one tick, and removes the --headless option from the console."
@@ -404,7 +404,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -423,6 +423,13 @@
           "event": "updated",
           "fields": [
             "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-17T05:59:44+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check"
           ]
         }
       ]

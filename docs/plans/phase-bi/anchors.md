@@ -174,13 +174,13 @@ Anchor: The single headless orchestration tick must be run as atm-bd cron --phas
 
 > atm-bd cron --phase <x>
 
-Said by Rand, planning session 2026-10-17: cron is unused, so rename it to fit the atm-bd layout instead of leaving it, 2026-10-16. Status: locked. Version 2.
+Said by Rand, planning session 2026-10-17: cron is unused, so rename it to fit the atm-bd layout instead of leaving it, 2026-10-16. Status: locked. Version 3.
 
 Summary: atm-bd cron --phase <x> replaces console --headless
 
 Scope: edits the headless tick, the console CLI options, or the README cron examples
 
-Deterministic check to pair with the development gate: atm-bd cron --help succeeds; atm-bd console --help lists no --headless; rg -- '--headless' apps/ plugins/ returns nothing
+Deterministic check to pair with the development gate: atm-bd cron --help succeeds; atm-bd console --help lists no --headless; rg -n -g '!**/tests/**' -g '!**/CHANGELOG.md' -- '--headless' apps plugins .github returns nothing; a test asserts atm-bd cron --headless is rejected
 
 Fixtures:
 - pass: Adds the atm-bd cron --phase <x> subcommand that runs one tick, and removes the --headless option from the console.
