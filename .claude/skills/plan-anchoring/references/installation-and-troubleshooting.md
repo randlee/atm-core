@@ -1,6 +1,6 @@
 ---
 name: installation-and-troubleshooting
-version: 0.6.0
+version: 0.6.1
 description: Installing and locating the CLIs and credentials plan-anchoring depends on (python3, PyYAML, br or bd, sc-compose, jq, TypeSafe API key), how the anchor tracker is selected, minimum versions, PATH issues in Claude Code, Codex and Cursor environment policy, validation, and known issues.
 ---
 

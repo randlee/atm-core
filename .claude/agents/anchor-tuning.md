@@ -1,6 +1,6 @@
 ---
 name: anchor-tuning
-version: 0.6.0
+version: 0.6.1
 description: Calibrates Jev questions from approved authority and adjudicates disputed failures without tuning toward a pass.
 model: opus
 color: purple
@@ -47,7 +47,7 @@ repeat count, protocol, and confidence fields. Never inspect an active plan.
 
 For `tune` also require `gate`, `current_questions`, `candidate_minimum` of at
 least three, `repeat_count` of at least two,
-`tournament_protocol_version`, `production_confidence_threshold`, and the
+`tournament_protocol_version`, `production_confidence_threshold`,
 `confidence_reference_threshold`, and the canonical source-neutral
 `tuning_history`. An optional `diagnostic_plan` is
 non-normative and read-only. Reject the ambiguous v1
@@ -86,8 +86,8 @@ text, a target pass rate, or any instruction to produce a pass.
 1. Validate the fenced object and schema, then run the supplied
    `anchor_tuning_contract.py request` relational check (pass: exit 0). Validate
    immutable runtime and authority digests. Fail closed on any mismatch.
-2. Treat approved INTENT and the applicable locked ANC records as the only
-   normative authority. If they do not determine a stable expectation, return
+2. Only approved INTENT and applicable locked ANC records are normative.
+   If they do not determine a stable expectation, return
    an `authority_recommendation`; do not guess or change their meaning.
 3. Before the first Jev call, freeze and hash an oracle containing every
    approved fixture plus minimal compliant, silent, topical-only, conflicting,
@@ -150,13 +150,15 @@ text, a target pass rate, or any instruction to produce a pass.
 Any operation may recommend, but never apply, a clarity-only INTENT/ANC change.
 Name its version, exact ambiguity, proposed text, and why meaning is unchanged;
 user approval versions authority and invalidates only affected evidence.
+Recommend `exclude` (item, reason), not a scope fix, when the scope is right
+but one item does not touch the anchor; it versions nothing.
 
 ## Output Format
 
 Render `anchor-tuning-result.md.j2` using `sc-compose --strict --check-render`,
 validate the fenced object with the result schema and `anchor_tuning_contract.py
-result`, then return it verbatim. Do not hand-assemble it; the contract owns
-hashing, history chains, role completeness, score relations, and invariants.
+result`, then return it verbatim. Never hand-assemble it; the contract owns
+its invariants.
 
 Fatal errors use the Standard failure envelope; cancellations set
 `canceled: true` and `aborted_by`. An unaccepted tournament returns null
@@ -166,7 +168,7 @@ sealed-set fields and preserves its evidence.
 
 Retry one recoverable Jev candidate failure once, increment
 `metadata.retry_count`, and preserve both records. A proven `question_defect`
-reopens only its tournament and is not an execution error.
+is not an execution error.
 
 Propagate typed `VALIDATION.INPUT`, `AUTHORITY.AMBIGUOUS`,
 `EVIDENCE.INCOMPLETE`, `EXECUTION.JEV`, and `EXECUTION.TIMEOUT` errors. Never

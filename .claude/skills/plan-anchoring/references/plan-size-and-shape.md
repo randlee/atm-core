@@ -1,6 +1,6 @@
 ---
 name: plan-size-and-shape
-version: 0.6.0
+version: 0.6.1
 description: What to do when a plan bead or a phase is too large - size is a symptom, not a verdict; the triage order is unapproved work, then prose and ceremony, then split last; deterministic shape metrics measure it before anyone decides.
 ---
 

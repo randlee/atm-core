@@ -1,6 +1,6 @@
 ---
 name: question-tuning
-version: 0.6.0
+version: 0.6.1
 description: When and how to replace the generic Jev questions with anchor-specific wording, where the overrides live, how to test a question set with fixtures and known beads before trusting it, and when to stop tuning.
 ---
 

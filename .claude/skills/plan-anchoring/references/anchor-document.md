@@ -1,6 +1,6 @@
 ---
 name: anchor-document
-version: 0.6.0
+version: 0.6.1
 description: The intent document, the anchors.json record of truth and its rendered anchors.md, ID rules, provenance, versioning, promotion, and retirement.
 ---
 
@@ -11,7 +11,7 @@ Two documents in `doc/plan/phase-current/` are for people; one machine record fe
 | File | Who edits | Purpose |
 | --- | --- | --- |
 | `intent.md` | you, from `assets/templates/intent.md` | One page: purpose, success, out of scope. Frames the anchors; never judged |
-| `anchors.json` | `scripts/jev_judge.py` only (`add`, `update`, `retire`, `promote`, `set-beads`) | Record of truth: every anchor with provenance, status, overrides, fixtures, bead IDs, history |
+| `anchors.json` | `scripts/jev_judge.py` only (`add`, `update`, `retire`, `promote`, `set-beads`, `exclude`) | Record of truth: every anchor with provenance, status, overrides, fixtures, bead IDs, history |
 | `anchors.md` | nobody; rendered by `render` | Human view of `anchors.json`; re-render after every change |
 | `anchor-runs/*.json` | `judge` (dry runs included; `check-fixtures` under `fixtures/`) | One file per gate run: answers, attempts, bytes sent, a hash of the questions asked; diffable, countable |
 
@@ -41,13 +41,28 @@ Anchor record fields:
 | `deterministic_check` | string | Code-level check paired with the development gate |
 | `fixtures` | `{pass: [], fail: []}` | Sentences that would satisfy or violate the anchor |
 | `question_overrides` | `{plan?: {...}, dev?: {...}}` | Optional wording overrides, same shape as a question-set file (`questions`, optional `roles`) |
-| `version` | int | Bumped when statement, scope, summary, fixtures, overrides, or status change. Three statement rewordings mean retire and re-lock |
+| `exclude` | list, optional | `[{item, reason}]`: plan items this anchor does not apply to. See Exclusions below |
+| `version` | int | Bumped when statement, scope, summary, fixtures, overrides, or status change; never by `exclude`. Three statement rewordings mean retire and re-lock |
 | `status` | `proposed` / `locked` / `promoted` / `retired` | Only `locked` and `promoted` are judged by `--all` |
 | `promoted_to` | string or null | The ADR an anchor was promoted to |
 | `beads` | `{anchor, plan_questions, dev_questions}` | Bead IDs of the anchor tree |
 | `history` | list | Append-only events with timestamps |
 
 Full example: `assets/examples/anchors.example.json`. Run `validate` after any change; it fails on structural problems and warns when `intent_ref` is missing or no anchor is locked. `judge` refuses a record with problems. `stated_at` defaults to today.
+
+## Exclusions
+
+`exclude` is the official way to say "this anchor is not relevant to this plan item":
+
+```json
+"exclude": [{"item": "atm-bi-2", "reason": "Data-only sprint; the skill CLI options belong to bi-3."}]
+```
+
+- `item` is the plan item id exactly as `judge --item-id` receives it (the sprint id from `plan_source.py discover-*`, or the bead id). `reason` is one non-empty sentence. One entry per item; `validate` rejects an empty reason, unknown keys and duplicates.
+- Record it with `exclude --id ANC-011 --item atm-bi-2 --reason "..."`; drop it with `exclude --id ANC-011 --item atm-bi-2 --remove`. Both append a history event and do not bump `version`, so no earlier run of any cell is invalidated. A locked or promoted anchor stays editable this way: locking is the `status` field, and nothing hashes the anchor record (the tuner's `authority.anchors` digest covers a fixed projection of fields that has no `exclude`).
+- `judge` makes no Jev call for an excluded cell and reports verdict `excluded`, `exclusion: {item, reason}`, in `summary.excluded`. It counts as passing. `report` always lists it with the reason; `coverage` and `diff` carry the reason; `anchors.md` lists it under the anchor.
+- No approval or frozen expected verdict is needed, and nobody verifies it: the reason is the record. Use it when the anchor's `scope` is right and this item simply does not touch it. If the scope is wrong for many items, fix the scope instead (`triage-and-iteration.md`).
+- `lint --plan-items <discover output>` (or `--plan-item ID`, repeatable) warns about an exclusion naming an item the plan does not have. It is a warning only: it does not change lint's exit code, and `judge` ignores an exclusion for another item.
 
 ## IDs
 
@@ -75,4 +90,4 @@ The quote is evidence. The statement is an instrument: `lint`, `rubric` and the 
 
 ## Rendering
 
-`render` writes `anchors.md`: a status table and one section per anchor (quote as blockquote, provenance, summary, scope, deterministic check, bead IDs, fixtures). Re-render after every `add`, `update`, `set-beads`, `promote` or `retire`; commit both files together.
+`render` writes `anchors.md`: a status table and one section per anchor (quote as blockquote, provenance, summary, scope, deterministic check, exclusions with reasons, bead IDs, fixtures). Re-render after every `add`, `update`, `set-beads`, `promote`, `retire` or `exclude`; commit both files together.

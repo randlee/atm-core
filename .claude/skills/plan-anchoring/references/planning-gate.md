@@ -1,6 +1,6 @@
 ---
 name: planning-gate
-version: 0.6.0
+version: 0.6.1
 description: Running the planning gate end to end - what to pass, what Jev sees, the command and exit codes, and how to read results for one sprint item and a whole phase.
 ---
 
@@ -52,7 +52,7 @@ python3 "$S" judge --anchors "$A" --gate plan --all --item-id <sprint-id> --item
 
 | Exit | Meaning |
 | --- | --- |
-| 0 | Every anchor `satisfied`, `not_applicable` or `deterministic_only`, or a dry run |
+| 0 | Every anchor `satisfied`, `not_applicable`, `deterministic_only` or `excluded`, or a dry run |
 | 1 | At least one `contradicted`, `not_addressed`, `underspecified` or `error` verdict; the run file was written |
 | 2 | Fatal before judging: credentials, opt-in, malformed record or override, unknown anchor, or `PLAN.TOO_LARGE` (a symptom; `plan-size-and-shape.md`) |
 
@@ -69,9 +69,12 @@ python3 "$S" coverage --runs doc/plan/phase-current/anchor-runs --gate plan --fo
 | `contradicted` | The item proposes what the directive rules out | Re-read the sent text (`$W/item.txt`) at the governed section | Change the approach, or if the directive has changed, `retire` and lock a new anchor |
 | `not_addressed` | The item is silent on the directive | Same | Add the directive's specific content: starting point, constraint, step |
 | `underspecified` | Confidence below threshold or `unclear` | The row's `leaning` and `min_confidence`: low on one item means a vague item; low on many, untuned questions or a vague anchor | Fix the item where `to_fix` points, preferring cuts; tune the questions (`question-tuning.md`) or the anchor's `scope` only when it is low on many items that plainly comply |
+| `excluded` | Not asked: the anchor's `exclude` names this item | `results[].exclusion.reason` | Nothing; drop it with `exclude --remove` if the reason is wrong |
 | `deterministic_only` | Structural anchor; Jev not asked | The anchor's `deterministic_check` | Run the check and record it |
 | `satisfied` | Directive present | Nothing | Nothing |
 | `not_applicable` | Anchor does not govern this bead | If it should have, the anchor's `scope` is too narrow | `update --scope` |
+
+To mark an anchor not relevant to one sprint item when its scope is right, use `exclude` (`anchor-document.md`), not a scope change or a smaller `--anchor` list. Check exclusion ids against the plan with `lint --plan-items <discover output>`.
 | `error` | Jev could not be asked after retries | `results[].error.code` | Fix the cause; re-run that bead |
 | `PLAN.TOO_LARGE` | The sprint does not fit one request | `plan_source.py shape <sprint path>`; scope-anchor verdicts | Judge the cause: unapproved work, then prose and ceremony, then split (`plan-size-and-shape.md`) |
 

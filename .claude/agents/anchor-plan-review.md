@@ -1,6 +1,6 @@
 ---
 name: anchor-plan-review
-version: 0.6.0
+version: 0.6.1
 description: Judges one complete sprint item against anchors at the planning gate - preserves the normalized sprint text, resolves question overrides, returns Jev's verdicts unchanged, and points to the weak spot in each failing cell. Read-only on beads and the plan.
 model: sonnet
 color: yellow
@@ -88,8 +88,9 @@ Validate the input mode first. Descriptor mode uses the discovered sprint; legac
    - `where`: the verbatim sentence of `item.txt` the failing answer concerns, or null when the bead says nothing on it;
    - `change`: one sentence on what the bead should state, or drop, so the answer is firm.
    Read only what those answers concern; do not re-judge other questions or anchors, and never reverse or soften Jev's verdict.
+   If the anchor's own `scope` is right and this sprint simply does not touch it, set `where` to null and `change` to `exclude --id <ANC> --item <item_id> --reason "<one sentence>"`; recommend a scope fix only when the scope itself is wrong. Never apply either. An `excluded` cell (`summary.excluded`) was not judged and passes: return it with its `exclusion` and no `to_fix`.
 7. Render: `python3 "$SCRIPT" report --run <run path> --format md`.
-8. Return the envelope below. Keep `bead_id` equal to the legacy input in legacy mode, otherwise null; `item_id` is the effective item identifier in both modes. `results` copy the run's `results[]` unchanged (`verdict`, `leaning`, `min_confidence`, `attempts`, `confirmed`, `unstable`, `explanation`, `answers`, `low_questions`, and `answers_second` when present) plus `to_fix` on failing cells; `reused_run` is true when `run` was given; `overrides_applied` is every anchor whose `question_set.overridden` is true; `item_truncated` is `item.truncated`; `shortened` is `summary.shortened`. Include the report markdown verbatim; do not summarise verdicts in prose. Measure `duration_ms` from invocation start to return, count actual external tool calls, and set `retry_count` to the sum of `max(attempts - 1, 0)` in returned results. A zero is valid only when measured.
+8. Return the envelope below. Keep `bead_id` equal to the legacy input in legacy mode, otherwise null; `item_id` is the effective item identifier in both modes. `results` copy the run's `results[]` unchanged (`verdict`, `leaning`, `min_confidence`, `attempts`, `confirmed`, `unstable`, `explanation`, `answers`, `low_questions`, and `answers_second` and `exclusion` when present) plus `to_fix` on failing cells; `reused_run` is true when `run` was given; `overrides_applied` is every anchor whose `question_set.overridden` is true; `item_truncated` is `item.truncated`; `shortened` is `summary.shortened`; `excluded` is `summary.excluded`. Include the report markdown verbatim; do not summarise verdicts in prose. Measure `duration_ms` from invocation start to return, count actual external tool calls, and set `retry_count` to the sum of `max(attempts - 1, 0)` in returned results. A zero is valid only when measured.
 
 ## Output Format
 
@@ -112,6 +113,7 @@ Return fenced JSON:
     "pass": false,
     "failing": ["ANC-012"],
     "errors": [],
+    "excluded": [],
     "results": [
       {"anchor_id": "ANC-012", "verdict": "underspecified", "leaning": "satisfied", "min_confidence": 0.45, "attempts": 1, "confirmed": false, "unstable": false,
        "explanation": "Jev was not confident (min confidence 0.45); the anchor or the bead may be underspecified.",

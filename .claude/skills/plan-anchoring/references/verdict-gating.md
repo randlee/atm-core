@@ -1,6 +1,6 @@
 ---
 name: verdict-gating
-version: 0.6.0
+version: 0.6.1
 description: How jev_judge.py turns independent Jev answers into one verdict per anchor and item, the role contract, thresholds, severity order, pass criteria and exit codes, coverage, run diffs, and offline fixtures.
 ---
 
@@ -28,6 +28,8 @@ The gating depends on the anchor's `kind` (`anchor-capture.md`):
 | `prohibition` | relevance, conflict (+ evidence at the dev gate) | Silence is compliance; the generic `addressed` question says no on compliant beads (measured-behaviour.md) |
 | `structural` | none at the planning gate; the anchor's `deterministic_check` | Verdict `deterministic_only`, non-failing; Jev cannot see code blocks as compliance (measured-behaviour.md) |
 
+An anchor whose `exclude` list names the item (`--item-id`, exact match) is not asked at either gate: verdict `excluded`, non-failing, with `exclusion.reason` (`anchor-document.md`).
+
 ## From answers to a verdict
 
 Each `choice` answer gives a `choice` and a `confidence` in [0, 1]. The threshold `t` defaults to 0.6 (`--threshold`, or `PLAN_ANCHOR_CONFIDENCE_THRESHOLD`). Evaluated in order; the first match wins:
@@ -48,11 +50,11 @@ Contradiction outranks underspecification: a confident conflict is actionable ev
 
 ## Severity order
 
-`contradicted` > `not_addressed` > `asserted_only` > `underspecified` > `satisfied` > `not_applicable`. `error` sorts first in reports and ranks below every verdict in diffs, so losing a verdict is a regression. Results are sorted by severity then anchor ID.
+`contradicted` > `not_addressed` > `asserted_only` > `underspecified` > `satisfied` > `not_applicable` > `deterministic_only` > `excluded`. `error` sorts first in reports and ranks below every verdict in diffs, so losing a verdict is a regression. Results are sorted by severity then anchor ID.
 
 ## Pass criteria and exit codes
 
-- A **run** (one item) passes when no result is `contradicted`, `not_addressed`, `asserted_only`, `underspecified`, or `error`. `judge` exits 0 on pass or dry run, 1 on a failing run (the run file is still written), 2 on a fatal error before judging.
+- A **run** (one item) passes when no result is `contradicted`, `not_addressed`, `asserted_only`, `underspecified`, or `error`; `excluded` passes. `judge` exits 0 on pass or dry run, 1 on a failing run (the run file is still written), 2 on a fatal error before judging.
 - The **planning gate** passes when every planning bead's latest run passes and `coverage` lists no uncovered locked anchor.
 - The **development gate** passes when the sprint's latest run passes and each returned deterministic check has been run and recorded.
 
@@ -62,7 +64,7 @@ Contradiction outranks underspecification: a confident conflict is actionable ev
 python3 "$S" coverage --runs doc/plan/phase-current/anchor-runs --gate plan --format md
 ```
 
-Takes the latest non-dry run per (gate, item), builds the anchor x item matrix, and lists anchors with no `satisfied` cell. Without `--gate`, columns are labelled `gate:item` so plan and dev verdicts are not merged. "Is ANC-012 satisfied anywhere?" is answered here, never by Jev. An anchor `not_applicable` to every bead is reported as uncovered on purpose: its scope is wrong or the plan lacks the bead that should carry it.
+Takes the latest non-dry run per (gate, item), builds the anchor x item matrix, and lists anchors with no `satisfied` cell. Without `--gate`, columns are labelled `gate:item` so plan and dev verdicts are not merged. "Is ANC-012 satisfied anywhere?" is answered here, never by Jev. An anchor `not_applicable` to every bead is reported as uncovered on purpose: its scope is wrong or the plan lacks the bead that should carry it. Excluded cells show as `excluded` and are listed with their reasons (`data.excluded`); they never count as covering.
 
 ## Diffing runs
 

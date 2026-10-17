@@ -47,6 +47,7 @@
       "deterministic_check": "",
       "fixtures": {"pass": [], "fail": []},
       "question_overrides": {},
+      "exclude": [{"item": "bd-41", "reason": "Data-only migration bead; it adds no CLI command and the JSON output work belongs to bd-42."}],
       "version": 1,
       "status": "locked",
       "promoted_to": null,

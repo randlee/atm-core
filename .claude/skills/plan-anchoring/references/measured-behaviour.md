@@ -1,6 +1,6 @@
 ---
 name: measured-behaviour
-version: 0.6.0
+version: 0.6.1
 description: What Jev actually did on a real plan - request sizes it accepts, where in a long bead it stops reading reliably, how the default questions perform on real anchors, run-to-run noise, and the threshold - with the skill rules each number justifies.
 ---
 
