@@ -26,11 +26,12 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-018 | locked | PR list uses Rand's GH_THEME icons | 2026-10-16 |
 | ANC-019 | locked | claude agents get a per-model icon and colour | 2026-10-16 |
 | ANC-020 | locked | codex agents get a celestial icon and colour per model class | 2026-10-16 |
-| ANC-021 | locked | QA status icons: jev, running, pass, fail | 2026-10-16 |
+| ANC-021 | locked | qa agent icon: running blue, pass green, fail red | 2026-10-16 |
 | ANC-022 | locked | atm-bd-console is dropped, not aliased | 2026-10-16 |
 | ANC-023 | locked | agent icon wherever an agent name is shown | 2026-10-16 |
 | ANC-024 | locked | model icon by lower-case contains | 2026-10-16 |
 | ANC-025 | locked | claude=sonnet and codex=terra stand-ins | 2026-10-16 |
+| ANC-026 | locked | sanity agent icon is the Jev icon | 2026-10-16 |
 
 ## ANC-001
 
@@ -314,13 +315,13 @@ Deterministic check to pair with the development gate: render codex-cli members 
 
 ## ANC-021
 
-Anchor: The console must show a QA status icon of U+F01A6 in #E551BA for the jev state, and U+F029B in #4A5AF8 while QA is running, in #2EA043 when QA has passed and in #F85149 when QA has failed.
+Anchor: The console must show a qa agent with the icon U+F029B in #4A5AF8 while it is running QA, in #2EA043 after a QA pass and in #F85149 after a QA fail.
 
 > "qa_running": "[#4A5AF8]\U000f029b[/]",
 
-Said by Rand, planning session 2026-10-17: JEV_QA pasted; placement and the Jev icon still to be agreed, 2026-10-16. Status: locked. Version 2.
+Said by Rand, planning session 2026-10-17: JEV_QA pasted; placement and the Jev icon still to be agreed, 2026-10-16. Status: locked. Version 3.
 
-Summary: QA status icons: jev, running, pass, fail
+Summary: qa agent icon: running blue, pass green, fail red
 
 Scope: edits how QA state is rendered
 
@@ -381,3 +382,17 @@ Summary: claude=sonnet and codex=terra stand-ins
 Scope: edits how the roster model is mapped to an icon
 
 Deterministic check to pair with the development gate: feed models claude and codex to icon_for and assert the sonnet and terra icons
+
+## ANC-026
+
+Anchor: The console must show every sanity agent with the icon U+F01A6 in #E551BA, whatever its harness or model.
+
+> "jev":        "[#E551BA]\U000f01a6[/]",
+
+Said by Rand, planning session 2026-10-17: jev is the sanity icon, followed by the three qa states, 2026-10-16. Status: locked. Version 1.
+
+Summary: sanity agent icon is the Jev icon
+
+Scope: edits how agent names are rendered
+
+Deterministic check to pair with the development gate: render sanity members with differing harness and model and assert U+F01A6 in #E551BA each

@@ -755,13 +755,13 @@
       "id": "ANC-021",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The console must show a QA status icon of U+F01A6 in #E551BA for the jev state, and U+F029B in #4A5AF8 while QA is running, in #2EA043 when QA has passed and in #F85149 when QA has failed.",
+      "statement": "The console must show a qa agent with the icon U+F029B in #4A5AF8 while it is running QA, in #2EA043 after a QA pass and in #F85149 after a QA fail.",
       "quote": "\"qa_running\": \"[#4A5AF8]\\U000f029b[/]\",",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-16",
       "context": "planning session 2026-10-17: JEV_QA pasted; placement and the Jev icon still to be agreed",
-      "summary": "QA status icons: jev, running, pass, fail",
+      "summary": "qa agent icon: running blue, pass green, fail red",
       "scope": "edits how QA state is rendered",
       "deterministic_check": "render QA states running, pass and fail and assert U+F029B with each colour",
       "fixtures": {
@@ -769,7 +769,7 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -791,6 +791,15 @@
             "summary"
           ],
           "previous_statement": "The console must show a QA status icon, U+F029B, in #4A5AF8 while QA is running, in #2EA043 when QA has passed and in #F85149 when QA has failed."
+        },
+        {
+          "at": "2026-10-17T04:53:52+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary"
+          ],
+          "previous_statement": "The console must show a QA status icon of U+F01A6 in #E551BA for the jev state, and U+F029B in #4A5AF8 while QA is running, in #2EA043 when QA has passed and in #F85149 when QA has failed."
         }
       ]
     },
@@ -934,6 +943,40 @@
       "history": [
         {
           "at": "2026-10-17T04:44:06+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-026",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show every sanity agent with the icon U+F01A6 in #E551BA, whatever its harness or model.",
+      "quote": "\"jev\":        \"[#E551BA]\\U000f01a6[/]\",",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: jev is the sanity icon, followed by the three qa states",
+      "summary": "sanity agent icon is the Jev icon",
+      "scope": "edits how agent names are rendered",
+      "deterministic_check": "render sanity members with differing harness and model and assert U+F01A6 in #E551BA each",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T04:53:52+00:00",
           "event": "created",
           "status": "locked"
         }
