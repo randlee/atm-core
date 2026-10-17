@@ -12,7 +12,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-004 | locked | phase ends with PyPI publish after TestPyPI rehearsal | 2026-10-16 |
 | ANC-005 | locked | nothing here changes v0.16.1 | 2026-10-16 |
 | ANC-006 | locked | plan lives as beads in this bd db | 2026-10-16 |
-| ANC-007 | locked | atm-bd-console kept as alias | 2026-10-16 |
+| ANC-007 | retired | atm-bd-console kept as alias | 2026-10-16 |
 | ANC-008 | retired | no skill-set selector yet | 2026-10-16 |
 | ANC-009 | locked | atm-bd cron --phase <x> replaces console --headless | 2026-10-16 |
 | ANC-010 | locked | bare skill installs the bundled skills, offline | 2026-10-16 |
@@ -27,6 +27,8 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-019 | locked | claude agents get a per-model icon and colour | 2026-10-16 |
 | ANC-020 | locked | codex agents get a celestial icon and colour per model class | 2026-10-16 |
 | ANC-021 | locked | QA status icons: jev, running, pass, fail | 2026-10-16 |
+| ANC-022 | locked | atm-bd-console is dropped, not aliased | 2026-10-16 |
+| ANC-023 | locked | agent icon wherever an agent name is shown | 2026-10-16 |
 
 ## ANC-001
 
@@ -118,7 +120,7 @@ Anchor: The atm-bd-console command must remain available as an alias of the atm-
 
 > should we just change the name of the cli to 'atm-bd'
 
-Said by Rand, planning session 2026-10-17: rename to atm-bd with the old name kept, agreed, 2026-10-16. Status: locked. Version 1.
+Said by Rand, planning session 2026-10-17: rename to atm-bd with the old name kept, agreed, 2026-10-16. Status: retired. Version 2.
 
 Summary: atm-bd-console kept as alias
 
@@ -321,3 +323,31 @@ Summary: QA status icons: jev, running, pass, fail
 Scope: edits how QA state is rendered
 
 Deterministic check to pair with the development gate: render QA states running, pass and fail and assert U+F029B with each colour
+
+## ANC-022
+
+Anchor: After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke atm-bd-console.
+
+> jes drop atm-bd-console
+
+Said by Rand, planning session 2026-10-17: answer to whether to drop the alias, 2026-10-16. Status: locked. Version 1.
+
+Summary: atm-bd-console is dropped, not aliased
+
+Scope: edits the command name, install scripts or any caller of the console
+
+Deterministic check to pair with the development gate: after uv tool install, command -v atm-bd-console finds nothing; rg atm-bd-console over scripts, docs, tests and workflows finds no invocation
+
+## ANC-023
+
+Anchor: Wherever the console shows an agent's name, it must show that agent's icon next to the name.
+
+> when agents are shown in ui, across the board, let's show agent icon.
+
+Said by Rand, planning session 2026-10-17, 2026-10-16. Status: locked. Version 1.
+
+Summary: agent icon wherever an agent name is shown
+
+Scope: edits any render path that prints an agent name
+
+Deterministic check to pair with the development gate: list every render path that emits an agent name and assert the icon next to it in each

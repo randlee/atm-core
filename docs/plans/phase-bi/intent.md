@@ -14,7 +14,7 @@ subcommand that does what `install.py` does now.
   result as `install.py`.
 - `atm-bd` is the one command: `atm-bd console` (the TUI), `atm-bd skill` (the
   install) and `atm-bd cron --phase <x>` (the headless tick). `atm-bd-console`
-  stays as an alias.
+  is dropped, not aliased.
 - `atm-bd skill` installs the skills bundled in the app; `atm-bd skill x.y.z`
   installs a release tag, `--latest` installs the head of `main` (a skill patch
   ships without republishing the app), `--list` shows what the repo offers, and

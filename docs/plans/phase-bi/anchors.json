@@ -257,8 +257,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "locked",
+      "version": 2,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -270,6 +270,12 @@
           "at": "2026-10-17T02:43:17+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T04:42:16+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-022",
+          "reason": "Rand: drop atm-bd-console instead of keeping an alias"
         }
       ]
     },
@@ -785,6 +791,74 @@
             "summary"
           ],
           "previous_statement": "The console must show a QA status icon, U+F029B, in #4A5AF8 while QA is running, in #2EA043 when QA has passed and in #F85149 when QA has failed."
+        }
+      ]
+    },
+    {
+      "id": "ANC-022",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke atm-bd-console.",
+      "quote": "jes drop atm-bd-console",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: answer to whether to drop the alias",
+      "summary": "atm-bd-console is dropped, not aliased",
+      "scope": "edits the command name, install scripts or any caller of the console",
+      "deterministic_check": "after uv tool install, command -v atm-bd-console finds nothing; rg atm-bd-console over scripts, docs, tests and workflows finds no invocation",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T04:42:16+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-023",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Wherever the console shows an agent's name, it must show that agent's icon next to the name.",
+      "quote": "when agents are shown in ui, across the board, let's show agent icon.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17",
+      "summary": "agent icon wherever an agent name is shown",
+      "scope": "edits any render path that prints an agent name",
+      "deterministic_check": "list every render path that emits an agent name and assert the icon next to it in each",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T04:42:16+00:00",
+          "event": "created",
+          "status": "locked"
         }
       ]
     }
