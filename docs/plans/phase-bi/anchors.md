@@ -20,6 +20,9 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-012 | locked | skill --latest installs main head | 2026-10-16 |
 | ANC-013 | locked | skill --list shows what the repo offers | 2026-10-16 |
 | ANC-014 | locked | --orchestration selects today's skill set | 2026-10-16 |
+| ANC-015 | locked | claude dev agents get an orange starburst | 2026-10-16 |
+| ANC-016 | locked | codex agents get a glyph per model class | 2026-10-16 |
+| ANC-017 | locked | qa and sanity icons are fixed by agent type | 2026-10-16 |
 
 ## ANC-001
 
@@ -216,3 +219,45 @@ Summary: --orchestration selects today's skill set
 Scope: adds or changes skill-set options on the skill subcommand
 
 Deterministic check to pair with the development gate: atm-bd skill --help lists --orchestration; atm-bd skill --orchestration installs the same files as bare atm-bd skill
+
+## ANC-015
+
+Anchor: The console must show an orange starburst icon next to the name of every Claude dev agent.
+
+> orange starburst for claude (dev)
+
+Said by Rand, planning session 2026-10-17: agent icons added to phase-bi, 2026-10-16. Status: locked. Version 1.
+
+Summary: claude dev agents get an orange starburst
+
+Scope: edits how agent names are rendered
+
+Deterministic check to pair with the development gate: render a roster with a claude-code dev member and assert the line contains the starburst glyph with an orange style
+
+## ANC-016
+
+Anchor: The console must show ☀️ for Codex agents of model sol, 🌙 for luna, 🌍 for terra and ✨ for astra, next to the agent name.
+
+> for codex what about ☀️, 🌙, 🌍 for sol,luna, terra and astra: ✨
+
+Said by Rand, planning session 2026-10-17: agent icons added to phase-bi, 2026-10-16. Status: locked. Version 1.
+
+Summary: codex agents get a glyph per model class
+
+Scope: edits how agent names are rendered
+
+Deterministic check to pair with the development gate: render a roster with codex-cli members of each model class and assert each glyph appears next to its member
+
+## ANC-017
+
+Anchor: The console must show one fixed icon for every agent whose agent type is qa and one fixed icon for every agent whose agent type is sanity, regardless of its harness or model.
+
+> I would like qa/sanity to have fixed icons, it would be good to specify by agent type
+
+Said by Rand, planning session 2026-10-17: agent icons added to phase-bi, 2026-10-16. Status: locked. Version 1.
+
+Summary: qa and sanity icons are fixed by agent type
+
+Scope: edits how agent names are rendered
+
+Deterministic check to pair with the development gate: render qa and sanity members with differing harness and model and assert the same icon each

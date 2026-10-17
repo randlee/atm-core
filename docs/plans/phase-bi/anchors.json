@@ -516,6 +516,108 @@
           "status": "locked"
         }
       ]
+    },
+    {
+      "id": "ANC-015",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show an orange starburst icon next to the name of every Claude dev agent.",
+      "quote": "orange starburst for claude (dev)",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: agent icons added to phase-bi",
+      "summary": "claude dev agents get an orange starburst",
+      "scope": "edits how agent names are rendered",
+      "deterministic_check": "render a roster with a claude-code dev member and assert the line contains the starburst glyph with an orange style",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T03:27:18+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show ☀️ for Codex agents of model sol, 🌙 for luna, 🌍 for terra and ✨ for astra, next to the agent name.",
+      "quote": "for codex what about ☀️, 🌙, 🌍 for sol,luna, terra and astra: ✨",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: agent icons added to phase-bi",
+      "summary": "codex agents get a glyph per model class",
+      "scope": "edits how agent names are rendered",
+      "deterministic_check": "render a roster with codex-cli members of each model class and assert each glyph appears next to its member",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T03:27:18+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show one fixed icon for every agent whose agent type is qa and one fixed icon for every agent whose agent type is sanity, regardless of its harness or model.",
+      "quote": "I would like qa/sanity to have fixed icons, it would be good to specify by agent type",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: agent icons added to phase-bi",
+      "summary": "qa and sanity icons are fixed by agent type",
+      "scope": "edits how agent names are rendered",
+      "deterministic_check": "render qa and sanity members with differing harness and model and assert the same icon each",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T03:27:18+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
     }
   ]
 }
