@@ -20,7 +20,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-012 | locked | skill --latest installs main head | 2026-10-16 |
 | ANC-013 | locked | skill --list shows what the repo offers | 2026-10-16 |
 | ANC-014 | locked | --orchestration selects today's skill set | 2026-10-16 |
-| ANC-015 | locked | claude agents of unknown model get an orange starburst | 2026-10-16 |
+| ANC-015 | retired | claude agents of unknown model get an orange starburst | 2026-10-16 |
 | ANC-016 | retired | codex agents get a glyph per model class | 2026-10-16 |
 | ANC-017 | locked | qa and sanity icons are fixed by agent type | 2026-10-16 |
 | ANC-018 | locked | PR list uses Rand's GH_THEME icons | 2026-10-16 |
@@ -30,7 +30,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-022 | locked | atm-bd-console is dropped, not aliased | 2026-10-16 |
 | ANC-023 | locked | agent icon immediately left of every agent name | 2026-10-16 |
 | ANC-024 | locked | model icon by lower-case contains | 2026-10-16 |
-| ANC-025 | locked | claude=sonnet and codex=terra stand-ins | 2026-10-16 |
+| ANC-025 | locked | unmatched model: sonnet on claude-code, terra on codex-cli | 2026-10-16 |
 | ANC-026 | locked | sanity agent icon is the Jev icon | 2026-10-16 |
 
 ## ANC-001
@@ -235,7 +235,7 @@ Anchor: The console must show an orange starburst icon next to the name of every
 
 > orange starburst for claude (dev)
 
-Said by Rand, planning session 2026-10-17: agent icons added to phase-bi, 2026-10-16. Status: locked. Version 2.
+Said by Rand, planning session 2026-10-17: agent icons added to phase-bi, 2026-10-16. Status: retired. Version 3.
 
 Summary: claude agents of unknown model get an orange starburst
 
@@ -371,13 +371,13 @@ Deterministic check to pair with the development gate: feed models GPT-5.6-Terra
 
 ## ANC-025
 
-Anchor: When the roster model string contains claude or codex but none of the model names, the console must use the sonnet icon for claude and the terra icon for codex.
+Anchor: When the roster model string matches none of the model names, the console must use the sonnet icon for a claude-code agent and the terra icon for a codex-cli agent.
 
 > if claude or codex show up there, probably use sonnet/terra as stand-in for not knowing.
 
-Said by Rand, planning session 2026-10-17, 2026-10-16. Status: locked. Version 1.
+Said by Rand, planning session 2026-10-17, 2026-10-16. Status: locked. Version 2.
 
-Summary: claude=sonnet and codex=terra stand-ins
+Summary: unmatched model: sonnet on claude-code, terra on codex-cli
 
 Scope: edits how the roster model is mapped to an icon
 

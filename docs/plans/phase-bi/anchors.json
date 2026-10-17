@@ -541,8 +541,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -563,6 +563,12 @@
             "summary"
           ],
           "previous_statement": "The console must show an orange starburst icon next to the name of every Claude dev agent."
+        },
+        {
+          "at": "2026-10-17T04:56:12+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-025",
+          "reason": "Rand: no starburst; unknown models use the sonnet or terra stand-in"
         }
       ]
     },
@@ -928,13 +934,13 @@
       "id": "ANC-025",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "When the roster model string contains claude or codex but none of the model names, the console must use the sonnet icon for claude and the terra icon for codex.",
+      "statement": "When the roster model string matches none of the model names, the console must use the sonnet icon for a claude-code agent and the terra icon for a codex-cli agent.",
       "quote": "if claude or codex show up there, probably use sonnet/terra as stand-in for not knowing.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-16",
       "context": "planning session 2026-10-17",
-      "summary": "claude=sonnet and codex=terra stand-ins",
+      "summary": "unmatched model: sonnet on claude-code, terra on codex-cli",
       "scope": "edits how the roster model is mapped to an icon",
       "deterministic_check": "feed models claude and codex to icon_for and assert the sonnet and terra icons",
       "fixtures": {
@@ -942,7 +948,7 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -955,6 +961,15 @@
           "at": "2026-10-17T04:44:06+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T04:56:12+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary"
+          ],
+          "previous_statement": "When the roster model string contains claude or codex but none of the model names, the console must use the sonnet icon for claude and the terra icon for codex."
         }
       ]
     },
