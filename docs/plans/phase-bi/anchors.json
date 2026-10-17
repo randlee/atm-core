@@ -861,6 +861,40 @@
           "status": "locked"
         }
       ]
+    },
+    {
+      "id": "ANC-024",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must choose an agent's model icon by lower-casing the roster model string and testing with contains for sol, luna, terra, astra, haiku, sonnet, opus and fable, and when the string contains only claude or codex it must use the sonnet or terra icon respectively.",
+      "quote": "when you pull agent type from atm model, you will to a to lower and use contains to pull out sol, luna, haiku, ...",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: how the model is matched",
+      "summary": "model icon by lower-case contains; claude=sonnet, codex=terra",
+      "scope": "edits how the roster model is mapped to an icon",
+      "deterministic_check": "feed models GPT-5.6-Terra, Claude-Opus-5-5, claude, codex and unknown to icon_for and assert terra, opus, sonnet, terra icons and the unknown fallback",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T04:43:33+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
     }
   ]
 }

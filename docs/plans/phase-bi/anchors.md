@@ -29,6 +29,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-021 | locked | QA status icons: jev, running, pass, fail | 2026-10-16 |
 | ANC-022 | locked | atm-bd-console is dropped, not aliased | 2026-10-16 |
 | ANC-023 | locked | agent icon wherever an agent name is shown | 2026-10-16 |
+| ANC-024 | locked | model icon by lower-case contains; claude=sonnet, codex=terra | 2026-10-16 |
 
 ## ANC-001
 
@@ -351,3 +352,17 @@ Summary: agent icon wherever an agent name is shown
 Scope: edits any render path that prints an agent name
 
 Deterministic check to pair with the development gate: list every render path that emits an agent name and assert the icon next to it in each
+
+## ANC-024
+
+Anchor: The console must choose an agent's model icon by lower-casing the roster model string and testing with contains for sol, luna, terra, astra, haiku, sonnet, opus and fable, and when the string contains only claude or codex it must use the sonnet or terra icon respectively.
+
+> when you pull agent type from atm model, you will to a to lower and use contains to pull out sol, luna, haiku, ...
+
+Said by Rand, planning session 2026-10-17: how the model is matched, 2026-10-16. Status: locked. Version 1.
+
+Summary: model icon by lower-case contains; claude=sonnet, codex=terra
+
+Scope: edits how the roster model is mapped to an icon
+
+Deterministic check to pair with the development gate: feed models GPT-5.6-Terra, Claude-Opus-5-5, claude, codex and unknown to icon_for and assert terra, opus, sonnet, terra icons and the unknown fallback
