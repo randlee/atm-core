@@ -20,10 +20,11 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-012 | locked | skill --latest installs main head | 2026-10-16 |
 | ANC-013 | locked | skill --list shows what the repo offers | 2026-10-16 |
 | ANC-014 | locked | --orchestration selects today's skill set | 2026-10-16 |
-| ANC-015 | locked | claude dev agents get an orange starburst | 2026-10-16 |
+| ANC-015 | locked | claude agents of unknown model get an orange starburst | 2026-10-16 |
 | ANC-016 | locked | codex agents get a glyph per model class | 2026-10-16 |
 | ANC-017 | locked | qa and sanity icons are fixed by agent type | 2026-10-16 |
 | ANC-018 | locked | PR list uses Rand's GH_THEME icons | 2026-10-16 |
+| ANC-019 | locked | claude agents get a per-model icon in #D97757 | 2026-10-16 |
 
 ## ANC-001
 
@@ -223,13 +224,13 @@ Deterministic check to pair with the development gate: atm-bd skill --help lists
 
 ## ANC-015
 
-Anchor: The console must show an orange starburst icon next to the name of every Claude dev agent.
+Anchor: The console must show an orange starburst icon next to the name of every Claude agent whose model is not haiku, sonnet, opus or fable.
 
 > orange starburst for claude (dev)
 
-Said by Rand, planning session 2026-10-17: agent icons added to phase-bi, 2026-10-16. Status: locked. Version 1.
+Said by Rand, planning session 2026-10-17: agent icons added to phase-bi, 2026-10-16. Status: locked. Version 2.
 
-Summary: claude dev agents get an orange starburst
+Summary: claude agents of unknown model get an orange starburst
 
 Scope: edits how agent names are rendered
 
@@ -276,3 +277,17 @@ Summary: PR list uses Rand's GH_THEME icons
 Scope: edits how pull-request states are rendered
 
 Deterministic check to pair with the development gate: render a PR list with one PR per state and assert each line contains its GH_THEME code point and colour
+
+## ANC-019
+
+Anchor: The console must show, next to every Claude agent whose model is haiku, sonnet, opus or fable, that model's icon in colour #D97757: U+F0156 for haiku, U+F0382 for sonnet, U+F06C4 for opus and U+F0717 for fable.
+
+> "haiku":  "[#D97757]\U000f0156[/]",
+
+Said by Rand, planning session 2026-10-17: MODEL_ICONS pasted, 2026-10-16. Status: locked. Version 1.
+
+Summary: claude agents get a per-model icon in #D97757
+
+Scope: edits how agent names are rendered
+
+Deterministic check to pair with the development gate: render claude-code members with each model and assert each line has its code point and colour
