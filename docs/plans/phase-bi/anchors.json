@@ -1006,6 +1006,40 @@
           "status": "locked"
         }
       ]
+    },
+    {
+      "id": "ANC-027",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show each bead status in Rand's BEAD_STATUS table with that status's icon and colour: blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed and ready, and must not change how open is shown.",
+      "quote": "\"blocked\":     \"[#FA8537]\\U000f033e[/]\",  # lock",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: BEAD_STATUS pasted; open not chosen yet",
+      "summary": "bead statuses use the BEAD_STATUS icons",
+      "scope": "edits how a bead or sprint status is rendered",
+      "deterministic_check": "render one bead per status in the table and assert each glyph code point and colour; render open and assert it is unchanged",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T05:18:19+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
     }
   ]
 }

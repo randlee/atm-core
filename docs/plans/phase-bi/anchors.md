@@ -32,6 +32,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-024 | locked | model icon by lower-case contains | 2026-10-16 |
 | ANC-025 | locked | unmatched model: sonnet on claude-code, terra on codex-cli | 2026-10-16 |
 | ANC-026 | locked | sanity agent icon is the Jev icon | 2026-10-16 |
+| ANC-027 | locked | bead statuses use the BEAD_STATUS icons | 2026-10-16 |
 
 ## ANC-001
 
@@ -396,3 +397,17 @@ Summary: sanity agent icon is the Jev icon
 Scope: edits how agent names are rendered
 
 Deterministic check to pair with the development gate: render sanity members with differing harness and model and assert U+F01A6 in #E551BA each
+
+## ANC-027
+
+Anchor: The console must show each bead status in Rand's BEAD_STATUS table with that status's icon and colour: blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed and ready, and must not change how open is shown.
+
+> "blocked":     "[#FA8537]\U000f033e[/]",  # lock
+
+Said by Rand, planning session 2026-10-17: BEAD_STATUS pasted; open not chosen yet, 2026-10-16. Status: locked. Version 1.
+
+Summary: bead statuses use the BEAD_STATUS icons
+
+Scope: edits how a bead or sprint status is rendered
+
+Deterministic check to pair with the development gate: render one bead per status in the table and assert each glyph code point and colour; render open and assert it is unchanged
