@@ -666,13 +666,13 @@
       "id": "ANC-019",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The console must show, next to every Claude agent whose model is haiku, sonnet, opus or fable, that model's icon in colour #D97757: U+F0156 for haiku, U+F0382 for sonnet, U+F06C4 for opus and U+F0717 for fable.",
+      "statement": "The console must show, next to every Claude agent whose model is haiku, sonnet, opus or fable, that model's icon in that model's colour: U+F0156 in #FF6533 for haiku, U+F0382 in #FF784D for sonnet, U+F06C4 in #FF8C66 for opus and U+F0717 in #FF9F80 for fable.",
       "quote": "\"haiku\":  \"[#D97757]\\U000f0156[/]\",",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-16",
       "context": "planning session 2026-10-17: MODEL_ICONS pasted",
-      "summary": "claude agents get a per-model icon in #D97757",
+      "summary": "claude agents get a per-model icon and colour",
       "scope": "edits how agent names are rendered",
       "deterministic_check": "render claude-code members with each model and assert each line has its code point and colour",
       "fixtures": {
@@ -680,7 +680,7 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -693,6 +693,15 @@
           "at": "2026-10-17T04:01:06+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T04:12:40+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary"
+          ],
+          "previous_statement": "The console must show, next to every Claude agent whose model is haiku, sonnet, opus or fable, that model's icon in colour #D97757: U+F0156 for haiku, U+F0382 for sonnet, U+F06C4 for opus and U+F0717 for fable."
         }
       ]
     }

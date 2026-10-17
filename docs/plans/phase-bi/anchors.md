@@ -24,7 +24,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-016 | locked | codex agents get a glyph per model class | 2026-10-16 |
 | ANC-017 | locked | qa and sanity icons are fixed by agent type | 2026-10-16 |
 | ANC-018 | locked | PR list uses Rand's GH_THEME icons | 2026-10-16 |
-| ANC-019 | locked | claude agents get a per-model icon in #D97757 | 2026-10-16 |
+| ANC-019 | locked | claude agents get a per-model icon and colour | 2026-10-16 |
 
 ## ANC-001
 
@@ -280,13 +280,13 @@ Deterministic check to pair with the development gate: render a PR list with one
 
 ## ANC-019
 
-Anchor: The console must show, next to every Claude agent whose model is haiku, sonnet, opus or fable, that model's icon in colour #D97757: U+F0156 for haiku, U+F0382 for sonnet, U+F06C4 for opus and U+F0717 for fable.
+Anchor: The console must show, next to every Claude agent whose model is haiku, sonnet, opus or fable, that model's icon in that model's colour: U+F0156 in #FF6533 for haiku, U+F0382 in #FF784D for sonnet, U+F06C4 in #FF8C66 for opus and U+F0717 in #FF9F80 for fable.
 
 > "haiku":  "[#D97757]\U000f0156[/]",
 
-Said by Rand, planning session 2026-10-17: MODEL_ICONS pasted, 2026-10-16. Status: locked. Version 1.
+Said by Rand, planning session 2026-10-17: MODEL_ICONS pasted, 2026-10-16. Status: locked. Version 2.
 
-Summary: claude agents get a per-model icon in #D97757
+Summary: claude agents get a per-model icon and colour
 
 Scope: edits how agent names are rendered
 
