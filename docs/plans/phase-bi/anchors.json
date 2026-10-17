@@ -744,6 +744,40 @@
           "status": "locked"
         }
       ]
+    },
+    {
+      "id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show a QA status icon, U+F029B, in #4A5AF8 while QA is running, in #2EA043 when QA has passed and in #F85149 when QA has failed.",
+      "quote": "\"qa_running\": \"[#4A5AF8]\\U000f029b[/]\",",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: JEV_QA pasted; placement and the Jev icon still to be agreed",
+      "summary": "QA status icon: running blue, pass green, fail red",
+      "scope": "edits how QA state is rendered",
+      "deterministic_check": "render QA states running, pass and fail and assert U+F029B with each colour",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T04:40:24+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
     }
   ]
 }
