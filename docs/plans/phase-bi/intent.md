@@ -1,8 +1,8 @@
-# Intent - phase-bi: install the skill from atm-bd-console
+# Intent - phase-bi: one `atm-bd` command
 
 ## What this plan is for
 
-One install process that installs `atm-bd-console` for the user and also lets
+One install process that installs `atm-bd` for the user and also lets
 them install the atm-bd-orchestration skill into a repository. Today the app
 installs with `uv tool install` but the skill needs a separate hand-run
 `install.py`. This phase puts the skill install behind an `atm-bd`
