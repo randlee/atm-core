@@ -126,6 +126,14 @@ Findings from the follow-up turns (iteration 9 and 11 agents, one cell each):
 
 Jev result by run, bi-2: 5, 5, 6, 4, 4, 2, 2 failing cells. The failing set changes every run and `to_fix` flips between "add" and "drop", so these cells sit on the 0.6 relevance line and wording moves them either side. Awaiting Rand: accept as applicability noise, scope ANC-011..014 to bi-3 (anchor change), or continue.
 
+## Mistakes made while tuning (for the post-mortem)
+
+- Iterations 6 and 9: I put "why" and "best sentence to add" into the first haiku prompt and did not run follow-up turns. Turn 1 is then not Jev's exact request, and the discussion with haiku, which is where the tuning comes from, did not happen. Corrected by Rand; follow-up turns ran from iteration 9 on. Rule: turn 1 is the exact request only; every question goes in a later turn to the same agent.
+- A follow-up goes only to the agent that gave the answer. I twice asked a fresh agent to reconcile numbers from a different agent; both pointed out it had no such record.
+- Iteration 8 (bi-2): listing every skill option in one long "Does Not Close" bullet made things worse (5 to 6 failing cells). Mentioning an anchor's subject raises relevance without raising `addressed`.
+- Early dispatches mixed script and anchors roots (preflight refusal); multi-cell haiku agents contaminated each other; `bd import` needs compact JSONL (`jq -c`), not the pretty render.
+- Haiku's counterfactual predictions did not match its later first-turn answers on the real edited text. Edit and measure; do not predict.
+
 ## Rules followed while tuning
 
 - No question or anchor wording was changed to make a cell pass; changes are to the bead text only, each citing a locked anchor that predates the run.
