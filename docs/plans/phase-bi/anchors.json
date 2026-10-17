@@ -14,14 +14,18 @@
       "stated_at": "2026-10-16",
       "context": "planning session 2026-10-17: let's anchor this behavior. (not --profile yet)",
       "summary": "atm-bd skill = install.py behavior",
-      "scope": "adds an atm-bd-console subcommand, touches install.py or the skill install path",
-      "deterministic_check": "run 'atm-bd-console skill' and install.py against the same target repo and diff the installed file sets; atm-bd-console skill --help shows no --profile",
+      "scope": "adds an atm-bd skill subcommand, touches install.py or the skill install path",
+      "deterministic_check": "run 'atm-bd skill --dest R1' and install.py --dest R2 against a scratch repo and diff -r the installed file sets; atm-bd skill --help shows no --profile",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Adds a skill subcommand to atm-bd whose code calls the functions of plugins/atm-bd-orchestration/install.py to install the skills into a repository."
+        ],
+        "fail": [
+          "Adds a skill subcommand to atm-bd that carries its own copy of the install logic instead of calling install.py."
+        ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -52,6 +56,21 @@
             "summary"
           ],
           "previous_statement": "The atm-bd command must have a skill subcommand that installs the atm-bd-orchestration skill into a repository by running the same installer logic as plugins/atm-bd-orchestration/install.py, the atm-bd-console command must remain available as an alias, and the skill subcommand must not offer a skill-set selector option such as --profile."
+        },
+        {
+          "at": "2026-10-17T05:35:12+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-17T05:35:42+00:00",
+          "event": "updated",
+          "fields": [
+            "scope",
+            "deterministic_check"
+          ]
         }
       ]
     },
@@ -109,11 +128,15 @@
       "scope": "edits skill subcommand output",
       "deterministic_check": "run atm-bd skill and grep its output for the ref, a 40-hex sha and the app version",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "After an install, atm-bd skill prints the source ref, the 40-character commit sha and the atm-bd version."
+        ],
+        "fail": [
+          "atm-bd skill installs the skills and prints only 'done'."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -126,6 +149,13 @@
           "at": "2026-10-17T02:43:09+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:12+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -143,11 +173,15 @@
       "scope": "adds a publish or release sprint, touches pyproject.toml packaging",
       "deterministic_check": "pip index versions atm-bd lists the release; a TestPyPI release exists with an earlier upload time",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The last sprint uploads the package to TestPyPI, checks the install, and then uploads it to PyPI."
+        ],
+        "fail": [
+          "The last sprint uploads the package straight to PyPI with no TestPyPI upload before it."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -160,6 +194,13 @@
           "at": "2026-10-17T02:43:09+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:12+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -177,11 +218,15 @@
       "scope": "any sprint dispatch, any change to the v0.16.1 release branch",
       "deterministic_check": "git diff v0.16.1..<phase base> shows no change from this phase's PRs; tag v0.16.1 predates the first sprint's first commit",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The sprint changes only the new atm-bd code and leaves everything v0.16.1 ships untouched."
+        ],
+        "fail": [
+          "The sprint edits the 0.16.1 release's contents to apply the new rename."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -202,6 +247,13 @@
             "statement"
           ],
           "previous_statement": "No sprint in this phase may change what ships in v0.16.1, and no sprint may start before the v0.16.1 tag exists."
+        },
+        {
+          "at": "2026-10-17T05:35:12+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -219,11 +271,15 @@
       "scope": "adds plan documents, creates phase or sprint beads",
       "deterministic_check": "bd show atm-phase-bi returns the root with sprint children; no docs/plans/phase-bi/sprint-*.md exists",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The plan is a phase root bead with sprint container beads in the atm-core bd database and no markdown sprint docs."
+        ],
+        "fail": [
+          "The plan is a set of markdown sprint documents under docs/plans/phase-bi with no beads."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -236,6 +292,13 @@
           "at": "2026-10-17T02:43:09+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:12+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -333,11 +396,15 @@
       "scope": "edits the headless tick, the console CLI options, or the README cron examples",
       "deterministic_check": "atm-bd cron --help succeeds; atm-bd console --help lists no --headless; rg -- '--headless' apps/ plugins/ returns nothing",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Adds the atm-bd cron --phase <x> subcommand that runs one tick, and removes the --headless option from the console."
+        ],
+        "fail": [
+          "Keeps the --headless option on the console and adds no cron subcommand."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -350,6 +417,13 @@
           "at": "2026-10-17T02:46:44+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:12+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -367,11 +441,15 @@
       "scope": "changes where the skill subcommand reads skill files or how the wheel is built",
       "deterministic_check": "build the wheel, unzip it and find the skill files; run atm-bd skill with the network disabled and confirm the install succeeds",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Bare atm-bd skill installs the skills packaged inside the installed package and works with the network disabled."
+        ],
+        "fail": [
+          "Bare atm-bd skill downloads the skills from GitHub and fails when offline."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -384,6 +462,13 @@
           "at": "2026-10-17T02:49:47+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:12+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -401,11 +486,15 @@
       "scope": "adds or changes the version argument of the skill subcommand",
       "deterministic_check": "run atm-bd skill 0.16.0 and diff the installed files against git show v0.16.0",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "atm-bd skill 0.16.0 installs the skills from the v0.16.0 tag of the atm-bd-orchestration repository."
+        ],
+        "fail": [
+          "atm-bd skill 0.16.0 installs the skills from the head of main."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -418,6 +507,13 @@
           "at": "2026-10-17T02:49:47+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -435,11 +531,15 @@
       "scope": "adds or changes the --latest option",
       "deterministic_check": "run atm-bd skill --latest and diff the installed files against git show origin/main",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "atm-bd skill --latest installs the skills from the head of the main branch of atm-bd-orchestration."
+        ],
+        "fail": [
+          "atm-bd skill --latest installs the skills bundled in the installed package."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -452,6 +552,13 @@
           "at": "2026-10-17T02:49:47+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -469,11 +576,15 @@
       "scope": "adds or changes the --list option",
       "deterministic_check": "run atm-bd skill --list, compare its releases to git tag -l on the repo, and confirm the target repo is unchanged",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "atm-bd skill --list prints the available skill releases and sets and writes nothing into the target repository."
+        ],
+        "fail": [
+          "atm-bd skill --list prints the releases and then installs the newest one."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -486,6 +597,13 @@
           "at": "2026-10-17T02:49:47+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -503,11 +621,15 @@
       "scope": "adds or changes skill-set options on the skill subcommand",
       "deterministic_check": "atm-bd skill --help lists --orchestration; atm-bd skill --orchestration installs the same files as bare atm-bd skill",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "atm-bd skill accepts --orchestration and selects the current atm-bd-orchestration skill set."
+        ],
+        "fail": [
+          "atm-bd skill has no --orchestration option: its help lists only --dest and --codex, and passing --orchestration exits with an unknown-option error."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -520,6 +642,34 @@
           "at": "2026-10-17T02:49:47+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-17T05:35:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-17T05:36:00+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-17T05:36:16+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -626,11 +776,15 @@
       "scope": "edits how agent names are rendered",
       "deterministic_check": "render qa and sanity members with differing harness and model and assert the same icon each",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "A qa agent and a sanity agent each render one fixed icon whatever their harness or model."
+        ],
+        "fail": [
+          "A qa agent renders a different icon depending on whether its model is sonnet or opus."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -643,6 +797,13 @@
           "at": "2026-10-17T03:27:18+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -660,11 +821,15 @@
       "scope": "edits how pull-request states are rendered",
       "deterministic_check": "render a PR list with one PR per state and assert each line contains its GH_THEME code point and colour",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The PR list renders CI pass, CI fail, running, merged and closed with the GH_THEME glyphs and colours."
+        ],
+        "fail": [
+          "The PR list renders CI pass, CI fail, running, merged and closed with the old ✅, ⛔, 🌀, ⑂ and ⊗ characters and uses no GH_THEME glyph or colour."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -677,6 +842,20 @@
           "at": "2026-10-17T03:55:59+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-17T05:36:16+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -694,11 +873,15 @@
       "scope": "edits how agent names are rendered",
       "deterministic_check": "render claude-code members with each model and assert each line has its code point and colour",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "A claude-code agent with model opus renders U+F06C4 in #FF8C66, and haiku, sonnet and fable render their listed glyphs and colours."
+        ],
+        "fail": [
+          "A claude-code agent with model opus renders the sonnet glyph in #FF784D."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -720,6 +903,13 @@
             "summary"
           ],
           "previous_statement": "The console must show, next to every Claude agent whose model is haiku, sonnet, opus or fable, that model's icon in colour #D97757: U+F0156 for haiku, U+F0382 for sonnet, U+F06C4 for opus and U+F0717 for fable."
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -737,11 +927,15 @@
       "scope": "edits how agent names are rendered",
       "deterministic_check": "render codex-cli members of each model class and assert each line has its code point and colour",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "A codex-cli agent of class terra renders U+F01E7 in #2DE057, and sol, luna and astra render their listed glyphs and colours."
+        ],
+        "fail": [
+          "A codex-cli agent of class sol renders U+F01E7 in #2DE057."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -754,6 +948,13 @@
           "at": "2026-10-17T04:30:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -771,11 +972,15 @@
       "scope": "edits how QA state is rendered",
       "deterministic_check": "render QA states running, pass and fail and assert U+F029B with each colour",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "A qa agent renders U+F029B in #4A5AF8 while running QA, #2EA043 after a pass and #F85149 after a fail."
+        ],
+        "fail": [
+          "A qa agent renders U+F029B in #2EA043 while running QA."
+        ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -806,6 +1011,13 @@
             "summary"
           ],
           "previous_statement": "The console must show a QA status icon of U+F01A6 in #E551BA for the jev state, and U+F029B in #4A5AF8 while QA is running, in #2EA043 when QA has passed and in #F85149 when QA has failed."
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -813,7 +1025,7 @@
       "id": "ANC-022",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke atm-bd-console.",
+      "statement": "After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke the atm-bd-console command; the directory apps/atm-bd-console and the module atm_bd_console are not that command.",
       "quote": "jes drop atm-bd-console",
       "kind": "prohibition",
       "stated_by": "Rand",
@@ -823,11 +1035,15 @@
       "scope": "edits the command name, install scripts or any caller of the console",
       "deterministic_check": "after uv tool install, command -v atm-bd-console finds nothing; rg atm-bd-console over scripts, docs, tests and workflows finds no invocation",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "After the sprint, atm-bd-console is not installed and no script, document, test or workflow in the repository invokes it."
+        ],
+        "fail": [
+          "After the sprint, atm-bd-console remains as an alias that bead-queues still calls."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -840,6 +1056,21 @@
           "at": "2026-10-17T04:42:16+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-17T05:39:34+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke atm-bd-console."
         }
       ]
     },
@@ -857,11 +1088,15 @@
       "scope": "edits any render path that prints an agent name",
       "deterministic_check": "list every render path that emits an agent name and assert the icon is the character cell immediately before the name in each",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Every place an agent name is shown renders that agent's icon immediately to the left of the name."
+        ],
+        "fail": [
+          "The status bar, the DAG and the PR list assignee show the agent name with no icon next to it; only the dashboard rows show icons."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -884,6 +1119,20 @@
             "deterministic_check"
           ],
           "previous_statement": "Wherever the console shows an agent's name, it must show that agent's icon next to the name."
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-17T05:36:16+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -901,11 +1150,15 @@
       "scope": "edits how the roster model is mapped to an icon",
       "deterministic_check": "feed models GPT-5.6-Terra, Claude-Opus-5-5, claude, codex and unknown to icon_for and assert terra, opus, sonnet, terra icons and the unknown fallback",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The model icon is chosen by lower-casing the roster model string and testing with contains for sol, luna, terra, astra, haiku, sonnet, opus and fable."
+        ],
+        "fail": [
+          "The model icon is chosen only when the roster model string equals the exact name 'sonnet' or 'opus'."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -927,6 +1180,13 @@
             "summary"
           ],
           "previous_statement": "The console must choose an agent's model icon by lower-casing the roster model string and testing with contains for sol, luna, terra, astra, haiku, sonnet, opus and fable, and when the string contains only claude or codex it must use the sonnet or terra icon respectively."
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -944,11 +1204,15 @@
       "scope": "edits how the roster model is mapped to an icon",
       "deterministic_check": "feed models claude and codex to icon_for and assert the sonnet and terra icons",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "A claude-code agent whose model string matches no name renders the sonnet icon, and a codex-cli agent renders the terra icon."
+        ],
+        "fail": [
+          "An agent whose model string matches no name renders a blank space."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -970,6 +1234,13 @@
             "summary"
           ],
           "previous_statement": "When the roster model string contains claude or codex but none of the model names, the console must use the sonnet icon for claude and the terra icon for codex."
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -987,11 +1258,15 @@
       "scope": "edits how agent names are rendered",
       "deterministic_check": "render sanity members with differing harness and model and assert U+F01A6 in #E551BA each",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Every sanity agent renders U+F01A6 in #E551BA whatever its harness or model."
+        ],
+        "fail": [
+          "A sanity agent on codex-cli renders the terra icon."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1004,6 +1279,13 @@
           "at": "2026-10-17T04:53:52+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -1021,11 +1303,15 @@
       "scope": "edits how a bead or sprint status is rendered",
       "deterministic_check": "render one bead per status in the table and assert each glyph code point and colour; render open and assert it is unchanged",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Each of the ten bead statuses (blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed, ready) renders the icon and colour listed for it in the BEAD_STATUS table."
+        ],
+        "fail": [
+          "Only blocked, in_progress and closed render icons from the BEAD_STATUS table; the other seven statuses render a plain dot, and no BEAD_STATUS table is used."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1046,6 +1332,27 @@
             "statement"
           ],
           "previous_statement": "The console must show each bead status in Rand's BEAD_STATUS table with that status's icon and colour: blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed and ready, and must not change how open is shown."
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-17T05:35:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-17T05:36:00+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -1063,11 +1370,15 @@
       "scope": "edits how bead, sprint, PR or CI states are rendered",
       "deterministic_check": "render each of the five states and assert its code point and colour",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Bead open, sprint not_ready, PR open, PR draft and CI none render U+F0766 in #2D81E0, U+F137C in #D97757, U+F04C2 in #2D81E0, U+F0CB6 in #FFA60D and U+F01D8 in #2D81E0 respectively."
+        ],
+        "fail": [
+          "PR draft renders U+F04C2 in #2D81E0, the same glyph and colour as PR open, and sprint not_ready renders the PR open glyph too."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1080,6 +1391,27 @@
           "at": "2026-10-17T05:27:49+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:13+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-17T05:35:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-17T05:36:00+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -1097,11 +1429,15 @@
       "scope": "edits how the merge check is rendered",
       "deterministic_check": "render a merge check of conflict and assert U+F062D in #F85149",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "A merge check of conflict renders the merged glyph U+F062D in #F85149."
+        ],
+        "fail": [
+          "A merge check of conflict renders U+F062D in #8957E5, the merged purple."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1114,6 +1450,13 @@
           "at": "2026-10-17T05:27:49+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T05:35:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     }
