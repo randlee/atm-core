@@ -48,6 +48,14 @@ Result (35 cells, 105 answers):
 
 Open question, not investigated: why Jev's relevance answers differ from haiku's on ordering-only beads (Jev-side behaviour, not a plan defect).
 
+## The tuning loop (Rand 2026-10-17; to be added to the anchor-tuning process)
+
+1. Run the gate on the failing beads; read each failing cell's `to_fix` and, where the cause is unclear, the one-cell haiku cross-check.
+2. Where the bead is missing information the anchor needs, add it to the bead as context or a `## Prerequisites` section. Rand: adding it is allowed, and it must also serve the dev agent who executes the sprint, so the text is the instruction the dev needs and not wording aimed at the judge.
+3. Never reword the anchor or its questions to pass; applicability noise is left alone.
+4. Re-render, import, validate, and re-run immediately; compare per-cell verdicts to the previous run and record the outcome here.
+5. Repeat until the beads pass. Three identical failing runs of one bead escalate to Rand.
+
 ## Interventions and outcomes
 
 | Date | Change | Reason | Outcome |
@@ -58,6 +66,18 @@ Open question, not investigated: why Jev's relevance answers differ from haiku's
 ### Finding from the re-run
 
 The Prerequisites section answered the relevance question and exposed the real decision: for each anchor bi-5 delivers, does bi-4 check it in the published build, or only ship it? Jev's `to_fix` offers both ("add a criterion ... or say plainly that bi-4 asserts none of it"). Rand's rule "the icons are delivered and tested in bi-5; bi-4 only orders after it" is the second answer; it is not yet stated in the bead in those words. Not applied; awaiting Rand.
+
+### Iterations 2 to 4 (2026-10-17, same day)
+
+| Bead | Iter 1 (round 1) | Iter 2 | Iter 3 | Iter 4 | What changed |
+| --- | --- | --- | --- | --- | --- |
+| root | 13 | 9 | 0 (pass) | not re-run | icon table, offline/`vX.Y.Z` wording, then the status/state/PR icon lists in the root text |
+| bi-5 | 2 | not run | 1 (ANC-005) | 0 (pass) | ANC-022 rg widened to every owned file; "changes only apps/atm-bd-console, after the v0.16.1 tag" |
+| bi-4 | 13 | 16 | 15 | 16 | ownership statements; exact ANC-022 rg (passes from iter 3); "Not bi-4's work" list; ref/sha/version criterion |
+
+What worked: stating the missing content in the bead where the bead owns it (root, bi-5) turned every cell satisfied at 0.74 to 1.0. Exact commands (ANC-022 rg) worked.
+
+What did not work (bi-4): mentioning another sprint's topic in any form (ids only, ownership statements, an out-of-scope list) makes Jev answer `relevant: yes` at 0.34 to 0.67 and `addressed: no`; saying nothing leaves `relevant: no` at 0.3 to 0.56. Both fail because relevance below 0.6 is `underspecified`. Jev's `to_fix` offers only "state the content here" or "drop the anchor from this bead", and the first would duplicate bi-1/2/3/5 content in a publish-only sprint. Stopped at iteration 4 for Rand's ruling; no question or anchor wording was changed.
 
 ## Rules followed while tuning
 
