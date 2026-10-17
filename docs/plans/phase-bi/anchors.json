@@ -578,8 +578,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "locked",
+      "version": 2,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -591,6 +591,12 @@
           "at": "2026-10-17T03:27:18+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T04:30:54+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-020",
+          "reason": "Rand replaced the codex emoji with CELESTIAL Nerd Font glyphs and colours"
         }
       ]
     },
@@ -702,6 +708,40 @@
             "summary"
           ],
           "previous_statement": "The console must show, next to every Claude agent whose model is haiku, sonnet, opus or fable, that model's icon in colour #D97757: U+F0156 for haiku, U+F0382 for sonnet, U+F06C4 for opus and U+F0717 for fable."
+        }
+      ]
+    },
+    {
+      "id": "ANC-020",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show, next to every Codex agent whose model class is sol, luna, terra or astra, that class's icon in that class's colour: U+F05A8 in #FFA60D for sol, U+F0F65 in #FFE066 for luna, U+F01E7 in #2DE057 for terra and U+F0674 in #FFE066 for astra.",
+      "quote": "\"astra\": \"[#FFE066]\\U000f0674[/]\",",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: CELESTIAL pasted, replacing the emoji for codex",
+      "summary": "codex agents get a celestial icon and colour per model class",
+      "scope": "edits how agent names are rendered",
+      "deterministic_check": "render codex-cli members of each model class and assert each line has its code point and colour",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T04:30:54+00:00",
+          "event": "created",
+          "status": "locked"
         }
       ]
     }

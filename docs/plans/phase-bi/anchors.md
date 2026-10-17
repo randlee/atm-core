@@ -21,10 +21,11 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-013 | locked | skill --list shows what the repo offers | 2026-10-16 |
 | ANC-014 | locked | --orchestration selects today's skill set | 2026-10-16 |
 | ANC-015 | locked | claude agents of unknown model get an orange starburst | 2026-10-16 |
-| ANC-016 | locked | codex agents get a glyph per model class | 2026-10-16 |
+| ANC-016 | retired | codex agents get a glyph per model class | 2026-10-16 |
 | ANC-017 | locked | qa and sanity icons are fixed by agent type | 2026-10-16 |
 | ANC-018 | locked | PR list uses Rand's GH_THEME icons | 2026-10-16 |
 | ANC-019 | locked | claude agents get a per-model icon and colour | 2026-10-16 |
+| ANC-020 | locked | codex agents get a celestial icon and colour per model class | 2026-10-16 |
 
 ## ANC-001
 
@@ -242,7 +243,7 @@ Anchor: The console must show ☀️ for Codex agents of model sol, 🌙 for lun
 
 > for codex what about ☀️, 🌙, 🌍 for sol,luna, terra and astra: ✨
 
-Said by Rand, planning session 2026-10-17: agent icons added to phase-bi, 2026-10-16. Status: locked. Version 1.
+Said by Rand, planning session 2026-10-17: agent icons added to phase-bi, 2026-10-16. Status: retired. Version 2.
 
 Summary: codex agents get a glyph per model class
 
@@ -291,3 +292,17 @@ Summary: claude agents get a per-model icon and colour
 Scope: edits how agent names are rendered
 
 Deterministic check to pair with the development gate: render claude-code members with each model and assert each line has its code point and colour
+
+## ANC-020
+
+Anchor: The console must show, next to every Codex agent whose model class is sol, luna, terra or astra, that class's icon in that class's colour: U+F05A8 in #FFA60D for sol, U+F0F65 in #FFE066 for luna, U+F01E7 in #2DE057 for terra and U+F0674 in #FFE066 for astra.
+
+> "astra": "[#FFE066]\U000f0674[/]",
+
+Said by Rand, planning session 2026-10-17: CELESTIAL pasted, replacing the emoji for codex, 2026-10-16. Status: locked. Version 1.
+
+Summary: codex agents get a celestial icon and colour per model class
+
+Scope: edits how agent names are rendered
+
+Deterministic check to pair with the development gate: render codex-cli members of each model class and assert each line has its code point and colour
