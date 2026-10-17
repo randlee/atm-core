@@ -17,6 +17,12 @@ statement; `validate` reports it.
 
 Standard library only. Python 3.9+.
 
+Expected failures travel as values: a function that can fail returns
+``Ok(value)`` or ``Err(JudgeError)`` (see ``result.py``) and its caller
+propagates the ``Err`` explicitly. ``main`` is the only place an error becomes
+JSON on stdout and an exit code; anything unexpected that still raises is
+reported there as SCRIPT.INTERNAL.
+
 Subcommands
   add             append an anchor record (allocates the next ANC-NNN); lints the statement and refuses likely duplicates
   update          edit statement / scope / summary / deterministic_check / fixtures (never the quote)
@@ -75,20 +81,30 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from typing import Any
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from result import Err, Ok, Result, ToolError, err  # noqa: E402
+
+
+def parse_env_number(name: str, default, cast) -> Result[Any, ToolError]:
+    """Read a numeric environment variable; Ok(default) when unset or blank, Err when it is not a number."""
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return Ok(default)
+    try:
+        return Ok(cast(raw))
+    except ValueError:
+        return err("VALIDATION.INPUT", f"{name}={raw!r} is not a number", f"Unset {name} or give it a numeric value.")
 
 
 def _env_number(name: str, default, cast):
-    """Read a numeric environment variable; a non-numeric value is a JSON error, not a traceback."""
-    raw = os.environ.get(name)
-    if raw is None or not raw.strip():
-        return default
-    try:
-        return cast(raw)
-    except ValueError:
-        print(json.dumps({"success": False, "data": None, "error": {
-            "code": "VALIDATION.INPUT", "message": f"{name}={raw!r} is not a number",
-            "recoverable": False, "suggested_action": f"Unset {name} or give it a numeric value."}}, indent=2))
+    """Module-load boundary for parse_env_number: a non-numeric value is a JSON error and exit 2, not a traceback."""
+    parsed = parse_env_number(name, default, cast)
+    if isinstance(parsed, Err):
+        print(json.dumps({"success": False, "data": None, "error": parsed.error.to_json()}, indent=2))
         sys.exit(2)
+    return parsed.value
 
 
 JEV_URL = os.environ.get("PLAN_ANCHOR_JEV_URL", "https://api.typesafe.ai/v1/systemone")
@@ -165,17 +181,25 @@ BEARER_RE = re.compile(r"(?i)(bearer\s+)[^\s\"']+")
 # --------------------------------------------------------------------------- #
 # plumbing
 # --------------------------------------------------------------------------- #
-class JudgeError(Exception):
+class JudgeError:
+    """An expected failure, carried in Err. Never raised: main() turns it into the error envelope and exit 2."""
+
     def __init__(self, code: str, message: str, recoverable: bool = False, action: str = "",
                  status=None, retry_after=None):
-        super().__init__(message)
         self.code = code
+        self.message = message
         self.recoverable = recoverable
         self.action = action
         self.status = status            # HTTP status when the error came from Jev
         self.retry_after = retry_after  # parsed Retry-After header, seconds, or None
         self.meta = {}                  # attempt / shortening bookkeeping, filled by judge_with_policy
         self.data = None                # optional facts that explain the error (PLAN.TOO_LARGE carries the bead's shape)
+
+    def __str__(self) -> str:
+        return self.message
+
+    def __repr__(self) -> str:
+        return f"JudgeError({self.code!r}, {self.message!r})"
 
     def to_json(self) -> dict:
         return redact_sensitive({
@@ -188,6 +212,11 @@ class JudgeError(Exception):
                 "suggested_action": self.action,
             },
         })
+
+
+def fail(code: str, message: str, **fields) -> Err[JudgeError]:
+    """An expected failure as a value: ``return fail(...)`` where the old code raised."""
+    return Err(JudgeError(code, message, **fields))
 
 
 def redact_sensitive(value):
@@ -229,38 +258,44 @@ def history_event(event: str, **fields) -> dict:
     return ev
 
 
-def load_json(path: str, what: str):
+def load_json(path: str, what: str) -> Result[Any, JudgeError]:
     if path == "-":
         raw = sys.stdin.read()
         try:
-            return json.loads(raw)
+            return Ok(json.loads(raw))
         except json.JSONDecodeError as exc:
-            raise JudgeError("INPUT.MALFORMED", f"{what} on stdin is not valid JSON: {exc}")
+            return fail("INPUT.MALFORMED", f"{what} on stdin is not valid JSON: {exc}")
     p = pathlib.Path(path) if path else None
     if p is None or not path.strip() or not p.is_file():
-        raise JudgeError("INPUT.MISSING", f"{what} not found: {path!r}" + (" (not a regular file)" if p is not None and path.strip() and p.exists() else ""),
-                         action=f"Pass the path of an existing file for the {what}.")
+        return fail("INPUT.MISSING", f"{what} not found: {path!r}" + (" (not a regular file)" if p is not None and path.strip() and p.exists() else ""),
+                    action=f"Pass the path of an existing file for the {what}.")
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
+        return Ok(json.loads(p.read_text(encoding="utf-8")))
     except json.JSONDecodeError as exc:
-        raise JudgeError("INPUT.MALFORMED", f"{what} is not valid JSON: {exc}", action=f"Fix the JSON in {path}.")
+        return fail("INPUT.MALFORMED", f"{what} is not valid JSON: {exc}", action=f"Fix the JSON in {path}.")
     except (OSError, UnicodeDecodeError) as exc:
-        raise JudgeError("INPUT.MALFORMED", f"{what} could not be read: {exc}", action=f"Check {path} is a readable UTF-8 file.")
+        return fail("INPUT.MALFORMED", f"{what} could not be read: {exc}", action=f"Check {path} is a readable UTF-8 file.")
 
 
-def load_record(path: str) -> dict:
-    rec = load_json(path, "anchors.json")
+def load_record(path: str) -> Result[dict, JudgeError]:
+    loaded = load_json(path, "anchors.json")
+    if isinstance(loaded, Err):
+        return loaded
+    rec = loaded.value
     if not isinstance(rec, dict):
-        raise JudgeError("INPUT.MALFORMED", "anchors.json must be a JSON object", action="See references/anchor-document.md for the schema.")
-    return rec
+        return fail("INPUT.MALFORMED", "anchors.json must be a JSON object", action="See references/anchor-document.md for the schema.")
+    return Ok(rec)
 
 
-def load_run(path: str, what: str) -> dict:
-    run = load_json(path, what)
+def load_run(path: str, what: str) -> Result[dict, JudgeError]:
+    loaded = load_json(path, what)
+    if isinstance(loaded, Err):
+        return loaded
+    run = loaded.value
     if not isinstance(run, dict) or run.get("schema") != "plan-anchoring/run/1" or not isinstance(run.get("results"), list) \
             or not isinstance(run.get("item"), dict) or not isinstance(run.get("summary"), dict):
-        raise JudgeError("INPUT.MALFORMED", f"{what} {path} is not a plan-anchoring run file", action="Pass a file written by `judge`.")
-    return run
+        return fail("INPUT.MALFORMED", f"{what} {path} is not a plan-anchoring run file", action="Pass a file written by `judge`.")
+    return Ok(run)
 
 
 def write_text_atomic(path: str, text: str) -> None:
@@ -292,65 +327,75 @@ def _inside(path: pathlib.Path, root: pathlib.Path) -> bool:
 
 
 def canonical_workspace_path(raw: str, root: pathlib.Path, what: str, *, must_exist: bool,
-                             regular_file: bool = False) -> pathlib.Path:
+                             regular_file: bool = False) -> Result[pathlib.Path, JudgeError]:
     if not raw or not raw.strip():
-        raise JudgeError("VALIDATION.PATH", f"{what} is empty", action=f"Pass a {what} inside the repository.")
+        return fail("VALIDATION.PATH", f"{what} is empty", action=f"Pass a {what} inside the repository.")
     candidate = pathlib.Path(raw).expanduser()
     if not candidate.is_absolute():
         candidate = root / candidate
     try:
         resolved = candidate.resolve(strict=must_exist)
     except (OSError, RuntimeError) as exc:
-        raise JudgeError("VALIDATION.PATH", f"{what} could not be resolved: {exc}",
-                         action=f"Pass a readable {what} inside {root}.")
+        return fail("VALIDATION.PATH", f"{what} could not be resolved: {exc}",
+                    action=f"Pass a readable {what} inside {root}.")
     if not _inside(resolved, root):
-        raise JudgeError("VALIDATION.PATH", f"{what} is outside the repository: {resolved}",
-                         action=f"Use a path under {root}; external files are never read or sent to Jev.")
+        return fail("VALIDATION.PATH", f"{what} is outside the repository: {resolved}",
+                    action=f"Use a path under {root}; external files are never read or sent to Jev.")
     if regular_file and not resolved.is_file():
-        raise JudgeError("VALIDATION.PATH", f"{what} is not a regular file: {resolved}",
-                         action=f"Pass an existing regular file for {what}.")
-    return resolved
+        return fail("VALIDATION.PATH", f"{what} is not a regular file: {resolved}",
+                    action=f"Pass an existing regular file for {what}.")
+    return Ok(resolved)
 
 
-def cmd_agent_preflight(args) -> dict:
+def cmd_agent_preflight(args) -> Result[dict, JudgeError]:
     """Fail closed before an agent reads local evidence or sends it to Jev."""
     try:
         root = pathlib.Path(args.workspace_root).expanduser().resolve(strict=True)
     except (OSError, RuntimeError) as exc:
-        raise JudgeError("VALIDATION.PATH", f"workspace root could not be resolved: {exc}",
-                         action="Run from a Git worktree and pass `git rev-parse --show-toplevel`.")
+        return fail("VALIDATION.PATH", f"workspace root could not be resolved: {exc}",
+                    action="Run from a Git worktree and pass `git rev-parse --show-toplevel`.")
     if not root.is_dir():
-        raise JudgeError("VALIDATION.PATH", f"workspace root is not a directory: {root}")
+        return fail("VALIDATION.PATH", f"workspace root is not a directory: {root}")
 
     try:
         script = pathlib.Path(args.script).expanduser().resolve(strict=True)
     except (OSError, RuntimeError) as exc:
-        raise JudgeError("VALIDATION.PATH", f"script could not be resolved: {exc}",
-                         action="Use the installed plan-anchoring script selected from the harness skill directory.")
+        return fail("VALIDATION.PATH", f"script could not be resolved: {exc}",
+                    action="Use the installed plan-anchoring script selected from the harness skill directory.")
     running_script = pathlib.Path(__file__).resolve()
     if script != running_script:
-        raise JudgeError("VALIDATION.PATH", f"script does not match the running plan-anchoring script: {script}",
-                         action="Use the installed plan-anchoring script selected from the harness skill directory.")
+        return fail("VALIDATION.PATH", f"script does not match the running plan-anchoring script: {script}",
+                    action="Use the installed plan-anchoring script selected from the harness skill directory.")
 
-    anchors = canonical_workspace_path(args.anchors, root, "anchors file", must_exist=True, regular_file=True)
+    resolved = canonical_workspace_path(args.anchors, root, "anchors file", must_exist=True, regular_file=True)
+    if isinstance(resolved, Err):
+        return resolved
+    anchors = resolved.value
     raw_run_dir = args.run_dir or str(anchors.parent / "anchor-runs")
-    run_dir = canonical_workspace_path(raw_run_dir, root, "run directory", must_exist=False)
+    resolved = canonical_workspace_path(raw_run_dir, root, "run directory", must_exist=False)
+    if isinstance(resolved, Err):
+        return resolved
+    run_dir = resolved.value
     if run_dir.exists() and not run_dir.is_dir():
-        raise JudgeError("VALIDATION.PATH", f"run directory is not a directory: {run_dir}",
-                         action="Pass a directory inside the repository for run output.")
-    evidence = [str(canonical_workspace_path(path, root, "evidence file", must_exist=True, regular_file=True))
-                for path in args.evidence]
+        return fail("VALIDATION.PATH", f"run directory is not a directory: {run_dir}",
+                    action="Pass a directory inside the repository for run output.")
+    evidence = []
+    for path in args.evidence:
+        resolved = canonical_workspace_path(path, root, "evidence file", must_exist=True, regular_file=True)
+        if isinstance(resolved, Err):
+            return resolved
+        evidence.append(str(resolved.value))
 
     for identifier in args.identifier:
         if not SAFE_AGENT_ID_RE.fullmatch(identifier):
-            raise JudgeError("VALIDATION.ID", f"unsafe agent identifier: {identifier!r}",
-                             action="Use 1-128 letters, digits, dots, underscores, colons or hyphens; do not use paths or whitespace.")
+            return fail("VALIDATION.ID", f"unsafe agent identifier: {identifier!r}",
+                        action="Use 1-128 letters, digits, dots, underscores, colons or hyphens; do not use paths or whitespace.")
     if args.pr_number and (not args.pr_number.isascii() or not args.pr_number.isdigit() or int(args.pr_number) < 1):
-        raise JudgeError("VALIDATION.ID", f"invalid PR number: {args.pr_number!r}",
-                         action="Pass a positive decimal pull-request number.")
+        return fail("VALIDATION.ID", f"invalid PR number: {args.pr_number!r}",
+                    action="Pass a positive decimal pull-request number.")
 
     work_source = args.correlation_id or (args.identifier[0] if args.identifier else "run")
-    return {"success": True, "data": {
+    return Ok({"success": True, "data": {
         "workspace_root": str(root),
         "script": str(script),
         "anchors_path": str(anchors),
@@ -359,7 +404,7 @@ def cmd_agent_preflight(args) -> dict:
         "identifiers": list(args.identifier),
         "pr_number": args.pr_number or None,
         "work_key": sanitize_id(work_source)[:128],
-    }, "error": None}
+    }, "error": None})
 
 
 # --------------------------------------------------------------------------- #
@@ -374,36 +419,43 @@ def empty_record(plan: str, intent_ref: str) -> dict:
     }
 
 
-def anchor_list(rec: dict) -> list:
+def anchor_list(rec: dict) -> Result[list, JudgeError]:
     anchors = rec.get("anchors")
     if anchors is None:
         anchors = rec["anchors"] = []
     if not isinstance(anchors, list):
-        raise JudgeError("INPUT.MALFORMED", "anchors.json: 'anchors' must be a list", action="Fix the record by hand, then run validate.")
-    return anchors
+        return fail("INPUT.MALFORMED", "anchors.json: 'anchors' must be a list", action="Fix the record by hand, then run validate.")
+    return Ok(anchors)
 
 
-def find_anchor(rec: dict, anchor_id: str) -> dict:
-    for a in anchor_list(rec):
+def find_anchor(rec: dict, anchor_id: str) -> Result[dict, JudgeError]:
+    listed = anchor_list(rec)
+    if isinstance(listed, Err):
+        return listed
+    for a in listed.value:
         if isinstance(a, dict) and a.get("id") == anchor_id:
-            return a
-    raise JudgeError("ANCHOR.UNKNOWN", f"No anchor with id {anchor_id}", action="Check anchors.json for the exact ID.")
+            return Ok(a)
+    return fail("ANCHOR.UNKNOWN", f"No anchor with id {anchor_id}", action="Check anchors.json for the exact ID.")
 
 
-def next_anc_id(rec: dict) -> str:
+def next_anc_id(rec: dict) -> Result[str, JudgeError]:
+    listed = anchor_list(rec)
+    if isinstance(listed, Err):
+        return listed
     nums = []
-    for a in anchor_list(rec):
+    for a in listed.value:
         aid = a.get("id") if isinstance(a, dict) else None
         if isinstance(aid, str) and re.fullmatch(r"ANC-\d{3,}", aid):
             nums.append(int(aid[4:]))
-    return f"ANC-{(max(nums) + 1 if nums else 1):03d}"
+    return Ok(f"ANC-{(max(nums) + 1 if nums else 1):03d}")
 
 
-def require_valid(rec: dict) -> None:
+def require_valid(rec: dict) -> Result[None, JudgeError]:
     problems = validate_record(rec)
     if problems:
-        raise JudgeError("VALIDATION.ANCHORS", "anchors.json has problems: " + "; ".join(problems[:5]), recoverable=True,
-                         action="Run `jev_judge.py validate` and fix the record first.")
+        return fail("VALIDATION.ANCHORS", "anchors.json has problems: " + "; ".join(problems[:5]), recoverable=True,
+                    action="Run `jev_judge.py validate` and fix the record first.")
+    return Ok(None)
 
 
 # --------------------------------------------------------------------------- #
@@ -500,54 +552,74 @@ def similar_anchors(anchors: list, statement: str, quote: str, floor: float = SI
     return found
 
 
-def lint_or_refuse(statement: str, quote: str, source_type: str, strict: bool) -> list:
+def lint_or_refuse(statement: str, quote: str, source_type: str, strict: bool) -> Result[list, JudgeError]:
     """Run the lint; the verbatim rule is always a refusal for ANC, every other warning only under --strict."""
     warnings = lint_statement(statement, quote, source_type)
     if LINT_VERBATIM in warnings:
-        raise JudgeError("VALIDATION.INPUT", LINT_VERBATIM_PROBLEM, recoverable=True,
-                         action="Write the statement as a testable requirement in the orchestrator's words; keep the user's words in --quote.")
+        return fail("VALIDATION.INPUT", LINT_VERBATIM_PROBLEM, recoverable=True,
+                    action="Write the statement as a testable requirement in the orchestrator's words; keep the user's words in --quote.")
     if strict and warnings:
-        raise JudgeError("ANCHOR.LINT", "statement has testability warnings: " + "; ".join(warnings), recoverable=True,
-                         action="Reword the statement (see references/anchor-capture.md), or drop --strict to record it anyway.")
-    return warnings
+        return fail("ANCHOR.LINT", "statement has testability warnings: " + "; ".join(warnings), recoverable=True,
+                    action="Reword the statement (see references/anchor-capture.md), or drop --strict to record it anyway.")
+    return Ok(warnings)
 
 
-def cmd_add(args) -> dict:
+def cmd_add(args) -> Result[dict, JudgeError]:
     p = pathlib.Path(args.anchors)
-    rec = load_record(args.anchors) if p.exists() else empty_record(args.plan, args.intent_ref)
-    anchors = anchor_list(rec)
+    if p.exists():
+        loaded = load_record(args.anchors)
+        if isinstance(loaded, Err):
+            return loaded
+        rec = loaded.value
+    else:
+        rec = empty_record(args.plan, args.intent_ref)
+    listed = anchor_list(rec)
+    if isinstance(listed, Err):
+        return listed
+    anchors = listed.value
     statement = args.statement.strip()
     if not statement:
-        raise JudgeError("VALIDATION.INPUT", "statement cannot be empty; write the testable anchor text",
-                         action="Pass --statement with the authored requirement and --quote with the user's verbatim words.")
+        return fail("VALIDATION.INPUT", "statement cannot be empty; write the testable anchor text",
+                    action="Pass --statement with the authored requirement and --quote with the user's verbatim words.")
     if args.status == "retired":
-        raise JudgeError("VALIDATION.INPUT", "a new anchor cannot be added as retired", action="Add it as proposed or locked; retire it later with `retire`.")
+        return fail("VALIDATION.INPUT", "a new anchor cannot be added as retired", action="Add it as proposed or locked; retire it later with `retire`.")
     if args.source_type == "ANC":
-        anchor_id = next_anc_id(rec)
+        allocated = next_anc_id(rec)
+        if isinstance(allocated, Err):
+            return allocated
+        anchor_id = allocated.value
         source_ref = None
     else:
         if not args.source_ref:
-            raise JudgeError("VALIDATION.INPUT", f"--source-ref is required for source type {args.source_type}",
-                             action="Pass the register ID, e.g. --source-ref REQ-014.")
+            return fail("VALIDATION.INPUT", f"--source-ref is required for source type {args.source_type}",
+                        action="Pass the register ID, e.g. --source-ref REQ-014.")
         anchor_id = args.source_ref
         source_ref = args.source_ref
         if any(isinstance(a, dict) and a.get("id") == anchor_id for a in anchors):
-            raise JudgeError("ANCHOR.DUPLICATE", f"{anchor_id} already recorded")
+            return fail("ANCHOR.DUPLICATE", f"{anchor_id} already recorded")
     quote = (args.quote or "").strip()
     if args.source_type == "ANC":
         if not quote:
-            raise JudgeError("VALIDATION.INPUT", "--quote is required for ANC anchors: record the user's verbatim words",
-                             action='Pass --quote "<the user\'s exact words>" alongside the authored --statement.')
+            return fail("VALIDATION.INPUT", "--quote is required for ANC anchors: record the user's verbatim words",
+                        action='Pass --quote "<the user\'s exact words>" alongside the authored --statement.')
     elif not quote:
         quote = statement  # register text: the quote is the statement
-    warnings = lint_or_refuse(statement, quote, args.source_type, bool(args.strict))
+    linted = lint_or_refuse(statement, quote, args.source_type, bool(args.strict))
+    if isinstance(linted, Err):
+        return linted
+    warnings = linted.value
     similar = similar_anchors(anchors, statement, quote)
     candidates = [s for s in similar if s["jaccard"] >= DUPLICATE_JACCARD]
     if candidates and not args.allow_similar:
         names = ", ".join(f"{s['id']} (jaccard {s['jaccard']}, {s['field']})" for s in candidates)
-        raise JudgeError("ANCHOR.DUPLICATE_CANDIDATE", f"the new anchor looks like an existing one: {names}", recoverable=True,
-                         action=f"Update {candidates[0]['id']} instead (or retire it with --replaced-by), or pass --allow-similar if it is really a different constraint.")
-    rubric = add_rubric_gate(args, statement, quote, args.source_type) if getattr(args, "rubric", False) else None
+        return fail("ANCHOR.DUPLICATE_CANDIDATE", f"the new anchor looks like an existing one: {names}", recoverable=True,
+                    action=f"Update {candidates[0]['id']} instead (or retire it with --replaced-by), or pass --allow-similar if it is really a different constraint.")
+    rubric = None
+    if getattr(args, "rubric", False):
+        gated = add_rubric_gate(args, statement, quote, args.source_type)
+        if isinstance(gated, Err):
+            return gated
+        rubric = gated.value
     record = {
         "id": anchor_id,
         "source_type": args.source_type,
@@ -574,21 +646,35 @@ def cmd_add(args) -> dict:
     data = {"anchor": record, "path": args.anchors, "lint": {"warnings": warnings}, "similar": similar}
     if rubric is not None:
         data["rubric"] = rubric
-    return {"success": True, "data": data, "error": None}
+    return Ok({"success": True, "data": data, "error": None})
 
 
-def cmd_update(args) -> dict:
+def _record_and_anchor(path: str, anchor_id: str) -> Result[tuple, JudgeError]:
+    """Load anchors.json and find one anchor in it: (record, anchor)."""
+    loaded = load_record(path)
+    if isinstance(loaded, Err):
+        return loaded
+    rec = loaded.value
+    found = find_anchor(rec, anchor_id)
+    if isinstance(found, Err):
+        return found
+    return Ok((rec, found.value))
+
+
+def cmd_update(args) -> Result[dict, JudgeError]:
     if getattr(args, "quote", None) is not None:
-        raise JudgeError("VALIDATION.INPUT", "quote is verbatim provenance and immutable",
-                         action="If the user said something different, `add` a new anchor with the new quote and `retire --replaced-by` this one.")
-    rec = load_record(args.anchors)
-    a = find_anchor(rec, args.id)
+        return fail("VALIDATION.INPUT", "quote is verbatim provenance and immutable",
+                    action="If the user said something different, `add` a new anchor with the new quote and `retire --replaced-by` this one.")
+    loaded = _record_and_anchor(args.anchors, args.id)
+    if isinstance(loaded, Err):
+        return loaded
+    rec, a = loaded.value
     changed = []
     previous_statement = None
     if args.statement is not None:
         new_statement = args.statement.strip()
         if not new_statement:
-            raise JudgeError("VALIDATION.INPUT", "statement cannot be empty; write the testable anchor text")
+            return fail("VALIDATION.INPUT", "statement cannot be empty; write the testable anchor text")
         if new_statement != (a.get("statement") or ""):
             previous_statement = a.get("statement")
             a["statement"] = new_statement
@@ -617,29 +703,36 @@ def cmd_update(args) -> dict:
         a["fixtures"] = fixtures
         changed.append("fixtures")
     if not changed:
-        raise JudgeError("VALIDATION.INPUT", "nothing to update", action="Pass --statement, --scope, --summary, --deterministic-check, --fixture-pass, --fixture-fail or --clear-fixtures.")
-    warnings = lint_or_refuse(a.get("statement") or "", anchor_quote(a), a.get("source_type") or "ANC", bool(getattr(args, "strict", False)))
+        return fail("VALIDATION.INPUT", "nothing to update", action="Pass --statement, --scope, --summary, --deterministic-check, --fixture-pass, --fixture-fail or --clear-fixtures.")
+    linted = lint_or_refuse(a.get("statement") or "", anchor_quote(a), a.get("source_type") or "ANC", bool(getattr(args, "strict", False)))
+    if isinstance(linted, Err):
+        return linted
+    warnings = linted.value
     a["version"] = int(a.get("version", 1)) + 1
     event = history_event("updated", fields=changed)
     if "statement" in changed:
         event["previous_statement"] = previous_statement
     a.setdefault("history", []).append(event)
     save_json(args.anchors, rec)
-    return {"success": True, "data": {"id": a["id"], "changed": changed, "version": a["version"], "anchor": a, "lint": {"warnings": warnings}}, "error": None}
+    return Ok({"success": True, "data": {"id": a["id"], "changed": changed, "version": a["version"], "anchor": a, "lint": {"warnings": warnings}}, "error": None})
 
 
-def cmd_retire(args) -> dict:
-    rec = load_record(args.anchors)
-    a = find_anchor(rec, args.id)
+def cmd_retire(args) -> Result[dict, JudgeError]:
+    loaded = _record_and_anchor(args.anchors, args.id)
+    if isinstance(loaded, Err):
+        return loaded
+    rec, a = loaded.value
     if a.get("status") == "retired":
-        raise JudgeError("VALIDATION.INPUT", f"{args.id} is already retired")
+        return fail("VALIDATION.INPUT", f"{args.id} is already retired")
     if args.replaced_by:
-        find_anchor(rec, args.replaced_by)  # the replacement must exist
+        replacement = find_anchor(rec, args.replaced_by)  # the replacement must exist
+        if isinstance(replacement, Err):
+            return replacement
     a["status"] = "retired"
     a["version"] = int(a.get("version", 1)) + 1
     a.setdefault("history", []).append(history_event("retired", replaced_by=args.replaced_by or None, reason=args.reason or ""))
     save_json(args.anchors, rec)
-    return {"success": True, "data": {"id": a["id"], "status": "retired", "replaced_by": args.replaced_by or None, "version": a["version"]}, "error": None}
+    return Ok({"success": True, "data": {"id": a["id"], "status": "retired", "replaced_by": args.replaced_by or None, "version": a["version"]}, "error": None})
 
 
 def validate_record(rec: dict) -> list:
@@ -718,15 +811,19 @@ def record_warnings(rec: dict, anchors_path: str) -> list:
     return warnings
 
 
-def cmd_validate(args) -> dict:
-    rec = load_record(args.anchors)
+def cmd_validate(args) -> Result[dict, JudgeError]:
+    loaded = load_record(args.anchors)
+    if isinstance(loaded, Err):
+        return loaded
+    rec = loaded.value
     problems = validate_record(rec)
     warnings = record_warnings(rec, args.anchors)
     if problems:
-        return {"success": False, "data": {"problems": problems, "warnings": warnings}, "error": {
+        # A completed negative answer (exit 1), not a failure of the command: it stays an Ok value.
+        return Ok({"success": False, "data": {"problems": problems, "warnings": warnings}, "error": {
             "code": "VALIDATION.ANCHORS", "message": f"{len(problems)} problem(s) in {args.anchors}",
-            "recoverable": True, "suggested_action": "Fix the listed problems and re-run validate."}}
-    return {"success": True, "data": {"anchors": len(rec["anchors"]), "path": args.anchors, "warnings": warnings}, "error": None}
+            "recoverable": True, "suggested_action": "Fix the listed problems and re-run validate."}})
+    return Ok({"success": True, "data": {"anchors": len(rec["anchors"]), "path": args.anchors, "warnings": warnings}, "error": None})
 
 
 def render_md(rec: dict) -> str:
@@ -776,18 +873,25 @@ def render_md(rec: dict) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def cmd_render(args) -> dict:
-    rec = load_record(args.anchors)
-    require_valid(rec)
+def cmd_render(args) -> Result[dict, JudgeError]:
+    loaded = load_record(args.anchors)
+    if isinstance(loaded, Err):
+        return loaded
+    rec = loaded.value
+    checked = require_valid(rec)
+    if isinstance(checked, Err):
+        return checked
     md = render_md(rec)
     out = args.out or str(pathlib.Path(args.anchors).with_name("anchors.md"))
     write_text_atomic(out, md)
-    return {"success": True, "data": {"path": out, "anchors": len(rec["anchors"])}, "error": None}
+    return Ok({"success": True, "data": {"path": out, "anchors": len(rec["anchors"])}, "error": None})
 
 
-def cmd_set_beads(args) -> dict:
-    rec = load_record(args.anchors)
-    a = find_anchor(rec, args.id)
+def cmd_set_beads(args) -> Result[dict, JudgeError]:
+    loaded = _record_and_anchor(args.anchors, args.id)
+    if isinstance(loaded, Err):
+        return loaded
+    rec, a = loaded.value
     beads = a.setdefault("beads", {})
     if not isinstance(beads, dict):
         beads = a["beads"] = {}
@@ -796,18 +900,20 @@ def cmd_set_beads(args) -> dict:
             beads[key] = val
     a.setdefault("history", []).append(history_event("beads_set", beads=beads))
     save_json(args.anchors, rec)
-    return {"success": True, "data": {"id": a["id"], "beads": beads}, "error": None}
+    return Ok({"success": True, "data": {"id": a["id"], "beads": beads}, "error": None})
 
 
-def cmd_promote(args) -> dict:
-    rec = load_record(args.anchors)
-    a = find_anchor(rec, args.id)
+def cmd_promote(args) -> Result[dict, JudgeError]:
+    loaded = _record_and_anchor(args.anchors, args.id)
+    if isinstance(loaded, Err):
+        return loaded
+    rec, a = loaded.value
     a["status"] = "promoted"
     a["promoted_to"] = args.adr
     a["version"] = int(a.get("version", 1)) + 1
     a.setdefault("history", []).append(history_event("promoted", to=args.adr))
     save_json(args.anchors, rec)
-    return {"success": True, "data": {"id": a["id"], "promoted_to": args.adr, "version": a["version"]}, "error": None}
+    return Ok({"success": True, "data": {"id": a["id"], "promoted_to": args.adr, "version": a["version"]}, "error": None})
 
 
 # --------------------------------------------------------------------------- #
@@ -833,19 +939,19 @@ def demote_headings(body: str) -> str:
     return "\n".join(out)
 
 
-def compose_item_text(show, children=None, sections=None) -> dict:
+def compose_item_text(show, children=None, sections=None) -> Result[dict, JudgeError]:
     """Markdown item from bd JSON. `sections` (keys from ITEM_SECTIONS) limits the body; None means every non-empty section."""
     if sections is not None:
         bad = [s for s in sections if s not in SECTION_KEYS]
         if bad:
-            raise JudgeError("VALIDATION.INPUT", f"unknown section(s) {bad}; choose from {list(SECTION_KEYS)}")
+            return fail("VALIDATION.INPUT", f"unknown section(s) {bad}; choose from {list(SECTION_KEYS)}")
     if isinstance(show, list):
         if len(show) != 1 or not isinstance(show[0], dict):
-            raise JudgeError("INPUT.MALFORMED", "bd show --json output must be a one-element array holding the bead object",
-                             action="Pass the unmodified output of `bd show <id> --json`.")
+            return fail("INPUT.MALFORMED", "bd show --json output must be a one-element array holding the bead object",
+                        action="Pass the unmodified output of `bd show <id> --json`.")
         show = show[0]
     if not isinstance(show, dict):
-        raise JudgeError("INPUT.MALFORMED", "bead JSON must be an object or a one-element array")
+        return fail("INPUT.MALFORMED", "bead JSON must be an object or a one-element array")
     item_id = str(show.get("id") or "")
     title = str(show.get("title") or item_id or "untitled").strip()
     parts = [f"# {title}"]
@@ -859,32 +965,43 @@ def compose_item_text(show, children=None, sections=None) -> dict:
             sections_used.append(heading)
     if children is not None:
         if not isinstance(children, list):
-            raise JudgeError("INPUT.MALFORMED", "bd children --json output must be an array", action="Pass the unmodified output of `bd children <id> --json`.")
+            return fail("INPUT.MALFORMED", "bd children --json output must be an array", action="Pass the unmodified output of `bd children <id> --json`.")
         closed = [c for c in children if isinstance(c, dict) and c.get("status") == "closed"]
         if closed:
             rows = [f"- {c.get('id', '?')} {str(c.get('title') or '').strip()}: {str(c.get('close_reason') or '').strip()}".rstrip() for c in closed]
             parts.append("## Closed beads\n\n" + "\n".join(rows))
             sections_used.append("Closed beads")
     text = "\n\n".join(parts) + "\n"
-    return {"item_id": item_id, "title": title, "text": text, "sections": sections_used, "chars": len(text)}
+    return Ok({"item_id": item_id, "title": title, "text": text, "sections": sections_used, "chars": len(text)})
 
 
-def cmd_compose_item(args) -> dict:
-    show = load_json(args.show_json, "bd show output")
-    children = load_json(args.children_json, "bd children output") if args.children_json else None
+def cmd_compose_item(args) -> Result[dict, JudgeError]:
+    loaded = load_json(args.show_json, "bd show output")
+    if isinstance(loaded, Err):
+        return loaded
+    show = loaded.value
+    children = None
+    if args.children_json:
+        loaded = load_json(args.children_json, "bd children output")
+        if isinstance(loaded, Err):
+            return loaded
+        children = loaded.value
     gate_for = getattr(args, "for_gate", "") or ""
     sections = None
     if getattr(args, "sections", ""):
         if gate_for:
-            raise JudgeError("VALIDATION.INPUT", "pass --sections or --for, not both")
+            return fail("VALIDATION.INPUT", "pass --sections or --for, not both")
         sections = [s.strip() for s in args.sections.split(",") if s.strip()]
         if not sections:
-            raise JudgeError("VALIDATION.INPUT", f"--sections needs at least one of {list(SECTION_KEYS)}")
+            return fail("VALIDATION.INPUT", f"--sections needs at least one of {list(SECTION_KEYS)}")
     elif gate_for:
         sections = list(COMPOSE_FOR[gate_for])
         if gate_for == "plan":
             children = None  # closed children are development-gate evidence
-    composed = compose_item_text(show, children, sections)
+    built = compose_item_text(show, children, sections)
+    if isinstance(built, Err):
+        return built
+    composed = built.value
     data = {"path": None, "item_id": composed["item_id"], "title": composed["title"], "sections": composed["sections"], "chars": composed["chars"],
             "composition": {"for": gate_for or None, "sections_requested": sections if sections is not None else "all",
                             "children": children is not None}}
@@ -893,7 +1010,7 @@ def cmd_compose_item(args) -> dict:
         data["path"] = args.out
     else:
         data["text"] = composed["text"]
-    return {"success": True, "data": data, "error": None}
+    return Ok({"success": True, "data": data, "error": None})
 
 
 # --------------------------------------------------------------------------- #
@@ -1094,7 +1211,7 @@ def plan_too_large(item: dict, detail: str, max_code_lines: int = DEFAULT_MAX_CO
     return exc
 
 
-def fit_plan_item(item: dict, misfit, max_code_lines: int) -> dict:
+def fit_plan_item(item: dict, misfit, max_code_lines: int) -> Result[dict, JudgeError]:
     """Plan gate: send the bead whole when it fits; otherwise reduce code as little as possible.
 
     `misfit(text)` returns None when the text fits one Jev request, else why not. Fenced blocks longer than
@@ -1113,17 +1230,25 @@ def fit_plan_item(item: dict, misfit, max_code_lines: int) -> dict:
         item["text"], item["code_reduced"] = reduce_code(text, max_code_lines, chosen)
         detail = misfit(item["text"])
     if detail is not None:
-        raise plan_too_large(item, detail, max_code_lines)
-    return item
+        return Err(plan_too_large(item, detail, max_code_lines))
+    return Ok(item)
 
 
-def beads_from_json(obj, what: str) -> list:
+def beads_from_json(obj, what: str) -> Result[list, JudgeError]:
     """bd JSON in any of its shapes: one bead object, `bd show --json` (one-element array) or `bd children --json` (array)."""
     if isinstance(obj, dict):
-        return [obj]
+        return Ok([obj])
     if isinstance(obj, list) and all(isinstance(b, dict) for b in obj):
-        return obj
-    raise JudgeError("INPUT.MALFORMED", f"{what} must be a bead object or an array of bead objects", action="Pass unmodified `bd show --json` / `bd children --json` output.")
+        return Ok(obj)
+    return fail("INPUT.MALFORMED", f"{what} must be a bead object or an array of bead objects", action="Pass unmodified `bd show --json` / `bd children --json` output.")
+
+
+def load_beads(path: str, what: str) -> Result[list, JudgeError]:
+    """Read one bd JSON file and return its beads."""
+    loaded = load_json(path, what)
+    if isinstance(loaded, Err):
+        return loaded
+    return beads_from_json(loaded.value, what)
 
 
 SPRINT_TITLE_RE = re.compile(r"^[A-Za-z]+-\d+\b")   # "h-3: ..." style sprint titles
@@ -1138,19 +1263,27 @@ def is_sprint_bead(show: dict, item_id: str, title: str) -> bool:
             or re.search(r"\bsprint\b", title, re.IGNORECASE) is not None)
 
 
-def bead_shape(show: dict, max_code_lines: int) -> dict:
-    composed = compose_item_text(show)
+def bead_shape(show: dict, max_code_lines: int) -> Result[dict, JudgeError]:
+    built = compose_item_text(show)
+    if isinstance(built, Err):
+        return built
+    composed = built.value
     shape = shape_text(composed["text"], max_code_lines)
     kind = str(show.get("issue_type") or show.get("type") or "")
     sections = shape["sections"]
-    return {"id": composed["item_id"], "title": composed["title"], "type": kind or None,
-            "is_sprint": is_sprint_bead(show, composed["item_id"], composed["title"]),
-            "description_chars": sections.get("description", 0), "acceptance_chars": sections.get("acceptance_criteria", 0),
-            "design_ratio": round(sections.get("design", 0) / shape["chars"], 2) if shape["chars"] else 0.0, **shape}
+    return Ok({"id": composed["item_id"], "title": composed["title"], "type": kind or None,
+               "is_sprint": is_sprint_bead(show, composed["item_id"], composed["title"]),
+               "description_chars": sections.get("description", 0), "acceptance_chars": sections.get("acceptance_criteria", 0),
+               "design_ratio": round(sections.get("design", 0) / shape["chars"], 2) if shape["chars"] else 0.0, **shape})
 
 
-def shape_beads(beads: list, max_code_lines: int, rec=None) -> dict:
-    rows = [bead_shape(b, max_code_lines) for b in beads]
+def shape_beads(beads: list, max_code_lines: int, rec=None) -> Result[dict, JudgeError]:
+    rows = []
+    for b in beads:
+        row = bead_shape(b, max_code_lines)
+        if isinstance(row, Err):
+            return row
+        rows.append(row.value)
     seen = {}
     for r in rows:
         for p in r.pop("paragraphs"):
@@ -1169,14 +1302,17 @@ def shape_beads(beads: list, max_code_lines: int, rec=None) -> dict:
               "duplicated_paragraphs": len(duplicated)}
     data = {"max_code_lines": max_code_lines, "beads": rows, "duplicated_paragraphs": duplicated, "totals": totals}
     if rec is not None:
-        known = {a.get("id") for a in anchor_list(rec) if isinstance(a, dict)}
-        active = {a.get("id") for a in anchor_list(rec) if isinstance(a, dict) and a.get("status") != "retired"}
+        listed = anchor_list(rec)
+        if isinstance(listed, Err):
+            return listed
+        known = {a.get("id") for a in listed.value if isinstance(a, dict)}
+        active = {a.get("id") for a in listed.value if isinstance(a, dict) and a.get("status") != "retired"}
         referenced = set()
         for r in rows:
             r["unknown_anchor_references"] = [x for x in r["references"]["anc"] if x not in known]
             referenced.update(r["references"]["anc"])
         data["anchors_not_referenced"] = sorted(a for a in active if a not in referenced)
-    return data
+    return Ok(data)
 
 
 def shape_md(data: dict) -> str:
@@ -1201,77 +1337,95 @@ def shape_md(data: dict) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def cmd_shape(args) -> dict:
+def cmd_shape(args) -> Result[Any, JudgeError]:
     if args.max_code_lines < 1:
-        raise JudgeError("VALIDATION.INPUT", f"--max-code-lines must be a positive integer, got {args.max_code_lines}")
-    beads = []
+        return fail("VALIDATION.INPUT", f"--max-code-lines must be a positive integer, got {args.max_code_lines}")
+    sources = []
     if args.beads:
         d = pathlib.Path(args.beads)
         if not d.is_dir():
-            raise JudgeError("INPUT.MISSING", f"--beads directory not found: {args.beads}", action="Pass a directory of `bd show --json` files.")
-        for f in sorted(d.glob("*.json")):
-            beads += beads_from_json(load_json(str(f), f"bead file {f.name}"), f"bead file {f.name}")
+            return fail("INPUT.MISSING", f"--beads directory not found: {args.beads}", action="Pass a directory of `bd show --json` files.")
+        sources += [(str(f), f"bead file {f.name}") for f in sorted(d.glob("*.json"))]
     if args.children_json:
-        beads += beads_from_json(load_json(args.children_json, "bd children output"), "bd children output")
-    for path in args.show_json or []:
-        beads += beads_from_json(load_json(path, "bd show output"), "bd show output")
+        sources.append((args.children_json, "bd children output"))
+    sources += [(path, "bd show output") for path in args.show_json or []]
+    beads = []
+    for path, what in sources:
+        loaded = load_beads(path, what)
+        if isinstance(loaded, Err):
+            return loaded
+        beads += loaded.value
     if not beads:
-        raise JudgeError("INPUT.EMPTY", "no beads to shape", action="Pass --beads <dir>, --children-json <file> or --show-json <file>.")
-    rec = load_record(args.anchors) if args.anchors else None
-    data = shape_beads(beads, args.max_code_lines, rec)
+        return fail("INPUT.EMPTY", "no beads to shape", action="Pass --beads <dir>, --children-json <file> or --show-json <file>.")
+    rec = None
+    if args.anchors:
+        loaded = load_record(args.anchors)
+        if isinstance(loaded, Err):
+            return loaded
+        rec = loaded.value
+    shaped = shape_beads(beads, args.max_code_lines, rec)
+    if isinstance(shaped, Err):
+        return shaped
+    data = shaped.value
     if args.format == "md":
-        return shape_md(data)
-    return {"success": True, "data": data, "error": None}
+        return Ok(shape_md(data))
+    return Ok({"success": True, "data": data, "error": None})
 
 
 # --------------------------------------------------------------------------- #
 # judging
 # --------------------------------------------------------------------------- #
-def check_roles(qs: dict, where: str) -> None:
+def check_roles(qs: dict, where: str) -> Result[None, JudgeError]:
     """Every required role, and the optional evidence role if present, must name a question in the set."""
     questions = qs.get("questions")
     if not isinstance(questions, dict) or not questions:
-        raise JudgeError("INPUT.MALFORMED", f"{where}: 'questions' must be a non-empty object keyed by question id",
-                         action="See assets/questions/plan.json for the shape.")
+        return fail("INPUT.MALFORMED", f"{where}: 'questions' must be a non-empty object keyed by question id",
+                    action="See assets/questions/plan.json for the shape.")
     roles = qs.get("roles")
     if not isinstance(roles, dict):
-        raise JudgeError("QUESTIONS.ROLES", f"{where}: 'roles' must map relevance, compliance and conflict to question ids",
-                         action="See references/verdict-gating.md for the role contract.")
+        return fail("QUESTIONS.ROLES", f"{where}: 'roles' must map relevance, compliance and conflict to question ids",
+                    action="See references/verdict-gating.md for the role contract.")
     for required in REQUIRED_ROLES:
         if roles.get(required) not in questions:
-            raise JudgeError("QUESTIONS.ROLES", f"{where} must map role '{required}' to a question id in the set",
-                             action="See references/verdict-gating.md for the role contract.")
+            return fail("QUESTIONS.ROLES", f"{where} must map role '{required}' to a question id in the set",
+                        action="See references/verdict-gating.md for the role contract.")
     evidence = roles.get("evidence")
     if evidence is not None and evidence not in questions:
-        raise JudgeError("QUESTIONS.ROLES", f"{where} maps role 'evidence' to '{evidence}', which is not a question in the set",
-                         action="Keep the default question ids, or update roles to match the renamed question.")
+        return fail("QUESTIONS.ROLES", f"{where} maps role 'evidence' to '{evidence}', which is not a question in the set",
+                    action="Keep the default question ids, or update roles to match the renamed question.")
+    return Ok(None)
 
 
-def load_question_set(gate: str, override_path: str = "") -> dict:
+def load_question_set(gate: str, override_path: str = "") -> Result[dict, JudgeError]:
     path = override_path or str(QUESTIONS_DIR / f"{gate}.json")
-    qs = load_json(path, f"question set for gate '{gate}'")
+    loaded = load_json(path, f"question set for gate '{gate}'")
+    if isinstance(loaded, Err):
+        return loaded
+    qs = loaded.value
     if not isinstance(qs, dict):
-        raise JudgeError("INPUT.MALFORMED", f"question set {path} must be a JSON object")
-    check_roles(qs, f"question set {path}")
-    return qs
+        return fail("INPUT.MALFORMED", f"question set {path} must be a JSON object")
+    checked = check_roles(qs, f"question set {path}")
+    if isinstance(checked, Err):
+        return checked
+    return Ok(qs)
 
 
-def merge_overrides(base: dict, override: dict) -> dict:
+def merge_overrides(base: dict, override: dict) -> Result[dict, JudgeError]:
     """Per-anchor overrides replace question text by id; roles stay as in base unless overridden."""
     merged = json.loads(json.dumps(base))
     if not isinstance(override, dict):
-        raise JudgeError("INPUT.MALFORMED", "a question override must be an object with 'questions' and optional 'roles'")
+        return fail("INPUT.MALFORMED", "a question override must be an object with 'questions' and optional 'roles'")
     questions = override.get("questions") or {}
     if not isinstance(questions, dict):
-        raise JudgeError("INPUT.MALFORMED", "override 'questions' must be an object keyed by question id")
+        return fail("INPUT.MALFORMED", "override 'questions' must be an object keyed by question id")
     for qid, q in questions.items():
         merged["questions"][qid] = q
     roles = override.get("roles")
     if roles:
         if not isinstance(roles, dict):
-            raise JudgeError("INPUT.MALFORMED", "override 'roles' must be an object")
+            return fail("INPUT.MALFORMED", "override 'roles' must be an object")
         merged.setdefault("roles", {}).update(roles)
-    return merged
+    return Ok(merged)
 
 
 def questions_digest(questions: dict) -> str:
@@ -1327,8 +1481,8 @@ def http_error(status: int, text: str, retry_after=None) -> JudgeError:
                       status=status, retry_after=retry_after)
 
 
-def call_jev(body: dict, api_key: str, timeout: float) -> dict:
-    """One POST to Jev. Raises JudgeError; never retries or shortens (judge_with_policy does both)."""
+def call_jev(body: dict, api_key: str, timeout: float) -> Result[dict, JudgeError]:
+    """One POST to Jev. Returns Err(JudgeError) on failure; never retries or shortens (judge_with_policy does both)."""
     data = encode_body(body)
     req = urllib.request.Request(
         JEV_URL, data=data, method="POST",
@@ -1340,20 +1494,20 @@ def call_jev(body: dict, api_key: str, timeout: float) -> dict:
     except urllib.error.HTTPError as exc:
         text = exc.read(4096).decode("utf-8", "replace")
         retry_after = parse_retry_after(exc.headers.get("Retry-After") if exc.headers is not None else None)
-        raise http_error(exc.code, text, retry_after)
+        return Err(http_error(exc.code, text, retry_after))
     except urllib.error.URLError as exc:
-        raise JudgeError("JEV.NETWORK", f"Could not reach Jev: {exc.reason}", recoverable=True, action="Check network access and retry.")
+        return fail("JEV.NETWORK", f"Could not reach Jev: {exc.reason}", recoverable=True, action="Check network access and retry.")
     except (OSError, http.client.HTTPException) as exc:
-        raise JudgeError("JEV.NETWORK", f"Jev connection failed: {type(exc).__name__}: {exc}", recoverable=True, action="Check network access and retry.")
+        return fail("JEV.NETWORK", f"Jev connection failed: {type(exc).__name__}: {exc}", recoverable=True, action="Check network access and retry.")
     if len(raw) > MAX_RESPONSE_BYTES:
-        raise JudgeError("JEV.RESPONSE_INVALID", "Jev response exceeded the size limit", recoverable=True, action="Retry once; if it repeats, check PLAN_ANCHOR_JEV_URL.")
+        return fail("JEV.RESPONSE_INVALID", "Jev response exceeded the size limit", recoverable=True, action="Retry once; if it repeats, check PLAN_ANCHOR_JEV_URL.")
     try:
         parsed = json.loads(raw.decode("utf-8"))
     except (ValueError, UnicodeError):
-        raise JudgeError("JEV.RESPONSE_INVALID", "Jev response was not JSON", recoverable=True, action="Retry once; if it repeats, check PLAN_ANCHOR_JEV_URL.")
+        return fail("JEV.RESPONSE_INVALID", "Jev response was not JSON", recoverable=True, action="Retry once; if it repeats, check PLAN_ANCHOR_JEV_URL.")
     if not isinstance(parsed, dict):
-        raise JudgeError("JEV.RESPONSE_INVALID", "Jev response was not a JSON object", recoverable=True, action="Check PLAN_ANCHOR_JEV_URL points at the systemone endpoint.")
-    return parsed
+        return fail("JEV.RESPONSE_INVALID", "Jev response was not a JSON object", recoverable=True, action="Check PLAN_ANCHOR_JEV_URL points at the systemone endpoint.")
+    return Ok(parsed)
 
 
 def is_transient(exc: JudgeError) -> bool:
@@ -1377,7 +1531,7 @@ def halve_item(item: dict, min_item_chars: int, meta: dict) -> bool:
     return True
 
 
-def fit_request(body: dict, max_request_bytes: int, min_item_chars: int, meta: dict) -> None:
+def fit_request(body: dict, max_request_bytes: int, min_item_chars: int, meta: dict) -> Result[None, JudgeError]:
     """Pre-flight cap: shorten the item until the serialised request (state + questions) is under max_request_bytes.
 
     A state without an item (dedupe, rubric) has nothing to shorten: over the cap it is refused outright.
@@ -1389,64 +1543,69 @@ def fit_request(body: dict, max_request_bytes: int, min_item_chars: int, meta: d
             exc = JudgeError("JEV.CONTEXT_EXCEEDED", f"request is {size} bytes, over --max-request-bytes {max_request_bytes}, and has no item to shorten",
                              action="Shorten the anchor statement, quote or scope, or raise --max-request-bytes.")
             exc.meta = meta
-            raise exc
+            return Err(exc)
         if not halve_item(item, min_item_chars, meta):
             exc = JudgeError("JEV.CONTEXT_EXCEEDED",
                              f"request is {size} bytes with the item at {len(item['text'])} chars, over --max-request-bytes {max_request_bytes}; "
                              f"the item is already at --min-item-chars {min_item_chars}",
                              action="Shorten the evidence for this item (names, counts and summaries only), shorten the question overrides, or raise --max-request-bytes.")
             exc.meta = meta
-            raise exc
+            return Err(exc)
         size = len(encode_body(body))
     meta["request_bytes"] = size
+    return Ok(None)
 
 
 def judge_with_policy(body: dict, api_key: str, timeout: float, max_request_bytes: int, min_item_chars: int, questions: dict,
-                      shorten: bool = True) -> tuple:
-    """call_jev with the attempt policy and context handling. Returns (validated response, meta); raises JudgeError carrying .meta.
+                      shorten: bool = True) -> Result[tuple, JudgeError]:
+    """call_jev with the attempt policy and context handling. Returns Ok((validated response, meta)) or Err(JudgeError carrying .meta).
 
     - Transport-level failures (429, 529, 5xx, network, invalid response): up to MAX_ATTEMPTS attempts; the first
       retry waits Retry-After when given, else RETRY_DELAYS[0]; the next waits RETRY_DELAYS[1].
     - Context overflow (4xx mentioning max_tokens / token ... exceed): halve the item and retry until it fits or
       the item is at min_item_chars, then give up with JEV.CONTEXT_EXCEEDED. With shorten=False (the plan gate)
-      the item is never cut: the overflow is raised at once as PLAN.TOO_LARGE.
-    - Everything else (401, 422) is raised at once.
+      the item is never cut: the overflow is returned at once as PLAN.TOO_LARGE.
+    - Everything else (401, 422) is returned at once.
     """
     item = body["state"].get("item")
     meta = {"attempts": 0, "item_chars_sent": len(item["text"]) if item else 0, "item_shortened": False}
-    fit_request(body, max_request_bytes, min_item_chars, meta)
+    fitted = fit_request(body, max_request_bytes, min_item_chars, meta)
+    if isinstance(fitted, Err):
+        return fitted
     transient_failures = 0
     while True:
         meta["attempts"] += 1
         meta["item_chars_sent"] = len(item["text"]) if item else 0
-        try:
-            resp = call_jev(body, api_key, timeout)
-            return validate_response(resp, questions), meta
-        except JudgeError as exc:
-            exc.meta = meta
-            if exc.code == "JEV.CONTEXT_EXCEEDED" and item is not None and not shorten:
-                final = plan_too_large(item, f"Jev rejected it for context size ({exc})")
-                final.meta = dict(meta, **final.meta)
-                raise final
-            if exc.code == "JEV.CONTEXT_EXCEEDED":
-                if item is not None and halve_item(item, min_item_chars, meta):
-                    meta["request_bytes"] = len(encode_body(body))
-                    continue
-                final = JudgeError("JEV.CONTEXT_EXCEEDED",
-                                   f"Jev rejected the request for context size with the item at {len(item['text']) if item else 0} chars "
-                                   f"(floor --min-item-chars {min_item_chars}): {exc}",
-                                   action="Shorten the evidence for this item: sprint report and PR body summaries, file names and counts only; or lower --min-item-chars.",
-                                   status=exc.status)
-                final.meta = meta
-                raise final
-            if is_transient(exc) and transient_failures < MAX_ATTEMPTS - 1:
-                delay = RETRY_DELAYS[min(transient_failures, len(RETRY_DELAYS) - 1)]
-                if transient_failures == 0 and exc.retry_after is not None:
-                    delay = exc.retry_after
-                transient_failures += 1
-                _sleep(delay)
+        answered = call_jev(body, api_key, timeout)
+        if isinstance(answered, Ok):
+            answered = validate_response(answered.value, questions)
+            if isinstance(answered, Ok):
+                return Ok((answered.value, meta))
+        exc = answered.error
+        exc.meta = meta
+        if exc.code == "JEV.CONTEXT_EXCEEDED" and item is not None and not shorten:
+            final = plan_too_large(item, f"Jev rejected it for context size ({exc.message})")
+            final.meta = dict(meta, **final.meta)
+            return Err(final)
+        if exc.code == "JEV.CONTEXT_EXCEEDED":
+            if item is not None and halve_item(item, min_item_chars, meta):
+                meta["request_bytes"] = len(encode_body(body))
                 continue
-            raise
+            final = JudgeError("JEV.CONTEXT_EXCEEDED",
+                               f"Jev rejected the request for context size with the item at {len(item['text']) if item else 0} chars "
+                               f"(floor --min-item-chars {min_item_chars}): {exc.message}",
+                               action="Shorten the evidence for this item: sprint report and PR body summaries, file names and counts only; or lower --min-item-chars.",
+                               status=exc.status)
+            final.meta = meta
+            return Err(final)
+        if is_transient(exc) and transient_failures < MAX_ATTEMPTS - 1:
+            delay = RETRY_DELAYS[min(transient_failures, len(RETRY_DELAYS) - 1)]
+            if transient_failures == 0 and exc.retry_after is not None:
+                delay = exc.retry_after
+            transient_failures += 1
+            _sleep(delay)
+            continue
+        return answered
 
 
 def is_probability(value) -> bool:
@@ -1492,21 +1651,21 @@ def answer_problem(ans, question) -> str:
     return None
 
 
-def validate_response(resp: dict, questions: dict) -> dict:
+def validate_response(resp: dict, questions: dict) -> Result[dict, JudgeError]:
     if not isinstance(resp, dict) or not isinstance(resp.get("answers"), dict):
-        raise JudgeError("JEV.RESPONSE_INVALID", "Jev response has no 'answers' object", recoverable=True,
-                         action="Retry; if it repeats, check PLAN_ANCHOR_JEV_URL and the model name.")
+        return fail("JEV.RESPONSE_INVALID", "Jev response has no 'answers' object", recoverable=True,
+                    action="Retry; if it repeats, check PLAN_ANCHOR_JEV_URL and the model name.")
     answers = resp["answers"]
     if set(answers) != set(questions):
         missing, extra = sorted(set(questions) - set(answers)), sorted(set(answers) - set(questions))
-        raise JudgeError("JEV.RESPONSE_INVALID", f"Jev answer ids differ from the questions (missing {missing}, unexpected {extra})", recoverable=True,
-                         action="Retry; if it repeats, check the question ids in the overrides.")
+        return fail("JEV.RESPONSE_INVALID", f"Jev answer ids differ from the questions (missing {missing}, unexpected {extra})", recoverable=True,
+                    action="Retry; if it repeats, check the question ids in the overrides.")
     for qid, q in questions.items():
         problem = answer_problem(answers[qid], q)
         if problem:
-            raise JudgeError("JEV.RESPONSE_INVALID", f"invalid answer for {qid}: {problem}", recoverable=True,
-                             action="Retry; if it repeats, the question set or the model changed shape.")
-    return resp
+            return fail("JEV.RESPONSE_INVALID", f"invalid answer for {qid}: {problem}", recoverable=True,
+                        action="Retry; if it repeats, the question set or the model changed shape.")
+    return Ok(resp)
 
 
 def answer_choice(ans: dict) -> tuple:
@@ -1623,43 +1782,44 @@ def explain(verdict: str, min_conf: float, gate: str) -> str:
     }[verdict]
 
 
-def read_item(args) -> dict:
+def read_item(args) -> Result[dict, JudgeError]:
     if args.item_file:
         try:
             text = pathlib.Path(args.item_file).read_text(encoding="utf-8")
         except FileNotFoundError:
-            raise JudgeError("INPUT.MISSING", f"item file not found: {args.item_file}", action="Write the bead or work description to a file and pass it with --item-file.")
+            return fail("INPUT.MISSING", f"item file not found: {args.item_file}", action="Write the bead or work description to a file and pass it with --item-file.")
         except (OSError, UnicodeDecodeError) as exc:
-            raise JudgeError("INPUT.MALFORMED", f"item file could not be read: {exc}", action="Pass a readable UTF-8 text file with --item-file.")
+            return fail("INPUT.MALFORMED", f"item file could not be read: {exc}", action="Pass a readable UTF-8 text file with --item-file.")
     else:
         text = sys.stdin.read()
     if not text.strip():
-        raise JudgeError("INPUT.EMPTY", "item text is empty", action="Pass the bead or work description via --item-file.")
+        return fail("INPUT.EMPTY", "item text is empty", action="Pass the bead or work description via --item-file.")
     item = {"id": args.item_id, "title": args.item_title or "", "truncated": False, "source": args.item_file or "stdin"}
     if getattr(args, "gate", "") == "plan":
         # A plan bead is never truncated; cmd_judge fits it (fit_plan_item) once the anchors and questions are known.
         item["text"] = text
-        return item
+        return Ok(item)
     if len(text) > args.max_item_chars:
         text = text[: args.max_item_chars] + TRUNCATION_MARKER
         item["truncated"] = True
     item["text"] = text
-    return item
+    return Ok(item)
 
 
-def check_api_key(api_key: str) -> None:
+def check_api_key(api_key: str) -> Result[None, JudgeError]:
     if not api_key:
-        raise JudgeError("AUTH.CREDENTIALS", "TYPESAFE_API_KEY is not set", action="Export TYPESAFE_API_KEY, or use --dry-run / --answers-file.")
+        return fail("AUTH.CREDENTIALS", "TYPESAFE_API_KEY is not set", action="Export TYPESAFE_API_KEY, or use --dry-run / --answers-file.")
     if not api_key.isascii() or any(ord(c) <= 32 or ord(c) == 127 for c in api_key):
-        raise JudgeError("AUTH.CREDENTIALS", "TYPESAFE_API_KEY has invalid formatting (whitespace, control or non-ASCII characters)",
-                         action="Re-export TYPESAFE_API_KEY with the key exactly as issued.")
+        return fail("AUTH.CREDENTIALS", "TYPESAFE_API_KEY has invalid formatting (whitespace, control or non-ASCII characters)",
+                    action="Re-export TYPESAFE_API_KEY with the key exactly as issued.")
+    return Ok(None)
 
 
-def judge_context(args, rec: dict) -> dict:
+def judge_context(args, rec: dict) -> Result[dict, JudgeError]:
     """Shared pre-flight for judge and check-fixtures: options, question set, overrides, fixture answers, key and opt-in."""
     threshold = getattr(args, "threshold", DEFAULT_THRESHOLD)
     if not (0.0 <= threshold <= 1.0):
-        raise JudgeError("VALIDATION.INPUT", f"--threshold must be between 0 and 1, got {threshold}")
+        return fail("VALIDATION.INPUT", f"--threshold must be between 0 and 1, got {threshold}")
     ctx = {
         "gate": args.gate, "model": getattr(args, "model", DEFAULT_MODEL), "threshold": threshold,
         "timeout": getattr(args, "timeout", 30.0),
@@ -1674,16 +1834,33 @@ def judge_context(args, rec: dict) -> dict:
         ctx["max_request_bytes"] = DEFAULT_MAX_REQUEST_BYTES if args.gate == "plan" else DEFAULT_MAX_REQUEST_BYTES_DEV
     for name in ("max_item_chars", "max_request_bytes", "min_item_chars", "max_code_lines"):
         if ctx[name] < 1:
-            raise JudgeError("VALIDATION.INPUT", f"--{name.replace('_', '-')} must be a positive integer, got {ctx[name]}")
-    ctx["base_qs"] = load_question_set(args.gate, getattr(args, "questions", ""))
-    ctx["answers_fixture"] = load_answers_fixture(getattr(args, "answers_file", ""), "anchor id")
+            return fail("VALIDATION.INPUT", f"--{name.replace('_', '-')} must be a positive integer, got {ctx[name]}")
+    loaded = load_question_set(args.gate, getattr(args, "questions", ""))
+    if isinstance(loaded, Err):
+        return loaded
+    ctx["base_qs"] = loaded.value
+    loaded = load_answers_fixture(getattr(args, "answers_file", ""), "anchor id")
+    if isinstance(loaded, Err):
+        return loaded
+    ctx["answers_fixture"] = loaded.value
     overrides_file = getattr(args, "overrides_file", "")
-    ctx["bead_overrides"] = load_json(overrides_file, "overrides file") if overrides_file else {}
+    ctx["bead_overrides"] = {}
+    if overrides_file:
+        loaded = load_json(overrides_file, "overrides file")
+        if isinstance(loaded, Err):
+            return loaded
+        ctx["bead_overrides"] = loaded.value
     if not isinstance(ctx["bead_overrides"], dict):
-        raise JudgeError("INPUT.MALFORMED", "overrides file must be an object keyed by anchor id")
+        return fail("INPUT.MALFORMED", "overrides file must be an object keyed by anchor id")
     ctx["live"] = not ctx["dry_run"] and ctx["answers_fixture"] is None
-    ctx["api_key"] = remote_preflight(args, "The anchor statement and the item text") if ctx["live"] else os.environ.get("TYPESAFE_API_KEY", "").strip()
-    return ctx
+    if ctx["live"]:
+        cleared = remote_preflight(args, "The anchor statement and the item text")
+        if isinstance(cleared, Err):
+            return cleared
+        ctx["api_key"] = cleared.value
+    else:
+        ctx["api_key"] = os.environ.get("TYPESAFE_API_KEY", "").strip()
+    return Ok(ctx)
 
 
 def confirm_enabled(args) -> bool:
@@ -1695,43 +1872,51 @@ def confirm_enabled(args) -> bool:
     return os.environ.get("PLAN_ANCHOR_CONFIRM_NEAR", "1") != "0"
 
 
-def remote_preflight(args, what: str) -> str:
+def remote_preflight(args, what: str) -> Result[str, JudgeError]:
     """Key and opt-in checks shared by every live Jev call; returns the API key. Nothing leaves the machine before this passes."""
     api_key = os.environ.get("TYPESAFE_API_KEY", "").strip()
-    check_api_key(api_key)
+    checked = check_api_key(api_key)
+    if isinstance(checked, Err):
+        return checked
     allow_remote = os.environ.get("PLAN_ANCHOR_ALLOW_REMOTE_JUDGE") == "1" or bool(getattr(args, "allow_remote", False))
     if not allow_remote:
-        raise JudgeError("POLICY.REMOTE_JUDGE_DISABLED",
-                         f"Sending plan text to TypeSafe is disabled. {what} would leave this machine.",
-                         action="Set PLAN_ANCHOR_ALLOW_REMOTE_JUDGE=1 (or pass --allow-remote) once the data-retention question is settled for this plan; use --dry-run to inspect the request instead.")
-    return api_key
+        return fail("POLICY.REMOTE_JUDGE_DISABLED",
+                    f"Sending plan text to TypeSafe is disabled. {what} would leave this machine.",
+                    action="Set PLAN_ANCHOR_ALLOW_REMOTE_JUDGE=1 (or pass --allow-remote) once the data-retention question is settled for this plan; use --dry-run to inspect the request instead.")
+    return Ok(api_key)
 
 
-def load_answers_fixture(path: str, keyed_by: str):
-    """A fixture of Jev answers keyed by id (or '*'); None when no path is given."""
+def load_answers_fixture(path: str, keyed_by: str) -> Result[Any, JudgeError]:
+    """A fixture of Jev answers keyed by id (or '*'); Ok(None) when no path is given."""
     if not path:
-        return None
-    fixture = load_json(path, "answers fixture")
+        return Ok(None)
+    loaded = load_json(path, "answers fixture")
+    if isinstance(loaded, Err):
+        return loaded
+    fixture = loaded.value
     if not isinstance(fixture, dict):
-        raise JudgeError("INPUT.MALFORMED", f"answers fixture must be an object keyed by {keyed_by} (or '*')")
-    return fixture
+        return fail("INPUT.MALFORMED", f"answers fixture must be an object keyed by {keyed_by} (or '*')")
+    return Ok(fixture)
 
 
-def load_simple_question_set(name: str, required: tuple) -> dict:
+def load_simple_question_set(name: str, required: tuple) -> Result[dict, JudgeError]:
     """A question set without roles (dedupe, testability): every named question must be present."""
     path = str(QUESTIONS_DIR / f"{name}.json")
-    qs = load_json(path, f"question set '{name}'")
+    loaded = load_json(path, f"question set '{name}'")
+    if isinstance(loaded, Err):
+        return loaded
+    qs = loaded.value
     questions = qs.get("questions") if isinstance(qs, dict) else None
     if not isinstance(questions, dict) or any(q not in questions for q in required):
-        raise JudgeError("INPUT.MALFORMED", f"question set {path} must hold the questions {list(required)}",
-                         action=f"Restore assets/questions/{name}.json from the skill.")
-    return qs
+        return fail("INPUT.MALFORMED", f"question set {path} must hold the questions {list(required)}",
+                    action=f"Restore assets/questions/{name}.json from the skill.")
+    return Ok(qs)
 
 
-def ask_jev_once(args, api_key: str, body: dict, questions: dict, fixture, fixture_keys: tuple) -> tuple:
+def ask_jev_once(args, api_key: str, body: dict, questions: dict, fixture, fixture_keys: tuple) -> Result[tuple, JudgeError]:
     """One request for the item-less subcommands (dedupe, rubric): fixture answers when given, else the live policy.
 
-    Returns (validated response, meta). Raises JudgeError (FIXTURE.MISSING when the fixture lacks every key).
+    Returns Ok((validated response, meta)), or Err(JudgeError) (FIXTURE.MISSING when the fixture lacks every key).
     """
     if fixture is not None:
         fx = None
@@ -1740,26 +1925,52 @@ def ask_jev_once(args, api_key: str, body: dict, questions: dict, fixture, fixtu
             if fx is not None:
                 break
         if fx is None:
-            raise JudgeError("FIXTURE.MISSING", f"answers fixture has no entry for {fixture_keys[0]} (or '*')")
-        return validate_response({"model": "fixture", "answers": fx}, questions), {"attempts": 1}
+            return fail("FIXTURE.MISSING", f"answers fixture has no entry for {fixture_keys[0]} (or '*')")
+        checked = validate_response({"model": "fixture", "answers": fx}, questions)
+        if isinstance(checked, Err):
+            return checked
+        return Ok((checked.value, {"attempts": 1}))
     return judge_with_policy(body, api_key, getattr(args, "timeout", 30.0), DEFAULT_MAX_REQUEST_BYTES, DEFAULT_MIN_ITEM_CHARS, questions)
 
 
-def prepare_question_sets(ctx: dict, anchors: list) -> list:
+def prepare_question_sets(ctx: dict, anchors: list) -> Result[list, JudgeError]:
     """Resolve every anchor's question set before any call, so a bad override aborts before anything leaves the machine."""
     prepared = []
     for a in anchors:
         record_override = (a.get("question_overrides") or {}).get(ctx["gate"]) or {}
         bead_override = ctx["bead_overrides"].get(a["id"]) or {}
-        qs = merge_overrides(merge_overrides(ctx["base_qs"], record_override), bead_override)
-        check_roles(qs, f"question set for {a['id']} after overrides")
+        merged = merge_overrides(ctx["base_qs"], record_override)
+        if isinstance(merged, Err):
+            return merged
+        merged = merge_overrides(merged.value, bead_override)
+        if isinstance(merged, Err):
+            return merged
+        qs = merged.value
+        checked = check_roles(qs, f"question set for {a['id']} after overrides")
+        if isinstance(checked, Err):
+            return checked
         overridden = any(o.get(k) for o in (record_override, bead_override) for k in ("questions", "roles"))
         prepared.append((a, qs, bool(overridden)))
-    return prepared
+    return Ok(prepared)
 
 
-def judge_entries(ctx: dict, prepared: list, item: dict, fixture_key) -> tuple:
-    """One Jev request per anchor. Returns (results, requests_out, model_answered)."""
+def _first_answer(ctx: dict, a: dict, qs: dict, body: dict, meta: dict, fixture_key) -> Result[tuple, JudgeError]:
+    """The first answer for one anchor: the fixture entry when a fixture is given, else the live policy. Ok((response, meta))."""
+    if ctx["answers_fixture"] is not None:
+        fx = ctx["answers_fixture"].get(fixture_key(a)) or ctx["answers_fixture"].get("*")
+        if fx is None:
+            return fail("FIXTURE.MISSING", f"answers fixture has no entry for {fixture_key(a)} (or '*')")
+        meta["attempts"] = 1
+        checked = validate_response({"model": "fixture", "answers": fx}, qs["questions"])
+        if isinstance(checked, Err):
+            return checked
+        return Ok((checked.value, meta))
+    return judge_with_policy(body, ctx["api_key"], ctx["timeout"], ctx["max_request_bytes"], ctx["min_item_chars"], qs["questions"],
+                             shorten=ctx["gate"] != "plan")
+
+
+def judge_entries(ctx: dict, prepared: list, item: dict, fixture_key) -> Result[tuple, JudgeError]:
+    """One Jev request per anchor. Returns Ok((results, requests_out, model_answered)); Err only for an ABORT_CODES error."""
     results, requests_out, model_answered = [], [], None
     for a, qs, overridden in prepared:
         body = {"model": ctx["model"], "state": build_state(a, item), "questions": qs["questions"]}
@@ -1783,35 +1994,29 @@ def judge_entries(ctx: dict, prepared: list, item: dict, fixture_key) -> tuple:
             results.append(entry)
             continue
         if ctx["dry_run"]:
-            try:
-                fit_request(body, ctx["max_request_bytes"], ctx["min_item_chars"], meta)
+            fitted = fit_request(body, ctx["max_request_bytes"], ctx["min_item_chars"], meta)
+            if isinstance(fitted, Ok):
                 entry.update({"verdict": None, "answers": None, "min_confidence": None, "explanation": "dry run"})
-            except JudgeError as exc:
+            else:
                 entry.update({"verdict": None, "answers": None, "min_confidence": None, "explanation": "dry run; request does not fit",
-                              "error": exc.to_json()["error"]})
+                              "error": fitted.error.to_json()["error"]})
             requests_out.append(body)
             entry.update(meta)
             results.append(entry)
             continue
-        try:
-            if ctx["answers_fixture"] is not None:
-                fx = ctx["answers_fixture"].get(fixture_key(a)) or ctx["answers_fixture"].get("*")
-                if fx is None:
-                    raise JudgeError("FIXTURE.MISSING", f"answers fixture has no entry for {fixture_key(a)} (or '*')")
-                meta["attempts"] = 1
-                resp = validate_response({"model": "fixture", "answers": fx}, qs["questions"])
-            else:
-                resp, meta = judge_with_policy(body, ctx["api_key"], ctx["timeout"], ctx["max_request_bytes"], ctx["min_item_chars"], qs["questions"],
-                                               shorten=ctx["gate"] != "plan")
+        first = _first_answer(ctx, a, qs, body, meta, fixture_key)
+        if isinstance(first, Ok):
+            resp, meta = first.value
             model_answered = resp.get("model", model_answered)
             verdict, min_conf = decide(resp["answers"], qs["roles"], ctx["threshold"], entry["kind"])
             entry["leaning"] = leaning_of(resp["answers"], qs["roles"], entry["kind"])
             if ctx["answers_fixture"] is None and ctx.get("confirm", False) and near_threshold(resp["answers"], qs["roles"], ctx["threshold"], entry["kind"]):
                 # Near the threshold a single answer is noise (8/50 identical re-runs flipped): ask once more, require agreement.
                 entry["near_threshold"] = True
-                try:
-                    resp2, meta2 = judge_with_policy(body, ctx["api_key"], ctx["timeout"], ctx["max_request_bytes"], ctx["min_item_chars"], qs["questions"],
-                                                     shorten=ctx["gate"] != "plan")
+                second = judge_with_policy(body, ctx["api_key"], ctx["timeout"], ctx["max_request_bytes"], ctx["min_item_chars"], qs["questions"],
+                                           shorten=ctx["gate"] != "plan")
+                if isinstance(second, Ok):
+                    resp2, meta2 = second.value
                     meta["attempts"] += meta2.get("attempts", 0)
                     verdict2, min_conf2 = decide(resp2["answers"], qs["roles"], ctx["threshold"], entry["kind"])
                     if verdict2 == verdict:
@@ -1819,18 +2024,20 @@ def judge_entries(ctx: dict, prepared: list, item: dict, fixture_key) -> tuple:
                     else:
                         entry.update({"unstable": True, "answers_second": resp2["answers"], "verdict_first": verdict, "verdict_second": verdict2})
                         verdict, min_conf = "underspecified", min(min_conf, min_conf2)
-                except JudgeError as exc2:
+                else:
+                    exc2 = second.error
                     if exc2.code in ABORT_CODES:
-                        raise
+                        return second
                     meta["attempts"] += (exc2.meta or {}).get("attempts", 0)
                     entry["confirm_error"] = exc2.to_json()["error"]
             entry.update({"verdict": verdict, "answers": resp["answers"], "min_confidence": round(min_conf, 3),
                           "explanation": explain(verdict, min_conf, ctx["gate"]), "usage": resp.get("usage")})
             if verdict == "underspecified":
                 entry["low_questions"] = low_questions_of(entry, qs["roles"], ctx["threshold"])
-        except JudgeError as exc:
+        else:
+            exc = first.error
             if exc.code in ABORT_CODES:
-                raise
+                return first
             meta = exc.meta or meta
             error = exc.to_json()["error"]
             if exc.data:
@@ -1840,7 +2047,7 @@ def judge_entries(ctx: dict, prepared: list, item: dict, fixture_key) -> tuple:
         entry.update({k: v for k, v in meta.items() if k != "size"})
         results.append(entry)
     results.sort(key=lambda r: (SEVERITY.get(r["verdict"] or "error", 99), r["anchor_id"]))
-    return results, requests_out, model_answered
+    return Ok((results, requests_out, model_answered))
 
 
 def assemble_run(ctx: dict, rec: dict, anchors_path: str, item: dict, results: list, requests_out: list, model_answered) -> dict:
@@ -1900,25 +2107,52 @@ def default_run_dir(args) -> pathlib.Path:
     return pathlib.Path(args.run_dir or str(pathlib.Path(args.anchors).parent / "anchor-runs"))
 
 
-def cmd_judge(args) -> dict:
-    rec = load_record(args.anchors)
-    require_valid(rec)
+def _valid_record(path: str) -> Result[dict, JudgeError]:
+    """Load anchors.json and refuse it when validate would report problems."""
+    loaded = load_record(path)
+    if isinstance(loaded, Err):
+        return loaded
+    checked = require_valid(loaded.value)
+    if isinstance(checked, Err):
+        return checked
+    return loaded
+
+
+def cmd_judge(args) -> Result[dict, JudgeError]:
+    loaded = _valid_record(args.anchors)
+    if isinstance(loaded, Err):
+        return loaded
+    rec = loaded.value
     if args.all:
         anchors = [a for a in rec["anchors"] if a["status"] in JUDGED_STATUSES]
     else:
         if not args.anchor:
-            raise JudgeError("VALIDATION.INPUT", "pass --anchor ID (repeatable) or --all")
-        anchors = [find_anchor(rec, aid) for aid in dict.fromkeys(args.anchor)]
+            return fail("VALIDATION.INPUT", "pass --anchor ID (repeatable) or --all")
+        anchors = []
+        for aid in dict.fromkeys(args.anchor):
+            found = find_anchor(rec, aid)
+            if isinstance(found, Err):
+                return found
+            anchors.append(found.value)
         if not args.include_unlocked:
             unlocked = [a["id"] for a in anchors if a.get("status") not in JUDGED_STATUSES]
             if unlocked:
-                raise JudgeError("ANCHOR.NOT_LOCKED", f"anchors not locked or promoted: {', '.join(unlocked)}",
-                                 action="Lock the anchor first, or pass --include-unlocked to judge a proposed or retired anchor deliberately.")
+                return fail("ANCHOR.NOT_LOCKED", f"anchors not locked or promoted: {', '.join(unlocked)}",
+                            action="Lock the anchor first, or pass --include-unlocked to judge a proposed or retired anchor deliberately.")
     if not anchors:
-        raise JudgeError("ANCHOR.NONE", "no locked anchors to judge", action="Lock at least one anchor, or pass --anchor.")
-    ctx = judge_context(args, rec)
-    item = read_item(args)
-    prepared = prepare_question_sets(ctx, anchors)
+        return fail("ANCHOR.NONE", "no locked anchors to judge", action="Lock at least one anchor, or pass --anchor.")
+    built = judge_context(args, rec)
+    if isinstance(built, Err):
+        return built
+    ctx = built.value
+    loaded = read_item(args)
+    if isinstance(loaded, Err):
+        return loaded
+    item = loaded.value
+    resolved = prepare_question_sets(ctx, anchors)
+    if isinstance(resolved, Err):
+        return resolved
+    prepared = resolved.value
     if ctx["gate"] == "plan":
         # Checked for every anchor before any request, so an oversize plan bead sends nothing and is never shortened.
         def misfit(text):
@@ -1930,24 +2164,40 @@ def cmd_judge(args) -> dict:
                 if size > ctx["max_request_bytes"]:
                     return f"with {a['id']} and its questions the request is {size} bytes, over --max-request-bytes {ctx['max_request_bytes']}"
             return None
-        fit_plan_item(item, misfit, ctx["max_code_lines"])
-    results, requests_out, model_answered = judge_entries(ctx, prepared, item, lambda a: a["id"])
+        fitted = fit_plan_item(item, misfit, ctx["max_code_lines"])
+        if isinstance(fitted, Err):
+            return fitted
+    judged = judge_entries(ctx, prepared, item, lambda a: a["id"])
+    if isinstance(judged, Err):
+        return judged
+    results, requests_out, model_answered = judged.value
     run = assemble_run(ctx, rec, args.anchors, item, results, requests_out, model_answered)
     write_run(run, args.out, default_run_dir(args))
-    return {"success": True, "data": run, "error": None}
+    return Ok({"success": True, "data": run, "error": None})
 
 
-def cmd_check_fixtures(args) -> dict:
-    rec = load_record(args.anchors)
-    require_valid(rec)
+def cmd_check_fixtures(args) -> Result[dict, JudgeError]:
+    loaded = _valid_record(args.anchors)
+    if isinstance(loaded, Err):
+        return loaded
+    rec = loaded.value
     if args.all:
         anchors = [a for a in rec["anchors"] if a.get("status") != "retired"]
     elif args.id:
-        anchors = [find_anchor(rec, args.id)]
+        found = find_anchor(rec, args.id)
+        if isinstance(found, Err):
+            return found
+        anchors = [found.value]
     else:
-        raise JudgeError("VALIDATION.INPUT", "pass --id ANC-NNN or --all")
-    ctx = judge_context(args, rec)
-    prepared = prepare_question_sets(ctx, anchors)
+        return fail("VALIDATION.INPUT", "pass --id ANC-NNN or --all")
+    built = judge_context(args, rec)
+    if isinstance(built, Err):
+        return built
+    ctx = built.value
+    resolved = prepare_question_sets(ctx, anchors)
+    if isinstance(resolved, Err):
+        return resolved
+    prepared = resolved.value
     fixtures_dir = (pathlib.Path(args.run_dir) / "fixtures") if args.run_dir else None
     checks, runs, written = [], [], []
     for a, qs, overridden in prepared:
@@ -1958,7 +2208,10 @@ def cmd_check_fixtures(args) -> dict:
                     continue
                 item = {"id": f"fixture:{a['id']}:{kind}:{n}", "title": "fixture", "text": sentence.strip(), "truncated": False, "source": "fixtures"}
                 key = f"{a['id']}:{kind}:{n}"
-                results, requests_out, model_answered = judge_entries(ctx, [(a, qs, overridden)], item, lambda _a, key=key: key)
+                judged = judge_entries(ctx, [(a, qs, overridden)], item, lambda _a, key=key: key)
+                if isinstance(judged, Err):
+                    return judged
+                results, requests_out, model_answered = judged.value
                 run = assemble_run(ctx, rec, args.anchors, item, results, requests_out, model_answered)
                 verdict = results[0]["verdict"]
                 check = {"anchor_id": a["id"], "kind": kind, "index": n, "sentence": item["text"], "verdict": verdict,
@@ -1972,8 +2225,8 @@ def cmd_check_fixtures(args) -> dict:
                 checks.append(check)
                 runs.append(run)
     if not checks:
-        raise JudgeError("FIXTURE.NONE", "no fixture sentences recorded on the selected anchors",
-                         action="Add fixtures with `update --id ANC-NNN --fixture-pass ... --fixture-fail ...`.")
+        return fail("FIXTURE.NONE", "no fixture sentences recorded on the selected anchors",
+                    action="Add fixtures with `update --id ANC-NNN --fixture-pass ... --fixture-fail ...`.")
     mismatches = [f"{c['anchor_id']}:{c['kind']}:{c['index']}" for c in checks if c["expected_ok"] is False]
     data = {"gate": args.gate, "dry_run": ctx["dry_run"], "fixture": ctx["answers_fixture"] is not None,
             "checks": checks, "mismatches": mismatches, "pass": not mismatches and not ctx["dry_run"],
@@ -1983,39 +2236,63 @@ def cmd_check_fixtures(args) -> dict:
         data["requests"] = [b for r in runs for b in r.get("requests", [])]
         data["totals"] = {"requests": len(data["requests"]), "bytes": sum(len(encode_body(b)) for b in data["requests"]),
                           "max_request_bytes": ctx["max_request_bytes"]}
-    return {"success": True, "data": data, "error": None}
+    return Ok({"success": True, "data": data, "error": None})
 
 
 # --------------------------------------------------------------------------- #
 # anchor quality: lint, dedupe, rubric (no run files; nothing leaves the machine without the opt-in)
 # --------------------------------------------------------------------------- #
-def select_anchors(rec: dict, anchor_id: str, all_: bool, what: str) -> list:
+def live_anchors(rec: dict) -> Result[list, JudgeError]:
+    """Every non-retired anchor of the record."""
+    listed = anchor_list(rec)
+    if isinstance(listed, Err):
+        return listed
+    return Ok([a for a in listed.value if isinstance(a, dict) and a.get("status") != "retired"])
+
+
+def select_anchors(rec: dict, anchor_id: str, all_: bool, what: str) -> Result[list, JudgeError]:
     """--id picks one anchor (any status); --all, or neither flag, picks every non-retired anchor."""
     if anchor_id and all_:
-        raise JudgeError("VALIDATION.INPUT", f"pass --id or --all to {what}, not both")
+        return fail("VALIDATION.INPUT", f"pass --id or --all to {what}, not both")
     if anchor_id:
-        return [find_anchor(rec, anchor_id)]
-    return [a for a in anchor_list(rec) if isinstance(a, dict) and a.get("status") != "retired"]
+        found = find_anchor(rec, anchor_id)
+        if isinstance(found, Err):
+            return found
+        return Ok([found.value])
+    return live_anchors(rec)
 
 
-def cmd_lint(args) -> dict:
-    rec = load_record(args.anchors)
-    anchors = select_anchors(rec, args.id, args.all, "lint")
-    rows = [{"id": a.get("id"), "warnings": lint_statement(a.get("statement") or "", anchor_quote(a), a.get("source_type") or "ANC")} for a in anchors]
+def cmd_lint(args) -> Result[dict, JudgeError]:
+    loaded = load_record(args.anchors)
+    if isinstance(loaded, Err):
+        return loaded
+    selected = select_anchors(loaded.value, args.id, args.all, "lint")
+    if isinstance(selected, Err):
+        return selected
+    rows = [{"id": a.get("id"), "warnings": lint_statement(a.get("statement") or "", anchor_quote(a), a.get("source_type") or "ANC")}
+            for a in selected.value]
     count = sum(len(r["warnings"]) for r in rows)
-    return {"success": True, "data": {"anchors": rows, "warning_count": count, "path": args.anchors}, "error": None}
+    return Ok({"success": True, "data": {"anchors": rows, "warning_count": count, "path": args.anchors}, "error": None})
 
 
-def check_threshold(value: float, name: str = "--threshold") -> float:
+def check_threshold(value: float, name: str = "--threshold") -> Result[float, JudgeError]:
     if not (0.0 <= value <= 1.0):
-        raise JudgeError("VALIDATION.INPUT", f"{name} must be between 0 and 1, got {value}")
-    return value
+        return fail("VALIDATION.INPUT", f"{name} must be between 0 and 1, got {value}")
+    return Ok(value)
 
 
-def cmd_dedupe(args) -> dict:
-    rec = load_record(args.anchors)
-    anchors = [a for a in anchor_list(rec) if isinstance(a, dict) and a.get("status") != "retired"]
-    threshold = check_threshold(args.threshold)
+def cmd_dedupe(args) -> Result[dict, JudgeError]:
+    loaded = load_record(args.anchors)
+    if isinstance(loaded, Err):
+        return loaded
+    listed = live_anchors(loaded.value)
+    if isinstance(listed, Err):
+        return listed
+    anchors = listed.value
+    checked = check_threshold(args.threshold)
+    if isinstance(checked, Err):
+        return checked
+    threshold = checked.value
     pairs = []
     for i, a in enumerate(anchors):
         for b in anchors[i + 1:]:
@@ -2023,14 +2300,25 @@ def cmd_dedupe(args) -> dict:
             if score >= threshold:
                 pairs.append({"a": a.get("id"), "b": b.get("id"), "jaccard": round(score, 3), "field_a": fa, "field_b": fb})
     pairs.sort(key=lambda p: (-p["jaccard"], str(p["a"]), str(p["b"])))
-    fixture = load_answers_fixture(args.answers_file, "'<a>|<b>'")
+    loaded = load_answers_fixture(args.answers_file, "'<a>|<b>'")
+    if isinstance(loaded, Err):
+        return loaded
+    fixture = loaded.value
     jev_mode = bool(args.jev or fixture is not None)
     dry_run = bool(args.dry_run)
     data = {"threshold": threshold, "confidence_threshold": DEFAULT_THRESHOLD, "jev": jev_mode, "dry_run": dry_run, "fixture": fixture is not None,
             "anchors": len(anchors), "pairs": pairs, "likely_duplicates": []}
     if jev_mode:
-        qs = load_simple_question_set("dedupe", (DEDUPE_QUESTION,))
-        api_key = remote_preflight(args, "The anchor statements") if (pairs and not dry_run and fixture is None) else ""
+        loaded = load_simple_question_set("dedupe", (DEDUPE_QUESTION,))
+        if isinstance(loaded, Err):
+            return loaded
+        qs = loaded.value
+        api_key = ""
+        if pairs and not dry_run and fixture is None:
+            cleared = remote_preflight(args, "The anchor statements")
+            if isinstance(cleared, Err):
+                return cleared
+            api_key = cleared.value
         by_id = {a.get("id"): a for a in anchors}
         requests_out = []
         for pair in pairs:
@@ -2039,20 +2327,22 @@ def cmd_dedupe(args) -> dict:
                 "a": {"id": a.get("id"), "statement": a.get("statement") or ""},
                 "b": {"id": b.get("id"), "statement": b.get("statement") or ""}}}
             if dry_run:
-                try:
-                    fit_request(body, DEFAULT_MAX_REQUEST_BYTES, DEFAULT_MIN_ITEM_CHARS, {})
+                fitted = fit_request(body, DEFAULT_MAX_REQUEST_BYTES, DEFAULT_MIN_ITEM_CHARS, {})
+                if isinstance(fitted, Ok):
                     pair["jev"] = None
-                except JudgeError as exc:
-                    pair["jev"] = {"choice": None, "confidence": None, "error": exc.to_json()["error"]}
+                else:
+                    pair["jev"] = {"choice": None, "confidence": None, "error": fitted.error.to_json()["error"]}
                 requests_out.append(body)
                 continue
-            try:
-                resp, meta = ask_jev_once(args, api_key, body, qs["questions"], fixture, (f"{pair['a']}|{pair['b']}", "*"))
+            asked = ask_jev_once(args, api_key, body, qs["questions"], fixture, (f"{pair['a']}|{pair['b']}", "*"))
+            if isinstance(asked, Ok):
+                resp, meta = asked.value
                 choice, conf = answer_choice(resp["answers"][DEDUPE_QUESTION])
                 pair["jev"] = {"choice": choice, "confidence": round(conf, 3), "attempts": meta.get("attempts")}
-            except JudgeError as exc:
+            else:
+                exc = asked.error
                 if exc.code in ABORT_CODES:
-                    raise
+                    return asked
                 pair["jev"] = {"choice": None, "confidence": None, "attempts": (exc.meta or {}).get("attempts"), "error": exc.to_json()["error"]}
         if dry_run:
             data["requests"] = requests_out
@@ -2062,13 +2352,13 @@ def cmd_dedupe(args) -> dict:
             data["likely_duplicates"] = [p for p in pairs if p.get("jev") and p["jev"].get("choice") == "yes" and (p["jev"].get("confidence") or 0.0) >= DEFAULT_THRESHOLD]
     else:
         data["likely_duplicates"] = [p for p in pairs if p["jaccard"] >= LIKELY_DUPLICATE_JACCARD]
-    return {"success": True, "data": data, "error": None}
+    return Ok({"success": True, "data": data, "error": None})
 
 
 RUBRIC_QUESTIONS = ("single_constraint", "observable", "faithful", "scoped", "self_contained")
 
 
-def rubric_confirmation_outcome(responses: list, questions: tuple, threshold: float, lint_errors: list) -> dict:
+def rubric_confirmation_outcome(responses: list, questions: tuple, threshold: float, lint_errors: list) -> Result[dict, JudgeError]:
     """Classify two rubric confirmations and an optional tie-breaker.
 
     A third response is meaningful only when the first two choices disagree.
@@ -2078,7 +2368,7 @@ def rubric_confirmation_outcome(responses: list, questions: tuple, threshold: fl
     with no deterministic lint errors is testable.
     """
     if len(responses) not in (2, 3):
-        raise JudgeError("RUBRIC.CONFIRMATION", "rubric confirmation needs two responses and an optional third")
+        return fail("RUBRIC.CONFIRMATION", "rubric confirmation needs two responses and an optional third")
     disagreements = []
     unstable = []
     low = []
@@ -2090,7 +2380,7 @@ def rubric_confirmation_outcome(responses: list, questions: tuple, threshold: fl
         if first_disagrees:
             disagreements.append(qid)
             if len(cells) != 3:
-                raise JudgeError("RUBRIC.CONFIRMATION", f"third response missing for disagreement on {qid}")
+                return fail("RUBRIC.CONFIRMATION", f"third response missing for disagreement on {qid}")
             confident = {
                 choice: [index + 1 for index, (got, confidence) in enumerate(cells)
                          if got == choice and confidence >= threshold]
@@ -2133,41 +2423,85 @@ def rubric_confirmation_outcome(responses: list, questions: tuple, threshold: fl
         verdict = "needs_work"
     else:
         verdict = "testable"
-    return {
+    return Ok({
         "verdict": verdict,
         "failing": list(dict.fromkeys(failing + low + unstable + list(lint_errors))),
         "low_confidence": low,
         "unstable": unstable,
         "initial_disagreements": disagreements,
         "resolved": resolved,
-    }
+    })
 
 
-def rubric_fixture_response(fixture: dict, keys: tuple, index: int, questions: dict) -> dict:
+def rubric_fixture_response(fixture: dict, keys: tuple, index: int, questions: dict) -> Result[dict, JudgeError]:
     value = None
     for key in keys:
         value = fixture.get(key)
         if value is not None:
             break
     if value is None:
-        raise JudgeError("FIXTURE.MISSING", f"answers fixture has no entry for {keys[0]} (or '*')")
+        return fail("FIXTURE.MISSING", f"answers fixture has no entry for {keys[0]} (or '*')")
     if isinstance(value, list):
         if index >= len(value):
-            raise JudgeError("FIXTURE.MISSING", f"answers fixture has no confirmation {index + 1} for {keys[0]}")
+            return fail("FIXTURE.MISSING", f"answers fixture has no confirmation {index + 1} for {keys[0]}")
         value = value[index]
     return validate_response({"model": "fixture", "answers": value}, questions)
 
 
-def rubric_entries(args, candidates: list, threshold: float, dry_run: bool, fixture, what: str) -> tuple:
-    """Lint, then one Jev request per candidate {id, statement, quote, scope, source_type}. Returns (entries, requests_out).
+def _rubric_ask(args, api_key: str, body: dict, qs: dict, fixture, cid, index: int) -> Result[tuple, JudgeError]:
+    """Confirmation `index` for one candidate: the fixture entry when a fixture is given, else one live request. Ok((response, meta))."""
+    if fixture is not None:
+        response = rubric_fixture_response(fixture, (cid, "*"), index, qs["questions"])
+        if isinstance(response, Err):
+            return response
+        return Ok((response.value, {"attempts": 1}))
+    return ask_jev_once(args, api_key, body, qs["questions"], None, (cid, "*"))
+
+
+def _rubric_judgement(args, api_key: str, body: dict, qs: dict, fixture, cid, threshold: float, lint_errors: list) -> Result[tuple, JudgeError]:
+    """Two confirmations, a third on disagreement, then the outcome. Ok((responses, attempts, outcome))."""
+    responses = []
+    attempts = 0
+    for index in range(2):
+        asked = _rubric_ask(args, api_key, body, qs, fixture, cid, index)
+        if isinstance(asked, Err):
+            return asked
+        response, meta = asked.value
+        responses.append(response)
+        attempts += meta.get("attempts", 1)
+    first_choices = [answer_choice(responses[0]["answers"][qid])[0] for qid in qs["questions"]]
+    second_choices = [answer_choice(responses[1]["answers"][qid])[0] for qid in qs["questions"]]
+    if first_choices != second_choices:
+        asked = _rubric_ask(args, api_key, body, qs, fixture, cid, 2)
+        if isinstance(asked, Err):
+            return asked
+        response, meta = asked.value
+        responses.append(response)
+        attempts += meta.get("attempts", 1)
+    outcome = rubric_confirmation_outcome(responses, tuple(qs["questions"]), threshold, lint_errors)
+    if isinstance(outcome, Err):
+        return outcome
+    return Ok((responses, attempts, outcome.value))
+
+
+def rubric_entries(args, candidates: list, threshold: float, dry_run: bool, fixture, what: str) -> Result[tuple, JudgeError]:
+    """Lint, then one Jev request per candidate {id, statement, quote, scope, source_type}. Returns Ok((entries, requests_out)).
 
     An entry is testable when every rubric question has two confident yes
     confirmations and deterministic requirement-form lint has no error. A
     third call is made only when the first two choices disagree. Nothing is
     written to disk.
     """
-    qs = load_simple_question_set("testability", RUBRIC_QUESTIONS)
-    api_key = remote_preflight(args, what) if (candidates and not dry_run and fixture is None) else ""
+    loaded = load_simple_question_set("testability", RUBRIC_QUESTIONS)
+    if isinstance(loaded, Err):
+        return loaded
+    qs = loaded.value
+    api_key = ""
+    if candidates and not dry_run and fixture is None:
+        cleared = remote_preflight(args, what)
+        if isinstance(cleared, Err):
+            return cleared
+        api_key = cleared.value
     entries, requests_out = [], []
     for c in candidates:
         warnings = lint_statement(c["statement"], c["quote"], c.get("source_type") or "ANC")
@@ -2177,35 +2511,15 @@ def rubric_entries(args, candidates: list, threshold: float, dry_run: bool, fixt
         body = {"model": args.model, "questions": qs["questions"],
                 "state": {"anchor": {"statement": c["statement"], "quote": c["quote"], "scope": c.get("scope") or ""}}}
         if dry_run:
-            try:
-                fit_request(body, DEFAULT_MAX_REQUEST_BYTES, DEFAULT_MIN_ITEM_CHARS, {})
-            except JudgeError as exc:
-                entry["error"] = exc.to_json()["error"]
+            fitted = fit_request(body, DEFAULT_MAX_REQUEST_BYTES, DEFAULT_MIN_ITEM_CHARS, {})
+            if isinstance(fitted, Err):
+                entry["error"] = fitted.error.to_json()["error"]
             requests_out.extend((body, json.loads(json.dumps(body))))
             entries.append(entry)
             continue
-        try:
-            responses = []
-            attempts = 0
-            for index in range(2):
-                if fixture is not None:
-                    response = rubric_fixture_response(fixture, (c["id"], "*"), index, qs["questions"])
-                    meta = {"attempts": 1}
-                else:
-                    response, meta = ask_jev_once(args, api_key, body, qs["questions"], None, (c["id"], "*"))
-                responses.append(response)
-                attempts += meta.get("attempts", 1)
-            first_choices = [answer_choice(responses[0]["answers"][qid])[0] for qid in qs["questions"]]
-            second_choices = [answer_choice(responses[1]["answers"][qid])[0] for qid in qs["questions"]]
-            if first_choices != second_choices:
-                if fixture is not None:
-                    response = rubric_fixture_response(fixture, (c["id"], "*"), 2, qs["questions"])
-                    meta = {"attempts": 1}
-                else:
-                    response, meta = ask_jev_once(args, api_key, body, qs["questions"], None, (c["id"], "*"))
-                responses.append(response)
-                attempts += meta.get("attempts", 1)
-            outcome = rubric_confirmation_outcome(responses, tuple(qs["questions"]), threshold, lint_errors)
+        judged = _rubric_judgement(args, api_key, body, qs, fixture, c["id"], threshold, lint_errors)
+        if isinstance(judged, Ok):
+            responses, attempts, outcome = judged.value
             entry["answers"] = responses[0]["answers"]
             entry["answers_second"] = responses[1]["answers"]
             if len(responses) == 3:
@@ -2214,62 +2528,81 @@ def rubric_entries(args, candidates: list, threshold: float, dry_run: bool, fixt
             entry["confirmations"] = outcome
             entry["failing"] = outcome["failing"]
             entry["verdict"] = outcome["verdict"]
-        except JudgeError as exc:
+        else:
+            exc = judged.error
             if exc.code in ABORT_CODES:
-                raise
+                return judged
             entry["verdict"] = "error"
             entry["failing"] = [f"error: {exc.code}"] + lint_errors
             entry["error"] = exc.to_json()["error"]
         entries.append(entry)
-    return entries, requests_out
+    return Ok((entries, requests_out))
 
 
-def cmd_rubric(args) -> dict:
-    threshold = check_threshold(args.threshold)
-    fixture = load_answers_fixture(args.answers_file, "anchor id (or 'candidate')")
+def cmd_rubric(args) -> Result[dict, JudgeError]:
+    checked = check_threshold(args.threshold)
+    if isinstance(checked, Err):
+        return checked
+    threshold = checked.value
+    loaded = load_answers_fixture(args.answers_file, "anchor id (or 'candidate')")
+    if isinstance(loaded, Err):
+        return loaded
+    fixture = loaded.value
     if args.statement is not None:
         if args.anchors or args.id or args.all:
-            raise JudgeError("VALIDATION.INPUT", "pass either --statement/--quote/--scope for a candidate or --anchors with --id/--all, not both")
+            return fail("VALIDATION.INPUT", "pass either --statement/--quote/--scope for a candidate or --anchors with --id/--all, not both")
         statement = args.statement.strip()
         if not statement:
-            raise JudgeError("VALIDATION.INPUT", "statement cannot be empty")
+            return fail("VALIDATION.INPUT", "statement cannot be empty")
         quote = (args.quote or "").strip()
         if not quote:
-            raise JudgeError("VALIDATION.INPUT", "--quote is required with --statement: the rubric checks the statement against the user's words",
-                             action='Pass --quote "<the user\'s exact words>".')
+            return fail("VALIDATION.INPUT", "--quote is required with --statement: the rubric checks the statement against the user's words",
+                        action='Pass --quote "<the user\'s exact words>".')
         candidates = [{"id": "candidate", "statement": statement, "quote": quote, "scope": args.scope or "", "source_type": "ANC"}]
         path = None
     else:
         if not args.anchors:
-            raise JudgeError("VALIDATION.INPUT", "pass --anchors with --id/--all, or --statement/--quote/--scope for a candidate")
-        rec = load_record(args.anchors)
-        anchors = select_anchors(rec, args.id, args.all, "run the rubric")
+            return fail("VALIDATION.INPUT", "pass --anchors with --id/--all, or --statement/--quote/--scope for a candidate")
+        loaded = load_record(args.anchors)
+        if isinstance(loaded, Err):
+            return loaded
+        selected = select_anchors(loaded.value, args.id, args.all, "run the rubric")
+        if isinstance(selected, Err):
+            return selected
+        anchors = selected.value
         candidates = [{"id": a.get("id"), "statement": a.get("statement") or "", "quote": anchor_quote(a), "scope": a.get("scope") or "",
                        "source_type": a.get("source_type") or "ANC"} for a in anchors]
         path = args.anchors
     dry_run = bool(args.dry_run)
-    entries, requests_out = rubric_entries(args, candidates, threshold, dry_run, fixture, "The anchor statements, quotes and scopes")
+    judged = rubric_entries(args, candidates, threshold, dry_run, fixture, "The anchor statements, quotes and scopes")
+    if isinstance(judged, Err):
+        return judged
+    entries, requests_out = judged.value
     data = {"threshold": threshold, "dry_run": dry_run, "fixture": fixture is not None, "path": path, "anchors": entries,
             "needs_work": [e["id"] for e in entries if e["verdict"] != "testable"],
             "pass": bool(entries) and all(e["verdict"] == "testable" for e in entries) and not dry_run}
     if dry_run:
         data["requests"] = requests_out
         data["totals"] = {"requests": len(requests_out), "bytes": sum(len(encode_body(b)) for b in requests_out), "max_request_bytes": DEFAULT_MAX_REQUEST_BYTES}
-    return {"success": True, "data": data, "error": None}
+    return Ok({"success": True, "data": data, "error": None})
 
 
-def add_rubric_gate(args, statement: str, quote: str, source_type: str) -> dict:
+def add_rubric_gate(args, statement: str, quote: str, source_type: str) -> Result[dict, JudgeError]:
     """`add --rubric`: judge the candidate before writing; refuse with ANCHOR.NOT_TESTABLE unless --allow-untestable."""
-    fixture = load_answers_fixture(getattr(args, "answers_file", ""), "'candidate'")
+    loaded = load_answers_fixture(getattr(args, "answers_file", ""), "'candidate'")
+    if isinstance(loaded, Err):
+        return loaded
     candidate = {"id": "candidate", "statement": statement, "quote": quote, "scope": args.scope or "", "source_type": source_type}
-    entries, _ = rubric_entries(args, [candidate], DEFAULT_THRESHOLD, False, fixture, "The anchor statement, quote and scope")
-    entry = entries[0]
+    judged = rubric_entries(args, [candidate], DEFAULT_THRESHOLD, False, loaded.value, "The anchor statement, quote and scope")
+    if isinstance(judged, Err):
+        return judged
+    entry = judged.value[0][0]
     if entry["verdict"] != "testable" and not getattr(args, "allow_untestable", False):
-        raise JudgeError("ANCHOR.NOT_TESTABLE", f"the statement did not pass the testability rubric ({entry['verdict']}): " + ", ".join(entry["failing"]),
-                         recoverable=True,
-                         action="Reword the statement so each failing criterion holds (see references/anchor-capture.md), re-run `rubric --statement ... --quote ...`, "
-                                "or pass --allow-untestable to record it anyway.")
-    return entry
+        return fail("ANCHOR.NOT_TESTABLE", f"the statement did not pass the testability rubric ({entry['verdict']}): " + ", ".join(entry["failing"]),
+                    recoverable=True,
+                    action="Reword the statement so each failing criterion holds (see references/anchor-capture.md), re-run `rubric --statement ... --quote ...`, "
+                           "or pass --allow-untestable to record it anyway.")
+    return Ok(entry)
 
 
 # --------------------------------------------------------------------------- #
@@ -2326,8 +2659,11 @@ def report_lines(run: dict, include_passing: bool = False) -> list:
     return lines
 
 
-def cmd_report(args) -> dict:
-    run = load_run(args.run, "run file")
+def cmd_report(args) -> Result[Any, JudgeError]:
+    loaded = load_run(args.run, "run file")
+    if isinstance(loaded, Err):
+        return loaded
+    run = loaded.value
     s = run["summary"]
     head = [f"## Anchor gate: {run['gate']} · {run['item']['id']}" + (f" - {run['item']['title']}" if run['item'].get('title') else ""), "",
             f"Run `{run['run_id']}`, model `{run.get('model_answered') or run.get('model_requested')}`, threshold {run['threshold']}. "
@@ -2338,8 +2674,8 @@ def cmd_report(args) -> dict:
         body = ["All judged anchors are satisfied or not applicable.", ""]
     md = "\n".join(head + body).rstrip() + "\n"
     if args.format == "md":
-        return md
-    return {"success": True, "data": {"run_id": run["run_id"], "pass": s.get("pass"), "failing": s.get("failing"), "markdown": md}, "error": None}
+        return Ok(md)
+    return Ok({"success": True, "data": {"run_id": run["run_id"], "pass": s.get("pass"), "failing": s.get("failing"), "markdown": md}, "error": None})
 
 
 def collect_runs(paths: list) -> list:
@@ -2358,12 +2694,12 @@ def collect_runs(paths: list) -> list:
     return runs
 
 
-def cmd_coverage(args) -> dict:
+def cmd_coverage(args) -> Result[Any, JudgeError]:
     runs = collect_runs(args.runs)
     if args.gate:
         runs = [r for r in runs if r.get("gate") == args.gate]
     if not runs:
-        raise JudgeError("RUNS.NONE", "no run files found", action="Run `judge` first, or check the --runs path.")
+        return fail("RUNS.NONE", "no run files found", action="Run `judge` first, or check the --runs path.")
     # latest run per (gate, item) wins
     latest = {}
     for r in sorted(runs, key=lambda r: str(r.get("created_at", ""))):
@@ -2390,8 +2726,8 @@ def cmd_coverage(args) -> dict:
         lines.append("")
         if uncovered:
             lines.append("Uncovered anchors (no item satisfies them): " + ", ".join(uncovered))
-        return "\n".join(lines) + "\n"
-    return {"success": True, "data": data, "error": None}
+        return Ok("\n".join(lines) + "\n")
+    return Ok({"success": True, "data": data, "error": None})
 
 
 def diff_rank(verdict) -> int:
@@ -2401,14 +2737,20 @@ def diff_rank(verdict) -> int:
     return SEVERITY.get(verdict, -1)
 
 
-def cmd_diff(args) -> dict:
-    prev = load_run(args.prev, "previous run")
-    nxt = load_run(args.next, "next run")
+def cmd_diff(args) -> Result[dict, JudgeError]:
+    loaded = load_run(args.prev, "previous run")
+    if isinstance(loaded, Err):
+        return loaded
+    prev = loaded.value
+    loaded = load_run(args.next, "next run")
+    if isinstance(loaded, Err):
+        return loaded
+    nxt = loaded.value
     if prev["gate"] != nxt["gate"]:
-        raise JudgeError("RUNS.MISMATCH", "runs are for different gates")
+        return fail("RUNS.MISMATCH", "runs are for different gates")
     if prev["item"]["id"] != nxt["item"]["id"]:
-        raise JudgeError("RUNS.MISMATCH", f"runs are for different items ({prev['item']['id']} vs {nxt['item']['id']})",
-                         action="Diff two runs of the same bead or sprint.")
+        return fail("RUNS.MISMATCH", f"runs are for different items ({prev['item']['id']} vs {nxt['item']['id']})",
+                    action="Diff two runs of the same bead or sprint.")
     pv = {r["anchor_id"]: r for r in prev["results"]}
     nv = {r["anchor_id"]: r for r in nxt["results"]}
     changed, added, removed = [], [], []
@@ -2441,13 +2783,16 @@ def cmd_diff(args) -> dict:
                           "delta_chars": after_chars - before_chars, "grew": after_chars > before_chars},
             "pass_before": prev["summary"].get("pass"), "pass_after": nxt["summary"].get("pass")}
     if getattr(args, "expected", ""):
-        expected = load_json(args.expected, "expected verdicts")
+        loaded = load_json(args.expected, "expected verdicts")
+        if isinstance(loaded, Err):
+            return loaded
+        expected = loaded.value
         if not isinstance(expected, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in expected.items()):
-            raise JudgeError("INPUT.MALFORMED", "expected verdicts must be a JSON object {anchor_id: verdict}", action="Write the verdict a human reading gives each anchor.")
+            return fail("INPUT.MALFORMED", "expected verdicts must be a JSON object {anchor_id: verdict}", action="Write the verdict a human reading gives each anchor.")
         cells = []
         for aid, want in sorted(expected.items()):
             if want not in VERDICTS:
-                raise JudgeError("VALIDATION.INPUT", f"expected verdict for {aid} must be one of {VERDICTS}, got {want!r}")
+                return fail("VALIDATION.INPUT", f"expected verdict for {aid} must be one of {VERDICTS}, got {want!r}")
             p = pv[aid]["verdict"] if aid in pv else None
             n = nv[aid]["verdict"] if aid in nv else None
             cells.append({"anchor_id": aid, "expected": want, "prev": p, "next": n, "prev_matches": p == want, "next_matches": n == want})
@@ -2458,7 +2803,7 @@ def cmd_diff(args) -> dict:
             "still_off": [c["anchor_id"] for c in cells if not c["prev_matches"] and not c["next_matches"]],
             "all_match": all(c["next_matches"] for c in cells),
         }
-    return {"success": True, "data": data, "error": None}
+    return Ok({"success": True, "data": data, "error": None})
 
 
 # --------------------------------------------------------------------------- #
@@ -2694,10 +3039,7 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     fmt = getattr(args, "format", "json")
     try:
-        out = args.func(args)
-    except JudgeError as exc:
-        emit(exc.to_json())
-        return 2
+        outcome = args.func(args)
     except KeyboardInterrupt:
         emit({"success": False, "canceled": True, "aborted_by": "user", "data": None, "error": None})
         return 130
@@ -2705,6 +3047,10 @@ def main(argv=None) -> int:
         emit(JudgeError("SCRIPT.INTERNAL", f"{type(exc).__name__}: {exc}",
                         action="Report this with the command line; check the JSON inputs against references/anchor-document.md.").to_json())
         return 2
+    if isinstance(outcome, Err):
+        emit(outcome.error.to_json())
+        return 2
+    out = outcome.value
     emit(out, fmt)
     return exit_code_for(args.cmd, out)
 

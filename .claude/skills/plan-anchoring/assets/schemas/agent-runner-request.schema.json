@@ -19,10 +19,10 @@
       "required": ["agent", "harness", "path", "version", "model", "sha256"],
       "properties": {
         "agent": {"enum": ["anchor-plan-review", "anchor-sprint-review", "anchor-tuning"]},
-        "harness": {"enum": ["claude", "codex"]},
+        "harness": {"enum": ["claude", "codex", "cursor"]},
         "path": {"type": "string", "minLength": 1},
         "version": {"type": "string", "minLength": 1},
-        "model": {"enum": ["sonnet", "opus", "luna", "sol"]},
+        "model": {"enum": ["sonnet", "opus", "luna", "sol", "composer", "grok[effort=high]"]},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       }
     }
