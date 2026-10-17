@@ -27,6 +27,7 @@ Subcommands
   add             append an anchor record (allocates the next ANC-NNN); lints the statement and refuses likely duplicates
   update          edit statement / scope / summary / deterministic_check / fixtures (never the quote)
   retire          mark an anchor retired, optionally naming its replacement
+  exclude         record (or --remove) that an anchor does not apply to one plan item; no version bump
   validate        check anchors.json for structural problems (plus non-fatal warnings)
   lint            testability warnings for one or every anchor statement (exit 1 when any)
   dedupe          token-Jaccard pairs of similar anchors, optionally confirmed by Jev (exit 1 when likely duplicates)
@@ -140,9 +141,11 @@ VERDICTS = (
     "satisfied",
     "not_applicable",
     "deterministic_only",
+    "excluded",          # the anchor's `exclude` list names this item: Jev is not asked, the cell passes
     "error",
 )
 FAILING = {"contradicted", "not_addressed", "asserted_only", "underspecified"}
+EXCLUSION_KEYS = ("item", "reason")
 SEVERITY = {v: i for i, v in enumerate(VERDICTS)}
 REQUIRED_ROLES = ("relevance", "compliance", "conflict")
 ABORT_CODES = ("AUTH.CREDENTIALS", "POLICY.REMOTE_JUDGE_DISABLED")
@@ -735,6 +738,40 @@ def cmd_retire(args) -> Result[dict, JudgeError]:
     return Ok({"success": True, "data": {"id": a["id"], "status": "retired", "replaced_by": args.replaced_by or None, "version": a["version"]}, "error": None})
 
 
+def cmd_exclude(args) -> Result[dict, JudgeError]:
+    """Add, replace or remove one exclusion. Not a requirement change: no version bump, earlier runs stay valid, any status."""
+    item = (args.item or "").strip()
+    if not item:
+        return fail("VALIDATION.INPUT", "--item cannot be empty; pass the plan item id exactly as judge --item-id gets it")
+    reason = (args.reason or "").strip()
+    if not args.remove and not reason:
+        return fail("VALIDATION.INPUT", "--reason cannot be empty",
+                    action="Say in one sentence why the anchor does not apply to this item.")
+    loaded = _record_and_anchor(args.anchors, args.id)
+    if isinstance(loaded, Err):
+        return loaded
+    rec, a = loaded.value
+    exclude = a.get("exclude")
+    if exclude is not None and not isinstance(exclude, list):
+        return fail("VALIDATION.ANCHORS", f"{args.id}: exclude must be a list", action="Fix the record by hand, then run validate.")
+    kept = [x for x in (exclude or []) if not (isinstance(x, dict) and x.get("item") == item)]
+    removed = len(kept) != len(exclude or [])
+    if args.remove:
+        if not removed:
+            return fail("VALIDATION.INPUT", f"{args.id} has no exclusion for {item}")
+        a["exclude"] = kept
+        if not kept:
+            del a["exclude"]
+        event = history_event("exclusion_removed", item=item)
+    else:
+        a["exclude"] = kept + [{"item": item, "reason": reason}]
+        event = history_event("excluded", item=item, reason=reason, replaced=removed)
+    a.setdefault("history", []).append(event)
+    save_json(args.anchors, rec)
+    return Ok({"success": True, "data": {"id": a["id"], "item": item, "removed": bool(args.remove),
+                                         "exclude": a.get("exclude", []), "version": a.get("version", 1)}, "error": None})
+
+
 def validate_record(rec: dict) -> list:
     problems = []
     if not isinstance(rec, dict):
@@ -795,7 +832,44 @@ def validate_record(rec: dict) -> list:
                 problems.append(f"{aid}: question_overrides.{gate} must have a 'questions' object")
             elif not isinstance(q["questions"], dict):
                 problems.append(f"{aid}: question_overrides.{gate}.questions must be an object")
+        problems.extend(exclusion_problems(aid, a.get("exclude")))
     return problems
+
+
+def exclusion_problems(aid: str, exclude) -> list:
+    """Schema of the optional `exclude` list: [{item: <plan item id>, reason: <non-empty sentence>}], one entry per item."""
+    if exclude is None:
+        return []
+    if not isinstance(exclude, list):
+        return [f"{aid}: exclude must be a list of {{item, reason}} objects"]
+    problems, seen = [], set()
+    for n, x in enumerate(exclude):
+        where = f"{aid}: exclude[{n}]"
+        if not isinstance(x, dict):
+            problems.append(f"{where} must be an object with item and reason")
+            continue
+        extra = sorted(set(x) - set(EXCLUSION_KEYS))
+        if extra:
+            problems.append(f"{where} has unknown keys {extra}; only item and reason are allowed")
+        item = x.get("item")
+        if not isinstance(item, str) or not item.strip():
+            problems.append(f"{where}.item must be a non-empty plan item id")
+        elif item in seen:
+            problems.append(f"{where}: duplicate exclusion for item {item}")
+        else:
+            seen.add(item)
+        reason = x.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            problems.append(f"{where}.reason is empty; say in one sentence why the anchor does not apply to this item")
+    return problems
+
+
+def exclusion_for(anchor: dict, item_id: str):
+    """The anchor's exclusion entry for this item id (exact match), or None."""
+    for x in anchor.get("exclude") or []:
+        if isinstance(x, dict) and x.get("item") == item_id:
+            return x
+    return None
 
 
 def record_warnings(rec: dict, anchors_path: str) -> list:
@@ -857,6 +931,11 @@ def render_md(rec: dict) -> str:
         if a.get("deterministic_check"):
             lines.append("")
             lines.append(f"Deterministic check to pair with the development gate: {a['deterministic_check']}")
+        if a.get("exclude"):
+            lines.append("")
+            lines.append("Excluded from (not judged; the cell passes as `excluded`):")
+            for x in a["exclude"]:
+                lines.append(f"- `{x['item']}`: {x['reason']}")
         b = a.get("beads") or {}
         if any(b.values()):
             lines.append("")
@@ -1815,8 +1894,11 @@ def check_api_key(api_key: str) -> Result[None, JudgeError]:
     return Ok(None)
 
 
-def judge_context(args, rec: dict) -> Result[dict, JudgeError]:
-    """Shared pre-flight for judge and check-fixtures: options, question set, overrides, fixture answers, key and opt-in."""
+def judge_context(args, rec: dict, remote: bool = True) -> Result[dict, JudgeError]:
+    """Shared pre-flight for judge and check-fixtures: options, question set, overrides, fixture answers, key and opt-in.
+
+    remote=False (every selected anchor is excluded from the item) skips the key and opt-in check: nothing is sent.
+    """
     threshold = getattr(args, "threshold", DEFAULT_THRESHOLD)
     if not (0.0 <= threshold <= 1.0):
         return fail("VALIDATION.INPUT", f"--threshold must be between 0 and 1, got {threshold}")
@@ -1853,7 +1935,7 @@ def judge_context(args, rec: dict) -> Result[dict, JudgeError]:
     if not isinstance(ctx["bead_overrides"], dict):
         return fail("INPUT.MALFORMED", "overrides file must be an object keyed by anchor id")
     ctx["live"] = not ctx["dry_run"] and ctx["answers_fixture"] is None
-    if ctx["live"]:
+    if ctx["live"] and remote:
         cleared = remote_preflight(args, "The anchor statement and the item text")
         if isinstance(cleared, Err):
             return cleared
@@ -1969,20 +2051,39 @@ def _first_answer(ctx: dict, a: dict, qs: dict, body: dict, meta: dict, fixture_
                              shorten=ctx["gate"] != "plan")
 
 
+def entry_base(a: dict) -> dict:
+    """The anchor facts every result row carries, judged or excluded."""
+    return {
+        "anchor_id": a["id"], "source_type": a["source_type"], "source_ref": a.get("source_ref"),
+        "statement": a["statement"], "quote": anchor_quote(a), "stated_by": a.get("stated_by"), "stated_at": a.get("stated_at"),
+        "context": a.get("context"), "anchor_version": a.get("version", 1),
+        "deterministic_check": a.get("deterministic_check") or "",
+        "kind": anchor_kind(a), "leaning": None,
+    }
+
+
+def excluded_entry(a: dict, exclusion: dict, gate: str) -> dict:
+    """A result row for a cell the anchor's `exclude` list names: no question set, no request, no Jev call."""
+    entry = entry_base(a)
+    reason = exclusion["reason"].strip()
+    noun = "bead" if gate == "plan" else "work"
+    entry.update({"verdict": "excluded", "answers": None, "min_confidence": None,
+                  "exclusion": {"item": exclusion["item"], "reason": reason},
+                  "explanation": f"Excluded from this {noun} by the anchor's exclude list: {sentence(reason)}",
+                  "attempts": 0})
+    return entry
+
+
 def judge_entries(ctx: dict, prepared: list, item: dict, fixture_key) -> Result[tuple, JudgeError]:
     """One Jev request per anchor. Returns Ok((results, requests_out, model_answered)); Err only for an ABORT_CODES error."""
     results, requests_out, model_answered = [], [], None
     for a, qs, overridden in prepared:
         body = {"model": ctx["model"], "state": build_state(a, item), "questions": qs["questions"]}
-        entry = {
-            "anchor_id": a["id"], "source_type": a["source_type"], "source_ref": a.get("source_ref"),
-            "statement": a["statement"], "quote": anchor_quote(a), "stated_by": a.get("stated_by"), "stated_at": a.get("stated_at"),
-            "context": a.get("context"), "anchor_version": a.get("version", 1),
+        entry = entry_base(a)
+        entry.update({
             "question_set": {"gate": qs.get("gate", ctx["gate"]), "version": qs.get("version"), "overridden": overridden},
             "questions_sha256": questions_digest(qs["questions"]),
-            "deterministic_check": a.get("deterministic_check") or "",
-            "kind": anchor_kind(a), "leaning": None,
-        }
+        })
         if overridden:
             entry["questions"] = qs["questions"]
         meta = {"attempts": 0, "item_chars_sent": len(item["text"]), "item_shortened": False}
@@ -2078,6 +2179,7 @@ def assemble_run(ctx: dict, rec: dict, anchors_path: str, item: dict, results: l
             "leaning_counts": dict(sorted(((k, sum(1 for r in results if r.get("leaning") == k)) for k in {r.get("leaning") for r in results if r.get("leaning")}))),
             "unstable": [r["anchor_id"] for r in results if r.get("unstable")],
             "errors": [r["anchor_id"] for r in results if r["verdict"] == "error"],
+            "excluded": [{"anchor_id": r["anchor_id"], "reason": r["exclusion"]["reason"]} for r in results if r["verdict"] == "excluded"],
             "shortened": [r["anchor_id"] for r in results if r.get("item_shortened")],
             "pass": not any(r["verdict"] in FAILING or r["verdict"] == "error" for r in results) and not ctx["dry_run"],
         },
@@ -2141,7 +2243,10 @@ def cmd_judge(args) -> Result[dict, JudgeError]:
                             action="Lock the anchor first, or pass --include-unlocked to judge a proposed or retired anchor deliberately.")
     if not anchors:
         return fail("ANCHOR.NONE", "no locked anchors to judge", action="Lock at least one anchor, or pass --anchor.")
-    built = judge_context(args, rec)
+    # An anchor whose `exclude` names this item is never asked: no question set, no size check, no request.
+    exclusions = {a["id"]: exclusion_for(a, args.item_id) for a in anchors}
+    judged_anchors = [a for a in anchors if exclusions[a["id"]] is None]
+    built = judge_context(args, rec, remote=bool(judged_anchors))
     if isinstance(built, Err):
         return built
     ctx = built.value
@@ -2149,7 +2254,7 @@ def cmd_judge(args) -> Result[dict, JudgeError]:
     if isinstance(loaded, Err):
         return loaded
     item = loaded.value
-    resolved = prepare_question_sets(ctx, anchors)
+    resolved = prepare_question_sets(ctx, judged_anchors)
     if isinstance(resolved, Err):
         return resolved
     prepared = resolved.value
@@ -2171,6 +2276,8 @@ def cmd_judge(args) -> Result[dict, JudgeError]:
     if isinstance(judged, Err):
         return judged
     results, requests_out, model_answered = judged.value
+    results = results + [excluded_entry(a, exclusions[a["id"]], ctx["gate"]) for a in anchors if exclusions[a["id"]] is not None]
+    results.sort(key=lambda r: (SEVERITY.get(r["verdict"] or "error", 99), r["anchor_id"]))
     run = assemble_run(ctx, rec, args.anchors, item, results, requests_out, model_answered)
     write_run(run, args.out, default_run_dir(args))
     return Ok({"success": True, "data": run, "error": None})
@@ -2272,7 +2379,52 @@ def cmd_lint(args) -> Result[dict, JudgeError]:
     rows = [{"id": a.get("id"), "warnings": lint_statement(a.get("statement") or "", anchor_quote(a), a.get("source_type") or "ANC")}
             for a in selected.value]
     count = sum(len(r["warnings"]) for r in rows)
-    return Ok({"success": True, "data": {"anchors": rows, "warning_count": count, "path": args.anchors}, "error": None})
+    known = plan_item_ids(args)
+    if isinstance(known, Err):
+        return known
+    data = {"anchors": rows, "warning_count": count, "path": args.anchors}
+    data.update(exclusion_lint(selected.value, known.value))
+    return Ok({"success": True, "data": data, "error": None})
+
+
+def plan_item_ids(args) -> Result[Any, JudgeError]:
+    """Plan item ids for the exclusion check: --plan-item (repeatable) plus --plan-items FILE; None when neither is given.
+
+    FILE is `plan_source.py discover-*` output (data.sprints[].id), `bd show/children --json` output, or a JSON list of ids.
+    """
+    ids = [i for i in (getattr(args, "plan_item", None) or []) if i]
+    path = getattr(args, "plan_items", "")
+    if path:
+        loaded = load_json(path, "plan items file")
+        if isinstance(loaded, Err):
+            return loaded
+        obj = loaded.value
+        if isinstance(obj, dict) and isinstance(obj.get("data"), dict):
+            obj = obj["data"]
+        if isinstance(obj, dict) and isinstance(obj.get("sprints"), list):
+            obj = obj["sprints"]
+        if isinstance(obj, dict):
+            obj = [obj]
+        if not isinstance(obj, list) or not all(isinstance(x, str) or (isinstance(x, dict) and isinstance(x.get("id"), str)) for x in obj):
+            return fail("INPUT.MALFORMED", "plan items file must be plan_source discover output, bd JSON, or a list of item ids",
+                        action="Pass `plan_source.py discover-markdown|discover-tracker` output or a JSON array of ids.")
+        ids.extend(x if isinstance(x, str) else x["id"] for x in obj)
+    if not ids and not path:
+        return Ok(None)
+    return Ok(set(ids))
+
+
+def exclusion_lint(anchors: list, known) -> dict:
+    """Exclusions naming an item the plan does not have. A warning only: it never changes lint's exit code or blocks judge."""
+    listed = [(a.get("id"), x) for a in anchors for x in (a.get("exclude") or []) if isinstance(x, dict)]
+    if not listed and known is None:
+        return {}  # no exclusions and no plan items: lint output is what it was before exclusions existed
+    if known is None:
+        return {"exclusions": len(listed), "exclusion_warnings": [], "exclusions_checked": False}
+    warnings = [{"id": aid, "item": x.get("item"),
+                 "warning": f"exclude names item {x.get('item')!r}, which is not in the plan; the exclusion never applies"}
+                for aid, x in listed if x.get("item") not in known]
+    return {"exclusions": len(listed), "exclusion_warnings": warnings, "exclusions_checked": True}
 
 
 def check_threshold(value: float, name: str = "--threshold") -> Result[float, JudgeError]:
@@ -2625,12 +2777,19 @@ def report_lines(run: dict, include_passing: bool = False) -> list:
     REQ/ADR: > **item · id · verdict** Anchor: <statement> REQ-014 (requirements register) says: "<quote>" <explanation>
              (the says-clause is skipped when the quote is the statement, as it is for register text)
     Run files written before the quote field existed are read as quote = statement.
+    An excluded cell is always listed, with the exclusion's reason in place of the provenance and explanation.
     """
     lines = []
     item_id = run["item"]["id"]
     for r in run["results"]:
         v = r.get("verdict") or "error"
         if v in ("satisfied", "not_applicable", "deterministic_only") and not include_passing:
+            continue
+        if v == "excluded":
+            # Always shown, so the reason a cell was not judged is in every report.
+            lines.append(f"> **{item_id} · {r['anchor_id']} · excluded** Anchor: {sentence(r.get('statement') or '')} "
+                         f"Not judged: {sentence((r.get('exclusion') or {}).get('reason') or '')}")
+            lines.append("")
             continue
         label = v.replace("_", " ")
         statement = r.get("statement") or ""
@@ -2670,8 +2829,8 @@ def cmd_report(args) -> Result[Any, JudgeError]:
             + ("DRY RUN. " if run.get("dry_run") else "") + ("FIXTURE answers. " if run.get("fixture") else "")
             + "Counts: " + (", ".join(f"{k} {v}" for k, v in (s.get("counts") or {}).items()) or "none") + ".", ""]
     body = report_lines(run, include_passing=args.all)
-    if not body:
-        body = ["All judged anchors are satisfied or not applicable.", ""]
+    if not any(line and "· excluded**" not in line for line in body):
+        body = body + ["All judged anchors are satisfied or not applicable.", ""]
     md = "\n".join(head + body).rstrip() + "\n"
     if args.format == "md":
         return Ok(md)
@@ -2708,16 +2867,18 @@ def cmd_coverage(args) -> Result[Any, JudgeError]:
     # without a --gate filter, columns are qualified so plan and dev verdicts for one item never overwrite each other
     def column(gate, item_id):
         return item_id if args.gate else f"{gate}:{item_id}"
-    matrix = {}
+    matrix, excluded = {}, {}
     items = sorted({column(g, i) for g, i in latest})
     for (gate, item_id), r in latest.items():
         for res in r["results"]:
             matrix.setdefault(res["anchor_id"], {})[column(gate, item_id)] = res["verdict"]
+            if res["verdict"] == "excluded":
+                excluded.setdefault(res["anchor_id"], {})[column(gate, item_id)] = (res.get("exclusion") or {}).get("reason", "")
     anchors_sorted = sorted(matrix)
     uncovered = [a for a in anchors_sorted if not any(v == "satisfied" for v in matrix[a].values())]
     contradicted = {a: [i for i, v in matrix[a].items() if v == "contradicted"] for a in anchors_sorted if any(v == "contradicted" for v in matrix[a].values())}
     data = {"gate": args.gate or "all", "items": items, "anchors": anchors_sorted, "matrix": matrix,
-            "uncovered_anchors": uncovered, "contradicted": contradicted, "runs_considered": len(latest)}
+            "uncovered_anchors": uncovered, "contradicted": contradicted, "excluded": excluded, "runs_considered": len(latest)}
     if args.format == "md":
         lines = [f"## Anchor coverage ({data['gate']})", "", "| Anchor | " + " | ".join(items) + " | Covered |", "| --- | " + " | ".join("---" for _ in items) + " | --- |"]
         for a in anchors_sorted:
@@ -2726,6 +2887,12 @@ def cmd_coverage(args) -> Result[Any, JudgeError]:
         lines.append("")
         if uncovered:
             lines.append("Uncovered anchors (no item satisfies them): " + ", ".join(uncovered))
+        if excluded:
+            lines.append("")
+            lines.append("Excluded cells (not judged):")
+            for a in sorted(excluded):
+                for i, reason in sorted(excluded[a].items()):
+                    lines.append(f"- {a} x {i}: {reason}")
         return Ok("\n".join(lines) + "\n")
     return Ok({"success": True, "data": data, "error": None})
 
@@ -2781,6 +2948,8 @@ def cmd_diff(args) -> Result[dict, JudgeError]:
             "fail_to_pass": [c["anchor_id"] for c in changed if not passing(c["from"]) and passing(c["to"])],
             "item_size": {"before_chars": before_chars, "after_chars": after_chars,
                           "delta_chars": after_chars - before_chars, "grew": after_chars > before_chars},
+            "excluded": [{"anchor_id": aid, "reason": (nv[aid].get("exclusion") or {}).get("reason", "")}
+                         for aid in sorted(nv) if nv[aid].get("verdict") == "excluded"],
             "pass_before": prev["summary"].get("pass"), "pass_after": nxt["summary"].get("pass")}
     if getattr(args, "expected", ""):
         loaded = load_json(args.expected, "expected verdicts")
@@ -2903,6 +3072,14 @@ def build_parser() -> argparse.ArgumentParser:
     rt.add_argument("--reason", default="")
     rt.set_defaults(func=cmd_retire)
 
+    ex = sub.add_parser("exclude", help="record that an anchor does not apply to one plan item (judge reports it as excluded); no version bump")
+    ex.add_argument("--anchors", required=True)
+    ex.add_argument("--id", required=True, help="anchor id")
+    ex.add_argument("--item", required=True, help="plan item id, exactly as judge --item-id gets it")
+    ex.add_argument("--reason", default="", help="one sentence: why the anchor does not apply to this item (required unless --remove)")
+    ex.add_argument("--remove", action="store_true", help="drop the exclusion for --item")
+    ex.set_defaults(func=cmd_exclude)
+
     v = sub.add_parser("validate", help="check anchors.json")
     v.add_argument("--anchors", required=True)
     v.set_defaults(func=cmd_validate)
@@ -2911,6 +3088,8 @@ def build_parser() -> argparse.ArgumentParser:
     ln.add_argument("--anchors", required=True)
     ln.add_argument("--id", default="", help="one anchor id")
     ln.add_argument("--all", action="store_true", help="every non-retired anchor (the default when --id is not given)")
+    ln.add_argument("--plan-items", default="", help="plan_source discover output, bd JSON or a JSON list of ids: warn on exclusions naming another item")
+    ln.add_argument("--plan-item", action="append", help="a plan item id for the exclusion check; repeatable")
     ln.set_defaults(func=cmd_lint)
 
     dd = sub.add_parser("dedupe", help="find pairs of similar anchors by token Jaccard, optionally confirmed by Jev; exit 1 when likely duplicates")

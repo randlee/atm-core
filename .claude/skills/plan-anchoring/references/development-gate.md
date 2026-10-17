@@ -1,6 +1,6 @@
 ---
 name: development-gate
-version: 0.6.0
+version: 0.6.1
 description: Running the development gate (sprint review) end to end - what evidence to pass, what Jev sees, the command and exit codes, pairing with deterministic checks, and how to read the results.
 ---
 
@@ -55,6 +55,7 @@ Set a check with `add --deterministic-check` or later with `update --determinist
 | `underspecified` | Confidence below threshold | Usually a vague sprint report | Ask for a fuller report; re-run |
 | `satisfied` | Followed and evidenced | Run the paired check anyway | Record it |
 | `not_applicable` | The sprint did not touch the governed area | Expected for most anchors on most sprints | Nothing |
+| `excluded` | Not asked: the anchor's `exclude` names this item | `results[].exclusion.reason` | Nothing |
 | `error` | Jev could not be asked after retries | `results[].error.code` | Fix the cause; re-run |
 
 The gate passes when the sprint's latest run exits 0 and every returned deterministic check has been run and recorded.

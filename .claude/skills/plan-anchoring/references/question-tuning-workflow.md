@@ -1,5 +1,5 @@
 ---
-version: 0.6.0
+version: 0.6.1
 ---
 
 # Question-tuning workflow
@@ -18,6 +18,11 @@ stable role-complete set plus canonical history. Validate its schema and
 `bd` or `br` question record. Leaf review waits for current protocol seals. On
 ambiguous authority, present the tuner's clarity-only recommendation to the
 user; the planner never tunes questions itself.
+
+Exclusions are not a tuning outcome. When an anchor's scope is right and one
+item simply does not touch it, record `exclude` (`anchor-document.md`) instead
+of tuning its questions or scope. The tuner's `authority.anchors.records` carry
+no `exclude` field, so an exclusion changes no authority digest and no seal.
 
 Before this per-anchor tuning, a changed or unsealed testability rubric must be
 calibrated by the same higher-reasoning agent with operation `testability`, rendered

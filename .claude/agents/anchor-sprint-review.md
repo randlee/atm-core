@@ -1,6 +1,6 @@
 ---
 name: anchor-sprint-review
-version: 0.6.0
+version: 0.6.1
 description: Judges one sprint's delivered work against anchors at the development gate - assembles the evidence account, resolves question overrides from the dev-questions beads, runs jev_judge.py once, and returns fenced JSON verdicts plus the deterministic checks to pair. Read-only on beads, PRs and code.
 model: sonnet
 color: blue

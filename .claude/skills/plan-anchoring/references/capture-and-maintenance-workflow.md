@@ -1,5 +1,5 @@
 ---
-version: 0.6.0
+version: 0.6.1
 ---
 
 # Capture and maintenance workflow
@@ -53,6 +53,6 @@ Then create the bead tree and record its IDs with `set-beads` (`references/bead-
 
 ### F. Maintain
 
-`python3 "$S" promote --anchors "$A" --id ANC-012 --adr ADR-0007` promotes a durable anchor, keeping the ID. A changed directive is a new anchor; retire the old with `python3 "$S" retire --anchors "$A" --id ANC-012 --replaced-by ANC-020 --reason "<why>"`. Scope, summary, fixtures and deterministic checks change through `update`. Re-render after every change. Lifecycle: `references/anchor-document.md`.
+`python3 "$S" promote --anchors "$A" --id ANC-012 --adr ADR-0007` promotes a durable anchor, keeping the ID. A changed directive is a new anchor; retire the old with `python3 "$S" retire --anchors "$A" --id ANC-012 --replaced-by ANC-020 --reason "<why>"`. Scope, summary, fixtures and deterministic checks change through `update`. An anchor that does not apply to one plan item gets `exclude --id <ANC> --item <item id> --reason "<why>"` (no version bump; `references/anchor-document.md`). Re-render after every change. Lifecycle: `references/anchor-document.md`.
 
 <!-- The workflow text above is preserved verbatim from the 0.4.3 entrypoint. -->

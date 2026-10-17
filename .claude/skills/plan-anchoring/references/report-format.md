@@ -1,6 +1,6 @@
 ---
 name: report-format
-version: 0.6.0
+version: 0.6.1
 description: The provenance-quoting report format for gate results, what the planning agent or quality manager should do with each verdict, and where reports are posted.
 ---
 
@@ -37,6 +37,7 @@ Before acting on a failing verdict, re-read the sent text (the composed item fil
 | `underspecified` | Read `low_questions` and the agent's `to_fix`, and fix the bead there, preferring cuts to additions. Only when the cell is low on several beads that plainly comply: sharpen the anchor's `scope` (`update --scope`) or override its questions | Same; a vague sprint report is a reporting defect, not an anchor defect |
 | `satisfied` | Nothing | Run the paired deterministic check if any |
 | `not_applicable` | Nothing. If the anchor should have applied, its `scope` is too narrow | Same |
+| `excluded` | Nothing; the report always lists it with the exclusion's reason. Remove the exclusion if the reason is wrong | Same |
 | `error` | `JEV.CONTEXT_EXCEEDED`: shorten the item; transport codes: retry later, the script already tried three times | Same |
 
 ## Where reports go

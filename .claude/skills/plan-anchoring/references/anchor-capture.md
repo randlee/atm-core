@@ -1,6 +1,6 @@
 ---
 name: anchor-capture
-version: 0.6.0
+version: 0.6.1
 description: How the planning orchestrator detects candidate anchors, writes each one as a clear testable requirement with the user's verbatim words kept as provenance, deduplicates, and gets the user's approval before locking.
 ---
 

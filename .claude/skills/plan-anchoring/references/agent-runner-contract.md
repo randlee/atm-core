@@ -1,6 +1,6 @@
 ---
 name: agent-runner-contract
-version: 0.6.0
+version: 0.6.1
 description: Resolve one trusted harness agent, validate one fenced request and response, and write a credential-safe invocation attestation.
 ---
 

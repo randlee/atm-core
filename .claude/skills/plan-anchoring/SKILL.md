@@ -2,7 +2,7 @@
 name: plan-anchoring
 description: Capture the facts a user states while planning as numbered anchors (ANC-001...), one clear, testable requirement each, with the user's verbatim words kept as provenance, alongside existing requirements (REQ) and ADRs. Turn them into Jev-judged questions, tune and test the questions per anchor, and enforce them at two gates with a triage-apply-rerun loop. The planning gate checks each plan bead still says what the user said; the development gate checks the delivered sprint work followed it. Use when planning a phase or sprint with beads, when the user says "anchor this", "lock this", "don't let this drift", or "remember I said", when re-opening a plan after context compression, or when reviewing a sprint against its plan. Not for general code review, and not a replacement for plan hardening.
 metadata:
-  version: "0.6.0"
+  version: "0.6.1"
 ---
 
 # Plan Anchoring
@@ -83,13 +83,14 @@ locking do not load that reference.
 - **Relationship to plan hardening**: standalone and composable; run the planning gate after hardening.
 - **Data retention**: fail closed. The gates refuse to call TypeSafe unless `PLAN_ANCHOR_ALLOW_REMOTE_JUDGE=1` is set for the session, and `--dry-run` writes exactly what would leave the machine.
 - **Fixture authorship**: the skill drafts one pass and one fail fixture per anchor at lock time; the user approves them. `check-fixtures` sends them to Jev (same opt-in) to confirm the wording lands them; `--answers-file` fixtures exercise the gating offline in CI.
+- **Not relevant to one item**: `exclude` is the one way to say an anchor does not apply to a specific plan item: `python3 "$S" exclude --anchors "$A" --id ANC-011 --item bi-2 --reason "<one sentence>"`. `judge` then skips that cell without calling Jev and reports it `excluded` with the reason; it passes the gate. No approval, no frozen expectation, no version bump, and other runs stay valid; it is not QA-verified, so the reason must say why. Use it when the anchor's scope is right and the item simply does not touch it; when the scope itself is wrong, fix the scope (`references/triage-and-iteration.md`). Do not drop the anchor from `--anchor` or override its relevance question instead; neither is recorded.
 - **Question-tuning independence**: the planner cannot tune. An isolated evaluator (Claude: Opus; Codex: Sol; Cursor: Grok at high effort, version left off) derives and freezes its oracle from approved intent and anchors before seeing Jev answers, then iterates wording against that oracle without regard to whether the current plan passes. A live gate failure alone never authorizes an override or scope change. The main session records only an override accompanied by the frozen oracle, digest, acceptance table, and run IDs.
 
 ## Hard stops
 
 - An anchor without a verbatim `quote` has no provenance; one whose statement is just the quote is not testable. Both are refused.
 - Never tune a question or reword a statement to make one bead pass. Fixtures and a known-bad bead must still fail.
-- Never tune or rescope from a live failure alone. Require a frozen, user-approved fixture or expected verdict that independently demonstrates the false result; scope changes require user approval and invalidate prior gate runs for that anchor.
+- Never tune or rescope from a live failure alone. Require a frozen, user-approved fixture or expected verdict that independently demonstrates the false result; scope changes require user approval and invalidate prior gate runs for that anchor. An `exclude` is not a rescope and needs neither.
 - A failing-to-passing plan edit that grows the composed item is a hard stop unless each added passage is traced to a locked ANC/REQ/ADR that predates the failed run.
 - Never split a bead, trim its text, or raise a size cap to pass `PLAN.TOO_LARGE`. Triage unapproved work, then prose and ceremony, then split.
 - Never send more than one bead or one work description per Jev request, and never the whole plan.
