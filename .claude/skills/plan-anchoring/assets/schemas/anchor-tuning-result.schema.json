@@ -5,6 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "schema_version",
     "success",
     "canceled",
     "aborted_by",
@@ -13,6 +14,9 @@
     "metadata"
   ],
   "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
     "success": {
       "type": "boolean"
     },
@@ -861,6 +865,13 @@
     },
     "tuningEvent": {
       "type": "object",
+      "if": {
+        "anyOf": [
+          {"properties": {"event_index": {"minimum": 2}}},
+          {"properties": {"event": {"const": "protocol_re_evaluated"}}}
+        ]
+      },
+      "then": {"properties": {"supersedes": {"type": "object"}}},
       "additionalProperties": false,
       "required": [
         "event_index",
@@ -928,7 +939,7 @@
             },
             "anchor_id": {
               "type": "string",
-              "pattern": "^ANC-[0-9]{3}$"
+              "minLength": 1
             },
             "anchor_version": {
               "type": [
@@ -1059,7 +1070,7 @@
           }
         },
         "supersedes": {
-          "type": "object",
+          "type": ["object", "null"],
           "additionalProperties": false,
           "required": [
             "protocol_version",

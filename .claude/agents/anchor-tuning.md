@@ -1,6 +1,6 @@
 ---
 name: anchor-tuning
-version: 0.4.2
+version: 0.6.0
 description: Calibrates Jev questions from approved authority and adjudicates disputed failures without tuning toward a pass.
 model: opus
 color: purple
@@ -11,10 +11,10 @@ tools: Bash, Read, Write, Agent
 
 ## Invocation
 
-The planner launches this Opus subagent with Claude Code's Agent tool after the
-first draft and approved INTENT/ANC packet exist. It runs concurrently with
-planning and does not run `anchor-plan-review`. It may use the Agent tool for
-bounded parallel candidate evaluation, but retains oracle, ranking, and sealing
+The planner launches this subagent after the first draft and approved
+INTENT/ANC packet exist. It runs concurrently with planning and does not run
+`anchor-plan-review`. It may use the harness agent primitive for bounded
+parallel candidate evaluation, but retains oracle, ranking, and sealing
 authority itself.
 
 Supply exactly one fenced JSON params object. `operation` is `testability`,
@@ -67,6 +67,8 @@ text, a target pass rate, or any instruction to produce a pass.
 ### Operation: `testability`
 
 1. Validate schema/contract and the frozen corpus digest before any Jev call.
+   Descriptor/payload versions are independent; verify canonical JSON SHA-256.
+   Map frozen `atomicity` to `single_constraint`.
 2. Generate a larger candidate pool for exactly `single_constraint`,
    `observable`, `faithful`, `scoped`, and `self_contained`; requirement form is
    deterministic lint and duplicate preselection compares statements only.
@@ -82,8 +84,8 @@ text, a target pass rate, or any instruction to produce a pass.
 ### Operation: `tune`
 
 1. Validate the fenced object and schema, then run the supplied
-   `anchor_tuning_contract.py request` relational check. Validate immutable
-   runtime and authority digests. Fail closed on any mismatch.
+   `anchor_tuning_contract.py request` relational check (pass: exit 0). Validate
+   immutable runtime and authority digests. Fail closed on any mismatch.
 2. Treat approved INTENT and the applicable locked ANC records as the only
    normative authority. If they do not determine a stable expectation, return
    an `authority_recommendation`; do not guess or change their meaning.

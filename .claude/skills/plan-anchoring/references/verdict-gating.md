@@ -1,6 +1,6 @@
 ---
 name: verdict-gating
-version: 0.4.0
+version: 0.6.0
 description: How jev_judge.py turns independent Jev answers into one verdict per anchor and item, the role contract, thresholds, severity order, pass criteria and exit codes, coverage, run diffs, and offline fixtures.
 ---
 
@@ -77,6 +77,6 @@ Lists changed, added, and removed verdicts for the same gate and item (`RUNS.MIS
 Two different things are called fixtures:
 
 - **Fixture sentences** on an anchor (`fixtures.pass`, `fixtures.fail`, set with `update --fixture-pass/--fixture-fail`): what a bead would say if it satisfied or violated the anchor. `check-fixtures --gate plan --all` sends each sentence to Jev as the item (same key and opt-in as `judge`) and reports whether it landed: pass -> `satisfied`, fail -> `not_addressed` or `contradicted`. Exit 1 on any mismatch. Use it after changing question wording.
-- **Fixture answers** (`--answers-file`): Jev-shaped answers keyed by anchor ID (or `*`), injected instead of calling Jev. They exercise the gating table, report format, coverage and diffs offline; `assets/examples/answers.fixture.json` is one, and `tests/test_jev_judge.py` uses them. For `check-fixtures`, keys are `<anchor>:pass:<n>` / `<anchor>:fail:<n>`.
+- **Fixture answers** (`--answers-file`): Jev-shaped answers keyed by anchor ID (or `*`), injected instead of calling Jev. They exercise the gating table, report format, coverage and diffs offline; `assets/examples/answers.fixture.json` is one, and the maintainer-only `<repository root>/tests/sc-plan-anchor/test_jev_judge.py` uses them. For `check-fixtures`, keys are `<anchor>:pass:<n>` / `<anchor>:fail:<n>`.
 
 `--dry-run` writes the exact requests, plus `totals {requests, bytes}`, to the run directory and no verdicts. Dry runs are never counted by `coverage`.

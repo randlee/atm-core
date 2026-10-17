@@ -1,6 +1,6 @@
 ---
 name: agent-runner-contract
-version: 0.4.1
+version: 0.6.0
 description: Resolve one trusted harness agent, validate one fenced request and response, and write a credential-safe invocation attestation.
 ---
 
@@ -14,9 +14,18 @@ returns an immutable runtime descriptor. A failed supplied root or registry
 fails closed; callers do not search for another installation.
 
 Render `templates/agent-invocation.md.j2` with that descriptor and invoke the
-named definition through the harness **Agent** tool. The invocation contains
+named definition through the harness **Agent** tool. In Cursor, invoke the
+registered subagent through the **Task** tool and do not pass a model argument;
+the descriptor's `model` is `composer` for the gates and `grok[effort=high]`
+for tuning. The invocation contains
 exactly one fenced JSON request. The response must contain exactly one fenced
 JSON result and pass `validate-fence` before any follow-on action.
+
+Every result, including a tuning failure, carries top-level
+`schema_version: "1.0.0"`. This versions the shared response envelope, independently
+of the tuning request or tournament protocol version. The tuning result template
+must satisfy both `anchor-tuning-result.schema.json` and
+`agent-runner-result.schema.json` before runner validation.
 
 Write one attestation per invocation with `build_attestation` and
 `atomic_write_json`. Attestations contain only typed identity, hashes, timing,

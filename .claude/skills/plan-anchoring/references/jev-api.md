@@ -1,6 +1,6 @@
 ---
 name: jev-api
-version: 0.4.0
+version: 0.6.0
 description: How jev_judge.py talks to TypeSafe's Jev - endpoint, auth, request and response shape, validation, limits, the retry and context-shortening policy, every error code and flag, model pinning, and the privacy opt-in that gates every call.
 ---
 

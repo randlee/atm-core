@@ -1,6 +1,6 @@
 ---
 name: development-gate
-version: 0.4.0
+version: 0.6.0
 description: Running the development gate (sprint review) end to end - what evidence to pass, what Jev sees, the command and exit codes, pairing with deterministic checks, and how to read the results.
 ---
 
@@ -24,7 +24,7 @@ One anchor and the account: the sprint bead's title and fields, `## Closed beads
 
 ## Run
 
-Delegate to the harness-specific `anchor-sprint-review` definition (Claude Code and Codex). Cursor may follow these gate steps inline. The agent runs once:
+Delegate to the harness-specific `anchor-sprint-review` definition. Claude Code and Codex use their Agent tool. Cursor uses the Task tool with no model override; the registered agent pins Composer. If that subagent is not registered, stop. The agent runs once:
 
 ```bash
 python3 "$S" judge --anchors "$A" --gate dev --all --item-id <sprint epic> --item-title "<sprint title>" \
