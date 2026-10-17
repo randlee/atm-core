@@ -618,6 +618,40 @@
           "status": "locked"
         }
       ]
+    },
+    {
+      "id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console's pull-request list must show the CI pass, CI fail, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME.",
+      "quote": "here are gh icons:",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: GH_THEME pasted (source-branch green/red, source-merge purple, cancel red, weather-hurricane blue)",
+      "summary": "PR list uses Rand's GH_THEME icons",
+      "scope": "edits how pull-request states are rendered",
+      "deterministic_check": "render a PR list with one PR per state and assert each line contains its GH_THEME code point and colour",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T03:55:59+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
     }
   ]
 }

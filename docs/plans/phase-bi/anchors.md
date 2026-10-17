@@ -23,6 +23,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-015 | locked | claude dev agents get an orange starburst | 2026-10-16 |
 | ANC-016 | locked | codex agents get a glyph per model class | 2026-10-16 |
 | ANC-017 | locked | qa and sanity icons are fixed by agent type | 2026-10-16 |
+| ANC-018 | locked | PR list uses Rand's GH_THEME icons | 2026-10-16 |
 
 ## ANC-001
 
@@ -261,3 +262,17 @@ Summary: qa and sanity icons are fixed by agent type
 Scope: edits how agent names are rendered
 
 Deterministic check to pair with the development gate: render qa and sanity members with differing harness and model and assert the same icon each
+
+## ANC-018
+
+Anchor: The console's pull-request list must show the CI pass, CI fail, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME.
+
+> here are gh icons:
+
+Said by Rand, planning session 2026-10-17: GH_THEME pasted (source-branch green/red, source-merge purple, cancel red, weather-hurricane blue), 2026-10-16. Status: locked. Version 1.
+
+Summary: PR list uses Rand's GH_THEME icons
+
+Scope: edits how pull-request states are rendered
+
+Deterministic check to pair with the development gate: render a PR list with one PR per state and assert each line contains its GH_THEME code point and colour
