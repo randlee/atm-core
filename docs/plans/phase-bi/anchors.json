@@ -1,0 +1,521 @@
+{
+  "schema": "plan-anchoring/anchors/1",
+  "plan": "phase-current",
+  "intent_ref": "doc/plan/phase-current/intent.md",
+  "anchors": [
+    {
+      "id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd command must have a skill subcommand that installs the atm-bd-orchestration skill into a repository by running the same installer logic as plugins/atm-bd-orchestration/install.py.",
+      "quote": "it would do the same thing as the install.py does now right?",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: let's anchor this behavior. (not --profile yet)",
+      "summary": "atm-bd skill = install.py behavior",
+      "scope": "adds an atm-bd-console subcommand, touches install.py or the skill install path",
+      "deterministic_check": "run 'atm-bd-console skill' and install.py against the same target repo and diff the installed file sets; atm-bd-console skill --help shows no --profile",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:28:17+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-17T02:43:09+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary"
+          ],
+          "previous_statement": "atm-bd-console must have a skill subcommand that installs the atm-bd-orchestration skill into a repository by running the same installer logic as plugins/atm-bd-orchestration/install.py, and the subcommand must not have a --profile option."
+        },
+        {
+          "at": "2026-10-17T02:43:17+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary"
+          ],
+          "previous_statement": "The atm-bd command must have a skill subcommand that installs the atm-bd-orchestration skill into a repository by running the same installer logic as plugins/atm-bd-orchestration/install.py, the atm-bd-console command must remain available as an alias, and the skill subcommand must not offer a skill-set selector option such as --profile."
+        }
+      ]
+    },
+    {
+      "id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "By default the atm-bd skill subcommand must fetch the skills from the head of the main branch of the atm-bd-orchestration repository at run time, without a republish of the app, and a --ref option must select another branch, tag or commit.",
+      "quote": "we really always want to upgrade to most recent.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: head of main as default, agreed",
+      "summary": "skill fetched from main head by default; --ref overrides",
+      "scope": "changes how the skill subcommand locates skill files",
+      "deterministic_check": "run atm-bd skill with network traces or a local clone and confirm the installed files equal main's head; run with --ref <branch> and confirm that branch's files",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:43:09+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-17T02:49:47+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-010",
+          "reason": "skill sources redesigned: bare=bundled, x.y.z=tag, --latest=main head (ANC-010..012)"
+        }
+      ]
+    },
+    {
+      "id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand must print the git ref and commit sha it installed the skills from, together with the app's own version.",
+      "quote": "the script can find the repo and get most recent skill though.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: report line proposed with the main-head default, agreed",
+      "summary": "skill install prints ref, sha and app version",
+      "scope": "edits skill subcommand output",
+      "deterministic_check": "run atm-bd skill and grep its output for the ref, a 40-hex sha and the app version",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:43:09+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The phase must end with the app published to PyPI, and a TestPyPI rehearsal of that publish must precede the production publish.",
+      "quote": "we can publish to pypi, that can be at end of phase.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17",
+      "summary": "phase ends with PyPI publish after TestPyPI rehearsal",
+      "scope": "adds a publish or release sprint, touches pyproject.toml packaging",
+      "deterministic_check": "pip index versions atm-bd lists the release; a TestPyPI release exists with an earlier upload time",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:43:09+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "No sprint in this phase must change what ships in v0.16.1.",
+      "quote": "agreed 0.16.1 first, but we can plan this as part of next phase.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17",
+      "summary": "nothing here changes v0.16.1",
+      "scope": "any sprint dispatch, any change to the v0.16.1 release branch",
+      "deterministic_check": "git diff v0.16.1..<phase base> shows no change from this phase's PRs; tag v0.16.1 predates the first sprint's first commit",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:43:09+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-17T02:43:17+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "No sprint in this phase may change what ships in v0.16.1, and no sprint may start before the v0.16.1 tag exists."
+        }
+      ]
+    },
+    {
+      "id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The phase plan must exist as beads in the atm-core bd database with a phase root and sprint containers, and the phase must not use a markdown plan or sprint documents.",
+      "quote": "we are creating plans as bd on this bd db.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17",
+      "summary": "plan lives as beads in this bd db",
+      "scope": "adds plan documents, creates phase or sprint beads",
+      "deterministic_check": "bd show atm-phase-bi returns the root with sprint children; no docs/plans/phase-bi/sprint-*.md exists",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:43:09+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-007",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd-console command must remain available as an alias of the atm-bd command.",
+      "quote": "should we just change the name of the cli to 'atm-bd'",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: rename to atm-bd with the old name kept, agreed",
+      "summary": "atm-bd-console kept as alias",
+      "scope": "edits [project.scripts] or renames the package or command",
+      "deterministic_check": "after uv tool install, both atm-bd --help and atm-bd-console --help succeed with identical output",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:43:17+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand must not offer a skill-set selector option such as --profile.",
+      "quote": "(not --profile yet)",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: let's anchor this behavior. (not --profile yet)",
+      "summary": "no skill-set selector yet",
+      "scope": "adds an option to the skill subcommand",
+      "deterministic_check": "atm-bd skill --help lists no --profile, --orchestration or --lite option",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:43:17+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-17T02:49:47+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-014",
+          "reason": "Rand asked for --orchestration; a skill-set option is now wanted"
+        }
+      ]
+    },
+    {
+      "id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The single headless orchestration tick must be run as atm-bd cron --phase <x>, and the console's --headless option must be removed.",
+      "quote": "atm-bd cron --phase <x>",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: cron is unused, so rename it to fit the atm-bd layout instead of leaving it",
+      "summary": "atm-bd cron --phase <x> replaces console --headless",
+      "scope": "edits the headless tick, the console CLI options, or the README cron examples",
+      "deterministic_check": "atm-bd cron --help succeeds; atm-bd console --help lists no --headless; rg -- '--headless' apps/ plugins/ returns nothing",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:46:44+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand with no version or --latest argument must install the skills packaged inside the installed atm-bd package, without network access.",
+      "quote": "atm-bd skill (bare would use skill in uv)",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: skill sources redesigned, agreed (yes)",
+      "summary": "bare skill installs the bundled skills, offline",
+      "scope": "changes where the skill subcommand reads skill files or how the wheel is built",
+      "deterministic_check": "build the wheel, unzip it and find the skill files; run atm-bd skill with the network disabled and confirm the install succeeds",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:49:47+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand given a version x.y.z must install the skills from the vX.Y.Z tag of the atm-bd-orchestration repository.",
+      "quote": "atm-bd skill x.y.z (install version x.y.z)",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: skill sources redesigned, agreed (yes)",
+      "summary": "skill x.y.z installs that release tag",
+      "scope": "adds or changes the version argument of the skill subcommand",
+      "deterministic_check": "run atm-bd skill 0.16.0 and diff the installed files against git show v0.16.0",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:49:47+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand given --latest must install the skills from the head of the main branch of the atm-bd-orchestration repository.",
+      "quote": "atm-bd --latest (latest on repo)",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: skill sources redesigned, agreed (yes)",
+      "summary": "skill --latest installs main head",
+      "scope": "adds or changes the --latest option",
+      "deterministic_check": "run atm-bd skill --latest and diff the installed files against git show origin/main",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:49:47+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand given --list must print the skill releases and skill sets available in the atm-bd-orchestration repository and must install nothing.",
+      "quote": "atm-bd skill --list (shows what is available on repo)",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: skill sources redesigned, agreed (yes)",
+      "summary": "skill --list shows what the repo offers",
+      "scope": "adds or changes the --list option",
+      "deterministic_check": "run atm-bd skill --list, compare its releases to git tag -l on the repo, and confirm the target repo is unchanged",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:49:47+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand must accept an --orchestration option that selects the current atm-bd-orchestration skill set.",
+      "quote": "--orchestration (current set of packages)",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: skill sources redesigned, agreed (yes)",
+      "summary": "--orchestration selects today's skill set",
+      "scope": "adds or changes skill-set options on the skill subcommand",
+      "deterministic_check": "atm-bd skill --help lists --orchestration; atm-bd skill --orchestration installs the same files as bare atm-bd skill",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-17T02:49:47+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    }
+  ]
+}

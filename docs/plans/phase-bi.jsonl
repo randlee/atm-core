@@ -1,0 +1,5 @@
+{"sprint": "bi-1"}
+{"sprint": "bi-2", "depends_on": ["bi-1"]}
+{"sprint": "bi-3", "depends_on": ["bi-2"]}
+{"sprint": "bi-4", "depends_on": ["bi-3"]}
+{"sprint": "bi-5", "depends_on": ["bi-4"]}
