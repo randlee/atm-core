@@ -79,6 +79,37 @@ What worked: stating the missing content in the bead where the bead owns it (roo
 
 What did not work (bi-4): mentioning another sprint's topic in any form (ids only, ownership statements, an out-of-scope list) makes Jev answer `relevant: yes` at 0.34 to 0.67 and `addressed: no`; saying nothing leaves `relevant: no` at 0.3 to 0.56. Both fail because relevance below 0.6 is `underspecified`. Jev's `to_fix` offers only "state the content here" or "drop the anchor from this bead", and the first would duplicate bi-1/2/3/5 content in a publish-only sprint. Stopped at iteration 4 for Rand's ruling; no question or anchor wording was changed.
 
+### Iterations 5 and 6 (2026-10-17): copy the owning content, flag drift
+
+Rand's ruling: where bi-4 only orders after another sprint, copy that sprint's content into bi-4 (a "Not bi-4's work" list), and quality-mgr flags any drift between the copy and the owning bead. The bead states that bi-4 neither changes nor re-proves the items and returns any defect to the owning sprint.
+
+| Iteration | bi-4 text | Jev result |
+| --- | --- | --- |
+| 5 | ids and words, no codepoints | 11 cells satisfied (skill-side anchors >= 0.8); 10 icon cells (ANC-018..021, 024..029) failing, all `addressed` low confidence; every `to_fix` says to state the codepoints, colours and rule |
+| 6 | the same list plus every codepoint, colour and the contains/fallback rules, and the quality-mgr drift sentence | PASS: 21 satisfied, 3 deterministic-only; lowest confidence ANC-028 0.74, ANC-018 0.76, ANC-020 0.77 |
+
+Haiku, run in parallel on the same request for ten cells (ANC-018..021, 024..029): relevant yes 0.80 to 0.95, addressed yes 0.65 to 0.90, contradicted no 0.85 to 0.95 on all ten. Jev and haiku now agree on every cell checked.
+
+Haiku's suggestions, all optional: add an acceptance criterion in bi-4 that re-checks each copied icon on the installed console (ANC-019..021, 025..028); name where `GH_THEME` lives (ANC-018); state which name wins when a model string contains two listed names (ANC-024, the anchor gives no order). The first conflicts with the ruling that bi-5 owns and tests the icons and bi-4 neither changes nor re-proves them, so it is not applied. The other two are open for Rand.
+
+### Modified tuning algorithm (Rand 2026-10-17)
+
+Each iteration: run Jev and the one-cell haiku agents in parallel on the same bead text, compare per cell, discuss the differences with the haiku agents, then change the bead. When the gap is "this sprint depends on content another sprint owns", the fix is to copy that content into the dependent bead and leave drift checking to quality-mgr.
+
+### Iterations 7 to 10: bi-1, bi-2, bi-3 (2026-10-17)
+
+| Bead | Round 1 | Iter 7 | Iter 8 | Iter 9 | Iter 10 |
+| --- | --- | --- | --- | --- | --- |
+| bi-1 | 1 (ANC-004) | pass (ANC-004 satisfied at 0.62, near threshold) | - | - | - |
+| bi-3 | 1 (ANC-005) | pass (lowest 0.74) | - | - | - |
+| bi-2 | 5 (004, 005, 011, 012, 022) | 5 (003, 004, 011, 012, 014) | 6 (003, 004, 011, 012, 013, 014) | 4 (004, 011, 012, 014) | 4 (003, 011, 013, 014) |
+
+What fixed bi-1 and bi-3: one sentence each saying what the sprint owns and what it leaves alone (ANC-004 publish is bi-4's and `atm-bd` is the name bi-4 publishes; the sprint changes nothing shipped in v0.16.1).
+
+What did not fix bi-2: it builds the data the skill subcommand reads, so the skill anchors (ANC-003, 011..014) sit next to it. Each edit moved the failure instead of removing it. A long "Does Not Close" bullet naming the options made relevance flip to yes (0.27 to 0.59) with `addressed` no. One generic line ("all its options are bi-3's") returned relevance `no` at 0.45 to 0.59, which is below the 0.6 line and so `underspecified`. Jev's `to_fix` changes between runs: iteration 8 and 9 said add the ownership line, iteration 9 and 10 said to drop it or name each option. ANC-014 and ANC-011 were unstable on identical requests. Haiku on iteration 9 gave the same split (ANC-011 relevant yes 0.55 / addressed no 0.60; ANC-012 relevant no 0.60; ANC-013 relevant no 0.55; ANC-014 relevant yes 0.80 / addressed no 0.60). The same bead text gives answers on both sides of the 0.6 relevance line for both judges, so no wording of an ownership note settles it.
+
+Open for Rand: bi-2 fails on relevance noise for the skill anchors. Options are (a) accept those cells as applicability noise for a non-owning bead, (b) scope the skill anchors (ANC-011..014) to the bead that owns them, which is an anchor change, or (c) keep editing bi-2. Not applied.
+
 ## Rules followed while tuning
 
 - No question or anchor wording was changed to make a cell pass; changes are to the bead text only, each citing a locked anchor that predates the run.
