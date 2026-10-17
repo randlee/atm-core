@@ -28,7 +28,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-020 | locked | codex agents get a celestial icon and colour per model class | 2026-10-16 |
 | ANC-021 | locked | qa agent icon: running blue, pass green, fail red | 2026-10-16 |
 | ANC-022 | locked | atm-bd-console is dropped, not aliased | 2026-10-16 |
-| ANC-023 | locked | agent icon wherever an agent name is shown | 2026-10-16 |
+| ANC-023 | locked | agent icon immediately left of every agent name | 2026-10-16 |
 | ANC-024 | locked | model icon by lower-case contains | 2026-10-16 |
 | ANC-025 | locked | claude=sonnet and codex=terra stand-ins | 2026-10-16 |
 | ANC-026 | locked | sanity agent icon is the Jev icon | 2026-10-16 |
@@ -343,17 +343,17 @@ Deterministic check to pair with the development gate: after uv tool install, co
 
 ## ANC-023
 
-Anchor: Wherever the console shows an agent's name, it must show that agent's icon next to the name.
+Anchor: Wherever the console shows an agent's name, it must show that agent's icon immediately to the left of the name.
 
 > when agents are shown in ui, across the board, let's show agent icon.
 
-Said by Rand, planning session 2026-10-17, 2026-10-16. Status: locked. Version 1.
+Said by Rand, planning session 2026-10-17, 2026-10-16. Status: locked. Version 2.
 
-Summary: agent icon wherever an agent name is shown
+Summary: agent icon immediately left of every agent name
 
 Scope: edits any render path that prints an agent name
 
-Deterministic check to pair with the development gate: list every render path that emits an agent name and assert the icon next to it in each
+Deterministic check to pair with the development gate: list every render path that emits an agent name and assert the icon is the character cell immediately before the name in each
 
 ## ANC-024
 

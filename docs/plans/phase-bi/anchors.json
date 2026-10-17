@@ -841,21 +841,21 @@
       "id": "ANC-023",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Wherever the console shows an agent's name, it must show that agent's icon next to the name.",
+      "statement": "Wherever the console shows an agent's name, it must show that agent's icon immediately to the left of the name.",
       "quote": "when agents are shown in ui, across the board, let's show agent icon.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-16",
       "context": "planning session 2026-10-17",
-      "summary": "agent icon wherever an agent name is shown",
+      "summary": "agent icon immediately left of every agent name",
       "scope": "edits any render path that prints an agent name",
-      "deterministic_check": "list every render path that emits an agent name and assert the icon next to it in each",
+      "deterministic_check": "list every render path that emits an agent name and assert the icon is the character cell immediately before the name in each",
       "fixtures": {
         "pass": [],
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -868,6 +868,16 @@
           "at": "2026-10-17T04:42:16+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-10-17T04:55:21+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check"
+          ],
+          "previous_statement": "Wherever the console shows an agent's name, it must show that agent's icon next to the name."
         }
       ]
     },
