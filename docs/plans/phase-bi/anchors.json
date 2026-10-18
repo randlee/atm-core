@@ -1599,6 +1599,141 @@
           ]
         }
       ]
+    },
+    {
+      "id": "ANC-032",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The status table's ci cell for a sprint whose shown PR is merged or closed must show the last CI run on that PR's head (pass, running or a fail per ANC-030), not none.",
+      "quote": "I think showing the last ci run is fine for now. IF a pr was merged and ci was red, this is something that might be OK, but I would want to know.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "bi-6 open question B, Rand to fenix 2026-10-18; spec rows bi-1 and bi-19 show pass on merged PRs",
+      "summary": "ci cell on a merged or closed PR = last run on its head",
+      "scope": "the ci cell of the status table (status_table.py CI producers) for merged and closed PRs",
+      "deterministic_check": "fixture with a merged PR whose last run failed renders a fail glyph per ANC-030; one whose last run passed renders U+F062C #2EA043; neither renders U+F01D8",
+      "fixtures": {
+        "pass": [
+          "A sprint whose newest PR is merged and whose last CI run on that head passed renders U+F062C in #2EA043 in the ci cell; a merged PR whose last run failed on Windows only renders U+F05B3 in #F85149."
+        ],
+        "fail": [
+          "A sprint whose newest PR is merged renders the ci cell as none (U+F01D8) regardless of the last run on its head."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-18T04:20:02+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-18T04:20:22+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-033",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The status table's pr cell must link the PR number to the PR url GitHub returned for that PR (PullRequest.url); it must not derive the link from a base URL or call gh pr view per PR.",
+      "quote": "github url should be fine. I assume it would work.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "bi-6 open question C, Rand to fenix 2026-10-18; replaces the spec's base-URL derivation text",
+      "summary": "PR link = the fetched PullRequest.url",
+      "scope": "the pr cell link of the markdown emitter and the Rich emitter",
+      "deterministic_check": "markdown row for a PR with url U renders [#n](U); a PR with empty url renders #n unlinked; the stubbed gh records no pr view call",
+      "fixtures": {
+        "pass": [
+          "The pr cell renders [#281](https://github.com/randlee/atm-bd-orchestration/pull/281) using the url returned by the GitHub fetch for PR 281, and the test's gh stub records no pr view call."
+        ],
+        "fail": [
+          "The pr cell builds the link from a configured base URL plus the number, or calls gh pr view for each PR to obtain the url."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-18T04:20:02+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-18T04:20:22+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-034",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The status table must render an unknown member (unknown sprint, ci or pr state, or GitHub data that is off, rate-limited or truncated) as the glyph ? in #2D81E0, never as the no-PR dash or the ci none glyph.",
+      "quote": "Uknown data the ? you showed would be fine. I would lighten the shade a bit (use same blue we used for the other items in spec)",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "bi-6 open question E, Rand to fenix 2026-10-18; #2D81E0 is the spec's blue for bead open, PR open and ci none",
+      "summary": "unknown = ? in #2D81E0",
+      "scope": "the unknown members of SprintState, CiState and PrState in the icon tables and both emitters",
+      "deterministic_check": "icon table test asserts ('?', '#2D81E0') for each unknown member; a GhStatus-off fixture renders ? in both ci and pr cells and a Problems row",
+      "fixtures": {
+        "pass": [
+          "SprintState.unknown, CiState.unknown and PrState.unknown each map to the glyph ? in #2D81E0, and a snapshot with GitHub data truncated renders ? in the ci and pr cells with a Problems row."
+        ],
+        "fail": [
+          "An unknown state renders ? in #F85149, or GitHub-off renders the no-PR dash in the pr cell."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-18T04:20:02+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-18T04:20:22+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
     }
   ]
 }

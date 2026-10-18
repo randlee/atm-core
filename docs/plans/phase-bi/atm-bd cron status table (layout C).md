@@ -101,6 +101,7 @@ Glyphs are Material Design Icons in the Nerd Font `md-` range. Codepoints were l
 | ci fail, Linux only | `linux` | U+F033D | `#F85149` |
 | ci running | `weather-hurricane` | U+F0898 | `#58A6FF` |
 | ci none | `dots-horizontal` | U+F01D8 | `#2D81E0` |
+| unknown (sprint, ci or pr state not recognised, or GitHub data off, rate-limited or truncated) | `?` (plain text, not an icon) | U+003F | `#2D81E0` (Rand 2026-10-18, ANC-034) |
 
 ### Sprint states
 

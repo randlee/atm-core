@@ -37,6 +37,9 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-029 | retired | merge conflict = merged glyph in red | 2026-10-16 |
 | ANC-030 | locked | CI fail = single failing platform icon in red, else red bug | 2026-10-17 |
 | ANC-031 | locked | merge conflict = source-branch glyph in red | 2026-10-17 |
+| ANC-032 | locked | ci cell on a merged or closed PR = last run on its head | 2026-10-18 |
+| ANC-033 | locked | PR link = the fetched PullRequest.url | 2026-10-18 |
+| ANC-034 | locked | unknown = ? in #2D81E0 | 2026-10-18 |
 
 ## ANC-001
 
@@ -581,3 +584,57 @@ Deterministic check to pair with the development gate: render a merge check of c
 Fixtures:
 - pass: A merge check of conflict renders the source-branch glyph U+F062C in #F85149.
 - fail: A merge check of conflict renders the merged glyph U+F062D in #F85149, or U+F062C in #2EA043.
+
+## ANC-032
+
+Anchor: The status table's ci cell for a sprint whose shown PR is merged or closed must show the last CI run on that PR's head (pass, running or a fail per ANC-030), not none.
+
+> I think showing the last ci run is fine for now. IF a pr was merged and ci was red, this is something that might be OK, but I would want to know.
+
+Said by Rand, bi-6 open question B, Rand to fenix 2026-10-18; spec rows bi-1 and bi-19 show pass on merged PRs, 2026-10-18. Status: locked. Version 2.
+
+Summary: ci cell on a merged or closed PR = last run on its head
+
+Scope: the ci cell of the status table (status_table.py CI producers) for merged and closed PRs
+
+Deterministic check to pair with the development gate: fixture with a merged PR whose last run failed renders a fail glyph per ANC-030; one whose last run passed renders U+F062C #2EA043; neither renders U+F01D8
+
+Fixtures:
+- pass: A sprint whose newest PR is merged and whose last CI run on that head passed renders U+F062C in #2EA043 in the ci cell; a merged PR whose last run failed on Windows only renders U+F05B3 in #F85149.
+- fail: A sprint whose newest PR is merged renders the ci cell as none (U+F01D8) regardless of the last run on its head.
+
+## ANC-033
+
+Anchor: The status table's pr cell must link the PR number to the PR url GitHub returned for that PR (PullRequest.url); it must not derive the link from a base URL or call gh pr view per PR.
+
+> github url should be fine. I assume it would work.
+
+Said by Rand, bi-6 open question C, Rand to fenix 2026-10-18; replaces the spec's base-URL derivation text, 2026-10-18. Status: locked. Version 2.
+
+Summary: PR link = the fetched PullRequest.url
+
+Scope: the pr cell link of the markdown emitter and the Rich emitter
+
+Deterministic check to pair with the development gate: markdown row for a PR with url U renders [#n](U); a PR with empty url renders #n unlinked; the stubbed gh records no pr view call
+
+Fixtures:
+- pass: The pr cell renders [#281](https://github.com/randlee/atm-bd-orchestration/pull/281) using the url returned by the GitHub fetch for PR 281, and the test's gh stub records no pr view call.
+- fail: The pr cell builds the link from a configured base URL plus the number, or calls gh pr view for each PR to obtain the url.
+
+## ANC-034
+
+Anchor: The status table must render an unknown member (unknown sprint, ci or pr state, or GitHub data that is off, rate-limited or truncated) as the glyph ? in #2D81E0, never as the no-PR dash or the ci none glyph.
+
+> Uknown data the ? you showed would be fine. I would lighten the shade a bit (use same blue we used for the other items in spec)
+
+Said by Rand, bi-6 open question E, Rand to fenix 2026-10-18; #2D81E0 is the spec's blue for bead open, PR open and ci none, 2026-10-18. Status: locked. Version 2.
+
+Summary: unknown = ? in #2D81E0
+
+Scope: the unknown members of SprintState, CiState and PrState in the icon tables and both emitters
+
+Deterministic check to pair with the development gate: icon table test asserts ('?', '#2D81E0') for each unknown member; a GhStatus-off fixture renders ? in both ci and pr cells and a Problems row
+
+Fixtures:
+- pass: SprintState.unknown, CiState.unknown and PrState.unknown each map to the glyph ? in #2D81E0, and a snapshot with GitHub data truncated renders ? in the ci and pr cells with a Problems row.
+- fail: An unknown state renders ? in #F85149, or GitHub-off renders the no-PR dash in the pr cell.
