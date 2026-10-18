@@ -4,7 +4,7 @@ Oct 17, 2026 · @Rand Lee
 
 ## Purpose
 
-`atm-bd cron` emits a narrow markdown status table, one row per sprint, so a phase can be read at a glance. Layout C keeps four columns: sprint, state, ci, pr. The state cell holds exactly one icon: the agent working the sprint, or the sprint's own state when no agent is on it.
+`atm-bd cron` emits a narrow markdown status table, one row per sprint, so a phase can be read at a glance. Layout C keeps four columns: sprint, state, ci, pr. The state cell holds one icon per agent working the sprint, else one sprint-state icon: the agent working the sprint, or the sprint's own state when no agent is on it.
 
 ## Table shape
 
@@ -41,7 +41,7 @@ https://github.com/<owner>/<repo>/pull/<number>
 
 ## Layout C rule
 
-The state cell shows one icon, picked in this order:
+The state cell shows one icon per active agent (Rand 2026-10-18: every active agent is drawn, the column widens by one cell per extra agent), else one icon picked in this order:
 
 1. If an agent is working the sprint, show that agent's icon: a dev agent (fable, luna), severity, or QA.
 2. QA uses the gavel, colored by its result: indigo while running, green on pass, red on fail.
@@ -150,9 +150,9 @@ Twenty sprints, split across two views that carry different data so the examples
 
 ## Rendering notes
 
-- The markdown output carries glyphs only. Markdown has no co**lor, so the colors apply only when the table is printed in a terminal through Rich or ANSI.**
-- **Every icon needs a Nerd Font. Without one, the icons show as blank boxes.**
-- **Icon cells hold no text label, which is w**hat keeps the table narrow.
+- The markdown output carries glyphs only. Markdown has no color, so the colors apply only when the table is printed in a terminal through Rich or ANSI.
+- Every icon needs a Nerd Font. Without one, the icons show as blank boxes.
+- Icon cells hold no text label, which is what keeps the table narrow.
 - Contrast is 4:1 or better on black for every color. On white several fall short: the yellows are 1.3 to 2.0:1 and terra green is 1.8:1.
 
 ## Open items
