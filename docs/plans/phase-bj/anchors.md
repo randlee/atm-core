@@ -79,6 +79,8 @@ Intent: `docs/plans/phase-bj/intent.md`
 | ANC-070 | locked | qa hook informs the lead only, PASS or FAIL | 2026-10-18 |
 | ANC-071 | locked | max_sanity_rounds does not move on rebase-required | 2026-10-18 |
 | ANC-072 | locked | sanity FAIL handled entirely by ATM: sanity-fail.xml.j2 lists exactly what was NOT complete and references the sprint | 2026-10-18 |
+| ANC-073 | locked | atm-bd runs pages for sanity and quality: one line per run, newest first, JEV and LLM verdict and elapsed, dev name and icon | 2026-10-18 |
+| ANC-074 | locked | API failures: retry three times, reason in the runs page, a distinct icon from a JEV FAIL; no outage beads, no hold, no refusal citations | 2026-10-18 |
 
 ## ANC-001
 
@@ -1381,3 +1383,39 @@ Deterministic check to pair with the development gate: a FAIL run in a scratch r
 Fixtures:
 - pass: The dev receives sanity-fail: sprint bj-2, deliverables 2 and 5 NOT complete with reasons; no beads are created.
 - fail: The hook files a finding bead per undone deliverable under the checked bead, or the lead is asked to dispatch a fix.
+
+## ANC-073
+
+Anchor: atm-bd must show a sanity runs page and a quality runs page, newest run on top, one line per run; the sanity line must carry a pass/fail column and an elapsed-time column for JEV and for LLM each, and a column with the name and nerd icon of the dev whose work was checked; elapsed comes from the Jev client's own return and from a timer fenced around the LLM subagent, and the same rows feed the OTel database in the next atm release.
+
+> sanity agent never does it and I always need to ask.  it is the only thing I want to see from sanity agent.  perhaps we should consider adding a tui page for both sanity and quality which showed the runs sorted by most recent (on top).  the sanity page would have 1 line per run and both jev + llm would have columns for pass/fail AND elapsed time (which is currently not calculated properly).  Regarding calculation, can't this be returned from the jev.py method call and a timer fencing around the llm agent?  I would also like to have a column for what dev (name and nerd icon) did the work under review.  This would remove the agent distraction and show the data I want to see (and get into otel db on next atm release).
+
+Said by Rand, phase-bj planning 2026-10-18 (third round): Rand on the sanity runs table, Jev/LLM failures and refusal ceremony, 2026-10-18. Status: locked. Version 2.
+
+Summary: atm-bd runs pages for sanity and quality: one line per run, newest first, JEV and LLM verdict and elapsed, dev name and icon
+
+Scope: atm-bd console pages, the sanity ledger row schema (elapsed per reviewer, dev identity), jev_client.py return value, the dev-sanity LLM spawn
+
+Deterministic check to pair with the development gate: the console has a sanity page and a quality page; a ledger row has jev_elapsed_s, llm_elapsed_s and dev fields; jev_client.py returns elapsed; the dev-sanity prompt wraps the LLM spawn in a start/end time; the sanity reply template no longer renders the runs table
+
+Fixtures:
+- pass: The sanity page lists runs newest first: bj-2 #1904 dev solar (icon) JEV ✅ 41 s LLM ✅ 88 s; dev-sanity's reply carries only the verdict.
+- fail: The runs table is rendered into dev-sanity's chat reply, or elapsed is the gap between two ledger timestamps, or the dev column is missing.
+
+## ANC-074
+
+Anchor: A Jev or LLM call failure must be retried up to three times before the slot reports failure; the failure reason must appear in the runs page severity table with an icon distinct from a JEV verdict that the work is not done; and no workflow class bead, outage bead, hold on re-dispatch, refusal citation or checker-defect side channel may exist in the sanity or refusal flows.
+
+> this entire process of hold on re-dispatch sounds like a team trying to manage a reliable asset by making excuses not to deal with failures to call the agent properly.  (I suspect that a subagent sends too much context and jev returns error, instead of editing context, failure is returned.  There are occasionally LLM call fails during heavy traffic times which can be retried 3x before saying fail. )  Make sure that LLM failure reason shows up in severity table in tui AND the fail icon for typesafe API issue is distinctly different from jev answered 'all work NOT done'.  this `Class-bead append and citation on every refusal, and the checker-defect side channel.` also sounds like ceremony I did not know about or approve.
+
+Said by Rand, phase-bj planning 2026-10-18 (third round): Rand on the sanity runs table, Jev/LLM failures and refusal ceremony, 2026-10-18. Status: locked. Version 2.
+
+Summary: API failures: retry three times, reason in the runs page, a distinct icon from a JEV FAIL; no outage beads, no hold, no refusal citations
+
+Scope: jev_client.py and the LLM spawn retry; the ledger row kind field; the console severity table icons; dev-sanity 9, 10, 15, 25, dev 6, team-lead 30, 41, quality-mgr 3
+
+Deterministic check to pair with the development gate: grep the agents and requirements for 'class bead', 'outage' bead and 'cite' in refusal steps returns nothing; jev_client.py retries three times on a transport error; the console maps kind API_FAILURE to a different icon than verdict FAIL
+
+Fixtures:
+- pass: A Jev 502 is retried three times, then the row reads kind API_FAILURE with the error text and the page shows the plug icon, not the red cross of a FAIL verdict; dev-sanity re-runs on the next task with no bead opened.
+- fail: dev-sanity opens a -jev-outage class bead and the lead holds re-dispatch until it closes, or an API failure is shown with the same icon as a JEV FAIL.
