@@ -625,7 +625,7 @@ Fixtures:
 
 Anchor: The status table must render an unknown member (unknown sprint, ci or pr state, or GitHub data that is off, rate-limited or truncated) as the glyph ? in #2D81E0, never as the no-PR dash or the ci none glyph.
 
-> Uknown data the ? you showed would be fine. I would lighten the shade a bit (use same blue we used for the other items in spec)
+> Unknown data the ? you showed would be fine. I would lighten the shade a bit (use same blue we used for the other items in spec)
 
 Said by Rand, bi-6 open question E, Rand to fenix 2026-10-18; #2D81E0 is the spec's blue for bead open, PR open and ci none, 2026-10-18. Status: locked. Version 2.
 
