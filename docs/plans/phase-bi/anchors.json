@@ -1371,6 +1371,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T02:13:55+00:00",
+          "event": "excluded",
+          "item": "atm-bi-5.group-anc-f1",
+          "reason": "two-entry icon fix (conflict, CI fail) under bi-5; it touches no bead-status icon; ANC-027 is judged on bi-5 itself (satisfied 2026-10-18); the plan gate returned an unstable near-threshold verdict on this item",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bi-5.group-anc-f1",
+          "reason": "two-entry icon fix (conflict, CI fail) under bi-5; it touches no bead-status icon; ANC-027 is judged on bi-5 itself (satisfied 2026-10-18); the plan gate returned an unstable near-threshold verdict on this item"
         }
       ]
     },
