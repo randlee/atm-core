@@ -21,6 +21,7 @@ task stays open until sanity passes.
 - A sanity FAIL reopens the bead and sends the dev `sanity-rejected` on the same task and branch; `max_sanity_rounds` (default 5) escalates to the lead.
 - The pour writes branch, worktree, pr_target and difficulty to every bead of a sprint family and a pydantic model per bead kind validates the whole phase.
 - atm-core issue #1873 (task transition hooks, 1.6.2) is the long-term home; the skill script stands in until it ships.
+- Sanity links the layer on PASS under the stack bead's claim: the stack bead holds the whole stack as ledger and lock, first PASS wins the top and the loser gets `rebase-required` (no round counted); a sanity-stack subagent handles one next-top layer per spawn, sequentially, with a lean mode and a lock timeout that never blocks the team.
 
 ## What is deliberately out of scope
 
@@ -32,4 +33,4 @@ task stays open until sanity passes.
 
 The phase-bi anchors (ANC-001..050, REQ-BI6-AC6) are carried unchanged in
 `anchors.json` so Jev judges phase-bj items against the same console
-rulings; ANC-051..064 are this phase's. Rendered to `anchors.md`.
+rulings; ANC-051..072 are this phase's (ANC-062 retired to ANC-065). Rendered to `anchors.md`.

@@ -68,9 +68,17 @@ Intent: `docs/plans/phase-bj/intent.md`
 | ANC-059 | locked | rate limiting never stops the hook; --skip-checks is help-only | 2026-10-18 |
 | ANC-060 | locked | dev and fix dispatch stay the lead's judgment | 2026-10-18 |
 | ANC-061 | locked | poller checks bd ready then the ATM task before assigning | 2026-10-18 |
-| ANC-062 | locked | stack linking advised, base alignment sufficient, lead owns hygiene | 2026-10-18 |
+| ANC-062 | retired | stack linking advised, base alignment sufficient, lead owns hygiene | 2026-10-18 |
 | ANC-063 | locked | pour writes branch, worktree, pr_target and difficulty to every bead and validates the phase | 2026-10-18 |
 | ANC-064 | locked | atm task transition hooks in atm-core, routed by role, failure keeps the task open | 2026-10-18 |
+| ANC-065 | locked | sanity links the layer on PASS; first PASS wins the top, the other gets rebase-required | 2026-10-18 |
+| ANC-066 | locked | sanity-stack subagent: one next-top layer per spawn, sequential; the race is its job | 2026-10-18 |
+| ANC-067 | locked | stack bead: the whole stack as ledger, its claim as the lock, lead coordinates through it | 2026-10-18 |
+| ANC-068 | locked | lock timeout: --timeout input, report the holder, never blocks the team, never a human | 2026-10-18 |
+| ANC-069 | locked | lean mode: GraphQL out or token budget means alignment and no divergence only | 2026-10-18 |
+| ANC-070 | locked | qa hook informs the lead only, PASS or FAIL | 2026-10-18 |
+| ANC-071 | locked | max_sanity_rounds does not move on rebase-required | 2026-10-18 |
+| ANC-072 | locked | sanity FAIL handled entirely by ATM: sanity-fail.xml.j2 lists exactly what was NOT complete and references the sprint | 2026-10-18 |
 
 ## ANC-001
 
@@ -1182,7 +1190,7 @@ Anchor: The dev template must tell the dev to run /sc-gh-stack and verify with /
 
 > agreed.  we should 'tell the agent' to /sc-gh-stack and verify w/ /sc-gh-stack-view, but if graphql not working, aligning base w/ top is sufficient so sanity/qa proceed.  lead is responsible for stack hygene.
 
-Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 2.
+Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: retired. Version 3.
 
 Summary: stack linking advised, base alignment sufficient, lead owns hygiene
 
@@ -1229,3 +1237,147 @@ Deterministic check to pair with the development gate: with a configured hook th
 Fixtures:
 - pass: A repo-configured task-close hook returning err keeps the task active and logs the err; the hook receives role and the JSON payload unchanged.
 - fail: atm closes the task before running the hook, or the hook's JSON fields are defined by atm.
+
+## ANC-065
+
+Anchor: On a sanity PASS the sanity side must link the checked PR as the new top of the phase stack before the close hook runs; when the checked head does not descend from the recorded top because another layer linked first, it must send the dev rebase-required on the dev's open task instead of linking, and the dev must rebase before every resubmission.
+
+> what if we had dev rebase before sending to sanity, and sanity agent actually add to stack.  This would make handling 2 dev complete which were both based on the same <top-X> branch rast through sanity.  the first sanity agent determined PASS would get linked and sent to quality-mgr.  the other that completed sanity as PASS and could not be stacked w/out a rebase was sent back to dev to rebase and re-submit to sanity.  If sanity FAIL, the dev agent would be responsible for rebasing anyhow.
+
+Said by Rand, phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md), 2026-10-18. Status: locked. Version 2.
+
+Summary: sanity links the layer on PASS; first PASS wins the top, the other gets rebase-required
+
+Scope: dev-sanity PASS procedure, sanity-stack, the sanity close hook's PASS precondition, templates/rebase-required.xml.j2; replaces ANC-062's lead-links clause
+
+Deterministic check to pair with the development gate: two scratch branches cut from the same top both pass sanity: the first is linked and the stack bead's layers has it as top; the second gets one rebase-required send, no link, no ledger write; the hook refuses a PASS close whose vars carry no stack result
+
+Fixtures:
+- pass: Sanity PASS on branch A links A as the top; sanity PASS on branch B, cut from the old top, sends the dev rebase-required and writes nothing; the dev rebases B onto A and runs its hook again.
+- fail: The lead links the layer when it reads the sanity PASS report, or sanity closes the dev's task and assigns QA with the PR still unlinked.
+
+## ANC-066
+
+Anchor: dev-sanity must spawn the sanity-stack subagent for the link whenever more than one sanity task is open (or its own inline link failed), one spawn at a time in verdict order; each spawn handles exactly one next-top layer and the close procedure runs only after it returns stacked.
+
+> we should create a sanity-stack subagent.  IF more than 1 sanity tasks are queued, sanity agent MUST use santiy-stack subagent to do the stacking and after successful stack run the close procedure.  the sanity-stack subagent should handle a single next-top layer.  multiple sanity complete sanity-stack agent spawns must be done sequentially.  This should keep things from falling apart when 10 sanity tasks land at the same time. ... dealing with the 'race condition' is the most important thing the agent does.
+
+Said by Rand, phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md), 2026-10-18. Status: locked. Version 2.
+
+Summary: sanity-stack subagent: one next-top layer per spawn, sequential; the race is its job
+
+Scope: agents/sanity-stack.md, agents/dev-sanity.md PASS handling
+
+Deterministic check to pair with the development gate: dev-sanity.md forbids a second sanity-stack spawn while one is running; sanity-stack.md takes one checked bead per input; ten simultaneous PASSes in a scratch run produce ten sequential link events in the stack bead history
+
+Fixtures:
+- pass: With three sanity tasks open dev-sanity spawns sanity-stack for the first PASS, waits for stacked, then spawns it for the next; each spawn links one layer.
+- fail: dev-sanity spawns one sanity-stack per PASS in parallel, or one spawn links several layers at once.
+
+## ANC-067
+
+Anchor: A stack bead under the phase epic must hold the entire stack (ordered layers with branch, PR, head, base, linked) as the only record of layer order; sanity-stack and the lead must claim it before any stack write and release it after; when GraphQL is back the subagent links every layer recorded unlinked; the bead closes when the stack lands.
+
+> There needs to be local ledger the agent writes, which would be the phase bead if I understand properly.  entire stack would land in the phase bead.  |  One other responsibility of the subagent would be if graphql was out, but we can use not, it would stack ALL skipped layers.  |  On a side note, lead should probably coordinate w/ this agent as well when stacking work needs to be done.  this makes me think perhaps we need a stack-lock bead (child of phase epic).  stack-lock would be claimed before updating stack and returned to open when stack was complete.  (i believe using a bd as a lock is a known pattern.  stack-lock bead would represent a single stack, and woudl be closed when stack was merged.)
+
+Said by Rand, phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md), 2026-10-18. Status: locked. Version 2.
+
+Summary: stack bead: the whole stack as ledger, its claim as the lock, lead coordinates through it
+
+Scope: the stack bead (<prefix>-phase-<x>.stack) and every stack write in sanity-stack and the lead's stack recipes
+
+Deterministic check to pair with the development gate: bd show <stack bead> --json after two links shows layers in link order; a link attempted without the claim is absent from the procedures; a lean-mode layer shows linked false and the next full-mode spawn links it first
+
+Fixtures:
+- pass: sanity-stack claims atm-phase-bj.stack, appends the layer to metadata.layers, releases; the lead claims it before gh stack unstack; a layer recorded linked false is linked by the next full-mode spawn.
+- fail: The top is kept on the phase root as a single branch name, or the lead unstacks without claiming the stack bead, or an unlinked layer stays unlinked after GraphQL returns.
+
+## ANC-068
+
+Anchor: sanity-stack must take a timeout for the stack bead claim, and on expiry must return the holder's identity, claim time and active task; dev-sanity must then keep the sanity task active, ask the holder once, continue other sanity work and retry; neither may refuse the task, fail the dev or escalate to a person.
+
+> make sure there is a --timeout sent to the sanity-stack subagent for how long to wait if lock not available, sanity agent should also report who has the lock if --timeout occurs and lock could not be obtained.  This can not result in an team is blocked because agent could not get lock, likewise it can NOT result in escelate to HUMAN.  The team needs to know how to handle this and not disrupt work underway. ... 300 seconds and 15 seconds both seem quite long depending on how this is implemented.  can you attempt to claim w/ a 1-minute timeout for instance?
+
+Said by Rand, phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md), 2026-10-18. Status: locked. Version 2.
+
+Summary: lock timeout: --timeout input, report the holder, never blocks the team, never a human
+
+Scope: sanity-stack input timeout_s (default 60, retry 5 s), its lock_timeout result, dev-sanity's handling, the stack bead lease
+
+Deterministic check to pair with the development gate: a scratch run with the stack bead held by another actor: sanity-stack returns lock_timeout naming the holder within 60 s; dev-sanity's procedure has no refused close and no human escalation on that path; a claim older than lease_s is reclaimed by the subagent
+
+Fixtures:
+- pass: sanity-stack returns lock_timeout {holder: team-lead, since: ..., task: ...} after 60 s; dev-sanity notes STACK.LOCK_WAIT, messages team-lead once, runs its other sanity checks, retries.
+- fail: dev-sanity closes the sanity task refused because the lock was busy, or sends the dev a FAIL, or sends the user a message asking who holds the lock.
+
+## ANC-069
+
+Anchor: sanity-stack must take a budget input in its fenced JSON; in lean mode, or whenever GraphQL is unavailable, it must verify only that the PR base equals the recorded top and that the head descends from it with no divergence, using one filtered REST pull list and local git, and must make no GraphQL call.
+
+> yes, so basically if graphql is out, or we are watching our tokens (this should be an input arg to the fenced json input of the subagent) the subagent should make sure the branches are aligned and there is no divergence.
+
+Said by Rand, phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md), 2026-10-18. Status: locked. Version 2.
+
+Summary: lean mode: GraphQL out or token budget means alignment and no divergence only
+
+Scope: sanity-stack input budget and its lean procedure
+
+Deterministic check to pair with the development gate: with GH_TOKEN scoped to REST only, a lean spawn completes with zero graphql calls in the gh debug log and the layer recorded linked false; the REST call is filtered to number, base, head, sha, draft
+
+Fixtures:
+- pass: budget: lean: the subagent reads the recorded top, fetches, checks merge-base --is-ancestor, reads base.ref from the filtered REST list, appends the layer with linked false.
+- fail: The subagent runs /sc-gh-stack-view or gh stack view --json in lean mode, or reads the raw 365 KB pull list into its context.
+
+## ANC-070
+
+Anchor: The qa role of the close hook must close the QA bead and task and send the phase lead a status message in both the PASS and the FAIL case, and must assign nothing; quality-mgr pours the fix groups before the close as today.
+
+> yes, quality atm-task-close hook today would simply inform <phase-lead> w/ a status message in both pass or fail case.
+
+Said by Rand, phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md), 2026-10-18. Status: locked. Version 2.
+
+Summary: qa hook informs the lead only, PASS or FAIL
+
+Scope: atm-task-close.py qa role
+
+Deterministic check to pair with the development gate: a qa-role run in a scratch repo with verdict FAIL closes the bead and task, sends exactly one message to the lead, and issues no atm task assign
+
+Fixtures:
+- pass: The qa role closes atm-bj-2.group-qa and its task and sends the lead the qa status; the poured fix beads wait in bd ready for the lead.
+- fail: The qa role assigns the poured fix beads to devs, or sends the lead nothing on PASS.
+
+## ANC-071
+
+Anchor: A rebase-required outcome must not increment metadata.sanity_round on the sanity bead or count toward max_sanity_rounds.
+
+> max_sanity_rounds does NOT increment on rebase-required.
+
+Said by Rand, phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md), 2026-10-18. Status: locked. Version 2.
+
+Summary: max_sanity_rounds does not move on rebase-required
+
+Scope: the rebase-required path of dev-sanity and sanity-stack
+
+Deterministic check to pair with the development gate: after a rebase-required and a later PASS in a scratch run, sanity_round on the sanity bead is unchanged from before
+
+Fixtures:
+- pass: Branch B loses the top twice and then passes; sanity_round stays 0.
+- fail: sanity_round is 2 after two rebase-required outcomes.
+
+## ANC-072
+
+Anchor: A sanity FAIL must be delivered only as the sanity-fail.xml.j2 message to the dev on the open task, listing exactly the deliverables that were NOT complete with the reviewer's reason and referencing the sprint; no finding bead, child bead or lead action may be created for it.
+
+> sanity FAIL would be completely handled by ATM.  the sanity-fail.xml.j2 template would list exactly what was NOT complete and reference the sprint.
+
+Said by Rand, phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md), 2026-10-18. Status: locked. Version 2.
+
+Summary: sanity FAIL handled entirely by ATM: sanity-fail.xml.j2 lists exactly what was NOT complete and references the sprint
+
+Scope: templates/sanity-fail.xml.j2 and the sanity role's FAIL branch; retirement of sanity-create-findings
+
+Deterministic check to pair with the development gate: a FAIL run in a scratch repo produces one sanity-fail message whose body names the sprint id and each undone deliverable number, and bd list --parent <checked bead> stays empty
+
+Fixtures:
+- pass: The dev receives sanity-fail: sprint bj-2, deliverables 2 and 5 NOT complete with reasons; no beads are created.
+- fail: The hook files a finding bead per undone deliverable under the checked bead, or the lead is asked to dispatch a fix.
