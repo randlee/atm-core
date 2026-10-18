@@ -818,25 +818,25 @@
       "id": "ANC-018",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The console's pull-request list must show the CI pass, CI fail, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME.",
+      "statement": "The console's pull-request list must show the CI pass, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME; the CI fail glyph is governed by ANC-030.",
       "quote": "here are gh icons:",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-16",
       "context": "planning session 2026-10-17: GH_THEME pasted (source-branch green/red, source-merge purple, cancel red, weather-hurricane blue)",
-      "summary": "PR list uses Rand's GH_THEME icons",
+      "summary": "PR list uses Rand's GH_THEME icons (CI fail moved to ANC-030)",
       "scope": "edits how pull-request states are rendered",
-      "deterministic_check": "render a PR list with one PR per state and assert each line contains its GH_THEME code point and colour",
+      "deterministic_check": "render a PR list with one PR per state and assert each pass, running, merged and closed line contains its GH_THEME code point and colour",
       "fixtures": {
         "pass": [
-          "The PR list renders CI pass, CI fail, running, merged and closed with the GH_THEME glyphs and colours."
+          "The PR list renders CI pass, running, merged and closed with the GH_THEME glyphs and colours, and CI fail per ANC-030."
         ],
         "fail": [
-          "The PR list renders CI pass, CI fail, running, merged and closed with the old ✅, ⛔, 🌀, ⑂ and ⊗ characters and uses no GH_THEME glyph or colour."
+          "The PR list renders CI pass, running, merged and closed with the old ✅, 🌀, ⑂ and ⊗ characters and uses no GH_THEME glyph or colour."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -863,6 +863,17 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T01:35:07+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "The console's pull-request list must show the CI pass, CI fail, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME."
         }
       ]
     },
@@ -1078,6 +1089,19 @@
             "statement"
           ],
           "previous_statement": "After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke atm-bd-console."
+        },
+        {
+          "at": "2026-10-18T03:06:36+00:00",
+          "event": "excluded",
+          "item": "atm-bi-5.group-anc-f1",
+          "reason": "touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bi-5.group-anc-f1",
+          "reason": "touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow"
         }
       ]
     },
@@ -1360,6 +1384,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T02:13:55+00:00",
+          "event": "excluded",
+          "item": "atm-bi-5.group-anc-f1",
+          "reason": "two-entry icon fix (conflict, CI fail) under bi-5; it touches no bead-status icon; ANC-027 is judged on bi-5 itself (satisfied 2026-10-18); the plan gate returned an unstable near-threshold verdict on this item",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bi-5.group-anc-f1",
+          "reason": "two-entry icon fix (conflict, CI fail) under bi-5; it touches no bead-status icon; ANC-027 is judged on bi-5 itself (satisfied 2026-10-18); the plan gate returned an unstable near-threshold verdict on this item"
         }
       ]
     },
@@ -1444,8 +1481,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1460,6 +1497,237 @@
         },
         {
           "at": "2026-10-17T05:35:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-18T01:35:07+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-031",
+          "reason": "Rand, layout C spec: merge conflict uses source-branch U+F062C in red; source-merge in red looked like a closed GitHub PR item"
+        }
+      ]
+    },
+    {
+      "id": "ANC-030",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show a CI fail as the failing platform's icon in #F85149 when exactly one platform failed (macOS U+F0035, Windows U+F05B3, Linux U+F033D), and as the bug U+F00E4 in #F85149 when more than one platform failed or a general CI action not tied to a platform failed.",
+      "quote": "Only one of macOS, Windows or Linux failed: show that platform's icon in red. More than one platform failed: show the red bug. A general CI action failed, one that is not tied to a platform: show the red bug.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-17",
+      "context": "layout C spec, docs/plans/phase-bi/atm-bd cron status table (layout C).md, ci fail rule; ruling relayed by team-lead 2026-10-18 (01M56A77Q0JAB9R9WFBHN67104): the spec wins over ANC-018 for the CI fail glyph because the old source-branch red looked like a closed GitHub PR item",
+      "summary": "CI fail = single failing platform icon in red, else red bug",
+      "scope": "edits how a CI fail is rendered in the status table, PR list and cron markdown",
+      "deterministic_check": "render CI fails with one failing platform each and assert U+F0035, U+F05B3, U+F033D in #F85149; render a two-platform fail and a general action fail and assert U+F00E4 in #F85149",
+      "fixtures": {
+        "pass": [
+          "A CI fail where only Windows failed renders U+F05B3 in #F85149; a fail where macOS and Linux both failed renders the bug U+F00E4 in #F85149; a failed general action renders U+F00E4 in #F85149."
+        ],
+        "fail": [
+          "A CI fail where only Windows failed renders the source-branch glyph U+F062C in #F85149, or a two-platform fail renders one platform's icon."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-18T01:34:33+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-18T01:35:07+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-031",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show a merge check of conflict with the source-branch icon U+F062C in red #F85149.",
+      "quote": "| merge-check conflict | source-branch | U+F062C | #F85149 |",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-17",
+      "context": "layout C spec, docs/plans/phase-bi/atm-bd cron status table (layout C).md, PR states table; ruling relayed by team-lead 2026-10-18 (01M56A77Q0JAB9R9WFBHN67104): the spec wins over ANC-029; Rand moved the glyph off source-merge because it looked like a closed GitHub PR item",
+      "summary": "merge conflict = source-branch glyph in red",
+      "scope": "edits how the merge check is rendered",
+      "deterministic_check": "render a merge check of conflict and assert U+F062C in #F85149",
+      "fixtures": {
+        "pass": [
+          "A merge check of conflict renders the source-branch glyph U+F062C in #F85149."
+        ],
+        "fail": [
+          "A merge check of conflict renders the merged glyph U+F062D in #F85149, or U+F062C in #2EA043."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-18T01:35:07+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-18T01:35:07+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-032",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The status table's ci cell for a sprint whose shown PR is merged or closed must show the last CI run on that PR's head (pass, running or a fail per ANC-030), not none.",
+      "quote": "I think showing the last ci run is fine for now. IF a pr was merged and ci was red, this is something that might be OK, but I would want to know.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "bi-6 open question B, Rand to fenix 2026-10-18; spec rows bi-1 and bi-19 show pass on merged PRs",
+      "summary": "ci cell on a merged or closed PR = last run on its head",
+      "scope": "the ci cell of the status table (status_table.py CI producers) for merged and closed PRs",
+      "deterministic_check": "fixture with a merged PR whose last run failed renders a fail glyph per ANC-030; one whose last run passed renders U+F062C #2EA043; neither renders U+F01D8",
+      "fixtures": {
+        "pass": [
+          "A sprint whose newest PR is merged and whose last CI run on that head passed renders U+F062C in #2EA043 in the ci cell; a merged PR whose last run failed on Windows only renders U+F05B3 in #F85149."
+        ],
+        "fail": [
+          "A sprint whose newest PR is merged renders the ci cell as none (U+F01D8) regardless of the last run on its head."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-18T04:20:02+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-18T04:20:22+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-033",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The status table's pr cell must link the PR number to the PR url GitHub returned for that PR (PullRequest.url); it must not derive the link from a base URL or call gh pr view per PR.",
+      "quote": "github url should be fine. I assume it would work.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "bi-6 open question C, Rand to fenix 2026-10-18; replaces the spec's base-URL derivation text",
+      "summary": "PR link = the fetched PullRequest.url",
+      "scope": "the pr cell link of the markdown emitter and the Rich emitter",
+      "deterministic_check": "markdown row for a PR with url U renders [#n](U); a PR with empty url renders #n unlinked; the stubbed gh records no pr view call",
+      "fixtures": {
+        "pass": [
+          "The pr cell renders [#281](https://github.com/randlee/atm-bd-orchestration/pull/281) using the url returned by the GitHub fetch for PR 281, and the test's gh stub records no pr view call."
+        ],
+        "fail": [
+          "The pr cell builds the link from a configured base URL plus the number, or calls gh pr view for each PR to obtain the url."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-18T04:20:02+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-18T04:20:22+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-034",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The status table must render an unknown member (unknown sprint, ci or pr state, or GitHub data that is off, rate-limited or truncated) as the glyph ? in #2D81E0, never as the no-PR dash or the ci none glyph.",
+      "quote": "Unknown data the ? you showed would be fine. I would lighten the shade a bit (use same blue we used for the other items in spec)",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "bi-6 open question E, Rand to fenix 2026-10-18; #2D81E0 is the spec's blue for bead open, PR open and ci none",
+      "summary": "unknown = ? in #2D81E0",
+      "scope": "the unknown members of SprintState, CiState and PrState in the icon tables and both emitters",
+      "deterministic_check": "icon table test asserts ('?', '#2D81E0') for each unknown member; a GhStatus-off fixture renders ? in both ci and pr cells and a Problems row",
+      "fixtures": {
+        "pass": [
+          "SprintState.unknown, CiState.unknown and PrState.unknown each map to the glyph ? in #2D81E0, and a snapshot with GitHub data truncated renders ? in the ci and pr cells with a Problems row."
+        ],
+        "fail": [
+          "An unknown state renders ? in #F85149, or GitHub-off renders the no-PR dash in the pr cell."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-18T04:20:02+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-18T04:20:22+00:00",
           "event": "updated",
           "fields": [
             "fixtures"

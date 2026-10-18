@@ -23,7 +23,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-015 | retired | claude agents of unknown model get an orange starburst | 2026-10-16 |
 | ANC-016 | retired | codex agents get a glyph per model class | 2026-10-16 |
 | ANC-017 | locked | qa and sanity icons are fixed by agent type | 2026-10-16 |
-| ANC-018 | locked | PR list uses Rand's GH_THEME icons | 2026-10-16 |
+| ANC-018 | locked | PR list uses Rand's GH_THEME icons (CI fail moved to ANC-030) | 2026-10-16 |
 | ANC-019 | locked | claude agents get a per-model icon and colour | 2026-10-16 |
 | ANC-020 | locked | codex agents get a celestial icon and colour per model class | 2026-10-16 |
 | ANC-021 | locked | qa agent icon: running blue, pass green, fail red | 2026-10-16 |
@@ -34,7 +34,12 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-026 | locked | sanity agent icon is the Jev icon | 2026-10-16 |
 | ANC-027 | locked | bead statuses use the BEAD_STATUS icons | 2026-10-16 |
 | ANC-028 | locked | icons for the remaining states | 2026-10-16 |
-| ANC-029 | locked | merge conflict = merged glyph in red | 2026-10-16 |
+| ANC-029 | retired | merge conflict = merged glyph in red | 2026-10-16 |
+| ANC-030 | locked | CI fail = single failing platform icon in red, else red bug | 2026-10-17 |
+| ANC-031 | locked | merge conflict = source-branch glyph in red | 2026-10-17 |
+| ANC-032 | locked | ci cell on a merged or closed PR = last run on its head | 2026-10-18 |
+| ANC-033 | locked | PR link = the fetched PullRequest.url | 2026-10-18 |
+| ANC-034 | locked | unknown = ? in #2D81E0 | 2026-10-18 |
 
 ## ANC-001
 
@@ -324,21 +329,21 @@ Fixtures:
 
 ## ANC-018
 
-Anchor: The console's pull-request list must show the CI pass, CI fail, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME.
+Anchor: The console's pull-request list must show the CI pass, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME; the CI fail glyph is governed by ANC-030.
 
 > here are gh icons:
 
-Said by Rand, planning session 2026-10-17: GH_THEME pasted (source-branch green/red, source-merge purple, cancel red, weather-hurricane blue), 2026-10-16. Status: locked. Version 3.
+Said by Rand, planning session 2026-10-17: GH_THEME pasted (source-branch green/red, source-merge purple, cancel red, weather-hurricane blue), 2026-10-16. Status: locked. Version 4.
 
-Summary: PR list uses Rand's GH_THEME icons
+Summary: PR list uses Rand's GH_THEME icons (CI fail moved to ANC-030)
 
 Scope: edits how pull-request states are rendered
 
-Deterministic check to pair with the development gate: render a PR list with one PR per state and assert each line contains its GH_THEME code point and colour
+Deterministic check to pair with the development gate: render a PR list with one PR per state and assert each pass, running, merged and closed line contains its GH_THEME code point and colour
 
 Fixtures:
-- pass: The PR list renders CI pass, CI fail, running, merged and closed with the GH_THEME glyphs and colours.
-- fail: The PR list renders CI pass, CI fail, running, merged and closed with the old ✅, ⛔, 🌀, ⑂ and ⊗ characters and uses no GH_THEME glyph or colour.
+- pass: The PR list renders CI pass, running, merged and closed with the GH_THEME glyphs and colours, and CI fail per ANC-030.
+- fail: The PR list renders CI pass, running, merged and closed with the old ✅, 🌀, ⑂ and ⊗ characters and uses no GH_THEME glyph or colour.
 
 ## ANC-019
 
@@ -407,6 +412,9 @@ Summary: atm-bd-console is dropped, not aliased
 Scope: edits the command name, install scripts or any caller of the console
 
 Deterministic check to pair with the development gate: after uv tool install, command -v atm-bd-console finds nothing; rg atm-bd-console over scripts, docs, tests and workflows finds no invocation
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bi-5.group-anc-f1`: touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow
 
 Fixtures:
 - pass: After the sprint, atm-bd-console is not installed and no script, document, test or workflow in the repository invokes it.
@@ -498,6 +506,9 @@ Scope: edits how a bead or sprint status is rendered
 
 Deterministic check to pair with the development gate: render one bead per status in the table and assert each glyph code point and colour; render open and assert it is unchanged
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bi-5.group-anc-f1`: two-entry icon fix (conflict, CI fail) under bi-5; it touches no bead-status icon; ANC-027 is judged on bi-5 itself (satisfied 2026-10-18); the plan gate returned an unstable near-threshold verdict on this item
+
 Fixtures:
 - pass: Each of the ten bead statuses (blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed, ready) renders the icon and colour listed for it in the BEAD_STATUS table.
 - fail: Only blocked, in_progress and closed render icons from the BEAD_STATUS table; the other seven statuses render a plain dot, and no BEAD_STATUS table is used.
@@ -526,7 +537,7 @@ Anchor: The console must show a merge check of conflict with the merged icon U+F
 
 > merge conflict would be merged (w/ red)
 
-Said by Rand, planning session 2026-10-17; red taken as the GitHub red already in the theme, 2026-10-16. Status: locked. Version 2.
+Said by Rand, planning session 2026-10-17; red taken as the GitHub red already in the theme, 2026-10-16. Status: retired. Version 3.
 
 Summary: merge conflict = merged glyph in red
 
@@ -537,3 +548,93 @@ Deterministic check to pair with the development gate: render a merge check of c
 Fixtures:
 - pass: A merge check of conflict renders the merged glyph U+F062D in #F85149.
 - fail: A merge check of conflict renders U+F062D in #8957E5, the merged purple.
+
+## ANC-030
+
+Anchor: The console must show a CI fail as the failing platform's icon in #F85149 when exactly one platform failed (macOS U+F0035, Windows U+F05B3, Linux U+F033D), and as the bug U+F00E4 in #F85149 when more than one platform failed or a general CI action not tied to a platform failed.
+
+> Only one of macOS, Windows or Linux failed: show that platform's icon in red. More than one platform failed: show the red bug. A general CI action failed, one that is not tied to a platform: show the red bug.
+
+Said by Rand, layout C spec, docs/plans/phase-bi/atm-bd cron status table (layout C).md, ci fail rule; ruling relayed by team-lead 2026-10-18 (01M56A77Q0JAB9R9WFBHN67104): the spec wins over ANC-018 for the CI fail glyph because the old source-branch red looked like a closed GitHub PR item, 2026-10-17. Status: locked. Version 2.
+
+Summary: CI fail = single failing platform icon in red, else red bug
+
+Scope: edits how a CI fail is rendered in the status table, PR list and cron markdown
+
+Deterministic check to pair with the development gate: render CI fails with one failing platform each and assert U+F0035, U+F05B3, U+F033D in #F85149; render a two-platform fail and a general action fail and assert U+F00E4 in #F85149
+
+Fixtures:
+- pass: A CI fail where only Windows failed renders U+F05B3 in #F85149; a fail where macOS and Linux both failed renders the bug U+F00E4 in #F85149; a failed general action renders U+F00E4 in #F85149.
+- fail: A CI fail where only Windows failed renders the source-branch glyph U+F062C in #F85149, or a two-platform fail renders one platform's icon.
+
+## ANC-031
+
+Anchor: The console must show a merge check of conflict with the source-branch icon U+F062C in red #F85149.
+
+> | merge-check conflict | source-branch | U+F062C | #F85149 |
+
+Said by Rand, layout C spec, docs/plans/phase-bi/atm-bd cron status table (layout C).md, PR states table; ruling relayed by team-lead 2026-10-18 (01M56A77Q0JAB9R9WFBHN67104): the spec wins over ANC-029; Rand moved the glyph off source-merge because it looked like a closed GitHub PR item, 2026-10-17. Status: locked. Version 2.
+
+Summary: merge conflict = source-branch glyph in red
+
+Scope: edits how the merge check is rendered
+
+Deterministic check to pair with the development gate: render a merge check of conflict and assert U+F062C in #F85149
+
+Fixtures:
+- pass: A merge check of conflict renders the source-branch glyph U+F062C in #F85149.
+- fail: A merge check of conflict renders the merged glyph U+F062D in #F85149, or U+F062C in #2EA043.
+
+## ANC-032
+
+Anchor: The status table's ci cell for a sprint whose shown PR is merged or closed must show the last CI run on that PR's head (pass, running or a fail per ANC-030), not none.
+
+> I think showing the last ci run is fine for now. IF a pr was merged and ci was red, this is something that might be OK, but I would want to know.
+
+Said by Rand, bi-6 open question B, Rand to fenix 2026-10-18; spec rows bi-1 and bi-19 show pass on merged PRs, 2026-10-18. Status: locked. Version 2.
+
+Summary: ci cell on a merged or closed PR = last run on its head
+
+Scope: the ci cell of the status table (status_table.py CI producers) for merged and closed PRs
+
+Deterministic check to pair with the development gate: fixture with a merged PR whose last run failed renders a fail glyph per ANC-030; one whose last run passed renders U+F062C #2EA043; neither renders U+F01D8
+
+Fixtures:
+- pass: A sprint whose newest PR is merged and whose last CI run on that head passed renders U+F062C in #2EA043 in the ci cell; a merged PR whose last run failed on Windows only renders U+F05B3 in #F85149.
+- fail: A sprint whose newest PR is merged renders the ci cell as none (U+F01D8) regardless of the last run on its head.
+
+## ANC-033
+
+Anchor: The status table's pr cell must link the PR number to the PR url GitHub returned for that PR (PullRequest.url); it must not derive the link from a base URL or call gh pr view per PR.
+
+> github url should be fine. I assume it would work.
+
+Said by Rand, bi-6 open question C, Rand to fenix 2026-10-18; replaces the spec's base-URL derivation text, 2026-10-18. Status: locked. Version 2.
+
+Summary: PR link = the fetched PullRequest.url
+
+Scope: the pr cell link of the markdown emitter and the Rich emitter
+
+Deterministic check to pair with the development gate: markdown row for a PR with url U renders [#n](U); a PR with empty url renders #n unlinked; the stubbed gh records no pr view call
+
+Fixtures:
+- pass: The pr cell renders [#281](https://github.com/randlee/atm-bd-orchestration/pull/281) using the url returned by the GitHub fetch for PR 281, and the test's gh stub records no pr view call.
+- fail: The pr cell builds the link from a configured base URL plus the number, or calls gh pr view for each PR to obtain the url.
+
+## ANC-034
+
+Anchor: The status table must render an unknown member (unknown sprint, ci or pr state, or GitHub data that is off, rate-limited or truncated) as the glyph ? in #2D81E0, never as the no-PR dash or the ci none glyph.
+
+> Unknown data the ? you showed would be fine. I would lighten the shade a bit (use same blue we used for the other items in spec)
+
+Said by Rand, bi-6 open question E, Rand to fenix 2026-10-18; #2D81E0 is the spec's blue for bead open, PR open and ci none, 2026-10-18. Status: locked. Version 2.
+
+Summary: unknown = ? in #2D81E0
+
+Scope: the unknown members of SprintState, CiState and PrState in the icon tables and both emitters
+
+Deterministic check to pair with the development gate: icon table test asserts ('?', '#2D81E0') for each unknown member; a GhStatus-off fixture renders ? in both ci and pr cells and a Problems row
+
+Fixtures:
+- pass: SprintState.unknown, CiState.unknown and PrState.unknown each map to the glyph ? in #2D81E0, and a snapshot with GitHub data truncated renders ? in the ci and pr cells with a Problems row.
+- fail: An unknown state renders ? in #F85149, or GitHub-off renders the no-PR dash in the pr cell.
