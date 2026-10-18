@@ -3291,6 +3291,13 @@
           "item": "atm-bj-4",
           "reason": "the dev task's open and close lifecycle is the close hook's (bj-1); bj-4 reads runs and dispatches sanity and qa beads only",
           "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:48:58+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "BJ-2 ships stack schema, pour and validation only; whether the dev ATM task stays open through sanity is implemented by the BJ-1 close hook.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -3301,6 +3308,10 @@
         {
           "item": "atm-bj-4",
           "reason": "the dev task's open and close lifecycle is the close hook's (bj-1); bj-4 reads runs and dispatches sanity and qa beads only"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "BJ-2 ships stack schema, pour and validation only; whether the dev ATM task stays open through sanity is implemented by the BJ-1 close hook."
         }
       ]
     },

@@ -1149,6 +1149,7 @@ Deterministic check to pair with the development gate: grep atm-task-close.py: n
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
 - `atm-bj-4`: the dev task's open and close lifecycle is the close hook's (bj-1); bj-4 reads runs and dispatches sanity and qa beads only
+- `atm-bj-2`: BJ-2 ships stack schema, pour and validation only; whether the dev ATM task stays open through sanity is implemented by the BJ-1 close hook.
 
 Fixtures:
 - pass: After the dev role runs, atm task list still shows the dev task active; the sanity role on PASS closes it as the lead and the dev's next queued task starts.
