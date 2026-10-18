@@ -18,8 +18,10 @@ atm-core only. Four capabilities:
 3. **`atm cron`**: `atm cron start`, `atm cron end`, `atm cron list`. Cron
    strings live in a new table in the atm database; the daemon runs each due
    schedule's hook with the same contract; schedules survive a daemon restart.
-4. **`atm doctor`** module check: header sha compared to the released sha
-   (warn on mismatch), and the module's own `doctor` entry output.
+4. **`atm doctor`** calls the registered hook module's `doctor()` when run
+   from the team the hook is registered for, and reports its output. File
+   drift detection (published manifest of sc-sha per file) belongs to the
+   plugin's own doctor, not to atm (Rand, 2026-10-18).
 
 ## 2. Hook contract
 
@@ -73,32 +75,26 @@ The registered command is `python3 <module> <hook>`. The module declares:
 | Symbol | Type | Use |
 | --- | --- | --- |
 | `TIMEOUT_MS` | `int` constant | atm's deadline for one invocation. The module reads it to finish inside it. Required. |
-| `SC_SHA` | header line `# sc-sha: <hex>` | Hash of the module body with the header line removed, computed with sc-sha (strict UTF-8, CRLF and CR normalized to LF, BOM preserved, lowercase hex), the same identity templates use. |
 | `hook(request: dict) -> dict` | function | Task hooks. |
 | `cron(args: list[str]) -> dict` | function | Cron ticks. For atm-bd this runs `atm-bd cron <args>`. |
-| `doctor() -> dict` | function | Picked up by `atm doctor`. |
+| `doctor() -> dict` | function | Called by `atm doctor` from the registered team; the plugin's doctor runs its own published-manifest drift check inside it. |
 
-atm reads `TIMEOUT_MS` and `SC_SHA` from the file as text at registration
-(`atm hook register` refuses a module without them); it never imports the
+atm reads `TIMEOUT_MS` from the file as text at registration
+(`atm hook register` refuses a module without it); it never imports the
 module in-process.
 
-**D-2 Released sha and the header rule.** `atm hook register --released-sha <hex>`
-records the sha the skill release shipped; `atm doctor` compares the module's
-current header sha and the recomputed body sha against it. The skill passes the
-sha from its own release manifest. Reference (skillrx@hermes, 2026-10-18, on
-#1873): sc-sha crate at sc-compose `crates/sc-sha/` develop fcd5890b
-(`src/file.rs` `calculate_hash`), consumed by synaptic-canvas-dolt
-`src/pkg/integrity/` at 30b4bd6 and `sc validate`. Two consequences:
-
-- dolt keeps the sha out-of-band (Dolt column, catalog TOML, lockfile) and no
-  header-exclusion rule exists in sc-sha or dolt. The self-sha header is
-  therefore net-new to this design and is defined here as: remove the single
-  `# sc-sha: <hex>` line, then sc-sha `calculate_hash` over the rest. atm-core
-  implements it through the `sc-sha` crate it already depends on
-  (`crates/atm-template-sc-compose/Cargo.toml`), never a second hasher.
-- `atm doctor` hashes sc-sha-normalized bytes, not raw bytes (the dolt Go
-  `ComputeFileSHA256` hashes raw bytes; following it would make a CRLF module
-  warn).
+**D-2 No sha in atm.** Rand (2026-10-18): "when atm-bd is published, the sha
+must be calculated and stored in a manifest for every file. then the installer
+can check against the published manifest to verify the file has not changed.
+we should do this for the entire skill. all agents/skills/python files." and
+"the plug-in can run this check as part of 'doctor' it provides and IF a hook
+is installed, 'atm doctor' would call hook.doctor() when called from the team
+it is registered for." So atm stores no file sha and defines no header; the
+published manifest and its check live in atm-bd-orchestration (issue filed
+there). `atm doctor` resolves the active hooks for the caller's team and
+calls each module's `doctor()` with the same runner and deadline as a hook,
+printing the reply under a `hooks` section; a missing or failing `doctor()`
+is reported, not fatal.
 
 ## 3. Where hooks run
 
@@ -124,16 +120,16 @@ Flow for a hooked task command:
 4. Reply handling per 2.2. Actions are dispatched through the same internal
    command path the HTTP API uses, with `as` identity, hooks disabled for the
    dispatch.
-5. One structured log entry per hook call (hook, team, phase, caller, module
-   sha, duration, outcome, action count) and one per action (ADR-067).
+5. One structured log entry per hook call (hook, team, phase, caller,
+   duration, outcome, action count) and one per action (ADR-067).
 
 ## 4. Storage (ADR-061 governed interface, minor bump)
 
 Two tables, both team-scoped:
 
 - `hook_registration(team, phase, hook, module_path, cwd, timeout_ms,
-  header_sha, released_sha, active, registered_by, registered_at,
-  disabled_at)`; unique on (team, phase, hook).
+  active, registered_by, registered_at, disabled_at)`; unique on
+  (team, phase, hook).
 - `cron_schedule(id, team, phase, name, cron_expr, module_path, cwd, args,
   timeout_ms, active, created_by, created_at, last_run_at, last_outcome,
   ended_at)`; unique on (team, phase, name).
@@ -167,15 +163,15 @@ Rules:
 
 ## 6. CLI
 
-- `atm hook register <hook> --module <path> --phase <x> [--cwd <dir>] [--released-sha <hex>]`
+- `atm hook register <hook> --module <path> --phase <x> [--cwd <dir>]`
 - `atm hook disable --phase <x> [<hook>]`
 - `atm hook list [--phase <x>] [--json]`
 - `atm cron start <name> --cron "<expr>" --module <path> --phase <x> [--args ...] [--cwd <dir>]`
 - `atm cron end --phase <x> [<name>]`
 - `atm cron list [--phase <x>] [--json]`
-- `atm doctor`: a `hooks` section listing every active registration with
-  `header_sha`, `recomputed_sha`, `released_sha`, `drift` (bool) and the
-  module's `doctor()` output; drift is a warning, not a failure.
+- `atm doctor`: a `hooks` section listing every active registration for the
+  caller's team with the module's `doctor()` reply (or its error); never
+  fatal to doctor.
 
 Team comes from the caller context as for every atm command (ADR-066).
 
