@@ -254,6 +254,52 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:46:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships"
+        },
+        {
+          "item": "atm-bj-1",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships"
         }
       ]
     },
@@ -476,6 +522,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the atm-bd skill install subcommand is not touched by bj-2",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "the atm-bd skill install subcommand is not touched by bj-2"
         }
       ]
     },
@@ -1456,6 +1515,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -1732,6 +1804,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -1829,6 +1914,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -1927,6 +2025,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -2053,6 +2164,19 @@
             "fixtures"
           ],
           "previous_statement": "The emitted markdown must match the spec's form byte for byte: header | sprint | state | ci | pr |, alignment row |---|:-:|:-:|---|, one row per sprint with a glyph in each icon slot, and two emissions over the same snapshot must produce identical bytes."
+        },
+        {
+          "at": "2026-10-18T22:51:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table and its markdown export are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table and its markdown export are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -2098,6 +2222,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -2188,6 +2325,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "atm-bd's sender address and logging are not touched by bj-4",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "atm-bd's sender address and logging are not touched by bj-4"
         }
       ]
     },
@@ -2233,6 +2405,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:51:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "atm-bd's sender address is not touched by bj-4; the lead identity on dispatch's assign subprocess is ANC-051's and unchanged",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "atm-bd's sender address is not touched by bj-4; the lead identity on dispatch's assign subprocess is ANC-051's and unchanged"
         }
       ]
     },
@@ -2368,6 +2575,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:46:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd's log line format is atm-bd tool code; bj-3 edits agent prompts only",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd's log line format is atm-bd tool code; bj-3 edits agent prompts only"
         }
       ]
     },
@@ -2413,6 +2644,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "atm-bd's sender address and logging are not touched by bj-4",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "atm-bd's sender address and logging are not touched by bj-4"
         }
       ]
     },
@@ -2503,6 +2758,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:47:48+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd's GitHub quota read is atm-bd tool code; bj-3 edits agent prompts only",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd's GitHub quota read is atm-bd tool code; bj-3 edits agent prompts only"
         }
       ]
     },
@@ -2548,6 +2827,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -2593,6 +2885,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2638,6 +2943,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2683,6 +3012,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2728,6 +3070,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2735,7 +3101,7 @@
       "id": "ANC-055",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The ATM task of a dev or fix bead must stay open after the dev's close hook runs and must be closed only by the sanity close hook on PASS, as the lead; the dev waits for that close or for the sanity-rejected message and starts no other task meanwhile.",
+      "statement": "The ATM task of a dev or fix bead must stay open after the dev's close hook runs and must be closed only by the sanity close hook on PASS, as the lead; the dev waits for that close or for the sanity-fail message and starts no other task meanwhile.",
       "quote": "I would NOT close the atm task until AFTER sanity is green.  This simplifies the dev<->sanity loop.  in the atm-task-close hook for sanity, if sanity pass, THEN atm task is closed (and dev can begin on next task in the queue), sanity task is closed",
       "kind": "directive",
       "stated_by": "Rand",
@@ -2753,7 +3119,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2773,6 +3139,38 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:48:07+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "The ATM task of a dev or fix bead must stay open after the dev's close hook runs and must be closed only by the sanity close hook on PASS, as the lead; the dev waits for that close or for the sanity-rejected message and starts no other task meanwhile."
+        },
+        {
+          "at": "2026-10-18T22:51:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the dev task's open and close lifecycle is the close hook's (bj-1); bj-4 reads runs and dispatches sanity and qa beads only",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "the dev task's open and close lifecycle is the close hook's (bj-1); bj-4 reads runs and dispatches sanity and qa beads only"
         }
       ]
     },
@@ -2780,25 +3178,25 @@
       "id": "ANC-056",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "On a sanity FAIL below the round cap, the sanity close hook must reopen the checked bead to its assignee and send that dev the sanity-rejected template naming each undone deliverable, on the dev's still-open task; it must not create finding beads, a new layer or a new task.",
+      "statement": "On a sanity FAIL below the round cap, the sanity close hook must reopen the checked bead to its assignee and send that dev the sanity-fail.xml.j2 template naming each undone deliverable, on the dev's still-open task; it must not create finding beads, a new layer or a new task.",
       "quote": "If sanity fails, dev bead is re-opened and 'atm send <dev-agent> --template <sanity-rejected-template>'",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
       "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
       "summary": "sanity FAIL reopens the bead and sends sanity-rejected",
-      "scope": "atm-task-close.py sanity role on FAIL; templates/sanity-rejected.md.j2; retirement of sanity-create-findings and dev-fix.xml.j2",
-      "deterministic_check": "run the sanity role with verdict FAIL in a scratch repo: the checked bead is open with its assignee, the dev received one sanity-rejected message, bd list --parent <checked bead> is empty, no new ATM task exists",
+      "scope": "atm-task-close.py sanity role on FAIL; templates/sanity-fail.xml.j2; retirement of sanity-create-findings and dev-fix.xml.j2",
+      "deterministic_check": "run the sanity role with verdict FAIL in a scratch repo: the checked bead is open with its assignee, the dev received one sanity-fail message, bd list --parent <checked bead> is empty, no new ATM task exists",
       "fixtures": {
         "pass": [
-          "On FAIL the hook runs bd update <dev bead> --status open --assignee <dev> and atm send <dev> --template sanity-rejected.md.j2 --vars <file>; the dev fixes on the same branch."
+          "On FAIL the hook runs bd update <dev bead> --status open --assignee <dev> and atm send <dev> --template sanity-fail.xml.j2 --vars <file>; the dev fixes on the same branch."
         ],
         "fail": [
           "On FAIL the hook creates a finding child per undone deliverable and the lead assigns dev-fix.xml.j2 on a new layer."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2818,6 +3216,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:48:07+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "scope",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "On a sanity FAIL below the round cap, the sanity close hook must reopen the checked bead to its assignee and send that dev the sanity-rejected template naming each undone deliverable, on the dev's still-open task; it must not create finding beads, a new layer or a new task."
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2863,6 +3285,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2908,6 +3354,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2953,6 +3412,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2998,6 +3470,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:46:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd dispatch and the lead's dev assignment are not touched by bj-3; its agents assign nothing",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:47:49+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "atm-bd dispatch is not touched by bj-4; the runs tabs assign nothing",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd dispatch and the lead's dev assignment are not touched by bj-3; its agents assign nothing"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "atm-bd dispatch is not touched by bj-4; the runs tabs assign nothing"
         }
       ]
     },
@@ -3043,6 +3539,54 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "bj-1 does not touch atm-bd dispatch; the hook assigns the sanity task itself and dispatch's bd-ready-then-task check is phase-bi code left unchanged",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "atm-bd dispatch is not touched by bj-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:49:47+00:00",
+          "event": "exclusion_removed",
+          "item": "atm-bj-1"
+        },
+        {
+          "at": "2026-10-18T22:49:47+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "bj-1 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:49:47+00:00",
+          "event": "exclusion_removed",
+          "item": "atm-bj-2"
+        },
+        {
+          "at": "2026-10-18T22:49:47+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "bj-2 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "bj-1 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "bj-2 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8"
         }
       ]
     },
@@ -3139,6 +3683,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:42+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the sprint pour is bj-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:47:48+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the sprint pour is bj-2",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the sprint pour is bj-2"
+        },
+        {
+          "item": "atm-bj-1",
+          "reason": "the sprint pour is bj-2"
         }
       ]
     },
@@ -3184,6 +3752,63 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:40+00:00",
+          "event": "excluded",
+          "item": "atm-phase-bj",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-phase-bj",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it"
+        },
+        {
+          "item": "atm-bj-1",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it"
         }
       ]
     },
@@ -3229,6 +3854,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the link on PASS and the rebase-required path are bj-3; bj-1 only refuses a PASS close whose vars carry no stack result and ships the rebase-required template",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the link on PASS and the rebase-required path are bj-3; bj-1 only refuses a PASS close whose vars carry no stack result and ships the rebase-required template"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write"
         }
       ]
     },
@@ -3274,6 +3923,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the sanity-stack subagent and dev-sanity's spawn rule are bj-3",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:51:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the sanity-stack subagent and dev-sanity's spawn rule are bj-3",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the sanity-stack subagent and dev-sanity's spawn rule are bj-3"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "the sanity-stack subagent and dev-sanity's spawn rule are bj-3"
         }
       ]
     },
@@ -3319,6 +4003,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead"
         }
       ]
     },
@@ -3364,6 +4061,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write"
         }
       ]
     },
@@ -3409,6 +4130,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write"
         }
       ]
     },
@@ -3454,6 +4199,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -3544,6 +4313,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:47:49+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the sanity-fail message and the hook's FAIL branch are bj-1",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the sanity-fail message and the hook's FAIL branch are bj-1"
         }
       ]
     },
@@ -3589,6 +4382,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:42+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the runs pages and the ledger row schema are bj-4; bj-3 adds only the LLM timer and retry wording in dev-sanity.md whose values bj-4's rows carry",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:46:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the runs pages and the sanity ledger are bj-4; bj-2 ships the stack bead schema and the pour only",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the runs pages and the ledger row schema are bj-4; bj-3 adds only the LLM timer and retry wording in dev-sanity.md whose values bj-4's rows carry"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "the runs pages and the sanity ledger are bj-4; bj-2 ships the stack bead schema and the pour only"
         }
       ]
     },

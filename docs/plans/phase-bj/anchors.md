@@ -164,6 +164,12 @@ Scope: any sprint dispatch, any change to the v0.16.1 release branch
 
 Deterministic check to pair with the development gate: git diff v0.16.1..<phase base> shows no change from this phase's PRs; tag v0.16.1 predates the first sprint's first commit
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-2`: this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships
+- `atm-bj-3`: this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships
+- `atm-bj-4`: this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships
+- `atm-bj-1`: this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships
+
 Fixtures:
 - pass: The sprint changes only the new atm-bd code and leaves everything v0.16.1 ships untouched.
 - fail: The sprint edits the 0.16.1 release's contents to apply the new rename.
@@ -245,6 +251,9 @@ Summary: bare skill installs the bundled skills, offline
 Scope: changes where the skill subcommand reads skill files or how the wheel is built
 
 Deterministic check to pair with the development gate: build the wheel, unzip it and find the skill files; run atm-bd skill with the network disabled and confirm the install succeeds
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-2`: the atm-bd skill install subcommand is not touched by bj-2
 
 Fixtures:
 - pass: Bare atm-bd skill installs the skills packaged inside the installed package and works with the network disabled.
@@ -568,6 +577,9 @@ Scope: edits how bead, sprint, PR or CI states are rendered
 
 Deterministic check to pair with the development gate: render each of the five states and assert its code point and colour
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+
 Fixtures:
 - pass: Bead open, sprint not_ready, PR open, PR draft and CI none render U+F0766 in #2D81E0, U+F137C in #D97757, U+F04C2 in #2D81E0, U+F0CB6 in #FFA60D and U+F01D8 in #2D81E0 respectively.
 - fail: PR draft renders U+F04C2 in #2D81E0, the same glyph and colour as PR open, and sprint not_ready renders the PR open glyph too.
@@ -676,6 +688,9 @@ Scope: the unknown members of SprintState, CiState and PrState in the icon table
 
 Deterministic check to pair with the development gate: icon table test asserts ('?', '#2D81E0') for each unknown member; a GhStatus-off fixture renders ? in both ci and pr cells and a Problems row
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+
 Fixtures:
 - pass: SprintState.unknown, CiState.unknown and PrState.unknown each map to the glyph ? in #2D81E0, and a snapshot with GitHub data truncated renders ? in the ci and pr cells with a Problems row.
 - fail: An unknown state renders ? in #F85149, or GitHub-off renders the no-PR dash in the pr cell.
@@ -712,6 +727,9 @@ Scope: the agents_working STATE producer and both emitters (markdown and Rich)
 
 Deterministic check to pair with the development gate: fixture with two active agents renders both glyphs in the state cell and nothing else; a third active agent adds a third glyph
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+
 Fixtures:
 - pass: A sprint with fable and quality-mgr both active renders the fable glyph and the gavel side by side in its state cell, two glyph cells wide.
 - fail: A sprint with two active agents renders only the first agent's glyph, or an overflow marker in place of the second.
@@ -747,6 +765,9 @@ Summary: pr cell = state icon then [#n](url), or - with no PR
 Scope: the PR producers and the pr cell of the markdown emitter
 
 Deterministic check to pair with the development gate: fixture: open PR 118 renders the open glyph then [#118](url); merged PR renders the merged glyph then the link; no PR renders exactly -
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
 
 Fixtures:
 - pass: A sprint with open PR 118 renders the open glyph then [#118](https://github.com/randlee/atm-bd-orchestration/pull/118); a sprint with no PR renders exactly -.
@@ -804,6 +825,9 @@ Scope: the markdown emitter (AC6 byte test)
 
 Deterministic check to pair with the development gate: AC6 byte test: a fixed snapshot renders to exactly the stored expected bytes; a second render compares equal byte for byte
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+
 Fixtures:
 - pass: The AC6 byte test renders a fixed snapshot to the stored expected bytes and a second render of the same snapshot compares equal byte for byte.
 - fail: Two renders of the same snapshot differ because the emitter writes a generated-at timestamp or iterates an unordered set of agents.
@@ -840,6 +864,11 @@ Scope: the sender identity of every atm send and, once atm-core allows it, atm t
 
 Deterministic check to pair with the development gate: the sender constant exists; no flag or environment variable feeds it; the repo config key is optional
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's
+- `atm-bj-3`: atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only
+- `atm-bj-4`: atm-bd's sender address and logging are not touched by bj-4
+
 Fixtures:
 - pass: The console's sender is the constant atm-bd@tool; a repository sets tool_identity: ops-bot@tool in .claude/project/atm-bd-orchestration.yaml and every send goes out as ops-bot@tool.
 - fail: The console sends as the phase lead from the phase file, or takes the sender from a --as flag.
@@ -857,6 +886,10 @@ Summary: ADR-066 D3: env never the sender; ATM_TEAM is the target team at most
 Scope: config loading and the subprocess environment the console builds
 
 Deterministic check to pair with the development gate: no read of ATM_IDENTITY in the console's own config; ATM_TEAM, if read, flows only into the target team
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's
+- `atm-bj-3`: atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only
 
 Fixtures:
 - pass: The console reads ATM_TEAM only to choose which team's tasks it lists and assigns; its sends still go out as atm-bd@tool.
@@ -912,6 +945,10 @@ Scope: the sc-observability event writer in atm-bd and every error it records
 
 Deterministic check to pair with the development gate: an error entry has level error and a non-empty message matching the form; a stubbed gh failure renders the example line
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's
+- `atm-bj-3`: atm-bd's log line format is atm-bd tool code; bj-3 edits agent prompts only
+
 Fixtures:
 - pass: A gh failure with exit 1 and stderr 'gh: API rate limit already exceeded for user ID 8083956.' is logged at level error with message `check gh and retry` gh api graphql [1] gh: API rate limit already exceeded for user ID 8083956.
 - fail: The failure is logged at level info with message null, or the message carries the full GraphQL query text from argv.
@@ -929,6 +966,10 @@ Summary: ADR-067 D4: one failure, one entry
 Scope: the per-tick error collection in the model and runner
 
 Deterministic check to pair with the development gate: ten ticks with one cached GitHub error produce one error entry
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-3`: atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only
+- `atm-bj-4`: atm-bd's sender address and logging are not touched by bj-4
 
 Fixtures:
 - pass: A GitHub refresh fails once at 07:16; the log holds one error entry for it and the PR sheet shows the cached error status on later ticks.
@@ -966,6 +1007,10 @@ Scope: the GitHub refresh gate, its status line and the forced-refresh path
 
 Deterministic check to pair with the development gate: a stubbed rate_limit at 49 percent skips the refresh and shows the pause line with a local reset time; at 51 percent after reset the refresh runs
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's
+- `atm-bj-3`: atm-bd's GitHub quota read is atm-bd tool code; bj-3 edits agent prompts only
+
 Fixtures:
 - pass: With graphql remaining 2310 of 5000 the refresh is skipped, the PR sheet shows 'GitHub paused: 2310/5000 graphql remaining, below 50 percent, resets 08:14', a forced refresh is refused with the same line, and the first cycle after reset above 50 percent refreshes.
 - fail: The console refreshes regardless of the remaining quota, or counts its own calls instead of reading gh api rate_limit.
@@ -983,6 +1028,9 @@ Summary: bead .10: agent row = sprint/fix id + bead title, truncated
 Scope: the dashboard agent row renderer and its tag source
 
 Deterministic check to pair with the development gate: a row for a fix bead on sprint bi-5 starts with bi-5 or the fix id and the bead title, cut with an ellipsis at the pane width
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
 
 Fixtures:
 - pass: An agent row for a fix bead reads bi-5: console notify send to team-lead fails as self-addressed… cut at the pane width.
@@ -1002,6 +1050,9 @@ Scope: the sender of atm task assign in atm-task-close.py and in atm-bd dispatch
 
 Deterministic check to pair with the development gate: grep the assign subprocess env in atm-task-close.py and atm-bd dispatch for ATM_IDENTITY set from the phase file lead; a notice send has no such override
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
+
 Fixtures:
 - pass: The hook assigns the sanity bead with ATM_IDENTITY=team-lead taken from .atm-bd/phase-bj.toml on that subprocess only; its dev-complete send goes out as the dev and atm-bd's notices as atm-bd@tool.
 - fail: The hook assigns the sanity bead as the dev, or atm-bd assigns it as atm-bd@tool, or the lead identity comes from the process environment instead of the phase file.
@@ -1019,6 +1070,10 @@ Summary: sanity assigned mechanically when a dev or fix bead closes
 Scope: atm-task-close.py dev and fix roles; atm-bd dispatch of sanity beads
 
 Deterministic check to pair with the development gate: close a dev bead through the hook in a scratch repo and read atm task list: the sanity task exists before the hook exits; kill the hook between its commands and one atm-bd tick assigns it
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-2`: the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only
+- `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
 
 Fixtures:
 - pass: The dev role of atm-task-close.py runs atm task assign atm-sanity --task-id <sanity bead> and bd close <dev bead> in one shell command; an atm-bd tick finds a ready sanity bead with no task and assigns it.
@@ -1038,6 +1093,9 @@ Scope: atm-task-close.py sanity role on PASS
 
 Deterministic check to pair with the development gate: run the sanity role with verdict PASS in a scratch repo and read atm task list: the qa task exists, assigned by the lead identity, before the hook exits
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
+
 Fixtures:
 - pass: The sanity role on PASS runs atm task assign quality-mgr --task-id <qa bead> --template qa-template.xml.j2 --vars <file> with the lead identity on that subprocess.
 - fail: On PASS the hook closes the sanity bead and the lead dispatches the qa bead on the next bd ready pass.
@@ -1056,17 +1114,21 @@ Scope: the check set of atm-task-close.py for the dev and fix roles
 
 Deterministic check to pair with the development gate: the dev-role check list in the script source has exactly the PR-exists, head-equals and ancestor checks; a scratch stack whose lower layer is misaligned still passes a correctly based top layer
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-2`: the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only
+- `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
+
 Fixtures:
 - pass: The dev role checks: PR open on pr_target, HEAD equals origin/<branch> equals the PR head, origin/<pr_target> is an ancestor. Nothing else.
 - fail: The dev role also verifies every lower layer's base, runs gh stack view, or reruns the test command before closing.
 
 ## ANC-055
 
-Anchor: The ATM task of a dev or fix bead must stay open after the dev's close hook runs and must be closed only by the sanity close hook on PASS, as the lead; the dev waits for that close or for the sanity-rejected message and starts no other task meanwhile.
+Anchor: The ATM task of a dev or fix bead must stay open after the dev's close hook runs and must be closed only by the sanity close hook on PASS, as the lead; the dev waits for that close or for the sanity-fail message and starts no other task meanwhile.
 
 > I would NOT close the atm task until AFTER sanity is green.  This simplifies the dev<->sanity loop.  in the atm-task-close hook for sanity, if sanity pass, THEN atm task is closed (and dev can begin on next task in the queue), sanity task is closed
 
-Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 2.
+Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 3.
 
 Summary: dev task open until sanity PASS; closed by the sanity hook
 
@@ -1074,26 +1136,32 @@ Scope: the dev and fix roles never call atm task close completed; the sanity rol
 
 Deterministic check to pair with the development gate: grep atm-task-close.py: no atm task close completed in the dev or fix role; the sanity PASS branch closes the checked bead's task with the lead identity; atm task events of a dev task show the close after the sanity PASS
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
+
 Fixtures:
 - pass: After the dev role runs, atm task list still shows the dev task active; the sanity role on PASS closes it as the lead and the dev's next queued task starts.
 - fail: The dev role closes the dev's ATM task with dev-complete.md.j2 and the dev starts its next queued task before sanity has run.
 
 ## ANC-056
 
-Anchor: On a sanity FAIL below the round cap, the sanity close hook must reopen the checked bead to its assignee and send that dev the sanity-rejected template naming each undone deliverable, on the dev's still-open task; it must not create finding beads, a new layer or a new task.
+Anchor: On a sanity FAIL below the round cap, the sanity close hook must reopen the checked bead to its assignee and send that dev the sanity-fail.xml.j2 template naming each undone deliverable, on the dev's still-open task; it must not create finding beads, a new layer or a new task.
 
 > If sanity fails, dev bead is re-opened and 'atm send <dev-agent> --template <sanity-rejected-template>'
 
-Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 2.
+Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 3.
 
 Summary: sanity FAIL reopens the bead and sends sanity-rejected
 
-Scope: atm-task-close.py sanity role on FAIL; templates/sanity-rejected.md.j2; retirement of sanity-create-findings and dev-fix.xml.j2
+Scope: atm-task-close.py sanity role on FAIL; templates/sanity-fail.xml.j2; retirement of sanity-create-findings and dev-fix.xml.j2
 
-Deterministic check to pair with the development gate: run the sanity role with verdict FAIL in a scratch repo: the checked bead is open with its assignee, the dev received one sanity-rejected message, bd list --parent <checked bead> is empty, no new ATM task exists
+Deterministic check to pair with the development gate: run the sanity role with verdict FAIL in a scratch repo: the checked bead is open with its assignee, the dev received one sanity-fail message, bd list --parent <checked bead> is empty, no new ATM task exists
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
 
 Fixtures:
-- pass: On FAIL the hook runs bd update <dev bead> --status open --assignee <dev> and atm send <dev> --template sanity-rejected.md.j2 --vars <file>; the dev fixes on the same branch.
+- pass: On FAIL the hook runs bd update <dev bead> --status open --assignee <dev> and atm send <dev> --template sanity-fail.xml.j2 --vars <file>; the dev fixes on the same branch.
 - fail: On FAIL the hook creates a finding child per undone deliverable and the lead assigns dev-fix.xml.j2 on a new layer.
 
 ## ANC-057
@@ -1109,6 +1177,10 @@ Summary: sanity round counter with max_sanity_rounds default 5
 Scope: atm-task-close.py sanity role FAIL branch; .claude/project/atm-bd-orchestration.yaml key max_sanity_rounds rendered from registry.yaml
 
 Deterministic check to pair with the development gate: five FAIL runs in a scratch repo with no setting leave sanity_round at 5, the dev bead closed-not-reopened, and one SANITY.ROUND_CAP send to the lead; a repo value of 2 escalates on the second
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-2`: the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only
+- `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
 
 Fixtures:
 - pass: sanity_round goes 1, 2, 3, 4, 5; on the fifth FAIL the hook sends the lead SANITY.ROUND_CAP and reopens nothing; max_sanity_rounds: 2 in the repo config escalates on the second.
@@ -1128,6 +1200,9 @@ Scope: the input contract of atm-task-close.py; templates/task-close-vars.j2
 
 Deterministic check to pair with the development gate: a vars file missing commit fails before any git or gh call with an err naming commit; the assign and send subprocess argv carry --vars <the same path>
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
+
 Fixtures:
 - pass: The hook renders task-close-vars.j2 (required_variables only) with sc-compose in strict mode and refuses a file missing pr_number; the same path is passed as --vars to atm task assign.
 - fail: The hook defines a pydantic model of its own fields and builds a second vars dict for the assignment template.
@@ -1145,6 +1220,9 @@ Summary: rate limiting never stops the hook; --skip-checks is help-only
 Scope: GitHub failure handling and the --skip-checks flag of atm-task-close.py; the dev, fix, sanity and qa templates and agent prompts
 
 Deterministic check to pair with the development gate: run the hook with GH_TOKEN unset: exit ok with github: unavailable in the result; grep -r skip-checks templates/ agents/ returns nothing; --help lists --skip-checks with the lead-permission sentence
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
 
 Fixtures:
 - pass: With gh failing on rate limit the hook records github: unavailable, checks origin/<pr_target> locally and closes; --help shows '--skip-checks: skips the PR and stack checks. Do NOT use without permission from the phase lead' and no template mentions it.
@@ -1164,6 +1242,10 @@ Scope: atm-bd dispatch: sanity and qa beads only; dev, fix and finding beads are
 
 Deterministic check to pair with the development gate: atm-bd's actions.jsonl over a tick with a ready dev bead and no task holds no assign for it; the candidate filter in dispatch.py admits only sanity and qa stages
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-3`: atm-bd dispatch and the lead's dev assignment are not touched by bj-3; its agents assign nothing
+- `atm-bj-4`: atm-bd dispatch is not touched by bj-4; the runs tabs assign nothing
+
 Fixtures:
 - pass: A tick with a ready dev bead and a ready sanity bead assigns the sanity bead and emits a notice for the dev bead; the lead picks the dev.
 - fail: atm-bd assigns the ready dev bead to the first idle member of its difficulty tier.
@@ -1181,6 +1263,10 @@ Summary: poller checks bd ready then the ATM task before assigning
 Scope: atm-bd dispatch candidate filter order for sanity and qa beads
 
 Deterministic check to pair with the development gate: dispatch.py reads bd ready first and atm task list second for each candidate; a tick against a sanity bead whose task the hook assigned emits no assign action
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: bj-1 does not touch atm-bd dispatch; the hook assigns the sanity task itself and dispatch's bd-ready-then-task check is phase-bi code left unchanged
+- `atm-bj-2`: atm-bd dispatch is not touched by bj-2
 
 Fixtures:
 - pass: atm-bd reads bd ready, then atm task list, and skips the sanity bead because its task already exists.
@@ -1218,6 +1304,10 @@ Scope: bead-groups pour, bead_schema.py models, validate-plan; atm-bd-orchestrat
 
 Deterministic check to pair with the development gate: pour a sprint in a scratch repo and bd show each poured bead: the four keys are present; remove branch from one bead and the phase validation method exits non-zero naming it
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-3`: the sprint pour is bj-2
+- `atm-bj-1`: the sprint pour is bj-2
+
 Fixtures:
 - pass: bd show atm-bj-2.group-sanity shows branch, worktree, pr_target, difficulty; validate-plan --phase bj runs validate_phase() over all beads and fails on a missing key.
 - fail: Only the sprint container carries branch and worktree, and bead_schema.py validates sprint and sanity beads only.
@@ -1235,6 +1325,13 @@ Summary: atm task transition hooks in atm-core, routed by role, failure keeps th
 Scope: atm-core task close path (crates/atm/src/commands/task.rs TaskCloseCommand) and its hook configuration; atm-core #1873, release 1.6.2
 
 Deterministic check to pair with the development gate: with a configured hook that returns failure, atm task close <id> completed leaves the task active and the hook result appears in atm task events; with no hook configured the close behaves as today
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-phase-bj`: the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it
+- `atm-bj-1`: the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it
+- `atm-bj-2`: the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it
+- `atm-bj-3`: the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it
+- `atm-bj-4`: the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it
 
 Fixtures:
 - pass: A repo-configured task-close hook returning err keeps the task active and logs the err; the hook receives role and the JSON payload unchanged.
@@ -1254,6 +1351,10 @@ Scope: dev-sanity PASS procedure, sanity-stack, the sanity close hook's PASS pre
 
 Deterministic check to pair with the development gate: two scratch branches cut from the same top both pass sanity: the first is linked and the stack bead's layers has it as top; the second gets one rebase-required send, no link, no ledger write; the hook refuses a PASS close whose vars carry no stack result
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: the link on PASS and the rebase-required path are bj-3; bj-1 only refuses a PASS close whose vars carry no stack result and ships the rebase-required template
+- `atm-bj-2`: the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write
+
 Fixtures:
 - pass: Sanity PASS on branch A links A as the top; sanity PASS on branch B, cut from the old top, sends the dev rebase-required and writes nothing; the dev rebases B onto A and runs its hook again.
 - fail: The lead links the layer when it reads the sanity PASS report, or sanity closes the dev's task and assigns QA with the PR still unlinked.
@@ -1271,6 +1372,10 @@ Summary: sanity-stack subagent: one next-top layer per spawn, sequential; the ra
 Scope: agents/sanity-stack.md, agents/dev-sanity.md PASS handling
 
 Deterministic check to pair with the development gate: dev-sanity.md forbids a second sanity-stack spawn while one is running; sanity-stack.md takes one checked bead per input; ten simultaneous PASSes in a scratch run produce ten sequential link events in the stack bead history
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: the sanity-stack subagent and dev-sanity's spawn rule are bj-3
+- `atm-bj-2`: the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write
 
 Fixtures:
 - pass: With three sanity tasks open dev-sanity spawns sanity-stack for the first PASS, waits for stacked, then spawns it for the next; each spawn links one layer.
@@ -1290,6 +1395,9 @@ Scope: the stack bead (<prefix>-phase-<x>.stack) and every stack write in sanity
 
 Deterministic check to pair with the development gate: bd show <stack bead> --json after two links shows layers in link order; a link attempted without the claim is absent from the procedures; a lean-mode layer shows linked false and the next full-mode spawn links it first
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead
+
 Fixtures:
 - pass: sanity-stack claims atm-phase-bj.stack, appends the layer to metadata.layers, releases; the lead claims it before gh stack unstack; a layer recorded linked false is linked by the next full-mode spawn.
 - fail: The top is kept on the phase root as a single branch name, or the lead unstacks without claiming the stack bead, or an unlinked layer stays unlinked after GraphQL returns.
@@ -1307,6 +1415,10 @@ Summary: lock timeout: --timeout input, report the holder, never blocks the team
 Scope: sanity-stack input timeout_s (default 60, retry 5 s), its lock_timeout result, dev-sanity's handling, the stack bead lease
 
 Deterministic check to pair with the development gate: a scratch run with the stack bead held by another actor: sanity-stack returns lock_timeout naming the holder within 60 s; dev-sanity's procedure has no refused close and no human escalation on that path; a claim older than lease_s is reclaimed by the subagent
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead
+- `atm-bj-2`: the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write
 
 Fixtures:
 - pass: sanity-stack returns lock_timeout {holder: team-lead, since: ..., task: ...} after 60 s; dev-sanity notes STACK.LOCK_WAIT, messages team-lead once, runs its other sanity checks, retries.
@@ -1326,6 +1438,10 @@ Scope: sanity-stack input budget and its lean procedure
 
 Deterministic check to pair with the development gate: with GH_TOKEN scoped to REST only, a lean spawn completes with zero graphql calls in the gh debug log and the layer recorded linked false; the REST call is filtered to number, base, head, sha, draft
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead
+- `atm-bj-2`: the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write
+
 Fixtures:
 - pass: budget: lean: the subagent reads the recorded top, fetches, checks merge-base --is-ancestor, reads base.ref from the filtered REST list, appends the layer with linked false.
 - fail: The subagent runs /sc-gh-stack-view or gh stack view --json in lean mode, or reads the raw 365 KB pull list into its context.
@@ -1343,6 +1459,10 @@ Summary: qa hook informs the lead only, PASS or FAIL
 Scope: atm-task-close.py qa role
 
 Deterministic check to pair with the development gate: a qa-role run in a scratch repo with verdict FAIL closes the bead and task, sends exactly one message to the lead, and issues no atm task assign
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-2`: the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only
+- `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
 
 Fixtures:
 - pass: The qa role closes atm-bj-2.group-qa and its task and sends the lead the qa status; the poured fix beads wait in bd ready for the lead.
@@ -1380,6 +1500,10 @@ Scope: templates/sanity-fail.xml.j2 and the sanity role's FAIL branch; retiremen
 
 Deterministic check to pair with the development gate: a FAIL run in a scratch repo produces one sanity-fail message whose body names the sprint id and each undone deliverable number, and bd list --parent <checked bead> stays empty
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-2`: the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only
+- `atm-bj-3`: the sanity-fail message and the hook's FAIL branch are bj-1
+
 Fixtures:
 - pass: The dev receives sanity-fail: sprint bj-2, deliverables 2 and 5 NOT complete with reasons; no beads are created.
 - fail: The hook files a finding bead per undone deliverable under the checked bead, or the lead is asked to dispatch a fix.
@@ -1397,6 +1521,10 @@ Summary: atm-bd runs pages for sanity and quality: one line per run, newest firs
 Scope: atm-bd console pages, the sanity ledger row schema (elapsed per reviewer, dev identity), jev_client.py return value, the dev-sanity LLM spawn
 
 Deterministic check to pair with the development gate: the console has a sanity page and a quality page; a ledger row has jev_elapsed_s, llm_elapsed_s and dev fields; jev_client.py returns elapsed; the dev-sanity prompt wraps the LLM spawn in a start/end time; the sanity reply template no longer renders the runs table
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-3`: the runs pages and the ledger row schema are bj-4; bj-3 adds only the LLM timer and retry wording in dev-sanity.md whose values bj-4's rows carry
+- `atm-bj-2`: the runs pages and the sanity ledger are bj-4; bj-2 ships the stack bead schema and the pour only
 
 Fixtures:
 - pass: The sanity page lists runs newest first: bj-2 #1904 dev solar (icon) JEV ✅ 41 s LLM ✅ 88 s; dev-sanity's reply carries only the verdict.

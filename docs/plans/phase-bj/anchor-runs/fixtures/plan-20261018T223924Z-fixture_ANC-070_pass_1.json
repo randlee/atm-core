@@ -1,0 +1,101 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T223924Z-fixture_ANC-070_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T22:39:24+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-070:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 135,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-070",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The qa role of the close hook must close the QA bead and task and send the phase lead a status message in both the PASS and the FAIL case, and must assign nothing; quality-mgr pours the fix groups before the close as today.",
+      "quote": "yes, quality atm-task-close hook today would simply inform <phase-lead> w/ a status message in both pass or fail case.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md)",
+      "anchor_version": 2,
+      "deterministic_check": "a qa-role run in a scratch repo with verdict FAIL closes the bead and task, sends exactly one message to the lead, and issues no atm task assign",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.97,
+            "no": 0.02,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.77,
+          "probabilities": {
+            "yes": 0.14,
+            "no": 0.85,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.77,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1044,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 135,
+      "item_shortened": false,
+      "request_bytes": 3154
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}
