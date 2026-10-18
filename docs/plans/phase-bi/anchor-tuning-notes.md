@@ -171,3 +171,9 @@ Rand's ruling (21:07Z, via omega-prime): the defect is that there is no formal w
 - Final per-bead verdicts after the prerequisites change.
 - Whether adding a Prerequisites section is enough for ordering-only beads, or whether the questions need a ruling.
 - ANC-022: whether the rg criterion in bi-4 and bi-5 needs the wording Jev and haiku asked for (pattern, scope, exclusions).
+
+## atm-bi-6 (2026-10-18, after plan review round 2)
+
+The layout C table sprint moved from atm-phase-bi.2 to atm-bi-6 and lost its restated glyph table (plan review round 2). Seven cells then failed or flipped between runs (ANC-004, 005, 020, 021, 024, 027, 028). anchor-tuning adjudicated: six were plan-text gaps, fixed with one clause naming what bi-6 carries unchanged from bi-5 (ANC-020/027/028), one sentence on the gavel colours (ANC-021), the contains-match rule spelled out so `agent_icon_of` is not read as `AgentIcon(raw)` (ANC-024), and the bi-4 ordering sentence deleted (ANC-004 is bi-4's). Run plan-20261018T033358Z-atm-bi-6: 14 satisfied, 7 not applicable, 3 deterministic-only, 1 underspecified.
+
+The remaining cell is ANC-005 ("no sprint changes what ships in v0.16.1"): addressed yes 1.00, contradicted no 0.92, relevance yes 0.46 to 0.61 over seven runs of three wordings (the same sentence scored 0.76 on atm-phase-bi.2 and 0.85 on bi-5). The anchor applies to every sprint, but the plan relevance question asks whether the work touches the anchor's subject, so for a sprint that never touches the release the answer is noise around the threshold. Not excluded (the anchor does apply). Recommendation for Rand: a relevance override on ANC-005, "Is this item a sprint dispatched in this phase?", then version the anchor and re-run check-fixtures. Same gap as randlee/plan-anchor#35.
