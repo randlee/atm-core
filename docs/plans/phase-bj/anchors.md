@@ -60,7 +60,7 @@ Intent: `docs/plans/phase-bj/intent.md`
 | ANC-051 | locked | sanity and qa assignments go out as the phase lead | 2026-10-18 |
 | ANC-052 | locked | sanity assigned mechanically when a dev or fix bead closes | 2026-10-18 |
 | ANC-053 | locked | qa assigned mechanically on sanity PASS | 2026-10-18 |
-| ANC-054 | locked | close hook: role switch, minimal PR and rebase checks only | 2026-10-18 |
+| ANC-054 | locked | lead ruling 2026-10-18: current stack top with empty-ledger fallback | 2026-10-18 |
 | ANC-055 | locked | dev task open until sanity PASS; closed by the sanity hook | 2026-10-18 |
 | ANC-056 | locked | sanity FAIL reopens the bead and sends sanity-rejected | 2026-10-18 |
 | ANC-057 | locked | sanity round counter with max_sanity_rounds default 5 | 2026-10-18 |
@@ -69,7 +69,7 @@ Intent: `docs/plans/phase-bj/intent.md`
 | ANC-060 | locked | dev and fix dispatch stay the lead's judgment | 2026-10-18 |
 | ANC-061 | locked | poller checks bd ready then the ATM task before assigning | 2026-10-18 |
 | ANC-062 | retired | stack linking advised, base alignment sufficient, lead owns hygiene | 2026-10-18 |
-| ANC-063 | locked | pour writes branch, worktree, pr_target and difficulty to every bead and validates the phase | 2026-10-18 |
+| ANC-063 | locked | pour validates projected phase graph before writes | 2026-10-18 |
 | ANC-064 | retired | atm task transition hooks in atm-core, routed by role, failure keeps the task open | 2026-10-18 |
 | ANC-065 | locked | sanity links the layer on PASS; first PASS wins the top, the other gets rebase-required | 2026-10-18 |
 | ANC-066 | locked | sanity-stack subagent: one next-top layer per spawn, sequential; the race is its job | 2026-10-18 |
@@ -80,7 +80,7 @@ Intent: `docs/plans/phase-bj/intent.md`
 | ANC-071 | locked | max_sanity_rounds does not move on rebase-required | 2026-10-18 |
 | ANC-072 | locked | sanity FAIL handled entirely by ATM: sanity-fail.xml.j2 lists exactly what was NOT complete and references the sprint | 2026-10-18 |
 | ANC-073 | locked | atm-bd runs pages for sanity and quality: one line per run, newest first, JEV and LLM verdict and elapsed, dev name and icon | 2026-10-18 |
-| ANC-074 | locked | API failures: retry three times, reason in the runs page, a distinct icon from a JEV FAIL; no outage beads, no hold, no refusal citations | 2026-10-18 |
+| ANC-074 | locked | lead ruling 2026-10-18: Jev client owns three retries, four attempts total | 2026-10-18 |
 
 ## ANC-001
 
@@ -579,6 +579,7 @@ Deterministic check to pair with the development gate: render each of the five s
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+- `atm-bj-1`: bj-1 edits the close hook script and its templates and renders no bead, sprint, PR or CI state in the console; ANC-028 scope is console rendering (relevance no at 0.56 and 0.79, leaning not_applicable, same applicability-noise class as the other phase-bi exclusions)
 
 Fixtures:
 - pass: Bead open, sprint not_ready, PR open, PR draft and CI none render U+F0766 in #2D81E0, U+F137C in #D97757, U+F04C2 in #2D81E0, U+F0CB6 in #FFA60D and U+F01D8 in #2D81E0 respectively.
@@ -1078,6 +1079,7 @@ Deterministic check to pair with the development gate: close a dev bead through 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-2`: the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only
 - `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
+- `atm-bj-4`: bj-4 plans only the atm-bd dispatch read order of ANC-061; the close-hook assignment path of ANC-052 is bj-1, which satisfies ANC-052, and the sealed ANC-052 addressed question requires both paths in one item (the two-path reading is the ANC-052 clarity item for Rand)
 
 Fixtures:
 - pass: The dev role of atm-task-close.py runs atm task assign atm-sanity --task-id <sanity bead> and bd close <dev bead> in one shell command; an atm-bd tick finds a ready sanity bead with no task and assigns it.
@@ -1106,25 +1108,25 @@ Fixtures:
 
 ## ANC-054
 
-Anchor: atm-task-close.py must switch on a mandatory --role argument, and for the dev and fix roles must check only that a PR exists on pr_target, that the pushed head is the PR head and that origin/<pr_target> is an ancestor of it; it must not check any other layer of the stack or run lint or tests.
+Anchor: For dev and fix roles, atm-task-close.py must require --role, verify that an open PR exists for the branch, that the pushed head equals the PR head, and that HEAD descends from the current stack top: the last entry of the stack bead layers, or pr_target when layers is empty; it must not run lint or tests.
 
 > there should be a switch on role, then depending on role, this will verify that the pr is created, that it is stacked on the layer below (I think this can be determined locally by verifying the base is the previous top of stack).  The checks should be minimal to insure rebase occurred, maintaining the entire stack is NOT dev agents responsibility.  We can not create conditions that it is impossible for the dev agent to complete due to unnecessary python complexity.
 
-Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 2.
+Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 4.
 
-Summary: close hook: role switch, minimal PR and rebase checks only
+Summary: lead ruling 2026-10-18: current stack top with empty-ledger fallback
 
-Scope: the check set of atm-task-close.py for the dev and fix roles
+Scope: atm-task-close.py dev/fix admission; StackMetadata read supplied by bj-2
 
-Deterministic check to pair with the development gate: the dev-role check list in the script source has exactly the PR-exists, head-equals and ancestor checks; a scratch stack whose lower layer is misaligned still passes a correctly based top layer
+Deterministic check to pair with the development gate: The hook reads StackMetadata and checks HEAD ancestry against layers[-1].branch, falling back to pr_target only for empty layers; a nonempty-stack test has a misaligned lower layer and valid top.
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-2`: the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only
 - `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
 
 Fixtures:
-- pass: The dev role checks: PR open on pr_target, HEAD equals origin/<branch> equals the PR head, origin/<pr_target> is an ancestor. Nothing else.
-- fail: The dev role also verifies every lower layer's base, runs gh stack view, or reruns the test command before closing.
+- pass: The dev role checks an open PR for the branch, pushed head equals the PR head, and HEAD descends from the current stack top layers[-1].branch; only an empty ledger falls back to pr_target.
+- fail: The dev role uses static pr_target despite a nonempty stack ledger, or checks a lower stack layer instead of the current top.
 
 ## ANC-055
 
@@ -1164,6 +1166,7 @@ Deterministic check to pair with the development gate: run the sanity role with 
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
+- `atm-bj-2`: bj-2 plans the stack bead, the pour and validate-plan and does not write the sanity close hook or sanity-fail.xml.j2; the sanity FAIL path of ANC-056 is bj-1 (addressed yes at 0.70 then 0.55 on unchanged text, leaning satisfied, the near-threshold class)
 
 Fixtures:
 - pass: On FAIL the hook runs bd update <dev bead> --status open --assignee <dev> and atm send <dev> --template sanity-fail.xml.j2 --vars <file>; the dev fixes on the same branch.
@@ -1298,17 +1301,17 @@ Fixtures:
 
 ## ANC-063
 
-Anchor: The sprint pour must write branch, worktree, pr_target and difficulty onto every dev, fix, sanity and qa bead of the sprint family, and a pydantic model per bead kind with one validation method over every bead of the phase must fail the pour on any missing value.
+Anchor: The sprint pour must write branch, worktree, pr_target and difficulty onto every generated dev, fix, sanity and qa bead, and validate the projected full phase graph, including rendered prospective beads, before any persistent write; missing values fail without changing the database.
 
 > file a gh issue to make sure the necessary info lands in the poured bead AND is validated w/ pydantic model and validation python method for all beads in phase.
 
-Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 2.
+Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 3.
 
-Summary: pour writes branch, worktree, pr_target and difficulty to every bead and validates the phase
+Summary: pour validates projected phase graph before writes
 
-Scope: bead-groups pour, bead_schema.py models, validate-plan; atm-bd-orchestration #340
+Scope: formula producers and bead-groups projected pour; bead_schema.py and validate-plan phase validation
 
-Deterministic check to pair with the development gate: pour a sprint in a scratch repo and bd show each poured bead: the four keys are present; remove branch from one bead and the phase validation method exits non-zero naming it
+Deterministic check to pair with the development gate: Injected tests omit metadata from existing and prospective sc-compose records and assert zero mutating calls plus unchanged database state in normal and --validate mode.
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-3`: the sprint pour is bj-2
@@ -1316,7 +1319,9 @@ Excluded from (not judged; the cell passes as `excluded`):
 
 Fixtures:
 - pass: bd show atm-bj-2.group-sanity shows branch, worktree, pr_target, difficulty; validate-plan --phase bj runs validate_phase() over all beads and fails on a missing key.
+- pass: The pour validates all current and rendered prospective records first and makes no write when one is invalid.
 - fail: Only the sprint container carries branch and worktree, and bead_schema.py validates sprint and sanity beads only.
+- fail: The pour attaches prospective records and only then reports a missing metadata key.
 
 ## ANC-064
 
@@ -1532,18 +1537,20 @@ Fixtures:
 
 ## ANC-074
 
-Anchor: A Jev or LLM call failure must be retried up to three times before the slot reports failure; the failure reason must appear in the runs page severity table with an icon distinct from a JEV verdict that the work is not done; and no workflow class bead, outage bead, hold on re-dispatch, refusal citation or checker-defect side channel may exist in the sanity or refusal flows.
+Anchor: A Jev API call failure gets up to three retries (four total attempts) at the Jev client boundary before the slot reports failure; its reason must appear in the runs page severity table with an icon distinct from a JEV FAIL verdict; no workflow class bead, outage bead, hold on re-dispatch, refusal citation or checker-defect side channel may exist in the sanity or refusal flows.
 
 > this entire process of hold on re-dispatch sounds like a team trying to manage a reliable asset by making excuses not to deal with failures to call the agent properly.  (I suspect that a subagent sends too much context and jev returns error, instead of editing context, failure is returned.  There are occasionally LLM call fails during heavy traffic times which can be retried 3x before saying fail. )  Make sure that LLM failure reason shows up in severity table in tui AND the fail icon for typesafe API issue is distinctly different from jev answered 'all work NOT done'.  this `Class-bead append and citation on every refusal, and the checker-defect side channel.` also sounds like ceremony I did not know about or approve.
 
-Said by Rand, phase-bj planning 2026-10-18 (third round): Rand on the sanity runs table, Jev/LLM failures and refusal ceremony, 2026-10-18. Status: locked. Version 2.
+Said by Rand, phase-bj planning 2026-10-18 (third round): Rand on the sanity runs table, Jev/LLM failures and refusal ceremony, 2026-10-18. Status: locked. Version 4.
 
-Summary: API failures: retry three times, reason in the runs page, a distinct icon from a JEV FAIL; no outage beads, no hold, no refusal citations
+Summary: lead ruling 2026-10-18: Jev client owns three retries, four attempts total
 
-Scope: jev_client.py and the LLM spawn retry; the ledger row kind field; the console severity table icons; dev-sanity 9, 10, 15, 25, dev 6, team-lead 30, 41, quality-mgr 3
+Scope: jev_client.py single retry boundary; ledger kind; console severity icon; sanity/refusal flows; the LLM coordinator adds no second retry loop
 
-Deterministic check to pair with the development gate: grep the agents and requirements for 'class bead', 'outage' bead and 'cite' in refusal steps returns nothing; jev_client.py retries three times on a transport error; the console maps kind API_FAILURE to a different icon than verdict FAIL
+Deterministic check to pair with the development gate: Injected client tests assert up to four total attempts for transport/502/rate-limit failures with controlled clock, oversized-context no-retry, elapsed and API_FAILURE reason; console maps API_FAILURE to a distinct icon.
 
 Fixtures:
 - pass: A Jev 502 is retried three times, then the row reads kind API_FAILURE with the error text and the page shows the plug icon, not the red cross of a FAIL verdict; dev-sanity re-runs on the next task with no bead opened.
+- pass: The Jev client retries a 502 under its bounded policy, then records API_FAILURE and the console shows its distinct icon and error.
 - fail: dev-sanity opens a -jev-outage class bead and the lead holds re-dispatch until it closes, or an API failure is shown with the same icon as a JEV FAIL.
+- fail: The client immediately fails a retryable 502, or the API_FAILURE row uses the JEV FAIL icon.
