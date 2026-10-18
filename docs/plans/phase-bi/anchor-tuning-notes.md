@@ -4,7 +4,7 @@ Working notes for a post-mortem once the phase bi anchors are tuned. Facts only:
 
 ## Setup
 
-- 24 locked anchors (ANC-001 to ANC-029 minus retired), 6 beads judged: the root `atm-phase-bi` and sprints `atm-bi-1` to `atm-bi-5`. Plan gate, default plan questions (`relevant`, `addressed`, `contradicted`), threshold 0.6, no overrides, Jev model `jev-1.13.0`.
+- 24 locked anchors at that run (ANC-001 to ANC-029 minus retired; 25 after ANC-030 and ANC-031 replaced ANC-029 on 2026-10-18), 6 beads judged: the root `atm-phase-bi` and sprints `atm-bi-1` to `atm-bi-5`. Plan gate, default plan questions (`relevant`, `addressed`, `contradicted`), threshold 0.6, no overrides, Jev model `jev-1.13.0`.
 - Gate rule that matters (verdict-gating.md): relevance `no` at confidence >= 0.6 is `not_applicable` (passes). Below 0.6 the cell is `underspecified` and the run fails.
 
 ## 2026-10-17 round 1 (after plan review PASS round 3)
