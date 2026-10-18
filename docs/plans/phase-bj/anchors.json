@@ -1770,6 +1770,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T23:48:09+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "BJ-1 does not own console PR status-table rendering; it changes only the close hook and its templates.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "BJ-1 does not own console PR status-table rendering; it changes only the close hook and its templates."
         }
       ]
     },
@@ -2669,6 +2682,13 @@
           "item": "atm-bj-4",
           "reason": "atm-bd's sender address and logging are not touched by bj-4",
           "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:48:09+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "BJ-1 does not own cached console error logging or PR display; its scope is the close hook.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2679,6 +2699,10 @@
         {
           "item": "atm-bj-4",
           "reason": "atm-bd's sender address and logging are not touched by bj-4"
+        },
+        {
+          "item": "atm-bj-1",
+          "reason": "BJ-1 does not own cached console error logging or PR display; its scope is the close hook."
         }
       ]
     },
@@ -4522,6 +4546,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T23:48:09+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "BJ-2 ships stack schema, pour and validation only; the rebase-required sanity path is owned by BJ-1 and BJ-3.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "BJ-2 ships stack schema, pour and validation only; the rebase-required sanity path is owned by BJ-1 and BJ-3."
         }
       ]
     },

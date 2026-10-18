@@ -671,6 +671,9 @@ Scope: the pr cell link of the markdown emitter and the Rich emitter
 
 Deterministic check to pair with the development gate: markdown row for a PR with url U renders [#n](U); a PR with empty url renders #n unlinked; the stubbed gh records no pr view call
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: BJ-1 does not own console PR status-table rendering; it changes only the close hook and its templates.
+
 Fixtures:
 - pass: The pr cell renders [#281](https://github.com/randlee/atm-bd-orchestration/pull/281) using the url returned by the GitHub fetch for PR 281, and the test's gh stub records no pr view call.
 - fail: The pr cell builds the link from a configured base URL plus the number, or calls gh pr view for each PR to obtain the url.
@@ -975,6 +978,7 @@ Deterministic check to pair with the development gate: ten ticks with one cached
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-3`: atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only
 - `atm-bj-4`: atm-bd's sender address and logging are not touched by bj-4
+- `atm-bj-1`: BJ-1 does not own cached console error logging or PR display; its scope is the close hook.
 
 Fixtures:
 - pass: A GitHub refresh fails once at 07:16; the log holds one error entry for it and the PR sheet shows the cached error status on later ticks.
@@ -1486,6 +1490,9 @@ Summary: max_sanity_rounds does not move on rebase-required
 Scope: the rebase-required path of dev-sanity and sanity-stack
 
 Deterministic check to pair with the development gate: after a rebase-required and a later PASS in a scratch run, sanity_round on the sanity bead is unchanged from before
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-2`: BJ-2 ships stack schema, pour and validation only; the rebase-required sanity path is owned by BJ-1 and BJ-3.
 
 Fixtures:
 - pass: Branch B loses the top twice and then passes; sanity_round stays 0.
