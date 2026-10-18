@@ -73,7 +73,7 @@ The registered command is `python3 <module> <hook>`. The module declares:
 | Symbol | Type | Use |
 | --- | --- | --- |
 | `TIMEOUT_MS` | `int` constant | atm's deadline for one invocation. The module reads it to finish inside it. Required. |
-| `SC_SHA` | header line `# sc-sha: <hex>` | Hash of the module body with the header line excluded, computed with sc-sha (strict UTF-8, LF-normalized), the same identity templates use. |
+| `SC_SHA` | header line `# sc-sha: <hex>` | Hash of the module body with the header line removed, computed with sc-sha (strict UTF-8, CRLF and CR normalized to LF, BOM preserved, lowercase hex), the same identity templates use. |
 | `hook(request: dict) -> dict` | function | Task hooks. |
 | `cron(args: list[str]) -> dict` | function | Cron ticks. For atm-bd this runs `atm-bd cron <args>`. |
 | `doctor() -> dict` | function | Picked up by `atm doctor`. |
@@ -82,12 +82,23 @@ atm reads `TIMEOUT_MS` and `SC_SHA` from the file as text at registration
 (`atm hook register` refuses a module without them); it never imports the
 module in-process.
 
-**D-2 Released sha.** `atm hook register --released-sha <hex>` records the sha
-the skill release shipped; `atm doctor` compares the module's current header
-sha and the recomputed body sha against it. The skill passes the sha from its
-own release manifest. The exact hashing rule follows the synaptic-canvas-dolt
-skill-database drift design; skillrx@hermes has been asked for the reference
-(2026-10-18) and the sprint cites it once received.
+**D-2 Released sha and the header rule.** `atm hook register --released-sha <hex>`
+records the sha the skill release shipped; `atm doctor` compares the module's
+current header sha and the recomputed body sha against it. The skill passes the
+sha from its own release manifest. Reference (skillrx@hermes, 2026-10-18, on
+#1873): sc-sha crate at sc-compose `crates/sc-sha/` develop fcd5890b
+(`src/file.rs` `calculate_hash`), consumed by synaptic-canvas-dolt
+`src/pkg/integrity/` at 30b4bd6 and `sc validate`. Two consequences:
+
+- dolt keeps the sha out-of-band (Dolt column, catalog TOML, lockfile) and no
+  header-exclusion rule exists in sc-sha or dolt. The self-sha header is
+  therefore net-new to this design and is defined here as: remove the single
+  `# sc-sha: <hex>` line, then sc-sha `calculate_hash` over the rest. atm-core
+  implements it through the `sc-sha` crate it already depends on
+  (`crates/atm-template-sc-compose/Cargo.toml`), never a second hasher.
+- `atm doctor` hashes sc-sha-normalized bytes, not raw bytes (the dolt Go
+  `ComputeFileSHA256` hashes raw bytes; following it would make a CRLF module
+  warn).
 
 ## 3. Where hooks run
 
