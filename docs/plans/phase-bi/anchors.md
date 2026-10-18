@@ -47,6 +47,16 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-039 | locked | atm-bd cron --md-table emits the layout C table | 2026-10-17 |
 | ANC-040 | locked | spec table form: exact header and alignment row | 2026-10-17 |
 | REQ-BI6-AC6 | locked | same snapshot, identical bytes | 2026-10-18 |
+| ANC-041 | locked | ADR-065 applied to atm-bd: local 24h on screen, UTC Z in files | 2026-10-18 |
+| ANC-042 | locked | ADR-066 D1/D2: constant sender atm-bd@tool, repo-config override only | 2026-10-18 |
+| ANC-043 | locked | ADR-066 D3: env never the sender; ATM_TEAM is the target team at most | 2026-10-18 |
+| ANC-044 | locked | ADR-067 D3: viewer = time + level + message verbatim from the structured log | 2026-10-18 |
+| ANC-045 | locked | ADR-067 D1: no second diagnostics file | 2026-10-18 |
+| ANC-046 | locked | ADR-067 D2: writer sets level and composes the one-line failure message | 2026-10-18 |
+| ANC-047 | locked | ADR-067 D4: one failure, one entry | 2026-10-18 |
+| ANC-048 | locked | bead .12: configurable poll interval, bulk queries, paging past 100 | 2026-10-18 |
+| ANC-049 | locked | bead .12: live quota guard at 50 percent with a visible pause | 2026-10-18 |
+| ANC-050 | locked | bead .10: agent row = sprint/fix id + bead title, truncated | 2026-10-18 |
 
 ## ANC-001
 
@@ -773,3 +783,183 @@ Deterministic check to pair with the development gate: AC6 byte test: a fixed sn
 Fixtures:
 - pass: The AC6 byte test renders a fixed snapshot to the stored expected bytes and a second render of the same snapshot compares equal byte for byte.
 - fail: Two renders of the same snapshot differ because the emitter writes a generated-at timestamp or iterates an unordered set of agents.
+
+## ANC-041
+
+Anchor: Every time atm-bd prints for a person (console header, rows, PR sheet, Diagnostics view, cron digest) is 24-hour local time produced by the program's one display formatter; every time it writes to a file or log is UTC ISO-8601 with a Z suffix.
+
+> all time 'under the hood' should be utc, displayed times are 24h local format.
+
+Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: locked. Version 2.
+
+Summary: ADR-065 applied to atm-bd: local 24h on screen, UTC Z in files
+
+Scope: every strftime/isoformat call in atm-bd render, app, prs, cli and log paths
+
+Deterministic check to pair with the development gate: no datetime formatting for display outside the one formatter; log and snapshot timestamps end in Z
+
+Fixtures:
+- pass: The console header, rows, PR sheet and Diagnostics view all call the one local-time formatter; the snapshot and log timestamps are written as 2026-10-18T07:46:21Z.
+- fail: The PR sheet prints checked 07:36 from a UTC datetime's strftime while the header prints 00:36 local.
+
+## ANC-042
+
+Anchor: atm-bd sends every ATM message as the constant address atm-bd@tool; the only override is an optional <identity>@<team> key in the repository's .claude/project/atm-bd-orchestration.yaml.
+
+> we should hard-code the tool identity in the future. accepting ATM_TEAM or ATM_IDENTITY will most likely cause more confusion that it is worth. if there is any over-ride of <identity>@<team>, it should happen as an optional config veriable at the repo level, not environment variable.
+
+Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: locked. Version 2.
+
+Summary: ADR-066 D1/D2: constant sender atm-bd@tool, repo-config override only
+
+Scope: the sender identity of every atm send and, once atm-core allows it, atm task assign the console runs
+
+Deterministic check to pair with the development gate: the sender constant exists; no flag or environment variable feeds it; the repo config key is optional
+
+Fixtures:
+- pass: The console's sender is the constant atm-bd@tool; a repository sets tool_identity: ops-bot@tool in .claude/project/atm-bd-orchestration.yaml and every send goes out as ops-bot@tool.
+- fail: The console sends as the phase lead from the phase file, or takes the sender from a --as flag.
+
+## ANC-043
+
+Anchor: atm-bd must not take its sender address from ATM_IDENTITY or ATM_TEAM; ATM_TEAM may only select the team the tool executes against.
+
+> ATM_TEAM environment variable CAN be used to identify what team the cli is executing against, it should NOT be used as the atm address the tool uses for sending messages.
+
+Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: locked. Version 2.
+
+Summary: ADR-066 D3: env never the sender; ATM_TEAM is the target team at most
+
+Scope: config loading and the subprocess environment the console builds
+
+Deterministic check to pair with the development gate: no read of ATM_IDENTITY in the console's own config; ATM_TEAM, if read, flows only into the target team
+
+Fixtures:
+- pass: The console reads ATM_TEAM only to choose which team's tasks it lists and assigns; its sends still go out as atm-bd@tool.
+- fail: The console sends as the value of ATM_IDENTITY, or sets the sender's team from ATM_TEAM.
+
+## ANC-044
+
+Anchor: The atm-bd Diagnostics view reads only the sc-observability log, extracts the timestamp (rendered 24-hour local) and the level, and prints the entry's message unchanged; it parses nothing else from the entry.
+
+> the <fix> <error kind> <details> should just come from the log entries. i.e. I don't want the diagnostic viewer doing any special processing of structured log message besides time and error level extract.
+
+Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: locked. Version 2.
+
+Summary: ADR-067 D3: viewer = time + level + message verbatim from the structured log
+
+Scope: the Diagnostics tab's data source and rendering
+
+Deterministic check to pair with the development gate: the view's source is the logger query; the render concatenates local time, level and message with no per-kind branching
+
+Fixtures:
+- pass: The Diagnostics tab queries the sc-observability log for warning and error events and prints 00:10:18 error: followed by the entry's message string unchanged.
+- fail: The Diagnostics tab reads a diagnostics.log text file, or rebuilds the line from the entry's argv, code and stderr fields itself.
+
+## ANC-045
+
+Anchor: atm-bd keeps no diagnostics or error file outside the sc-observability log; the hand-built diagnostics.log and the code that writes it are removed entirely.
+
+> remove the 'hand-built' test file completely.
+
+Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: locked. Version 2.
+
+Summary: ADR-067 D1: no second diagnostics file
+
+Scope: every file the console opens for append under .atm-bd other than the sc-observability log and the actions journal
+
+Deterministic check to pair with the development gate: no reference to diagnostics.log or a diagnostics path remains in the package; grep is empty
+
+Fixtures:
+- pass: The package has no diagnostics.log path, no _record_error, and no open(..., 'a') for a diagnostics file; errors reach the Diagnostics tab only from the sc-observability log.
+- fail: A diagnostics.log file is still written beside the sc-observability log, even if the view no longer reads it.
+
+## ANC-046
+
+Anchor: A failed command is logged at level error with the message <fix in backticks> <command words> [<exit code>] <first stderr line>, composed once by the writer; the command words are the executable and subcommand, not the full argument vector.
+
+> 00:10:18 error: `check gh and retry` gh api graphql [1] gh: API rate limit already exceeded for user ID 8083956.
+
+Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: locked. Version 2.
+
+Summary: ADR-067 D2: writer sets level and composes the one-line failure message
+
+Scope: the sc-observability event writer in atm-bd and every error it records
+
+Deterministic check to pair with the development gate: an error entry has level error and a non-empty message matching the form; a stubbed gh failure renders the example line
+
+Fixtures:
+- pass: A gh failure with exit 1 and stderr 'gh: API rate limit already exceeded for user ID 8083956.' is logged at level error with message `check gh and retry` gh api graphql [1] gh: API rate limit already exceeded for user ID 8083956.
+- fail: The failure is logged at level info with message null, or the message carries the full GraphQL query text from argv.
+
+## ANC-047
+
+Anchor: A failure is logged once when it happens; a cached failure still on display (such as the last GitHub error kept with cached PR data) is a sheet status, never a new log entry per tick.
+
+> remove the 'hand-built' test file completely.
+
+Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: locked. Version 2.
+
+Summary: ADR-067 D4: one failure, one entry
+
+Scope: the per-tick error collection in the model and runner
+
+Deterministic check to pair with the development gate: ten ticks with one cached GitHub error produce one error entry
+
+Fixtures:
+- pass: A GitHub refresh fails once at 07:16; the log holds one error entry for it and the PR sheet shows the cached error status on later ticks.
+- fail: Each tick re-logs the cached GitHub error, giving twelve identical error entries for one failure.
+
+## ANC-048
+
+Anchor: The GitHub poll interval of atm-bd defaults to 10 minutes and is configurable in the repository configuration and on the command line; one refresh fetches up to 100 PRs per GraphQL page with few fields and pages past 100 rather than dropping PRs.
+
+> i think a poll interval for gh ~10 minutes would be fine for default as long as we are doing queries that return a lot of info w/ small token cost. remember we get >100 gh stack (> 100 pr) frequently on multiple projects at the same time.
+
+Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: locked. Version 2.
+
+Summary: bead .12: configurable poll interval, bulk queries, paging past 100
+
+Scope: the GitHub refresh cadence and query shape in atm-bd
+
+Deterministic check to pair with the development gate: default interval 600 s; a repo with 150 PRs yields 150 rows across two pages
+
+Fixtures:
+- pass: github_poll_s defaults to 600 and a repo value of 300 or --github-poll 300 changes the cycle; a repository with 150 PRs produces 150 PR rows from two GraphQL pages.
+- fail: The poll cycle is a fixed constant, or a repository with 150 PRs shows only the newest 100 with a truncated flag.
+
+## ANC-049
+
+Anchor: Before each GitHub refresh atm-bd reads the live remaining quota for the resource its mode uses (graphql or core) via gh api rate_limit; when remaining is below the configured threshold (default 50 percent of the limit) it skips the refresh, keeps cached PR data, shows a paused status with the numbers and the local reset time, and refuses forced refreshes until the quota is back above the threshold.
+
+> can you file another feature request to add the poll interval AND token budget(s) for gh? it should also stop polling if token drop below a threshold (start w/ 50%)
+
+Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: locked. Version 2.
+
+Summary: bead .12: live quota guard at 50 percent with a visible pause
+
+Scope: the GitHub refresh gate, its status line and the forced-refresh path
+
+Deterministic check to pair with the development gate: a stubbed rate_limit at 49 percent skips the refresh and shows the pause line with a local reset time; at 51 percent after reset the refresh runs
+
+Fixtures:
+- pass: With graphql remaining 2310 of 5000 the refresh is skipped, the PR sheet shows 'GitHub paused: 2310/5000 graphql remaining, below 50 percent, resets 08:14', a forced refresh is refused with the same line, and the first cycle after reset above 50 percent refreshes.
+- fail: The console refreshes regardless of the remaining quota, or counts its own calls instead of reading gh api rate_limit.
+
+## ANC-050
+
+Anchor: Agent task rows in the atm-bd dashboard read <sprint or fix id>: <bead title>, truncated to the pane width; never <phase>: <atm message text>.
+
+> this is a second fix request, related to the first. The first was the description appears to be <phase>: <atm-message> where it shoudl be <sprint/fix>: <bead-title>
+
+Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: locked. Version 2.
+
+Summary: bead .10: agent row = sprint/fix id + bead title, truncated
+
+Scope: the dashboard agent row renderer and its tag source
+
+Deterministic check to pair with the development gate: a row for a fix bead on sprint bi-5 starts with bi-5 or the fix id and the bead title, cut with an ellipsis at the pane width
+
+Fixtures:
+- pass: An agent row for a fix bead reads bi-5: console notify send to team-lead fails as self-addressed… cut at the pane width.
+- fail: An agent row reads phase-bi: followed by the full text of the ATM assignment message running past the pane edge.
