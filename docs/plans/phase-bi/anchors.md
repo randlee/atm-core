@@ -651,7 +651,7 @@ Anchor: The status table's state cell must show the icon of the agent working th
 
 > If no agent is working the sprint, show the sprint's state icon (closed, blocked, ready, not\_ready, and the rest). Because an agent wins over state, a blocked sprint that has an agent on it shows the agent. The lock appears only when nobody holds the sprint.
 
-Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 2.
+Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 3.
 
 Summary: state cell: active agent wins over sprint state
 
@@ -661,7 +661,7 @@ Deterministic check to pair with the development gate: fixture: a blocked sprint
 
 Fixtures:
 - pass: A blocked sprint with fable active renders the fable glyph in its state cell; after fable's task closes and no agent remains, the same sprint renders the lock U+F033E in #FA8537.
-- fail: A blocked sprint with an active agent renders the lock U+F033E, or a sprint with no active agent keeps rendering a stale agent glyph.
+- fail: The state cell shows the sprint's own status icon first and an agent's icon only while the sprint is in_progress, so a blocked sprint with an active dev agent renders the lock U+F033E in #FA8537, not the agent.
 
 ## ANC-036
 
@@ -723,7 +723,7 @@ Anchor: atm-bd cron --phase <x> --md-table must print the layout C markdown stat
 
 > Command flag for the table output: `--md-table`, or `--md --table`.
 
-Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 2.
+Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 3.
 
 Summary: atm-bd cron --md-table emits the layout C table
 
@@ -733,7 +733,7 @@ Deterministic check to pair with the development gate: CLI test: cron --phase bi
 
 Fixtures:
 - pass: Running atm-bd cron --phase bi --md-table over a fixture snapshot prints | sprint | state | ci | pr | then |---|:-:|:-:|---| then one row per sprint of the phase.
-- fail: atm-bd cron --phase bi --md-table prints the dispatch summary or a table with a different header, or the flag is not accepted.
+- fail: atm-bd cron gets no --md-table flag: atm-bd cron --phase bi prints only the dispatch tick summary to stdout, and the layout C status table is written to a report file instead of stdout.
 
 ## ANC-040
 
@@ -743,7 +743,7 @@ Anchor: The emitted markdown must match the spec's form byte for byte: header | 
 |---|:-:|:-:|---|
 | bi-1 | <icon> | <icon> | <icon> [#118](https://github.com/<owner>/<repo>/pull/118) |
 
-Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 2.
+Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 3.
 
 Summary: spec table form, byte-identical per snapshot
 
@@ -752,5 +752,5 @@ Scope: the markdown emitter (AC6 byte test)
 Deterministic check to pair with the development gate: a fixed snapshot renders exactly the stored expected bytes (AC6); rendering the same snapshot twice compares equal byte for byte
 
 Fixtures:
-- pass: The AC6 byte test renders a fixed snapshot to exactly the stored expected bytes, and rendering it twice gives byte-identical output.
-- fail: Two renders of the same snapshot differ (timestamps, dict ordering), or the header or alignment row deviates from the spec by a single byte.
+- pass: The markdown emitter prints the header | sprint | state | ci | pr | and the alignment row |---|:-:|:-:|---| exactly as the spec writes them, then one row per sprint with a glyph in each icon slot; a test renders a fixed snapshot to expected bytes written by hand from the spec, and two renders of the same snapshot are byte-identical.
+- fail: The markdown emitter writes its own header | Sprint | State | CI | PR | with the alignment row |---|---|---|---| and appends a generated-at timestamp line, so two renders of the same snapshot differ.

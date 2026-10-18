@@ -1753,11 +1753,11 @@
           "A blocked sprint with fable active renders the fable glyph in its state cell; after fable's task closes and no agent remains, the same sprint renders the lock U+F033E in #FA8537."
         ],
         "fail": [
-          "A blocked sprint with an active agent renders the lock U+F033E, or a sprint with no active agent keeps rendering a stale agent glyph."
+          "The state cell shows the sprint's own status icon first and an agent's icon only while the sprint is in_progress, so a blocked sprint with an active dev agent renders the lock U+F033E in #FA8537, not the agent."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1773,6 +1773,13 @@
         },
         {
           "at": "2026-10-18T05:33:43+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-18T05:41:18+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -1933,11 +1940,11 @@
           "Running atm-bd cron --phase bi --md-table over a fixture snapshot prints | sprint | state | ci | pr | then |---|:-:|:-:|---| then one row per sprint of the phase."
         ],
         "fail": [
-          "atm-bd cron --phase bi --md-table prints the dispatch summary or a table with a different header, or the flag is not accepted."
+          "atm-bd cron gets no --md-table flag: atm-bd cron --phase bi prints only the dispatch tick summary to stdout, and the layout C status table is written to a report file instead of stdout."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1953,6 +1960,13 @@
         },
         {
           "at": "2026-10-18T05:33:43+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-18T05:41:18+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -1975,14 +1989,14 @@
       "deterministic_check": "a fixed snapshot renders exactly the stored expected bytes (AC6); rendering the same snapshot twice compares equal byte for byte",
       "fixtures": {
         "pass": [
-          "The AC6 byte test renders a fixed snapshot to exactly the stored expected bytes, and rendering it twice gives byte-identical output."
+          "The markdown emitter prints the header | sprint | state | ci | pr | and the alignment row |---|:-:|:-:|---| exactly as the spec writes them, then one row per sprint with a glyph in each icon slot; a test renders a fixed snapshot to expected bytes written by hand from the spec, and two renders of the same snapshot are byte-identical."
         ],
         "fail": [
-          "Two renders of the same snapshot differ (timestamps, dict ordering), or the header or alignment row deviates from the spec by a single byte."
+          "The markdown emitter writes its own header | Sprint | State | CI | PR | with the alignment row |---|---|---|---| and appends a generated-at timestamp line, so two renders of the same snapshot differ."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1998,6 +2012,13 @@
         },
         {
           "at": "2026-10-18T05:33:43+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-18T05:41:18+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
