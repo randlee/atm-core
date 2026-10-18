@@ -71,6 +71,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-062 — Task State Machine](./ADR-062-task-state-machine.md)
 - [ADR-063 — Phase AZ Task And Attention Storage Capabilities (superseded; Phase AZ retired unmerged 2026-09-11, replaced by Phase BA)](./ADR-063-phase-az-task-and-attention-capabilities.md)
 - [ADR-064 — Task Telemetry Export Through OpenTelemetry](./ADR-064-task-telemetry-opentelemetry-export.md)
+- [ADR-065 — Time Handling: UTC Under The Hood, 24-Hour Local Time On Screen](./ADR-065-time-handling-utc-internal-local-display.md)
 
 ## Phase BB amendments
 
