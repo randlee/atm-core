@@ -1,0 +1,102 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261017T053526Z-fixture_ANC-029_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-17T05:35:26+00:00",
+  "anchors_path": "docs/plans/phase-bi/anchors.json",
+  "plan": "phase-current",
+  "item": {
+    "id": "fixture:ANC-029:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 72,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-029",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show a merge check of conflict with the merged icon U+F062D in red #F85149.",
+      "quote": "merge conflict would be merged (w/ red)",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17; red taken as the GitHub red already in the theme",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render a merge check of conflict and assert U+F062D in #F85149",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.28,
+          "probabilities": {
+            "yes": 0.52,
+            "no": 0.42,
+            "unclear": 0.06
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.28,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1018,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 72,
+      "item_shortened": false,
+      "request_bytes": 2972
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-029"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "shortened": [],
+    "pass": false
+  }
+}

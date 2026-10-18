@@ -1,0 +1,1587 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261017T162350Z-atm-phase-bi",
+  "gate": "plan",
+  "created_at": "2026-10-17T16:23:50+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bi/docs/plans/phase-bi/anchors.json",
+  "plan": "phase-current",
+  "item": {
+    "id": "atm-phase-bi",
+    "title": "phase-bi: atm-bd: one command to run the console, install the skills and tick",
+    "source": "/var/folders/3q/0f7c3v_j6ps28gtz8xfz99km0000gn/T//plan-anchoring-atm-phase-bi.WUX5MI/item.txt",
+    "chars": 3118,
+    "truncated": false,
+    "chars_before_reduction": 3118,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-025",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When the roster model string matches none of the model names, the console must use the sonnet icon for a claude-code agent and the terra icon for a codex-cli agent.",
+      "quote": "if claude or codex show up there, probably use sonnet/terra as stand-in for not knowing.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17",
+      "anchor_version": 3,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "feed models claude and codex to icon_for and assert the sonnet and terra icons",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "not_addressed",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.95,
+            "no": 0.05,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.66,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.77,
+            "unclear": 0.21
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.97,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.66,
+      "explanation": "This bead does not carry the directive forward.",
+      "usage": {
+        "input_tokens": 1922,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6201
+    },
+    {
+      "anchor_id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand with no version or --latest argument must install the skills packaged inside the installed atm-bd package, without network access.",
+      "quote": "atm-bd skill (bare would use skill in uv)",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: skill sources redesigned, agreed (yes)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "build the wheel, unzip it and find the skill files; run atm-bd skill with the network disabled and confirm the install succeeds",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.53,
+          "probabilities": {
+            "yes": 0.69,
+            "no": 0.14,
+            "unclear": 0.17
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.76,
+          "probabilities": {
+            "yes": 0.12,
+            "no": 0.84,
+            "unclear": 0.04
+          }
+        }
+      },
+      "min_confidence": 0.53,
+      "explanation": "Jev was not confident (min confidence 0.53); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1922,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.53
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6226
+    },
+    {
+      "anchor_id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand given a version x.y.z must install the skills from the vX.Y.Z tag of the atm-bd-orchestration repository.",
+      "quote": "atm-bd skill x.y.z (install version x.y.z)",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: skill sources redesigned, agreed (yes)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "run atm-bd skill 0.16.0 and diff the installed files against git show v0.16.0",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.43,
+          "probabilities": {
+            "yes": 0.62,
+            "no": 0.19,
+            "unclear": 0.19
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.58,
+          "probabilities": {
+            "yes": 0.16,
+            "no": 0.72,
+            "unclear": 0.12
+          }
+        }
+      },
+      "min_confidence": 0.43,
+      "explanation": "Jev was not confident (min confidence 0.43); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1921,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.43
+        },
+        {
+          "ask": "first",
+          "role": "conflict",
+          "question_id": "contradicted",
+          "choice": "no",
+          "confidence": 0.58
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6183
+    },
+    {
+      "anchor_id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show one fixed icon for every agent whose agent type is qa and one fixed icon for every agent whose agent type is sanity, regardless of its harness or model.",
+      "quote": "I would like qa/sanity to have fixed icons, it would be good to specify by agent type",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: agent icons added to phase-bi",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render qa and sanity members with differing harness and model and assert the same icon each",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.18,
+          "probabilities": {
+            "yes": 0.45,
+            "no": 0.24,
+            "unclear": 0.31
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.67,
+          "probabilities": {
+            "yes": 0.15,
+            "no": 0.78,
+            "unclear": 0.07
+          }
+        }
+      },
+      "min_confidence": 0.18,
+      "explanation": "Jev was not confident (min confidence 0.18); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1916,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.18
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6198
+    },
+    {
+      "anchor_id": "ANC-019",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show, next to every Claude agent whose model is haiku, sonnet, opus or fable, that model's icon in that model's colour: U+F0156 in #FF6533 for haiku, U+F0382 in #FF784D for sonnet, U+F06C4 in #FF8C66 for opus and U+F0717 in #FF9F80 for fable.",
+      "quote": "\"haiku\":  \"[#D97757]\\U000f0156[/]\",",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: MODEL_ICONS pasted",
+      "anchor_version": 3,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render claude-code members with each model and assert each line has its code point and colour",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.16,
+          "probabilities": {
+            "yes": 0.44,
+            "no": 0.22,
+            "unclear": 0.34
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.82,
+          "probabilities": {
+            "yes": 0.08,
+            "no": 0.88,
+            "unclear": 0.04
+          }
+        }
+      },
+      "min_confidence": 0.16,
+      "explanation": "Jev was not confident (min confidence 0.16); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1988,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.16
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6283
+    },
+    {
+      "anchor_id": "ANC-020",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show, next to every Codex agent whose model class is sol, luna, terra or astra, that class's icon in that class's colour: U+F05A8 in #FFA60D for sol, U+F0F65 in #FFE066 for luna, U+F01E7 in #2DE057 for terra and U+F0674 in #FFE066 for astra.",
+      "quote": "\"astra\": \"[#FFE066]\\U000f0674[/]\",",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: CELESTIAL pasted, replacing the emoji for codex",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render codex-cli members of each model class and assert each line has its code point and colour",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.18,
+          "probabilities": {
+            "yes": 0.45,
+            "no": 0.2,
+            "unclear": 0.35
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.83,
+          "probabilities": {
+            "yes": 0.05,
+            "no": 0.89,
+            "unclear": 0.06
+          }
+        }
+      },
+      "min_confidence": 0.18,
+      "explanation": "Jev was not confident (min confidence 0.18); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1981,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.18
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6282
+    },
+    {
+      "anchor_id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show a qa agent with the icon U+F029B in #4A5AF8 while it is running QA, in #2EA043 after a QA pass and in #F85149 after a QA fail.",
+      "quote": "\"qa_running\": \"[#4A5AF8]\\U000f029b[/]\",",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: JEV_QA pasted; placement and the Jev icon still to be agreed",
+      "anchor_version": 4,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render QA states running, pass and fail and assert U+F029B with each colour",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.73,
+          "probabilities": {
+            "yes": 0.82,
+            "no": 0.18,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.46,
+          "probabilities": {
+            "yes": 0.11,
+            "no": 0.64,
+            "unclear": 0.25
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.91,
+          "probabilities": {
+            "yes": 0.05,
+            "no": 0.94,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.46,
+      "explanation": "Jev was not confident (min confidence 0.46); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1936,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "no",
+          "confidence": 0.46
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6168
+    },
+    {
+      "anchor_id": "ANC-024",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must choose an agent's model icon by lower-casing the roster model string and testing it with contains for sol, luna, terra, astra, haiku, sonnet, opus and fable.",
+      "quote": "when you pull agent type from atm model, you will to a to lower and use contains to pull out sol, luna, haiku, ...",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: how the model is matched",
+      "anchor_version": 3,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "feed models GPT-5.6-Terra, Claude-Opus-5-5, claude, codex and unknown to icon_for and assert terra, opus, sonnet, terra icons and the unknown fallback",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "near_threshold": true,
+      "unstable": true,
+      "answers_second": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.83,
+          "probabilities": {
+            "yes": 0.89,
+            "no": 0.11,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.69,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.79,
+            "unclear": 0.2
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.98,
+            "unclear": 0.01
+          }
+        }
+      },
+      "verdict_first": "underspecified",
+      "verdict_second": "not_addressed",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.86,
+          "probabilities": {
+            "yes": 0.91,
+            "no": 0.09,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.56,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.71,
+            "unclear": 0.28
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.98,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.56,
+      "explanation": "Jev was not confident (min confidence 0.56); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1929,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "no",
+          "confidence": 0.56
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6211
+    },
+    {
+      "anchor_id": "ANC-026",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show every sanity agent with the icon U+F01A6 in #E551BA, whatever its harness or model.",
+      "quote": "\"jev\":        \"[#E551BA]\\U000f01a6[/]\",",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: jev is the sanity icon, followed by the three qa states",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render sanity members with differing harness and model and assert U+F01A6 in #E551BA each",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.02,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.27,
+          "probabilities": {
+            "yes": 0.18,
+            "no": 0.51,
+            "unclear": 0.31
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.83,
+          "probabilities": {
+            "yes": 0.08,
+            "no": 0.89,
+            "unclear": 0.03
+          }
+        }
+      },
+      "min_confidence": 0.27,
+      "explanation": "Jev was not confident (min confidence 0.27); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1912,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "no",
+          "confidence": 0.27
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6129
+    },
+    {
+      "anchor_id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand must print the git ref and commit sha it installed the skills from, together with the app's own version.",
+      "quote": "the script can find the repo and get most recent skill though.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: report line proposed with the main-head default, agreed",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "run atm-bd skill and grep its output for the ref, a 40-hex sha and the app version",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.01,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.97,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1911,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6151
+    },
+    {
+      "anchor_id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The phase must end with the app published to PyPI, and a TestPyPI rehearsal of that publish must precede the production publish.",
+      "quote": "we can publish to pypi, that can be at end of phase.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "pip index versions atm-bd lists the release; a TestPyPI release exists with an earlier upload time",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.97,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1916,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6184
+    },
+    {
+      "anchor_id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "No sprint in this phase must change what ships in v0.16.1.",
+      "quote": "agreed 0.16.1 first, but we can plan this as part of next phase.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17",
+      "anchor_version": 3,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "git diff v0.16.1..<phase base> shows no change from this phase's PRs; tag v0.16.1 predates the first sprint's first commit",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.93,
+            "no": 0.07,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.96,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.89,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1909,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6109
+    },
+    {
+      "anchor_id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand given --latest must install the skills from the head of the main branch of the atm-bd-orchestration repository.",
+      "quote": "atm-bd --latest (latest on repo)",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: skill sources redesigned, agreed (yes)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "run atm-bd skill --latest and diff the installed files against git show origin/main",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1913,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6164
+    },
+    {
+      "anchor_id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand given --list must print the skill releases and skill sets available in the atm-bd-orchestration repository and must install nothing.",
+      "quote": "atm-bd skill --list (shows what is available on repo)",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: skill sources redesigned, agreed (yes)",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "run atm-bd skill --list, compare its releases to git tag -l on the repo, and confirm the target repo is unchanged",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.97,
+            "no": 0.01,
+            "unclear": 0.02
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.95,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1915,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6183
+    },
+    {
+      "anchor_id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill subcommand must accept an --orchestration option that selects the current atm-bd-orchestration skill set.",
+      "quote": "--orchestration (current set of packages)",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: skill sources redesigned, agreed (yes)",
+      "anchor_version": 5,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "atm-bd skill --help lists --orchestration; atm-bd skill --orchestration installs the same files as bare atm-bd skill",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.07,
+            "no": 0.93,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.89,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1915,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6169
+    },
+    {
+      "anchor_id": "ANC-022",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke the atm-bd-console command; the directory apps/atm-bd-console and the module atm_bd_console are not that command.",
+      "quote": "jes drop atm-bd-console",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: answer to whether to drop the alias",
+      "anchor_version": 3,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "after uv tool install, command -v atm-bd-console finds nothing; rg atm-bd-console over scripts, docs, tests and workflows finds no invocation",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.97,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1945,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6320
+    },
+    {
+      "anchor_id": "ANC-023",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Wherever the console shows an agent's name, it must show that agent's icon immediately to the left of the name.",
+      "quote": "when agents are shown in ui, across the board, let's show agent icon.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17",
+      "anchor_version": 4,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "list every render path that emits an agent name and assert the icon is the character cell immediately before the name in each",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1910,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6148
+    },
+    {
+      "anchor_id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console's pull-request list must show the CI pass, CI fail, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME.",
+      "quote": "here are gh icons:",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: GH_THEME pasted (source-branch green/red, source-merge purple, cancel red, weather-hurricane blue)",
+      "anchor_version": 3,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render a PR list with one PR per state and assert each line contains its GH_THEME code point and colour",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "verdict": "not_applicable",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The anchor does not govern this bead.",
+      "usage": {
+        "input_tokens": 1916,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6184
+    },
+    {
+      "anchor_id": "ANC-027",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show each bead status in Rand's BEAD_STATUS table with that status's icon and colour: blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed and ready.",
+      "quote": "\"blocked\":     \"[#FA8537]\\U000f033e[/]\",  # lock",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: BEAD_STATUS pasted; open not chosen yet",
+      "anchor_version": 5,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render one bead per status in the table and assert each glyph code point and colour; render open and assert it is unchanged",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "verdict": "not_applicable",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.85,
+          "probabilities": {
+            "yes": 0.1,
+            "no": 0.9,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.99,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.85,
+      "explanation": "The anchor does not govern this bead.",
+      "usage": {
+        "input_tokens": 1927,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6232
+    },
+    {
+      "anchor_id": "ANC-028",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show bead open with U+F0766 in #2D81E0, sprint not_ready with U+F137C in #D97757, PR open with U+F04C2 in #2D81E0, PR draft with U+F0CB6 in #FFA60D and CI none with U+F01D8 in #2D81E0.",
+      "quote": "\"bead_open\":        \"[#2D81E0]\\U000f0766[/]\",",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: REMAINING pasted",
+      "anchor_version": 4,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render each of the five states and assert its code point and colour",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "verdict": "not_applicable",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.74,
+          "probabilities": {
+            "yes": 0.16,
+            "no": 0.83,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.99,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.74,
+      "explanation": "The anchor does not govern this bead.",
+      "usage": {
+        "input_tokens": 1984,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6243
+    },
+    {
+      "anchor_id": "ANC-029",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show a merge check of conflict with the merged icon U+F062D in red #F85149.",
+      "quote": "merge conflict would be merged (w/ red)",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17; red taken as the GitHub red already in the theme",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render a merge check of conflict and assert U+F062D in #F85149",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "verdict": "not_applicable",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.91,
+          "probabilities": {
+            "yes": 0.05,
+            "no": 0.94,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.91,
+      "explanation": "The anchor does not govern this bead.",
+      "usage": {
+        "input_tokens": 1912,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 3118,
+      "item_shortened": false,
+      "request_bytes": 6119
+    },
+    {
+      "anchor_id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd command must have a skill subcommand that installs the atm-bd-orchestration skill into a repository by running the same installer logic as plugins/atm-bd-orchestration/install.py.",
+      "quote": "it would do the same thing as the install.py does now right?",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: let's anchor this behavior. (not --profile yet)",
+      "anchor_version": 5,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "run 'atm-bd skill --dest R1' and install.py --dest R2 against a scratch repo and diff -r the installed file sets; atm-bd skill --help shows no --profile",
+      "kind": "structural",
+      "leaning": null,
+      "verdict": "deterministic_only",
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+      "attempts": 0,
+      "item_chars_sent": 3118,
+      "item_shortened": false
+    },
+    {
+      "anchor_id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The phase plan must exist as beads in the atm-core bd database with a phase root and sprint containers, and the phase must not use a markdown plan or sprint documents.",
+      "quote": "we are creating plans as bd on this bd db.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "bd show atm-phase-bi returns the root with sprint children; no docs/plans/phase-bi/sprint-*.md exists",
+      "kind": "structural",
+      "leaning": null,
+      "verdict": "deterministic_only",
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+      "attempts": 0,
+      "item_chars_sent": 3118,
+      "item_shortened": false
+    },
+    {
+      "anchor_id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The single headless orchestration tick must be run as atm-bd cron --phase <x>, and the console's --headless option must be removed.",
+      "quote": "atm-bd cron --phase <x>",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: cron is unused, so rename it to fit the atm-bd layout instead of leaving it",
+      "anchor_version": 3,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "atm-bd cron --help succeeds; atm-bd console --help lists no --headless; rg -n -g '!**/tests/**' -g '!**/CHANGELOG.md' -- '--headless' apps plugins .github returns nothing; a test asserts atm-bd cron --headless is rejected",
+      "kind": "structural",
+      "leaning": null,
+      "verdict": "deterministic_only",
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+      "attempts": 0,
+      "item_chars_sent": 3118,
+      "item_shortened": false
+    }
+  ],
+  "summary": {
+    "counts": {
+      "not_addressed": 1,
+      "underspecified": 8,
+      "satisfied": 8,
+      "not_applicable": 4,
+      "deterministic_only": 3
+    },
+    "failing": [
+      "ANC-025",
+      "ANC-010",
+      "ANC-011",
+      "ANC-017",
+      "ANC-019",
+      "ANC-020",
+      "ANC-021",
+      "ANC-024",
+      "ANC-026"
+    ],
+    "leaning_counts": {
+      "not_addressed": 4,
+      "not_applicable": 4,
+      "satisfied": 13
+    },
+    "unstable": [
+      "ANC-024"
+    ],
+    "errors": [],
+    "shortened": [],
+    "pass": false
+  }
+}

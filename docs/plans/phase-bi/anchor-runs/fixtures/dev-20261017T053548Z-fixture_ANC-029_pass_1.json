@@ -1,0 +1,112 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261017T053548Z-fixture_ANC-029_pass_1",
+  "gate": "dev",
+  "created_at": "2026-10-17T05:35:48+00:00",
+  "anchors_path": "docs/plans/phase-bi/anchors.json",
+  "plan": "phase-current",
+  "item": {
+    "id": "fixture:ANC-029:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 70,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-029",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show a merge check of conflict with the merged icon U+F062D in red #F85149.",
+      "quote": "merge conflict would be merged (w/ red)",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17; red taken as the GitHub red already in the theme",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "deterministic_check": "render a merge check of conflict and assert U+F062D in #F85149",
+      "kind": "directive",
+      "leaning": "asserted_only",
+      "verdict": "asserted_only",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.96,
+            "no": 0.02,
+            "unclear": 0.02
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.97,
+            "unclear": 0.02
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.94,
+      "explanation": "Compliance is asserted but no concrete evidence (paths, diffs, commands, tests) is cited.",
+      "usage": {
+        "input_tokens": 1197,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 70,
+      "item_shortened": false,
+      "request_bytes": 3718
+    }
+  ],
+  "summary": {
+    "counts": {
+      "asserted_only": 1
+    },
+    "failing": [
+      "ANC-029"
+    ],
+    "leaning_counts": {
+      "asserted_only": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "shortened": [],
+    "pass": false
+  }
+}

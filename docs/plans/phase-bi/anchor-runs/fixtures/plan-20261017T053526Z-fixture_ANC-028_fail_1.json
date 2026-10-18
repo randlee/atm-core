@@ -1,0 +1,163 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261017T053526Z-fixture_ANC-028_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-17T05:35:26+00:00",
+  "anchors_path": "docs/plans/phase-bi/anchors.json",
+  "plan": "phase-current",
+  "item": {
+    "id": "fixture:ANC-028:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 54,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-028",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show bead open with U+F0766 in #2D81E0, sprint not_ready with U+F137C in #D97757, PR open with U+F04C2 in #2D81E0, PR draft with U+F0CB6 in #FFA60D and CI none with U+F01D8 in #2D81E0.",
+      "quote": "\"bead_open\":        \"[#2D81E0]\\U000f0766[/]\",",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: REMAINING pasted",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render each of the five states and assert its code point and colour",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "near_threshold": true,
+      "unstable": true,
+      "answers_second": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.31,
+          "probabilities": {
+            "yes": 0.22,
+            "no": 0.54,
+            "unclear": 0.24
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.48,
+          "probabilities": {
+            "yes": 0.65,
+            "no": 0.33,
+            "unclear": 0.02
+          }
+        }
+      },
+      "verdict_first": "contradicted",
+      "verdict_second": "underspecified",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.46,
+          "probabilities": {
+            "yes": 0.13,
+            "no": 0.64,
+            "unclear": 0.23
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.61,
+          "probabilities": {
+            "yes": 0.74,
+            "no": 0.25,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.31,
+      "explanation": "Jev was not confident (min confidence 0.31); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1076,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "no",
+          "confidence": 0.46
+        },
+        {
+          "ask": "second",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "no",
+          "confidence": 0.31
+        },
+        {
+          "ask": "second",
+          "role": "conflict",
+          "question_id": "contradicted",
+          "choice": "yes",
+          "confidence": 0.48
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 54,
+      "item_shortened": false,
+      "request_bytes": 3078
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1
+    },
+    "failing": [
+      "ANC-028"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [
+      "ANC-028"
+    ],
+    "errors": [],
+    "shortened": [],
+    "pass": false
+  }
+}

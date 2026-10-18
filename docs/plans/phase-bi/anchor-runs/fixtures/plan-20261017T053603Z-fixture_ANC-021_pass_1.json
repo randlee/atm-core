@@ -1,0 +1,100 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261017T053603Z-fixture_ANC-021_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-17T05:36:03+00:00",
+  "anchors_path": "docs/plans/phase-bi/anchors.json",
+  "plan": "phase-current",
+  "item": {
+    "id": "fixture:ANC-021:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 102,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show a qa agent with the icon U+F029B in #4A5AF8 while it is running QA, in #2EA043 after a QA pass and in #F85149 after a QA fail.",
+      "quote": "\"qa_running\": \"[#4A5AF8]\\U000f029b[/]\",",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: JEV_QA pasted; placement and the Jev icon still to be agreed",
+      "anchor_version": 4,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render QA states running, pass and fail and assert U+F029B with each colour",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1059,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 102,
+      "item_shortened": false,
+      "request_bytes": 3051
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "shortened": [],
+    "pass": true
+  }
+}
