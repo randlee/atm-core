@@ -956,6 +956,7 @@ Deterministic check to pair with the development gate: an error entry has level 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-1`: atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's
 - `atm-bj-3`: atm-bd's log line format is atm-bd tool code; bj-3 edits agent prompts only
+- `atm-bj-2`: BJ-2 plans bead schemas, formula producers and validation; it does not write or change the atm-bd observability event logger.
 
 Fixtures:
 - pass: A gh failure with exit 1 and stderr 'gh: API rate limit already exceeded for user ID 8083956.' is logged at level error with message `check gh and retry` gh api graphql [1] gh: API rate limit already exceeded for user ID 8083956.
@@ -1061,6 +1062,7 @@ Deterministic check to pair with the development gate: grep the assign subproces
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
+- `atm-bj-2`: BJ-2 plans bead formula and validation behavior only; the phase-lead identity of close-hook and dispatch assignments is implemented by BJ-1 and BJ-4.
 
 Fixtures:
 - pass: The hook assigns the sanity bead with ATM_IDENTITY=team-lead taken from .atm-bd/phase-bj.toml on that subprocess only; its dev-complete send goes out as the dev and atm-bd's notices as atm-bd@tool.

@@ -2613,6 +2613,13 @@
           "item": "atm-bj-3",
           "reason": "atm-bd's log line format is atm-bd tool code; bj-3 edits agent prompts only",
           "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:49:24+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "BJ-2 plans bead schemas, formula producers and validation; it does not write or change the atm-bd observability event logger.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2623,6 +2630,10 @@
         {
           "item": "atm-bj-3",
           "reason": "atm-bd's log line format is atm-bd tool code; bj-3 edits agent prompts only"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "BJ-2 plans bead schemas, formula producers and validation; it does not write or change the atm-bd observability event logger."
         }
       ]
     },
@@ -2927,12 +2938,23 @@
           "item": "atm-bj-3",
           "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
           "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:49:24+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "BJ-2 plans bead formula and validation behavior only; the phase-lead identity of close-hook and dispatch assignments is implemented by BJ-1 and BJ-4.",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-3",
           "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "BJ-2 plans bead formula and validation behavior only; the phase-lead identity of close-hook and dispatch assignments is implemented by BJ-1 and BJ-4."
         }
       ]
     },
