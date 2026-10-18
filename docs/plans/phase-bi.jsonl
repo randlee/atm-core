@@ -4,3 +4,4 @@
 {"sprint": "bi-4", "depends_on": ["bi-3", "bi-5", "bi-6"]}
 {"sprint": "bi-5"}
 {"sprint": "bi-6", "depends_on": ["bi-1", "bi-5"]}
+{"sprint": "bi-7", "depends_on": ["bi-6"]}
