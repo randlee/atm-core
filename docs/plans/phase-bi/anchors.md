@@ -40,6 +40,12 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-032 | locked | ci cell on a merged or closed PR = last run on its head | 2026-10-18 |
 | ANC-033 | locked | PR link = the fetched PullRequest.url | 2026-10-18 |
 | ANC-034 | locked | unknown = ? in #2D81E0 | 2026-10-18 |
+| ANC-035 | locked | state cell: active agent wins over sprint state | 2026-10-17 |
+| ANC-036 | locked | one icon per active agent, none dropped | 2026-10-17 |
+| ANC-037 | locked | ci cell = exactly one of pass, fail, running, none | 2026-10-17 |
+| ANC-038 | locked | pr cell = state icon then [#n](url), or - with no PR | 2026-10-17 |
+| ANC-039 | locked | atm-bd cron --md-table emits the layout C table | 2026-10-17 |
+| ANC-040 | locked | spec table form, byte-identical per snapshot | 2026-10-17 |
 
 ## ANC-001
 
@@ -638,3 +644,113 @@ Deterministic check to pair with the development gate: icon table test asserts (
 Fixtures:
 - pass: SprintState.unknown, CiState.unknown and PrState.unknown each map to the glyph ? in #2D81E0, and a snapshot with GitHub data truncated renders ? in the ci and pr cells with a Problems row.
 - fail: An unknown state renders ? in #F85149, or GitHub-off renders the no-PR dash in the pr cell.
+
+## ANC-035
+
+Anchor: The status table's state cell must show the icon of the agent working the sprint whenever one is active (a dev agent, severity or QA), and the sprint's own state icon only when no agent is on it; a blocked sprint with an active agent must show the agent, never the lock.
+
+> If no agent is working the sprint, show the sprint's state icon (closed, blocked, ready, not\_ready, and the rest). Because an agent wins over state, a blocked sprint that has an agent on it shows the agent. The lock appears only when nobody holds the sprint.
+
+Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 2.
+
+Summary: state cell: active agent wins over sprint state
+
+Scope: the STATE producer order of the shared status table module (agents before sprint status)
+
+Deterministic check to pair with the development gate: fixture: a blocked sprint with an active dev agent renders that agent's glyph, not U+F033E; the same sprint with no agent renders U+F033E #FA8537
+
+Fixtures:
+- pass: A blocked sprint with fable active renders the fable glyph in its state cell; after fable's task closes and no agent remains, the same sprint renders the lock U+F033E in #FA8537.
+- fail: A blocked sprint with an active agent renders the lock U+F033E, or a sprint with no active agent keeps rendering a stale agent glyph.
+
+## ANC-036
+
+Anchor: When more than one agent is active on a sprint, the state cell must draw one icon per active agent, every agent drawn and none collapsed, truncated or dropped, so the cell widens by one glyph per extra agent.
+
+> The state cell shows one icon per active agent (Rand 2026-10-18: every active agent is drawn, the column widens by one cell per extra agent), else one icon picked in this order:
+
+Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 2.
+
+Summary: one icon per active agent, none dropped
+
+Scope: the agents_working STATE producer and both emitters (markdown and Rich)
+
+Deterministic check to pair with the development gate: fixture with two active agents renders both glyphs in the state cell and nothing else; a third active agent adds a third glyph
+
+Fixtures:
+- pass: A sprint with fable and quality-mgr both active renders the fable glyph and the gavel side by side in its state cell, two glyph cells wide.
+- fail: A sprint with two active agents renders only the first agent's glyph, or an overflow marker in place of the second.
+
+## ANC-037
+
+Anchor: The status table's ci cell must hold exactly one icon, pass, fail, running or none, for the sprint's shown PR head: pass U+F062C #2EA043, running U+F0898 #58A6FF, none U+F01D8 #2D81E0 only when no CI run exists for that head, and fail per ANC-030.
+
+> | ci | one icon | pass, fail, running, none |
+
+Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 2.
+
+Summary: ci cell = exactly one of pass, fail, running, none
+
+Scope: the CI producers of the shared status table module
+
+Deterministic check to pair with the development gate: fixtures: all checks passed renders U+F062C #2EA043; a run in progress renders U+F0898 #58A6FF; no run renders U+F01D8 #2D81E0; every ci cell is one glyph
+
+Fixtures:
+- pass: A sprint whose PR head's checks all passed renders U+F062C in #2EA043; one with a run still in progress renders U+F0898 in #58A6FF; one with no run on that head renders U+F01D8 in #2D81E0.
+- fail: A sprint with a run still in progress renders the pass glyph, or a sprint with no run renders an empty ci cell or two glyphs.
+
+## ANC-038
+
+Anchor: The status table's pr cell must render the PR state icon (open, draft, merged or closed) followed by the PR number linked as [#n](url) per ANC-033, and exactly the dash - when the sprint has no PR.
+
+> | pr | an icon and the PR number, or `-` when there is no PR | open, draft, merged, closed |
+
+Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 2.
+
+Summary: pr cell = state icon then [#n](url), or - with no PR
+
+Scope: the PR producers and the pr cell of the markdown emitter
+
+Deterministic check to pair with the development gate: fixture: open PR 118 renders the open glyph then [#118](url); merged PR renders the merged glyph then the link; no PR renders exactly -
+
+Fixtures:
+- pass: A sprint with open PR 118 renders the open glyph then [#118](https://github.com/randlee/atm-bd-orchestration/pull/118); a sprint with no PR renders exactly -.
+- fail: A sprint with no PR renders an empty pr cell or ?, or the PR number appears before the icon or without its link.
+
+## ANC-039
+
+Anchor: atm-bd cron --phase <x> --md-table must print the layout C markdown status table to stdout: header | sprint | state | ci | pr |, alignment row |---|:-:|:-:|---|, one row per sprint of the phase.
+
+> Command flag for the table output: `--md-table`, or `--md --table`.
+
+Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 2.
+
+Summary: atm-bd cron --md-table emits the layout C table
+
+Scope: the cron CLI flag and the markdown emitter entry point
+
+Deterministic check to pair with the development gate: CLI test: cron --phase bi --md-table over a fixture snapshot prints a table whose first two lines are exactly the spec header and alignment rows and whose row count equals the sprint count
+
+Fixtures:
+- pass: Running atm-bd cron --phase bi --md-table over a fixture snapshot prints | sprint | state | ci | pr | then |---|:-:|:-:|---| then one row per sprint of the phase.
+- fail: atm-bd cron --phase bi --md-table prints the dispatch summary or a table with a different header, or the flag is not accepted.
+
+## ANC-040
+
+Anchor: The emitted markdown must match the spec's form byte for byte: header | sprint | state | ci | pr |, alignment row |---|:-:|:-:|---|, one row per sprint with a glyph in each icon slot, and two emissions over the same snapshot must produce identical bytes.
+
+> | sprint | state | ci | pr |
+|---|:-:|:-:|---|
+| bi-1 | <icon> | <icon> | <icon> [#118](https://github.com/<owner>/<repo>/pull/118) |
+
+Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 2.
+
+Summary: spec table form, byte-identical per snapshot
+
+Scope: the markdown emitter (AC6 byte test)
+
+Deterministic check to pair with the development gate: a fixed snapshot renders exactly the stored expected bytes (AC6); rendering the same snapshot twice compares equal byte for byte
+
+Fixtures:
+- pass: The AC6 byte test renders a fixed snapshot to exactly the stored expected bytes, and rendering it twice gives byte-identical output.
+- fail: Two renders of the same snapshot differ (timestamps, dict ordering), or the header or alignment row deviates from the spec by a single byte.
