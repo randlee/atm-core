@@ -77,10 +77,10 @@ Glyphs are Material Design Icons in the Nerd Font `md-` range. Codepoints were l
 
 | Who | Icon name | Codepoint | Color |
 | --- | --- | --- | --- |
-| fable | `snowflake` | U+F0717 | `#D97757` |
-| haiku | `close` | U+F0156 | `#D97757` |
-| sonnet | `multiplication` | U+F0382 | `#D97757` |
-| opus | `asterisk` | U+F06C4 | `#D97757` |
+| fable | `snowflake` | U+F0717 | `#FF9F80` |
+| haiku | `close` | U+F0156 | `#FF6533` |
+| sonnet | `multiplication` | U+F0382 | `#FF784D` |
+| opus | `asterisk` | U+F06C4 | `#FF8C66` |
 | astra | `creation` | U+F0674 | `#FFE066` |
 | sol | `white-balance-sunny` | U+F05A8 | `#FFA60D` |
 | terra | `earth` | U+F01E7 | `#2DE057` |

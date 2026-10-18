@@ -23,7 +23,7 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-015 | retired | claude agents of unknown model get an orange starburst | 2026-10-16 |
 | ANC-016 | retired | codex agents get a glyph per model class | 2026-10-16 |
 | ANC-017 | locked | qa and sanity icons are fixed by agent type | 2026-10-16 |
-| ANC-018 | locked | PR list uses Rand's GH_THEME icons | 2026-10-16 |
+| ANC-018 | locked | PR list uses Rand's GH_THEME icons (CI fail moved to ANC-030) | 2026-10-16 |
 | ANC-019 | locked | claude agents get a per-model icon and colour | 2026-10-16 |
 | ANC-020 | locked | codex agents get a celestial icon and colour per model class | 2026-10-16 |
 | ANC-021 | locked | qa agent icon: running blue, pass green, fail red | 2026-10-16 |
@@ -34,7 +34,9 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-026 | locked | sanity agent icon is the Jev icon | 2026-10-16 |
 | ANC-027 | locked | bead statuses use the BEAD_STATUS icons | 2026-10-16 |
 | ANC-028 | locked | icons for the remaining states | 2026-10-16 |
-| ANC-029 | locked | merge conflict = merged glyph in red | 2026-10-16 |
+| ANC-029 | retired | merge conflict = merged glyph in red | 2026-10-16 |
+| ANC-030 | locked | CI fail = single failing platform icon in red, else red bug | 2026-10-17 |
+| ANC-031 | locked | merge conflict = source-branch glyph in red | 2026-10-17 |
 
 ## ANC-001
 
@@ -324,21 +326,21 @@ Fixtures:
 
 ## ANC-018
 
-Anchor: The console's pull-request list must show the CI pass, CI fail, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME.
+Anchor: The console's pull-request list must show the CI pass, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME; the CI fail glyph is governed by ANC-030.
 
 > here are gh icons:
 
-Said by Rand, planning session 2026-10-17: GH_THEME pasted (source-branch green/red, source-merge purple, cancel red, weather-hurricane blue), 2026-10-16. Status: locked. Version 3.
+Said by Rand, planning session 2026-10-17: GH_THEME pasted (source-branch green/red, source-merge purple, cancel red, weather-hurricane blue), 2026-10-16. Status: locked. Version 4.
 
-Summary: PR list uses Rand's GH_THEME icons
+Summary: PR list uses Rand's GH_THEME icons (CI fail moved to ANC-030)
 
 Scope: edits how pull-request states are rendered
 
-Deterministic check to pair with the development gate: render a PR list with one PR per state and assert each line contains its GH_THEME code point and colour
+Deterministic check to pair with the development gate: render a PR list with one PR per state and assert each pass, running, merged and closed line contains its GH_THEME code point and colour
 
 Fixtures:
-- pass: The PR list renders CI pass, CI fail, running, merged and closed with the GH_THEME glyphs and colours.
-- fail: The PR list renders CI pass, CI fail, running, merged and closed with the old ✅, ⛔, 🌀, ⑂ and ⊗ characters and uses no GH_THEME glyph or colour.
+- pass: The PR list renders CI pass, running, merged and closed with the GH_THEME glyphs and colours, and CI fail per ANC-030.
+- fail: The PR list renders CI pass, running, merged and closed with the old ✅, 🌀, ⑂ and ⊗ characters and uses no GH_THEME glyph or colour.
 
 ## ANC-019
 
@@ -526,7 +528,7 @@ Anchor: The console must show a merge check of conflict with the merged icon U+F
 
 > merge conflict would be merged (w/ red)
 
-Said by Rand, planning session 2026-10-17; red taken as the GitHub red already in the theme, 2026-10-16. Status: locked. Version 2.
+Said by Rand, planning session 2026-10-17; red taken as the GitHub red already in the theme, 2026-10-16. Status: retired. Version 3.
 
 Summary: merge conflict = merged glyph in red
 
@@ -537,3 +539,39 @@ Deterministic check to pair with the development gate: render a merge check of c
 Fixtures:
 - pass: A merge check of conflict renders the merged glyph U+F062D in #F85149.
 - fail: A merge check of conflict renders U+F062D in #8957E5, the merged purple.
+
+## ANC-030
+
+Anchor: The console must show a CI fail as the failing platform's icon in #F85149 when exactly one platform failed (macOS U+F0035, Windows U+F05B3, Linux U+F033D), and as the bug U+F00E4 in #F85149 when more than one platform failed or a general CI action not tied to a platform failed.
+
+> Only one of macOS, Windows or Linux failed: show that platform's icon in red. More than one platform failed: show the red bug. A general CI action failed, one that is not tied to a platform: show the red bug.
+
+Said by Rand, layout C spec, docs/plans/phase-bi/atm-bd cron status table (layout C).md, ci fail rule; ruling relayed by team-lead 2026-10-18 (01M56A77Q0JAB9R9WFBHN67104): the spec wins over ANC-018 for the CI fail glyph because the old source-branch red looked like a closed GitHub PR item, 2026-10-17. Status: locked. Version 2.
+
+Summary: CI fail = single failing platform icon in red, else red bug
+
+Scope: edits how a CI fail is rendered in the status table, PR list and cron markdown
+
+Deterministic check to pair with the development gate: render CI fails with one failing platform each and assert U+F0035, U+F05B3, U+F033D in #F85149; render a two-platform fail and a general action fail and assert U+F00E4 in #F85149
+
+Fixtures:
+- pass: A CI fail where only Windows failed renders U+F05B3 in #F85149; a fail where macOS and Linux both failed renders the bug U+F00E4 in #F85149; a failed general action renders U+F00E4 in #F85149.
+- fail: A CI fail where only Windows failed renders the source-branch glyph U+F062C in #F85149, or a two-platform fail renders one platform's icon.
+
+## ANC-031
+
+Anchor: The console must show a merge check of conflict with the source-branch icon U+F062C in red #F85149.
+
+> | merge-check conflict | source-branch | U+F062C | #F85149 |
+
+Said by Rand, layout C spec, docs/plans/phase-bi/atm-bd cron status table (layout C).md, PR states table; ruling relayed by team-lead 2026-10-18 (01M56A77Q0JAB9R9WFBHN67104): the spec wins over ANC-029; Rand moved the glyph off source-merge because it looked like a closed GitHub PR item, 2026-10-17. Status: locked. Version 2.
+
+Summary: merge conflict = source-branch glyph in red
+
+Scope: edits how the merge check is rendered
+
+Deterministic check to pair with the development gate: render a merge check of conflict and assert U+F062C in #F85149
+
+Fixtures:
+- pass: A merge check of conflict renders the source-branch glyph U+F062C in #F85149.
+- fail: A merge check of conflict renders the merged glyph U+F062D in #F85149, or U+F062C in #2EA043.
