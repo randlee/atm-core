@@ -1,0 +1,69 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T232228Z-atm-bj-2",
+  "gate": "plan",
+  "created_at": "2026-10-18T23:22:28+00:00",
+  "anchors_path": "docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "atm-bj-2",
+    "title": "bj-2: stack bead and sprint-family pour: stack-bead.json.j2, pour metadata, pydantic model per bead kind, validate-plan",
+    "source": "/private/tmp/claude-501/-Users-randlee-github-atm-core/48324f08-3c24-4d63-8574-a78f4d2d167d/scratchpad/bj-plan/item-atm-bj-2.txt",
+    "chars": 6138,
+    "truncated": false,
+    "chars_before_reduction": 6138,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": null,
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-060",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd must not assign dev or fix beads; the lead assigns them, the dev starts its next queued task when the sanity hook closes its current task, and a qa fix bead goes to the dev the lead picks at the finding's difficulty.",
+      "quote": "dev assignment is not mechanical.  this works as it does now.  dev agent will start next queued task as soon as sanity pass.  a different dev will get qa fix beads at appropriate level set by lead.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "atm-bd's actions.jsonl over a tick with a ready dev bead and no task holds no assign for it; the candidate filter in dispatch.py admits only sanity and qa stages",
+      "kind": "prohibition",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bj-2",
+        "reason": "bj-2 writes the pour metadata and the stack bead and does not touch atm-bd dispatch or any assignment; the dispatch candidate filter ANC-060 governs is unchanged (same ground as the ANC-061 exclusion)"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: bj-2 writes the pour metadata and the stack bead and does not touch atm-bd dispatch or any assignment; the dispatch candidate filter ANC-060 governs is unchanged (same ground as the ANC-061 exclusion).",
+      "attempts": 0
+    }
+  ],
+  "summary": {
+    "counts": {
+      "excluded": 1
+    },
+    "failing": [],
+    "leaning_counts": {},
+    "unstable": [],
+    "errors": [],
+    "excluded": [
+      {
+        "anchor_id": "ANC-060",
+        "reason": "bj-2 writes the pour metadata and the stack bead and does not touch atm-bd dispatch or any assignment; the dispatch candidate filter ANC-060 governs is unchanged (same ground as the ANC-061 exclusion)"
+      }
+    ],
+    "shortened": [],
+    "pass": true
+  }
+}

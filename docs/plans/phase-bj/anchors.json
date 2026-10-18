@@ -1522,12 +1522,23 @@
           "item": "atm-bj-4",
           "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
           "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:31:19+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "bj-1 edits the close hook script and its templates and renders no bead, sprint, PR or CI state in the console; ANC-028 scope is console rendering (relevance no at 0.56 and 0.79, leaning not_applicable, same applicability-noise class as the other phase-bi exclusions)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-4",
           "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
+        },
+        {
+          "item": "atm-bj-1",
+          "reason": "bj-1 edits the close hook script and its templates and renders no bead, sprint, PR or CI state in the console; ANC-028 scope is console rendering (relevance no at 0.56 and 0.79, leaning not_applicable, same applicability-noise class as the other phase-bi exclusions)"
         }
       ]
     },
@@ -2922,7 +2933,39 @@
           "The lead reads the dev-complete report and runs atm task assign for the sanity bead by hand, or atm-bd only logs a notice that the sanity bead is ready."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item contains no planned sanity assignment by the close hook or by atm-bd: it is about something else, only names the topic or a goal, or describes only notices, reports, or lead actions.",
+                "unclear": "The item describes some automatic sanity assignment but the text is too vague to tell who performs it or when.",
+                "yes": "Both the close-hook assignment in the same command as bd close and the atm-bd assignment of ready sanity beads without a task appear in the item as planned behaviour, in any wording."
+              },
+              "instructions": "Check `item.text` for the specific mechanism that `anchor.statement` requires. Two things must be planned in the item: a close hook or close script that, when a dev or fix bead closes, runs the sanity bead's task assignment in the same shell command as bd close; and atm-bd assigning the sanity bead on its own when bd ready lists it and it has no ATM task. A statement of intent such as 'sanity should be automated' or 'smoother hand-off' is not the mechanism. A notice, report, or message is not an assignment. Judge whether the mechanism is present, not whether anything conflicts with it.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item does not commit to a differing approach; it is silent, consistent with the anchor, or about something else.",
+                "unclear": "The item hints at a different approach but does not state it clearly enough to tell.",
+                "yes": "The item explicitly commits to one of these differing approaches."
+              },
+              "instructions": "Does `item.text` commit to an approach for sanity assignment that differs from the one `anchor.statement` requires? Look for an explicit statement in the item that a person (for example the lead) performs or triggers a sanity assignment, that the close hook does not assign, that atm-bd does not assign ready sanity beads, that only a notice is sent, or that some kind of bead (dev or fix) is left out. A script or hook that runs the assignment under the phase lead's identity (for example `atm task assign ... --as <phase lead>`) is not a lead action; a lead action is the lead personally performing, approving, or triggering the step. An item that does not mention sanity assignment at all, or mentions it only as a goal, does not differ from the anchor. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+                "unclear": "The item text is too vague to tell what part of the system it touches.",
+                "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -2957,6 +3000,13 @@
           "item": "atm-bj-3",
           "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
           "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:31:19+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "bj-4 plans only the atm-bd dispatch read order of ANC-061; the close-hook assignment path of ANC-052 is bj-1, which satisfies ANC-052, and the sealed ANC-052 addressed question requires both paths in one item (the two-path reading is the ANC-052 clarity item for Rand)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2967,6 +3017,10 @@
         {
           "item": "atm-bj-3",
           "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "bj-4 plans only the atm-bd dispatch read order of ANC-061; the close-hook assignment path of ANC-052 is bj-1, which satisfies ANC-052, and the sealed ANC-052 addressed question requires both paths in one item (the two-path reading is the ANC-052 clarity item for Rand)"
         }
       ]
     },
@@ -2991,7 +3045,39 @@
           "On PASS the hook closes the sanity bead and the lead dispatches the qa bead on the next bd ready pass."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not contain that hook step: QA assignment is not mentioned, is left to the lead or another component, or runs under a non-lead identity.",
+                "unclear": "The item refers to a QA assignment after sanity but it cannot be told who performs it or as whom.",
+                "yes": "The item has the hook, on sanity PASS, run the qa assignment to quality-mgr with the qa template and vars under the phase lead identity (`--as <phase-lead>`, or the lead identity on the subprocess)."
+              },
+              "instructions": "Read `anchor.statement`: on a sanity PASS the close hook must hand the group's qa bead to quality-mgr itself, as the phase lead, with the qa template and vars. Is that hand-off written into `item.text` as something the hook does? An item that leaves the QA assignment to a person, to a later dispatch pass, or to another identity does not contain it; an item that only says QA follows does not contain it. Judge presence only.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item keeps the assignment with the hook or its sanity role under the lead identity, or does not mention who assigns the qa bead, or only adds a report to the lead.",
+                "unclear": "The item mentions the QA assignment but it cannot be told whether the hook or the lead identity is kept.",
+                "yes": "The item has the lead, a person, or another component assign the qa bead after sanity passes, says the hook does not assign it, or has the assignment made under an identity other than the phase lead."
+              },
+              "instructions": "Does `item.text` take the QA assignment after a sanity PASS away from the close hook, or away from the phase lead's identity? `anchor.statement` requires the hook (its sanity role in `atm-task-close.py`) to assign the qa bead to quality-mgr as the phase lead, with no lead action. Silence about the QA assignment is not a conflict; a report to the lead is not a conflict. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item covers only something else: the dev or fix close, assigning the sanity bead, a sanity FAIL, or an unrelated area of the system.",
+                "unclear": "The item mentions the close hook, sanity, or QA, but it cannot be told whether it concerns what happens after a sanity PASS.",
+                "yes": "The item describes the sanity role of the close hook on PASS, or says who or what assigns the qa bead or starts QA after sanity passes."
+              },
+              "instructions": "Does `item.text` deal with the moment a sanity bead closes with PASS, or with handing the qa bead to quality-mgr after that PASS? Judge subject matter only, not whether the item follows `anchor.statement`.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -3234,12 +3320,23 @@
             "fixtures"
           ],
           "previous_statement": "On a sanity FAIL below the round cap, the sanity close hook must reopen the checked bead to its assignee and send that dev the sanity-rejected template naming each undone deliverable, on the dev's still-open task; it must not create finding beads, a new layer or a new task."
+        },
+        {
+          "at": "2026-10-18T23:32:28+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "bj-2 plans the stack bead, the pour and validate-plan and does not write the sanity close hook or sanity-fail.xml.j2; the sanity FAIL path of ANC-056 is bj-1 (addressed yes at 0.70 then 0.55 on unchanged text, leaning satisfied, the near-threshold class)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-3",
           "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "bj-2 plans the stack bead, the pour and validate-plan and does not write the sanity close hook or sanity-fail.xml.j2; the sanity FAIL path of ANC-056 is bj-1 (addressed yes at 0.70 then 0.55 on unchanged text, leaning satisfied, the near-threshold class)"
         }
       ]
     },
@@ -3264,7 +3361,39 @@
           "The hook reopens the dev bead on every FAIL forever, or the cap is a constant in the script with no repository setting."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not plan this: it is silent, only mentions limiting rounds in general, or leaves out or changes the count, the repository setting, the default of five, or escalation on the FAIL that reaches the limit.",
+                "unclear": "The item plans part of the cap and it cannot be determined whether the rest is planned.",
+                "yes": "The item plans the per-bead round count, the repository-configurable limit with five as the default, and escalation to the lead instead of reopening on the FAIL that reaches the limit, as rules or as a worked sequence."
+              },
+              "instructions": "Does `item.text` plan the sanity round cap in `anchor.statement`: sanity FAIL rounds are counted per sanity bead (for example in `sanity_round`), the number of rounds allowed comes from the repository's `max_sanity_rounds` setting with five used when it is not set, and the FAIL that reaches the allowed number goes to the lead instead of reopening the checked bead? The plan may state these as rules or as a worked sequence of rounds, for example the fifth FAIL escalating when nothing is configured and a configured value of 2 escalating on the second FAIL. Judge presence of this plan only, not conflict.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item is irreconcilable with the rule: it follows the rule, says nothing about the round limit, or plans only behaviour the rule allows.",
+                "unclear": "The item might or might not conflict with the rule; its wording does not settle it.",
+                "yes": "The item plans behaviour that cannot be reconciled with the anchor's round-cap rule."
+              },
+              "instructions": "Does `item.text` state a plan that cannot be reconciled with `anchor.statement`? The anchor requires that once a sanity bead's FAIL count reaches the repository's `max_sanity_rounds` (5 when unset) the hook escalates to the phase lead rather than reopening the checked bead. A plan conflicts if it says FAILs are reopened without limit, never escalates, hard-codes the cap with no repository setting, uses a different default, or waits until the count exceeds the cap. A plan that describes reopening on a FAIL but says nothing about a round limit is silent about the cap, not in conflict. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different subject and says nothing about sanity FAIL handling or round limits.",
+                "unclear": "It is not possible to tell what subject the item is about.",
+                "yes": "The item is about sanity FAIL handling or the number of allowed sanity FAIL rounds."
+              },
+              "instructions": "Is `item.text` about the same subject as `anchor.statement`, namely what the sanity close hook does after a sanity FAIL and how many FAIL rounds are allowed before the lead is involved? A different approach to the same subject still counts as the same subject. Judge subject only.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -3333,7 +3462,39 @@
           "The hook defines a pydantic model of its own fields and builds a second vars dict for the assignment template."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not say this, including when it is silent about the hook's input, mentions it generically, or uses a different method.",
+                "unclear": "The item's wording about validation or forwarding is too vague to decide.",
+                "yes": "The item says the vars file is checked by a strict sc-compose render of a header-only (required_variables only) template and that the same file goes as --vars to the assign or send template."
+              },
+              "instructions": "Does `item.text` say that atm-task-close.py validates its sc-compose --vars file by rendering a header-only template in strict mode and passes that same file as --vars to the templates it runs, as `anchor.statement` directs? A mention of vars or templates without that validation and forwarding does not count. Judge presence only.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item states none of the ruled-out approaches for atm-task-close.py; silence, omissions, partial coverage, and work on other components are not conflicts.",
+                "unclear": "The item states an approach for atm-task-close.py's input that might or might not be one of the ruled-out ones.",
+                "yes": "The item explicitly states one of the ruled-out approaches for atm-task-close.py's input."
+              },
+              "instructions": "Does `item.text` state an approach for atm-task-close.py's own input that `anchor.statement` rules out? Ruled out for the hook: taking its values from anything other than one sc-compose --vars file (command-line flags, environment, several files); validating them with a separately defined schema or model of the hook's fields instead of the header-only template render; validating only after checks have started; giving the assign or send templates a rebuilt, edited, or second vars set instead of the same file. Only statements about atm-task-close.py count: an approach stated for another script or component is not a conflict, even if it uses a schema or model. Leaving a part out or naming only some of the commands is not a conflict either. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item plans work only in other components.",
+                "unclear": "The item's component cannot be identified.",
+                "yes": "The item plans work in atm-task-close.py or templates/task-close-vars.j2, whatever part of the hook it covers."
+              },
+              "instructions": "Is `item.text` about atm-task-close.py (the close hook) or templates/task-close-vars.j2, the subject of `anchor.statement` and `anchor.scope`? Answer about subject matter only.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -3449,7 +3610,39 @@
           "atm-bd assigns the ready dev bead to the first idle member of its difficulty tier."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not state any part of this rule.",
+                "unclear": "The item mentions dev or fix assignment in a way that may or may not state the rule.",
+                "yes": "The item explicitly states some part of this rule."
+              },
+              "instructions": "Does `item.text` state the rule in `anchor.statement` itself: that atm-bd does not assign dev or fix beads and the lead assigns them (picking the dev for a qa fix bead), with the dev starting its next queued task when the sanity hook closes its current one? Any one part stated explicitly counts. Judge presence only.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item leaves dev and fix assignment to the lead, or does not mention it; mechanical sanity or qa assignment alone does not count.",
+                "unclear": "The item describes an assignment mechanism but it cannot be told whether it covers dev or fix beads.",
+                "yes": "The item has atm-bd, a hook or script, or the dev itself assign, select, or claim a dev or fix bead."
+              },
+              "instructions": "Does `item.text` plan for a dev or fix bead to be assigned or claimed by anything other than the lead (atm-bd's dispatch, a hook or script, or the dev picking its own next bead), or for a dev to take new work other than its next queued task? Silence about dev and fix assignment is not a conflict. Mechanical assignment of sanity or qa beads is allowed by the anchor and is not a conflict. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "Carrying out the item changes none of these; it only touches unrelated behaviour, files, or presentation.",
+                "unclear": "The item does not say enough to tell what carrying it out would change.",
+                "yes": "Carrying out the item changes or relies on bead assignment, atm-bd dispatch, or when a dev starts its next task."
+              },
+              "instructions": "Consider what `item.text` would change if it were carried out. Would any of it change or rely on assigning beads to agents, atm-bd's dispatch tick and its candidate filter, or the moment a dev takes up its next queued task? These are what `anchor.statement` governs. Judge whether the subject overlaps; do not judge compliance.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -3484,6 +3677,13 @@
           "item": "atm-bj-4",
           "reason": "atm-bd dispatch is not touched by bj-4; the runs tabs assign nothing",
           "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:22:28+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "bj-2 writes the pour metadata and the stack bead and does not touch atm-bd dispatch or any assignment; the dispatch candidate filter ANC-060 governs is unchanged (same ground as the ANC-061 exclusion)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -3494,6 +3694,10 @@
         {
           "item": "atm-bj-4",
           "reason": "atm-bd dispatch is not touched by bj-4; the runs tabs assign nothing"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "bj-2 writes the pour metadata and the stack bead and does not touch atm-bd dispatch or any assignment; the dispatch candidate filter ANC-060 governs is unchanged (same ground as the ANC-061 exclusion)"
         }
       ]
     },
@@ -3732,8 +3936,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3787,28 +3991,12 @@
           "item": "atm-bj-4",
           "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it",
           "replaced": false
-        }
-      ],
-      "exclude": [
-        {
-          "item": "atm-phase-bj",
-          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it"
         },
         {
-          "item": "atm-bj-1",
-          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it"
-        },
-        {
-          "item": "atm-bj-2",
-          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it"
-        },
-        {
-          "item": "atm-bj-3",
-          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it"
-        },
-        {
-          "item": "atm-bj-4",
-          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it"
+          "at": "2026-10-18T23:28:14+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "atm-core scope; carried into phase bk anchors (docs/plans/phase-bk)"
         }
       ]
     },
@@ -4109,7 +4297,39 @@
           "The subagent runs /sc-gh-stack-view or gh stack view --json in lean mode, or reads the raw 365 KB pull list into its context."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not state the lean procedure: it is silent about it, or mentions budget, tokens, economy or lean only as a topic or goal, or describes a lean path made of different steps.",
+                "unclear": "The item refers to a lean or low-budget procedure but its steps are described too loosely to tell whether they are the base and ancestry checks the anchor requires.",
+                "yes": "The item states what the subagent does in lean mode or when GraphQL is unavailable, with the specific content: base compared with the recorded top and an ancestry or no-divergence check, done with a filtered REST pull list and local git (for example fetch, merge-base --is-ancestor) rather than GraphQL. Paraphrases count."
+              },
+              "instructions": "`anchor.statement` requires two things of the sanity-stack subagent: a budget input in its fenced JSON, and a lean procedure used in lean mode or whenever GraphQL is unavailable that checks only that the PR base equals the recorded top and that the head descends from it with no divergence, using one filtered REST pull list and local git, with no GraphQL call. Does `item.text` plan that lean procedure, with its specific checks or method, for the lean or GraphQL-unavailable case? Judge presence of this content only.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item is a ruled-out behaviour: it follows the anchor, is silent about it, only uses GraphQL in full mode while GraphQL is available, or is about something else.",
+                "unclear": "The item describes a lean or rate-limited path whose method is ambiguous enough that it might or might not use GraphQL, an unfiltered list, or extra verification.",
+                "yes": "The item states a design or step that is one of the ruled-out behaviours, such as explicitly having no budget option, calling GraphQL on the lean or GraphQL-unavailable path, waiting on GraphQL rather than falling back, loading the raw pull list, or verifying the whole stack in lean mode."
+              },
+              "instructions": "Does `item.text` plan something that `anchor.statement` rules out for the sanity-stack subagent? The anchor rules out: having no budget input; making any GraphQL call in lean mode or when GraphQL is unavailable (gh stack view, /sc-gh-stack-view and GraphQL API queries are GraphQL); waiting for GraphQL instead of using the REST and git check; reading an unfiltered pull list; or verifying more than base and ancestry in lean mode. GraphQL use in full mode while GraphQL is available is not ruled out. Silence about the anchor is not a conflict. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different component or activity (for example another script, sanity pass/fail handling, the console, a CLI command), even if it uses similar words such as git, REST, rebase or budget.",
+                "unclear": "The item text is too vague to tell whether the work it describes is done by the sanity-stack subagent.",
+                "yes": "The item describes work on the sanity-stack subagent: its fenced JSON input, its verification or linking of a stack layer, or its GitHub API or GraphQL usage."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about the sanity-stack subagent: the subagent that verifies a layer against the recorded stack top and links it. Does `item.text` plan, change, or depend on the sanity-stack subagent itself: its input, how it verifies or links a layer, or how it uses GitHub and git while doing so? Judge subject overlap only, not whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -4361,7 +4581,39 @@
           "The runs table is rendered into dev-sanity's chat reply, or elapsed is the gap between two ledger timestamps, or the dev column is missing."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item leaves the page out, or names only the goal (visibility, less asking), or covers only some other part of the anchor.",
+                "unclear": "The item hints at a runs page but its contents cannot be told from the text.",
+                "yes": "The item includes that sanity runs page with its per-run columns, in any wording or as an example row."
+              },
+              "instructions": "Does `item.text` contain the concrete display `anchor.statement` asks for: a console page of sanity runs, newest first, one line per run, showing who did the work and the JEV and LLM results with their elapsed times? A wish to make results easier to see is not that display.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item is a ruled-out behaviour: it follows the anchor, is silent about it, or is about something else.",
+                "unclear": "The item describes runs display or timing in a way ambiguous enough that it might or might not be a ruled-out behaviour.",
+                "yes": "The item states a design or step that is one of the ruled-out behaviours."
+              },
+              "instructions": "Does `item.text` plan something that `anchor.statement` rules out? The anchor rules out: showing sanity runs only in dev-sanity's chat reply or rendering the runs table into that reply; having no sanity runs page or no quality runs page; listing oldest runs first or using more than one line per run; a sanity line without the dev, or without pass/fail or elapsed for JEV or for LLM; computing elapsed any other way than from the Jev client's return and a timer around the LLM subagent (for example from the gap between ledger timestamps); and rows that will never feed the OTel database. The quality line's columns, paging, and OTel export arriving in the next atm release are not ruled out. Silence is not a conflict. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different component or activity (for example the close hook, sanity FAIL routing, the pour, bead validation), even if it mentions sanity, beads or the lead.",
+                "unclear": "The item text is too vague to tell whether it touches any of these things.",
+                "yes": "The item describes work on a runs page or other display of sanity or quality runs, the sanity ledger row, jev_client.py's return value, how elapsed time is measured, or dev-sanity's spawning of its LLM subagent."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about how sanity and quality runs are recorded and shown: the atm-bd console runs pages, the sanity ledger row (elapsed per reviewer, dev identity), the value jev_client.py returns, and the dev-sanity spawn of the LLM subagent. Does `item.text` plan, change, or depend on one of these things? Judge subject overlap only, not whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,

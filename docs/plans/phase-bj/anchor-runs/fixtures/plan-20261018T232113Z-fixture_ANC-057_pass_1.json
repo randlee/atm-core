@@ -1,0 +1,141 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T232113Z-fixture_ANC-057_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T23:21:13+00:00",
+  "anchors_path": "docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-057:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 177,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-057",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The sanity close hook must count FAIL rounds per sanity bead in metadata.sanity_round and, when the count reaches max_sanity_rounds from the repository configuration (default 5 when unset), must escalate to the phase lead instead of reopening the checked bead.",
+      "quote": "sure, we can have sanity keep a counter and when count exceeded escelate to team-lead.  I would default max-sanity to ~5 if not overridden in atm-bd repo git settings.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "five FAIL runs in a scratch repo with no setting leave sanity_round at 5, the dev bead closed-not-reopened, and one SANITY.ROUND_CAP send to the lead; a repo value of 2 escalates on the second",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "8a1d3ad8c5f63ad2c86884b9de6f46a9012bfc7367c2d1a5bc3107b12faefdd5",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item is about a different subject and says nothing about sanity FAIL handling or round limits.",
+            "unclear": "It is not possible to tell what subject the item is about.",
+            "yes": "The item is about sanity FAIL handling or the number of allowed sanity FAIL rounds."
+          },
+          "instructions": "Is `item.text` about the same subject as `anchor.statement`, namely what the sanity close hook does after a sanity FAIL and how many FAIL rounds are allowed before the lead is involved? A different approach to the same subject still counts as the same subject. Judge subject only.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not plan this: it is silent, only mentions limiting rounds in general, or leaves out or changes the count, the repository setting, the default of five, or escalation on the FAIL that reaches the limit.",
+            "unclear": "The item plans part of the cap and it cannot be determined whether the rest is planned.",
+            "yes": "The item plans the per-bead round count, the repository-configurable limit with five as the default, and escalation to the lead instead of reopening on the FAIL that reaches the limit, as rules or as a worked sequence."
+          },
+          "instructions": "Does `item.text` plan the sanity round cap in `anchor.statement`: sanity FAIL rounds are counted per sanity bead (for example in `sanity_round`), the number of rounds allowed comes from the repository's `max_sanity_rounds` setting with five used when it is not set, and the FAIL that reaches the allowed number goes to the lead instead of reopening the checked bead? The plan may state these as rules or as a worked sequence of rounds, for example the fifth FAIL escalating when nothing is configured and a configured value of 2 escalating on the second FAIL. Judge presence of this plan only, not conflict.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item is irreconcilable with the rule: it follows the rule, says nothing about the round limit, or plans only behaviour the rule allows.",
+            "unclear": "The item might or might not conflict with the rule; its wording does not settle it.",
+            "yes": "The item plans behaviour that cannot be reconciled with the anchor's round-cap rule."
+          },
+          "instructions": "Does `item.text` state a plan that cannot be reconciled with `anchor.statement`? The anchor requires that once a sanity bead's FAIL count reaches the repository's `max_sanity_rounds` (5 when unset) the hook escalates to the phase lead rather than reopening the checked bead. A plan conflicts if it says FAILs are reopened without limit, never escalates, hard-codes the cap with no repository setting, uses a different default, or waits until the count exceeds the cap. A plan that describes reopening on a FAIL but says nothing about a round limit is silent about the cap, not in conflict. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.45,
+          "probabilities": {
+            "no": 0.22,
+            "unclear": 0.15,
+            "yes": 0.63
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.72,
+          "probabilities": {
+            "no": 0.81,
+            "unclear": 0.01,
+            "yes": 0.18
+          }
+        }
+      },
+      "min_confidence": 0.45,
+      "explanation": "Jev was not confident (min confidence 0.45); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1176,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.45
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 177,
+      "item_shortened": false,
+      "request_bytes": 3637
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1
+    },
+    "failing": [
+      "ANC-057"
+    ],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

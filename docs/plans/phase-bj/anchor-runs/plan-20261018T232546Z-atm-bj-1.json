@@ -1,0 +1,503 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T232546Z-atm-bj-1",
+  "gate": "plan",
+  "created_at": "2026-10-18T23:25:46+00:00",
+  "anchors_path": "docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "atm-bj-1",
+    "title": "bj-1: close hook: atm-task-close.py roles dev, fix, sanity, qa; task-close-vars.j2, sanity-fail.xml.j2, rebase-required.xml.j2; max_sanity_rounds",
+    "source": "/private/tmp/claude-501/-Users-randlee-github-atm-core/48324f08-3c24-4d63-8574-a78f4d2d167d/scratchpad/bj-plan/item-atm-bj-1.txt",
+    "chars": 11524,
+    "truncated": false,
+    "chars_before_reduction": 11524,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-052",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When a dev or fix bead closes, the group's sanity bead must be assigned to the dev-sanity member with the sanity template and vars without any lead action: by the dev's close hook in the same shell command as bd close, and by atm-bd when bd ready lists the sanity bead with no ATM task.",
+      "quote": "the first issue to solve is mechanical.  when dev or fix bd is closed, sanity 'bd ready' is true.  the atm-bd cron/console will 'atm task assign <bead-id> <sanity-agent> --template <template> --args <vars> automatically.  This assignment must be done --as <phase-lead>",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "close a dev bead through the hook in a scratch repo and read atm task list: the sanity task exists before the hook exits; kill the hook between its commands and one atm-bd tick assigns it",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "907fb722124ef7f964d782287fe9f3f8abbc51285927cefe3362aa0ee5a1c79b",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+            "unclear": "The item text is too vague to tell what part of the system it touches.",
+            "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+          },
+          "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item contains no planned sanity assignment by the close hook or by atm-bd: it is about something else, only names the topic or a goal, or describes only notices, reports, or lead actions.",
+            "unclear": "The item describes some automatic sanity assignment but the text is too vague to tell who performs it or when.",
+            "yes": "Both the close-hook assignment in the same command as bd close and the atm-bd assignment of ready sanity beads without a task appear in the item as planned behaviour, in any wording."
+          },
+          "instructions": "Check `item.text` for the specific mechanism that `anchor.statement` requires. Two things must be planned in the item: a close hook or close script that, when a dev or fix bead closes, runs the sanity bead's task assignment in the same shell command as bd close; and atm-bd assigning the sanity bead on its own when bd ready lists it and it has no ATM task. A statement of intent such as 'sanity should be automated' or 'smoother hand-off' is not the mechanism. A notice, report, or message is not an assignment. Judge whether the mechanism is present, not whether anything conflicts with it.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "The item does not commit to a differing approach; it is silent, consistent with the anchor, or about something else.",
+            "unclear": "The item hints at a different approach but does not state it clearly enough to tell.",
+            "yes": "The item explicitly commits to one of these differing approaches."
+          },
+          "instructions": "Does `item.text` commit to an approach for sanity assignment that differs from the one `anchor.statement` requires? Look for an explicit statement in the item that a person (for example the lead) performs or triggers a sanity assignment, that the close hook does not assign, that atm-bd does not assign ready sanity beads, that only a notice is sent, or that some kind of bead (dev or fix) is left out. A script or hook that runs the assignment under the phase lead's identity (for example `atm task assign ... --as <phase lead>`) is not a lead action; a lead action is the lead personally performing, approving, or triggering the step. An item that does not mention sanity assignment at all, or mentions it only as a goal, does not differ from the anchor. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.86,
+          "probabilities": {
+            "no": 0.08,
+            "unclear": 0.01,
+            "yes": 0.91
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.92,
+          "probabilities": {
+            "no": 0.95,
+            "unclear": 0.0,
+            "yes": 0.05
+          }
+        }
+      },
+      "min_confidence": 0.86,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4478,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 11524,
+      "item_shortened": false,
+      "request_bytes": 15377
+    },
+    {
+      "anchor_id": "ANC-053",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When a sanity bead closes with PASS, the sanity close hook must assign the group's qa bead to the quality-mgr member with the qa template and vars as the phase lead, with no lead action.",
+      "quote": "likewise, when a sanity-bd passes, the same task assignment occurs 'atm task assign <quality-agent> --template <qa-template> --args <vars> --as <phase-lead>",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "run the sanity role with verdict PASS in a scratch repo and read atm task list: the qa task exists, assigned by the lead identity, before the hook exits",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "5cdde2b481cbd5e8fa95046377138b3dae9a82173ebad9d419f939c263972f15",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item covers only something else: the dev or fix close, assigning the sanity bead, a sanity FAIL, or an unrelated area of the system.",
+            "unclear": "The item mentions the close hook, sanity, or QA, but it cannot be told whether it concerns what happens after a sanity PASS.",
+            "yes": "The item describes the sanity role of the close hook on PASS, or says who or what assigns the qa bead or starts QA after sanity passes."
+          },
+          "instructions": "Does `item.text` deal with the moment a sanity bead closes with PASS, or with handing the qa bead to quality-mgr after that PASS? Judge subject matter only, not whether the item follows `anchor.statement`.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not contain that hook step: QA assignment is not mentioned, is left to the lead or another component, or runs under a non-lead identity.",
+            "unclear": "The item refers to a QA assignment after sanity but it cannot be told who performs it or as whom.",
+            "yes": "The item has the hook, on sanity PASS, run the qa assignment to quality-mgr with the qa template and vars under the phase lead identity (`--as <phase-lead>`, or the lead identity on the subprocess)."
+          },
+          "instructions": "Read `anchor.statement`: on a sanity PASS the close hook must hand the group's qa bead to quality-mgr itself, as the phase lead, with the qa template and vars. Is that hand-off written into `item.text` as something the hook does? An item that leaves the QA assignment to a person, to a later dispatch pass, or to another identity does not contain it; an item that only says QA follows does not contain it. Judge presence only.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "The item keeps the assignment with the hook or its sanity role under the lead identity, or does not mention who assigns the qa bead, or only adds a report to the lead.",
+            "unclear": "The item mentions the QA assignment but it cannot be told whether the hook or the lead identity is kept.",
+            "yes": "The item has the lead, a person, or another component assign the qa bead after sanity passes, says the hook does not assign it, or has the assignment made under an identity other than the phase lead."
+          },
+          "instructions": "Does `item.text` take the QA assignment after a sanity PASS away from the close hook, or away from the phase lead's identity? `anchor.statement` requires the hook (its sanity role in `atm-task-close.py`) to assign the qa bead to quality-mgr as the phase lead, with no lead action. Silence about the QA assignment is not a conflict; a report to the lead is not a conflict. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.94,
+          "probabilities": {
+            "no": 0.04,
+            "unclear": 0.0,
+            "yes": 0.96
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "no": 0.99,
+            "unclear": 0.0,
+            "yes": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.94,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4358,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 11524,
+      "item_shortened": false,
+      "request_bytes": 14781
+    },
+    {
+      "anchor_id": "ANC-057",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The sanity close hook must count FAIL rounds per sanity bead in metadata.sanity_round and, when the count reaches max_sanity_rounds from the repository configuration (default 5 when unset), must escalate to the phase lead instead of reopening the checked bead.",
+      "quote": "sure, we can have sanity keep a counter and when count exceeded escelate to team-lead.  I would default max-sanity to ~5 if not overridden in atm-bd repo git settings.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "five FAIL runs in a scratch repo with no setting leave sanity_round at 5, the dev bead closed-not-reopened, and one SANITY.ROUND_CAP send to the lead; a repo value of 2 escalates on the second",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "8a1d3ad8c5f63ad2c86884b9de6f46a9012bfc7367c2d1a5bc3107b12faefdd5",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item is about a different subject and says nothing about sanity FAIL handling or round limits.",
+            "unclear": "It is not possible to tell what subject the item is about.",
+            "yes": "The item is about sanity FAIL handling or the number of allowed sanity FAIL rounds."
+          },
+          "instructions": "Is `item.text` about the same subject as `anchor.statement`, namely what the sanity close hook does after a sanity FAIL and how many FAIL rounds are allowed before the lead is involved? A different approach to the same subject still counts as the same subject. Judge subject only.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not plan this: it is silent, only mentions limiting rounds in general, or leaves out or changes the count, the repository setting, the default of five, or escalation on the FAIL that reaches the limit.",
+            "unclear": "The item plans part of the cap and it cannot be determined whether the rest is planned.",
+            "yes": "The item plans the per-bead round count, the repository-configurable limit with five as the default, and escalation to the lead instead of reopening on the FAIL that reaches the limit, as rules or as a worked sequence."
+          },
+          "instructions": "Does `item.text` plan the sanity round cap in `anchor.statement`: sanity FAIL rounds are counted per sanity bead (for example in `sanity_round`), the number of rounds allowed comes from the repository's `max_sanity_rounds` setting with five used when it is not set, and the FAIL that reaches the allowed number goes to the lead instead of reopening the checked bead? The plan may state these as rules or as a worked sequence of rounds, for example the fifth FAIL escalating when nothing is configured and a configured value of 2 escalating on the second FAIL. Judge presence of this plan only, not conflict.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item is irreconcilable with the rule: it follows the rule, says nothing about the round limit, or plans only behaviour the rule allows.",
+            "unclear": "The item might or might not conflict with the rule; its wording does not settle it.",
+            "yes": "The item plans behaviour that cannot be reconciled with the anchor's round-cap rule."
+          },
+          "instructions": "Does `item.text` state a plan that cannot be reconciled with `anchor.statement`? The anchor requires that once a sanity bead's FAIL count reaches the repository's `max_sanity_rounds` (5 when unset) the hook escalates to the phase lead rather than reopening the checked bead. A plan conflicts if it says FAILs are reopened without limit, never escalates, hard-codes the cap with no repository setting, uses a different default, or waits until the count exceeds the cap. A plan that describes reopening on a FAIL but says nothing about a round limit is silent about the cap, not in conflict. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 1.0,
+            "unclear": 0.0,
+            "yes": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4426,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 11524,
+      "item_shortened": false,
+      "request_bytes": 15192
+    },
+    {
+      "anchor_id": "ANC-058",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-task-close.py must take its input as one sc-compose --vars file that carries every value the role needs, must validate it by rendering a header-only j2 template in strict mode before any check runs, and must pass that same file unchanged to the atm task assign and atm send templates it runs.",
+      "quote": "the hook has vars specified by the hook python.  the hook input vars should be sc-compose --vars payload with every setting necessary to complete everything inside the hook.  the input to the hook would verify vars against pydantic model and reject any missing/unpopulated vars you could define this as a 'special unrendered sc-compose j2 w/ only compined header' so validation is trivial.  (this would skip the need for a pydantic model).  the same vars could be sent to ... same vars sent to 'atm ... --template --vars <shared-vars>'  and sc-compose bead ... --template --vars <shared-vars>",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "a vars file missing commit fails before any git or gh call with an err naming commit; the assign and send subprocess argv carry --vars <the same path>",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "9ef9e1d0934f89bc9befc3490684563131e0dfc424d9ae36a9231fbe13097d1d",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item plans work only in other components.",
+            "unclear": "The item's component cannot be identified.",
+            "yes": "The item plans work in atm-task-close.py or templates/task-close-vars.j2, whatever part of the hook it covers."
+          },
+          "instructions": "Is `item.text` about atm-task-close.py (the close hook) or templates/task-close-vars.j2, the subject of `anchor.statement` and `anchor.scope`? Answer about subject matter only.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not say this, including when it is silent about the hook's input, mentions it generically, or uses a different method.",
+            "unclear": "The item's wording about validation or forwarding is too vague to decide.",
+            "yes": "The item says the vars file is checked by a strict sc-compose render of a header-only (required_variables only) template and that the same file goes as --vars to the assign or send template."
+          },
+          "instructions": "Does `item.text` say that atm-task-close.py validates its sc-compose --vars file by rendering a header-only template in strict mode and passes that same file as --vars to the templates it runs, as `anchor.statement` directs? A mention of vars or templates without that validation and forwarding does not count. Judge presence only.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "The item states none of the ruled-out approaches for atm-task-close.py; silence, omissions, partial coverage, and work on other components are not conflicts.",
+            "unclear": "The item states an approach for atm-task-close.py's input that might or might not be one of the ruled-out ones.",
+            "yes": "The item explicitly states one of the ruled-out approaches for atm-task-close.py's input."
+          },
+          "instructions": "Does `item.text` state an approach for atm-task-close.py's own input that `anchor.statement` rules out? Ruled out for the hook: taking its values from anything other than one sc-compose --vars file (command-line flags, environment, several files); validating them with a separately defined schema or model of the hook's fields instead of the header-only template render; validating only after checks have started; giving the assign or send templates a rebuilt, edited, or second vars set instead of the same file. Only statements about atm-task-close.py count: an approach stated for another script or component is not a conflict, even if it uses a schema or model. Leaving a part out or naming only some of the commands is not a conflict either. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.86,
+          "probabilities": {
+            "no": 0.91,
+            "unclear": 0.0,
+            "yes": 0.09
+          }
+        }
+      },
+      "min_confidence": 0.86,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4339,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 11524,
+      "item_shortened": false,
+      "request_bytes": 14813
+    },
+    {
+      "anchor_id": "ANC-060",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd must not assign dev or fix beads; the lead assigns them, the dev starts its next queued task when the sanity hook closes its current task, and a qa fix bead goes to the dev the lead picks at the finding's difficulty.",
+      "quote": "dev assignment is not mechanical.  this works as it does now.  dev agent will start next queued task as soon as sanity pass.  a different dev will get qa fix beads at appropriate level set by lead.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "atm-bd's actions.jsonl over a tick with a ready dev bead and no task holds no assign for it; the candidate filter in dispatch.py admits only sanity and qa stages",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "2a580609cab144f1ff7d30906434da7ce9a9097e71dfe2f0eaff8b9f63a7eb71",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "Carrying out the item changes none of these; it only touches unrelated behaviour, files, or presentation.",
+            "unclear": "The item does not say enough to tell what carrying it out would change.",
+            "yes": "Carrying out the item changes or relies on bead assignment, atm-bd dispatch, or when a dev starts its next task."
+          },
+          "instructions": "Consider what `item.text` would change if it were carried out. Would any of it change or rely on assigning beads to agents, atm-bd's dispatch tick and its candidate filter, or the moment a dev takes up its next queued task? These are what `anchor.statement` governs. Judge whether the subject overlaps; do not judge compliance.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not state any part of this rule.",
+            "unclear": "The item mentions dev or fix assignment in a way that may or may not state the rule.",
+            "yes": "The item explicitly states some part of this rule."
+          },
+          "instructions": "Does `item.text` state the rule in `anchor.statement` itself: that atm-bd does not assign dev or fix beads and the lead assigns them (picking the dev for a qa fix bead), with the dev starting its next queued task when the sanity hook closes its current one? Any one part stated explicitly counts. Judge presence only.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "The item leaves dev and fix assignment to the lead, or does not mention it; mechanical sanity or qa assignment alone does not count.",
+            "unclear": "The item describes an assignment mechanism but it cannot be told whether it covers dev or fix beads.",
+            "yes": "The item has atm-bd, a hook or script, or the dev itself assign, select, or claim a dev or fix bead."
+          },
+          "instructions": "Does `item.text` plan for a dev or fix bead to be assigned or claimed by anything other than the lead (atm-bd's dispatch, a hook or script, or the dev picking its own next bead), or for a dev to take new work other than its next queued task? Silence about dev and fix assignment is not a conflict. Mechanical assignment of sanity or qa beads is allowed by the anchor and is not a conflict. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.92,
+          "probabilities": {
+            "no": 0.05,
+            "unclear": 0.0,
+            "yes": 0.95
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.83,
+          "probabilities": {
+            "no": 0.1,
+            "unclear": 0.01,
+            "yes": 0.89
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.86,
+          "probabilities": {
+            "no": 0.91,
+            "unclear": 0.0,
+            "yes": 0.09
+          }
+        }
+      },
+      "min_confidence": 0.86,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4277,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 11524,
+      "item_shortened": false,
+      "request_bytes": 14386
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 5
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 5
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

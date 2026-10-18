@@ -70,7 +70,7 @@ Intent: `docs/plans/phase-bj/intent.md`
 | ANC-061 | locked | poller checks bd ready then the ATM task before assigning | 2026-10-18 |
 | ANC-062 | retired | stack linking advised, base alignment sufficient, lead owns hygiene | 2026-10-18 |
 | ANC-063 | locked | pour writes branch, worktree, pr_target and difficulty to every bead and validates the phase | 2026-10-18 |
-| ANC-064 | locked | atm task transition hooks in atm-core, routed by role, failure keeps the task open | 2026-10-18 |
+| ANC-064 | retired | atm task transition hooks in atm-core, routed by role, failure keeps the task open | 2026-10-18 |
 | ANC-065 | locked | sanity links the layer on PASS; first PASS wins the top, the other gets rebase-required | 2026-10-18 |
 | ANC-066 | locked | sanity-stack subagent: one next-top layer per spawn, sequential; the race is its job | 2026-10-18 |
 | ANC-067 | locked | stack bead: the whole stack as ledger, its claim as the lock, lead coordinates through it | 2026-10-18 |
@@ -807,6 +807,9 @@ Scope: the markdown emitter's header, alignment row and row shape
 
 Deterministic check to pair with the development gate: the first two emitted lines equal the spec's header and alignment row byte for byte; row count equals the sprint count
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-4`: the status table and its markdown export are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+
 Fixtures:
 - pass: The markdown emitter's first two lines are exactly | sprint | state | ci | pr | and |---|:-:|:-:|---|, followed by one row per sprint with a glyph in each icon slot.
 - fail: The markdown emitter writes a header with different column names or a left-aligned alignment row such as |---|---|---|---| for the icon columns.
@@ -890,6 +893,7 @@ Deterministic check to pair with the development gate: no read of ATM_IDENTITY i
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-1`: atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's
 - `atm-bj-3`: atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only
+- `atm-bj-4`: atm-bd's sender address is not touched by bj-4; the lead identity on dispatch's assign subprocess is ANC-051's and unchanged
 
 Fixtures:
 - pass: The console reads ATM_TEAM only to choose which team's tasks it lists and assigns; its sends still go out as atm-bd@tool.
@@ -1138,6 +1142,7 @@ Deterministic check to pair with the development gate: grep atm-task-close.py: n
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
+- `atm-bj-4`: the dev task's open and close lifecycle is the close hook's (bj-1); bj-4 reads runs and dispatches sanity and qa beads only
 
 Fixtures:
 - pass: After the dev role runs, atm task list still shows the dev task active; the sanity role on PASS closes it as the lead and the dev's next queued task starts.
@@ -1245,6 +1250,7 @@ Deterministic check to pair with the development gate: atm-bd's actions.jsonl ov
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-3`: atm-bd dispatch and the lead's dev assignment are not touched by bj-3; its agents assign nothing
 - `atm-bj-4`: atm-bd dispatch is not touched by bj-4; the runs tabs assign nothing
+- `atm-bj-2`: bj-2 writes the pour metadata and the stack bead and does not touch atm-bd dispatch or any assignment; the dispatch candidate filter ANC-060 governs is unchanged (same ground as the ANC-061 exclusion)
 
 Fixtures:
 - pass: A tick with a ready dev bead and a ready sanity bead assigns the sanity bead and emits a notice for the dev bead; the lead picks the dev.
@@ -1265,8 +1271,8 @@ Scope: atm-bd dispatch candidate filter order for sanity and qa beads
 Deterministic check to pair with the development gate: dispatch.py reads bd ready first and atm task list second for each candidate; a tick against a sanity bead whose task the hook assigned emits no assign action
 
 Excluded from (not judged; the cell passes as `excluded`):
-- `atm-bj-1`: bj-1 does not touch atm-bd dispatch; the hook assigns the sanity task itself and dispatch's bd-ready-then-task check is phase-bi code left unchanged
-- `atm-bj-2`: atm-bd dispatch is not touched by bj-2
+- `atm-bj-1`: bj-1 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8
+- `atm-bj-2`: bj-2 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8
 
 Fixtures:
 - pass: atm-bd reads bd ready, then atm task list, and skips the sanity bead because its task already exists.
@@ -1318,20 +1324,13 @@ Anchor: atm-core must run a repository-configured hook on task close (and later 
 
 > Long term, I would like this to occur in a atm-task-close hook which we could tap into.  we should file this as an important gh issue on atm-core repo because I don't believe this hook exists today.  we should assign hooks for most of the atm task transitions.  that would allow us to implement different hooks in different orchestration patterns.  the atm-task-close hook would accept a 'custom' json set of fields which would be defined by the custom python (not atm).  atm would simply pass the json to the python function which would return a Result<T,E> and if the hook returned failure, the task would remain open.  the result would get logged.  The atm-task-close hook would ALSO be routed by 'role' or 'role' would be a mandetory input argument to the python script
 
-Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 2.
+Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: retired. Version 3.
 
 Summary: atm task transition hooks in atm-core, routed by role, failure keeps the task open
 
 Scope: atm-core task close path (crates/atm/src/commands/task.rs TaskCloseCommand) and its hook configuration; atm-core #1873, release 1.6.2
 
 Deterministic check to pair with the development gate: with a configured hook that returns failure, atm task close <id> completed leaves the task active and the hook result appears in atm task events; with no hook configured the close behaves as today
-
-Excluded from (not judged; the cell passes as `excluded`):
-- `atm-phase-bj`: the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it
-- `atm-bj-1`: the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it
-- `atm-bj-2`: the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it
-- `atm-bj-3`: the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it
-- `atm-bj-4`: the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it
 
 Fixtures:
 - pass: A repo-configured task-close hook returning err keeps the task active and logs the err; the hook receives role and the JSON payload unchanged.
@@ -1376,6 +1375,7 @@ Deterministic check to pair with the development gate: dev-sanity.md forbids a s
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-1`: the sanity-stack subagent and dev-sanity's spawn rule are bj-3
 - `atm-bj-2`: the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write
+- `atm-bj-4`: the sanity-stack subagent and dev-sanity's spawn rule are bj-3
 
 Fixtures:
 - pass: With three sanity tasks open dev-sanity spawns sanity-stack for the first PASS, waits for stacked, then spawns it for the next; each spawn links one layer.

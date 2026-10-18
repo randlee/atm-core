@@ -1,0 +1,132 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T231821Z-fixture_ANC-053_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T23:18:21+00:00",
+  "anchors_path": "docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-053:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 102,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-053",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When a sanity bead closes with PASS, the sanity close hook must assign the group's qa bead to the quality-mgr member with the qa template and vars as the phase lead, with no lead action.",
+      "quote": "likewise, when a sanity-bd passes, the same task assignment occurs 'atm task assign <quality-agent> --template <qa-template> --args <vars> --as <phase-lead>",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "run the sanity role with verdict PASS in a scratch repo and read atm task list: the qa task exists, assigned by the lead identity, before the hook exits",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "5cdde2b481cbd5e8fa95046377138b3dae9a82173ebad9d419f939c263972f15",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item covers only something else: the dev or fix close, assigning the sanity bead, a sanity FAIL, or an unrelated area of the system.",
+            "unclear": "The item mentions the close hook, sanity, or QA, but it cannot be told whether it concerns what happens after a sanity PASS.",
+            "yes": "The item describes the sanity role of the close hook on PASS, or says who or what assigns the qa bead or starts QA after sanity passes."
+          },
+          "instructions": "Does `item.text` deal with the moment a sanity bead closes with PASS, or with handing the qa bead to quality-mgr after that PASS? Judge subject matter only, not whether the item follows `anchor.statement`.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not contain that hook step: QA assignment is not mentioned, is left to the lead or another component, or runs under a non-lead identity.",
+            "unclear": "The item refers to a QA assignment after sanity but it cannot be told who performs it or as whom.",
+            "yes": "The item has the hook, on sanity PASS, run the qa assignment to quality-mgr with the qa template and vars under the phase lead identity (`--as <phase-lead>`, or the lead identity on the subprocess)."
+          },
+          "instructions": "Read `anchor.statement`: on a sanity PASS the close hook must hand the group's qa bead to quality-mgr itself, as the phase lead, with the qa template and vars. Is that hand-off written into `item.text` as something the hook does? An item that leaves the QA assignment to a person, to a later dispatch pass, or to another identity does not contain it; an item that only says QA follows does not contain it. Judge presence only.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "The item keeps the assignment with the hook or its sanity role under the lead identity, or does not mention who assigns the qa bead, or only adds a report to the lead.",
+            "unclear": "The item mentions the QA assignment but it cannot be told whether the hook or the lead identity is kept.",
+            "yes": "The item has the lead, a person, or another component assign the qa bead after sanity passes, says the hook does not assign it, or has the assignment made under an identity other than the phase lead."
+          },
+          "instructions": "Does `item.text` take the QA assignment after a sanity PASS away from the close hook, or away from the phase lead's identity? `anchor.statement` requires the hook (its sanity role in `atm-task-close.py`) to assign the qa bead to quality-mgr as the phase lead, with no lead action. Silence about the QA assignment is not a conflict; a report to the lead is not a conflict. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 1.0,
+            "unclear": 0.0,
+            "yes": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.95,
+          "probabilities": {
+            "no": 0.03,
+            "unclear": 0.0,
+            "yes": 0.97
+          }
+        }
+      },
+      "min_confidence": 0.95,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1074,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 102,
+      "item_shortened": false,
+      "request_bytes": 3151
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-053"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}
