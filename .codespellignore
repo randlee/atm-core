@@ -20,3 +20,6 @@ statics
 anc
 # Verbatim operator quote in docs/plans/phase-bg/anchors.*; anchor quotes are never edited.
 shold
+# Verbatim operator quotes in docs/plans/phase-bi/anchors.* and docs/adr/ADR-066; anchor quotes are never edited.
+veriable
+shoudl

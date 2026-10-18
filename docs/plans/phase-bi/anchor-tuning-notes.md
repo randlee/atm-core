@@ -187,3 +187,22 @@ Fixture check at the plan gate: ANC-036, 037, 038 pass both fixtures. ANC-035 an
 Adjudication (anchor-tuning, 8 remote runs, no anchor statement or question changed): ANC-035 was a plan-text gap (the precedence rule lived only in the bead's design field, which the plan gate does not send); one sentence added to deliverable 6 and the "open questions as originally put" record block removed to stay under the request cap. ANC-037 gap: a PR head with no run yet; one sentence added to deliverable 9. ANC-038 was judge noise (contradicted no 0.73 to 0.81, satisfied 3 of 4). The three thin fixture sentences (ANC-035 fail, ANC-039 fail, ANC-040 pass and fail) were rewritten to name the anchor's subject and now score contradicted/satisfied as expected (fixtures only, version 3). Re-run plan-20261018T054308Z-atm-bi-6 on the clarified text: 22 satisfied, 7 not applicable, 3 deterministic-only, 2 underspecified. The two left, ANC-039 and ANC-040, are statement defects awaiting Rand: ANC-039's statement reaches past its quote into the table form (ANC-040's subject); ANC-040 folds a determinism rule that is not in the spec's words into the form anchor. Proposed corrections are in the PR for Rand's yes or no; nothing is held on them.
 
 Wording corrections (fenix's own anchors, decided 2026-10-18 06:05Z, not held on Rand): ANC-037 adds `?` per ANC-034 for an unknown CI state; ANC-039 is narrowed to the flag, the table form being ANC-040's; ANC-040 is narrowed to the exact header and alignment row; the determinism rule moved to REQ-BI6-AC6, quoting bi-6 acceptance criterion 6, its real source. Run plan-20261018T060911Z-atm-bi-6: 25 satisfied, 7 not applicable, 3 deterministic-only, 0 failing, pass. Fixture checks: ANC-037 and ANC-040 pass both; the fail fixtures of ANC-039 and REQ-BI6-AC6 come back underspecified (the sentence is too thin for the judge, not wrong-way); left as is, they gate nothing.
+
+## Console lockdown anchors ANC-041 to ANC-050 (2026-10-18)
+
+Rand (2026-10-18): "review the items from recent beads against requirements/adr and ANC, we should update all 3 to make sure we are locking behavior down." The console findings filed that day (atm-phase-bi.7, .9, .10, .12, .13) carried rulings that no requirement, ADR or anchor recorded. This section adds the anchors; the matching records are atm-core ADR-066 (tool identity) and ADR-067 (one structured log), beside ADR-065 (time), and atm-bd-orchestration `docs/requirements/console.md`.
+
+| anchor | ruling source | locks |
+| --- | --- | --- |
+| ANC-041 | ADR-065, bead .9 | local 24h on every screen, UTC `Z` in every file |
+| ANC-042 | ADR-066 D1/D2, bead .7 | constant sender `atm-bd@tool`, repo-config override only |
+| ANC-043 | ADR-066 D3, bead .7 | `ATM_IDENTITY`/`ATM_TEAM` never the sender; `ATM_TEAM` is at most the target team |
+| ANC-044 | ADR-067 D3, bead .13 | Diagnostics view = time + level + message verbatim from the structured log |
+| ANC-045 | ADR-067 D1, bead .13 | no `diagnostics.log`, no second error file |
+| ANC-046 | ADR-067 D2, bead .13 | writer sets level and composes `<fix> <cmd words> [<code>] <stderr line>` |
+| ANC-047 | ADR-067 D4, bead .13 | one failure, one entry; cached errors are sheet status |
+| ANC-048 | bead .12 | 10-minute default poll, configurable; bulk pages past 100 PRs |
+| ANC-049 | bead .12 | live quota guard at 50 percent with a visible pause and local reset time |
+| ANC-050 | bead .10 | agent rows `<sprint/fix id>: <bead title>`, truncated |
+
+ANC-047's quote reuses the "remove the 'hand-built' test file completely" ruling (`--allow-similar`); the one-failure-one-entry rule itself came from the code review of the cached GitHub error being re-logged every tick (bead .13 notes), which Rand accepted by directing the Diagnostics view to read the structured log only. `input.log` is deliberately not anchored: its fate is an open ruling (ADR-067 consequences).
