@@ -1089,6 +1089,19 @@
             "statement"
           ],
           "previous_statement": "After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke atm-bd-console."
+        },
+        {
+          "at": "2026-10-18T03:06:36+00:00",
+          "event": "excluded",
+          "item": "atm-bi-5.group-anc-f1",
+          "reason": "touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bi-5.group-anc-f1",
+          "reason": "touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow"
         }
       ]
     },

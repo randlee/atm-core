@@ -410,6 +410,9 @@ Scope: edits the command name, install scripts or any caller of the console
 
 Deterministic check to pair with the development gate: after uv tool install, command -v atm-bd-console finds nothing; rg atm-bd-console over scripts, docs, tests and workflows finds no invocation
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bi-5.group-anc-f1`: touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow
+
 Fixtures:
 - pass: After the sprint, atm-bd-console is not installed and no script, document, test or workflow in the repository invokes it.
 - fail: After the sprint, atm-bd-console remains as an alias that bead-queues still calls.
