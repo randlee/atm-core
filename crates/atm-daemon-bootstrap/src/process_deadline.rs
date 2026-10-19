@@ -58,10 +58,10 @@ impl GroupKillGuard {
 
     fn kill(&self) {
         #[cfg(unix)]
-        if self.armed {
-            if let Some(pgid) = self.pgid {
-                let _ = rustix::process::kill_process_group(pgid, rustix::process::Signal::KILL);
-            }
+        if self.armed
+            && let Some(pgid) = self.pgid
+        {
+            let _ = rustix::process::kill_process_group(pgid, rustix::process::Signal::KILL);
         }
     }
 
