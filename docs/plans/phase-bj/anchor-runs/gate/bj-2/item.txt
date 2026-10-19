@@ -3,7 +3,7 @@
 ## Description
 
 ### Goal
-The stack bead `<prefix>-phase-<x>.stack` exists for every phase as the ledger and the lock of its stack, poured with the phase root and required by `validate-plan`; the pour writes branch, worktree, pr_target and difficulty onto every bead of a sprint family; a pydantic model per bead kind with one validation over every bead of the phase fails the pour on any missing value. Governing text: `docs/requirements/sanity-stack.md` 1 and 2, `team-lead.md` 13, 43, atm-bd-orchestration #340 (Rand: "so due to pour and validate, the info MUST be in the bead"). Anchors: ANC-078..083, ANC-067.
+The stack bead `<prefix>-phase-<x>.stack` exists for every phase as the ledger and the lock of its stack, poured with the phase root and required by `validate-plan`; the pour writes branch, worktree, pr_target and difficulty onto every bead of a sprint family; a pydantic model per bead kind with one validation over every bead of the phase fails the pour on any missing value. Governing text: `docs/requirements/sanity-stack.md` 1 and 2, `team-lead.md` 13, 43, atm-bd-orchestration #340 (Rand: "so due to pour and validate, the info MUST be in the bead"). Anchors: ANC-083, ANC-067.
 
 ### Deliverables
 1. `templates/stack-bead.json.j2` (skills/atm-beads): one bead per stack, id `<prefix>-phase-<x>.stack`, `issue_type` task, child of the phase root, labels `phase-<x>`, `stage:stack`, metadata `trunk` (the root's `integration_branch`), `stack_number` (null until the first link) and `layers` (empty list). `resources/planning.md` lists it beside `plan-root.json.j2` as rendered with the root into the plan JSONL; it is never created by hand (team-lead 13).
@@ -32,8 +32,8 @@ The initial empty ledger has trunk baseline, `layers=[]`, and `stack_number=null
 ### Acceptance Criteria
 - [ ] (ANC-067) rendering `stack-bead.json.j2` with the phase-bj root vars gives id `atm-phase-bj.stack`, parent `atm-phase-bj`, `metadata.trunk` `integrate/phase-bj`, `layers` `[]`; `validate-plan --file <plan.jsonl> --phase bj --index docs/plans/phase-bj.jsonl` exits 5 naming the stack bead when it is left out of the file and 0 when it is present.
 - [ ] (ANC-067) `StackMetadata` rejects a layer entry missing any of `branch`, `pr`, `head`, `base`, `linked`; the test fixture with two layers reads the top as `layers[-1]`.
-- [ ] (ANC-078..083) sc-compose-generated sprint-group and finding-group formula records in a scratch bd database: `bd show <id>.group-sanity --json` and `bd show <id>.group-qa --json` each carry `branch`, `worktree`, `pr_target` and `difficulty` equal to the container's; the fix group of a blocking finding carries the same four keys from the recorded layer cut.
-- [ ] (ANC-078..083) `bead_schema.py validate --phase <x>` over a phase with one sanity bead stripped of `branch` exits 5 with the line `<bead>: branch`; `bead-groups` on the same input exits non-zero and pours nothing new.
+- [ ] (ANC-083) sc-compose-generated sprint-group and finding-group formula records in a scratch bd database: `bd show <id>.group-sanity --json` and `bd show <id>.group-qa --json` each carry `branch`, `worktree`, `pr_target` and `difficulty` equal to the container's; the fix group of a blocking finding carries the same four keys from the recorded layer cut.
+- [ ] (ANC-083) `bead_schema.py validate --phase <x>` over a phase with one sanity bead stripped of `branch` exits 5 with the line `<bead>: branch`; `bead-groups` on the same input exits non-zero and pours nothing new.
 - [ ] (#340 item 5) tests with fixtures named `atm-bi-7`, `atm-bi-7.group-sanity`, `atm-phase-bi.15-sanity` and `atm-phase-bi.18-qa` pass.
 - [ ] (task-close-hook.md 15) `rg -n "dev-fix|dev_fix" plugins --glob '!CHANGELOG.md'` matches only the compatibility reader of an existing phase file; `phase-config init` writes six template keys.
 - [ ] `python3 skills/atm-beads/scripts/bead_schema.py export schemas` reproduces the committed schemas byte for byte.
