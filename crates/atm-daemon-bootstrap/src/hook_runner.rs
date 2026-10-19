@@ -228,17 +228,33 @@ impl DaemonHookRunner {
             })?;
         let output = spawn_with_deadline(spec, &stdin, remaining)
             .await
-            .map_err(|failure| match failure {
-                SpawnFailure::TimedOut {
-                    after_ms: _after_ms,
-                } => AtmError::hook_timeout(
-                    &target.phase,
-                    &format!("no reply within {} ms", target.timeout_ms),
-                ),
-                SpawnFailure::Failed(error) => error,
+            .map_err(|failure| {
+                spawn_failure_error(&target.phase, target.timeout_ms, budget, failure)
             })?;
         check_status(&output)?;
         Ok(output)
+    }
+}
+
+fn spawn_failure_error(
+    phase: &PhaseId,
+    timeout_ms: u32,
+    budget: Duration,
+    failure: SpawnFailure,
+) -> AtmError {
+    match failure {
+        SpawnFailure::TimedOut { after_ms } => {
+            let limit = if budget < Duration::from_millis(u64::from(timeout_ms)) {
+                "request deadline"
+            } else {
+                "configured timeout"
+            };
+            AtmError::hook_timeout(
+                phase,
+                &format!("no reply within {after_ms} ms (limited by {limit})"),
+            )
+        }
+        SpawnFailure::Failed(error) => error,
     }
 }
 
@@ -772,10 +788,64 @@ mod tests {
         fixture.script("import threading\nthreading.Event().wait()\n");
         let error = fixture.run().await.unwrap_err();
         assert_eq!(error.code(), AtmErrorCode::HookTimeout);
+        let after_ms: u64 = error
+            .message()
+            .strip_prefix("HOOK.TIMEOUT: phase bk: no reply within ")
+            .unwrap()
+            .split_once(" ms")
+            .unwrap()
+            .0
+            .parse()
+            .unwrap();
+        assert!(after_ms <= u64::from(fixture.target.timeout_ms));
         assert_eq!(
             error.message(),
-            AtmError::hook_timeout(&fixture.target.phase, "no reply within 200 ms").message()
+            AtmError::hook_timeout(
+                &fixture.target.phase,
+                &format!("no reply within {after_ms} ms (limited by configured timeout)")
+            )
+            .message()
         );
+    }
+
+    #[test]
+    fn timeout_reports_effective_budget_and_binding_limit() {
+        let phase = PhaseId::parse("bk").unwrap();
+        for (timeout_ms, remaining_ms, after_ms, expected_budget, limit) in [
+            (30000, 600, 75, 100, "request deadline"),
+            (200, 60000, 175, 200, "configured timeout"),
+        ] {
+            let budget = runner_budget(timeout_ms, Duration::from_millis(remaining_ms)).unwrap();
+            assert_eq!(budget, Duration::from_millis(expected_budget));
+            let error = spawn_failure_error(
+                &phase,
+                timeout_ms,
+                budget,
+                SpawnFailure::TimedOut { after_ms },
+            );
+            assert_eq!(
+                error.message(),
+                AtmError::hook_timeout(
+                    &phase,
+                    &format!("no reply within {after_ms} ms (limited by {limit})")
+                )
+                .message()
+            );
+        }
+    }
+
+    #[test]
+    fn spawn_failure_keeps_non_timeout_error_unchanged() {
+        let phase = PhaseId::parse("bk").unwrap();
+        let expected = AtmError::hook_malformed("invalid reply");
+        let actual = spawn_failure_error(
+            &phase,
+            30000,
+            Duration::from_millis(100),
+            SpawnFailure::Failed(expected.clone()),
+        );
+        assert_eq!(actual.code(), expected.code());
+        assert_eq!(actual.message(), expected.message());
     }
 
     #[tokio::test]
