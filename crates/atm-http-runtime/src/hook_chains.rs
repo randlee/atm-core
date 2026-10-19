@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use atm_core::api::RequestDeadline;
@@ -21,7 +21,12 @@ struct Shared {
 
 pub struct ChainTracker {
     shared: Arc<Shared>,
+    /// Written only under the `aborts` lock, so admission and registration
+    /// observe shutdown consistently.
     closing: AtomicBool,
+    /// Set under the `aborts` lock when `drain` takes the handles; a chain that
+    /// registers after that point is aborted by its own registration.
+    collected: AtomicBool,
     next: AtomicU64,
 }
 
@@ -43,6 +48,12 @@ impl Drop for ChainGuard {
     }
 }
 
+/// A live slot reserved by [`ChainTracker::admit`]. Dropping it unstarted
+/// releases the slot.
+struct Admission {
+    guard: ChainGuard,
+}
+
 impl Default for ChainTracker {
     fn default() -> Self {
         Self::new()
@@ -58,6 +69,7 @@ impl ChainTracker {
                 aborts: Mutex::new(HashMap::new()),
             }),
             closing: AtomicBool::new(false),
+            collected: AtomicBool::new(false),
             next: AtomicU64::new(0),
         }
     }
@@ -68,36 +80,13 @@ impl ChainTracker {
         F: Future<Output = T> + Send + 'static,
         T: Send + 'static,
     {
-        if self.closing.load(Ordering::SeqCst) {
-            return Err(AtmError::daemon_unavailable(
-                "daemon shutting down; hook chain not started",
-            ));
-        }
-        let id = self.next.fetch_add(1, Ordering::Relaxed);
-        self.shared.live.send_modify(|live| *live += 1);
-        let guard = ChainGuard {
-            shared: Arc::clone(&self.shared),
-            id,
-        };
-        let handle = tokio::spawn(async move {
-            let _guard = guard;
-            chain.await
-        });
-        // The guard removes its entry under this lock, so a chain that already
-        // finished must not leave an abort handle behind.
-        let mut aborts = self
-            .shared
-            .aborts
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        if !handle.is_finished() {
-            aborts.insert(id, handle.abort_handle());
-        }
-        Ok(handle)
+        let admission = self.admit()?;
+        Ok(self.start(admission, chain))
     }
 
     /// Refuses every chain started after this call.
     pub fn begin_shutdown(&self) {
+        let _aborts = self.lock_aborts();
         self.closing.store(true, Ordering::SeqCst);
     }
 
@@ -112,18 +101,77 @@ impl ChainTracker {
             return 0;
         }
         let aborted = *self.shared.live.borrow();
-        let handles: Vec<AbortHandle> = self
-            .shared
-            .aborts
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .drain()
-            .map(|(_, handle)| handle)
-            .collect();
+        let handles: Vec<AbortHandle> = {
+            let mut aborts = self.lock_aborts();
+            self.collected.store(true, Ordering::SeqCst);
+            aborts.drain().map(|(_, handle)| handle).collect()
+        };
+        // Aborted outside the lock: an abort can drop a chain's guard inline,
+        // and the guard takes this same lock.
         for handle in handles {
             handle.abort();
         }
         aborted
+    }
+
+    fn lock_aborts(&self) -> MutexGuard<'_, HashMap<u64, AbortHandle>> {
+        self.shared
+            .aborts
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Reserves a live slot unless shutdown began. The closing check and the
+    /// live increment share the `aborts` lock with `begin_shutdown`, so `drain`
+    /// either counts this chain as live or refuses it.
+    fn admit(&self) -> Result<Admission, AtmError> {
+        let _aborts = self.lock_aborts();
+        if self.closing.load(Ordering::SeqCst) {
+            return Err(AtmError::daemon_unavailable(
+                "daemon shutting down; hook chain not started",
+            ));
+        }
+        let id = self.next.fetch_add(1, Ordering::Relaxed);
+        self.shared.live.send_modify(|live| *live += 1);
+        Ok(Admission {
+            guard: ChainGuard {
+                shared: Arc::clone(&self.shared),
+                id,
+            },
+        })
+    }
+
+    /// Spawns an admitted chain and registers its abort handle. When `drain`
+    /// has already taken the handles, the chain is aborted here instead, since
+    /// no later collection will see it.
+    fn start<F, T>(&self, admission: Admission, chain: F) -> JoinHandle<T>
+    where
+        F: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        let id = admission.guard.id;
+        let handle = tokio::spawn(async move {
+            let _guard = admission.guard;
+            chain.await
+        });
+        let abort = handle.abort_handle();
+        let collected = {
+            let mut aborts = self.lock_aborts();
+            if self.collected.load(Ordering::SeqCst) {
+                true
+            } else {
+                // A chain that already finished left no entry for the guard to
+                // remove; inserting now would leak one.
+                if !handle.is_finished() {
+                    aborts.insert(id, abort.clone());
+                }
+                false
+            }
+        };
+        if collected {
+            abort.abort();
+        }
+        handle
     }
 }
 
@@ -175,6 +223,29 @@ mod tests {
             .await;
         assert_eq!(aborted, 1);
         assert!(chain.await.expect_err("chain is aborted").is_cancelled());
+    }
+
+    /// Interleaves an admitted chain with `begin_shutdown` and `drain`: the
+    /// chain is admitted, drain's deadline passes before the chain registers its
+    /// handle, and the registration must then abort the chain itself.
+    #[tokio::test(start_paused = true)]
+    async fn chain_registered_after_drain_collected_is_aborted() {
+        let tracker = ChainTracker::new();
+        let admission = tracker.admit().expect("admitted before shutdown");
+        let aborted = tracker
+            .drain(RequestDeadline::after(Duration::from_secs(1)))
+            .await;
+        assert_eq!(aborted, 1, "the admitted chain counts as live");
+        let (_hold, held) = oneshot::channel::<()>();
+        let chain = tracker.start(admission, async move {
+            let _ = held.await;
+        });
+        assert!(
+            chain
+                .await
+                .expect_err("registration after collection aborts the chain")
+                .is_cancelled()
+        );
     }
 
     #[tokio::test]
