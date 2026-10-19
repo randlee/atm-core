@@ -1,0 +1,105 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261019T022629Z-fixture_REQ-BK-LOG_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-19T02:26:29+00:00",
+  "anchors_path": "docs/plans/phase-bk/anchors.json",
+  "plan": "phase-bk",
+  "item": {
+    "id": "fixture:REQ-BK-LOG:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 38,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "REQ-BK-LOG",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-LOG",
+      "statement": "Every hook call and every hook-returned action must emit one structured log entry carrying team, phase, hook, outcome and elapsed milliseconds (ADR-067).",
+      "quote": "Every hook call and every hook-returned action emits one structured log entry carrying team, phase, hook, outcome and elapsed milliseconds (ADR-067).",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §3; ADR-067 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 4,
+      "deterministic_check": "a tracing-capture test asserts one action=run entry and one action=action entry per action with the five fields",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.66,
+          "probabilities": {
+            "yes": 0.07,
+            "no": 0.77,
+            "unclear": 0.16
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.66,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1009,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 38,
+      "item_shortened": false,
+      "request_bytes": 3034
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "REQ-BK-LOG"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

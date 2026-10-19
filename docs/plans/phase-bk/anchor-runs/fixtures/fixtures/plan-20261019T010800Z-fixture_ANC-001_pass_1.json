@@ -1,0 +1,130 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261019T010800Z-fixture_ANC-001_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-19T01:08:00+00:00",
+  "anchors_path": "docs/plans/phase-bk/anchors.json",
+  "plan": "phase-bk",
+  "item": {
+    "id": "fixture:ANC-001:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 167,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "An active hook replaces the atm task subcommand call: atm runs the hook first, parses its JSON reply, and the subcommand's own logic runs only when the reply is pass-through.",
+      "quote": "so the hooks replace the call. the hooks should return json which is processed by atm. We should be able to replace quite a few of (perhaps all) atm task subcommands.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 2,
+      "deterministic_check": "a test registers a task.assign hook whose reply is success false and asserts the task ledger is unchanged and the command fails with the hook's message",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "6454d949e178a88679af736244084e2249924f4727e74bd04db8bd5ada2b5ec7",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item touches none of the three: it is about something else, such as cron schedule storage or startup, the TUI, documentation, or a command other than atm task, and it does not mention an atm task subcommand's request handling, the hook runner, or a hook reply.",
+            "unclear": "The item text is too vague to tell whether it touches an atm task subcommand's request handling, the hook runner, or a hook reply.",
+            "yes": "The item plans or changes the request handling of an atm task subcommand, the hook runner, or the handling of a hook's reply, including adding a hook to an atm task subcommand or describing how such a subcommand behaves with or without a hook."
+          },
+          "instructions": "Does `item.text` plan or change one of these three things: (1) how an `atm task` subcommand (assign, start, close, move, list, events) handles a request, (2) the component that runs a registered hook, or (3) how atm handles a hook's reply? Judge only whether the item touches one of these three; do not judge whether the item follows `anchor.statement`.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not plan this: it is silent about hook order and reply handling, names hooks only as a topic, covers only the hook runner or the no-hook case, or runs the normal logic before the hook or for a reply that is not pass-through.",
+            "unclear": "The item refers to the hook taking over the call but it cannot be determined whether the hook runs first or whether only a pass-through reply lets the normal logic run.",
+            "yes": "The item says atm runs the hook first, reads its JSON reply, and continues into the normal subcommand logic only when the reply is pass-through."
+          },
+          "instructions": "Does `item.text` plan for an active hook to take over the atm task subcommand call, so that atm runs the hook first, reads its JSON reply, and continues into the subcommand's normal logic only on a pass-through reply? A refusal reply or a list of replacement commands in place of the normal logic fits this plan. Judge presence of this plan only, not conflict.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "The item lets the hook decide as the statement requires, or does not discuss hook order or replies at all.",
+            "unclear": "It cannot be determined from the item whether the own logic or the hook's reply is in charge.",
+            "yes": "The item keeps the own logic in charge in one of these ways: it runs before the hook, the hook only receives the result afterwards, the reply is not used to decide, or the own logic runs for a reply other than pass-through."
+          },
+          "instructions": "Does `item.text` keep the atm task subcommand's own logic in charge when a hook is active, contrary to `anchor.statement`? That is the case when the own logic runs before the hook, when the hook only receives the result afterwards, when the hook's reply is not used to decide, or when the own logic still runs for a reply other than pass-through. An item that does not discuss hook order or replies does not conflict. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "no": 0.01,
+            "unclear": 0.0,
+            "yes": 0.99
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.89,
+          "probabilities": {
+            "no": 0.02,
+            "unclear": 0.05,
+            "yes": 0.93
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 1.0,
+            "unclear": 0.0,
+            "yes": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.89,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1204,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 167,
+      "item_shortened": false,
+      "request_bytes": 3737
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

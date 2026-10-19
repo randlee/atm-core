@@ -1,0 +1,1193 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261019T010933Z-bk-1",
+  "gate": "plan",
+  "created_at": "2026-10-19T01:09:33+00:00",
+  "anchors_path": "docs/plans/phase-bk/anchors.json",
+  "plan": "phase-bk",
+  "item": {
+    "id": "bk-1",
+    "title": "hook registration and cron schedule stores",
+    "source": "/private/tmp/claude-501/-Users-randlee-github-atm-core/48324f08-3c24-4d63-8574-a78f4d2d167d/scratchpad/bkj/bk-1.txt",
+    "chars": 15629,
+    "truncated": false,
+    "chars_before_reduction": 15629,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-020",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every active cron_schedule row is loaded when the daemon starts, so a schedule created before a daemon restart keeps firing after the restart with no re-registration.",
+      "quote": "cron would be persistent after restarting daemon.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
+      "anchor_version": 2,
+      "deterministic_check": "a paused-clock test inserts an active schedule, starts CronWorker from the store, advances past the next fire time and asserts one hook invocation",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "unstable": true,
+      "answers_second": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.02,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.76,
+          "probabilities": {
+            "yes": 0.84,
+            "no": 0.07,
+            "unclear": 0.09
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "verdict_first": "underspecified",
+      "verdict_second": "satisfied",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.02,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.59,
+          "probabilities": {
+            "yes": 0.73,
+            "no": 0.11,
+            "unclear": 0.16
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.98,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.59,
+      "explanation": "Jev was not confident (min confidence 0.59); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 5644,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.59
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 15629,
+      "item_shortened": false,
+      "request_bytes": 18942
+    },
+    {
+      "anchor_id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A hook registration is keyed by (team, phase, hook); disabling a phase marks every hook of that team and phase inactive instead of deleting the rows.",
+      "quote": "1. the skill would register the hooks as 'active' for a phase for a single team, when phase ended, hooks would be disabled.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 2,
+      "deterministic_check": "hook_registration has UNIQUE(team, phase, hook) and an active column; a test disables a phase and asserts the rows remain with active = 0 and disabled_at set",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 5651,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 15629,
+      "item_shortened": false,
+      "request_bytes": 18949
+    },
+    {
+      "anchor_id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Cron schedules are persisted as cron-expression strings in a new cron_schedule table of the atm SQLite database.",
+      "quote": "atm cron would be a simple scheduler w/ cron strings saved in a new table in atm db.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
+      "anchor_version": 2,
+      "deterministic_check": "the migration creates cron_schedule with a cron_expr TEXT column; a test inserts and reads a schedule back through CronScheduleStore",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 5632,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 15629,
+      "item_shortened": false,
+      "request_bytes": 18890
+    },
+    {
+      "anchor_id": "ANC-023",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every cron schedule must be created with exactly one stop condition, a time (--until) or a stop hook (--until-hook); atm cron start must refuse a schedule with none or both, and the stored row must carry the condition.",
+      "quote": "there should probably be a 'stop condition' which was mandetory when it is created which would generally be a time, but a function/hook would also be useful.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 6257077671 (Rand, round 4, 2026-10-18), relayed on PR #1877",
+      "anchor_version": 2,
+      "deterministic_check": "a CLI test runs atm cron start without a stop flag and with both flags and asserts a usage error and no request; the cron_schedule CHECK rejects a row with neither until_at nor stop_hook and one with both",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.9299999999999999,
+            "no": 0.06,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.74,
+          "probabilities": {
+            "yes": 0.16,
+            "no": 0.83,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.74,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 5665,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 15629,
+      "item_shortened": false,
+      "request_bytes": 19008
+    },
+    {
+      "anchor_id": "REQ-BK-SCHEMA",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-SCHEMA",
+      "statement": "The hook_registration and cron_schedule tables are added in one ADR-061 minor bump of the storage schema version, applied by the existing migration path in atm-storage-rusqlite.",
+      "quote": "The hook_registration and cron_schedule tables are added in one ADR-061 minor bump of the storage schema version, applied by the existing migration path in atm-storage-rusqlite.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §4; ADR-061 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 2,
+      "deterministic_check": "the schema version constant increments by one minor; a test opens a pre-bump database and asserts both tables exist after migration",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.95,
+            "no": 0.04,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.95,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.92,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 5645,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 15629,
+      "item_shortened": false,
+      "request_bytes": 18930
+    },
+    {
+      "anchor_id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "An active hook replaces the atm task subcommand call: atm runs the hook first, parses its JSON reply, and the subcommand's own logic runs only when the reply is pass-through.",
+      "quote": "so the hooks replace the call. the hooks should return json which is processed by atm. We should be able to replace quite a few of (perhaps all) atm task subcommands.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 2,
+      "deterministic_check": "a test registers a task.assign hook whose reply is success false and asserts the task ledger is unchanged and the command fails with the hook's message",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "bk-1 is the two store capabilities only; replacing a subcommand call with a hook and acting on its reply is bk-3's router work"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: bk-1 is the two store capabilities only; replacing a subcommand call with a hook and acting on its reply is bk-3's router work.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm passes every hook one JSON request of a single published schema carrying the full subcommand request plus the caller's identity, team and host; the top-level shape is the same for every hooked command.",
+      "quote": "2. atm would call the hook w/ all info passed in + info of caller (who ran the hook) in a single json schema which is known and same for every command for that hook.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 2,
+      "deterministic_check": "one test serializes HookRequest for all six task hooks and cron.tick and asserts the same top-level keys: schema_version, hook, team, phase, caller, request, custom",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "the HookRequest type and its one schema are bk-2; bk-1 stores registrations and schedules"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: the HookRequest type and its one schema are bk-2; bk-1 stores registrations and schedules.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A success false reply must stop the subcommand before any of its logic runs, with the reply's message returned to the caller as the command error.",
+      "quote": "if 'bd ready' false, atm-task-assign hook returns false and message to caller i.e. { success = \"false\" message=\"bead {bead-id} is not ready\" }",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 3,
+      "deterministic_check": "a hook fixture prints {\"success\": false, \"message\": \"bead x is not ready\"}; the test asserts no task row is written and the error carries that message",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "reply parsing and the refused path are bk-2 (types) and bk-3 (router); bk-1 runs nothing"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: reply parsing and the refused path are bk-2 (types) and bk-3 (router); bk-1 runs nothing.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When a hook replies success true with no atm-action list, atm runs the subcommand's normal logic with the original request, giving the same result as when no hook is registered.",
+      "quote": "or if 'bd ready' the hook either retruns { success = \"true\" } and atm proceeds w/ normal atm task assign logic",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 2,
+      "deterministic_check": "a test with a hook replying {\"success\": true} asserts the resulting task row equals the row produced with no hook registered",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "pass-through behaviour is bk-3's router path; bk-1 runs nothing"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: pass-through behaviour is bk-3's router path; bk-1 runs nothing.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A success true reply with an atm-action array must make atm run each action in array order instead of the original subcommand's logic.",
+      "quote": "OR the hook returns what to do { success = \"true\" atm-action[] = { action-1, action-2 } } where action-1 and action-2 would be atm json commands. i.e. action-1 could be exactly the same command that was input, action-2 could be 'atm send omega-prime@hermes <escelation-message>'.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 3,
+      "deterministic_check": "a test with a reply carrying two actions asserts both ran in order and the original request was not applied",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "action dispatch is bk-2's HookAction and bk-3's dispatcher; bk-1 runs nothing"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: action dispatch is bk-2's HookAction and bk-3's dispatcher; bk-1 runs nothing.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-007",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each atm-action entry is an atm command expressed as the same JSON body the daemon's HTTP API accepts for that command and is deserialized with that route's request type.",
+      "quote": "4. how I described #3 this would be true. an array of 'un-hooked' atm commands would be returned as json exactly the same as they would be passed over http.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 2,
+      "deterministic_check": "a test deserializes an atm-action entry's request field with the same serde type the HTTP route handler for that command uses",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "the atm-action entry type is bk-2's HookAction; bk-1 defines no reply type"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: the atm-action entry type is bk-2's HookAction; bk-1 defines no reply type.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm never consults a hook while executing an action returned by a hook; every atm-action entry runs through the un-hooked command path.",
+      "quote": "the hook would not be called recursively, so the { success = true } (pass-through case) would simply do the same thing 'atm task assign ...' would do if there was no hook.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 2,
+      "deterministic_check": "a test whose task.assign hook returns an atm-action task.assign asserts the hook process was spawned exactly once",
+      "kind": "prohibition",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "hooks-disabled dispatch is bk-3's router flag; bk-1 has no dispatch path"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: hooks-disabled dispatch is bk-3's router flag; bk-1 has no dispatch path.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "An atm-action entry's as field is the identity the action runs as: atm dispatches the action with that caller identity, and an entry without as runs as the original caller.",
+      "quote": "6. yes",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal); point 6 of the proposal read: 'returned actions may run as the lead'",
+      "anchor_version": 3,
+      "deterministic_check": "a test dispatches {command: task.assign, as: team-lead} from caller cipher and asserts the task row's assigner is team-lead",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "the as field is bk-2's HookAction::envelope; bk-1 has no action type"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: the as field is bk-2's HookAction::envelope; bk-1 has no action type.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm itself never performs a bead-tracker (bd) read or write; every bd call happens inside the hook process.",
+      "quote": "5. yes",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal); point 5 of the proposal read: 'bead writes stay inside the hook'",
+      "anchor_version": 3,
+      "deterministic_check": "rg -n '\"bd\"|\\.beads' crates/ matches nothing new on the sprint diff",
+      "kind": "prohibition",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "bk-1 calls no process at all; the no-bd rule constrains bk-3's runner and bk-5's CLI"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: bk-1 calls no process at all; the no-bd rule constrains bk-3's runner and bk-5's CLI.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm hook register must read an integer TIMEOUT_MS constant from the module's text, store it on the registration, and refuse a module that lacks one.",
+      "quote": "7. the timeout should probably be a required field of the hook python module i.e. const int timeout_ms = 1000.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 3,
+      "deterministic_check": "a test registers a module file without TIMEOUT_MS and asserts a typed refusal; with TIMEOUT_MS = 1000 the row's timeout_ms is 1000",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "reading TIMEOUT_MS at registration is bk-5's register command; bk-1 only stores timeout_ms with a positive CHECK"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: reading TIMEOUT_MS at registration is bk-5's register command; bk-1 only stores timeout_ms with a positive CHECK.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The hook runner uses the registration's timeout_ms as the hook call's deadline: a hook still running at the deadline is killed and the command fails with HOOK.TIMEOUT.",
+      "quote": "This allows the hook to KNOW when it's caller will timeout so it can set a shorted timeout to complete w/out error.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal) (point 7, second sentence)",
+      "anchor_version": 2,
+      "deterministic_check": "a paused-clock test with a sleeping fixture hook and timeout_ms 100 asserts the child is killed and the error code is HOOK.TIMEOUT",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "deadline enforcement and the kill on timeout are bk-3's DaemonHookRunner; bk-1 spawns nothing"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: deadline enforcement and the kill on timeout are bk-3's DaemonHookRunner; bk-1 spawns nothing.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each of the six atm task subcommands (assign, start, close, move, list, events) must have its own hook name and consult its registered hook.",
+      "quote": "assign,start,close are natural to override w/ hooks. we might as well hook the others",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
+      "anchor_version": 3,
+      "deterministic_check": "the hook name enum has task.assign, task.start, task.close, task.move, task.list, task.events and cron.tick; one test per subcommand asserts the hook is consulted",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "hooking the six subcommands is bk-3's router consult; bk-1 only names the six hooks in HookName::TASK_HOOKS"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: hooking the six subcommands is bk-3's router consult; bk-1 only names the six hooks in HookName::TASK_HOOKS.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A task subcommand with no active hook for the caller's team and phase must run its existing logic unchanged and report no hook-related warning or error.",
+      "quote": "since all hooks would be optional (defaulting to normal behavior in the case of missing), I don't see much risk.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
+      "anchor_version": 4,
+      "deterministic_check": "the existing task CLI integration tests pass with no hook_registration rows and their output is unchanged; the router's request path makes no hook_registration store call (the in-memory snapshot is the only lookup; store call counter 0 after construction)",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "no task subcommand request path is touched by bk-1; the no-hook default is bk-3's snapshot path"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: no task subcommand request path is touched by bk-1; the no-hook default is bk-3's snapshot path.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-015",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm doctor, run for a team with an active hook registration, must invoke the module's doctor() through the hook runner and report the reply in a hooks section of the doctor report.",
+      "quote": "the plug-in can run this check as part of 'doctor' it provides and IF a hook is installed, 'atm doctor' would call hook.doctor() when called from the team it is registered for.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:15Z (Rand, round 3: no sha header)",
+      "anchor_version": 3,
+      "deterministic_check": "a test with an active registration for team T whose doctor() returns {\"success\": true, \"message\": \"ok\"} asserts run_doctor for T has a hooks section containing that reply",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "the atm doctor hooks section is bk-5; HookRunner::doctor is bk-2"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: the atm doctor hooks section is bk-5; HookRunner::doctor is bk-2.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm computes, stores and compares no sha of a hook module; module drift is detected only inside the module's own doctor() reply.",
+      "quote": "I may have made a mistake. when atm-bd is published, the sha must be calculated and stored in a manifest for every file. then the installer can check against the published manifest to verify the file has not changed. we should do this for the entire skill. all agents/skills/python files.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:15Z (Rand, round 3: no sha header); withdraws the round-2 sha header. Session 2026-10-18, Rand: 'yes, drift detection becomes 100% atm-db responsibility and is done through hook.doctor'",
+      "anchor_version": 2,
+      "deterministic_check": "rg -n 'sc_sha|sha256|released_sha' on the hook, cron and doctor sources matches nothing; hook_registration has no sha column",
+      "kind": "prohibition",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "bk-1 adds no module sha column or comparison; the anchor constrains bk-5's doctor section"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: bk-1 adds no module sha column or comparison; the anchor constrains bk-5's doctor section.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A cron schedule names a hook module and its args; on each tick atm must invoke that module's cron entry with those args under the same request and reply contract as task hooks.",
+      "quote": "b) we can register a cron function in the same python module the hook resides. cron would be registered on 'phase start' and shut-down on 'phase complete' and the method for atm-bd would simply call 'atm-bd cron <args>'.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
+      "anchor_version": 4,
+      "deterministic_check": "a test with module M and args [\"--phase\", \"bk\"] asserts the tick's HookRequest has hook cron.tick and request.args equal to those args, and that the module's argv is exactly [module_path, \"cron.tick\"] with the args only in the stdin request",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "invoking the module's cron entry per tick is bk-4; bk-1 stores module_path and args only"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: invoking the module's cron entry per tick is bk-4; bk-1 stores module_path and args only.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-019",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm CLI must have the subcommands cron start, cron end and cron list: start creates an active schedule, end marks one or every schedule of a phase inactive, list prints them.",
+      "quote": "we would have 'atm cron start', 'atm cron end', 'atm cron list'.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
+      "anchor_version": 3,
+      "deterministic_check": "atm cron --help lists start, end and list; a CLI test runs each against the in-process router",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "the cron start, end and list subcommands are bk-5; bk-1 owns the CronScheduleStore only"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: the cron start, end and list subcommands are bk-5; bk-1 owns the CronScheduleStore only.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A cron tick's hook reply goes through the same reply handler as a task hook's: an atm-action list is dispatched through the same un-hooked action path, and success false is recorded as the tick outcome.",
+      "quote": "the cron design would be 'atm cron' and it would run a hook (just like the atm task hooks) at a predefined interval AND return a set of atm commands just like we described above.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal) (cron note)",
+      "anchor_version": 2,
+      "deterministic_check": "a test with a cron.tick reply carrying one send action asserts a persisted message and a last_outcome of success",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "cron tick reply dispatch is bk-4 through bk-2's HookActionDispatcher; bk-1 defines no reply type"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: cron tick reply dispatch is bk-4 through bk-2's HookActionDispatcher; bk-1 defines no reply type.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-022",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The hook request's custom field carries JSON defined by the hook's owner; atm passes it through unchanged and never validates or interprets it.",
+      "quote": "the atm-task-close hook would accept a 'custom' json set of fields which would be defined by the custom python (not atm). atm would simply pass the json to the python function",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-bd-orchestration #340 (Rand, 2026-10-18), the origin of atm-core #1873; carried as phase-bj ANC-064 until the bj/bk split",
+      "anchor_version": 2,
+      "deterministic_check": "a test passes custom {\"x\": [1, {\"y\": null}]} and asserts the hook's stdin carries it byte-equal under the custom key",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "the custom field is bk-2's HookRequest; bk-1 has no request type"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: the custom field is bk-2's HookRequest; bk-1 has no request type.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-024",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A schedule started with --until-hook must have the daemon call the module's stop entry (hook name cron.stop, same stdin shape) before each scheduled run; a reply of stop true with a reason must end the schedule with that reason recorded and run nothing, stop false must run the tick, and a malformed reply must skip the tick and leave the schedule active.",
+      "quote": "a function/hook would also be useful. for atm-bd cron, phase bead closing would be condition for stopping.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 6257077671 (Rand, round 4, 2026-10-18), relayed on PR #1877",
+      "anchor_version": 2,
+      "deterministic_check": "a paused-clock test with DummyHookRunner stop replies {stop:true,reason:r}, {stop:false} and a malformed reply asserts respectively: row ended with last_outcome stopped: r and no cron.tick call; one cron.stop then one cron.tick call; row still active and no cron.tick call",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "the stop-hook call and its outcome handling are bk-4's tick sequence; bk-1 provides record_stop only, judged under ANC-023"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: the stop-hook call and its outcome handling are bk-4's tick sequence; bk-1 provides record_stop only, judged under ANC-023.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-025",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A schedule started with --until <time> must end when that time is reached: the row is set inactive with ended_at and last_outcome stopped: until reached, and no run happens at or after that time.",
+      "quote": "which would generally be a time",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 6257077671 (Rand, round 4, 2026-10-18), relayed on PR #1877",
+      "anchor_version": 2,
+      "deterministic_check": "a paused-clock test with until_at = now + 90 s on an every-minute schedule asserts one runner call at 60 s, the row ended at 90 s with last_outcome stopped: until reached, and no call at 120 s",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "the until wake and stop are bk-4's tick sequence; bk-1 provides the until_at column and record_stop only, judged under ANC-023"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: the until wake and stop are bk-4's tick sequence; bk-1 provides the until_at column and record_stop only, judged under ANC-023.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "REQ-BK-D1",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-D1",
+      "statement": "The hook runner must start a hook with exactly the environment ATM_HOOK=1, ATM_TEAM, ATM_PHASE, PATH and HOME in the registered cwd, passing no other variable from the daemon's environment.",
+      "quote": "The hook runner starts a hook with exactly the environment ATM_HOOK=1, ATM_TEAM, ATM_PHASE, PATH and HOME in the registered cwd, and passes no other variable from the daemon's environment.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §2.1 D-1 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 3,
+      "deterministic_check": "a fixture hook that prints its environment shows exactly those five variables",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "the spawn environment is set by bk-3's DaemonHookRunner; bk-1 spawns no process"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: the spawn environment is set by bk-3's DaemonHookRunner; bk-1 spawns no process.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "REQ-BK-D3",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-D3",
+      "statement": "Hooks run inside the daemon process through one HookRunner shared by the task router and the cron worker; the atm CLI never spawns a hook process.",
+      "quote": "Hooks run inside the daemon process through one HookRunner shared by the task router and the cron worker; the atm CLI never spawns a hook process.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §3 D-3 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 2,
+      "deterministic_check": "rg -n 'process::Command' crates/atm/src matches no hook code; HookRunner is constructed once in atm-daemon-bootstrap and handed to the router and the cron worker",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "the sealed HookRunner trait and the no-spawn CLI rule are bk-2 and bk-5; bk-1 is storage only"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: the sealed HookRunner trait and the no-spawn CLI rule are bk-2 and bk-5; bk-1 is storage only.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "REQ-BK-D4A",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-D4A",
+      "statement": "The cron worker parses each cron_expr with the cron crate in UTC and sleeps until the next occurrence computed from Utc::now() after every run, never replaying ticks missed while the daemon was stopped.",
+      "quote": "The cron worker parses each cron_expr with the cron crate in UTC and sleeps until the next occurrence computed from Utc::now() after every run, never replaying ticks missed while the daemon was stopped.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §5 D-4 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 2,
+      "deterministic_check": "a paused-clock test advances 3 intervals past a stopped period and asserts exactly one run after restart",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "cron expression parsing and next-occurrence sleeping are bk-4's worker; bk-1 only stores cron_expr"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: cron expression parsing and next-occurrence sleeping are bk-4's worker; bk-1 only stores cron_expr.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "REQ-BK-D4B",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-D4B",
+      "statement": "A schedule whose previous run is still in flight when its next tick is due skips that tick and logs the skip; two runs of one schedule never overlap.",
+      "quote": "A schedule whose previous run is still in flight when its next tick is due skips that tick and logs the skip; two runs of one schedule never overlap.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §5 D-4 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 2,
+      "deterministic_check": "a paused-clock test with a hook slower than the interval asserts one spawn and one skip log entry",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "overlap skipping is bk-4's worker behaviour"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: overlap skipping is bk-4's worker behaviour.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "REQ-BK-ERRORS",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-ERRORS",
+      "statement": "A hook that exits non-zero or replies with text that is not one of the three reply shapes fails the hooked command with HOOK.EXIT or HOOK.MALFORMED and runs no subcommand logic.",
+      "quote": "A hook that exits non-zero or replies with text that is not one of the three reply shapes fails the hooked command with HOOK.EXIT or HOOK.MALFORMED and runs no subcommand logic.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §2.2 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 2,
+      "deterministic_check": "two tests: a fixture that exits 3 yields HOOK.EXIT; a fixture printing 'ok' yields HOOK.MALFORMED; neither writes a task row",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "the ATM_HOOK_* codes and fail-closed reply handling are bk-2 and bk-3; bk-1 raises only HookActive and constraint errors"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: the ATM_HOOK_* codes and fail-closed reply handling are bk-2 and bk-3; bk-1 raises only HookActive and constraint errors.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "REQ-BK-HOOK-CLI",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-HOOK-CLI",
+      "statement": "The atm CLI must have the subcommands hook register <hook> --module <path> --phase <x> [--cwd <dir>], hook disable --phase <x> [<hook>] and hook list [--phase <x>] [--json].",
+      "quote": "The atm CLI has the subcommands hook register <hook> --module <path> --phase <x> [--cwd <dir>], hook disable --phase <x> [<hook>] and hook list [--phase <x>] [--json].",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §6 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 3,
+      "deterministic_check": "atm hook --help lists register, disable and list with those flags; a CLI test runs each against the in-process router",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "the hook register, disable and list CLI is bk-5; bk-1 adds the store behind it only"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: the hook register, disable and list CLI is bk-5; bk-1 adds the store behind it only.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "REQ-BK-LOG",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-LOG",
+      "statement": "Every hook call and every hook-returned action must emit one structured log entry carrying team, phase, hook, outcome and elapsed milliseconds (ADR-067).",
+      "quote": "Every hook call and every hook-returned action emits one structured log entry carrying team, phase, hook, outcome and elapsed milliseconds (ADR-067).",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §3; ADR-067 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 3,
+      "deterministic_check": "a tracing-capture test asserts one hook_call entry and one hook_action entry per action with the five fields",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "structured log entries per hook run and action are emitted by bk-3's runner and router and bk-4's worker; bk-1 runs nothing"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: structured log entries per hook run and action are emitted by bk-3's runner and router and bk-4's worker; bk-1 runs nothing.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "REQ-BK-TESTS",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-TESTS",
+      "statement": "Hook and cron behavior is tested with a fixture hook module and a paused tokio clock; no test starts, targets or depends on a live daemon.",
+      "quote": "Hook and cron behavior is tested with a fixture hook module and a paused tokio clock; no test starts, targets or depends on a live daemon.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §7 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 2,
+      "deterministic_check": "rg -n 'atm daemon|ATM_DAEMON|spawn.*daemon' on the new tests matches nothing; cron tests use #[tokio::test(start_paused = true)]",
+      "kind": "prohibition",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "bk-1",
+        "reason": "bk-1's tests are store round trips on a temp database; no hook module runs and no clock is read"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: bk-1's tests are store round trips on a temp database; no hook module runs and no clock is read.",
+      "attempts": 0
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1,
+      "satisfied": 4,
+      "excluded": 29
+    },
+    "failing": [
+      "ANC-020"
+    ],
+    "leaning_counts": {
+      "satisfied": 5
+    },
+    "unstable": [
+      "ANC-020"
+    ],
+    "errors": [],
+    "excluded": [
+      {
+        "anchor_id": "ANC-001",
+        "reason": "bk-1 is the two store capabilities only; replacing a subcommand call with a hook and acting on its reply is bk-3's router work"
+      },
+      {
+        "anchor_id": "ANC-003",
+        "reason": "the HookRequest type and its one schema are bk-2; bk-1 stores registrations and schedules"
+      },
+      {
+        "anchor_id": "ANC-004",
+        "reason": "reply parsing and the refused path are bk-2 (types) and bk-3 (router); bk-1 runs nothing"
+      },
+      {
+        "anchor_id": "ANC-005",
+        "reason": "pass-through behaviour is bk-3's router path; bk-1 runs nothing"
+      },
+      {
+        "anchor_id": "ANC-006",
+        "reason": "action dispatch is bk-2's HookAction and bk-3's dispatcher; bk-1 runs nothing"
+      },
+      {
+        "anchor_id": "ANC-007",
+        "reason": "the atm-action entry type is bk-2's HookAction; bk-1 defines no reply type"
+      },
+      {
+        "anchor_id": "ANC-008",
+        "reason": "hooks-disabled dispatch is bk-3's router flag; bk-1 has no dispatch path"
+      },
+      {
+        "anchor_id": "ANC-009",
+        "reason": "the as field is bk-2's HookAction::envelope; bk-1 has no action type"
+      },
+      {
+        "anchor_id": "ANC-010",
+        "reason": "bk-1 calls no process at all; the no-bd rule constrains bk-3's runner and bk-5's CLI"
+      },
+      {
+        "anchor_id": "ANC-011",
+        "reason": "reading TIMEOUT_MS at registration is bk-5's register command; bk-1 only stores timeout_ms with a positive CHECK"
+      },
+      {
+        "anchor_id": "ANC-012",
+        "reason": "deadline enforcement and the kill on timeout are bk-3's DaemonHookRunner; bk-1 spawns nothing"
+      },
+      {
+        "anchor_id": "ANC-013",
+        "reason": "hooking the six subcommands is bk-3's router consult; bk-1 only names the six hooks in HookName::TASK_HOOKS"
+      },
+      {
+        "anchor_id": "ANC-014",
+        "reason": "no task subcommand request path is touched by bk-1; the no-hook default is bk-3's snapshot path"
+      },
+      {
+        "anchor_id": "ANC-015",
+        "reason": "the atm doctor hooks section is bk-5; HookRunner::doctor is bk-2"
+      },
+      {
+        "anchor_id": "ANC-016",
+        "reason": "bk-1 adds no module sha column or comparison; the anchor constrains bk-5's doctor section"
+      },
+      {
+        "anchor_id": "ANC-017",
+        "reason": "invoking the module's cron entry per tick is bk-4; bk-1 stores module_path and args only"
+      },
+      {
+        "anchor_id": "ANC-019",
+        "reason": "the cron start, end and list subcommands are bk-5; bk-1 owns the CronScheduleStore only"
+      },
+      {
+        "anchor_id": "ANC-021",
+        "reason": "cron tick reply dispatch is bk-4 through bk-2's HookActionDispatcher; bk-1 defines no reply type"
+      },
+      {
+        "anchor_id": "ANC-022",
+        "reason": "the custom field is bk-2's HookRequest; bk-1 has no request type"
+      },
+      {
+        "anchor_id": "ANC-024",
+        "reason": "the stop-hook call and its outcome handling are bk-4's tick sequence; bk-1 provides record_stop only, judged under ANC-023"
+      },
+      {
+        "anchor_id": "ANC-025",
+        "reason": "the until wake and stop are bk-4's tick sequence; bk-1 provides the until_at column and record_stop only, judged under ANC-023"
+      },
+      {
+        "anchor_id": "REQ-BK-D1",
+        "reason": "the spawn environment is set by bk-3's DaemonHookRunner; bk-1 spawns no process"
+      },
+      {
+        "anchor_id": "REQ-BK-D3",
+        "reason": "the sealed HookRunner trait and the no-spawn CLI rule are bk-2 and bk-5; bk-1 is storage only"
+      },
+      {
+        "anchor_id": "REQ-BK-D4A",
+        "reason": "cron expression parsing and next-occurrence sleeping are bk-4's worker; bk-1 only stores cron_expr"
+      },
+      {
+        "anchor_id": "REQ-BK-D4B",
+        "reason": "overlap skipping is bk-4's worker behaviour"
+      },
+      {
+        "anchor_id": "REQ-BK-ERRORS",
+        "reason": "the ATM_HOOK_* codes and fail-closed reply handling are bk-2 and bk-3; bk-1 raises only HookActive and constraint errors"
+      },
+      {
+        "anchor_id": "REQ-BK-HOOK-CLI",
+        "reason": "the hook register, disable and list CLI is bk-5; bk-1 adds the store behind it only"
+      },
+      {
+        "anchor_id": "REQ-BK-LOG",
+        "reason": "structured log entries per hook run and action are emitted by bk-3's runner and router and bk-4's worker; bk-1 runs nothing"
+      },
+      {
+        "anchor_id": "REQ-BK-TESTS",
+        "reason": "bk-1's tests are store round trips on a temp database; no hook module runs and no clock is read"
+      }
+    ],
+    "shortened": [],
+    "pass": false
+  }
+}

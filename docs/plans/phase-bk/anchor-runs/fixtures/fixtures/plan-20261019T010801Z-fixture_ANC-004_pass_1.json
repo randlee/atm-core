@@ -1,0 +1,101 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261019T010801Z-fixture_ANC-004_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-19T01:08:01+00:00",
+  "anchors_path": "docs/plans/phase-bk/anchors.json",
+  "plan": "phase-bk",
+  "item": {
+    "id": "fixture:ANC-004:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 163,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A success false reply must stop the subcommand before any of its logic runs, with the reply's message returned to the caller as the command error.",
+      "quote": "if 'bd ready' false, atm-task-assign hook returns false and message to caller i.e. { success = \"false\" message=\"bead {bead-id} is not ready\" }",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 3,
+      "deterministic_check": "a hook fixture prints {\"success\": false, \"message\": \"bead x is not ready\"}; the test asserts no task row is written and the error carries that message",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.83,
+          "probabilities": {
+            "yes": 0.89,
+            "no": 0.03,
+            "unclear": 0.08
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.99,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.83,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1048,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 163,
+      "item_shortened": false,
+      "request_bytes": 3187
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

@@ -185,6 +185,17 @@ migration functions directly.
 
 ### D6. Storage-schema approval record
 
+- **2026-10-18 — Phase bk (approved):** Fenix, as Phase bk lead, approved
+  this additive schema change on PR #1877 (`docs/plans/phase-bk/design.md`
+  §4, ADR-068 D5, ADR-069 D1). `hook_registration` (primary key
+  `(team, phase, hook)`) and `cron_schedule` (`id` plus
+  `UNIQUE (team, phase, name)`) are additive SQLite MINOR schema objects:
+  created idempotently from `ensure_schema`, no foreign key, ignored by a
+  pre-bk binary. The D3 previous-consumer proof is sprint bk-1's test that
+  the frozen pre-bk `DB_MIGRATIONS` statements still read and write after
+  both tables exist (pattern
+  `pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created`). No
+  `STORAGE_SCHEMA_VERSION` is added, for the reason given under Phase BB.1.
 - **2026-09-12 — Phase BB.6 (approved):** Fenix, as Phase BB lead, approved
   this additive schema change through ATM on team `atm-dev`. `prompt_handoffs`
   and its task lookup index are additive SQLite MINOR schema objects. The table

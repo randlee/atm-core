@@ -1,0 +1,2554 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261019T045512Z-bk-7",
+  "gate": "plan",
+  "created_at": "2026-10-19T04:55:12+00:00",
+  "anchors_path": "docs/plans/phase-bk/anchors.json",
+  "plan": "phase-bk",
+  "item": {
+    "id": "bk-7",
+    "title": "task-command filter, dispatcher and hook routes: NormalTaskCommands, HookedTaskCommands chain, ActiveHookSnapshot, ChainTracker, UnhookedRouter, six routes, doctor collection, HTTP API 1.13.0",
+    "source": "docs/plans/phase-bk/sprint-bk-7-hook-filter.md",
+    "chars": 18271,
+    "truncated": false,
+    "chars_before_reduction": 22729,
+    "code_reduced": {
+      "blocks": 2,
+      "lines": 65
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-023",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every cron schedule must be created with exactly one stop condition, a time (--until) or a stop hook (--until-hook); atm cron start must refuse a schedule with none or both, and the stored row must carry the condition.",
+      "quote": "there should probably be a 'stop condition' which was mandetory when it is created which would generally be a time, but a function/hook would also be useful.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 6257077671 (Rand, round 4, 2026-10-18), relayed on PR #1877",
+      "anchor_version": 2,
+      "deterministic_check": "a CLI test runs atm cron start without a stop flag and with both flags and asserts a usage error and no request; the cron_schedule CHECK rejects a row with neither until_at nor stop_hook and one with both",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "not_addressed",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.83,
+          "probabilities": {
+            "yes": 0.89,
+            "no": 0.11,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.88,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.92,
+            "unclear": 0.08
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.62,
+          "probabilities": {
+            "yes": 0.18,
+            "no": 0.75,
+            "unclear": 0.07
+          }
+        }
+      },
+      "min_confidence": 0.62,
+      "explanation": "This bead does not carry the directive forward.",
+      "usage": {
+        "input_tokens": 6741,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21842
+    },
+    {
+      "anchor_id": "ANC-024",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A schedule started with --until-hook must have the daemon call the module's stop entry (hook name cron.stop, same stdin shape) before each scheduled run; a reply of stop true with a reason must end the schedule with that reason recorded and run nothing, stop false must run the tick, and a malformed reply must skip the tick and leave the schedule active.",
+      "quote": "a function/hook would also be useful. for atm-bd cron, phase bead closing would be condition for stopping.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 6257077671 (Rand, round 4, 2026-10-18), relayed on PR #1877",
+      "anchor_version": 2,
+      "deterministic_check": "a paused-clock test with DummyHookRunner stop replies {stop:true,reason:r}, {stop:false} and a malformed reply asserts respectively: row ended with last_outcome stopped: r and no cron.tick call; one cron.stop then one cron.tick call; row still active and no cron.tick call",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "not_addressed",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.74,
+          "probabilities": {
+            "yes": 0.83,
+            "no": 0.17,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.76,
+          "probabilities": {
+            "yes": 0.03,
+            "no": 0.84,
+            "unclear": 0.13
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.74,
+          "probabilities": {
+            "yes": 0.15,
+            "no": 0.83,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.74,
+      "explanation": "This bead does not carry the directive forward.",
+      "usage": {
+        "input_tokens": 6767,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21972
+    },
+    {
+      "anchor_id": "REQ-BK-HOOK-CLI",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-HOOK-CLI",
+      "statement": "The atm CLI must have the subcommands hook register <hook> --module <path> --phase <x> [--cwd <dir>], hook disable --phase <x> [<hook>] and hook list [--phase <x>] [--json].",
+      "quote": "The atm CLI has the subcommands hook register <hook> --module <path> --phase <x> [--cwd <dir>], hook disable --phase <x> [<hook>] and hook list [--phase <x>] [--json].",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §6 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 3,
+      "deterministic_check": "atm hook --help lists register, disable and list with those flags; a CLI test runs each against the in-process router",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "not_addressed",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.72,
+          "probabilities": {
+            "yes": 0.81,
+            "no": 0.19,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.74,
+          "probabilities": {
+            "yes": 0.12,
+            "no": 0.83,
+            "unclear": 0.05
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.61,
+          "probabilities": {
+            "yes": 0.25,
+            "no": 0.74,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.61,
+      "explanation": "This bead does not carry the directive forward.",
+      "usage": {
+        "input_tokens": 6745,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21779
+    },
+    {
+      "anchor_id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm passes every hook one JSON request of a single published schema carrying the full subcommand request plus the caller's identity, team and host; the top-level shape is the same for every hooked command.",
+      "quote": "2. atm would call the hook w/ all info passed in + info of caller (who ran the hook) in a single json schema which is known and same for every command for that hook.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 3,
+      "deterministic_check": "one test serializes HookRequest for all six task hooks, cron.tick and cron.stop and asserts the same top-level keys: schema_version, hook, team, phase, caller, request, custom; for each task hook request equals the bare HTTP body the CLI sends",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "81d4a64e3f65a76abae8341a68142d3e270f452f7866d1a20f40513720032e6f",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item works on something else, such as the hook registry, hook listing, cron storage, other command output, or an unrelated component, and makes no command call a hook.",
+            "unclear": "The item text is too vague to tell whether it involves calling a hook or the request a hook receives.",
+            "yes": "The item works on the hook request (its type, fields, serialization, or what is written to the hook's stdin) or makes a command call a hook."
+          },
+          "instructions": "Does `item.text` describe work on the hook request: the data structure atm sends to a hook, how it is serialized, what the hook runner writes to a hook's stdin, or a command that is made to call a hook? Use `anchor.scope` for the area the anchor governs. Do not judge whether the item obeys `anchor.statement`.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item text does not plan this complete request: it is silent, generic, or missing the shared shape or any of the caller's identity, team and host.",
+            "unclear": "The item text alludes to such a request but it is not possible to tell whether the complete directive is included.",
+            "yes": "The item text plans one request shape shared by all hooked commands, holding the subcommand request and the caller's identity, team and host."
+          },
+          "instructions": "Does `item.text` plan what `anchor.statement` asks for: every hooked command passes its hook the same top-level request shape, and that request holds the subcommand request together with the caller's identity, team and host? A generic mention of hooks, of JSON on stdin, or of a request, without both the shared shape and all three caller fields, does not count. Judge presence only; do not judge conflict.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item rules out the directive; the item may be silent or incomplete about the request.",
+            "unclear": "The item says something about the hook request that might or might not exclude the shared shape or the caller information.",
+            "yes": "The item states a design that cannot be reconciled with one shared request shape carrying the subcommand request and the caller's identity, team and host."
+          },
+          "instructions": "`anchor.statement` requires every hooked command to pass its hook one request with the same top-level shape, holding the full subcommand request and the caller's identity, team and host. Does `item.text` state a design that rules this out? Conflicts include: different request types or top-level fields for different commands or for cron ticks; ad-hoc JSON per subcommand; the caller's identity, team or host kept out of the request (for example passed only as environment variables) or stated as not sent. An item that does not mention the request, or describes it incompletely without excluding anything, is not a conflict. Different contents inside the request field for different commands are not a conflict. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "no": 0.01,
+            "unclear": 0.0,
+            "yes": 0.99
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.06,
+          "probabilities": {
+            "no": 0.37,
+            "unclear": 0.28,
+            "yes": 0.35
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.85,
+          "probabilities": {
+            "no": 0.9,
+            "unclear": 0.03,
+            "yes": 0.07
+          }
+        }
+      },
+      "min_confidence": 0.06,
+      "explanation": "Jev was not confident (min confidence 0.06); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6831,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "no",
+          "confidence": 0.06
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 22205
+    },
+    {
+      "anchor_id": "ANC-007",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each atm-action entry is an atm command expressed as the same JSON body the daemon's HTTP API accepts for that command and is deserialized with that route's request type.",
+      "quote": "4. how I described #3 this would be true. an array of 'un-hooked' atm commands would be returned as json exactly the same as they would be passed over http.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 3,
+      "deterministic_check": "a test deserializes an atm-action entry's request field with the same serde type the HTTP route handler for that command uses",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.72,
+          "probabilities": {
+            "yes": 0.81,
+            "no": 0.19,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.55,
+          "probabilities": {
+            "yes": 0.7,
+            "no": 0.25,
+            "unclear": 0.05
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.88,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.92,
+            "unclear": 0.04
+          }
+        }
+      },
+      "min_confidence": 0.55,
+      "explanation": "Jev was not confident (min confidence 0.55); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6725,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.55
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21787
+    },
+    {
+      "anchor_id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "An atm-action entry's as field is the identity the action runs as: atm dispatches the action with that caller identity, and an entry without as runs as the original caller.",
+      "quote": "6. yes",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal); point 6 of the proposal read: 'returned actions may run as the lead'",
+      "anchor_version": 3,
+      "deterministic_check": "a test dispatches {command: task.assign, as: team-lead} from caller cipher and asserts the task row's assigner is team-lead",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "unstable": true,
+      "answers_second": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.97,
+            "no": 0.03,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.56,
+          "probabilities": {
+            "yes": 0.71,
+            "no": 0.25,
+            "unclear": 0.04
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "verdict_first": "satisfied",
+      "verdict_second": "underspecified",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.02,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.61,
+          "probabilities": {
+            "yes": 0.74,
+            "no": 0.21,
+            "unclear": 0.05
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.56,
+      "explanation": "Jev was not confident (min confidence 0.56); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6727,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "second",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.56
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21793
+    },
+    {
+      "anchor_id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm itself never performs a bead-tracker (bd) read or write; every bd call happens inside the hook process.",
+      "quote": "5. yes",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal); point 5 of the proposal read: 'bead writes stay inside the hook'",
+      "anchor_version": 4,
+      "deterministic_check": "rg -n '\"bd\"|\\.beads' crates/ matches nothing new on the sprint diff",
+      "kind": "prohibition",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.25,
+          "probabilities": {
+            "yes": 0.49,
+            "no": 0.5,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.02,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.25,
+      "explanation": "Jev was not confident (min confidence 0.25); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6720,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.25
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21740
+    },
+    {
+      "anchor_id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm hook register must read an integer TIMEOUT_MS constant from the module's text, store it on the registration, and refuse a module that lacks one.",
+      "quote": "7. the timeout should probably be a required field of the hook python module i.e. const int timeout_ms = 1000.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 4,
+      "deterministic_check": "a test registers a module file without TIMEOUT_MS and asserts a typed refusal; with TIMEOUT_MS = 1000 the row's timeout_ms is 1000",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.93,
+            "no": 0.07,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.43,
+          "probabilities": {
+            "yes": 0.28,
+            "no": 0.62,
+            "unclear": 0.1
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.46,
+          "probabilities": {
+            "yes": 0.32,
+            "no": 0.64,
+            "unclear": 0.04
+          }
+        }
+      },
+      "min_confidence": 0.43,
+      "explanation": "Jev was not confident (min confidence 0.43); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6719,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "no",
+          "confidence": 0.43
+        },
+        {
+          "ask": "first",
+          "role": "conflict",
+          "question_id": "contradicted",
+          "choice": "no",
+          "confidence": 0.46
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21755
+    },
+    {
+      "anchor_id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The hook runner must kill a hook still running at its timeout_ms deadline, at most 2500 ms for a task hook and 30000 ms for a cron tick or stop check, and fail the command with ATM_HOOK_TIMEOUT.",
+      "quote": "This allows the hook to KNOW when it's caller will timeout so it can set a shorted timeout to complete w/out error.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal) (point 7, second sentence)",
+      "anchor_version": 4,
+      "deterministic_check": "a paused-clock test with a sleeping fixture hook and timeout_ms 100 asserts the child is killed and the error code is ATM_HOOK_TIMEOUT",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.51,
+          "probabilities": {
+            "yes": 0.33,
+            "no": 0.67,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.77,
+          "probabilities": {
+            "yes": 0.06,
+            "no": 0.85,
+            "unclear": 0.09
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.91,
+          "probabilities": {
+            "yes": 0.06,
+            "no": 0.9400000000000001,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.51,
+      "explanation": "Jev was not confident (min confidence 0.51); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6741,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.51
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21798
+    },
+    {
+      "anchor_id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm computes, stores and compares no sha of a hook module; module drift is detected only inside the module's own doctor() reply.",
+      "quote": "I may have made a mistake. when atm-bd is published, the sha must be calculated and stored in a manifest for every file. then the installer can check against the published manifest to verify the file has not changed. we should do this for the entire skill. all agents/skills/python files.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:15Z (Rand, round 3: no sha header); withdraws the round-2 sha header. Session 2026-10-18, Rand: 'yes, drift detection becomes 100% atm-db responsibility and is done through hook.doctor'",
+      "anchor_version": 2,
+      "deterministic_check": "rg -n 'sc_sha|sha256|released_sha' on the hook, cron and doctor sources matches nothing; hook_registration has no sha column",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.37,
+          "probabilities": {
+            "yes": 0.58,
+            "no": 0.42,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.49,
+          "probabilities": {
+            "yes": 0.33,
+            "no": 0.66,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.96,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.37,
+      "explanation": "Jev was not confident (min confidence 0.37); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6726,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.37
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21767
+    },
+    {
+      "anchor_id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A cron schedule names a hook module and its args; on each tick atm must invoke that module's cron entry with those args under the same request and reply contract as task hooks.",
+      "quote": "b) we can register a cron function in the same python module the hook resides. cron would be registered on 'phase start' and shut-down on 'phase complete' and the method for atm-bd would simply call 'atm-bd cron <args>'.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
+      "anchor_version": 4,
+      "deterministic_check": "a test with module M and args [\"--phase\", \"bk\"] asserts the tick's HookRequest has hook cron.tick and request.args equal to those args, and that the module's argv is exactly [module_path, \"cron.tick\"] with the args only in the stdin request",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.93,
+            "no": 0.07,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.55,
+          "probabilities": {
+            "yes": 0.05,
+            "no": 0.7,
+            "unclear": 0.25
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.67,
+          "probabilities": {
+            "yes": 0.14,
+            "no": 0.78,
+            "unclear": 0.08
+          }
+        }
+      },
+      "min_confidence": 0.55,
+      "explanation": "Jev was not confident (min confidence 0.55); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6730,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "no",
+          "confidence": 0.55
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21804
+    },
+    {
+      "anchor_id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Cron schedules are persisted as cron-expression strings in a new cron_schedule table of the atm SQLite database.",
+      "quote": "atm cron would be a simple scheduler w/ cron strings saved in a new table in atm db.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
+      "anchor_version": 2,
+      "deterministic_check": "the migration creates cron_schedule with a cron_expr TEXT column; a test inserts and reads a schedule back through CronScheduleStore",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.37,
+          "probabilities": {
+            "yes": 0.42,
+            "no": 0.58,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.95,
+            "unclear": 0.05
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.86,
+          "probabilities": {
+            "yes": 0.08,
+            "no": 0.91,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.37,
+      "explanation": "Jev was not confident (min confidence 0.37); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6708,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.37
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21724
+    },
+    {
+      "anchor_id": "ANC-019",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm CLI must have the subcommands cron start, cron end and cron list: start creates an active schedule, end marks one or every schedule of a phase inactive, list prints them.",
+      "quote": "we would have 'atm cron start', 'atm cron end', 'atm cron list'.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
+      "anchor_version": 3,
+      "deterministic_check": "atm cron --help lists start, end and list; a CLI test runs each against the in-process router",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.52,
+          "probabilities": {
+            "yes": 0.68,
+            "no": 0.32,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.48,
+          "probabilities": {
+            "yes": 0.31,
+            "no": 0.65,
+            "unclear": 0.04
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.62,
+          "probabilities": {
+            "yes": 0.23,
+            "no": 0.75,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.48,
+      "explanation": "Jev was not confident (min confidence 0.48); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6727,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.52
+        },
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "no",
+          "confidence": 0.48
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21776
+    },
+    {
+      "anchor_id": "ANC-020",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every active cron_schedule row is loaded when the daemon starts, so a schedule created before a daemon restart keeps firing after the restart with no re-registration.",
+      "quote": "cron would be persistent after restarting daemon.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
+      "anchor_version": 2,
+      "deterministic_check": "a paused-clock test inserts an active schedule, starts CronWorker from the store, advances past the next fire time and asserts one hook invocation",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.34,
+          "probabilities": {
+            "yes": 0.5599999999999999,
+            "no": 0.43,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.83,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.89,
+            "unclear": 0.1
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.03,
+            "no": 0.96,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.34,
+      "explanation": "Jev was not confident (min confidence 0.34); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6720,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.34
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21776
+    },
+    {
+      "anchor_id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A cron tick's hook reply is parsed exactly as a task hook's reply: a handled reply's atm-action list is dispatched through the same un-hooked action path, and a refused reply is recorded as the tick outcome.",
+      "quote": "the cron design would be 'atm cron' and it would run a hook (just like the atm task hooks) at a predefined interval AND return a set of atm commands just like we described above.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal) (cron note)",
+      "anchor_version": 3,
+      "deterministic_check": "a test with a cron.tick reply carrying one send action persists a message and last_outcome == \"actions: 1\"",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.91,
+          "probabilities": {
+            "yes": 0.94,
+            "no": 0.06,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.49,
+          "probabilities": {
+            "yes": 0.1,
+            "no": 0.66,
+            "unclear": 0.24
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.76,
+          "probabilities": {
+            "yes": 0.12,
+            "no": 0.84,
+            "unclear": 0.04
+          }
+        }
+      },
+      "min_confidence": 0.49,
+      "explanation": "Jev was not confident (min confidence 0.49); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6728,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "no",
+          "confidence": 0.49
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21793
+    },
+    {
+      "anchor_id": "ANC-022",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The hook request's custom field carries JSON defined by the hook's owner; atm passes it through unchanged and never validates or interprets it.",
+      "quote": "the atm-task-close hook would accept a 'custom' json set of fields which would be defined by the custom python (not atm). atm would simply pass the json to the python function",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-bd-orchestration #340 (Rand, 2026-10-18), the origin of atm-core #1873; carried as phase-bj ANC-064 until the bj/bk split",
+      "anchor_version": 2,
+      "deterministic_check": "a test passes custom {\"x\": [1, {\"y\": null}]} and asserts the hook's stdin carries it byte-equal under the custom key",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.09,
+          "probabilities": {
+            "yes": 0.39,
+            "no": 0.37,
+            "unclear": 0.24
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.03,
+            "no": 0.95,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.09,
+      "explanation": "Jev was not confident (min confidence 0.09); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6716,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.09
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21745
+    },
+    {
+      "anchor_id": "ANC-025",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A schedule started with --until <time> must end when that time is reached: the row is set inactive with ended_at and last_outcome stopped: until reached, and no run happens at or after that time.",
+      "quote": "which would generally be a time",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 6257077671 (Rand, round 4, 2026-10-18), relayed on PR #1877",
+      "anchor_version": 2,
+      "deterministic_check": "a paused-clock test with until_at = now + 90 s on an every-minute schedule asserts one runner call at 60 s, the row ended at 90 s with last_outcome stopped: until reached, and no call at 120 s",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.31,
+          "probabilities": {
+            "yes": 0.45,
+            "no": 0.54,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.91,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.9400000000000001,
+            "unclear": 0.06
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.97,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.31,
+      "explanation": "Jev was not confident (min confidence 0.31); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6735,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.31
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21806
+    },
+    {
+      "anchor_id": "REQ-BK-D1",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-D1",
+      "statement": "The hook runner must start a hook with exactly the environment ATM_TEAM, ATM_PHASE, PATH and HOME (plus SystemRoot and USERPROFILE on Windows) in the registered cwd, passing no other variable from the daemon's environment.",
+      "quote": "The child's environment must be exactly ATM_TEAM, ATM_PHASE, PATH, HOME (plus SystemRoot and USERPROFILE on Windows) after clearing the daemon's environment, with the registered cwd.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §2.1 D-1 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 4,
+      "deterministic_check": "a fixture hook that prints its environment shows exactly those four variables on unix",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.58,
+          "probabilities": {
+            "yes": 0.28,
+            "no": 0.72,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.96,
+            "unclear": 0.04
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.97,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.58,
+      "explanation": "Jev was not confident (min confidence 0.58); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6733,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.58
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21812
+    },
+    {
+      "anchor_id": "REQ-BK-D3",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-D3",
+      "statement": "Hooks run inside the daemon process through one HookRunner shared by the task router and the cron worker; the atm CLI never spawns a hook process.",
+      "quote": "Hooks run inside the daemon process through one HookRunner shared by the task router and the cron worker; the atm CLI never spawns a hook process.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §3 D-3 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 3,
+      "deterministic_check": "crates/atm-architecture/tests/process_spawn_sites.rs pins tokio::process::Command::new to process_deadline.rs, atm-herdr transport_cli.rs and atm send_to.rs; DaemonHookRunner is constructed once in atm-daemon-bootstrap and handed to the router and to AtmCron",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.95,
+            "no": 0.05,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.59,
+          "probabilities": {
+            "yes": 0.73,
+            "no": 0.24,
+            "unclear": 0.03
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.96,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.59,
+      "explanation": "Jev was not confident (min confidence 0.59); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6722,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.59
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21745
+    },
+    {
+      "anchor_id": "REQ-BK-D4A",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-D4A",
+      "statement": "The cron worker parses each cron_expr with the cron crate in UTC and sleeps until the next occurrence computed from Utc::now() after every run, never replaying ticks missed while the daemon was stopped.",
+      "quote": "The cron worker parses each cron_expr with the cron crate in UTC and sleeps until the next occurrence computed from Utc::now() after every run, never replaying ticks missed while the daemon was stopped.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §5 D-4 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 2,
+      "deterministic_check": "a paused-clock test advances 3 intervals past a stopped period and asserts exactly one run after restart",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.27,
+          "probabilities": {
+            "yes": 0.51,
+            "no": 0.49,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.77,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.85,
+            "unclear": 0.15
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.06,
+            "no": 0.93,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.27,
+      "explanation": "Jev was not confident (min confidence 0.27); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6728,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.27
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21797
+    },
+    {
+      "anchor_id": "REQ-BK-D4B",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-D4B",
+      "statement": "A schedule whose previous run is still in flight when its next tick is due skips that tick and logs the skip; two runs of one schedule never overlap.",
+      "quote": "A schedule whose previous run is still in flight when its next tick is due skips that tick and logs the skip; two runs of one schedule never overlap.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §5 D-4 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 2,
+      "deterministic_check": "a paused-clock test with a hook slower than the interval asserts one spawn and one skip log entry",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.35,
+          "probabilities": {
+            "yes": 0.43,
+            "no": 0.57,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.91,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.94,
+            "unclear": 0.06
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.86,
+          "probabilities": {
+            "yes": 0.08,
+            "no": 0.91,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.35,
+      "explanation": "Jev was not confident (min confidence 0.35); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6714,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.35
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21724
+    },
+    {
+      "anchor_id": "REQ-BK-ERRORS",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-ERRORS",
+      "statement": "A hook that exits non-zero or replies with text that is not one of the four reply shapes fails the hooked command with ATM_HOOK_EXIT or ATM_HOOK_MALFORMED, returns that error to the caller and runs no subcommand logic.",
+      "quote": "A hook that exits non-zero or replies with text that is not one of the four reply shapes fails the hooked command with ATM_HOOK_EXIT or ATM_HOOK_MALFORMED, returns that error to the caller and runs no subcommand logic.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §2.2 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 4,
+      "deterministic_check": "two tests: a fixture that exits 3 yields ATM_HOOK_EXIT; a fixture printing 'ok' yields ATM_HOOK_MALFORMED; neither writes a task row",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.96,
+            "no": 0.04,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.06,
+          "probabilities": {
+            "yes": 0.37,
+            "no": 0.36,
+            "unclear": 0.27
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.88,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.92,
+            "unclear": 0.04
+          }
+        }
+      },
+      "min_confidence": 0.06,
+      "explanation": "Jev was not confident (min confidence 0.06); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6735,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.06
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21811
+    },
+    {
+      "anchor_id": "REQ-BK-SCHEMA",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-SCHEMA",
+      "statement": "The hook_registration and cron_schedule tables are added in one ADR-061 minor bump of the storage schema version, applied by the existing migration path in atm-storage-rusqlite.",
+      "quote": "The hook_registration and cron_schedule tables are added in one ADR-061 minor bump of the storage schema version, applied by the existing migration path in atm-storage-rusqlite.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §4; ADR-061 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 4,
+      "deterministic_check": "crates/atm-storage-rusqlite/tests/hook_schema.rs::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created: both tables are created by ensure_schema on an empty database and on one built from the pre-bk DDL, and the pre-bk statements still read and write",
+      "kind": "directive",
+      "leaning": "not_addressed",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.51,
+          "probabilities": {
+            "yes": 0.67,
+            "no": 0.32,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.8,
+          "probabilities": {
+            "yes": 0.03,
+            "no": 0.87,
+            "unclear": 0.1
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.85,
+          "probabilities": {
+            "yes": 0.08,
+            "no": 0.9,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.51,
+      "explanation": "Jev was not confident (min confidence 0.51); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 6721,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "yes",
+          "confidence": 0.51
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21764
+    },
+    {
+      "anchor_id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "An active hook replaces the atm task subcommand call: atm runs the hook first, parses its JSON reply, and the subcommand's own logic runs only when the reply is pass-through, or when every hook in the chain replies not-applicable.",
+      "quote": "so the hooks replace the call. the hooks should return json which is processed by atm. We should be able to replace quite a few of (perhaps all) atm task subcommands.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 3,
+      "deterministic_check": "a test registers a task.assign hook whose reply is {\"result\": \"refused\", \"message\": \"m\"} and asserts the task ledger is unchanged and the command fails with ATM_HOOK_REFUSED carrying m",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "6454d949e178a88679af736244084e2249924f4727e74bd04db8bd5ada2b5ec7",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item touches none of the three: it is about something else, such as cron schedule storage or startup, the TUI, documentation, or a command other than atm task, and it does not mention an atm task subcommand's request handling, the hook runner, or a hook reply.",
+            "unclear": "The item text is too vague to tell whether it touches an atm task subcommand's request handling, the hook runner, or a hook reply.",
+            "yes": "The item plans or changes the request handling of an atm task subcommand, the hook runner, or the handling of a hook's reply, including adding a hook to an atm task subcommand or describing how such a subcommand behaves with or without a hook."
+          },
+          "instructions": "Does `item.text` plan or change one of these three things: (1) how an `atm task` subcommand (assign, start, close, move, list, events) handles a request, (2) the component that runs a registered hook, or (3) how atm handles a hook's reply? Judge only whether the item touches one of these three; do not judge whether the item follows `anchor.statement`.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not plan this: it is silent about hook order and reply handling, names hooks only as a topic, covers only the hook runner or the no-hook case, or runs the normal logic before the hook or for a reply that is not pass-through.",
+            "unclear": "The item refers to the hook taking over the call but it cannot be determined whether the hook runs first or whether only a pass-through reply lets the normal logic run.",
+            "yes": "The item says atm runs the hook first, reads its JSON reply, and continues into the normal subcommand logic only when the reply is pass-through."
+          },
+          "instructions": "Does `item.text` plan for an active hook to take over the atm task subcommand call, so that atm runs the hook first, reads its JSON reply, and continues into the subcommand's normal logic only on a pass-through reply? A refusal reply or a list of replacement commands in place of the normal logic fits this plan. Judge presence of this plan only, not conflict.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "The item lets the hook decide as the statement requires, or does not discuss hook order or replies at all.",
+            "unclear": "It cannot be determined from the item whether the own logic or the hook's reply is in charge.",
+            "yes": "The item keeps the own logic in charge in one of these ways: it runs before the hook, the hook only receives the result afterwards, the reply is not used to decide, or the own logic runs for a reply other than pass-through."
+          },
+          "instructions": "Does `item.text` keep the atm task subcommand's own logic in charge when a hook is active, contrary to `anchor.statement`? That is the case when the own logic runs before the hook, when the hook only receives the result afterwards, when the hook's reply is not used to decide, or when the own logic still runs for a reply other than pass-through. An item that does not discuss hook order or replies does not conflict. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "no": 0.01,
+            "unclear": 0.0,
+            "yes": 0.99
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "no": 0.99,
+            "unclear": 0.0,
+            "yes": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 6906,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 22384
+    },
+    {
+      "anchor_id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A hook registration is keyed by (team, phase, hook); disabling a phase marks every hook of that team and phase inactive instead of deleting the rows.",
+      "quote": "1. the skill would register the hooks as 'active' for a phase for a single team, when phase ended, hooks would be disabled.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 2,
+      "deterministic_check": "hook_registration has UNIQUE(team, phase, hook) and an active column; a test disables a phase and asserts the rows remain with active = 0 and disabled_at set",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.93,
+            "no": 0.05,
+            "unclear": 0.02
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.98,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.89,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 6727,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21783
+    },
+    {
+      "anchor_id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A refused reply must stop the subcommand before any of its logic runs, with the reply's message returned to the caller as the command error.",
+      "quote": "if 'bd ready' false, atm-task-assign hook returns false and message to caller i.e. { success = \"false\" message=\"bead {bead-id} is not ready\" }",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 4,
+      "deterministic_check": "a hook fixture prints {\"result\": \"refused\", \"message\": \"bead x is not ready\"}; the test asserts no task row is written and the ATM_HOOK_REFUSED error carries exactly that message",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.95,
+            "no": 0.02,
+            "unclear": 0.03
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.03,
+            "no": 0.95,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.92,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 6725,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21770
+    },
+    {
+      "anchor_id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When a hook replies pass-through, atm runs the subcommand's normal logic with the original request, giving the same result as when no hook is registered.",
+      "quote": "or if 'bd ready' the hook either retruns { success = \"true\" } and atm proceeds w/ normal atm task assign logic",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 3,
+      "deterministic_check": "a test with a hook replying {\"result\": \"pass-through\"} asserts the resulting task row equals the row produced with no hook registered",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "9f1e4a452233daeb49b2a619616447807d498962de24566f173645d7f6ac15aa",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item is about something else, such as messaging, cron storage, logging or the user interface, and does not touch how atm handles a hook's reply.",
+            "unclear": "The item mentions hooks, but it cannot be told whether it touches how atm handles a hook's reply.",
+            "yes": "The item adds, changes or tests hook reply parsing, or what atm does after a hook replies for an `atm task` subcommand."
+          },
+          "instructions": "Does `item.text` describe work on how atm handles a hook's reply for a hooked `atm task` subcommand (assign, start, close, move, list, events)? This includes parsing the hook's JSON reply, deciding what atm does for a handled, pass-through, not-applicable or refused reply, and the path by which atm continues to the subcommand's own logic after its hook returns. Judge subject matter only, not whether the item handles the reply correctly.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not state that behaviour: it is silent about the pass-through reply, only names the case or a branch without saying what happens, covers only other replies such as refusals or action lists, or describes a different outcome for that reply.",
+            "unclear": "The item describes what happens on a pass-through reply in words that may or may not mean the normal logic runs on the original request.",
+            "yes": "The item states that a pass-through reply leads atm to run the subcommand's normal or existing logic on the request as received (falls through, proceeds, continues, runs the unhooked path), or plans a test that the outcome equals the outcome with no hook registered."
+          },
+          "instructions": "`anchor.statement` requires that when a hook replies {\"result\": \"pass-through\"}, atm runs the subcommand's normal logic with the caller's original request, giving the same result as with no hook registered. Does `item.text` state this behaviour for that reply? Judge presence of this behaviour only, not whether something in the item conflicts with it.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+            "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+            "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+          },
+          "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only. For this anchor, examples of contradiction are: on a pass-through reply the item reports success without doing the work, changes the request before running it, bypasses part of the normal logic, or rejects the reply. Handling a refused, not-applicable or handled reply is not a contradiction.",
+          "type": "choice"
+        }
+      },
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 1.0,
+            "unclear": 0.0,
+            "yes": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 6855,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 22367
+    },
+    {
+      "anchor_id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A handled reply with an atm-action array must make atm run each action in array order instead of the original subcommand's logic.",
+      "quote": "OR the hook returns what to do { success = \"true\" atm-action[] = { action-1, action-2 } } where action-1 and action-2 would be atm json commands. i.e. action-1 could be exactly the same command that was input, action-2 could be 'atm send omega-prime@hermes <escelation-message>'.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 4,
+      "deterministic_check": "a test with a handled reply carrying two actions asserts both ran in order and the original request was not applied",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.82,
+          "probabilities": {
+            "yes": 0.88,
+            "no": 0.06,
+            "unclear": 0.06
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.82,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 6709,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21711
+    },
+    {
+      "anchor_id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm never consults a hook while executing an action returned by a hook; every atm-action entry runs through the un-hooked command path.",
+      "quote": "the hook would not be called recursively, so the { success = true } (pass-through case) would simply do the same thing 'atm task assign ...' would do if there was no hook.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 3,
+      "deterministic_check": "a test whose task.assign hook returns an atm-action task.assign asserts the hook process was spawned exactly once",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.01,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.8,
+          "probabilities": {
+            "yes": 0.13,
+            "no": 0.87,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.8,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 6729,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21788
+    },
+    {
+      "anchor_id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each of the six atm task subcommands (assign, start, close, move, list, events) must have its own hook name, equal to its TaskCommands method, and consult its registered hook.",
+      "quote": "assign,start,close are natural to override w/ hooks. we might as well hook the others",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
+      "anchor_version": 4,
+      "deterministic_check": "the hook name enum has task.assign, task.start, task.close, task.move, task.list, task.events, cron.tick and cron.stop; one test per TaskCommands method asserts that method consults only its own hook",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.62,
+          "probabilities": {
+            "yes": 0.75,
+            "no": 0.15,
+            "unclear": 0.1
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.72,
+          "probabilities": {
+            "yes": 0.09,
+            "no": 0.81,
+            "unclear": 0.1
+          }
+        }
+      },
+      "min_confidence": 0.62,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 6740,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21803
+    },
+    {
+      "anchor_id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A task subcommand with no active hook for the caller's team must run its existing logic unchanged and report no hook-related warning or error.",
+      "quote": "since all hooks would be optional (defaulting to normal behavior in the case of missing), I don't see much risk.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
+      "anchor_version": 5,
+      "deterministic_check": "the existing task CLI integration tests pass with no hook_registration rows and their output is unchanged; the filter's request path makes no hook_registration store call (the in-memory snapshot is the only lookup; store call counter 0 after construction)",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.96,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.94,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 6715,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21735
+    },
+    {
+      "anchor_id": "ANC-015",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm doctor, run for a team with an active hook registration, must invoke the module's doctor() through the hook runner and report the reply in a hooks section of the doctor report.",
+      "quote": "the plug-in can run this check as part of 'doctor' it provides and IF a hook is installed, 'atm doctor' would call hook.doctor() when called from the team it is registered for.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T23:15Z (Rand, round 3: no sha header)",
+      "anchor_version": 4,
+      "deterministic_check": "a test with an active registration for team T, phase P whose doctor(request) returns {\"success\": true, \"message\": \"ok\", \"findings\": [one warning]} asserts the module's stdin carried team T, phase P and the row's custom, and run_doctor for T has one hooks entry with team T, phase P, that message and that finding",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.02,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.06,
+            "no": 0.93,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.89,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 6729,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21799
+    },
+    {
+      "anchor_id": "REQ-BK-LOG",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-LOG",
+      "statement": "Every hook call and every hook-returned action must emit one structured log entry carrying team, phase, hook, outcome and elapsed milliseconds (ADR-067).",
+      "quote": "Every hook call and every hook-returned action emits one structured log entry carrying team, phase, hook, outcome and elapsed milliseconds (ADR-067).",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §3; ADR-067 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 4,
+      "deterministic_check": "a tracing-capture test asserts one action=run entry and one action=action entry per action with the five fields",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.69,
+          "probabilities": {
+            "yes": 0.2,
+            "no": 0.79,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.69,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 6720,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21751
+    },
+    {
+      "anchor_id": "REQ-BK-TESTS",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-TESTS",
+      "statement": "Hook execution is tested with a fixture hook module on the real clock, the timeout case using a child that never finishes, and cron scheduling with a manual test clock; no test starts, targets or depends on a live daemon.",
+      "quote": "Each sprint carries its tests, never a live daemon. A test that spawns a real child runs on the real clock with a generous `timeout_ms` and asserts content; the timeout case uses a child that never finishes. Scheduling is tested with `ManualClock`, and `start_paused` only with doubles.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §7 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 4,
+      "deterministic_check": "rg -n 'atm daemon|ATM_DAEMON|spawn.*daemon' on the new tests matches nothing; no test that spawns fixture_hook.py uses start_paused; atm-cron scheduling tests advance ManualClock",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.22,
+          "probabilities": {
+            "yes": 0.48,
+            "no": 0.34,
+            "unclear": 0.18
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.95,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.92,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 6731,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 18271,
+      "item_shortened": false,
+      "request_bytes": 21807
+    }
+  ],
+  "summary": {
+    "counts": {
+      "not_addressed": 3,
+      "underspecified": 20,
+      "satisfied": 11
+    },
+    "failing": [
+      "ANC-023",
+      "ANC-024",
+      "REQ-BK-HOOK-CLI",
+      "ANC-003",
+      "ANC-007",
+      "ANC-009",
+      "ANC-010",
+      "ANC-011",
+      "ANC-012",
+      "ANC-016",
+      "ANC-017",
+      "ANC-018",
+      "ANC-019",
+      "ANC-020",
+      "ANC-021",
+      "ANC-022",
+      "ANC-025",
+      "REQ-BK-D1",
+      "REQ-BK-D3",
+      "REQ-BK-D4A",
+      "REQ-BK-D4B",
+      "REQ-BK-ERRORS",
+      "REQ-BK-SCHEMA"
+    ],
+    "leaning_counts": {
+      "not_addressed": 11,
+      "not_applicable": 6,
+      "satisfied": 17
+    },
+    "unstable": [
+      "ANC-009"
+    ],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

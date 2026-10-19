@@ -115,6 +115,10 @@ Approved additive CLI feature for the Phase `AX` line:
 Approved additive CLI feature for the Phase `BA` line:
 - `atm task assign|close|move|list|events`
 
+Approved additive CLI feature for the Phase `BK` line (section 23, 24):
+- `atm hook register|disable|list`
+- `atm cron start|end|list`
+
 The system must preserve the retained command behavior unless these
 requirements explicitly retire or change it.
 
@@ -2514,6 +2518,43 @@ Phase AX.6 doctor findings must use these warning codes and actionable guidance:
 - `ATM_MEMBER_BLOCKED` — `<member> is waiting for interactive input; attach to its Herdr agent and answer the prompt`
 
 Critical findings must cause a non-zero exit status.
+
+### 11.5 Hooks Section (Phase BK)
+
+Product requirement ID:
+- `REQ-P-HOOK-004` `atm doctor`, run from a team with one or more active hook
+  registrations (section 23), must call each registered module's `doctor()`
+  through the daemon hook runner and report the reply.
+
+Required behavior:
+- the daemon runs `python3 <module_path> doctor` with stdin
+  `{"schema_version", "hook": "doctor", "team", "phase", "custom"}` (the
+  row's stored `custom`); the module replies `{"success": <bool>,
+  "message": "<text>", "findings": [...]}`, where `findings` is optional
+  and each finding has the fields of atm's doctor finding (`severity`
+  `info|warning|error`, `code`, `message`, optional `remediation`); any
+  other shape is `ATM_HOOK_MALFORMED` (Rand, 2026-10-18: "doctor would need
+  to know team, phase and it would return a dict/array (whatever is
+  consistent w/ what doctor expects)")
+- the report carries a `hooks` section with one entry per distinct
+  `(module_path, cwd, team, phase)` among the caller team's active
+  `hook_registration` and `cron_schedule` rows, naming its `hooks`,
+  `schedules`, `team`, `phase` and `timeout_ms`, with the reply's
+  `success`, `message` and `findings`, or the typed error (`ATM_HOOK_EXIT`,
+  `ATM_HOOK_TIMEOUT`, `ATM_HOOK_MALFORMED`) when the call fails; the calls
+  run concurrently under the doctor request's budget
+- the section is empty, not absent, when the team has no active
+  registration; it must never make `atm doctor` fail or raise the overall
+  status by itself
+- the `--json` output always carries the section, as `"hooks": []` when
+  empty; a consumer built before Phase BK must decode a report that lacks
+  it (serde default)
+- atm must store and compare no module sha (Rand, #1873 round 3): integrity
+  of the installed module is what the module's own `doctor()` reports
+
+Satisfied by:
+- `REQ-CORE-HOOK-001` for the runner boundary the section calls through
+- `REQ-ATM-OUT-001` for rendering
 
 ## 12. `atm teams`
 
@@ -5235,3 +5276,209 @@ Task ledger shape (Phase BA):
     state fields in the same record
   - any scoped exclusions for the semantic-literal gate must stay narrow and
     explicit; they must not exempt ordinary production code wholesale
+
+## 23. Task Hooks And `atm hook` (Phase BK)
+
+Product requirement IDs:
+- `REQ-P-HOOK-001` Every `atm task` subcommand must be replaceable by one
+  optional, registered hook that receives one JSON request and answers with
+  one of four JSON reply shapes.
+- `REQ-P-HOOK-002` Hooks must run in the daemon, in a fixed environment,
+  under the module's own deadline, with typed failures that fail the
+  subcommand closed.
+- `REQ-P-HOOK-003` `atm hook register|disable|list` must manage hook
+  registrations per team and phase.
+- `REQ-P-HOOK-004` is the doctor section (section 11.5).
+
+Governing decisions: ADR-068 (contract and runner), ADR-061 (two additive
+tables, six additive protocol variants), ADR-066 (team from caller context),
+ADR-067 (one structured log). Design: `docs/plans/phase-bk/design.md`.
+Rulings: atm-core #1873 (Rand, 2026-10-18).
+
+### 23.1 Hook Set And Registration (`REQ-P-HOOK-001`, `REQ-P-HOOK-003`)
+
+- the hook names are the closed set `task.assign`, `task.start`,
+  `task.close`, `task.move`, `task.list`, `task.events`, plus `cron.tick`
+  and `cron.stop` (section 24); `atm task history` is not hooked; every
+  hook is optional and a subcommand with no active registration for the
+  caller's team runs unchanged, with no process spawned
+- a registration is one `hook_registration` row keyed `(team, phase, hook)`
+  with `module_path`, `cwd`, `timeout_ms`, `custom` (a JSON object),
+  `active`, `registered_by`, `registered_at`, `disabled_at`
+- `atm hook register <hook> --module <path> --phase <x> [--cwd <dir>]
+  [--custom <json>]` must store `--custom` (a JSON object, `{}` when
+  absent; a non-object or more than 65 536 serialized bytes is
+  `ATM_HOOK_MODULE_INVALID`), must
+  read the module's `TIMEOUT_MS` constant (a module without it, with zero,
+  or with a value above 2500 ms is refused with `ATM_HOOK_MODULE_INVALID`),
+  and must accept a registration of a hook another phase of the team
+  already has active: phases are independent and tasks carry no phase
+  (Rand, 2026-10-18)
+- `atm hook disable --phase <x> [<hook>]` must set the phase's rows (or the
+  one hook) inactive with `disabled_at` and keep them for `atm hook list`
+- `atm hook list [--phase <x>] [--json]` must print the team's rows, active
+  first
+- the team is the caller's team (ADR-066); registrations persist across a
+  daemon restart
+- any roster member of the team may register, disable and list hooks; the
+  daemon's routes check team membership and nothing else (ADR-068 D5)
+- the daemon's register route is the only validator of the hook name
+  (the six task names; `cron.tick` and `cron.stop` are refused with
+  `ATM_HOOK_MODULE_INVALID`); the CLI validates only `TIMEOUT_MS`
+
+### 23.2 Request And Reply Contract (`REQ-P-HOOK-001`)
+
+- the daemon must invoke the module as `python3 <module_path> <hook name>`
+  with one JSON object on stdin: `schema_version` (`"1.0.0"`), `hook`,
+  `team`, `phase`, `caller { identity, team, host }`, `request` (the bare
+  HTTP body of the command the CLI sent) and `custom` (the registration's
+  stored `--custom` object, passed unchanged and never read by atm); the
+  key set is identical for every hook
+- the module must print exactly one JSON object (Rand, 2026-10-18: "we should add a 3-rd return type. instead of success=true/false which signals pass-through, we could return enum with { handled => run my actions, not-applicable, pass-through }"): `{"result": "refused",
+  "message": "<text>"}` refuses the subcommand with `ATM_HOOK_REFUSED`
+  carrying `<text>`;
+  `{"result": "pass-through"}` runs the normal subcommand with the original
+  request; `{"result": "not-applicable"}` hands the call to the next hook,
+  and all not-applicable runs the normal subcommand;
+  `{"result": "handled", "atm-action": [{"command": "<hook name>", "as":
+  "<identity>", "request": {...}}, ...]}` runs those commands in order
+  instead, with `as` (optional) replacing `caller_identity`
+- a hooked command must run the active registrations of its hook for the
+  caller's team, one per phase, sequentially and oldest `registered_at`
+  first, within the one request deadline (each gets `min(TIMEOUT_MS,
+  remaining - 500 ms)`; a hook left without budget is `ATM_HOOK_TIMEOUT`
+  naming its phase); the chain stops at the first reply that is not
+  not-applicable, which decides, later hooks are not run, and all
+  not-applicable runs the normal command
+- task hooks are an input filter (`HookedTaskCommands`) over the sealed
+  `atm_core::boundary::TaskCommands` trait that the normal task path
+  (`NormalTaskCommands`) also implements; actions enter the normal path
+  below the filter, so a hook-returned command never consults a hook and
+  no nesting variable or header exists (ADR-068 D4)
+- any reply that is not exactly one of the four shapes must return
+  `ATM_HOOK_MALFORMED` to the caller and never run the normal command
+- the hook must be consulted before any storage write of the request; a
+  refusal writes nothing
+- the module must expose `TIMEOUT_MS`, a `__main__` block that answers
+  `{"result": "not-applicable"}` for a `task.*` name it does not implement,
+  `cron(args)`, `stop(args)` and `doctor(request)` (section 11.5); atm stores no module sha
+- an action's `command` may be any routed atm command except
+  `hook.register|disable|list` and `cron.start|end|list`, with `request`
+  that route's body; an empty list, an action for another team, or an `as`
+  not on the roster is `ATM_HOOK_MALFORMED` and no action runs; a failing
+  action stops the list without rollback and names how many committed
+- `HOOK_SCHEMA_VERSION` versions the request and reply shapes independently
+  of `HTTP_API_VERSION`; the module must tolerate additive fields inside
+  `request` (ADR-068 D8)
+
+### 23.3 Runner (`REQ-P-HOOK-002`)
+
+- one runner in `atm-daemon-bootstrap` implements the sealed
+  `atm_core::boundary::HookRunner` trait that the HTTP router consults;
+  the CLI never runs a hook
+- the child's environment must be exactly `ATM_TEAM`, `ATM_PHASE`,
+  `PATH`, `HOME` (plus `SystemRoot` and `USERPROFILE` on Windows) after
+  clearing the daemon's environment, with the registered cwd; the daemon
+  reads no configuration from its own environment (ADR-066)
+- the child must be killed when `timeout_ms` elapses (`ATM_HOOK_TIMEOUT`);
+  a non-zero exit is `ATM_HOOK_EXIT` with the exit code and a stderr tail;
+  stdout that is not exactly one object of the four shapes is
+  `ATM_HOOK_MALFORMED`; a Python exception is `ATM_HOOK_EXIT` with the
+  traceback tail; a panic in the daemon-side hook task is caught and
+  returned as `ATM_HOOK_EXIT` while the daemon keeps serving; each fails
+  the subcommand closed
+- every run and every dispatched action must write one structured log entry
+  (`subsystem = "atm_hook"`, hook, team, phase, caller, outcome,
+  elapsed milliseconds) and no second file (ADR-067)
+
+### 23.4 Crate Requirements
+
+- `REQ-CORE-HOOK-001` `atm-core` must own the typed hook contract: the
+  request, reply and action types, the sealed `HookRunner` boundary trait
+  with its single test double, the sealed `TaskCommands`,
+  `CronScheduler` and `HookActionDispatcher` traits, the six request and
+  seven response envelope
+  variants, and `atm-storage` must own the `HookRegistrationStore` and
+  `CronScheduleStore` traits with in-memory doubles behind `test-utils`
+- `REQ-CORE-HOOK-002` `atm-storage-rusqlite` must create `hook_registration`
+  and `cron_schedule` idempotently from `ensure_schema` as additive MINOR
+  objects (ADR-061 D6 record 2026-10-18) and prove the pre-bk statements
+  still read and write afterwards
+- hook execution must be tested with a fixture module on the real clock
+  (the timeout case a child that never finishes) and scheduling with a
+  manual test clock, never a live daemon (section 19)
+
+## 24. `atm cron` (Phase BK)
+
+Product requirement IDs:
+- `REQ-P-CRON-001` `atm cron start|end|list` must manage persistent cron
+  schedules per team and phase that run a hook module on a cron expression.
+- `REQ-P-CRON-002` The daemon must tick every active schedule from one
+  worker, in UTC, without replaying missed ticks and with at most one run
+  per schedule in flight.
+
+Governing decisions: ADR-069, ADR-068 (the tick is a hook run), ADR-061,
+ADR-065, ADR-067.
+
+### 24.1 Commands And Storage (`REQ-P-CRON-001`)
+
+- `atm cron start <name> --cron "<expr>" --module <path> --phase <x>
+  (--until <rfc3339> | --until-hook) [--arg <v>]... [--cwd <dir>]
+  [--custom <json>]` must
+  require exactly one stop condition, parse `<expr>` before writing (6 or 7
+  fields seconds first, or `@yearly|@monthly|@weekly|@daily|@hourly`; five
+  fields, no future occurrence, or an `--until` not in the future is
+  `ATM_CRON_EXPR_INVALID`), read the module's
+  `CRON_TIMEOUT_MS`, else `TIMEOUT_MS` (above 30 000 ms is
+  `ATM_HOOK_MODULE_INVALID`), store `--custom` as for hooks, assign a
+  fixed `jitter_s` (section 24.2), and insert one `cron_schedule` row (`UNIQUE (team, phase,
+  name)`; an active duplicate is refused) with `until_at` or `stop_hook`
+  set (exactly one, enforced by a CHECK); restarting an ended name updates
+  its row in place and keeps the id
+- any roster member of the team may start, end and list schedules; the
+  daemon's routes check team membership and nothing else (ADR-069 D1)
+- `atm cron end --phase <x> [<name>]` must set the phase's rows (or the one
+  name) inactive with `ended_at` and keep them
+- `atm cron list [--phase <x>] [--json]` must print the team's rows with
+  `jitter_s`, `last_run_at` and `last_outcome`
+- rows persist across a daemon restart; every active row of every team runs
+
+### 24.2 Scheduler (`REQ-P-CRON-002`)
+
+- the `atm-cron` crate is the only implementation of the sealed
+  `atm_core::boundary::CronScheduler` trait (`start`, `end`, `list`); it
+  depends on `atm-core`, `tokio`, `chrono`, `cron`, `async-trait`,
+  `serde_json`, `getrandom` and `tracing`, never on `atm-storage`, `atm-http-runtime`,
+  `atm-daemon-bootstrap` or `atm`; it dispatches actions through the sealed
+  `atm_core::boundary::HookActionDispatcher` trait the router implements
+  (ADR-069 D2)
+- the daemon bootstrap composes the crate's scheduler once, hands it to the
+  router for the three cron routes, and keeps its worker in the daemon's
+  worker set: the worker loads the active rows at start, reloads them when
+  a start or end commits, and drains under the replacement-daemon deadline
+- each schedule's next time is computed from the injected clock after startup and
+  after each run, plus its `jitter_s`; a missed occurrence is never
+  replayed
+- `jitter_s` is drawn once at start from an injected random source,
+  uniform over the offsets in `[0, min(period_s / 2, 1800))` (at least 1)
+  not held by another active schedule with the same expression, or over
+  all of them when every offset is held; it is stored, so a daemon
+  restart keeps it; the stop-hook check runs at each jittered run time,
+  and an `--until` schedule ends at `until_at` exactly (ADR-069 D2, D4)
+- a tick that arrives while the schedule's previous run is still executing
+  is skipped and logged
+- every tick checks the stop condition first (ADR-069 D4): a schedule
+  whose `until_at` has been reached ends with `last_outcome = "stopped:
+  until reached"`; a `stop_hook` schedule runs `python3 <module_path>
+  cron.stop` with the section 23.2 request shape and ends with
+  `last_outcome = "stopped: <reason>"` on `{"stop": true, "reason":
+  "<reason>"}`, runs on `{"stop": false}`, and on a malformed reply, exit or
+  timeout skips the tick, logs the error and stays active
+- a tick invokes the module as `python3 <module_path> cron.tick` with the
+  section 23.2 request (`hook = "cron.tick"`, `request = {"args": [...],
+  "created_by": "<agent>"}`, `custom` the schedule's; the args travel only
+  in the stdin request), under the schedule's `timeout_ms` (at most
+  30 000 ms, never the 2 500 ms task-hook cap); the reply follows section 23.2 with actions run un-hooked
+  as `created_by` unless `as` is given, with local ingress; each run
+  writes `last_run_at`, `last_outcome` and one structured log entry
+  (`subsystem = "atm_cron"`)
