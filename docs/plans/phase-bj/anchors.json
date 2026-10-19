@@ -1227,12 +1227,23 @@
           "previous_quote": "jes drop atm-bd-console",
           "previous_context": "planning session 2026-10-17: answer to whether to drop the alias",
           "previous_deterministic_check": "after uv tool install, command -v atm-bd-console finds nothing; rg atm-bd-console over scripts, docs, tests and workflows finds no invocation"
+        },
+        {
+          "at": "2026-10-19T01:53:44+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "bj-2 ships the stack bead schema, the pour metadata and validate-plan; it does not name, install, edit the installer for, or run any console command",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bi-5.group-anc-f1",
           "reason": "touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "bj-2 ships the stack bead schema, the pour metadata and validate-plan; it does not name, install, edit the installer for, or run any console command"
         }
       ]
     },
