@@ -104,8 +104,9 @@ mod tests {
     }
 
     /// Pass-through check: the installed normal commands answer with the
-    /// un-hooked response shapes. The router task tests run the same body with
-    /// `NormalTaskCommands` installed (`*_through_normal_task_commands`).
+    /// un-hooked response shapes. The router task tests that have a
+    /// `*_through_normal_task_commands` twin run the same body with
+    /// `NormalTaskCommands` installed.
     #[tokio::test]
     async fn existing_task_tests_pass_through_normal_task_commands() {
         let fixture = fixture(true, None, None);

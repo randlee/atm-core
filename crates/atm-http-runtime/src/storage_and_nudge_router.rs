@@ -1842,11 +1842,18 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows() {
-        let fixture = fixture(true, None, None);
+    async fn bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows_body(
+        through: bool,
+    ) {
+        let fixture = route_task_commands(fixture(true, None, None), through);
         assert_async_committed_rows(&fixture, false).await;
     }
+
+    through_normal_task_commands!(
+        bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows,
+        bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows_through_normal_task_commands,
+        bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows_body
+    );
 
     async fn bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_body(
         through: bool,
@@ -3373,9 +3380,10 @@ pub(crate) mod tests {
         assert!(tasks.is_empty());
     }
 
-    #[tokio::test]
-    async fn task_ledger_list_uses_the_installed_async_reader_without_mailbox_runtime() {
-        let fixture = fixture(true, None, None);
+    async fn task_ledger_list_uses_the_installed_async_reader_without_mailbox_runtime_body(
+        through: bool,
+    ) {
+        let fixture = route_task_commands(fixture(true, None, None), through);
         let mut write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
         write.task_id = Some("t-42".parse().expect("task id"));
         write.requires_ack = true;
@@ -3433,6 +3441,12 @@ pub(crate) mod tests {
                 && outcome.task_rows[0].task_id.as_str() == "t-42"
                 && outcome.task_rows[0].state == atm_storage::TaskState::Assigned));
     }
+
+    through_normal_task_commands!(
+        task_ledger_list_uses_the_installed_async_reader_without_mailbox_runtime,
+        task_ledger_list_uses_the_installed_async_reader_without_mailbox_runtime_through_normal_task_commands,
+        task_ledger_list_uses_the_installed_async_reader_without_mailbox_runtime_body
+    );
 
     #[tokio::test]
     async fn mailbox_handlers_use_the_async_runtime_for_list_peek_and_read() {
@@ -4650,9 +4664,8 @@ pub(crate) mod tests {
         steer_emit_records_handoff_with_trigger_steer_body
     );
 
-    #[tokio::test]
-    async fn steer_of_non_task_message_records_no_handoff() {
-        let fixture = fixture(true, None, None);
+    async fn steer_of_non_task_message_records_no_handoff_body(through: bool) {
+        let fixture = route_task_commands(fixture(true, None, None), through);
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
 
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
@@ -4663,6 +4676,12 @@ pub(crate) mod tests {
             "a dispatch without task_transition writes no handoff"
         );
     }
+
+    through_normal_task_commands!(
+        steer_of_non_task_message_records_no_handoff,
+        steer_of_non_task_message_records_no_handoff_through_normal_task_commands,
+        steer_of_non_task_message_records_no_handoff_body
+    );
 
     #[test]
     fn queue_claim_records_no_handoff() {
