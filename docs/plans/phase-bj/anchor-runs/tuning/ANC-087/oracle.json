@@ -1,0 +1,119 @@
+{
+  "frozen_before_first_jev_call": true,
+  "oracle": {
+    "anchor_id": "ANC-087",
+    "anchor_record_sha256": "0aeb205b1d900a744940d4fe9182ed546dd8d84f266a5cef6f7490ef1ba2cb2c",
+    "anchor_version": 2,
+    "cases": [
+      {
+        "expected": {
+          "compliance": "yes",
+          "conflict": "no",
+          "relevance": "yes"
+        },
+        "id": "fixture_pass",
+        "rationale": "Approved ANC-087 v2 pass fixture: a published manifest with a hash for each shipped file.",
+        "text": "The published skill has a manifest listing the hash of each shipped file.",
+        "verdict": "satisfied"
+      },
+      {
+        "expected": {
+          "compliance": "no",
+          "conflict": "yes",
+          "relevance": "yes"
+        },
+        "id": "fixture_fail",
+        "rationale": "Approved ANC-087 v2 fail fixture: a shipped file without a hash cannot be reconciled with 'every shipped file'.",
+        "text": "The published skill manifest omits the hash for a shipped file.",
+        "verdict": "contradicted"
+      },
+      {
+        "expected": {
+          "compliance": "yes",
+          "conflict": "no",
+          "relevance": "yes"
+        },
+        "id": "paraphrase",
+        "rationale": "Compliant paraphrase of the quote: per-file SHA for the entire skill stored in a published manifest.",
+        "text": "When atm-bd is released, compute a SHA-256 for every file in the skill package, including agents, skills and Python scripts, and publish the list as a manifest with the release.",
+        "verdict": "satisfied"
+      },
+      {
+        "expected": {
+          "compliance": "no",
+          "conflict": "no",
+          "relevance": "yes"
+        },
+        "id": "silent",
+        "rationale": "Touches skill publishing but says nothing about a manifest or per-file hashes; silence is not conflict.",
+        "text": "Publish the atm-bd skill to the marketplace as a tagged release archive.",
+        "verdict": "not_addressed"
+      },
+      {
+        "expected": {
+          "compliance": "no",
+          "conflict": "no",
+          "relevance": "yes"
+        },
+        "id": "topical",
+        "rationale": "Integrity topic only; no manifest with a hash of every shipped file is stated, and nothing rules one out.",
+        "text": "Add integrity verification to the published atm-bd skill so tampering can be detected.",
+        "verdict": "not_addressed"
+      },
+      {
+        "expected": {
+          "compliance": "no",
+          "conflict": "yes",
+          "relevance": "yes"
+        },
+        "id": "conflict",
+        "rationale": "Explicitly replaces per-file hashes with one archive hash, which the statement rules out.",
+        "text": "Publish the atm-bd skill with a single SHA-256 of the whole release archive and no per-file hashes.",
+        "verdict": "contradicted"
+      },
+      {
+        "expected": {
+          "compliance": "no",
+          "conflict": "no",
+          "relevance": "no"
+        },
+        "id": "irrelevant",
+        "rationale": "LLM retry behavior is outside atm-bd skill publishing.",
+        "text": "A retryable LLM call failure receives three retries before the slot reports failure.",
+        "verdict": "not_applicable"
+      },
+      {
+        "expected": {
+          "compliance": "no",
+          "conflict": "yes",
+          "relevance": "yes"
+        },
+        "id": "boundary",
+        "rationale": "Partial coverage: the quote names all agents/skills/python files and the statement says every shipped file; leaving shipped markdown unhashed conflicts.",
+        "text": "The published skill manifest lists the hash of every Python script; agent and skill markdown files are shipped without hashes.",
+        "verdict": "contradicted"
+      },
+      {
+        "expected": {
+          "compliance": "yes",
+          "conflict": "no",
+          "relevance": "yes"
+        },
+        "id": "exception",
+        "rationale": "The obligation covers shipped files only; omitting files that are not shipped is not a conflict.",
+        "text": "The release manifest lists the hash of every file shipped in the published skill package; repository files that are not shipped, such as CI configuration, are left out of the manifest.",
+        "verdict": "satisfied"
+      }
+    ],
+    "gate": "planning",
+    "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+    "repeat_count": 2,
+    "roles": {
+      "compliance": "addressed",
+      "conflict": "contradicted",
+      "relevance": "relevant"
+    },
+    "schema": "plan-anchor/tuning-oracle/1"
+  },
+  "sha256": "0ab002111a68f3f3211f70e2c8acddd7ba786c3f5728ccb4bd2745c32b10afaf"
+}

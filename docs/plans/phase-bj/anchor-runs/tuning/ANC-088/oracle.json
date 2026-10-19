@@ -1,0 +1,114 @@
+{
+  "schema": "plan-anchor/tuning-oracle/1",
+  "anchor_id": "ANC-088",
+  "anchor_version": 2,
+  "anchor_statement": "The atm-bd installer must verify skill files against the published manifest.",
+  "anchor_scope": "atm-bd skill installer",
+  "anchor_kind": "directive",
+  "gate": "planning",
+  "roles": {"relevance": "relevant", "compliance": "addressed", "conflict": "contradicted"},
+  "semantic_mapping": "jev_judge.decide(answers, roles, 0.0, 'directive')",
+  "repeat_count": 2,
+  "frozen_before_first_jev_call": true,
+  "cases": [
+    {
+      "id": "fixture_pass",
+      "item_id": "item-01",
+      "category": "approved_fixture_pass",
+      "text": "The installer verifies skill files against the published manifest.",
+      "expected": {"relevant": "yes", "addressed": "yes", "contradicted": "no"},
+      "verdict": "satisfied",
+      "why": "ANC-088 v2 fixtures.pass[0], verbatim; it restates the locked statement."
+    },
+    {
+      "id": "fixture_fail",
+      "item_id": "item-02",
+      "category": "approved_fixture_fail",
+      "text": "The installer accepts skill files without comparing them to the published manifest.",
+      "expected": {"relevant": "yes", "addressed": "no", "contradicted": "yes"},
+      "verdict": "contradicted",
+      "why": "ANC-088 v2 fixtures.fail[0], verbatim; accepting skill files without the manifest comparison is the opposite of 'must verify skill files against the published manifest'."
+    },
+    {
+      "id": "compliant_minimal",
+      "item_id": "item-03",
+      "category": "minimal_compliant",
+      "text": "During install, the atm-bd installer computes the SHA-256 of every agent, skill and Python file it installs and compares each digest to the entry for that file in the published release manifest; a file whose digest differs is reported as changed.",
+      "expected": {"relevant": "yes", "addressed": "yes", "contradicted": "no"},
+      "verdict": "satisfied",
+      "why": "Per-file SHA comparison against the published manifest for agents, skills and Python files is exactly the quoted directive (ANC-088 quote: 'the installer can check against the published manifest ... all agents/skills/python files')."
+    },
+    {
+      "id": "compliant_paraphrase",
+      "item_id": "item-04",
+      "category": "minimal_compliant",
+      "text": "Before copying anything, check each file of the skill (agent prompts, SKILL.md files and scripts) against the per-file hash list shipped with the release and flag any file that does not match.",
+      "expected": {"relevant": "yes", "addressed": "yes", "contradicted": "no"},
+      "verdict": "satisfied",
+      "why": "A per-file hash list shipped with the release is the published manifest; checking every skill file against it is the directive in other words."
+    },
+    {
+      "id": "silent_in_scope",
+      "item_id": "item-05",
+      "category": "silent",
+      "text": "Add a --dry-run option to the atm-bd installer that lists the skill files it would install and their destination paths without writing anything.",
+      "expected": {"relevant": "yes", "addressed": "no", "contradicted": "no"},
+      "verdict": "not_addressed",
+      "why": "The item changes the atm-bd skill installer (the anchor's scope) and its handling of skill files, but says nothing about verifying them against a manifest; it writes nothing, so it does not install unverified files."
+    },
+    {
+      "id": "topical_only",
+      "item_id": "item-06",
+      "category": "topical_only",
+      "text": "When atm-bd is released, publish a manifest that lists the name and version of every file in the skill.",
+      "expected": {"relevant": "yes", "addressed": "no", "contradicted": "no"},
+      "verdict": "not_addressed",
+      "why": "The published manifest is a prerequisite of the directive, so the item is relevant, but no installer check against it is planned; nothing in it rules the check out."
+    },
+    {
+      "id": "direct_conflict",
+      "item_id": "item-07",
+      "category": "conflicting",
+      "text": "The atm-bd installer copies the skill files into place as they are and performs no manifest or checksum comparison, to keep installs fast.",
+      "expected": {"relevant": "yes", "addressed": "no", "contradicted": "yes"},
+      "verdict": "contradicted",
+      "why": "Explicitly installing skill files with no manifest comparison cannot be reconciled with 'must verify skill files against the published manifest'."
+    },
+    {
+      "id": "irrelevant",
+      "item_id": "item-08",
+      "category": "irrelevant",
+      "text": "Rename the sanity-rejected ATM message template to sanity-fail and update every reference to it in the close hook.",
+      "expected": {"relevant": "no", "addressed": "no", "contradicted": "no"},
+      "verdict": "not_applicable",
+      "why": "A message-template rename in the close hook touches neither the installer nor the manifest."
+    },
+    {
+      "id": "boundary_partial",
+      "item_id": "item-09",
+      "category": "boundary",
+      "text": "The atm-bd installer checks the SHA-256 of the skill's Python scripts against the published manifest; agent and skill markdown files are copied without any check.",
+      "expected": {"relevant": "yes", "addressed": "no", "contradicted": "yes"},
+      "verdict": "contradicted",
+      "why": "The statement covers skill files and the quote names the entire skill ('all agents/skills/python files'); planning to copy the agent and skill markdown files unchecked rules out verifying them, and checking only the scripts does not carry out the directive for the skill's files."
+    },
+    {
+      "id": "exception_fail_open",
+      "item_id": "item-10",
+      "category": "exception",
+      "text": "The atm-bd installer verifies every skill file against the published manifest; if the manifest cannot be fetched, it installs the files anyway without verification.",
+      "expected": {"relevant": "yes", "addressed": "yes", "contradicted": "yes"},
+      "verdict": "contradicted",
+      "why": "The verification step is present (addressed yes), but the planned fallback installs skill files unverified, which 'must verify' rules out (contradicted yes); conflict decides the verdict."
+    },
+    {
+      "id": "exception_fail_closed",
+      "item_id": "item-11",
+      "category": "exception",
+      "text": "The atm-bd installer verifies every skill file against the published manifest and refuses to install when the manifest cannot be fetched or a file does not match.",
+      "expected": {"relevant": "yes", "addressed": "yes", "contradicted": "no"},
+      "verdict": "satisfied",
+      "why": "Verification is planned and the exception path refuses rather than installing unverified files, so nothing conflicts with the directive."
+    }
+  ]
+}
