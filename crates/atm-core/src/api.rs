@@ -916,6 +916,45 @@ mod tests {
     }
 
     #[test]
+    fn pre_1_13_write_decode_fails_typed_on_a_hook_actions_body() {
+        use super::decode_http_response;
+        use crate::error::AtmErrorCode;
+        use crate::send::{SendMessageSource, WriteRequest};
+
+        let home = tempfile::tempdir().expect("home");
+        let write = WriteRequest::new(
+            home.path().to_path_buf(),
+            home.path().to_path_buf(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team",
+            "test-team".parse().expect("team"),
+            SendMessageSource::Inline("hooked".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write request");
+        let request = RequestEnvelope::Write(Box::new(write));
+
+        // A 1.13 daemon answers a hooked write with this body and the
+        // X-ATM-Hook-Actions header. A pre-1.13 client has no header branch, so
+        // it decodes the body as its write response, with no header.
+        let body = br#"{"dispatched":1}"#;
+        let Err(error) = decode_http_response(&request, 200, &[], body) else {
+            panic!("a pre-1.13 write response must not decode a hook-actions body");
+        };
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(
+            error
+                .message()
+                .contains("daemon HTTP write response body is invalid"),
+            "message was: {}",
+            error.message()
+        );
+    }
+
+    #[test]
     fn hook_routes_round_trip_and_check_the_header() {
         use super::{HOOK_ACTIONS_HEADER, decode_http_response};
         use crate::boundary::{PhaseId, StopCondition};
