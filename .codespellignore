@@ -23,3 +23,6 @@ shold
 # Verbatim operator quotes in docs/plans/phase-bi/anchors.* and docs/adr/ADR-066; anchor quotes are never edited.
 veriable
 shoudl
+# Verbatim operator quotes in docs/plans/phase-bk/anchors.*, ADR-068, ADR-069 and design.md; anchor quotes are never edited.
+mandetory
+retruns

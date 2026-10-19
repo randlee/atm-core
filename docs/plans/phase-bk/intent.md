@@ -22,9 +22,9 @@ design is `design.md` in this directory.
 - `atm cron start|end|list` stores cron strings in the atm database, the
   daemon runs each due schedule's hook with the same contract, and schedules
   persist across a daemon restart without replaying missed ticks.
-- `atm doctor` reports every registered hook module: its header sha
-  (sc-sha, as templates) against the released sha, warning on drift, plus the
-  module's own `doctor` output.
+- `atm doctor`, run from a team with an active hook, calls the module's
+  `doctor()` through the hook runner and reports the reply; atm stores and
+  compares no module sha (Rand, round 3 on #1873).
 - Every hook call, cron tick and hook-returned action lands in the one
   structured log (ADR-067).
 

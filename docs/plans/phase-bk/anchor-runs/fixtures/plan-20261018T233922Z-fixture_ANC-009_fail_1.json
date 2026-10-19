@@ -1,0 +1,103 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T233922Z-fixture_ANC-009_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T23:39:22+00:00",
+  "anchors_path": "docs/plans/phase-bk/anchors.json",
+  "plan": "phase-bk",
+  "item": {
+    "id": "fixture:ANC-009:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 94,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "An atm-action entry's as field is the identity the action runs as: atm dispatches the action with that caller identity, and an entry without as runs as the original caller.",
+      "quote": "6. yes",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal); point 6 of the proposal read: 'returned actions may run as the lead'",
+      "anchor_version": 3,
+      "deterministic_check": "a test dispatches {command: task.assign, as: team-lead} from caller cipher and asserts the task row's assigner is team-lead",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.77,
+          "probabilities": {
+            "yes": 0.07,
+            "no": 0.85,
+            "unclear": 0.08
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.77,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1026,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 94,
+      "item_shortened": false,
+      "request_bytes": 3129
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-009"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

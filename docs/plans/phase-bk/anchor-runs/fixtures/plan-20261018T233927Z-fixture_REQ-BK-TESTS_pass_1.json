@@ -1,0 +1,101 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T233927Z-fixture_REQ-BK-TESTS_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T23:39:27+00:00",
+  "anchors_path": "docs/plans/phase-bk/anchors.json",
+  "plan": "phase-bk",
+  "item": {
+    "id": "fixture:REQ-BK-TESTS:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 135,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "REQ-BK-TESTS",
+      "source_type": "REQ",
+      "source_ref": "REQ-BK-TESTS",
+      "statement": "Hook and cron behavior is tested with a fixture hook module and a paused tokio clock; no test starts, targets or depends on a live daemon.",
+      "quote": "Hook and cron behavior is tested with a fixture hook module and a paused tokio clock; no test starts, targets or depends on a live daemon.",
+      "stated_by": "fenix (design.md, PR #1877)",
+      "stated_at": "2026-10-18",
+      "context": "phase-bk design decision docs/plans/phase-bk/design.md §7 (fenix, PR #1877); not a Rand ruling",
+      "anchor_version": 2,
+      "deterministic_check": "rg -n 'atm daemon|ATM_DAEMON|spawn.*daemon' on the new tests matches nothing; cron tests use #[tokio::test(start_paused = true)]",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1034,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 135,
+      "item_shortened": false,
+      "request_bytes": 3106
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}
