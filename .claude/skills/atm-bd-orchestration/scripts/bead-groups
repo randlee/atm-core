@@ -222,6 +222,8 @@ class Run:
                            "reviewer": finding["reviewer"], "finding_title": finding["title"], "remedy": finding["remedy"],
                            "filed_by": filed_by, "found_at_commit": found_at, **ids,
                            "phase": meta["phase"], "sprint": meta["sprint"], "stack": meta["stack"],
+                           "found_on_layer": finding.get("found_on_layer", ""),
+                           "has_found_on_layer": finding.get("found_on_layer") not in (None, ""),
                            "difficulty": finding.get("difficulty") or meta["difficulty"], "priority": finding.get("priority", 1),
                            "edge_option": option}
                 compose["ref"] = fmt(sidecar["ref"], {"vars": compose})

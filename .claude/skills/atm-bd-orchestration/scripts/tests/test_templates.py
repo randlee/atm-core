@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import json
 import re
+import shutil
 import subprocess
 import unittest
 
@@ -248,6 +249,24 @@ class FixRoundReviewerScopeTests(unittest.TestCase):
 
     RBQA = "ruthless-boundary-qa-assignment.json.j2"
     QA = "qa-template.xml.j2"
+
+    @unittest.skipUnless(shutil.which("jq"), "jq is required to evaluate QA provenance")
+    def test_both_qa_paths_copy_checked_bead_layer_into_blocking_findings(self):
+        for example in ("qa-template-vars.json", "qa-template-fix-round-vars.json"):
+            with self.subTest(example=example):
+                values = _example(example)
+                result = _render(self.QA, values)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"bd show {values['checked_bead']} --json", result.stdout)
+                self.assertIn("Add its value as `found_on_layer` to each row", result.stdout)
+                self.assertIn("never substitute the sprint container's layer", result.stdout)
+                expression = re.search(r"\| jq -c '([^']+)'", result.stdout).group(1)
+                for metadata, expected in (({"layer": 15, "found_on_layer": 4}, "15"),
+                                           ({"layer": "", "found_on_layer": 15}, "15"),
+                                           ({"found_on_layer": 15}, "15"), ({"layer": 0}, "0"), ({}, "")):
+                    output = subprocess.run(["jq", "-c", expression], input=json.dumps([{"metadata": metadata}]),
+                                            capture_output=True, text=True, check=True, timeout=30)
+                    self.assertEqual(output.stdout.strip(), expected)
 
     def rbqa(self, **values) -> subprocess.CompletedProcess:
         base = {k: v for k, v in _example("ruthless-boundary-qa-assignment-vars.json").items()
@@ -605,7 +624,7 @@ CONFIG_VARS = {
     "plan-review-template.xml.j2": ("integration_branch", "plans_dir", "requirements_globs", "adr_globs"),
     "review-template.xml.j2": ("integration_branch",),
     "schema-reviewer-assignment.json.j2": ("policy_path",),
-    "qa-bead.json.j2": ("qa_member",),
+    "qa-bead.json.j2": ("qa_member", "sprint_bead"),
 }
 REPO_DEFAULTS = ("team-lead", "just validate", "just lint", "quality-policy.md", "develop", "integrate/phase-",
                  "docs/requirements.md", "docs/architecture.md", "docs/plans", "sc-rust", "rust-development",
@@ -664,6 +683,7 @@ class ConfigVariableTests(unittest.TestCase):
         result = _render("qa-bead.json.j2", {**_example("qa-bead-vars.json"), "qa_member": "my-qa"})
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["assignee"], "my-qa")
+        self.assertEqual(json.loads(result.stdout)["metadata"]["sprint_bead"], _example("qa-bead-vars.json")["sprint_bead"])
 
     def test_qa_bead_marks_a_quick_fix_explicitly(self):
         import json

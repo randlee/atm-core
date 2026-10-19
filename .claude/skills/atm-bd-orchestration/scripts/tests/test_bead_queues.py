@@ -31,12 +31,12 @@ def run_viewer(
     *,
     output: str,
     status: int,
-    version: str = "atm-bd-console 0.1.0",
+    version: str = "atm-bd 0.1.0",
 ) -> subprocess.CompletedProcess[str]:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     argv = tmp_path / "argv"
-    console = fake_bin / "atm-bd-console"
+    console = fake_bin / "atm-bd"
     console.write_text(
         "#!/bin/sh\n"
         'if [ "$1" = "--version" ]; then printf "%s\\n" "$FAKE_CONSOLE_VERSION"; exit 0; fi\n'
@@ -82,19 +82,19 @@ def test_viewer_explains_how_to_install_the_console_when_absent(tmp_path: Path, 
 
     assert result.returncode == 2
     assert result.stdout == ""
-    assert "atm-bd-console is not on PATH" in result.stderr
+    assert "atm-bd is not on PATH" in result.stderr
     assert "uv tool install" in result.stderr
     assert "apps/atm-bd-console" in result.stderr
 
 
 def test_viewer_rejects_unsupported_console_version_with_typed_fix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    result = run_viewer(tmp_path, monkeypatch, output="unused", status=0, version="atm-bd-console 0.0.9")
+    result = run_viewer(tmp_path, monkeypatch, output="unused", status=0, version="atm-bd 0.0.9")
 
     assert result.returncode == 2
     assert result.stdout == ""
     assert result.console_argv == []  # type: ignore[attr-defined]
     assert "CONSOLE_VERSION_TOO_OLD" in result.stderr
-    assert "requires atm-bd-console >= 0.1.0" in result.stderr
+    assert "requires atm-bd >= 0.1.0" in result.stderr
     assert "uv tool install" in result.stderr
 
 
