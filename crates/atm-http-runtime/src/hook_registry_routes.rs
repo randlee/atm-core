@@ -596,9 +596,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn concurrent_register_and_disable_leave_snapshot_equal_to_store() {
-        // Deterministic stand-in for interleaving: each write is awaited to completion
-        // before the next, and the snapshot is checked against the store after each step.
+    async fn sequential_register_and_disable_leave_snapshot_equal_to_store() {
+        // Sequential: each write is awaited to completion before the next. The overlap
+        // case is covered by register_and_disable_overlap_on_the_bridge_and_snapshot_equals_store.
         let routes = routes();
         let snapshot = routes.router.hooks.snapshot.clone().expect("snapshot");
         for phase_name in ["bj", "bk", "bl"] {
@@ -644,6 +644,83 @@ mod tests {
                 .collect();
             assert_eq!(active, stored);
         }
+    }
+
+    #[tokio::test]
+    async fn register_and_disable_overlap_on_the_bridge_and_snapshot_equals_store() {
+        let routes = routes();
+        let snapshot = routes.router.hooks.snapshot.clone().expect("snapshot");
+        register(&routes, register_request("sender", "task.assign", "bj"))
+            .await
+            .expect("bj");
+        // Hold the next store read: the register's refresh is then in flight inside its bridge job.
+        let pause = Arc::new(routes.hooks.pause_next_active_all());
+        let register_task = {
+            let router = routes.router.clone();
+            tokio::spawn(async move {
+                router
+                    .hook_register(
+                        register_request("sender", "task.assign", "bk"),
+                        AuthenticatedIngress::Local,
+                        deadline(),
+                    )
+                    .await
+                    .map(|_| ())
+            })
+        };
+        {
+            let pause = pause.clone();
+            tokio::task::spawn_blocking(move || pause.wait_entered())
+                .await
+                .expect("register reached the store");
+        }
+        let disable_task = {
+            let router = routes.router.clone();
+            tokio::spawn(async move {
+                router
+                    .hook_disable(
+                        HookDisableRequest {
+                            caller_identity: agent("sender"),
+                            caller_team: team(),
+                            phase: phase("bj"),
+                            hook: None,
+                        },
+                        AuthenticatedIngress::Local,
+                        deadline(),
+                    )
+                    .await
+                    .map(|_| ())
+            })
+        };
+        pause.release();
+        register_task
+            .await
+            .expect("register task")
+            .expect("register");
+        disable_task.await.expect("disable task").expect("disable");
+
+        let active: Vec<String> = snapshot
+            .current(
+                &routes.router.control_path_sync_bridge,
+                deadline(),
+                &team(),
+                &hook("task.assign"),
+            )
+            .await
+            .expect("active")
+            .iter()
+            .map(|row| row.phase.as_str().to_owned())
+            .collect();
+        let stored: Vec<String> = routes
+            .hooks
+            .active_all()
+            .expect("rows")
+            .iter()
+            .filter(|row| row.hook.as_str() == "task.assign")
+            .map(|row| row.phase.as_str().to_owned())
+            .collect();
+        assert_eq!(active, stored);
+        assert_eq!(stored, vec!["bk".to_owned()]);
     }
 
     #[tokio::test]
@@ -733,6 +810,31 @@ mod tests {
         ));
         routes.hooks.fail_active_all.store(false, Ordering::SeqCst);
         assert_eq!(routes.hooks.active_all().expect("rows").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn register_refresh_failure_then_hooked_call_sees_the_row() {
+        let routes = routes();
+        let snapshot = routes.router.hooks.snapshot.clone().expect("snapshot");
+        routes.hooks.fail_active_all.store(true, Ordering::SeqCst);
+        let error = register(&routes, register_request("sender", "task.assign", "bk"))
+            .await
+            .expect_err("refresh failure is reported");
+        assert!(error.message().contains(
+            "registration committed; snapshot refresh failed; the next hooked call reloads it"
+        ));
+        routes.hooks.fail_active_all.store(false, Ordering::SeqCst);
+        let rows = snapshot
+            .current(
+                &routes.router.control_path_sync_bridge,
+                deadline(),
+                &team(),
+                &hook("task.assign"),
+            )
+            .await
+            .expect("the hooked call reloads the dirty snapshot");
+        let phases: Vec<&str> = rows.iter().map(|row| row.phase.as_str()).collect();
+        assert_eq!(phases, vec!["bk"]);
     }
 
     #[tokio::test]
