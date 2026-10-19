@@ -186,6 +186,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-3`: this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships
 - `atm-bj-4`: this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships
 - `atm-bj-1`: this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships
+- `atm-bj-5`: this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships
 
 Fixtures:
 - pass: The sprint changes only the new atm-bd code and leaves everything v0.16.1 ships untouched.

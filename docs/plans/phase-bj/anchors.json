@@ -295,6 +295,13 @@
           "item": "atm-bj-1",
           "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T01:47:08+00:00",
+          "event": "excluded",
+          "item": "atm-bj-5",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -312,6 +319,10 @@
         },
         {
           "item": "atm-bj-1",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships"
+        },
+        {
+          "item": "atm-bj-5",
           "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships"
         }
       ]
