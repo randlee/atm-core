@@ -945,7 +945,12 @@ mod tests {
         )
         .await
         .expect_err("non-object custom");
-        assert!(non_object.is_validation() || non_object.code() == AtmErrorCode::HookModuleInvalid);
+        assert_eq!(non_object.code(), AtmErrorCode::HookModuleInvalid);
+        assert!(
+            non_object
+                .message()
+                .contains("custom must be an object of at most")
+        );
         let oversize = json!({"x": "x".repeat(atm_core::hook::HOOK_CUSTOM_MAX_BYTES)});
         let over = register(
             &routes,
@@ -978,31 +983,74 @@ mod tests {
 
     #[tokio::test]
     async fn oversize_name_args_and_paths_refused() {
+        // Returns the refusal, failing the test if the call was accepted.
+        fn expect_refused<T>(
+            result: Result<T, atm_core::error::AtmError>,
+            what: &str,
+        ) -> atm_core::error::AtmError {
+            match result {
+                Ok(_) => panic!("{what} must be refused"),
+                Err(error) => error,
+            }
+        }
         let routes = routes();
-        let mut long_name = cron_request("sender", 1_000, json!({}));
-        long_name.name = "n".repeat(atm_core::hook::CRON_NAME_MAX_BYTES + 1);
-        assert!(
-            routes
-                .router
-                .cron_start(long_name, AuthenticatedIngress::Local)
-                .await
-                .is_err()
-        );
-        let mut many_args = cron_request("sender", 1_000, json!({}));
-        many_args.args = vec!["a".to_owned(); atm_core::hook::CRON_ARGS_MAX + 1];
-        assert!(
-            routes
-                .router
-                .cron_start(many_args, AuthenticatedIngress::Local)
-                .await
-                .is_err()
-        );
-        let mut long_path = register_request("sender", "task.assign", "bk");
-        long_path.module_path = std::path::PathBuf::from(format!(
+        let path_over_cap = std::path::PathBuf::from(format!(
             "/{}",
             "p".repeat(atm_core::hook::HOOK_PATH_MAX_BYTES)
         ));
-        assert!(register(&routes, long_path).await.is_err());
+        let mut long_name = cron_request("sender", 1_000, json!({}));
+        long_name.name = "n".repeat(atm_core::hook::CRON_NAME_MAX_BYTES + 1);
+        let error = expect_refused(
+            routes
+                .router
+                .cron_start(long_name, AuthenticatedIngress::Local)
+                .await,
+            "a cron name over the cap",
+        );
+        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
+        assert!(error.message().contains(&format!(
+            "name must contain 1..={} bytes",
+            atm_core::hook::CRON_NAME_MAX_BYTES
+        )));
+        let mut many_args = cron_request("sender", 1_000, json!({}));
+        many_args.args = vec!["a".to_owned(); atm_core::hook::CRON_ARGS_MAX + 1];
+        let error = expect_refused(
+            routes
+                .router
+                .cron_start(many_args, AuthenticatedIngress::Local)
+                .await,
+            "cron args over the item cap",
+        );
+        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
+        assert!(error.message().contains(&format!(
+            "args must contain at most {} items",
+            atm_core::hook::CRON_ARGS_MAX
+        )));
+        let mut long_register = register_request("sender", "task.assign", "bk");
+        long_register.module_path = path_over_cap.clone();
+        let error = expect_refused(
+            register(&routes, long_register).await,
+            "a register module_path over the cap",
+        );
+        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
+        assert!(error.message().contains(&format!(
+            "module_path must be at most {} bytes",
+            atm_core::hook::HOOK_PATH_MAX_BYTES
+        )));
+        let mut long_cron = cron_request("sender", 1_000, json!({}));
+        long_cron.module_path = path_over_cap;
+        let error = expect_refused(
+            routes
+                .router
+                .cron_start(long_cron, AuthenticatedIngress::Local)
+                .await,
+            "a cron module_path over the cap",
+        );
+        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
+        assert!(error.message().contains(&format!(
+            "module_path must be at most {} bytes",
+            atm_core::hook::HOOK_PATH_MAX_BYTES
+        )));
         assert!(routes.hooks.active_all().expect("rows").is_empty());
         assert!(routes.cron.calls.lock().expect("calls").is_empty());
     }
