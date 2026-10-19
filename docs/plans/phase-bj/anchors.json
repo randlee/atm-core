@@ -3081,7 +3081,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "When a dev or fix bead closes, the group's sanity bead must be assigned to the dev-sanity member with the sanity template and vars without any lead action: by the dev's close hook in the same shell command as bd close, and by atm-bd when bd ready lists the sanity bead with no ATM task.",
-      "quote": "the first issue to solve is mechanical.  when dev or fix bd is closed, sanity 'bd ready' is true.  the atm-bd cron/console will 'atm task assign <bead-id> <sanity-agent> --template <template> --args <vars> automatically.  This assignment must be done --as <phase-lead>",
+      "quote": "the first issue to solve is mechanical.  when dev or fix bd is closed, sanity 'bd ready' is true.  the atm-bd cron/console will 'atm task assign <bead-id> <sanity-agent> --template <template> --args <vars> automatically.  This assignment must be done --as <phase-lead>\n\"the atm-task-close hook would immediately call 'atm task assign' and 'bd close'\" (from ANC-061's quote)\nyes, this is an intentional race condition.  In reality it is more of a backup plan",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
@@ -3171,6 +3171,15 @@
           "item": "atm-bj-4",
           "reason": "bj-4 plans only the atm-bd dispatch read order of ANC-061; the close-hook assignment path of ANC-052 is bj-1, which satisfies ANC-052, and the sealed ANC-052 addressed question requires both paths in one item (the two-path reading is the ANC-052 clarity item for Rand)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:23:08+00:00",
+          "event": "updated",
+          "fields": [
+            "quote"
+          ],
+          "reason": "drift finding 4: the close-hook path came from ANC-061's quote; Rand 2026-10-18 confirmed the hook assigns first and atm-bd is the backup",
+          "approved_by": "Rand"
         }
       ],
       "exclude": [

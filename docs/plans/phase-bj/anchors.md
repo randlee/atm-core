@@ -1095,6 +1095,8 @@ Fixtures:
 Anchor: When a dev or fix bead closes, the group's sanity bead must be assigned to the dev-sanity member with the sanity template and vars without any lead action: by the dev's close hook in the same shell command as bd close, and by atm-bd when bd ready lists the sanity bead with no ATM task.
 
 > the first issue to solve is mechanical.  when dev or fix bd is closed, sanity 'bd ready' is true.  the atm-bd cron/console will 'atm task assign <bead-id> <sanity-agent> --template <template> --args <vars> automatically.  This assignment must be done --as <phase-lead>
+"the atm-task-close hook would immediately call 'atm task assign' and 'bd close'" (from ANC-061's quote)
+yes, this is an intentional race condition.  In reality it is more of a backup plan
 
 Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 2.
 
