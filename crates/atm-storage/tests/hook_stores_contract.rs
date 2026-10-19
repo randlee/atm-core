@@ -313,6 +313,8 @@ fn list_orders_active_first_then_registered_at_then_phase() {
         .expect("bk start");
     let tied = store.active(&team(), &hook("task.start")).expect("active");
     assert_eq!(phases(&tied), ["bk", "bl"]);
+    let listed = store.list(&team(), None).expect("list with tied times");
+    assert_eq!(phases(&listed), ["bl", "bk", "bk", "bl", "bj"]);
 }
 
 #[test]
@@ -487,13 +489,38 @@ fn active_all_order_equals_active_order_for_every_key() {
             stamp(2),
         ))
         .expect("bl");
+    for (team_name, hook_name) in [
+        ("test-team", "task.start"),
+        ("test-team-z", "task.close"),
+        ("test-team-z", "task.start"),
+    ] {
+        for (phase_id, day) in [("bl", 2), ("bk", 2), ("bj", 1)] {
+            store
+                .register(registration(
+                    team_name,
+                    phase_id,
+                    hook_name,
+                    "/a.py",
+                    stamp(day),
+                ))
+                .expect("register");
+        }
+    }
     let all = store.active_all().expect("all");
-    let per_key = store.active(&team(), &hook("task.close")).expect("per key");
-    let filtered: Vec<HookRegistration> = all
-        .into_iter()
-        .filter(|row| row.hook.as_str() == "task.close")
-        .collect();
-    assert_eq!(filtered, per_key);
+    for team_name in ["test-team", "test-team-z"] {
+        for hook_name in ["task.close", "task.start"] {
+            let team = TeamName::from_validated(team_name);
+            let hook = hook(hook_name);
+            let per_key = store.active(&team, &hook).expect("per key");
+            assert_eq!(phases(&per_key), ["bj", "bk", "bl"]);
+            let filtered: Vec<HookRegistration> = all
+                .iter()
+                .filter(|row| row.team == team && row.hook == hook)
+                .cloned()
+                .collect();
+            assert_eq!(filtered, per_key);
+        }
+    }
 }
 
 #[test]
@@ -671,6 +698,12 @@ fn list_schedules_orders_active_first_then_created_at_then_phase() {
     store
         .start(cron_spec("early", StopCondition::Hook, stamp(2)))
         .expect("early");
+    let mut other_phase = cron_spec("zulu", StopCondition::Hook, stamp(2));
+    other_phase.phase = phase("bj");
+    store.start(other_phase).expect("earlier phase");
+    store
+        .start(cron_spec("alpha", StopCondition::Hook, stamp(2)))
+        .expect("earlier name");
     store
         .start(cron_spec("ended", StopCondition::Hook, stamp(1)))
         .expect("ended");
@@ -683,7 +716,7 @@ fn list_schedules_orders_active_first_then_created_at_then_phase() {
         .into_iter()
         .map(|row| row.name)
         .collect();
-    assert_eq!(names, ["early", "late", "ended"]);
+    assert_eq!(names, ["zulu", "alpha", "early", "late", "ended"]);
 }
 
 #[test]
