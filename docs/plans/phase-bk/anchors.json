@@ -7,7 +7,7 @@
       "id": "ANC-001",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "An active hook replaces the atm task subcommand call: atm runs the hook first, parses its JSON reply, and the subcommand's own logic runs only when the reply is pass-through.",
+      "statement": "An active hook replaces the atm task subcommand call: atm runs the hook first, parses its JSON reply, and the subcommand's own logic runs only when the reply is pass-through, or when every hook in the chain replies not-applicable.",
       "quote": "so the hooks replace the call. the hooks should return json which is processed by atm. We should be able to replace quite a few of (perhaps all) atm task subcommands.",
       "kind": "directive",
       "stated_by": "Rand",
@@ -15,10 +15,10 @@
       "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
       "summary": "Hook replaces the subcommand call; atm acts on its JSON reply",
       "scope": "adds or changes the request path of an atm task subcommand, the hook runner, or hook reply handling in atm-http-runtime or atm-daemon-bootstrap",
-      "deterministic_check": "a test registers a task.assign hook whose reply is success false and asserts the task ledger is unchanged and the command fails with the hook's message",
+      "deterministic_check": "a test registers a task.assign hook whose reply is {\"result\": \"refused\", \"message\": \"m\"} and asserts the task ledger is unchanged and the command fails with ATM_HOOK_REFUSED carrying m",
       "fixtures": {
         "pass": [
-          "The daemon router consults the active task.assign hook before admitting the assignment and parses the hook's JSON reply to decide whether the normal assign logic runs."
+          "HookedTaskCommands runs the active task.assign hook before calling inner and parses the hook's JSON reply to decide whether the normal assign logic runs."
         ],
         "fail": [
           "The daemon applies the task assignment to storage first and then notifies the hook of the result for logging."
@@ -57,7 +57,7 @@
           }
         }
       },
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -129,12 +129,29 @@
           "item": "bk-5",
           "reason": "replacing the subcommand call with the hook and acting on its reply is bk-3's router; bk-5 adds the registry and cron commands and the doctor section",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "An active hook replaces the atm task subcommand call: atm runs the hook first, parses its JSON reply, and the subcommand's own logic runs only when the reply is pass-through."
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "excluded",
+          "item": "bk-2",
+          "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher",
+          "replaced": true
         }
       ],
       "exclude": [
         {
           "item": "bk-2",
-          "reason": "bk-2 defines the HookReply parse and action envelope only; running, refusing, passing through or dispatching in the subcommand path is bk-3's router work"
+          "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher"
         },
         {
           "item": "bk-4",
@@ -254,10 +271,10 @@
       "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
       "summary": "One JSON request schema with caller info for every hook",
       "scope": "adds or changes the hook request type, its serialization, or what the hook runner writes to the hook's stdin",
-      "deterministic_check": "one test serializes HookRequest for all six task hooks and cron.tick and asserts the same top-level keys: schema_version, hook, team, phase, caller, request, custom",
+      "deterministic_check": "one test serializes HookRequest for all six task hooks, cron.tick and cron.stop and asserts the same top-level keys: schema_version, hook, team, phase, caller, request, custom; for each task hook request equals the bare HTTP body the CLI sends",
       "fixtures": {
         "pass": [
-          "HookRequest { schema_version, hook, team, phase, caller: CallerInfo { identity, team, host }, request, custom } is written to the hook's stdin for every task hook and for cron.tick."
+          "HookRequest { schema_version, hook, team, phase, caller: HookCaller { identity, team, host }, request: <bare HTTP body>, custom } is written to the hook's stdin for every task hook, cron.tick and cron.stop."
         ],
         "fail": [
           "Each task subcommand writes its own ad-hoc JSON to the hook, and the caller identity is passed only as an environment variable."
@@ -296,7 +313,7 @@
           }
         }
       },
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -330,6 +347,14 @@
           "item": "bk-5",
           "reason": "the one request schema is bk-2's HookRequest; bk-5 sends no hook request",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -347,25 +372,25 @@
       "id": "ANC-004",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "A success false reply must stop the subcommand before any of its logic runs, with the reply's message returned to the caller as the command error.",
+      "statement": "A refused reply must stop the subcommand before any of its logic runs, with the reply's message returned to the caller as the command error.",
       "quote": "if 'bd ready' false, atm-task-assign hook returns false and message to caller i.e. { success = \"false\" message=\"bead {bead-id} is not ready\" }",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
       "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
-      "summary": "success false reply refuses the command with the hook's message",
+      "summary": "refused reply refuses the command with the hook's message",
       "scope": "adds or changes hook reply parsing, the refused path, or the error output of a hooked task subcommand",
-      "deterministic_check": "a hook fixture prints {\"success\": false, \"message\": \"bead x is not ready\"}; the test asserts no task row is written and the error carries that message",
+      "deterministic_check": "a hook fixture prints {\"result\": \"refused\", \"message\": \"bead x is not ready\"}; the test asserts no task row is written and the ATM_HOOK_REFUSED error carries exactly that message",
       "fixtures": {
         "pass": [
-          "A reply of {\"success\": false, \"message\": \"bead atm-bk-1 is not ready\"} makes atm task assign exit non-zero with that message and writes nothing to the task ledger."
+          "A reply of {\"result\": \"refused\", \"message\": \"bead atm-bk-1 is not ready\"} makes atm task assign exit non-zero with ATM_HOOK_REFUSED carrying that message and writes nothing to the task ledger."
         ],
         "fail": [
-          "When the hook replies success false, atm logs a warning and continues with the normal assignment."
+          "When the hook replies refused, atm logs a warning and continues with the normal assignment."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -426,12 +451,30 @@
           "item": "bk-5",
           "reason": "the refused path is bk-3's router; bk-5 adds no task subcommand logic",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "A success false reply must stop the subcommand before any of its logic runs, with the reply's message returned to the caller as the command error."
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "excluded",
+          "item": "bk-2",
+          "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher",
+          "replaced": true
         }
       ],
       "exclude": [
         {
           "item": "bk-2",
-          "reason": "bk-2 defines the HookReply parse and action envelope only; running, refusing, passing through or dispatching in the subcommand path is bk-3's router work"
+          "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher"
         },
         {
           "item": "bk-1",
@@ -447,21 +490,21 @@
       "id": "ANC-005",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "When a hook replies success true with no atm-action list, atm runs the subcommand's normal logic with the original request, giving the same result as when no hook is registered.",
+      "statement": "When a hook replies pass-through, atm runs the subcommand's normal logic with the original request, giving the same result as when no hook is registered.",
       "quote": "or if 'bd ready' the hook either retruns { success = \"true\" } and atm proceeds w/ normal atm task assign logic",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
       "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
-      "summary": "success true without actions = normal subcommand behavior",
+      "summary": "pass-through reply = normal subcommand behavior",
       "scope": "adds or changes hook reply parsing or the pass-through path of a hooked task subcommand",
-      "deterministic_check": "a test with a hook replying {\"success\": true} asserts the resulting task row equals the row produced with no hook registered",
+      "deterministic_check": "a test with a hook replying {\"result\": \"pass-through\"} asserts the resulting task row equals the row produced with no hook registered",
       "fixtures": {
         "pass": [
-          "On {\"success\": true} the router falls through to the existing task-assign admission path with the caller's original request unchanged."
+          "On {\"result\": \"pass-through\"} HookedTaskCommands calls inner (NormalTaskCommands) with the caller's original request unchanged."
         ],
         "fail": [
-          "On {\"success\": true} the router reports success to the CLI without performing the assignment."
+          "On {\"result\": \"pass-through\"} the filter reports success to the CLI without performing the assignment."
         ]
       },
       "question_overrides": {
@@ -469,11 +512,11 @@
           "questions": {
             "addressed": {
               "criteria": {
-                "no": "The item does not state that behaviour: it is silent about the success-true reply, only names the case or a branch without saying what happens, covers only other replies such as refusals or action lists, or describes a different outcome for that reply.",
-                "unclear": "The item describes what happens on a success-true reply in words that may or may not mean the normal logic runs on the original request.",
-                "yes": "The item states that a success-true reply without actions leads atm to run the subcommand's normal or existing logic on the request as received (falls through, proceeds, continues, runs the unhooked path), or plans a test that the outcome equals the outcome with no hook registered."
+                "no": "The item does not state that behaviour: it is silent about the pass-through reply, only names the case or a branch without saying what happens, covers only other replies such as refusals or action lists, or describes a different outcome for that reply.",
+                "unclear": "The item describes what happens on a pass-through reply in words that may or may not mean the normal logic runs on the original request.",
+                "yes": "The item states that a pass-through reply leads atm to run the subcommand's normal or existing logic on the request as received (falls through, proceeds, continues, runs the unhooked path), or plans a test that the outcome equals the outcome with no hook registered."
               },
-              "instructions": "`anchor.statement` requires that when a hook replies {\"success\": true} with no actions list, atm runs the subcommand's normal logic with the caller's original request, giving the same result as with no hook registered. Does `item.text` state this behaviour for that reply? Judge presence of this behaviour only, not whether something in the item conflicts with it.",
+              "instructions": "`anchor.statement` requires that when a hook replies {\"result\": \"pass-through\"}, atm runs the subcommand's normal logic with the caller's original request, giving the same result as with no hook registered. Does `item.text` state this behaviour for that reply? Judge presence of this behaviour only, not whether something in the item conflicts with it.",
               "type": "choice"
             },
             "contradicted": {
@@ -482,7 +525,7 @@
                 "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
                 "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
               },
-              "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only. For this anchor, examples of contradiction are: on a success-true reply without actions the item reports success without doing the work, changes the request before running it, bypasses part of the normal logic, or rejects the reply. Handling a success-false reply or a reply with an actions list is not a contradiction.",
+              "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only. For this anchor, examples of contradiction are: on a pass-through reply the item reports success without doing the work, changes the request before running it, bypasses part of the normal logic, or rejects the reply. Handling a refused, not-applicable or handled reply is not a contradiction.",
               "type": "choice"
             },
             "relevant": {
@@ -491,13 +534,13 @@
                 "unclear": "The item mentions hooks, but it cannot be told whether it touches how atm handles a hook's reply.",
                 "yes": "The item adds, changes or tests hook reply parsing, or what atm does after a hook replies for an `atm task` subcommand."
               },
-              "instructions": "Does `item.text` describe work on how atm handles a hook's reply for a hooked `atm task` subcommand (assign, start, close, move, list, events)? This includes parsing the hook's JSON reply, deciding what atm does for a success, refusal or action-list reply, and the path by which atm continues to the subcommand's own logic after its hook returns. Judge subject matter only, not whether the item handles the reply correctly.",
+              "instructions": "Does `item.text` describe work on how atm handles a hook's reply for a hooked `atm task` subcommand (assign, start, close, move, list, events)? This includes parsing the hook's JSON reply, deciding what atm does for a handled, pass-through, not-applicable or refused reply, and the path by which atm continues to the subcommand's own logic after its hook returns. Judge subject matter only, not whether the item handles the reply correctly.",
               "type": "choice"
             }
           }
         }
       },
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -550,12 +593,38 @@
           "item": "bk-5",
           "reason": "pass-through is bk-3's router path; bk-5 adds no task subcommand logic",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "When a hook replies success true with no atm-action list, atm runs the subcommand's normal logic with the original request, giving the same result as when no hook is registered."
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "updated",
+          "fields": [
+            "question_overrides"
+          ],
+          "note": "literal reply-shape names replaced after Rand 2026-10-18 reply-enum ruling (success true -> pass-through); criteria otherwise unchanged; not tuning"
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "excluded",
+          "item": "bk-2",
+          "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher",
+          "replaced": true
         }
       ],
       "exclude": [
         {
           "item": "bk-2",
-          "reason": "bk-2 defines the HookReply parse and action envelope only; running, refusing, passing through or dispatching in the subcommand path is bk-3's router work"
+          "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher"
         },
         {
           "item": "bk-1",
@@ -571,25 +640,25 @@
       "id": "ANC-006",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "A success true reply with an atm-action array must make atm run each action in array order instead of the original subcommand's logic.",
+      "statement": "A handled reply with an atm-action array must make atm run each action in array order instead of the original subcommand's logic.",
       "quote": "OR the hook returns what to do { success = \"true\" atm-action[] = { action-1, action-2 } } where action-1 and action-2 would be atm json commands. i.e. action-1 could be exactly the same command that was input, action-2 could be 'atm send omega-prime@hermes <escelation-message>'.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
       "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
-      "summary": "success true with atm-action runs the actions instead of the subcommand",
+      "summary": "handled reply with atm-action runs the actions instead of the subcommand",
       "scope": "adds or changes hook reply parsing or action dispatch",
-      "deterministic_check": "a test with a reply carrying two actions asserts both ran in order and the original request was not applied",
+      "deterministic_check": "a test with a handled reply carrying two actions asserts both ran in order and the original request was not applied",
       "fixtures": {
         "pass": [
-          "On {\"success\": true, \"atm-action\": [...]} the router dispatches each action in array order through the internal command path and does not run the original assign logic."
+          "On {\"result\": \"handled\", \"atm-action\": [...]} the filter dispatches each action in array order into the normal path below the filter (any routed command except the hook and cron registry commands) and does not run the original assign logic."
         ],
         "fail": [
-          "The router runs the original assignment first and then runs the atm-action list as a follow-up."
+          "The filter runs the original assignment first and then runs the atm-action list as a follow-up."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -650,12 +719,30 @@
           "item": "bk-5",
           "reason": "action dispatch is bk-3's router; bk-5 adds no task subcommand logic",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "A success true reply with an atm-action array must make atm run each action in array order instead of the original subcommand's logic."
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "excluded",
+          "item": "bk-2",
+          "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher",
+          "replaced": true
         }
       ],
       "exclude": [
         {
           "item": "bk-2",
-          "reason": "bk-2 defines the HookReply parse and action envelope only; running, refusing, passing through or dispatching in the subcommand path is bk-3's router work"
+          "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher"
         },
         {
           "item": "bk-1",
@@ -682,14 +769,14 @@
       "deterministic_check": "a test deserializes an atm-action entry's request field with the same serde type the HTTP route handler for that command uses",
       "fixtures": {
         "pass": [
-          "An atm-action entry is {\"command\": \"task.assign\", \"as\": \"team-lead\", \"request\": <the HTTP task-assign request body>} and is parsed with the HTTP route's request type."
+          "An atm-action entry is {\"command\": \"<any routed command except hook.* and cron.*>\", \"as\": \"team-lead\", \"request\": <that route's bare HTTP body>} and is turned into the ApiRequest the HTTP handler builds for that route."
         ],
         "fail": [
           "Actions are shell command strings such as \"atm send omega-prime hello\" that the daemon splits and executes."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -742,12 +829,26 @@
           "item": "bk-5",
           "reason": "the action entry type is bk-2's HookAction; bk-5 parses no reply",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "excluded",
+          "item": "bk-4",
+          "reason": "the atm-action type and its parse are bk-2's HookAction and HookReply; bk-4 hands the actions to bk-2's HookActionDispatcher trait, implemented by bk-3",
+          "replaced": true
         }
       ],
       "exclude": [
         {
           "item": "bk-4",
-          "reason": "the atm-action entry type and its deserialization are bk-1's HookAction and bk-3's dispatch_hook_reply; bk-4 calls the wrapper"
+          "reason": "the atm-action type and its parse are bk-2's HookAction and HookReply; bk-4 hands the actions to bk-2's HookActionDispatcher trait, implemented by bk-3"
         },
         {
           "item": "bk-1",
@@ -774,14 +875,14 @@
       "deterministic_check": "a test whose task.assign hook returns an atm-action task.assign asserts the hook process was spawned exactly once",
       "fixtures": {
         "pass": [
-          "Actions returned by a hook are dispatched with hooks disabled, so a task.assign action from the task.assign hook does not spawn the hook again."
+          "Actions returned by a hook enter the normal path below the hook filter, so a task.assign action from the task.assign hook does not spawn the hook again; there is no hooks-disabled flag, nesting variable or header."
         ],
         "fail": [
           "Each atm-action entry is executed as a full CLI request, so a task.assign action consults the task.assign hook again."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -834,20 +935,48 @@
           "item": "bk-5",
           "reason": "hooks-disabled dispatch is bk-3's router flag; bk-5 dispatches no action",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "excluded",
+          "item": "bk-2",
+          "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher",
+          "replaced": true
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "excluded",
+          "item": "bk-1",
+          "reason": "actions enter bk-3's normal path below the hook filter; bk-1 has no dispatch path",
+          "replaced": true
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "excluded",
+          "item": "bk-5",
+          "reason": "actions enter bk-3's normal path below the hook filter; bk-5 has no dispatch path",
+          "replaced": true
         }
       ],
       "exclude": [
         {
           "item": "bk-2",
-          "reason": "bk-2 defines the HookReply parse and action envelope only; running, refusing, passing through or dispatching in the subcommand path is bk-3's router work"
+          "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher"
         },
         {
           "item": "bk-1",
-          "reason": "hooks-disabled dispatch is bk-3's router flag; bk-1 has no dispatch path"
+          "reason": "actions enter bk-3's normal path below the hook filter; bk-1 has no dispatch path"
         },
         {
           "item": "bk-5",
-          "reason": "hooks-disabled dispatch is bk-3's router flag; bk-5 dispatches no action"
+          "reason": "actions enter bk-3's normal path below the hook filter; bk-5 has no dispatch path"
         }
       ]
     },
@@ -915,16 +1044,30 @@
           "item": "bk-5",
           "reason": "the as field is bk-2's HookAction::envelope and bk-3's dispatch; bk-5 dispatches no action",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "excluded",
+          "item": "bk-1",
+          "reason": "the as field is bk-2's HookAction::into_api_request; bk-1 has no action type",
+          "replaced": true
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "excluded",
+          "item": "bk-5",
+          "reason": "the as field is bk-2's HookAction::into_api_request and bk-3's dispatch; bk-5 dispatches no action",
+          "replaced": true
         }
       ],
       "exclude": [
         {
           "item": "bk-1",
-          "reason": "the as field is bk-2's HookAction::envelope; bk-1 has no action type"
+          "reason": "the as field is bk-2's HookAction::into_api_request; bk-1 has no action type"
         },
         {
           "item": "bk-5",
-          "reason": "the as field is bk-2's HookAction::envelope and bk-3's dispatch; bk-5 dispatches no action"
+          "reason": "the as field is bk-2's HookAction::into_api_request and bk-3's dispatch; bk-5 dispatches no action"
         }
       ]
     },
@@ -943,14 +1086,14 @@
       "deterministic_check": "rg -n '\"bd\"|\\.beads' crates/ matches nothing new on the sprint diff",
       "fixtures": {
         "pass": [
-          "The hook runner passes the bead id in the request and leaves every bd ready and bd close call to the hook module."
+          "The hook request carries only the bare body; every bd call happens in the hook module."
         ],
         "fail": [
           "atm task assign runs bd ready itself before consulting the hook."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -999,6 +1142,13 @@
           "item": "bk-5",
           "reason": "bk-5's commands send envelopes and read TIMEOUT_MS; no bd call is possible from them, and the rule's code-level check is bk-3's",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -1031,14 +1181,14 @@
       "deterministic_check": "a test registers a module file without TIMEOUT_MS and asserts a typed refusal; with TIMEOUT_MS = 1000 the row's timeout_ms is 1000",
       "fixtures": {
         "pass": [
-          "atm hook register parses TIMEOUT_MS = <int> from the module file, writes it to hook_registration.timeout_ms, and fails with HOOK.NO_TIMEOUT when the constant is absent."
+          "atm hook register parses TIMEOUT_MS = <int> from the module file, writes it to hook_registration.timeout_ms, and fails with ATM_HOOK_MODULE_INVALID when the constant is absent, zero, duplicated or above HOOK_TIMEOUT_MAX_MS (2500)."
         ],
         "fail": [
           "The hook timeout is a daemon-wide setting in ~/.atm.toml and the module declares nothing."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1130,6 +1280,13 @@
           "item": "bk-3",
           "reason": "reading TIMEOUT_MS and refusing a module without it is bk-5's register command; bk-3's route validates the hook name only",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -1155,15 +1312,15 @@
       "id": "ANC-012",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The hook runner uses the registration's timeout_ms as the hook call's deadline: a hook still running at the deadline is killed and the command fails with HOOK.TIMEOUT.",
+      "statement": "The hook runner must kill a hook still running at its timeout_ms deadline, at most 2500 ms for a task hook and 30000 ms for a cron tick or stop check, and fail the command with ATM_HOOK_TIMEOUT.",
       "quote": "This allows the hook to KNOW when it's caller will timeout so it can set a shorted timeout to complete w/out error.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
       "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal) (point 7, second sentence)",
-      "summary": "Runner enforces timeout_ms, kills the hook, fails with HOOK.TIMEOUT",
+      "summary": "Runner enforces timeout_ms, kills the hook, fails with ATM_HOOK_TIMEOUT",
       "scope": "adds or changes the hook runner's process spawn, wait, or deadline handling",
-      "deterministic_check": "a paused-clock test with a sleeping fixture hook and timeout_ms 100 asserts the child is killed and the error code is HOOK.TIMEOUT",
+      "deterministic_check": "a paused-clock test with a sleeping fixture hook and timeout_ms 100 asserts the child is killed and the error code is ATM_HOOK_TIMEOUT",
       "fixtures": {
         "pass": [
           "HookRunner spawns the module with kill_on_drop, waits with tokio::time::timeout(timeout_ms), kills on expiry and returns AtmErrorCode::HookTimeout."
@@ -1173,7 +1330,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1226,6 +1383,24 @@
           "item": "bk-5",
           "reason": "deadline enforcement is bk-3's DaemonHookRunner; bk-5 spawns no hook",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check"
+          ],
+          "previous_statement": "The hook runner uses the registration's timeout_ms as the hook call's deadline: a hook still running at the deadline is killed and the command fails with HOOK.TIMEOUT."
+        },
+        {
+          "at": "2026-10-19T02:26:03+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "The hook runner uses the registration's timeout_ms as the hook call's deadline: a hook still running at the deadline is killed and the command fails with ATM_HOOK_TIMEOUT. For a task hook the deadline is at most 2500 ms; a cron tick or stop check uses the schedule's timeout_ms, at most 30000 ms."
         }
       ],
       "exclude": [
@@ -1247,7 +1422,7 @@
       "id": "ANC-013",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Each of the six atm task subcommands (assign, start, close, move, list, events) must have its own hook name and consult its registered hook.",
+      "statement": "Each of the six atm task subcommands (assign, start, close, move, list, events) must have its own hook name, equal to its TaskCommands method, and consult its registered hook.",
       "quote": "assign,start,close are natural to override w/ hooks. we might as well hook the others",
       "kind": "directive",
       "stated_by": "Rand",
@@ -1255,17 +1430,17 @@
       "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
       "summary": "All six atm task subcommands are hookable",
       "scope": "adds or changes the hook name enum, the router's hook lookup, or any task subcommand's request path",
-      "deterministic_check": "the hook name enum has task.assign, task.start, task.close, task.move, task.list, task.events and cron.tick; one test per subcommand asserts the hook is consulted",
+      "deterministic_check": "the hook name enum has task.assign, task.start, task.close, task.move, task.list, task.events, cron.tick and cron.stop; one test per TaskCommands method asserts that method consults only its own hook",
       "fixtures": {
         "pass": [
-          "HookName covers task.assign, task.start, task.close, task.move, task.list and task.events, and the router resolves the hook for each of the six before running it."
+          "HookName covers the six task names, and HookedTaskCommands resolves the hook for each of its six methods before calling inner."
         ],
         "fail": [
           "Only task.assign, task.start and task.close consult a hook; move, list and events are unhooked."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1314,6 +1489,16 @@
           "item": "bk-4",
           "reason": "bk-4 adds no task subcommand hook and does not change the hook name enum or the router's hook lookup; it only consumes cron.tick and cron.stop from bk-1 and bk-2 (not_applicable 0.76 in round 1, relevant-no 0.46 in round 3)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "Each of the six atm task subcommands (assign, start, close, move, list, events) must have its own hook name and consult its registered hook."
         }
       ],
       "exclude": [
@@ -1335,7 +1520,7 @@
       "id": "ANC-014",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "A task subcommand with no active hook for the caller's team and phase must run its existing logic unchanged and report no hook-related warning or error.",
+      "statement": "A task subcommand with no active hook for the caller's team must run its existing logic unchanged and report no hook-related warning or error.",
       "quote": "since all hooks would be optional (defaulting to normal behavior in the case of missing), I don't see much risk.",
       "kind": "directive",
       "stated_by": "Rand",
@@ -1343,17 +1528,17 @@
       "context": "atm-core #1873 comment 2026-10-18T23:04Z (Rand, round 2)",
       "summary": "Missing hook = today's behavior, no error",
       "scope": "adds or changes hook lookup or the task subcommand request paths",
-      "deterministic_check": "the existing task CLI integration tests pass with no hook_registration rows and their output is unchanged; the router's request path makes no hook_registration store call (the in-memory snapshot is the only lookup; store call counter 0 after construction)",
+      "deterministic_check": "the existing task CLI integration tests pass with no hook_registration rows and their output is unchanged; the filter's request path makes no hook_registration store call (the in-memory snapshot is the only lookup; store call counter 0 after construction)",
       "fixtures": {
         "pass": [
-          "When no registration is active for the request in the router's in-memory snapshot, the router runs the existing admission path with no store read and the CLI output is unchanged from the pre-hook release."
+          "When no registration is active for the caller's team and hook in the filter's in-memory snapshot, HookedTaskCommands calls inner with no store read and the CLI output is unchanged from the pre-hook release."
         ],
         "fail": [
-          "atm task assign fails with HOOK.MISSING when no hook is registered for the team."
+          "atm task assign fails with a missing-hook error when no hook is registered for the team."
         ]
       },
       "question_overrides": {},
-      "version": 4,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1441,12 +1626,29 @@
           "item": "bk-5",
           "reason": "the no-hook default is bk-3's snapshot path; bk-5 touches no task subcommand",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "A task subcommand with no active hook for the caller's team and phase must run its existing logic unchanged and report no hook-related warning or error."
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "excluded",
+          "item": "bk-2",
+          "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher",
+          "replaced": true
         }
       ],
       "exclude": [
         {
           "item": "bk-2",
-          "reason": "bk-2 defines the HookReply parse and action envelope only; running, refusing, passing through or dispatching in the subcommand path is bk-3's router work"
+          "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher"
         },
         {
           "item": "bk-4",
@@ -1474,17 +1676,17 @@
       "context": "atm-core #1873 comment 2026-10-18T23:15Z (Rand, round 3: no sha header)",
       "summary": "atm doctor calls hook.doctor() for the registered team",
       "scope": "adds or changes atm doctor, the doctor report sections, or doctor's use of the hook runner",
-      "deterministic_check": "a test with an active registration for team T whose doctor() returns {\"success\": true, \"message\": \"ok\"} asserts run_doctor for T has a hooks section containing that reply",
+      "deterministic_check": "a test with an active registration for team T, phase P whose doctor(request) returns {\"success\": true, \"message\": \"ok\", \"findings\": [one warning]} asserts the module's stdin carried team T, phase P and the row's custom, and run_doctor for T has one hooks entry with team T, phase P, that message and that finding",
       "fixtures": {
         "pass": [
-          "atm doctor adds a hooks section listing each active registration of the caller's team with the JSON reply of the module's doctor() call."
+          "atm doctor adds a hooks section with one entry per (module_path, cwd, team, phase) among the caller team's active registrations and schedules, each carrying the module's doctor(request) reply: success, message and findings in the fields of DoctorFinding."
         ],
         "fail": [
           "atm doctor lists the hook_registration rows but never executes the module."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1545,6 +1747,14 @@
           "item": "bk-3",
           "reason": "the atm doctor hooks section is bk-5; bk-3 implements the runner's doctor method only (ADR-068 D3 AC)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -2083,7 +2293,7 @@
       "id": "ANC-021",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "A cron tick's hook reply goes through the same reply handler as a task hook's: an atm-action list is dispatched through the same un-hooked action path, and success false is recorded as the tick outcome.",
+      "statement": "A cron tick's hook reply is parsed exactly as a task hook's reply: a handled reply's atm-action list is dispatched through the same un-hooked action path, and a refused reply is recorded as the tick outcome.",
       "quote": "the cron design would be 'atm cron' and it would run a hook (just like the atm task hooks) at a predefined interval AND return a set of atm commands just like we described above.",
       "kind": "directive",
       "stated_by": "Rand",
@@ -2091,17 +2301,17 @@
       "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal) (cron note)",
       "summary": "Cron reply actions use the task-hook action path",
       "scope": "adds or changes cron tick handling or hook reply handling",
-      "deterministic_check": "a test with a cron.tick reply carrying one send action asserts a persisted message and a last_outcome of success",
+      "deterministic_check": "a test with a cron.tick reply carrying one send action persists a message and last_outcome == \"actions: 1\"",
       "fixtures": {
         "pass": [
-          "The cron worker hands the tick reply to the same reply handler the task router uses, so returned actions are dispatched identically."
+          "The cron worker hands the tick's actions to the same HookActionDispatcher the task filter uses, so returned actions are dispatched identically."
         ],
         "fail": [
           "The cron worker only logs the hook's stdout and never executes returned actions."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2154,6 +2364,16 @@
           "item": "bk-5",
           "reason": "cron reply actions reach the task-hook dispatcher inside bk-4's tick; bk-5 only composes AtmCron",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:38+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "A cron tick's hook reply goes through the same reply handler as a task hook's: an atm-action list is dispatched through the same un-hooked action path, and success false is recorded as the tick outcome."
         }
       ],
       "exclude": [
@@ -2234,6 +2454,12 @@
           "item": "bk-4",
           "reason": "cron schedules have no owner-supplied custom (every cron request sends {}); the pass-through is bk-3's task path",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "exclusion_removed",
+          "item": "bk-4",
+          "note": "Rand 2026-10-18 custom ruling: schedules store --custom and every cron request carries it"
         }
       ],
       "exclude": [
@@ -2244,10 +2470,6 @@
         {
           "item": "bk-5",
           "reason": "the custom field is bk-2's HookRequest; bk-5 sends no hook request"
-        },
-        {
-          "item": "bk-4",
-          "reason": "cron schedules have no owner-supplied custom (every cron request sends {}); the pass-through is bk-3's task path"
         }
       ]
     },
@@ -2255,25 +2477,25 @@
       "id": "REQ-BK-D1",
       "source_type": "REQ",
       "source_ref": "REQ-BK-D1",
-      "statement": "The hook runner must start a hook with exactly the environment ATM_HOOK=1, ATM_TEAM, ATM_PHASE, PATH and HOME in the registered cwd, passing no other variable from the daemon's environment.",
-      "quote": "The hook runner starts a hook with exactly the environment ATM_HOOK=1, ATM_TEAM, ATM_PHASE, PATH and HOME in the registered cwd, and passes no other variable from the daemon's environment.",
+      "statement": "The hook runner must start a hook with exactly the environment ATM_TEAM, ATM_PHASE, PATH and HOME (plus SystemRoot and USERPROFILE on Windows) in the registered cwd, passing no other variable from the daemon's environment.",
+      "quote": "The child's environment must be exactly ATM_TEAM, ATM_PHASE, PATH, HOME (plus SystemRoot and USERPROFILE on Windows) after clearing the daemon's environment, with the registered cwd.",
       "kind": "directive",
       "stated_by": "fenix (design.md, PR #1877)",
       "stated_at": "2026-10-18",
       "context": "phase-bk design decision docs/plans/phase-bk/design.md §2.1 D-1 (fenix, PR #1877); not a Rand ruling",
-      "summary": "Fixed five-variable hook environment",
+      "summary": "Fixed four-variable hook environment",
       "scope": "adds or changes how the hook runner spawns the hook process",
-      "deterministic_check": "a fixture hook that prints its environment shows exactly those five variables",
+      "deterministic_check": "a fixture hook that prints its environment shows exactly those four variables on unix",
       "fixtures": {
         "pass": [
-          "HookRunner calls Command::env_clear() and sets ATM_HOOK, ATM_TEAM, ATM_PHASE, PATH and HOME, with current_dir set to the registration's cwd."
+          "DaemonHookRunner calls env_clear() and sets ATM_TEAM, ATM_PHASE, PATH and HOME, with current_dir set to the registration's cwd."
         ],
         "fail": [
-          "The hook inherits the daemon's full environment plus ATM_HOOK=1."
+          "The hook inherits the daemon's full environment."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2353,6 +2575,25 @@
           "item": "bk-5",
           "reason": "the spawn environment is bk-3's DaemonHookRunner; bk-5 spawns no process",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:39+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "The hook runner must start a hook with exactly the environment ATM_HOOK=1, ATM_TEAM, ATM_PHASE, PATH and HOME in the registered cwd, passing no other variable from the daemon's environment."
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "updated",
+          "fields": [
+            "quote"
+          ],
+          "note": "register text re-captured from docs/requirements.md section 23.3 after Rand 2026-10-18 rulings (ATM_HOOK=1 removed; four reply shapes; ATM_HOOK_* codes)"
         }
       ],
       "exclude": [
@@ -2386,17 +2627,17 @@
       "context": "phase-bk design decision docs/plans/phase-bk/design.md §3 D-3 (fenix, PR #1877); not a Rand ruling",
       "summary": "One daemon-side HookRunner; the CLI spawns nothing",
       "scope": "adds a hook-spawning code path in crates/atm or a second runner type",
-      "deterministic_check": "rg -n 'process::Command' crates/atm/src matches no hook code; HookRunner is constructed once in atm-daemon-bootstrap and handed to the router and the cron worker",
+      "deterministic_check": "crates/atm-architecture/tests/process_spawn_sites.rs pins tokio::process::Command::new to process_deadline.rs, atm-herdr transport_cli.rs and atm send_to.rs; DaemonHookRunner is constructed once in atm-daemon-bootstrap and handed to the router and to AtmCron",
       "fixtures": {
         "pass": [
-          "HookRunner lives in atm-daemon-bootstrap and is passed by Arc to both StorageAndNudgeRouter and CronWorker; the CLI only sends the request over the socket."
+          "DaemonHookRunner lives in atm-daemon-bootstrap and is passed by Arc to the HookedTaskCommands filter and to AtmCron; the CLI only sends the request over the socket."
         ],
         "fail": [
           "The atm CLI runs the hook module itself before sending the request to the daemon."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2423,6 +2664,14 @@
           "item": "bk-1",
           "reason": "the sealed HookRunner trait and the no-spawn CLI rule are bk-2 and bk-5; bk-1 is storage only",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:39+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -2654,25 +2903,25 @@
       "id": "REQ-BK-ERRORS",
       "source_type": "REQ",
       "source_ref": "REQ-BK-ERRORS",
-      "statement": "A hook that exits non-zero or replies with text that is not one of the three reply shapes fails the hooked command with HOOK.EXIT or HOOK.MALFORMED and runs no subcommand logic.",
-      "quote": "A hook that exits non-zero or replies with text that is not one of the three reply shapes fails the hooked command with HOOK.EXIT or HOOK.MALFORMED and runs no subcommand logic.",
+      "statement": "A hook that exits non-zero or replies with text that is not one of the four reply shapes fails the hooked command with ATM_HOOK_EXIT or ATM_HOOK_MALFORMED, returns that error to the caller and runs no subcommand logic.",
+      "quote": "A hook that exits non-zero or replies with text that is not one of the four reply shapes fails the hooked command with ATM_HOOK_EXIT or ATM_HOOK_MALFORMED, returns that error to the caller and runs no subcommand logic.",
       "kind": "directive",
       "stated_by": "fenix (design.md, PR #1877)",
       "stated_at": "2026-10-18",
       "context": "phase-bk design decision docs/plans/phase-bk/design.md §2.2 (fenix, PR #1877); not a Rand ruling",
       "summary": "Non-zero exit or malformed reply fails closed",
       "scope": "adds or changes hook reply parsing or exit-status handling",
-      "deterministic_check": "two tests: a fixture that exits 3 yields HOOK.EXIT; a fixture printing 'ok' yields HOOK.MALFORMED; neither writes a task row",
+      "deterministic_check": "two tests: a fixture that exits 3 yields ATM_HOOK_EXIT; a fixture printing 'ok' yields ATM_HOOK_MALFORMED; neither writes a task row",
       "fixtures": {
         "pass": [
-          "The runner maps a non-zero status to AtmErrorCode::HookExit and an unparsable stdout to AtmErrorCode::HookMalformed, and the router returns that error before admission."
+          "The runner maps a non-zero status to AtmErrorCode::HookExit and an unparsable stdout to AtmErrorCode::HookMalformed, and the filter returns that error without calling inner."
         ],
         "fail": [
           "A hook that prints nothing is treated as pass-through."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2713,12 +2962,37 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-19T02:25:39+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "A hook that exits non-zero or replies with text that is not one of the three reply shapes fails the hooked command with HOOK.EXIT or HOOK.MALFORMED and runs no subcommand logic."
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "updated",
+          "fields": [
+            "quote"
+          ],
+          "note": "register text re-captured from docs/requirements.md section 23.3 after Rand 2026-10-18 rulings (ATM_HOOK=1 removed; four reply shapes; ATM_HOOK_* codes)"
+        },
+        {
+          "at": "2026-10-19T02:26:19+00:00",
+          "event": "excluded",
+          "item": "bk-1",
+          "reason": "bk-1 defines the six ATM_HOOK_* and cron codes (ruling A) and raises constraint errors; fail-closed reply handling is bk-2's parse and bk-3's filter",
+          "replaced": true
         }
       ],
       "exclude": [
         {
           "item": "bk-1",
-          "reason": "the ATM_HOOK_* codes and fail-closed reply handling are bk-2 and bk-3; bk-1 raises only HookActive and constraint errors"
+          "reason": "bk-1 defines the six ATM_HOOK_* and cron codes (ruling A) and raises constraint errors; fail-closed reply handling is bk-2's parse and bk-3's filter"
         },
         {
           "item": "bk-5",
@@ -2738,17 +3012,17 @@
       "context": "phase-bk design decision docs/plans/phase-bk/design.md §3; ADR-067 (fenix, PR #1877); not a Rand ruling",
       "summary": "One ADR-067 log entry per hook call and per action",
       "scope": "adds or changes the hook runner, action dispatch, or their tracing",
-      "deterministic_check": "a tracing-capture test asserts one hook_call entry and one hook_action entry per action with the five fields",
+      "deterministic_check": "a tracing-capture test asserts one action=run entry and one action=action entry per action with the five fields",
       "fixtures": {
         "pass": [
-          "HookRunner emits tracing::info!(subsystem = \"hook\", team, phase, hook, outcome, elapsed_ms) once per call, and action dispatch emits one entry per action."
+          "HookedTaskCommands emits tracing::info!(subsystem = \"atm_hook\", action = \"run\", team, phase, hook, outcome, elapsed_ms) once per call, and the HookActionDispatcher emits one action = \"action\" entry per action; atm-cron emits subsystem = \"atm_cron\" tick and stop_check entries."
         ],
         "fail": [
           "Hook calls are logged only on failure."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2809,6 +3083,14 @@
           "item": "bk-5",
           "reason": "the per-run and per-action log entries are bk-3's runner and router and bk-4's worker; bk-5 logs nothing new",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:39+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -2938,17 +3220,17 @@
       "context": "phase-bk design decision docs/plans/phase-bk/design.md §4; ADR-061 (fenix, PR #1877); not a Rand ruling",
       "summary": "Two new tables as one ADR-061 minor schema bump",
       "scope": "adds or changes the storage schema or its migrations",
-      "deterministic_check": "the schema version constant increments by one minor; a test opens a pre-bump database and asserts both tables exist after migration",
+      "deterministic_check": "crates/atm-storage-rusqlite/tests/hook_schema.rs::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created: both tables are created by ensure_schema on an empty database and on one built from the pre-bk DDL, and the pre-bk statements still read and write",
       "fixtures": {
         "pass": [
-          "One migration adds hook_registration and cron_schedule and records the minor-bumped schema version; ADR-061's governed-interface table lists the bump."
+          "The existing ensure_schema migration path in atm-storage-rusqlite creates hook_registration and cron_schedule together and idempotently, and ADR-061's D6 record of 2026-10-18 lists both tables as one MINOR storage schema change."
         ],
         "fail": [
           "Each sprint adds its own table with its own schema-version bump."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -3008,6 +3290,21 @@
           "item": "bk-3",
           "reason": "the storage schema change is bk-1; bk-3 edits no storage crate",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:25:39+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T02:26:49+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ],
       "exclude": [

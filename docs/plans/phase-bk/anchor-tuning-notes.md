@@ -192,3 +192,39 @@ a behaviour a sprint can be judged on.
   spawn is the only subprocess bk-3 adds and that no bk-3 file calls `bd`
   or touches `.beads` (+127 characters, authority: locked ANC-010);
   re-run satisfied 0.92.
+
+## Round 7: ruled reply enum and filter (2026-10-19)
+
+Lock-time capture of Rand's 2026-10-18 rulings on #1873; no question was
+tuned and no anchor was added. Authority, verbatim: "we should add a 3-rd
+return type. instead of success=true/false which signals pass-through, we
+could return enum with { handled => run my actions, not-applicable,
+pass-through }"; "ahh, I forgot rufused, that is a significant one. same
+pattern works though"; "the return array of actions are then injectec into
+the normal input stream bypassing the hook-plug-in implementation";
+"adding ATM_HOOK=1 is a lot more logic branching"; "manformed hook MUST
+return hook failed to caller (error)"; "phases are INDEPENDENT entities";
+"the cron timeout would need to be much longer than the hook timeout. 2.5s
+is fine for hook"; "doctor would need to know team, phase and it would
+return a dict/array"; plus the ATM_HOOK_* code names of design §9.1.
+
+- Statements reworded to the four reply results, the filter, the
+  team-only lookup, the cron cap and the four-variable environment:
+  ANC-001, ANC-004, ANC-005, ANC-006, ANC-012, ANC-013, ANC-014, ANC-021,
+  REQ-BK-D1, REQ-BK-ERRORS (REQ quotes re-captured from requirements §23.3).
+- Checks and fixtures only: ANC-003, ANC-007, ANC-008, ANC-010, ANC-011,
+  ANC-015, REQ-BK-D3, REQ-BK-LOG, REQ-BK-SCHEMA (no schema version
+  constant exists; the record is ADR-061 D6).
+- ANC-005's sealed questions named `{"success": true}`; only those
+  reply-shape names were replaced, criteria otherwise unchanged.
+- Exclusion reasons corrected where they named the router flag, the
+  envelope or ATM_HOOK_ACTIVE; ANC-022's bk-4 exclusion removed (schedules
+  carry `--custom`).
+- check-fixtures: 38 of 38 as expected after REQ-BK-SCHEMA's pass fixture
+  was restated to name the existing migration path its statement requires.
+- Gate: bk-1 `plan-20261019T022704Z`, bk-2 `plan-20261019T022704Z`, bk-3
+  `plan-20261019T022720Z`, bk-4 `plan-20261019T022707Z`, bk-5
+  `plan-20261019T022705Z`; coverage 34/34. Remaining low cells (bk-2
+  REQ-BK-ERRORS; bk-3 ANC-021, REQ-BK-D3; bk-4 ANC-004, ANC-012, ANC-023,
+  ANC-024, REQ-BK-ERRORS, REQ-BK-LOG) go to the round-2 fix layer as
+  sprint-doc gaps; sprint docs were not edited in this round.
