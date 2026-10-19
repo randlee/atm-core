@@ -4922,6 +4922,13 @@
           "item": "atm-bj-3",
           "reason": "the sanity-fail message and the hook's FAIL branch are bj-1",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T01:11:07+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the sanity FAIL message and branch are bj-1; bj-4's tabs only read QA run and finding data already on beads",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -4932,6 +4939,10 @@
         {
           "item": "atm-bj-3",
           "reason": "the sanity-fail message and the hook's FAIL branch are bj-1"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "the sanity FAIL message and branch are bj-1; bj-4's tabs only read QA run and finding data already on beads"
         }
       ]
     },

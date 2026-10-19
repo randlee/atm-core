@@ -1535,6 +1535,7 @@ Deterministic check to pair with the development gate: a FAIL run in a scratch r
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-2`: the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only
 - `atm-bj-3`: the sanity-fail message and the hook's FAIL branch are bj-1
+- `atm-bj-4`: the sanity FAIL message and branch are bj-1; bj-4's tabs only read QA run and finding data already on beads
 
 Fixtures:
 - pass: The dev receives sanity-fail: sprint bj-2, deliverables 2 and 5 NOT complete with reasons; no beads are created.
