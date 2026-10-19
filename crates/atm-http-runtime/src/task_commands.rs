@@ -103,9 +103,9 @@ mod tests {
         }
     }
 
-    /// A reduced pass-through check: the installed normal commands answer with
-    /// the un-hooked response shapes. The full existing task suite runs unchanged
-    /// in the router tests, which build their router without a filter.
+    /// Pass-through check: the installed normal commands answer with the
+    /// un-hooked response shapes. The router task tests run the same body with
+    /// `NormalTaskCommands` installed (`*_through_normal_task_commands`).
     #[tokio::test]
     async fn existing_task_tests_pass_through_normal_task_commands() {
         let fixture = fixture(true, None, None);

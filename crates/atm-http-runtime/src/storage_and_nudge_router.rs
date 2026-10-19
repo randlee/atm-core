@@ -1607,9 +1607,36 @@ pub(crate) mod tests {
         )
     }
 
-    #[tokio::test]
-    async fn router_peer_ingress_rejects_task_move() {
-        let fixture = fixture(true, None, None);
+    /// Installs `NormalTaskCommands` over this fixture's router when `through` is
+    /// set, so the same task test exercises the hook task-command route.
+    fn route_task_commands(mut fixture: Fixture, through: bool) -> Fixture {
+        if through {
+            let base = fixture.router.clone();
+            fixture.router = base.clone().with_task_commands(Arc::new(
+                crate::task_commands::NormalTaskCommands::new(base),
+            ));
+        }
+        fixture
+    }
+
+    /// Emits the plain task test and its twin that runs the same body through
+    /// `NormalTaskCommands`.
+    macro_rules! through_normal_task_commands {
+        ($plain:ident, $through:ident, $body:ident) => {
+            #[tokio::test]
+            async fn $plain() {
+                $body(false).await;
+            }
+
+            #[tokio::test]
+            async fn $through() {
+                $body(true).await;
+            }
+        };
+    }
+
+    async fn router_peer_ingress_rejects_task_move_body(through: bool) {
+        let fixture = route_task_commands(fixture(true, None, None), through);
         let team: TeamName = "test-team".parse().expect("team");
         let task_id = "T1".parse().expect("task id");
         let before = fixture
@@ -1638,6 +1665,12 @@ pub(crate) mod tests {
             .expect("events after");
         assert_eq!(after, before, "rejection must occur before the writer lane");
     }
+
+    through_normal_task_commands!(
+        router_peer_ingress_rejects_task_move,
+        router_peer_ingress_rejects_task_move_through_normal_task_commands,
+        router_peer_ingress_rejects_task_move_body
+    );
 
     fn fixture_with_selector<F>(
         with_recipient: bool,
@@ -1779,21 +1812,27 @@ pub(crate) mod tests {
         assert_async_committed_rows(&fixture, false).await;
     }
 
-    #[tokio::test]
-    async fn bd2_template_async_pipeline_retains_success_and_rejected_committed_rows() {
-        let fixture = fixture_with_selector_and_template(
-            true,
-            None,
-            None,
-            Some(template_composer_for("template body")),
-            |received_hook| {
-                Arc::new(FixedReceivedHookSelector {
-                    emitter: received_hook,
-                })
-            },
+    async fn bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_body(
+        through: bool,
+    ) {
+        let fixture = route_task_commands(
+            fixture_with_selector_and_template(
+                true,
+                None,
+                None,
+                Some(template_composer_for("template body")),
+                |received_hook| {
+                    Arc::new(FixedReceivedHookSelector {
+                        emitter: received_hook,
+                    })
+                },
+            ),
+            through,
         );
         assert_async_committed_rows(&fixture, true).await;
     }
+
+    through_normal_task_commands!(bd2_template_async_pipeline_retains_success_and_rejected_committed_rows, bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_through_normal_task_commands, bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_body);
 
     async fn assert_async_committed_rows(fixture: &Fixture, template: bool) {
         for rejected in [false, true] {
@@ -2164,9 +2203,10 @@ pub(crate) mod tests {
         .expect("serialize mailbox")
     }
 
-    #[tokio::test]
-    async fn non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon() {
-        let fixture = fixture(true, None, None);
+    async fn non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_body(
+        through: bool,
+    ) {
+        let fixture = route_task_commands(fixture(true, None, None), through);
         let (running, client) = start_task_lifecycle_daemon(&fixture).await;
         let assigned = daemon_request(
             &client,
@@ -2215,9 +2255,10 @@ pub(crate) mod tests {
             .expect("task lifecycle daemon shuts down");
     }
 
-    #[tokio::test]
-    async fn recorded_assigner_reassign_still_succeeds_through_daemon() {
-        let fixture = fixture(true, None, None);
+    through_normal_task_commands!(non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon, non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_through_normal_task_commands, non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_body);
+
+    async fn recorded_assigner_reassign_still_succeeds_through_daemon_body(through: bool) {
+        let fixture = route_task_commands(fixture(true, None, None), through);
         let (running, client) = start_task_lifecycle_daemon(&fixture).await;
         for recipient in ["recipient", "third"] {
             let response = daemon_request(
@@ -2249,6 +2290,12 @@ pub(crate) mod tests {
             .await
             .expect("task lifecycle daemon shuts down");
     }
+
+    through_normal_task_commands!(
+        recorded_assigner_reassign_still_succeeds_through_daemon,
+        recorded_assigner_reassign_still_succeeds_through_daemon_through_normal_task_commands,
+        recorded_assigner_reassign_still_succeeds_through_daemon_body
+    );
 
     /// Hang detector for two-runtime router tests that dispatch a canonical
     /// write or ACK over a real reqwest client to a real, in-process peer
@@ -4547,9 +4594,8 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn steer_emit_records_handoff_with_trigger_steer() {
-        let fixture = fixture(true, None, None);
+    async fn steer_emit_records_handoff_with_trigger_steer_body(through: bool) {
+        let fixture = route_task_commands(fixture(true, None, None), through);
         let write = task_write_request(&fixture, "BB6-STEER");
 
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
@@ -4561,6 +4607,12 @@ pub(crate) mod tests {
         assert_eq!(handoffs[0].attempt, 0);
         assert_eq!(handoffs[0].kind.as_str(), "task_queued");
     }
+
+    through_normal_task_commands!(
+        steer_emit_records_handoff_with_trigger_steer,
+        steer_emit_records_handoff_with_trigger_steer_through_normal_task_commands,
+        steer_emit_records_handoff_with_trigger_steer_body
+    );
 
     #[tokio::test]
     async fn steer_of_non_task_message_records_no_handoff() {
@@ -6433,14 +6485,16 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn failed_steer_sink_records_no_handoff() {
-        let fixture = fixture(
-            true,
-            Some(AtmError::daemon_unavailable(
-                "intentional steer sink failure",
-            )),
-            None,
+    async fn failed_steer_sink_records_no_handoff_body(through: bool) {
+        let fixture = route_task_commands(
+            fixture(
+                true,
+                Some(AtmError::daemon_unavailable(
+                    "intentional steer sink failure",
+                )),
+                None,
+            ),
+            through,
         );
         let write = task_write_request(&fixture, "BB6-FAILED-STEER");
 
@@ -6454,6 +6508,12 @@ pub(crate) mod tests {
             "a failed steer sink writes no handoff"
         );
     }
+
+    through_normal_task_commands!(
+        failed_steer_sink_records_no_handoff,
+        failed_steer_sink_records_no_handoff_through_normal_task_commands,
+        failed_steer_sink_records_no_handoff_body
+    );
 
     #[tokio::test]
     async fn axum_route_without_a_selected_receiver_hook_keeps_durable_success() {
