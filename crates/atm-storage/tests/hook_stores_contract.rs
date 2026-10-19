@@ -413,14 +413,26 @@ fn active_all_spans_teams_and_counts_calls() {
         ))
         .expect("a");
     store
-        .register(registration("other", "bj", "task.close", "/b.py", stamp(1)))
+        .register(registration(
+            "test-team-z",
+            "bj",
+            "task.close",
+            "/b.py",
+            stamp(1),
+        ))
         .expect("b");
     store
-        .register(registration("other", "bk", "task.start", "/c.py", stamp(2)))
+        .register(registration(
+            "test-team-z",
+            "bk",
+            "task.start",
+            "/c.py",
+            stamp(2),
+        ))
         .expect("c");
     store
         .disable(
-            &TeamName::from_validated("other"),
+            &TeamName::from_validated("test-team-z"),
             &phase("bk"),
             None,
             stamp(3),
@@ -440,7 +452,7 @@ fn active_all_spans_teams_and_counts_calls() {
         keys,
         [
             ("test-team".to_owned(), "task.close".to_owned()),
-            ("other".to_owned(), "task.close".to_owned())
+            ("test-team-z".to_owned(), "task.close".to_owned())
         ]
     );
 }
