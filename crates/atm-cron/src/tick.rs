@@ -125,6 +125,39 @@ fn runner_error(error: AtmError) -> CronRunOutcome {
     }
 }
 
+async fn reply_outcome(
+    cron: &AtmCron,
+    schedule: &CronSchedule,
+    reply: HookReply,
+) -> CronRunOutcome {
+    match reply {
+        HookReply::Refused { message } => CronRunOutcome::Refused(message),
+        HookReply::PassThrough | HookReply::NotApplicable => CronRunOutcome::Ok,
+        HookReply::Handled(actions) => {
+            let count = actions.len();
+            match cron
+                .deps
+                .dispatcher
+                .dispatch_actions(
+                    DispatchSpec {
+                        hook: HookName::parse("cron.tick").expect("static cron hook name"),
+                        team: schedule.team.clone(),
+                        phase: schedule.phase.clone(),
+                        default_as: schedule.created_by.clone(),
+                        deadline: None,
+                        dry_run: false,
+                    },
+                    actions,
+                )
+                .await
+            {
+                Ok(_) => CronRunOutcome::Actions(count),
+                Err(error) => CronRunOutcome::ActionErr(error.code()),
+            }
+        }
+    }
+}
+
 pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunOutcome {
     let started = cron.deps.clock.now();
     let target = HookTarget::from(schedule);
@@ -171,32 +204,7 @@ pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunO
         .await
     {
         Err(error) => runner_error(error),
-        Ok(result) => match result.reply {
-            HookReply::Refused { message } => CronRunOutcome::Refused(message),
-            HookReply::PassThrough | HookReply::NotApplicable => CronRunOutcome::Ok,
-            HookReply::Handled(actions) => {
-                let count = actions.len();
-                match cron
-                    .deps
-                    .dispatcher
-                    .dispatch_actions(
-                        DispatchSpec {
-                            hook: HookName::parse("cron.tick").expect("static cron hook name"),
-                            team: schedule.team.clone(),
-                            phase: schedule.phase.clone(),
-                            default_as: schedule.created_by.clone(),
-                            deadline: None,
-                            dry_run: false,
-                        },
-                        actions,
-                    )
-                    .await
-                {
-                    Ok(_) => CronRunOutcome::Actions(count),
-                    Err(error) => CronRunOutcome::ActionErr(error.code()),
-                }
-            }
-        },
+        Ok(result) => reply_outcome(cron, schedule, result.reply).await,
     };
     log(
         schedule,

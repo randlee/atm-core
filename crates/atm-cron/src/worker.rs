@@ -206,6 +206,66 @@ async fn complete(cron: &AtmCron, slot: &Slot, result: Result<CronRunOutcome, Jo
     }
 }
 
+fn step_for(slots: &[Slot], now: DateTime<Utc>) -> Step {
+    let views: Vec<_> = slots
+        .iter()
+        .map(|slot| SlotView {
+            schedule: &slot.schedule,
+            next: slot.next,
+            in_flight: slot.in_flight.is_some(),
+        })
+        .collect();
+    plan_step(&views, now)
+}
+
+async fn reload_slots(cron: &AtmCron, slots: &mut Vec<Slot>) -> bool {
+    match store_call(cron.deps.store.clone(), |store| store.active_all()).await {
+        Ok(rows) => {
+            merge(cron, slots, rows).await;
+            false
+        }
+        Err(error) => {
+            tracing::error!(subsystem = "atm_cron", action = "reload_failed", %error, "cron reload failed: {error}");
+            true
+        }
+    }
+}
+
+async fn apply_step(cron: &Arc<AtmCron>, slots: &mut Vec<Slot>, running: &watch::Sender<usize>) {
+    let now = cron.deps.clock.now();
+    let step = step_for(slots, now);
+    for id in &step.stop_until {
+        if let Some(index) = slots.iter().position(|slot| slot.schedule.id == *id) {
+            let mut slot = slots.remove(index);
+            if let Some(handle) = slot.in_flight.take() {
+                handle.abort();
+                if let Err(error) = handle.await {
+                    tracing::info!(subsystem = "atm_cron", action = "cancelled", schedule = %slot.schedule.id,
+                        %error, "cron run cancelled at until: {error}");
+                }
+            }
+            let outcome = CronRunOutcome::Stopped("until reached".into());
+            tick::record(cron, &slot.schedule, &outcome).await;
+            tick::log(&slot.schedule, "tick", &outcome, 0);
+        }
+    }
+    for slot in slots {
+        if step.skip_in_flight.contains(&slot.schedule.id) {
+            tick::log(&slot.schedule, "tick", &CronRunOutcome::SkippedInFlight, 0);
+            slot.next = next_time(&slot.schedule, now);
+        } else if step.run.contains(&slot.schedule.id) {
+            let owner = cron.clone();
+            let schedule = slot.schedule.clone();
+            let guard = Running::new(running.clone());
+            slot.in_flight = Some(tokio::spawn(TrackedRun {
+                future: Box::pin(async move { tick::run_one(&owner, &schedule).await }),
+                _guard: guard,
+            }));
+            slot.next = next_time(&slot.schedule, now);
+        }
+    }
+}
+
 pub(crate) async fn run(
     cron: Arc<AtmCron>,
     rows: Vec<CronSchedule>,
@@ -218,15 +278,7 @@ pub(crate) async fn run(
     let mut retry_reload = false;
     loop {
         let now = cron.deps.clock.now();
-        let views: Vec<_> = slots
-            .iter()
-            .map(|slot| SlotView {
-                schedule: &slot.schedule,
-                next: slot.next,
-                in_flight: slot.in_flight.is_some(),
-            })
-            .collect();
-        let step = plan_step(&views, now);
+        let step = step_for(&slots, now);
         let due =
             !step.run.is_empty() || !step.stop_until.is_empty() || !step.skip_in_flight.is_empty();
         let wake = if due {
@@ -238,56 +290,11 @@ pub(crate) async fn run(
             biased;
             result = reload.changed() => {
                 if result.is_err() { break; }
-                match store_call(cron.deps.store.clone(), |store| store.active_all()).await {
-                    Ok(rows) => { merge(&cron, &mut slots, rows).await; retry_reload = false; }
-                    Err(error) => {
-                        retry_reload = true;
-                        tracing::error!(subsystem = "atm_cron", action = "reload_failed", %error, "cron reload failed: {error}");
-                    }
-                }
+                retry_reload = reload_slots(&cron, &mut slots).await;
             }
             () = cron.deps.clock.sleep_until(wake) => {
-                if retry_reload {
-                    match store_call(cron.deps.store.clone(), |store| store.active_all()).await {
-                        Ok(rows) => { merge(&cron, &mut slots, rows).await; retry_reload = false; }
-                        Err(error) => tracing::error!(subsystem = "atm_cron", action = "reload_failed", %error, "cron reload failed: {error}"),
-                    }
-                }
-                let now = cron.deps.clock.now();
-                let views: Vec<_> = slots.iter().map(|slot| SlotView {
-                    schedule: &slot.schedule, next: slot.next, in_flight: slot.in_flight.is_some(),
-                }).collect();
-                let step = plan_step(&views, now);
-                for id in &step.stop_until {
-                if let Some(index) = slots.iter().position(|slot| slot.schedule.id == *id) {
-                    let mut slot = slots.remove(index);
-                    if let Some(handle) = slot.in_flight.take() {
-                        handle.abort();
-                        if let Err(error) = handle.await {
-                            tracing::info!(subsystem = "atm_cron", action = "cancelled", schedule = %slot.schedule.id,
-                                %error, "cron run cancelled at until: {error}");
-                        }
-                    }
-                    let outcome = CronRunOutcome::Stopped("until reached".into());
-                    tick::record(&cron, &slot.schedule, &outcome).await;
-                    tick::log(&slot.schedule, "tick", &outcome, 0);
-                }
-            }
-                for slot in &mut slots {
-                if step.skip_in_flight.contains(&slot.schedule.id) {
-                    tick::log(&slot.schedule, "tick", &CronRunOutcome::SkippedInFlight, 0);
-                    slot.next = next_time(&slot.schedule, now);
-                } else if step.run.contains(&slot.schedule.id) {
-                    let owner = cron.clone();
-                    let schedule = slot.schedule.clone();
-                    let guard = Running::new(running.clone());
-                    slot.in_flight = Some(tokio::spawn(TrackedRun {
-                        future: Box::pin(async move { tick::run_one(&owner, &schedule).await }),
-                        _guard: guard,
-                    }));
-                    slot.next = next_time(&slot.schedule, now);
-                }
-                }
+                if retry_reload { retry_reload = reload_slots(&cron, &mut slots).await; }
+                apply_step(&cron, &mut slots, &running).await;
             }
             (index, result) = finished(&mut slots) => {
                 slots[index].in_flight.take();

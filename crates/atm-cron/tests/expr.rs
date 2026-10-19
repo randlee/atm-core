@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::sync::Arc;
 
 use atm_core::boundary::{CronScheduler, CronStartSpec, PhaseId, StopCondition};
@@ -64,7 +65,8 @@ async fn cron_parse_refuses_garbage_and_out_of_range() {
     for expression in ["x y", "0 0 25 * * *"] {
         let error = parse(expression).await.unwrap_err();
         assert_eq!(error.code().as_str(), "ATM_CRON_EXPR_INVALID");
-        assert!(!error.message().is_empty());
+        let parser_error = cron::Schedule::from_str(expression).unwrap_err();
+        assert!(error.message().contains(&parser_error.to_string()));
     }
 }
 

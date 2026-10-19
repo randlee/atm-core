@@ -67,8 +67,6 @@ ulid = { version = "1.2.1", features = ["serde"] }
 base64 = "0.22"
 getrandom = "0.3"
 cron = "0.17"
-chrono = { version = "0.4", features = ["serde"] }
-atm-cron = { path = "crates/atm-cron", version = "1.6.2" }
 syn = { version = "2", features = ["full", "parsing", "visit"] }
 semver = { version = "1", features = ["serde"] }
 async-trait = "0.1"
