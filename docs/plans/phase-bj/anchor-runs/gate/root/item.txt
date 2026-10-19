@@ -28,7 +28,7 @@ No per-reviewer quality metadata is promised: the producer is outside phase-bj, 
 `requirements` and `adrs` are `NONE` on every sprint: the atm-core requirement and ADR documents do not govern atm-bd-orchestration code; the governing text is the package's `docs/requirements/*.md` named per sprint.
 
 ### BJ5 integrity addition (atm-bd-orchestration #349)
-`bj-5` publishes an out-of-band sc-sha manifest for all shipped skill files, verifies files against the selected release manifest during `atm-bd skill` install, and ships a hand-runnable plugin doctor reporting per-file status and aggregate PASS/FAIL. It uses sc-compose's Python sc-sha implementation, stores no SHA inside any file, leaves sc-publish unchanged, and has no dependency on atm-core. Anchors: ANC-087, ANC-088. requirements/adrs: NONE.
+`bj-5` publishes an out-of-band sc-sha manifest for all shipped skill files, verifies files against the selected release manifest during `atm-bd skill` install, and ships a hand-runnable plugin doctor reporting per-file status and aggregate PASS/FAIL. It hashes with the `sc-sha` package's `sc_sha` module, stores no SHA inside any file, leaves sc-publish unchanged, and has no dependency on atm-core. Anchors: ANC-087, ANC-088. requirements/adrs: NONE.
 
 ## Acceptance criteria
 
@@ -39,5 +39,5 @@ No per-reviewer quality metadata is promised: the producer is outside phase-bj, 
 - `validate-plan --phase bj` requires the stack bead and every generated dev, fix, sanity and QA bead carries branch, worktree, pr_target and difficulty (ANC-083).
 - `atm-bd console` shows the sanity and quality tabs with run-level QA verdict and elapsed, the dev's icon and name, and an API_FAILURE icon distinct from FAIL (ANC-073).
 - Every sprint's QA PASS at its head; the stack lands on `integrate/phase-bj` of atm-bd-orchestration; `just lint` and `just test` green there.
-- `atm-bd skill` verifies every installed file against the selected release manifest and refuses mismatches with the path list; `atm-hook-doctor.py` reports per-file integrity and aggregate PASS/FAIL from the install-recorded manifest, using sc-compose's Python sc-sha implementation only (ANC-087, ANC-088).
+- `atm-bd skill` verifies every installed file against the selected release manifest and refuses mismatches with the path list; `atm-hook-doctor.py` reports per-file integrity and aggregate PASS/FAIL from the install-recorded manifest, hashing only with the `sc-sha` package's `sc_sha` module (ANC-087, ANC-088).
 - Phase BJ5 uses no atm-core dependency, embeds no SHA in shipped files, and leaves sc-publish unchanged.
