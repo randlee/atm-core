@@ -1,68 +1,76 @@
 # Sprint bk-5 — hook and cron CLI, doctor hooks section, composition, user docs
 
 closure_type `integration`; target_boundary the `atm` CLI (`atm hook`,
-`atm cron`, the `atm doctor` hooks section) and the daemon composition of
-`atm-cron`, over `req:REQ-P-HOOK-001`, `req:REQ-P-HOOK-003`,
-`req:REQ-P-HOOK-004`, `req:REQ-P-CRON-001`, `req:REQ-P-CRON-002`; branch `sprint/bk-5-hook-cli-doctor`, PR above bk-4; difficulty normal;
-recommended_agent `arch-ctm`, recommended_model `gpt-5-codex`. Consumes
-bk-1 (codes, `fail_active_all`), bk-2 (envelopes, responses,
-`DoctorReport.hooks`, `RequestDeadline::minus`, `DummyHookRunner`), bk-3
-(routes, `X-ATM-Hook-Actions`, `install_cron_scheduler`, the
-`build_replacement_handler` four-tuple, `fixture_hook.py`) and bk-4 (`AtmCron`, `AtmCronDeps`, `CronWorkerHandle`,
-`SystemClock`, `SystemJitter`, `ManualClock`, `SeqJitter`). Governing text: `design.md` §2.3, §5, §6, §9.1, §9.7-§9.10, D-2, D-5, D-9; `REQ-P-HOOK-003` §23.1,
+`atm cron`, the `atm doctor` hooks lines), the daemon composition of the
+filter, `atm-cron` and the shutdown order, over `req:REQ-P-HOOK-001`,
+`req:REQ-P-HOOK-003`, `req:REQ-P-HOOK-004`, `req:REQ-P-CRON-001`,
+`req:REQ-P-CRON-002`; branch `sprint/bk-5-hook-cli-doctor`, PR →
+`sprint/bk-4-atm-cron` (layer 7, wave 4). Consumes bk-6
+(`StorageHandles::hook_registration_store`, `cron_schedule_store`), bk-3
+(`DaemonHookRunner`, `fixture_hook.py`), bk-7 (routes, `X-ATM-Hook-Actions`,
+`NormalTaskCommands`, `HookedTaskCommands`, `ActiveHookSnapshot`,
+`ChainTracker`, `unhooked()`, `install_cron_scheduler`, `DoctorReport.hooks`)
+and bk-4 (`AtmCron`, `AtmCronDeps`, `CronWorkerHandle`, `SystemClock`,
+`SystemJitter`, `ManualClock`, `SeqJitter`). Governing text: `design.md`
+§2.3, §5, §6, §9.1, §9.8, §9.9, D-2, D-5, D-9; `REQ-P-HOOK-003` §23.1,
 `REQ-P-HOOK-004` §11.5, `REQ-P-CRON-001` §24.1, `REQ-P-CRON-002` §24.2,
-`REQ-P-USER-DOCS-001`; ADR-068 D3, D5, D6, ADR-069 D1, D2, ADR-066.
+`REQ-P-USER-DOCS-001`, `REQ-P-USER-DOCS-002`; ADR-068 D3, D5, D6, ADR-069
+D1, D2, ADR-066.
 
 ## Scope boundary
 
 No storage, protocol, runner, filter, route or scheduler code; nothing
-under `crates/atm-cron` or `crates/atm-core`; `crates/atm/Cargo.toml`
-unchanged.
-
-Owned paths (new unless marked edited):
+under `crates/atm-cron`, `crates/atm-core` or `crates/atm-http-runtime`;
+`crates/atm/Cargo.toml` unchanged. Owned paths (new unless marked edited;
+production lines by `.just/check_line_counts.py` rules):
 
 - `crates/atm/src/commands/hook.rs`, `crates/atm/src/commands/cron.rs`
   (each with its `#[cfg(test)] mod tests`),
   `crates/atm/src/commands/hook_module.rs`, `crates/atm/src/commands/mod.rs`
   (edited: `Hook(HookCommand)`, `Cron(CronCommand)` in `enum Command` at
-  `:118` and their arms), `crates/atm/src/output.rs` (edited:
-  `print_hook_list`, `print_cron_list`, the hooks block in
-  `print_doctor_result` at `:288`, the `HookActions` line),
-  `crates/atm/src/main.rs` (edited: three codes in the `=> 3` arm of
-  `exit_code_for_atm_error` `:138-151`)
-- `crates/atm/tests/cli_surface_baseline.json` (edited),
-  data read via `CARGO_MANIFEST_DIR`, no new `[[test]]`:
-  `crates/atm/tests/fixtures/hook_module/valid_hook.py`, `crates/atm/tests/fixtures/hook_module/no_timeout.py`,
-  `crates/atm/tests/fixtures/hook_module/zero_timeout.py`, `crates/atm/tests/fixtures/hook_module/over_cap.py`,
-  `crates/atm/tests/fixtures/hook_module/indented.py`, `crates/atm/tests/fixtures/hook_module/two_lines.py`,
-  `crates/atm/tests/fixtures/hook_module/cron_timeout.py` (`CRON_TIMEOUT_MS = 20000`),
-  `crates/atm/tests/fixtures/hook_module/cron_over_cap.py` (`CRON_TIMEOUT_MS = 30001`)
-- `crates/atm-http-runtime/src/doctor_hooks.rs` (new),
-  `crates/atm-http-runtime/src/storage_and_nudge_router.rs` (edited: the
-  `doctor()` body at `:651`, one call), `crates/atm-http-runtime/src/lib.rs`
-  (edited: mod)
-- `crates/atm-daemon-bootstrap/src/lib.rs` (edited: `DaemonWorkers.cron:
-  Option<atm_cron::CronWorkerHandle>` at `:532`; `compose_cron`,
-  `start_cron_worker` and `run_shutdown_steps` extracted and called from
-  `run_replacement_daemon_with_selector` (`:445`) and
-  `shutdown_replacement_daemon` (`:805`); `#[cfg(test)] mod
-  hook_cron_composition_tests;` next to `telemetry_lifecycle_tests` `:1044`),
-  `crates/atm-daemon-bootstrap/Cargo.toml` (edited: `atm-cron.workspace =
-  true` in `[dependencies]`; `atm-cron = { workspace = true, features =
-  ["test-utils"] }` in `[dev-dependencies]`),
+  `:118` and their arms; 130), `crates/atm/src/output/hooks.rs`
+  (`print_hook_list`, `print_cron_list`, `print_doctor_hooks`,
+  `print_hook_actions`), `crates/atm/src/output.rs` (edited: `mod hooks;
+  pub use hooks::*;` and one `print_doctor_hooks` call in
+  `print_doctor_result` `:288`; 991 → 994), `crates/atm/src/composition.rs`
+  (edited: the `HookActions` arm; 411), `crates/atm/src/main.rs` (edited:
+  three codes in the `=> 3` arm of `exit_code_for_atm_error` `:138-151`;
+  789)
+- `crates/atm/tests/cli_surface_baseline.json` (edited), data read via
+  `CARGO_MANIFEST_DIR`, no new `[[test]]`, under
+  `crates/atm/tests/fixtures/hook_module/`: `valid_hook.py`,
+  `no_timeout.py`, `zero_timeout.py`, `over_cap.py`, `indented.py`,
+  `two_lines.py`, `cron_timeout.py` (`CRON_TIMEOUT_MS = 20000`),
+  `cron_over_cap.py` (`CRON_TIMEOUT_MS = 30001`)
+- `crates/atm-runtime/src/composition.rs` (edited:
+  `.with_hook_registration_store(storage.hook_registration_store())` and
+  `.with_cron_schedule_store(..)` beside `.with_task_store` `:193`; 276)
+- `crates/atm-daemon-bootstrap/src/replacement_handler.rs` (edited:
+  `compose_storage_router` `:268`, `build_replacement_handler` `:204`
+  returning the four-tuple; 340), `crates/atm-daemon-bootstrap/src/lib.rs`
+  (edited: the call sites `:471`, `:1303`, `:1505`, `mod
+  cron_composition;`, `DaemonWorkers.cron` `:532`, calls from
+  `run_replacement_daemon_with_selector` `:445` and
+  `shutdown_replacement_daemon` `:805`; 827 → about 840),
+  `crates/atm-daemon-bootstrap/src/telemetry_lifecycle_tests.rs` (edited:
+  its call `:172`), `crates/atm-daemon-bootstrap/src/cron_composition.rs`,
+  `crates/atm-daemon-bootstrap/Cargo.toml` (edited: `atm-cron.workspace`;
+  dev `atm-cron` with `test-utils`), `Cargo.lock`,
   `crates/atm-daemon-bootstrap/src/hook_cron_composition_tests.rs`,
   `crates/atm-daemon-bootstrap/tests/cron_fixture/fixture_cron.py`
-- `boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml` and
+- `boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml`,
   `boundaries/atm-daemon-bootstrap/daemon-observability.toml` (edited:
-  `atm-cron` in `allowed_dependencies`, the latter at `:25`;
-  `cron_worker_lifecycle` in `io_owns` of the former),
-  `boundaries/atm-cron/cron-scheduler.toml` (edited: `[status]` notes the
-  composition), `.just/lint-config.toml` (edited: `atm-cron` in the
-  `crates/atm-daemon-bootstrap/Cargo.toml` allowlist)
+  `atm-cron` in `allowed_dependencies`; `cron_worker_lifecycle` in the
+  former's `io_owns`), `boundaries/atm-cron/cron-scheduler.toml` (edited:
+  `[status]`), `.just/lint-config.toml` (edited: `atm-cron` in the
+  bootstrap allowlist)
 - `docs/user-documents/cli-reference.md` (edited: `` ### `atm cron` `` and
   `` ### `atm hook` `` in alphabetical position, a hooks paragraph under
-  `` ### `atm doctor` `` at `:109`), `docs/user-documents/tasks.md`
-  (edited: "Task hooks"), `docs/user-documents/hooks.md` (new)
+  `` ### `atm doctor` `` `:109`), `docs/user-documents/tasks.md` (edited:
+  "Task hooks"), `docs/user-documents/hooks.md` (edited: today's post-send
+  hook sections stay under "Post-send hooks", still linked from
+  `README.md:26`; the task-hook sections below are added and
+  `reviewed_for_release` set to the phase's release version)
 
 ## Public contract
 
@@ -93,17 +101,12 @@ pub fn read_cron_timeout_ms(module: &Path) -> Result<u32, AtmError>;
 pub fn parse_custom_object(raw: &str) -> Result<serde_json::Map<String, serde_json::Value>, String>;   // "--custom must be a JSON object: <serde error>"
 pub fn parse_rfc3339_utc(raw: &str) -> Result<DateTime<Utc>, String>;   // clap value_parser for --until; "--until must be RFC 3339: <chrono error>"
 
-// crates/atm/src/output.rs
+// crates/atm/src/output/hooks.rs
 pub fn print_hook_list(rows: &[HookRegistration], json: bool) -> Result<()>;   // PHASE HOOK ACTIVE MODULE CWD TIMEOUT_MS CUSTOM REGISTERED_BY REGISTERED_AT DISABLED_AT
 pub fn print_cron_list(rows: &[CronSchedule], json: bool) -> Result<()>;       // PHASE NAME ACTIVE CRON JITTER_S MODULE ARGS TIMEOUT_MS CUSTOM STOP LAST_RUN_AT LAST_OUTCOME
 // CUSTOM prints `<n> keys`; --json carries the full custom object and jitter_s
-
-// crates/atm-http-runtime/src/doctor_hooks.rs  (design.md §9.10)
-pub(crate) async fn collect(router: &StorageAndNudgeRouter, team: Option<&TeamName>, deadline: RequestDeadline) -> Vec<HookDoctorEntry>;
-// rows: the team's active hook_registration rows and the active rows of the installed CronScheduler::list(team, None) (none when not installed);
-// groups by (module_path, cwd, team, phase); each call is HookRunner::doctor(&HookTarget::from(first row), deadline.minus(250 ms)) on a
-// tokio::task::JoinSet, so a schedule group uses the schedule's timeout_ms and a registration group the registration's (design D-q); the runner's
-// doctor_budget decides exhaustion. None for an all-teams report.
+pub fn print_doctor_hooks(entries: &[HookDoctorEntry]) -> Vec<String>;   // `Hooks:` + one line per entry + indented findings, or `Hooks: none`
+pub fn print_hook_actions(response: &HookActionsResponse) -> String;     // `hook ran <n> actions` (D-b)
 ```
 
 Each command does these steps:
@@ -128,18 +131,24 @@ Each command does these steps:
 - **Task commands.** `HookActions` prints `hook ran <n> actions` (D-b); a
   refusal prints the hook's message, exit 3.
 
-Composition (design §9.9): after `build_replacement_handler` (`:471`)
-bk-3's `_hook_runner`, `_base_dispatcher` become `hook_runner`,
-`base_dispatcher`:
+Composition (design §9.9):
 
 ```rust
-// crates/atm-daemon-bootstrap/src/lib.rs: three functions the daemon path and the in-crate tests both call; the tests bind no listener
+// crates/atm-daemon-bootstrap/src/replacement_handler.rs
+// compose_storage_router: runner = Arc::new(DaemonHookRunner::new(&env)); base router .with_hook_runner(runner.clone()),
+// .with_local_host(daemon_atm_config(&env).and_then(|c| c.local_host)); snapshot = ActiveHookSnapshot::load(store)? (an error aborts startup);
+// hooked = HookedTaskCommands::new(Arc::new(NormalTaskCommands::new(base.clone())), Arc::new(base.unhooked()), snapshot.clone(), runner.clone(),
+// base.hook_chains()); returns base.with_hook_snapshot(snapshot).with_task_commands(Arc::new(hooked)).
+pub(crate) fn build_replacement_handler(..) -> Result<(Arc<StorageAndNudgeRouter>, RecoverySweepHandle, Arc<dyn HookRunner>, Arc<UnhookedRouter>), AtmError>;
+
+// crates/atm-daemon-bootstrap/src/cron_composition.rs: called by the daemon path and the in-crate tests; the tests bind no listener
 /// AtmCron::new(deps) then handler.install_cron_scheduler(cron.clone()); the daemon passes SystemClock and SystemJitter, tests ManualClock and SeqJitter.
-fn compose_cron(handler: &StorageAndNudgeRouter, deps: atm_cron::AtmCronDeps) -> Result<Arc<atm_cron::AtmCron>, AtmError>;
+pub(crate) fn compose_cron(handler: &StorageAndNudgeRouter, deps: atm_cron::AtmCronDeps) -> Result<Arc<atm_cron::AtmCron>, AtmError>;
 /// workers.cron = Some(cron.start_worker().await?); an initial active_all error is returned and aborts startup.
-async fn start_cron_worker(cron: &Arc<atm_cron::AtmCron>, workers: &mut DaemonWorkers) -> Result<(), AtmError>;
-/// The shutdown steps in order: "cron_worker" (CronWorkerHandle::shutdown), "listener" (awaits `listener`), then today's steps unchanged.
-async fn run_shutdown_steps(listener: impl Future<Output = Result<(), AtmError>>, handler: &StorageAndNudgeRouter, workers: DaemonWorkers,
+pub(crate) async fn start_cron_worker(cron: &Arc<atm_cron::AtmCron>, workers: &mut DaemonWorkers) -> Result<(), AtmError>;
+/// Steps in order: "cron_worker" (CronWorkerHandle::shutdown), "hook_chains" (hook_chains().begin_shutdown() then drain(deadline)),
+/// "listener" (awaits `listener`), then today's steps unchanged.
+pub(crate) async fn run_shutdown_steps(listener: impl Future<Output = Result<(), AtmError>>, handler: &StorageAndNudgeRouter, workers: DaemonWorkers,
     deadline: tokio::time::Instant) -> Result<(), AtmError>;
 
 let cron = compose_cron(&handler, atm_cron::AtmCronDeps { store: runtime.cron_schedule_store()?, runner: hook_runner.clone(),
@@ -195,29 +204,32 @@ start_cron_worker(&cron, &mut workers).await?;
 3. `exit_code_for_atm_error` arms per design §9.1: the three validation
    codes exit 3; `HookExit`, `HookTimeout`, `HookMalformed` exit 1 through
    `_ => 1`.
-4. `doctor_hooks::collect` per design §9.10, one call in `doctor()`;
-   never fails doctor or changes `summary` (ANC-015, ANC-016).
-   `print_doctor_result` renders `Hooks:`, a line per entry
+4. `print_doctor_hooks` (bk-7 collects the entries) renders `Hooks:`, a
+   line per entry
    (`<team>/<phase> <module>: <message>` or the error), an indented
    `<severity> <code>: <message>` per finding, or `Hooks: none`.
-5. Composition and shutdown as above (`REQ-P-CRON-002`, ADR-069 D2).
+5. Composition and shutdown as above (`REQ-P-CRON-002`, ADR-069 D2);
+   the `atm-runtime` store wiring.
 6. `cli_surface_baseline.json` regenerated for the two subtrees only.
-7. The user documentation above; `cli-reference.md` lists every flag.
+7. The user documentation above; `cli-reference.md` lists every flag;
+   `hooks.md` keeps its front matter (REQ-P-USER-DOCS-002) and every
+   fenced `json` example parses.
 8. Tests, no live daemon (REQ-BK-TESTS).
    - CLI tests in `hook.rs`/`cron.rs` `mod tests` over
      `CliComposition::from_fake_transport` (`composition.rs:207`, pattern
      `send.rs:2680`); the `FakeClientTransport` handler records each
      `ApiRequest` and returns a scripted response. They assert the built
      request, refusals before any request, printing and exit codes; a
-     route-side refusal is scripted (the route is tested in bk-3, bk-4).
-   - `doctor_hooks.rs::tests`: router harness, `DummyHookRunner`.
+     route-side refusal is scripted (the route is tested in bk-7).
    - `hook_cron_composition_tests.rs`: the `build_replacement_handler`
      handler on a temp-dir store plus `compose_cron`, `ManualClock`,
      `SeqJitter`, no listener. A real child through `DaemonHookRunner`
-     runs in a plain `#[tokio::test]` on the real clock, its
-     `timeout_ms = 30000` row stored before composition; a tick fires by
-     `ManualClock::advance`, results read after `CronWorkerHandle::shutdown`.
-     `start_paused` only with doubles.
+     runs in a plain `#[tokio::test]`, its `timeout_ms = 30000` row stored
+     before composition. Synchronisation: `before_reply` cannot hold a real
+     child, so each such test makes exactly one `ManualClock::advance` to
+     one occurrence, then calls `CronWorkerHandle::shutdown` with a 60 s
+     deadline, which joins the in-flight run; the files the fixture wrote
+     and the row are read only after that join. No sleep, no polling.
 
 ## Authoritative acceptance criteria
 
@@ -235,33 +247,34 @@ start_cron_worker(&cron, &mut workers).await?;
 - [ ] (ANC-022, Rand 2026-10-18 custom) `req:REQ-P-CRON-001` `custom_flag_reaches_the_request`: `--custom '{"goal":"ship"}'` is the sent `HookRegister`'s and `CronStart`'s `custom`; `list --json` carries `custom`, `jitter_s`, the table `1 keys`, `JITTER_S`; `custom_non_object_refused`: `'[1]'`, `'x'` are clap errors naming `--custom`, counter 0.
 - [ ] (ANC-023) `req:REQ-P-CRON-001` `start_refuses_{missing,both}_stop_condition{,s}_before_any_request` (clap usage error, counter 0).
 
-`crates/atm-http-runtime/src/doctor_hooks.rs::tests` (router harness, `DummyHookRunner`) and `crates/atm/src/output.rs::tests`:
+`crates/atm/src/output/hooks.rs::tests` and `crates/atm-runtime`:
 
-- [ ] (ANC-015, REQ-P-HOOK-004) `req:REQ-P-HOOK-004` `doctor_hooks_section_dedupes_by_module_cwd_team_and_phase`: two hooks and a schedule on one module in phase `bk` give one entry (both names in `hooks`, the schedule in `schedules`), one `HookCall::Doctor`, `success == Some(true)`, `message == Some("ok")`; the module also in phase `bj` gives a second entry and call; `doctor_findings_carry_module_and_phase` (a `warning` finding lands with `module_path`, `phase`, `summary` unchanged; a malformed reply gives `error.code == ATM_HOOK_MALFORMED`); `doctor_hooks_calls_run_concurrently_under_one_budget` (`before_reply` holds both replies until both calls started; each deadline equals `deadline.minus(250 ms)`).
-- [ ] (ANC-016) `req:REQ-P-HOOK-004` `doctor_hooks_section_reports_timeout_without_failing_doctor` (exit status and `summary` as without registrations); `doctor_hooks_section_is_empty_array_for_team_without_registrations`; `doctor_hooks_budget_exhausted_returns_timeout_without_spawn`: an expired deadline reaches each call as `deadline.minus(250 ms)`; an `ATM_HOOK_TIMEOUT` reply lands in `error`, `summary` unchanged (no-spawn: bk-3); `doctor_hooks_all_teams_report_has_empty_hooks` (no runner call; a `team_override` report collects that team's rows).
-- [ ] (REQ-P-HOOK-004) `req:REQ-P-HOOK-004` `output.rs::tests::doctor_human_output_renders_hooks_findings_and_none`: prints `Hooks:`, `bk/bk <module>: ok`, the indented `warning <code>: <message>`, an error entry's error, and `Hooks: none` when empty.
-- [ ] (REQ-BK-D3) `req:REQ-P-HOOK-003` `AtmCron` gets the one `DaemonHookRunner` (`Arc::ptr_eq` in `cron_scheduler_installed_once_and_cron_routes_reach_it`).
-- [ ] (D-2, ANC-016) `req:REQ-P-HOOK-004` `rg -n 'sc_sha|sha256|released_sha|sha1' crates/atm/src/commands/hook.rs crates/atm/src/commands/cron.rs crates/atm-http-runtime/src/doctor_hooks.rs` and `rg -nw 'bd|\.beads'` on the same files are empty.
+- [ ] (REQ-P-HOOK-004) `req:REQ-P-HOOK-004` `doctor_human_output_renders_hooks_findings_and_none`: `Hooks:`, `bk/bk <module>: ok`, the indented `warning <code>: <message>`, an error entry's error, and `Hooks: none` when empty.
+- [ ] `req:REQ-P-HOOK-001` `crates/atm-runtime/src/composition.rs::tests::composition_installs_the_hook_and_cron_stores` (pattern `:347`).
+- [ ] (D-2, ANC-016) `req:REQ-P-HOOK-004` `rg -n 'sc_sha|sha256|released_sha|sha1' crates/atm/src/commands/hook.rs crates/atm/src/commands/cron.rs crates/atm/src/output/hooks.rs` and `rg -nw 'bd|\.beads'` on the same files are empty.
 
 `crates/atm-daemon-bootstrap/src/hook_cron_composition_tests.rs` (composed handler, `compose_cron`, no listener):
 
 - [ ] (ANC-019, ANC-023, D-5) `req:REQ-P-CRON-001` `start_persists_row_with_args_and_timeout` (row = spec plus `jitter_s`); `list_shows_last_run_and_outcome_after_record_run`; `start_refuses_until_in_the_past_with_daemon_message`; `start_refuses_invalid_expression_with_cron_expr_invalid` (`x y`, five-field `* * * * *`; list empty); `start_refuses_active_duplicate_name`; `end_phase_keeps_rows_inactive_with_ended_at`; `register_second_phase_same_hook_succeeds` (`bj`'s `task.close` active, `bk`'s registers; `HookList` shows both).
+- [ ] (ANC-021, REQ-BK-D3) `req:REQ-P-HOOK-001` `filter_and_cron_share_one_runner_and_one_dispatcher`: the tuple's runner and `UnhookedRouter` are `Arc::ptr_eq` to the filter's `runner()` and `actions()` and to `AtmCronDeps`; `snapshot_load_error_fails_daemon_composition` (`fail_active_all`); `snapshot_load_from_reopened_store_serves_pre_restart_registrations` (`bj`, `bk` on `task.close`, reopened temp-dir store: `[bj, bk]`).
 - [ ] (ANC-004) `req:REQ-P-HOOK-001` `close_end_to_end_with_refusing_hook_leaves_task_open`: `fixture_hook.py` on `task.close`, `timeout_ms = 30000`, stored before composition; a close gives `ATM_HOOK_REFUSED` with the module's message, task still `active`.
-- [ ] (ANC-008, ANC-021) `req:REQ-P-CRON-002` `cron_tick_action_runs_unhooked`: a schedule runs `fixture_hook.py` in cwd A (lists `cron.tick`; replies one `task.assign` action) while cwd B's is registered for `task.assign`; after `ManualClock::advance` and `shutdown` the task exists and B's `fixture_request.json` is never written.
-- [ ] (ADR-069 D2) `req:REQ-P-CRON-002` `cron_scheduler_installed_once_and_cron_routes_reach_it` (a second `install_cron_scheduler` errors); `cron_worker_is_first_shutdown_step`: `run_shutdown_steps` with an `async { Ok(()) }` listener records steps beginning `cron_worker`, `listener`; `cron_initial_load_error_aborts_startup`: `start_cron_worker` with `fail_active_all` returns `Err`, `workers.cron` `None`.
+- [ ] (ANC-008, ANC-021) `req:REQ-P-CRON-002` `cron_tick_action_runs_unhooked`: a schedule runs `fixture_hook.py` in cwd A (lists `cron.tick`; replies one `task.assign` action) while cwd B's is registered for `task.assign`; after one `ManualClock::advance` and `shutdown` (which joins the run) the task exists and B's `fixture_request.json` is never written.
+- [ ] (ADR-069 D2) `req:REQ-P-CRON-002` `cron_scheduler_installed_once_and_cron_routes_reach_it` (a second `install_cron_scheduler` errors); `cron_worker_is_first_shutdown_step`: `run_shutdown_steps` with an `async { Ok(()) }` listener records steps beginning `cron_worker`, `hook_chains`, `listener`; `cron_initial_load_error_aborts_startup`: `start_cron_worker` with `fail_active_all` returns `Err`, `workers.cron` `None`.
 - [ ] (REQ-BK-D4A) `req:REQ-P-CRON-002` `daemon_restart_with_schedule_due_while_down_fires_once_at_next_occurrence_and_not_at_startup`: `ManualClock`, `DummyHookRunner`; a second `compose_cron` on the reopened store at 10:00:30 for a 10:00:00 occurrence makes no call before an advance, one at the next occurrence.
 - [ ] (ANC-017, ANC-024) `req:REQ-P-CRON-002` `fixture_cron_receives_args_through_the_composed_scheduler` (real clock, `DaemonHookRunner`, `fixture_cron.py`, an `--until-hook` schedule with `timeout_ms = 30000`): after an advance and `shutdown`, `cron.stop` then `cron.tick` (with `request.args`) are written, each `sys.argv[1:]` its hook name only, `last_outcome == "ok"`; with the stop marker, a second `start_cron_worker`, advance and `shutdown` give `"stopped: marker present"`, `active == false`.
 
 Surface and docs:
 
 - [ ] (REQ-BK-HOOK-CLI) `req:REQ-P-HOOK-003` `cargo test -p atm --test cli_surface` passes, baseline diff only the `hook` and `cron` subtrees; `crates/atm/Cargo.toml` unchanged.
-- [ ] `req:REQ-P-USER-DOCS-001` `hooks.md`'s example handles `task.close`, `task.assign` only; `cli-reference.md` has `` ### `atm cron` `` and `` ### `atm hook` ``; `just lint` (site-links) passes.
+- [ ] `req:REQ-P-USER-DOCS-001` `hooks.md`'s example handles `task.close`, `task.assign` only and its post-send sections remain; `cli-reference.md` has `` ### `atm cron` `` and `` ### `atm hook` ``; `just lint` (site-links) passes.
+- [ ] `req:REQ-P-USER-DOCS-002` `hooks.md` front matter keeps `title`, `audience`, `reviewed_for_release` (the release version); a `python3 -c` over `hooks.md` and `tasks.md` runs `json.loads` on every fenced `json` block without error.
+- [ ] (ANC-011) `req:REQ-P-CRON-001` `cron.rs::tests::until_parses_rfc3339_and_normalizes_to_utc` (`2026-11-01T02:00:00+02:00` gives `2026-11-01T00:00:00Z`; `2026-11-01`, `tomorrow` are clap errors naming `--until`, counter 0).
 
 ## Authoritative validation
 
-- `cargo test -p atm -p atm-http-runtime -p atm-daemon-bootstrap`
-- `cargo clippy -p atm -p atm-http-runtime -p atm-daemon-bootstrap --all-targets -- -D warnings`
-- `just lint`
+- `cargo test -p atm -p atm-runtime -p atm-daemon-bootstrap`
+- `cargo clippy -p atm -p atm-runtime -p atm-daemon-bootstrap --all-targets -- -D warnings`
+- `just lint` (boundaries, site-links, `.just/check_line_counts.py`)
 - `just test`
 
 ## Non-closure

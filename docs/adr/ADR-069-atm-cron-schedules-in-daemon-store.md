@@ -120,10 +120,10 @@ names `as`, with ingress `Local`. Each run writes `last_run_at` and
 ### D4. Every schedule has exactly one stop condition, checked first on every tick
 
 `atm cron start` requires exactly one of `--until <rfc3339>` and
-`--until-hook` (`StopCondition { Until(DateTime<Utc>), Hook }` on
+`--until-hook` (`StopCondition { Until { at: DateTime<Utc> }, Hook }` on
 `CronStartSpec` and the stored schedule). The stop check precedes the run on every tick:
 
-- `Until(t)`: the worker wakes at `min(next, t)`; once `now >= t` the
+- `Until { at: t }`: the worker wakes at `min(next, t)`; once `now >= t` the
   schedule ends (`active = 0`, `ended_at`, `last_outcome = "stopped: until
   reached"`) and nothing runs.
 - `Hook`: the daemon calls `python3 <module> cron.stop` with the same stdin

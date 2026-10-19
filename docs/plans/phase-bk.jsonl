@@ -1,5 +1,7 @@
 {"sprint": "bk-1"}
 {"sprint": "bk-2", "depends_on": ["bk-1"]}
+{"sprint": "bk-6", "depends_on": ["bk-1"]}
 {"sprint": "bk-3", "depends_on": ["bk-2"]}
+{"sprint": "bk-7", "depends_on": ["bk-2"]}
 {"sprint": "bk-4", "depends_on": ["bk-2"]}
-{"sprint": "bk-5", "depends_on": ["bk-3", "bk-4"]}
+{"sprint": "bk-5", "depends_on": ["bk-3", "bk-7", "bk-4", "bk-6"]}

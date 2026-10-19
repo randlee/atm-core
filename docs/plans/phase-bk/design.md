@@ -298,8 +298,9 @@ Two tables, both team-scoped:
   (team, phase, hook).
 - `cron_schedule(id, team, phase, name, cron_expr, module_path, cwd, args,
   timeout_ms, jitter_s, custom, active, until_at, stop_hook, created_by,
-  created_at, last_run_at, last_outcome, ended_at)`; unique on (team,
-  phase, name).
+  created_at, last_run_at, last_outcome, ended_at, generation)`; unique
+  on (team, phase, name); `CHECK ((active = 1) = (ended_at IS NULL))` and
+  the same on `hook_registration` with `disabled_at`.
 
 `PhaseId` is `^[a-z][a-z0-9-]{0,31}$`, checked by hand-written code with no
 regex crate. `atm hook disable --phase <x>` sets `active = 0` on the
@@ -313,7 +314,13 @@ an upsert (`ON CONFLICT DO UPDATE`), never `INSERT OR REPLACE`.
 each key's subsequence equals `active(team, hook)`; `list` puts active
 rows first, then `registered_at`, then phase. `atm cron end --phase <x>` does the same for
 schedules. Starting a name that has an ended row updates that row in
-place and keeps its id (D-i). `atm hook list` and `atm cron list` read
+place, keeps its id and adds 1 to `generation` (D-i). `record_run` and
+`record_stop` take the run's `generation` and write only `WHERE id = ?
+AND generation = ? AND active = 1`, so a run that outlives its slot (its
+write in `spawn_blocking` survives a task abort) never writes a restarted
+row. The stores read no clock: every timestamp (`registered_at`,
+`disabled_at`, `created_at`, `ended_at`, run and stop times) is an
+argument, and `AtmCron` stamps from its injected `Clock`. `atm hook list` and `atm cron list` read
 these rows. There is no database-wide schema version constant; the proof
 is a pre-bk DDL test (ADR-061 D3). The schema-reviewer records the minor
 bump at plan review.
@@ -359,16 +366,37 @@ Rules:
   while `in_flight` is running is skipped and logged. The loop awaits
   finished runs; `Stopped` removes the slot and any other outcome
   recomputes `next`. A reload keeps a slot only when the loaded row equals
-  the slot's row on `id`, `created_at`, `cron_expr`, `jitter_s`, `stop`,
+  the slot's row on `id`, `generation`, `cron_expr`, `jitter_s`, `stop`,
   `module_path`, `cwd`, `args`, `timeout_ms` and `custom`; otherwise the
-  slot is dropped, its `in_flight` aborted (its outcome is never recorded)
-  and a new slot built. A restart in place sets `created_at = now`, so an
-  end then start before the reload is never merged into the old slot.
+  slot is dropped, its `in_flight` aborted and a new slot built. A restart
+  in place adds 1 to `generation`, so an end then start before the reload
+  is never merged into the old slot, and the aborted run's write carries
+  the old generation and changes nothing (§4).
+- What a clock wake does is the pure `plan_step(slots, now) -> Step { run,
+  skip_in_flight, stop_until, wake }`; the one `Until` rule is the pure
+  `stop_due(stop, now)` used by `start`, `plan_step` and the run. Timing
+  rules are tested on those functions.
+- `JoinError::is_panic` of a run records `exit: hook runner panicked:
+  <payload>` (generation-guarded) and the worker keeps running;
+  `is_cancelled` records nothing and logs `cancelled`. An `active_all`
+  failure on reload logs `reload_failed`, keeps the slots and retries at
+  the next wake or bump; a failed record logs `record_failed`. A drop
+  guard in the worker task sets `stopped` when the loop ends (shutdown or
+  panic); then `start`, `end` and `list` return `daemon_unavailable("cron
+  worker stopped")`, so `atm cron list` shows it.
+- `ManualClock` (tests) counts parks: each `sleep_until` entry that finds
+  `now < t`, re-parks after an `advance` included; with no wake the worker
+  awaits `sleep_until(MAX_UTC)`. `advance_settled(d)` advances, then waits
+  until the park count rises, which means the worker handled the advance
+  and waits again. It is the quiescent barrier when no run is in flight or
+  each in-flight run is held by `before_reply`; outcomes are read after
+  `CronWorkerHandle::shutdown` has joined the runs.
 - The worker sleeps in slices of at most `MAX_SLEEP_SLICE` (30 s) and
   checks what is due after every wake, so a wall-clock jump is seen within
   one slice.
-- `record_run` updates `WHERE id = ? AND active = 1`, so a run that
-  finishes after `end` does not overwrite the ended row.
+- `record_run` updates `WHERE id = ? AND generation = ? AND active = 1`,
+  so a run that finishes after `end`, or after an end and restart, does
+  not overwrite the row.
 - Invalid cron strings are refused at `atm cron start` (parse before
   write, in `AtmCron::start`), so the daemon never loads one. A loaded row
   with no future occurrence is ended through `record_stop` with reason
@@ -431,7 +459,7 @@ would be condition for stopping." `atm cron start` requires exactly one of
 `CronSchedule`. `--until` at or before now is refused by `AtmCron::start` with `ATM_CRON_EXPR_INVALID`.
 The stop check is the first step of every tick:
 
-- `Until(t)`: the worker wakes at `min(next, t)`; when `now >= t` the
+- `Until { at: t }`: the worker wakes at `min(next, t)`; when `now >= t` the
   schedule ends (`active = 0`, `ended_at = now`,
   `last_outcome = "stopped: until reached"`) and no run happens.
 - `Hook`: before the run the daemon calls `python3 <module> cron.stop` with
@@ -492,18 +520,22 @@ the team (Rand 2026-10-18 round 4: "so any roster member for both").
 
 The sprints, waves and consumed artefacts are in `phase-bk-plan.md`.
 
-**D-7 Contract types live in bk-2, codes in bk-1.** The first cut placed
-every `atm-core` change in bk-5. `atm-http-runtime -> atm-daemon-bootstrap`
+**D-7 Sprint cut by crate.** `atm-http-runtime -> atm-daemon-bootstrap`
 is a forbidden edge
 (`boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml`), so the
 runner the router calls must be a core boundary trait implemented in
 bootstrap, exactly as `MessageReceivedHookSelector` is
-(`crates/atm-core/src/boundary/message_received_hook_emitter.rs:54`), and
-bk-3 and bk-5 both consume the same request, reply and protocol types.
-Those types, the HTTP API bump and the key-pinning test are therefore
-bk-2's. The six error codes are bk-1's, because the stores raise
-`ATM_HOOK_MODULE_INVALID` and `ATM_HOOK_MALFORMED`.
-bk-5 keeps the CLI and the doctor collection.
+(`crates/atm-core/src/boundary/message_received_hook_emitter.rs:54`).
+The cut (plan review round 1): bk-1 the store traits, codes, constructors
+and budgets (`atm-storage`, `atm-error`; the stores raise the codes, and
+`atm-core` depends on `atm-storage`); bk-2 the core hook types and the four
+sealed traits; bk-6 the rusqlite stores; bk-3 the runner
+(`atm-daemon-bootstrap`); bk-7 the filter, dispatcher, routes and the
+envelope variants with HTTP 1.13.0, because the variants and their only
+exhaustive matches (`map_api_response`, `dispatch_non_write`) must change
+in one layer for every layer to build; bk-4 `atm-cron`; bk-5 the CLI, the
+composition, shutdown order and docs. Waves: bk-1; bk-2 with bk-6; bk-3,
+bk-7, bk-4; bk-5.
 
 Each sprint carries its tests, never a live daemon. A test
 that spawns a real child runs on the real clock with a generous
@@ -683,25 +715,31 @@ impl TaskCommand {
 }
 ```
 
-- `NormalTaskCommands { router: StorageAndNudgeRouter }` (bk-3) holds a
+- `NormalTaskCommands { router: StorageAndNudgeRouter }` (bk-7) holds a
   clone of the base router taken before a filter is installed, and calls
   its existing bodies: `write_unhooked` (today's `write_with_request_id`
   body from `dispatch_raw_host_qualified_local_write`, `:991`),
   `task_move` (`:608`) and `list_messages`. Behavior is unchanged; the
-  existing task tests are the proof.
+  existing task tests are the proof. Those three router methods are the
+  single owner of the un-hooked bodies: `NormalTaskCommands`,
+  `UnhookedRouter` and the `task_commands = None` path all call them.
 - The router's `write_with_request_id` (`:973`), after the deadline check
   and `home_dir`/`current_dir` normalization (`:988-989`), and the
   `TaskMove` and `Messages(List)` arms of `dispatch_non_write` (`:532`)
   classify the request and call `task_commands` when it is set. When it is
   `None` they run the existing body. A `dry_run` write is classified too,
   and the hook sees `dry_run`.
-- `pub struct UnhookedRouter(StorageAndNudgeRouter)` (bk-3, private
+- `pub struct UnhookedRouter(StorageAndNudgeRouter)` (bk-7, private
   field) is built only by `StorageAndNudgeRouter::unhooked(&self)`, a clone
   with `task_commands = None`. It is the only `HookActionDispatcher`
   besides the test double; it runs each action's `ApiRequest` through
-  that entry, so no action reaches a filter. `dispatch_actions(..,
-  dry_run)` with `dry_run` true validates every action and dispatches
-  none.
+  that entry, so no action reaches a filter. `dispatch_actions(spec:
+  DispatchSpec { hook, team, phase, default_as, deadline, dry_run },
+  actions)`; with `dry_run` it validates every action and dispatches none.
+  A reply carries at most `HOOK_ACTIONS_MAX` = 32 actions (a longer list
+  is `ATM_HOOK_MALFORMED`), which bounds one task or cron run. The three
+  `HookRunner` methods stay separate: they differ in argv, stdin and the
+  typed reply (D-3).
 
 ### 9.6 Plug-in coverage
 
@@ -766,7 +804,17 @@ limitation (ADR-068 D4), there is no Windows job-object code, and
 calls `kill().await` and returns a phase-less `SpawnFailure::TimedOut {
 after_ms }`, which `DaemonHookRunner` converts to `hook_timeout(phase, "no
 reply within <n> ms")`. `hook_runner.rs` spawns only through this helper;
-`received_hook_selector.rs` keeps its own spawn unchanged.
+`received_hook_selector.rs` keeps its own spawn unchanged: it and
+`atm-herdr/src/transport_cli.rs` kill only the leader, write no stdin and
+read unbounded output, which a hook cannot use. The helper is
+`spawn_until(spec, stdin, cancel)` with `spawn_with_deadline` passing
+`sleep(remaining)` as `cancel`, so a test cancels on a signal instead of a
+timer. A `GroupKillGuard` held until the child is reaped kills the group
+on drop, so an aborted or dropped call orphans no grandchild.
+`DaemonHookRunner` holds a semaphore of `HOOK_CONCURRENCY_MAX` = 16 live
+hook children shared by task chains, cron runs and doctor; a permit not
+acquired within the call's budget is `hook_timeout(phase, "hook
+concurrency limit reached")` with no spawn.
 
 | Failure | Code |
 | --- | --- |
@@ -780,9 +828,13 @@ reply within <n> ms")`. `hook_runner.rs` spawns only through this helper;
 | python exception in the module | `ATM_HOOK_EXIT` with the traceback tail |
 | panic in the daemon-side hook task | `ATM_HOOK_EXIT` `hook runner panicked: <payload>` |
 
-`HookedTaskCommands` (bk-3) runs the registration loop, each runner call,
-the chain decision and the action dispatch inside one `tokio::spawn` over
-cloned `Arc`s. The task returns `Result<Decision, AtmError>`, with `enum
+`HookedTaskCommands` (bk-7) runs the registration loop, each runner call,
+the chain decision and the action dispatch inside one task spawned through
+the router's `ChainTracker` over cloned `Arc`s; shutdown refuses new
+chains, waits for live ones up to its deadline, then aborts them
+(`daemon_unavailable` "hook chain cancelled: daemon shutting down"). The
+snapshot holds `Arc<HookRegistration>` rows and each `HookRequest` is built
+only when its hook runs. The task returns `Result<Decision, AtmError>`, with `enum
 Decision { Inner, Refused(String), Done(ApiResponse) }`. The filter maps
 `JoinError::is_panic()` to that error, then performs `Inner` (the `inner`
 call) and `Refused` outside the spawn; `inner` is never called inside
@@ -816,7 +868,7 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
 ### 9.9 Composition
 
 - `compose_storage_router` (`crates/atm-daemon-bootstrap/src/replacement_handler.rs:268`,
-  bk-3) builds the base router with `.with_hook_runner(runner.clone())`,
+  bk-5) builds the base router with `.with_hook_runner(runner.clone())`,
   `.with_local_host(daemon_atm_config(&env).and_then(|c| c.local_host))`
   and the snapshot load, whose error aborts startup. It then builds
   `NormalTaskCommands::new(base.clone())` and `HookedTaskCommands` over
@@ -824,10 +876,9 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
   `actions = Arc::new(base.unhooked())`, and returns
   `base.with_task_commands(hooked)`. `build_replacement_handler` (`:204`)
   returns `(Arc<StorageAndNudgeRouter>, RecoverySweepHandle, Arc<dyn
-  HookRunner>, Arc<UnhookedRouter>)`, the last for the cron crate. bk-3
+  HookRunner>, Arc<UnhookedRouter>)`, the last for the cron crate. bk-5
   updates all four call sites (`lib.rs:471`, `:1303`, `:1505`,
-  `telemetry_lifecycle_tests.rs:172`), binding `_hook_runner` and
-  `_base_dispatcher` at `:471`; bk-5 replaces only those two bindings.
+  `telemetry_lifecycle_tests.rs:172`).
 - Router fields: `task_commands: Option<Arc<dyn TaskCommands>>`,
   `hooks: Arc<ActiveHookSnapshot>` (shared with the filter so the register
   and disable routes refresh what the filter reads), `hook_runner:
@@ -847,8 +898,9 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
   `emit_ready_signal_if_requested` (`:624`). An initial `active_all` error
   aborts startup.
 - `shutdown_replacement_daemon` (`:805`) calls `run_shutdown_steps` with
-  the listener's finish as a future; `cron_worker` is its first step,
-  before `listener`. The three functions are extracted so the in-crate
+  the listener's finish as a future; its steps are `cron_worker`, then
+  `hook_chains` (begin shutdown, drain to the deadline), then `listener`.
+  The three functions live in `cron_composition.rs`. The three functions are extracted so the in-crate
   tests call them with no listener. `CronWorkerHandle::shutdown` stops scheduling,
   awaits in-flight runs until the deadline, then aborts them.
 
@@ -857,7 +909,7 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
 Rand (2026-10-18): "doctor would need to know team, phase and it would
 return a dict/array (whatever is consistent w/ what doctor expects)".
 
-`doctor_hooks::collect(router, team, deadline)` (bk-5) reads the active
+`doctor_hooks::collect(router, team, deadline)` (bk-7) reads the active
 `hook_registration` rows and active `cron_schedule` rows of the report's
 `member_roster` team (none for an all-teams report) and groups them by
 `(module_path, cwd, team, phase)`. Each group is one entry naming its
@@ -905,21 +957,21 @@ registration carries `"hooks": []`.
 
 ### 9.11 Routes
 
-Six path constants in `crates/atm-core/src/api.rs` (bk-2), all `POST`:
+Six path constants in `crates/atm-core/src/api.rs` (bk-7), all `POST`:
 `/v1/atm/hooks/register`, `/v1/atm/hooks/disable`, `/v1/atm/hooks/list`,
-`/v1/atm/cron/start`, `/v1/atm/cron/end`, `/v1/atm/cron/list`. bk-2 adds
+`/v1/atm/cron/start`, `/v1/atm/cron/end`, `/v1/atm/cron/list`. bk-7 adds
 the `HttpRouteKind` variants, `HTTP_ROUTE_SPECS` entries 16 to 21 with
 their `route_spec` arms, and arms in `route_kind_for_request`,
 `encode_request_body`, `decode_success_response`,
 `ApiRequest::into_inner`, `From<RequestEnvelope>` and
-`crates/atm-core/src/transport/testing.rs`. bk-3 adds the
+`crates/atm-core/src/transport/testing.rs`, and the
 `decode_framework_request` (`message_handler.rs:471`) and
 `map_api_response` (`:707`) arms. The `HookActions` response is sent with
 header `X-ATM-Hook-Actions: <n>` and body `{"dispatched": n}`;
 `decode_http_response` checks that header before
 `decode_success_response`, as it does for `CLEAR_OUTCOME_HEADER`.
 
-Request fields (bk-2, `crates/atm-core/src/protocol.rs`):
+Request fields (bk-2, `crates/atm-core/src/hook/routes.rs`):
 
 | Type | Fields |
 | --- | --- |

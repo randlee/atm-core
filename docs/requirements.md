@@ -5456,15 +5456,15 @@ ADR-065, ADR-067.
   router for the three cron routes, and keeps its worker in the daemon's
   worker set: the worker loads the active rows at start, reloads them when
   a start or end commits, and drains under the replacement-daemon deadline
-- each schedule's next time is computed from `Utc::now()` after startup and
+- each schedule's next time is computed from the injected clock after startup and
   after each run, plus its `jitter_s`; a missed occurrence is never
   replayed
 - `jitter_s` is drawn once at start from an injected random source,
   uniform over the offsets in `[0, min(period_s / 2, 1800))` (at least 1)
   not held by another active schedule with the same expression, or over
   all of them when every offset is held; it is stored, so a daemon
-  restart keeps it, and the `until` and stop checks run at the jittered
-  time (ADR-069 D2)
+  restart keeps it; the stop-hook check runs at each jittered run time,
+  and an `--until` schedule ends at `until_at` exactly (ADR-069 D2, D4)
 - a tick that arrives while the schedule's previous run is still executing
   is skipped and logged
 - every tick checks the stop condition first (ADR-069 D4): a schedule
