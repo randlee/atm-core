@@ -103,6 +103,17 @@ fn sql_insert_cron(
     )
 }
 
+/// Asserts that the insert was refused by a table CHECK constraint, not by a
+/// NOT NULL, a typo or schema drift.
+fn assert_check_violation(result: rusqlite::Result<usize>, case: &str) {
+    let error = result.expect_err(case);
+    let message = error.to_string();
+    assert!(
+        message.contains("CHECK constraint failed"),
+        "{case}: expected a CHECK constraint violation, got: {message}"
+    );
+}
+
 fn stored_last_outcome(path: &Path, name: &str) -> Option<String> {
     Connection::open(path)
         .expect("connection")
@@ -169,8 +180,14 @@ fn stop_condition_check_and_round_trip() {
         sql_insert_cron(&h.path, "ok-until", 1, Some(&until_text), 0, None).expect("valid until"),
         1
     );
-    assert!(sql_insert_cron(&h.path, "no-stop", 1, None, 0, None).is_err());
-    assert!(sql_insert_cron(&h.path, "both-stops", 1, Some(&until_text), 1, None).is_err());
+    assert_check_violation(
+        sql_insert_cron(&h.path, "no-stop", 1, None, 0, None),
+        "no stop condition",
+    );
+    assert_check_violation(
+        sql_insert_cron(&h.path, "both-stops", 1, Some(&until_text), 1, None),
+        "both stop conditions",
+    );
 
     let store = h.store();
     let until = store
@@ -361,33 +378,35 @@ fn lifecycle_checks_refuse_contradictory_rows() {
     h.store()
         .start(cron_spec("seed", StopCondition::Hook, stamp(1)))
         .expect("seed table");
-    assert!(sql_insert_cron(&h.path, "active-ended", 1, None, 1, Some(&stamp_text(2))).is_err());
-    assert!(sql_insert_cron(&h.path, "inactive-open", 0, None, 1, None).is_err());
-    assert!(
-        Connection::open(&h.path)
-            .expect("connection")
-            .execute(
-                "INSERT INTO hook_registration
+    assert_check_violation(
+        sql_insert_cron(&h.path, "active-ended", 1, None, 1, Some(&stamp_text(2))),
+        "active schedule with ended_at",
+    );
+    assert_check_violation(
+        sql_insert_cron(&h.path, "inactive-open", 0, None, 1, None),
+        "inactive schedule without ended_at",
+    );
+    assert_check_violation(
+        Connection::open(&h.path).expect("connection").execute(
+            "INSERT INTO hook_registration
                     (team, phase, hook, module_path, cwd, timeout_ms, active,
                      registered_by, registered_at, disabled_at)
                  VALUES ('test-team', 'bk', 'task.close', '/a.py', '/repo', 1000, 1,
                      'test-agent', ?1, ?1)",
-                [stamp_text(1)],
-            )
-            .is_err()
+            [stamp_text(1)],
+        ),
+        "active hook with disabled_at",
     );
-    assert!(
-        Connection::open(&h.path)
-            .expect("connection")
-            .execute(
-                "INSERT INTO hook_registration
+    assert_check_violation(
+        Connection::open(&h.path).expect("connection").execute(
+            "INSERT INTO hook_registration
                     (team, phase, hook, module_path, cwd, timeout_ms, active,
                      registered_by, registered_at)
                  VALUES ('test-team', 'bk', 'task.assign', '/a.py', '/repo', 1000, 0,
                      'test-agent', ?1)",
-                [stamp_text(1)],
-            )
-            .is_err()
+            [stamp_text(1)],
+        ),
+        "disabled hook without disabled_at",
     );
 }
 
