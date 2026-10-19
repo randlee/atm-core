@@ -132,6 +132,16 @@ impl<D: HookActionDispatcher> HookedTaskCommands<D> {
             chains,
         }
     }
+
+    /// The hook runner this wrapper dispatches chain actions through.
+    pub fn runner(&self) -> &Arc<dyn HookRunner> {
+        &self.runner
+    }
+
+    /// The action dispatcher this wrapper was composed with.
+    pub fn actions(&self) -> &Arc<D> {
+        &self.actions
+    }
 }
 
 impl<D: HookActionDispatcher + 'static> HookedTaskCommands<D> {
@@ -564,6 +574,15 @@ mod tests {
         let mut request = assign_request(false);
         request.task_op = Some(atm_core::boundary::TaskOp::Start);
         request
+    }
+
+    #[test]
+    fn accessors_return_the_composed_runner_and_actions() {
+        let store = Arc::new(InMemoryHookRegistrationStore::new());
+        let h = harness(&store);
+        let runner: Arc<dyn atm_core::boundary::HookRunner> = h.runner.clone();
+        assert!(Arc::ptr_eq(h.commands.runner(), &runner));
+        assert!(Arc::ptr_eq(h.commands.actions(), &h.actions));
     }
 
     #[tokio::test]
