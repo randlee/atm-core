@@ -1,0 +1,49 @@
+boundary_id = "BOUNDARY-HookRunner"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "HookRunner"
+
+[public]
+trait = "HookRunner"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = []
+io_forbidden = ["sqlite", "process_spawn", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm","atm-daemon-bootstrap","atm-http-runtime","atm-runtime-test-support"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["HookTarget","HookRequest","RequestDeadline"]
+response_types = ["HookOutcome", "HookDoctorReply", "StopReply"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["crate::boundary::hook_runner::DummyHookRunner"]
+forbidden_test_bypasses = ["std::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-HOOK-RUNNER-REFERENCES"]
+review_gates = ["sealed_trait", "typed_contract", "deterministic_test_doubles"]
+
+[enforcement.io_forbidden_source_modules]
+sqlite = ["atm_core::boundary::hook_runner"]
+process_spawn = ["atm_core::boundary::hook_runner"]
+socket_io = ["atm_core::boundary::hook_runner"]
+
+[status]
+state = "active"
+notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters."]

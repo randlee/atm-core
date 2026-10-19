@@ -1,6 +1,7 @@
 mod ax6;
 pub mod health;
 mod herdr_state;
+pub mod hooks;
 pub mod report;
 mod roster_names;
 mod team_scope;

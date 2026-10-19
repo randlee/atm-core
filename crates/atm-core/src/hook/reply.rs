@@ -1,0 +1,630 @@
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use crate::api::{ApiRequest, MessageCollectionRequest};
+use crate::boundary::TaskCommand;
+use crate::clear::ClearQuery;
+use crate::doctor::DoctorQuery;
+use crate::error::AtmError;
+use crate::list::{ListQuery, TaskLedgerQuery};
+use crate::protocol::TaskMoveRequest;
+use crate::read::{PeekQuery, ReadQuery};
+use crate::search::SearchRequest;
+use crate::send::WriteRequest;
+use crate::types::{AgentName, TeamName};
+
+pub const HOOK_ACTIONS_MAX: usize = 32;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum HookReply {
+    Handled(Vec<HookAction>),
+    PassThrough,
+    NotApplicable,
+    Refused { message: String },
+}
+
+impl HookReply {
+    pub fn parse(stdout: &[u8]) -> Result<Self, AtmError> {
+        let value: Value = serde_json::from_slice(stdout)
+            .map_err(|error| AtmError::hook_malformed(&format!("reply JSON: {error}")))?;
+        let object = value.as_object().ok_or_else(|| {
+            AtmError::hook_malformed("reply must be one JSON object with a result")
+        })?;
+        match object.get("result").and_then(Value::as_str) {
+            Some("handled") if object.len() == 2 && object.contains_key("atm-action") => {
+                let actions: Vec<HookAction> = serde_json::from_value(object["atm-action"].clone())
+                    .map_err(|error| AtmError::hook_malformed(&format!("atm-action: {error}")))?;
+                if actions.is_empty() || actions.len() > HOOK_ACTIONS_MAX {
+                    return Err(AtmError::hook_malformed(&format!(
+                        "atm-action must contain 1..={HOOK_ACTIONS_MAX} actions"
+                    )));
+                }
+                Ok(Self::Handled(actions))
+            }
+            Some("pass-through") if object.len() == 1 => Ok(Self::PassThrough),
+            Some("not-applicable") if object.len() == 1 => Ok(Self::NotApplicable),
+            Some("refused") if object.len() == 2 => {
+                let message = object
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .filter(|message| !message.is_empty())
+                    .ok_or_else(|| {
+                        AtmError::hook_malformed("refused reply requires a non-empty message")
+                    })?;
+                Ok(Self::Refused {
+                    message: message.to_owned(),
+                })
+            }
+            _ => Err(AtmError::hook_malformed(
+                "reply keys and result must match handled, pass-through, not-applicable or refused exactly",
+            )),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HookAction {
+    pub command: String,
+    #[serde(rename = "as", default)]
+    pub run_as: Option<AgentName>,
+    pub request: Value,
+}
+
+impl HookAction {
+    fn malformed(&self, detail: &str) -> AtmError {
+        AtmError::hook_malformed(&format!("action {}: {detail}", self.command))
+    }
+
+    fn body<T: DeserializeOwned>(&self) -> Result<T, AtmError> {
+        serde_json::from_value(self.request.clone())
+            .map_err(|error| self.malformed(&format!("request: {error}")))
+    }
+
+    fn check_team(&self, actual: &TeamName, expected: &TeamName) -> Result<(), AtmError> {
+        if actual != expected {
+            return Err(self.malformed("caller_team must equal the registered team"));
+        }
+        Ok(())
+    }
+
+    pub fn into_api_request(
+        &self,
+        team: &TeamName,
+        default_as: &AgentName,
+    ) -> Result<ApiRequest, AtmError> {
+        let identity = self.run_as.as_ref().unwrap_or(default_as);
+        match self.command.as_str() {
+            "send" | "ack" | "task.assign" | "task.start" | "task.close" => {
+                let mut request: WriteRequest = self.body()?;
+                self.check_team(&request.caller_team, team)?;
+                request.caller_identity = identity.clone();
+                match self.command.as_str() {
+                    "send"
+                        if request.task_id.is_none()
+                            && request.task_op.is_none()
+                            && request.task_complete.is_none()
+                            && request.acknowledges_message_id.is_none() => {}
+                    "ack" if request.acknowledges_message_id.is_some() => {}
+                    "task.assign" | "task.start" | "task.close" => {
+                        let classified =
+                            TaskCommand::classify(ApiRequest::Write(Box::new(request.clone())))
+                                .map_err(|_| {
+                                    self.malformed("request does not classify as a task command")
+                                })?;
+                        if classified.hook_name().as_str() != self.command {
+                            return Err(
+                                self.malformed("request classifies as a different task command")
+                            );
+                        }
+                    }
+                    _ => {
+                        return Err(self.malformed(
+                            "request fields do not match the named send or ack command",
+                        ));
+                    }
+                }
+                Ok(ApiRequest::Write(Box::new(request)))
+            }
+            "task.move" => {
+                let mut request: TaskMoveRequest = self.body()?;
+                self.check_team(&request.caller_team, team)?;
+                request.caller_identity = identity.clone();
+                Ok(ApiRequest::TaskMove(request))
+            }
+            "task.list" | "task.events" | "task.history" => {
+                let mut request: ListQuery = self.body()?;
+                self.check_team(&request.caller_team, team)?;
+                let matches = matches!(
+                    (self.command.as_str(), &request.task_ledger),
+                    ("task.list", Some(TaskLedgerQuery::Tasks { .. }))
+                        | ("task.events", Some(TaskLedgerQuery::Events { .. }))
+                        | ("task.history", Some(TaskLedgerQuery::History { .. }))
+                );
+                if !matches {
+                    return Err(self.malformed("task_ledger must match the named task query"));
+                }
+                request.caller_identity = identity.clone();
+                Ok(ApiRequest::Messages(Box::new(
+                    MessageCollectionRequest::List(request),
+                )))
+            }
+            "read" => {
+                let mut request: ReadQuery = self.body()?;
+                self.check_team(&request.caller_team, team)?;
+                request.caller_identity = identity.clone();
+                Ok(ApiRequest::Messages(Box::new(
+                    MessageCollectionRequest::Receive(request),
+                )))
+            }
+            "peek" => {
+                let mut request: PeekQuery = self.body()?;
+                self.check_team(&request.caller_team, team)?;
+                request.caller_identity = identity.clone();
+                Ok(ApiRequest::Messages(Box::new(
+                    MessageCollectionRequest::Peek(request),
+                )))
+            }
+            "clear" => {
+                let mut request: ClearQuery = self.body()?;
+                self.check_team(&request.caller_team, team)?;
+                request.caller_identity = identity.clone();
+                Ok(ApiRequest::Clear(request))
+            }
+            "search" => {
+                let mut request: SearchRequest = self.body()?;
+                if self.run_as.is_some()
+                    || request
+                        .query
+                        .team
+                        .as_ref()
+                        .is_some_and(|actual| actual != team.as_str())
+                {
+                    return Err(self.malformed("search requires no as and no foreign query.team"));
+                }
+                request.query.team = Some(team.to_string());
+                Ok(ApiRequest::Search(Box::new(request)))
+            }
+            "doctor" => {
+                let mut request: DoctorQuery = self.body()?;
+                if self.run_as.is_some()
+                    || request.all_teams
+                    || request
+                        .team_override
+                        .as_ref()
+                        .is_some_and(|actual| actual != team)
+                    || request
+                        .caller_team
+                        .as_ref()
+                        .is_some_and(|actual| actual != team)
+                {
+                    return Err(self
+                        .malformed("doctor requires no as, all_teams false and no foreign team"));
+                }
+                request.caller_team = Some(team.clone());
+                request.team_override = Some(team.clone());
+                Ok(ApiRequest::Doctor(request))
+            }
+            _ => Err(self.malformed("command is not an allowed hook action")),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StopReply {
+    pub stop: bool,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+impl StopReply {
+    pub fn parse(stdout: &[u8]) -> Result<Self, AtmError> {
+        let value: Value = serde_json::from_slice(stdout)
+            .map_err(|error| AtmError::hook_malformed(&format!("stop reply JSON: {error}")))?;
+        let reply: Self = serde_json::from_value(value.clone())
+            .map_err(|error| AtmError::hook_malformed(&format!("stop reply: {error}")))?;
+        if (reply.stop
+            && reply
+                .reason
+                .as_ref()
+                .is_some_and(|reason| !reason.is_empty()))
+            || (!reply.stop && value.as_object().is_some_and(|object| object.len() == 1))
+        {
+            return Ok(reply);
+        }
+        Err(AtmError::hook_malformed(
+            "stop reply must be exactly {stop:true,reason:<non-empty string>} or {stop:false}",
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::search::SearchInput;
+    use crate::send::SendMessageSource;
+    use serde_json::json;
+    use std::path::PathBuf;
+
+    fn team() -> TeamName {
+        "test-team".parse().unwrap()
+    }
+
+    fn identity() -> AgentName {
+        "caller".parse().unwrap()
+    }
+
+    fn action(command: &str, request: Value) -> HookAction {
+        HookAction {
+            command: command.to_owned(),
+            run_as: None,
+            request,
+        }
+    }
+
+    fn write_body() -> Value {
+        serde_json::to_value(
+            WriteRequest::new(
+                PathBuf::from("/home"),
+                PathBuf::from("/repo"),
+                "untrusted".parse().unwrap(),
+                "receiver@test-team",
+                team(),
+                SendMessageSource::Inline("message".to_owned()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn list_body(ledger: Value) -> Value {
+        json!({
+            "home_dir":"/home", "current_dir":"/repo", "caller_identity":"untrusted",
+            "caller_team":"test-team", "selection_mode":"all", "seen_state_filter":false,
+            "task_ledger":ledger
+        })
+    }
+
+    fn mailbox_body(read: bool) -> Value {
+        let mut body = json!({
+            "mailbox":{"home_dir":"/home", "current_dir":"/repo", "selection_mode":"all", "seen_state_filter":false},
+            "caller_identity":"untrusted", "caller_team":"test-team"
+        });
+        if read {
+            body["seen_state_update"] = json!(true);
+        }
+        body
+    }
+
+    fn search_body() -> Value {
+        serde_json::to_value(SearchRequest {
+            query: SearchInput::default(),
+            lifecycle: None,
+        })
+        .unwrap()
+    }
+
+    fn doctor_body() -> Value {
+        json!({"home_dir":"/home", "current_dir":"/repo"})
+    }
+
+    fn mapped_body(request: ApiRequest) -> (&'static str, Value) {
+        match request {
+            ApiRequest::Write(body) => ("write", serde_json::to_value(body).unwrap()),
+            ApiRequest::TaskMove(body) => ("move", serde_json::to_value(body).unwrap()),
+            ApiRequest::Messages(body) => match *body {
+                MessageCollectionRequest::List(body) => {
+                    ("list", serde_json::to_value(body).unwrap())
+                }
+                MessageCollectionRequest::Peek(body) => {
+                    ("peek", serde_json::to_value(body).unwrap())
+                }
+                MessageCollectionRequest::Receive(body) => {
+                    ("read", serde_json::to_value(body).unwrap())
+                }
+            },
+            ApiRequest::Clear(body) => ("clear", serde_json::to_value(body).unwrap()),
+            ApiRequest::Search(body) => ("search", serde_json::to_value(body).unwrap()),
+            ApiRequest::Doctor(body) => ("doctor", serde_json::to_value(body).unwrap()),
+            unexpected => panic!("unexpected mapped request: {unexpected:?}"),
+        }
+    }
+
+    fn malformed<T: std::fmt::Debug>(result: Result<T, AtmError>) {
+        assert_eq!(result.unwrap_err().code().as_str(), "ATM_HOOK_MALFORMED");
+    }
+
+    #[test]
+    fn action_maps_each_command() {
+        let send = write_body();
+        let mut ack = send.clone();
+        ack["acknowledges_message_id"] = json!("01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        let mut assign = send.clone();
+        assign["task_id"] = json!("work-1");
+        let mut start = assign.clone();
+        start["task_op"] = json!({"op":"start"});
+        let mut close = assign.clone();
+        close["task_op"] = json!({"op":"close", "outcome":"completed"});
+        let cases = [
+            ("send", send, "write"),
+            ("ack", ack, "write"),
+            ("task.assign", assign.clone(), "write"),
+            ("task.start", start, "write"),
+            ("task.close", close, "write"),
+            (
+                "task.move",
+                json!({"caller_identity":"untrusted", "caller_team":"test-team", "task_id":"work-1", "target":{"to":"head"}}),
+                "move",
+            ),
+            (
+                "task.list",
+                list_body(json!({"Tasks":{"member":null}})),
+                "list",
+            ),
+            (
+                "task.events",
+                list_body(json!({"Events":{"task_id":"work-1", "member":null}})),
+                "list",
+            ),
+            (
+                "task.history",
+                list_body(json!({"History":{"member":null, "limit":10}})),
+                "list",
+            ),
+            ("read", mailbox_body(true), "read"),
+            ("peek", mailbox_body(false), "peek"),
+            (
+                "clear",
+                json!({"home_dir":"/home", "current_dir":"/repo", "caller_identity":"untrusted", "caller_team":"test-team", "idle_only":false, "dry_run":false}),
+                "clear",
+            ),
+        ];
+        for (command, body, variant) in cases {
+            for run_as in [None, Some("lead".parse().unwrap())] {
+                let candidate = HookAction {
+                    run_as: run_as.clone(),
+                    ..action(command, body.clone())
+                };
+                let (actual_variant, mapped) =
+                    mapped_body(candidate.into_api_request(&team(), &identity()).unwrap());
+                assert_eq!(actual_variant, variant, "{command}");
+                assert_eq!(
+                    mapped["caller_identity"],
+                    run_as.as_ref().map_or("caller", AgentName::as_str),
+                    "{command}"
+                );
+                assert_eq!(mapped["caller_team"], "test-team");
+            }
+            let mut foreign = body;
+            foreign["caller_team"] = json!("foreign");
+            malformed(action(command, foreign).into_api_request(&team(), &identity()));
+        }
+        let route_body: WriteRequest = serde_json::from_value(assign.clone()).unwrap();
+        let ApiRequest::Write(mapped) = action("task.assign", assign)
+            .into_api_request(&team(), &identity())
+            .unwrap()
+        else {
+            panic!("task assign was not a write")
+        };
+        assert_eq!(mapped.task_id, route_body.task_id);
+        assert_eq!(
+            serde_json::to_value(mapped.message_source).unwrap(),
+            serde_json::to_value(route_body.message_source).unwrap()
+        );
+
+        for command in ["search", "doctor"] {
+            let mut body = if command == "search" {
+                search_body()
+            } else {
+                doctor_body()
+            };
+            for configured in [false, true] {
+                if configured {
+                    if command == "search" {
+                        body["query"]["team"] = json!("test-team");
+                    } else {
+                        body["team_override"] = json!("test-team");
+                        body["caller_team"] = json!("test-team");
+                    }
+                }
+                let (variant, mapped) = mapped_body(
+                    action(command, body.clone())
+                        .into_api_request(&team(), &identity())
+                        .unwrap(),
+                );
+                assert_eq!(variant, command);
+                if command == "search" {
+                    assert_eq!(mapped["query"]["team"], "test-team");
+                } else {
+                    assert_eq!(mapped["team_override"], "test-team");
+                    assert_eq!(mapped["caller_team"], "test-team");
+                }
+            }
+            let with_as = HookAction {
+                run_as: Some(identity()),
+                ..action(command, body.clone())
+            };
+            malformed(with_as.into_api_request(&team(), &identity()));
+            if command == "search" {
+                body["query"]["team"] = json!("foreign");
+            } else {
+                body["team_override"] = json!("foreign");
+            }
+            malformed(action(command, body).into_api_request(&team(), &identity()));
+        }
+        for change in [json!({"all_teams":true}), json!({"caller_team":"foreign"})] {
+            let mut body = doctor_body();
+            body.as_object_mut()
+                .unwrap()
+                .extend(change.as_object().unwrap().clone());
+            malformed(action("doctor", body).into_api_request(&team(), &identity()));
+        }
+    }
+
+    #[test]
+    fn registry_cron_and_internal_commands_are_malformed() {
+        for command in [
+            "hook.register",
+            "hook.disable",
+            "hook.list",
+            "cron.start",
+            "cron.end",
+            "cron.list",
+            "heartbeat",
+            "graft",
+            "reload",
+            "compatibility",
+            "queue",
+            "task.foo",
+            "",
+        ] {
+            malformed(action(command, write_body()).into_api_request(&team(), &identity()));
+        }
+        let mut body = write_body();
+        body["task_id"] = json!("work-1");
+        malformed(action("send", body.clone()).into_api_request(&team(), &identity()));
+        malformed(action("task.start", body.clone()).into_api_request(&team(), &identity()));
+        malformed(action("task.close", body.clone()).into_api_request(&team(), &identity()));
+        malformed(action("ack", body).into_api_request(&team(), &identity()));
+        malformed(
+            action(
+                "task.list",
+                list_body(json!({"History":{"member":null,"limit":1}})),
+            )
+            .into_api_request(&team(), &identity()),
+        );
+        malformed(action("send", json!({})).into_api_request(&team(), &identity()));
+        assert!(
+            serde_json::from_value::<HookAction>(
+                json!({"command":"send", "request":{}, "extra":1})
+            )
+            .is_err()
+        );
+    }
+
+    fn malformed_replies() -> Vec<Vec<u8>> {
+        let mut cases = vec![
+            r#"{"result":"handled","atm-action":{}}"#,
+            r#"{"result":"handled","atm-action":[]}"#,
+            r#"{"result":"handled","atm-action":[1]}"#,
+            r#"{"result":"handled"}"#,
+            r#"{"result":"pass-through","extra":1}"#,
+            r#"{"result":"not-applicable","message":"x"}"#,
+            r#"{"result":"refused","message":""}"#,
+            r#"{"result":"refused"}"#,
+            r#"{"result":"refused","message":1}"#,
+            r#"{"result":"refused","message":"x","extra":1}"#,
+            r#"{"result":"handled","atm-action":[{"command":"send","request":{},"extra":1}]}"#,
+            r#"{"result":"handled","atm-action":[{"request":{}}]}"#,
+            r#"{"result":"skip"}"#,
+            r#"{"result":true}"#,
+            r#"{"success":true}"#,
+            r#"{"success":false,"message":"m"}"#,
+            r#"{} {}"#,
+            "",
+            "null",
+            "[]",
+            r#"{"result":"#,
+        ]
+        .into_iter()
+        .map(|case| case.as_bytes().to_vec())
+        .collect::<Vec<_>>();
+        cases.push(vec![255]);
+        cases.push(serde_json::to_vec(&json!({"result":"handled","atm-action":vec![action("send", write_body()); HOOK_ACTIONS_MAX + 1]})).unwrap());
+        cases
+    }
+
+    #[test]
+    fn reply_parse_case_table() {
+        assert_eq!(
+            HookReply::parse(br#"{"result":"pass-through"}"#).unwrap(),
+            HookReply::PassThrough
+        );
+        assert_eq!(
+            HookReply::parse(br#"{"result":"not-applicable"}"#).unwrap(),
+            HookReply::NotApplicable
+        );
+        assert_eq!(
+            HookReply::parse(br#"{"result":"refused","message":"verbatim message"}"#).unwrap(),
+            HookReply::Refused {
+                message: "verbatim message".to_owned()
+            }
+        );
+        let actions = vec![
+            action("send", write_body()),
+            action("doctor", doctor_body()),
+        ];
+        assert_eq!(
+            HookReply::parse(
+                &serde_json::to_vec(&json!({"result":"handled","atm-action":actions})).unwrap()
+            )
+            .unwrap(),
+            HookReply::Handled(actions)
+        );
+        let actions = vec![action("send", write_body()); HOOK_ACTIONS_MAX];
+        assert_eq!(
+            HookReply::parse(
+                &serde_json::to_vec(&json!({"result":"handled","atm-action":actions})).unwrap()
+            )
+            .unwrap(),
+            HookReply::Handled(actions)
+        );
+        for stdout in malformed_replies() {
+            malformed(HookReply::parse(&stdout));
+        }
+    }
+
+    #[test]
+    fn malformed_is_never_pass_through() {
+        for stdout in malformed_replies() {
+            let reply = HookReply::parse(&stdout);
+            assert!(!matches!(
+                reply,
+                Ok(HookReply::PassThrough | HookReply::NotApplicable)
+            ));
+            malformed(reply);
+        }
+    }
+
+    #[test]
+    fn stop_reply_shapes() {
+        assert_eq!(
+            StopReply::parse(br#"{"stop":true,"reason":"r"}"#).unwrap(),
+            StopReply {
+                stop: true,
+                reason: Some("r".to_owned())
+            }
+        );
+        assert_eq!(
+            StopReply::parse(br#"{"stop":false}"#).unwrap(),
+            StopReply {
+                stop: false,
+                reason: None
+            }
+        );
+        for stdout in [
+            r#"{"stop":true}"#,
+            r#"{"stop":true,"reason":""}"#,
+            r#"{"stop":false,"reason":"x"}"#,
+            r#"{"stop":false,"reason":null}"#,
+            r#"{"stop":"yes"}"#,
+            r#"{"stop":1}"#,
+            r#"{"stop":true,"reason":"r","extra":1}"#,
+            r#"{"stop":false,"extra":1}"#,
+            r#"{"stop":true,"reason":null}"#,
+            "null",
+            "[]",
+            "",
+            "{} {}",
+            r#"{"stop":"#,
+        ] {
+            malformed(StopReply::parse(stdout.as_bytes()));
+        }
+    }
+}

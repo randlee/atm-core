@@ -598,6 +598,33 @@ mod tests {
     use atm_storage::MoveTarget;
 
     #[test]
+    fn request_deadline_equality_minus_and_remaining_ms() {
+        let deadline = super::RequestDeadline::after(std::time::Duration::from_secs(10));
+        assert_eq!(
+            deadline.minus(std::time::Duration::from_secs(4)),
+            deadline
+                .minus(std::time::Duration::from_secs(1))
+                .minus(std::time::Duration::from_secs(3))
+        );
+        assert_ne!(
+            deadline,
+            deadline.minus(std::time::Duration::from_millis(1))
+        );
+        assert_eq!(
+            super::RequestDeadline::after(std::time::Duration::ZERO).remaining_ms(),
+            0
+        );
+        assert!(deadline.remaining_ms() <= 10_000);
+        assert_eq!(
+            deadline
+                .minus(std::time::Duration::from_secs(20))
+                .remaining_ms(),
+            0
+        );
+        assert_eq!(deadline.minus(std::time::Duration::MAX).remaining_ms(), 0);
+    }
+
+    #[test]
     fn search_is_encoded_as_one_bodyless_get_query_parameter() {
         let request = RequestEnvelope::Search(Box::new(SearchRequest {
             query: crate::search::SearchInput::default(),
@@ -757,7 +784,7 @@ impl UntrustedSmokeProvenance {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RequestDeadline(Instant);
 
 impl RequestDeadline {
@@ -773,6 +800,16 @@ impl RequestDeadline {
         self.0
             .checked_duration_since(Instant::now())
             .filter(|remaining| !remaining.is_zero())
+    }
+
+    pub fn remaining_ms(self) -> u64 {
+        self.remaining()
+            .map(|remaining| remaining.as_millis().min(u128::from(u64::MAX)) as u64)
+            .unwrap_or(0)
+    }
+
+    pub fn minus(self, duration: Duration) -> Self {
+        Self(self.0.checked_sub(duration).unwrap_or_else(Instant::now))
     }
 }
 

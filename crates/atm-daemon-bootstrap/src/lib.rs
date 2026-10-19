@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::atm_temp::{ProcessEnvSource, is_atm_temp_unset};
+use atm_core::boundary::SERVER_REQUEST_BUDGET;
 use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
 use atm_core::error::{AtmError, AtmErrorCode};
 #[cfg(unix)]
@@ -35,7 +36,6 @@ use atm_http_runtime::{
     PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
-use atm_storage::request_budget::SERVER_REQUEST_BUDGET;
 use atm_storage_rusqlite::SqliteStorageFactory;
 use peer_tls::{LEGACY_LITERAL_IP_SKIP_ENV_VAR, LegacyLiteralIpPolicy, MtlsPeerStreamAdapter};
 use tokio::net::TcpStream;
