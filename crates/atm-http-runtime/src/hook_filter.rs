@@ -567,12 +567,11 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use atm_core::boundary::{
-        HookRegistrationStore, RecordingHookActionDispatcher, TaskAssign, TaskClose, TaskCommands,
-        TaskList,
+        DummyHookRunner, HookCall, HookRegistrationStore, RecordingHookActionDispatcher,
+        TaskAssign, TaskClose, TaskCommands, TaskEvents, TaskList, TaskStart,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::hook::HookReply;
-    use atm_core::protocol::ResponseEnvelope;
     use atm_runtime_test_support::InMemoryHookRegistrationStore;
 
     use super::ActiveHookSnapshot;
@@ -583,6 +582,9 @@ mod tests {
         targeted_phases, team,
     };
     use crate::hook_chains::ChainTracker;
+    use crate::storage_and_nudge_router::StorageAndNudgeRouter;
+    use crate::storage_and_nudge_router::tests::{fixture, task_write_request};
+    use crate::task_commands::NormalTaskCommands;
 
     fn list_query() -> atm_core::list::ListQuery {
         atm_core::list::ListQuery {
@@ -602,10 +604,80 @@ mod tests {
         }
     }
 
-    fn close_request() -> atm_core::send::WriteRequest {
+    fn start_request() -> atm_core::send::WriteRequest {
         let mut request = assign_request(false);
         request.task_op = Some(atm_core::boundary::TaskOp::Start);
         request
+    }
+
+    fn close_request() -> atm_core::send::WriteRequest {
+        let mut request = assign_request(false);
+        request.task_op = Some(atm_core::boundary::TaskOp::Close {
+            outcome: atm_core::boundary::TaskCloseOutcome::Completed,
+            reason: None,
+        });
+        request
+    }
+
+    fn move_request() -> atm_core::protocol::TaskMoveRequest {
+        atm_core::protocol::TaskMoveRequest {
+            caller_identity: agent(atm_core::roles::ROLE_TEAM_LEAD),
+            caller_team: team(),
+            task_id: "bk-2".parse().expect("task id"),
+            target: atm_core::test_support::MoveTarget::End,
+        }
+    }
+
+    fn events_query() -> atm_core::list::ListQuery {
+        atm_core::list::ListQuery {
+            task_ledger: Some(atm_core::list::TaskLedgerQuery::Events {
+                task_id: "bk-2".parse().expect("task id"),
+                member: None,
+            }),
+            ..list_query()
+        }
+    }
+
+    /// A filter over a real router: the un-hooked body is `NormalTaskCommands`,
+    /// so a pass-through or refusal is judged against the real ledger.
+    fn filter_over(
+        base: &StorageAndNudgeRouter,
+        snapshot: Arc<ActiveHookSnapshot>,
+        runner: Arc<DummyHookRunner>,
+    ) -> impl TaskCommands {
+        HookedTaskCommands::new(
+            Arc::new(NormalTaskCommands::new(base.clone())),
+            Arc::new(base.unhooked()),
+            snapshot,
+            runner,
+            base.hook_chains(),
+        )
+    }
+
+    /// The team's task rows as the store holds them: the ledger a write changes.
+    fn ledger(
+        store: &(dyn atm_core::test_support::TaskStore + Send + Sync),
+    ) -> Vec<atm_core::test_support::TaskRow> {
+        store.list_tasks(&team(), None).expect("ledger rows")
+    }
+
+    /// Each leaf replaced by its JSON type name: two responses compare equal when
+    /// they carry the same fields, whatever the generated ids and timestamps are.
+    fn shape(value: &serde_json::Value) -> serde_json::Value {
+        use serde_json::Value;
+        let name = match value {
+            Value::Object(map) => {
+                return Value::Object(map.iter().map(|(k, v)| (k.clone(), shape(v))).collect());
+            }
+            Value::Array(items) => {
+                return Value::Array(items.iter().map(shape).collect());
+            }
+            Value::Null => "null",
+            Value::Bool(_) => "bool",
+            Value::Number(_) => "number",
+            Value::String(_) => "string",
+        };
+        Value::String(name.to_owned())
     }
 
     #[test]
@@ -648,15 +720,35 @@ mod tests {
             .list(TaskList(list_query()), &ctx(deadline()))
             .await
             .expect("list");
+        h.commands
+            .move_task(move_request(), &ctx(deadline()))
+            .await
+            .expect("move");
+        h.commands
+            .events(TaskEvents(events_query()), &ctx(deadline()))
+            .await
+            .expect("events");
         assert_eq!(store.calls.load(Ordering::SeqCst), before);
     }
 
     #[tokio::test]
     async fn each_method_consults_only_its_own_hook() {
+        let names = [
+            "task.assign",
+            "task.start",
+            "task.close",
+            "task.move",
+            "task.list",
+            "task.events",
+        ];
         let store = Arc::new(InMemoryHookRegistrationStore::new());
-        register(&store, "task.close", "bk", 1);
+        for name in names {
+            register(&store, name, "bk", 1);
+        }
         let h = harness(&store);
-        reply(&h.runner, HookReply::PassThrough);
+        for _ in names {
+            reply(&h.runner, HookReply::PassThrough);
+        }
         h.commands
             .assign(
                 TaskAssign(Box::new(assign_request(false))),
@@ -664,19 +756,47 @@ mod tests {
             )
             .await
             .expect("assign");
-        assert!(h.runner.calls.lock().expect("calls").is_empty());
+        h.commands
+            .start(TaskStart(Box::new(start_request())), &ctx(deadline()))
+            .await
+            .expect("start");
         h.commands
             .close(TaskClose(Box::new(close_request())), &ctx(deadline()))
             .await
             .expect("close");
-        let calls = h.runner.calls.lock().expect("calls");
-        assert_eq!(calls.len(), 1);
-        match &calls[0].1 {
-            atm_core::boundary::HookCall::Run(request) => {
-                assert_eq!(request.hook.as_str(), "task.close");
-            }
-            other => panic!("unexpected hook call {other:?}"),
-        }
+        h.commands
+            .move_task(move_request(), &ctx(deadline()))
+            .await
+            .expect("move");
+        h.commands
+            .list(TaskList(list_query()), &ctx(deadline()))
+            .await
+            .expect("list");
+        h.commands
+            .events(TaskEvents(events_query()), &ctx(deadline()))
+            .await
+            .expect("events");
+        let consulted: Vec<String> = h
+            .runner
+            .calls
+            .lock()
+            .expect("calls")
+            .iter()
+            .map(|(_, call, _)| match call {
+                HookCall::Run(request) => request.hook.as_str().to_owned(),
+                other => panic!("unexpected hook call {other:?}"),
+            })
+            .collect();
+        assert_eq!(consulted, names);
+        let inner: Vec<String> = h
+            .inner
+            .calls
+            .lock()
+            .expect("calls")
+            .iter()
+            .map(|(hook, _)| hook.as_str().to_owned())
+            .collect();
+        assert_eq!(inner, names);
     }
 
     #[tokio::test]
@@ -842,6 +962,7 @@ mod tests {
                 .await,
         );
         assert_eq!(error.code(), AtmErrorCode::HookRefused);
+        assert!(error.message().contains("bd not ready"));
         assert!(h.inner.calls.lock().expect("calls").is_empty());
     }
 
@@ -963,7 +1084,54 @@ mod tests {
                 .await,
         );
         assert_eq!(error.code(), AtmErrorCode::HookRefused);
+        assert!(error.message().contains("bd not ready"));
         assert!(h.actions.calls.lock().expect("calls").is_empty());
+        assert!(h.inner.calls.lock().expect("calls").is_empty());
+    }
+
+    #[tokio::test]
+    async fn refused_task_write_leaves_the_real_ledger_unchanged() {
+        let store = Arc::new(InMemoryHookRegistrationStore::new());
+        register(&store, "task.assign", "bk", 1);
+        let snapshot = Arc::new(ActiveHookSnapshot::load(store.clone()).expect("snapshot"));
+        let fx = fixture(true, None, None);
+        let base = fx.router.clone();
+        NormalTaskCommands::new(base.clone())
+            .assign(
+                TaskAssign(Box::new(task_write_request(&fx, "T-SEED"))),
+                &ctx(deadline()),
+            )
+            .await
+            .expect("seed the ledger without a hook");
+        let before = ledger(fx.task_store.as_ref());
+        assert_eq!(
+            before.len(),
+            1,
+            "the seeded task is in the ledger before the refusal"
+        );
+        let runner = Arc::new(DummyHookRunner::default());
+        reply(
+            &runner,
+            HookReply::Refused {
+                message: "bd not ready".into(),
+            },
+        );
+        let filter = filter_over(&base, snapshot, runner);
+        let error = expect_err(
+            filter
+                .assign(
+                    TaskAssign(Box::new(task_write_request(&fx, "T-REFUSED"))),
+                    &ctx(deadline()),
+                )
+                .await,
+        );
+        assert_eq!(error.code(), AtmErrorCode::HookRefused);
+        assert!(error.message().contains("bd not ready"));
+        assert_eq!(
+            ledger(fx.task_store.as_ref()),
+            before,
+            "a refused write leaves the task ledger as it was"
+        );
     }
 
     #[tokio::test]
@@ -991,21 +1159,35 @@ mod tests {
     async fn pass_through_row_equals_unhooked_row() {
         let store = Arc::new(InMemoryHookRegistrationStore::new());
         register(&store, "task.assign", "bk", 1);
-        let h = harness(&store);
-        reply(&h.runner, HookReply::PassThrough);
-        let response = h
-            .commands
+        let snapshot = Arc::new(ActiveHookSnapshot::load(store.clone()).expect("snapshot"));
+
+        let unhooked = fixture(true, None, None);
+        let unhooked_response = NormalTaskCommands::new(unhooked.router.clone())
             .assign(
-                TaskAssign(Box::new(assign_request(false))),
+                TaskAssign(Box::new(task_write_request(&unhooked, "T-PASS"))),
                 &ctx(deadline()),
             )
             .await
-            .expect("assign");
-        assert!(matches!(
-            response.into_inner(),
-            ResponseEnvelope::RuntimeViewReloaded
-        ));
-        assert_eq!(h.inner.calls.lock().expect("calls").len(), 1);
+            .expect("unhooked assign");
+
+        let hooked = fixture(true, None, None);
+        let runner = Arc::new(DummyHookRunner::default());
+        reply(&runner, HookReply::PassThrough);
+        let filter = filter_over(&hooked.router, snapshot, runner.clone());
+        let hooked_response = filter
+            .assign(
+                TaskAssign(Box::new(task_write_request(&hooked, "T-PASS"))),
+                &ctx(deadline()),
+            )
+            .await
+            .expect("pass-through assign");
+
+        assert_eq!(runner.calls.lock().expect("calls").len(), 1);
+        let unhooked_shape =
+            shape(&serde_json::to_value(unhooked_response.into_inner()).expect("json"));
+        let hooked_shape =
+            shape(&serde_json::to_value(hooked_response.into_inner()).expect("json"));
+        assert_eq!(hooked_shape, unhooked_shape);
     }
 
     #[tokio::test]
