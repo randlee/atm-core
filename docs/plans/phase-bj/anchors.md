@@ -1886,6 +1886,7 @@ Deterministic check to pair with the development gate: Install a skill with a ch
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-1`: Installer verification belongs to bj-5, not the bj-1 task-close hook.
 - `atm-bj-3`: Installer verification belongs to bj-5, not bj-3 sanity-stack.
+- `atm-bj-2`: Installer verification belongs to bj-5, not the bj-2 pour and validate-plan.
 
 Fixtures:
 - pass: The installer verifies skill files against the published manifest.

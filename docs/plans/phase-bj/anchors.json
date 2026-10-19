@@ -6616,6 +6616,13 @@
           "item": "atm-bj-3",
           "reason": "Installer verification belongs to bj-5, not bj-3 sanity-stack.",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T03:03:25+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "Installer verification belongs to bj-5, not the bj-2 pour and validate-plan.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -6626,6 +6633,10 @@
         {
           "item": "atm-bj-3",
           "reason": "Installer verification belongs to bj-5, not bj-3 sanity-stack."
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "Installer verification belongs to bj-5, not the bj-2 pour and validate-plan."
         }
       ]
     },
