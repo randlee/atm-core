@@ -62,15 +62,17 @@ impl AtmCron {
         let reload = self.reload.subscribe();
         let rows = store_call(self.deps.store.clone(), |store| store.active_all()).await?;
         let (shutdown, receiver) = oneshot::channel();
+        let (running, settled) = watch::channel(0);
         let cron = self.clone();
         let stopped = self.stopped.clone();
         let worker = tokio::spawn(async move {
             let _guard = Stopped(stopped);
-            worker::run(cron, rows, reload, receiver).await;
+            worker::run(cron, rows, reload, receiver, running).await;
         });
         Ok(CronWorkerHandle {
             shutdown: Mutex::new(Some(shutdown)),
             worker: Mutex::new(Some(worker)),
+            settled,
         })
     }
 
@@ -178,6 +180,7 @@ impl CronScheduler for AtmCron {
 pub struct CronWorkerHandle {
     shutdown: Mutex<Option<oneshot::Sender<()>>>,
     worker: Mutex<Option<JoinHandle<()>>>,
+    settled: watch::Receiver<usize>,
 }
 
 impl CronWorkerHandle {
@@ -203,6 +206,8 @@ impl CronWorkerHandle {
             worker.abort();
             let _ = worker.await;
         }
+        let mut settled = self.settled.clone();
+        let _ = settled.wait_for(|running| *running == 0).await;
     }
 }
 

@@ -442,12 +442,25 @@ async fn stop_hook_false_runs_the_tick() {
             stop: false,
             reason: None,
         }));
-    fixture.cron.start(spec).await.unwrap();
+    fixture.cron.start(spec.clone()).await.unwrap();
     let worker = fixture.worker().await;
     fixture.step(60).await;
     shutdown(&worker).await;
     assert_eq!(fixture.calls(), 2);
     assert_eq!(fixture.row().last_outcome.as_deref(), Some("ok"));
+    let calls = fixture.runner.calls.lock().unwrap();
+    let HookCall::Stop(request) = &calls[0].1 else {
+        panic!("not stop check")
+    };
+    assert_eq!(request.custom, spec.custom);
+    assert_eq!(request.hook.as_str(), "cron.stop");
+    assert_eq!(
+        request.request,
+        serde_json::json!({"args":spec.args,"created_by":"solar"})
+    );
+    assert_eq!(request.caller.identity, spec.created_by);
+    assert_eq!(calls[0].0.timeout_ms, 20000);
+    assert_eq!(calls[1].0.timeout_ms, 20000);
 }
 
 #[tokio::test]
@@ -917,6 +930,35 @@ async fn shutdown_joins_within_deadline_with_run_in_flight() {
     assert_eq!(fixture.row().last_outcome, None);
 }
 
+#[tokio::test]
+async fn shutdown_waits_for_cancelled_run_cleanup() {
+    struct Dropped(watch::Sender<bool>);
+    impl Drop for Dropped {
+        fn drop(&mut self) {
+            self.0.send_replace(true);
+        }
+    }
+    let fixture = Fixture::new();
+    let (entered, mut received) = watch::channel(false);
+    let (dropped, finished) = watch::channel(false);
+    *fixture.runner.before_reply.lock().unwrap() = Some(Arc::new(move |_| {
+        let guard = Dropped(dropped.clone());
+        let entered = entered.clone();
+        Box::pin(async move {
+            let _guard = guard;
+            entered.send_replace(true);
+            std::future::pending::<()>().await;
+        })
+    }));
+    fixture.cron.start(fixture.spec("cleanup")).await.unwrap();
+    let worker = fixture.worker().await;
+    fixture.step(60).await;
+    received.wait_for(|entered| *entered).await.unwrap();
+    worker.shutdown(tokio::time::Instant::now()).await;
+    assert!(*finished.borrow());
+    assert_eq!(fixture.row().last_outcome, None);
+}
+
 fn actions() -> Vec<atm_core::hook::HookAction> {
     serde_json::from_value(serde_json::json!([
         {"command":"task.move","request":{"caller_identity":"other","caller_team":"test-team","task_id":"first","target":{"to":"end"}}},
@@ -1053,6 +1095,7 @@ async fn reload_failure_keeps_slots_and_retries() {
     let spec = fixture.spec("reload");
     fixture.cron.start(spec.clone()).await.unwrap();
     fixture.reply(HookReply::PassThrough);
+    let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.store.fail_active_all.store(true, Ordering::SeqCst);
     let parks = fixture.clock.parks();
@@ -1063,9 +1106,21 @@ async fn reload_failure_keeps_slots_and_retries() {
         .unwrap();
     fixture.clock.wait_parks_above(parks).await;
     fixture.step(60).await;
+    entered.wait_for(|count| *count == 1).await.unwrap();
     fixture.store.fail_active_all.store(false, Ordering::SeqCst);
+    let parks = fixture.clock.parks();
+    fixture
+        .cron
+        .start(fixture.spec("after-clear"))
+        .await
+        .unwrap();
+    fixture.clock.wait_parks_above(parks).await;
+    fixture.reply(HookReply::PassThrough);
+    fixture.step(61).await;
+    entered.wait_for(|count| *count == 2).await.unwrap();
+    release.send_replace(true);
     shutdown(&worker).await;
-    assert_eq!(fixture.calls(), 1);
+    assert_eq!(fixture.calls(), 2);
     assert!(
         logs.lock()
             .unwrap()

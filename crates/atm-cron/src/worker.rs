@@ -24,6 +24,34 @@ struct Slot {
     in_flight: Option<JoinHandle<CronRunOutcome>>,
 }
 
+struct Running(watch::Sender<usize>);
+
+impl Running {
+    fn new(sender: watch::Sender<usize>) -> Self {
+        sender.send_modify(|count| *count += 1);
+        Self(sender)
+    }
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        self.0.send_modify(|count| *count -= 1);
+    }
+}
+
+struct TrackedRun<F> {
+    future: Pin<Box<F>>,
+    _guard: Running,
+}
+
+impl<F: Future> Future for TrackedRun<F> {
+    type Output = F::Output;
+
+    fn poll(self: Pin<&mut Self>, context: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        self.get_mut().future.as_mut().poll(context)
+    }
+}
+
 impl Drop for Slot {
     fn drop(&mut self) {
         if let Some(handle) = &self.in_flight {
@@ -183,6 +211,7 @@ pub(crate) async fn run(
     rows: Vec<CronSchedule>,
     mut reload: watch::Receiver<u64>,
     mut shutdown: oneshot::Receiver<()>,
+    running: watch::Sender<usize>,
 ) {
     let mut slots = Vec::new();
     merge(&cron, &mut slots, rows).await;
@@ -231,7 +260,14 @@ pub(crate) async fn run(
                 let step = plan_step(&views, now);
                 for id in &step.stop_until {
                 if let Some(index) = slots.iter().position(|slot| slot.schedule.id == *id) {
-                    let slot = slots.remove(index);
+                    let mut slot = slots.remove(index);
+                    if let Some(handle) = slot.in_flight.take() {
+                        handle.abort();
+                        if let Err(error) = handle.await {
+                            tracing::info!(subsystem = "atm_cron", action = "cancelled", schedule = %slot.schedule.id,
+                                %error, "cron run cancelled at until: {error}");
+                        }
+                    }
                     let outcome = CronRunOutcome::Stopped("until reached".into());
                     tick::record(&cron, &slot.schedule, &outcome).await;
                     tick::log(&slot.schedule, "tick", &outcome, 0);
@@ -244,7 +280,11 @@ pub(crate) async fn run(
                 } else if step.run.contains(&slot.schedule.id) {
                     let owner = cron.clone();
                     let schedule = slot.schedule.clone();
-                    slot.in_flight = Some(tokio::spawn(async move { tick::run_one(&owner, &schedule).await }));
+                    let guard = Running::new(running.clone());
+                    slot.in_flight = Some(tokio::spawn(TrackedRun {
+                        future: Box::pin(async move { tick::run_one(&owner, &schedule).await }),
+                        _guard: guard,
+                    }));
                     slot.next = next_time(&slot.schedule, now);
                 }
                 }
