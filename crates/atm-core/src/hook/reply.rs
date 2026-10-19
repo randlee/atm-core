@@ -121,19 +121,17 @@ impl HookAction {
     fn list_request(&self, team: &TeamName, identity: &AgentName) -> Result<ApiRequest, AtmError> {
         let mut request: ListQuery = self.body()?;
         self.check_team(&request.caller_team, team)?;
-        let matches = matches!(
-            (self.command.as_str(), &request.task_ledger),
-            ("task.list", Some(TaskLedgerQuery::Tasks { .. }))
-                | ("task.events", Some(TaskLedgerQuery::Events { .. }))
-                | ("task.history", Some(TaskLedgerQuery::History { .. }))
-        );
-        if !matches {
+        let is_history = self.command == "task.history"
+            && matches!(request.task_ledger, Some(TaskLedgerQuery::History { .. }));
+        request.caller_identity = identity.clone();
+        let api_request = ApiRequest::Messages(Box::new(MessageCollectionRequest::List(request)));
+        if !is_history
+            && !TaskCommand::classify(api_request.clone())
+                .is_ok_and(|classified| classified.hook_name().as_str() == self.command)
+        {
             return Err(self.malformed("task_ledger must match the named task query"));
         }
-        request.caller_identity = identity.clone();
-        Ok(ApiRequest::Messages(Box::new(
-            MessageCollectionRequest::List(request),
-        )))
+        Ok(api_request)
     }
 
     pub fn into_api_request(
@@ -509,6 +507,37 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn task_query_action_must_match_classified_command_or_history() {
+        let ledgers = [
+            ("task.list", json!({"Tasks":{"member":null}})),
+            (
+                "task.events",
+                json!({"Events":{"task_id":"work-1", "member":null}}),
+            ),
+            (
+                "task.history",
+                json!({"History":{"member":null, "limit":10}}),
+            ),
+            ("", Value::Null),
+        ];
+        for command in ["task.list", "task.events", "task.history"] {
+            for (expected, ledger) in &ledgers {
+                let candidate = action(command, list_body(ledger.clone()));
+                let result = candidate.into_api_request(&team(), &identity());
+                if command == *expected {
+                    let (variant, body) = mapped_body(result.unwrap());
+                    assert_eq!(variant, "list");
+                    assert_eq!(body["caller_identity"], "caller");
+                    assert_eq!(body["caller_team"], "test-team");
+                    assert_eq!(body["task_ledger"], *ledger);
+                } else {
+                    malformed(result);
+                }
+            }
+        }
     }
 
     fn malformed_replies() -> Vec<Vec<u8>> {
