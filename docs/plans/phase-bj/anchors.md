@@ -17,7 +17,7 @@ Intent: `docs/plans/phase-bj/intent.md`
 | ANC-009 | locked | atm-bd cron --phase <x> replaces console --headless | 2026-10-16 |
 | ANC-010 | locked | bare skill installs the bundled skills, offline | 2026-10-16 |
 | ANC-011 | locked | skill x.y.z installs that release tag | 2026-10-16 |
-| ANC-012 | locked | skill --latest installs main head | 2026-10-16 |
+| ANC-012 | locked | skill --latest installs the latest published release | 2026-10-16 |
 | ANC-013 | locked | skill --list shows what the repo offers | 2026-10-16 |
 | ANC-014 | locked | --orchestration selects today's skill set | 2026-10-16 |
 | ANC-015 | retired | claude agents of unknown model get an orange starburst | 2026-10-16 |
@@ -296,21 +296,21 @@ Fixtures:
 
 ## ANC-012
 
-Anchor: The atm-bd skill subcommand given --latest must install the skills from the head of the main branch of the atm-bd-orchestration repository.
+Anchor: The atm-bd skill subcommand given --latest must install the skills from the latest published release of the atm-bd-orchestration repository.
 
 > atm-bd --latest (latest on repo)
 
-Said by Rand, planning session 2026-10-17: skill sources redesigned, agreed (yes), 2026-10-16. Status: locked. Version 2.
+Said by Rand, planning session 2026-10-17: skill sources redesigned, agreed (yes), 2026-10-16. Status: locked. Version 3.
 
-Summary: skill --latest installs main head
+Summary: skill --latest installs the latest published release
 
 Scope: adds or changes the --latest option
 
-Deterministic check to pair with the development gate: run atm-bd skill --latest and diff the installed files against git show origin/main
+Deterministic check to pair with the development gate: Run atm-bd skill --latest and diff the installed files against the files of the newest published release tag.
 
 Fixtures:
-- pass: atm-bd skill --latest installs the skills from the head of the main branch of atm-bd-orchestration.
-- fail: atm-bd skill --latest installs the skills bundled in the installed package.
+- pass: atm-bd skill --latest installs the skills from the newest published release of atm-bd-orchestration.
+- fail: atm-bd skill --latest installs the unreleased head of the main branch instead of the latest published release.
 
 ## ANC-013
 

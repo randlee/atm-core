@@ -600,25 +600,25 @@
       "id": "ANC-012",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The atm-bd skill subcommand given --latest must install the skills from the head of the main branch of the atm-bd-orchestration repository.",
+      "statement": "The atm-bd skill subcommand given --latest must install the skills from the latest published release of the atm-bd-orchestration repository.",
       "quote": "atm-bd --latest (latest on repo)",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-16",
       "context": "planning session 2026-10-17: skill sources redesigned, agreed (yes)",
-      "summary": "skill --latest installs main head",
+      "summary": "skill --latest installs the latest published release",
       "scope": "adds or changes the --latest option",
-      "deterministic_check": "run atm-bd skill --latest and diff the installed files against git show origin/main",
+      "deterministic_check": "Run atm-bd skill --latest and diff the installed files against the files of the newest published release tag.",
       "fixtures": {
         "pass": [
-          "atm-bd skill --latest installs the skills from the head of the main branch of atm-bd-orchestration."
+          "atm-bd skill --latest installs the skills from the newest published release of atm-bd-orchestration."
         ],
         "fail": [
-          "atm-bd skill --latest installs the skills bundled in the installed package."
+          "atm-bd skill --latest installs the unreleased head of the main branch instead of the latest published release."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -638,6 +638,17 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-19T01:02:22+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "The atm-bd skill subcommand given --latest must install the skills from the head of the main branch of the atm-bd-orchestration repository."
         }
       ]
     },
