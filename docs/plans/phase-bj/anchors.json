@@ -1143,7 +1143,30 @@
           "After the sprint, atm-bd-console remains as an alias that bead-queues still calls."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "relevant": {
+              "type": "choice",
+              "instructions": "Does `item.text` touch any of the three things listed in `anchor.scope`: (1) the name of a command or installed entry point; (2) an install script, installer or install path; (3) a script, document, test or workflow that starts, runs or describes the console? Judge whether the item touches at least one of them. Do not judge whether the item obeys `anchor.statement`.",
+              "criteria": {
+                "yes": "The item touches a command or entry-point name, an install script, installer or install path, or a script, document, test or workflow that starts, runs or describes the console.",
+                "no": "The item touches none of the three: it changes something else, such as a message template, a data model or a review rule, and does not run or describe the console.",
+                "unclear": "The item text is too vague to tell whether it touches any of the three."
+              }
+            },
+            "contradicted": {
+              "type": "choice",
+              "instructions": "`anchor.statement` forbids one thing: a command named atm-bd-console (one hyphenated word) existing after installation, or any script, document, test or workflow running that hyphenated command. Decide whether `item.text` keeps, adds, aliases or runs that hyphenated atm-bd-console command. `atm-bd console`, written with a space, is a different command: the `console` subcommand of the `atm-bd` command; running, documenting or extending it is not a conflict. The directory apps/atm-bd-console and the Python module atm_bd_console are not the command either. Silence about atm-bd-console is not a conflict. Judge conflict only.",
+              "criteria": {
+                "yes": "The item text keeps, adds, aliases or runs a command named atm-bd-console (hyphenated), for example as an installed entry point, a console script, a compatibility alias, or a command line in a script, document, test or workflow.",
+                "no": "The item text does not keep, add or run a hyphenated atm-bd-console command: it is silent about it, removes it, or names only the `atm-bd console` subcommand (with a space), the directory apps/atm-bd-console or the module atm_bd_console.",
+                "unclear": "The item text refers to a console command but it is not possible to tell whether it means the hyphenated atm-bd-console command or the `atm-bd console` subcommand."
+              }
+            }
+          }
+        }
+      },
       "version": 3,
       "status": "locked",
       "promoted_to": null,
