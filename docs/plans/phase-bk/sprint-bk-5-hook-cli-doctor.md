@@ -5,7 +5,7 @@ closure_type `integration`; target_boundary the `atm` CLI (`atm hook`,
 filter, `atm-cron` and the shutdown order, over `req:REQ-P-HOOK-001`,
 `req:REQ-P-HOOK-003`, `req:REQ-P-HOOK-004`, `req:REQ-P-CRON-001`,
 `req:REQ-P-CRON-002`; branch `sprint/bk-5-hook-cli-doctor`, PR →
-`sprint/bk-4-atm-cron` (layer 7, wave 3). Consumes bk-6
+`sprint/bk-4-atm-cron` (layer 7, wave 4). Consumes bk-6
 (`StorageHandles::hook_registration_store`, `cron_schedule_store`), bk-3
 (`DaemonHookRunner`, `fixture_hook.py`), bk-7 (routes, `X-ATM-Hook-Actions`,
 `NormalTaskCommands`, `HookedTaskCommands`, `ActiveHookSnapshot`,

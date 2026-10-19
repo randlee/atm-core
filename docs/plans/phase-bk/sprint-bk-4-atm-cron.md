@@ -3,11 +3,10 @@
 closure_type `boundary`; target_boundary `BOUNDARY-CronScheduler` (the
 `atm-cron` crate behind bk-2's sealed `atm_core::boundary::CronScheduler`
 trait); branch `sprint/bk-4-atm-cron`, PR → `sprint/bk-7-hook-filter`
-(layer 6). Wave 2, parallel with bk-6, bk-3 and bk-7: cut from the bk-2 head and
-rebased onto layer 5 in order. Its root `Cargo.toml` and
-`.just/lint-config.toml` lines are disjoint from bk-3's (bk-3 sprint doc,
-scope boundary); on the rebase it regenerates `Cargo.lock` with `cargo
-check --workspace` instead of merging lock hunks. It
+(layer 6). Wave 3, must_follow bk-3 (Rand, 2026-10-19: "do 4 waves"; overrides
+`atm-beads-plan-guidelines.md:177`): cut from bk-3's final head, building
+on its root `Cargo.toml`, `Cargo.lock` and `.just/lint-config.toml` edits,
+and rebased onto layer 5 in order. It
 consumes through `atm_core::boundary` bk-2's `CronScheduler`,
 `CronStartSpec`, `HookRunner`, `HookActionDispatcher`, `DispatchSpec`,
 `HookRequest::for_cron`, the doubles, and bk-1's `CronScheduleStore`

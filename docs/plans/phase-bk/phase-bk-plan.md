@@ -32,10 +32,11 @@ targets the layer below.
 | Wave | Sprints | Hard dependency (consumed artefact) |
 | --- | --- | --- |
 | 1 | bk-1, bk-2 | bk-2 ← bk-1: the store traits and types, doubles, codes, constructors, budget constants as written in `sprint-bk-1-hook-stores.md` (Public contract); bk-2's dev codes against that text from the start and closes only after bk-1 completes |
-| 2 | bk-6, bk-3, bk-7, bk-4 | bk-6 ← bk-1: the two store traits and their row types, `CronSchedule.generation`, the contract tests' expectations. bk-3 ← bk-2: `HookRunner`, `HookTarget`, `HookRequest`, the reply parsers, doctor request/reply. bk-7 ← bk-2: `TaskCommands`, `TaskCommand::classify`, `HookActionDispatcher`, `DispatchSpec`, the request structs, `check_limits`, the doubles. bk-4 ← bk-2: `CronScheduler`, `CronStartSpec`, `HookRequest::for_cron`, `DispatchSpec`, the doubles |
-| 3 | bk-5 | bk-5 ← bk-6: `StorageHandles` accessors; ← bk-3: `DaemonHookRunner`, `fixture_hook.py`; ← bk-7: routes, `HookedTaskCommands`, `ChainTracker`, `install_cron_scheduler`; ← bk-4: `AtmCron`, `CronWorkerHandle`, `ManualClock` |
+| 2 | bk-6, bk-3, bk-7 | bk-6 ← bk-1: the two store traits and their row types, `CronSchedule.generation`, the contract tests' expectations. bk-3 ← bk-2: `HookRunner`, `HookTarget`, `HookRequest`, the reply parsers, doctor request/reply. bk-7 ← bk-2: `TaskCommands`, `TaskCommand::classify`, `HookActionDispatcher`, `DispatchSpec`, the request structs, `check_limits`, the doubles |
+| 3 | bk-4 | bk-4 ← bk-2: `CronScheduler`, `CronStartSpec`, `HookRequest::for_cron`, `DispatchSpec`, the doubles; ← bk-3: its root `Cargo.toml`, `Cargo.lock` and `.just/lint-config.toml` edits (Rand, 2026-10-19: "do 4 waves") |
+| 4 | bk-5 | bk-5 ← bk-6: `StorageHandles` accessors; ← bk-3: `DaemonHookRunner`, `fixture_hook.py`; ← bk-7: routes, `HookedTaskCommands`, `ChainTracker`, `install_cron_scheduler`; ← bk-4: `AtmCron`, `CronWorkerHandle`, `ManualClock` |
 
-Critical path 3 waves. bk-1 and bk-2 are separate sprints developed
+Critical path 4 waves (Rand, 2026-10-19: "do 4 waves"); bk-4 must_follow bk-3, a ruling that overrides `atm-beads-plan-guidelines.md:177`. bk-1 and bk-2 are separate sprints developed
 concurrently by two agents (Rand, 2026-10-19: "I would do them in parallel w/ 2 agents."; and: "that works, he starts, then when bk-1 completes, he finishes"). bk-2's dev
 starts with bk-1's, coding `atm-core` against bk-1's atm-storage contract
 types in `sprint-bk-1-hook-stores.md`. bk-2 closes only after bk-1
@@ -46,9 +47,8 @@ stays bk-1 then bk-2, bk-2's PR targeting bk-1's branch. In beads,
 `atm-bk-2.group-dev` is ready in wave 1. The CLI and composition (bk-5)
 need every runtime crate. Other parallel sprints are cut from their
 dependency's head and rebased into the stack in layer order when done
-(Rand 2026-10-12). The root `Cargo.toml` and `.just/lint-config.toml`
-lines bk-3 and bk-4 add are disjoint (`sprint-bk-3-hook-runner.md`, scope
-boundary); bk-4 regenerates `Cargo.lock` on its rebase.
+(Rand 2026-10-12). bk-4 starts from bk-3's final head and builds on its
+root `Cargo.toml`, `Cargo.lock` and `.just/lint-config.toml` edits.
 
 ## Decisions
 

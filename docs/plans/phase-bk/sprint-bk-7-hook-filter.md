@@ -4,7 +4,7 @@ closure_type `boundary`; target_boundary `BOUNDARY-TaskCommands` and
 `BOUNDARY-HookActionDispatcher` (`atm-http-runtime`) with the hook and cron
 envelope variants and routes (`atm-core` protocol, HTTP API 1.13.0); branch
 `sprint/bk-7-hook-filter`, PR → `sprint/bk-3-hook-runner` (layer 5). Wave 2,
-parallel with bk-6, bk-3 and bk-4: cut from the bk-2 head and rebased onto layer 4
+parallel with bk-6 and bk-3: cut from the bk-2 head and rebased onto layer 4
 in order; it consumes from bk-2 `TaskCommands`, `TaskCommand::classify`,
 `HookActionDispatcher`, `DispatchSpec`, `HookRunner` (through
 `DummyHookRunner` only), `CronScheduler`, the six request structs,

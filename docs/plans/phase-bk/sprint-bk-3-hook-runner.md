@@ -3,7 +3,7 @@
 closure_type `boundary`; target_boundary `BOUNDARY-HookRunner`
 (`DaemonHookRunner` in `atm-daemon-bootstrap` over `spawn_with_deadline`);
 branch `sprint/bk-3-hook-runner`, PR → `sprint/bk-6-hook-stores-sqlite`
-(layer 4). Wave 2, parallel with bk-6, bk-7 and bk-4: cut from the bk-2 head,
+(layer 4). Wave 2, parallel with bk-6 and bk-7: cut from the bk-2 head,
 rebased onto layer 3 in order; it consumes from bk-2 the `HookRunner` trait,
 `HookTarget`, `HookRequest`, `HookReply::parse`, `StopReply::parse`,
 `HookDoctorRequest`, `HookDoctorReply::parse` and from bk-1 `HookExitCause`,
@@ -44,19 +44,9 @@ Owned paths (new unless marked edited):
   `async-trait`, `rustix` in `allowed_dependencies`)
 
 bk-2 lands the `rustix` and `cron` ownership entries and the `atm-cron`
-section rule, which pass `just lint` early. The rest cannot move earlier:
-an unused `[workspace.dependencies]` line fails `cargo shear`
-(`unused_workspace_dependency`), an allowlisted dependency the manifest does
-not declare fails `just lint`, and an allowlist entry or `members` line for
-a crate that does not exist fails `just lint` and `cargo`. bk-3 and bk-4
-therefore edit disjoint lines of the same files. bk-3 adds one line to root
-`Cargo.toml` `[workspace.dependencies]` (`rustix`) and edits the existing
-`crates/atm-daemon-bootstrap/Cargo.toml` allowlist entry in
-`.just/lint-config.toml` (`async-trait`, `rustix`); bk-4 adds the
-`"crates/atm-cron"` `members` line and the `atm-cron` and `cron`
-`[workspace.dependencies]` lines, and a new `crates/atm-cron/Cargo.toml`
-allowlist entry. bk-4, the later layer, rebases onto bk-3 and regenerates
-`Cargo.lock` with `cargo check --workspace` rather than merging lock hunks.
+section rule. bk-4 must_follow this sprint and starts from its final head,
+building on these root `Cargo.toml`, `Cargo.lock` and
+`.just/lint-config.toml` edits (Rand, 2026-10-19: "do 4 waves").
 
 ## Public contract
 
