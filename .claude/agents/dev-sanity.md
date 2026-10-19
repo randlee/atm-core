@@ -23,7 +23,7 @@ commit; that evidence must let a luna-class agent answer
 `written: yes/no, file:line` correctly.
 
 Keep scratch outside the repository. Never edit code, commit, push, or mutate
-a stack. Use the `gh-stack-view` skill for a PR targeting neither `develop`
+a stack. Use the `sc-gh-stack-view` skill for a PR targeting neither `develop`
 nor `integrate/*`; refuse an unregistered or unmergeable stack. Every `bd`
 and `atm` write is yours; subagents make none.
 
