@@ -468,17 +468,19 @@ Fixtures:
 
 ## ANC-022
 
-Anchor: After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke the atm-bd-console command; the directory apps/atm-bd-console and the module atm_bd_console are not that command.
+Anchor: The atm-bd-console command must be replaced by the atm-bd console subcommand.
 
 > jes drop atm-bd-console
+'atm-bd-console' is to be removed/replaced w/ atm-bd console
+atm-bd console would logically be in atm-bd-console module
 
-Said by Rand, planning session 2026-10-17: answer to whether to drop the alias, 2026-10-16. Status: locked. Version 3.
+Said by Rand, Rand 2026-10-19 ANC-022 ruling, 2026-10-16. Status: locked. Version 4.
 
 Summary: atm-bd-console is dropped, not aliased
 
 Scope: edits the command name, install scripts or any caller of the console
 
-Deterministic check to pair with the development gate: after uv tool install, command -v atm-bd-console finds nothing; rg atm-bd-console over scripts, docs, tests and workflows finds no invocation
+Deterministic check to pair with the development gate: command -v atm-bd-console fails, atm-bd console runs, rg finds no atm-bd-console invocation outside apps/atm-bd-console and atm_bd_console
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bi-5.group-anc-f1`: touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow

@@ -1126,15 +1126,15 @@
       "id": "ANC-022",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke the atm-bd-console command; the directory apps/atm-bd-console and the module atm_bd_console are not that command.",
-      "quote": "jes drop atm-bd-console",
+      "statement": "The atm-bd-console command must be replaced by the atm-bd console subcommand.",
+      "quote": "jes drop atm-bd-console\n'atm-bd-console' is to be removed/replaced w/ atm-bd console\natm-bd console would logically be in atm-bd-console module",
       "kind": "prohibition",
       "stated_by": "Rand",
       "stated_at": "2026-10-16",
-      "context": "planning session 2026-10-17: answer to whether to drop the alias",
+      "context": "Rand 2026-10-19 ANC-022 ruling",
       "summary": "atm-bd-console is dropped, not aliased",
       "scope": "edits the command name, install scripts or any caller of the console",
-      "deterministic_check": "after uv tool install, command -v atm-bd-console finds nothing; rg atm-bd-console over scripts, docs, tests and workflows finds no invocation",
+      "deterministic_check": "command -v atm-bd-console fails, atm-bd console runs, rg finds no atm-bd-console invocation outside apps/atm-bd-console and atm_bd_console",
       "fixtures": {
         "pass": [
           "After the sprint, atm-bd-console is not installed and no script, document, test or workflow in the repository invokes it."
@@ -1167,7 +1167,7 @@
           }
         }
       },
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1202,6 +1202,20 @@
           "item": "atm-bi-5.group-anc-f1",
           "reason": "touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T01:27:51+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "quote",
+            "context",
+            "deterministic_check"
+          ],
+          "previous_statement": "After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke the atm-bd-console command; the directory apps/atm-bd-console and the module atm_bd_console are not that command.",
+          "previous_quote": "jes drop atm-bd-console",
+          "previous_context": "planning session 2026-10-17: answer to whether to drop the alias",
+          "previous_deterministic_check": "after uv tool install, command -v atm-bd-console finds nothing; rg atm-bd-console over scripts, docs, tests and workflows finds no invocation"
         }
       ],
       "exclude": [
