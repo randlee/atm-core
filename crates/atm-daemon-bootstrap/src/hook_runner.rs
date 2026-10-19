@@ -593,8 +593,10 @@ mod tests {
         assert_eq!(environment["ATM_PHASE"], "bk");
         assert!(environment.get("ATM_BK3_LEAK_SENTINEL").is_none());
         assert_eq!(
-            fs::read_to_string(fixture.target.cwd.join("fixture_cwd.txt")).unwrap(),
-            fixture.target.cwd.to_str().unwrap()
+            Path::new(&fs::read_to_string(fixture.target.cwd.join("fixture_cwd.txt")).unwrap())
+                .canonicalize()
+                .unwrap(),
+            fixture.target.cwd.canonicalize().unwrap()
         );
         println!("BK3_ENVIRONMENT_PROOF_COMPLETE");
     }
