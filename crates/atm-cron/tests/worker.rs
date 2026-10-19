@@ -538,11 +538,20 @@ async fn cron_tick_uses_cron_timeout_ms_not_timeout_ms() {
     {
         let calls = fixture.runner.calls.lock().unwrap();
         assert_eq!(calls[0].0.timeout_ms, 20000);
-        assert!(calls[0].2.remaining_ms() <= 20500);
+        let remaining = calls[0].2.remaining_ms_at(fixture.clock.monotonic_now());
+        assert_eq!(remaining, 20500);
+        assert!(remaining > u64::from(atm_core::boundary::HOOK_TIMEOUT_MAX_MS));
+        assert!(remaining <= 20500);
     }
     release.send_replace(true);
     shutdown(&worker).await;
     assert_eq!(fixture.calls(), 2);
+    for (_, _, deadline) in fixture.runner.calls.lock().unwrap().iter() {
+        assert_eq!(
+            deadline.remaining_ms_at(fixture.clock.monotonic_now()),
+            20500
+        );
+    }
 }
 
 #[tokio::test]

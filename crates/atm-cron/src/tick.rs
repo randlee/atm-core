@@ -97,8 +97,11 @@ fn deadline_budget(timeout_ms: u32) -> Duration {
     Duration::from_millis(u64::from(timeout_ms) + HOOK_ACTION_RESERVE_MS)
 }
 
-fn deadline(schedule: &CronSchedule) -> RequestDeadline {
-    RequestDeadline::after(deadline_budget(schedule.timeout_ms))
+fn deadline(cron: &AtmCron, schedule: &CronSchedule) -> RequestDeadline {
+    RequestDeadline::after_at(
+        cron.deps.clock.monotonic_now(),
+        deadline_budget(schedule.timeout_ms),
+    )
 }
 
 fn request(
@@ -176,7 +179,7 @@ pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunO
             .stop(
                 &target,
                 &request(cron, schedule, &target, "cron.stop"),
-                deadline(schedule),
+                deadline(cron, schedule),
             )
             .await;
         let check = match result {
@@ -201,7 +204,7 @@ pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunO
         .run(
             &target,
             &request(cron, schedule, &target, "cron.tick"),
-            deadline(schedule),
+            deadline(cron, schedule),
         )
         .await
     {

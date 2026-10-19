@@ -740,6 +740,26 @@ mod tests {
     use atm_storage::MoveTarget;
 
     #[test]
+    fn request_deadline_uses_injected_instants() {
+        let now = std::time::Instant::now();
+        let deadline =
+            super::RequestDeadline::after_at(now, std::time::Duration::from_millis(20500));
+        assert_eq!(deadline.remaining_ms_at(now), 20500);
+        assert_eq!(
+            deadline.remaining_ms_at(now + std::time::Duration::from_millis(500)),
+            20000
+        );
+        assert_eq!(
+            deadline.remaining_ms_at(now + std::time::Duration::from_millis(20500)),
+            0
+        );
+        assert_eq!(
+            deadline.remaining_ms_at(now + std::time::Duration::from_secs(30)),
+            0
+        );
+    }
+
+    #[test]
     fn request_deadline_equality_minus_and_remaining_ms() {
         let deadline = super::RequestDeadline::after(std::time::Duration::from_secs(10));
         assert_eq!(
@@ -1038,7 +1058,11 @@ pub struct RequestDeadline(Instant);
 
 impl RequestDeadline {
     pub fn after(duration: Duration) -> Self {
-        Self(Instant::now() + duration)
+        Self::after_at(Instant::now(), duration)
+    }
+
+    pub fn after_at(now: Instant, duration: Duration) -> Self {
+        Self(now + duration)
     }
 
     pub fn expired(self) -> bool {
@@ -1052,7 +1076,12 @@ impl RequestDeadline {
     }
 
     pub fn remaining_ms(self) -> u64 {
-        self.remaining()
+        self.remaining_ms_at(Instant::now())
+    }
+
+    pub fn remaining_ms_at(self, now: Instant) -> u64 {
+        self.0
+            .checked_duration_since(now)
             .map(|remaining| remaining.as_millis().min(u128::from(u64::MAX)) as u64)
             .unwrap_or(0)
     }
