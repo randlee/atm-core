@@ -19,35 +19,46 @@ use crate::types::{AgentName, IsoTimestamp, TeamName};
 pub struct HookName(String);
 
 impl HookName {
-    /// The six task hooks, in the order the design lists them.
-    pub const TASK_HOOKS: [&'static str; 6] = [
+    /// All supported hooks, in the order the design lists them.
+    pub const ALL_HOOKS: [&'static str; 8] = [
         "task.assign",
         "task.start",
         "task.close",
         "task.move",
         "task.list",
         "task.events",
+        "cron.tick",
+        "cron.stop",
     ];
-    pub const CRON_TICK: &'static str = "cron.tick";
-    pub const CRON_STOP: &'static str = "cron.stop";
+    /// The six task hooks, in the order the design lists them.
+    pub const TASK_HOOKS: [&'static str; 6] = [
+        Self::ALL_HOOKS[0],
+        Self::ALL_HOOKS[1],
+        Self::ALL_HOOKS[2],
+        Self::ALL_HOOKS[3],
+        Self::ALL_HOOKS[4],
+        Self::ALL_HOOKS[5],
+    ];
+    pub const CRON_TICK: &'static str = Self::ALL_HOOKS[6];
+    pub const CRON_STOP: &'static str = Self::ALL_HOOKS[7];
 
     /// Accepts any of the eight hook names.
     pub fn parse(name: &str) -> Result<Self, AtmError> {
-        let known =
-            Self::TASK_HOOKS.contains(&name) || name == Self::CRON_TICK || name == Self::CRON_STOP;
-        if known {
+        if Self::ALL_HOOKS.contains(&name) {
             Ok(Self(name.to_owned()))
         } else {
-            Err(AtmError::hook_malformed(&format!(
-                "unknown hook name {name}"
+            Err(AtmError::hook_module_invalid(&format!(
+                "unknown hook name {name}; expected one of {}",
+                Self::ALL_HOOKS.join(", ")
             )))
         }
     }
 
     /// Accepts exactly the six task hooks; the register route's only validator.
     pub fn parse_task_hook(name: &str) -> Result<Self, AtmError> {
-        if Self::TASK_HOOKS.contains(&name) {
-            Ok(Self(name.to_owned()))
+        let hook = Self::parse(name)?;
+        if Self::TASK_HOOKS.contains(&hook.as_str()) {
+            Ok(hook)
         } else {
             Err(AtmError::hook_module_invalid(&format!(
                 "{name} is not a task hook; expected one of {}",

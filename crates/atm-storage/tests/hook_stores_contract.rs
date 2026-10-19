@@ -351,26 +351,46 @@ fn disable_phase_with_no_rows_returns_empty() {
 
 #[test]
 fn hook_name_parse_sets() {
-    for name in HookName::TASK_HOOKS {
+    let task_names = [
+        "task.assign",
+        "task.start",
+        "task.close",
+        "task.move",
+        "task.list",
+        "task.events",
+    ];
+    for name in task_names {
         assert!(HookName::parse_task_hook(name).is_ok(), "{name}");
-    }
-    for name in ["cron.tick", "cron.stop", "task.foo"] {
-        let error = HookName::parse_task_hook(name).expect_err("not a task hook");
-        assert_eq!(error.code().as_str(), "ATM_HOOK_MODULE_INVALID", "{name}");
-    }
-    for name in HookName::TASK_HOOKS
-        .iter()
-        .chain(["cron.tick", "cron.stop"].iter())
-    {
         assert!(HookName::parse(name).is_ok(), "{name}");
     }
-    let error = HookName::parse("task.foo").expect_err("unknown hook");
-    assert_eq!(error.code().as_str(), "ATM_HOOK_MALFORMED");
+    for name in ["cron.tick", "cron.stop"] {
+        assert!(HookName::parse(name).is_ok(), "{name}");
+        let error = HookName::parse_task_hook(name).expect_err("not a task hook");
+        assert_eq!(error.code().as_str(), "ATM_HOOK_MODULE_INVALID", "{name}");
+        assert!(error.is_validation(), "{name}");
+        assert!(error.message().contains(&task_names.join(", ")), "{name}");
+    }
+    for name in ["task.foo", "", "TASK.CLOSE"] {
+        let error = HookName::parse(name).expect_err("unknown hook");
+        let task_error = HookName::parse_task_hook(name).expect_err("unknown task hook");
+        assert_eq!(error.code().as_str(), "ATM_HOOK_MODULE_INVALID", "{name}");
+        assert!(error.is_validation(), "{name}");
+        assert_eq!(task_error.code(), error.code(), "{name}");
+        assert_eq!(task_error.message(), error.message(), "{name}");
+        assert!(
+            error.message().contains(
+                "task.assign, task.start, task.close, task.move, task.list, task.events, cron.tick, cron.stop"
+            ),
+            "{name}: {}",
+            error.message()
+        );
+    }
 }
 
 #[test]
 fn hook_name_deserialize_rejects_unknown() {
-    assert!(serde_json::from_str::<HookName>("\"task.foo\"").is_err());
+    let error = serde_json::from_str::<HookName>("\"task.foo\"").expect_err("unknown hook");
+    assert!(error.to_string().contains("cron.tick, cron.stop"));
     assert!(serde_json::from_str::<HookName>("\"task.close\"").is_ok());
 }
 
