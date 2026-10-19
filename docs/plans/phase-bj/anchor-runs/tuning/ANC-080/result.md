@@ -1,0 +1,1503 @@
+```json
+{
+  "schema_version": "1.0.0",
+  "success": true,
+  "canceled": false,
+  "aborted_by": null,
+  "data": {
+    "operation": "tune",
+    "gate": "planning",
+    "accepted": true,
+    "tournament_protocol_version": "plan-anchor/question-tournament/2.0.0",
+    "production_confidence_threshold": 0.6,
+    "confidence_reference_threshold": 0.8,
+    "semantic_score": {
+      "exact_role_cells": 48,
+      "total_role_cells": 48,
+      "exact_semantic_verdicts": 16,
+      "total_semantic_verdicts": 16,
+      "stable_cases": 8,
+      "total_cases": 8,
+      "regressions": 0
+    },
+    "confidence_diagnostics": {
+      "threshold": 0.8,
+      "cells_at_or_above_threshold": 46,
+      "total_cells": 48,
+      "minimum": 0.55,
+      "p10": 0.94,
+      "median": 1.0,
+      "mean": 0.9652083333333333
+    },
+    "tuning_history_before_sha256": "e0896233814bb4a742f487c076bc2a3ed6a1cef2fce91b19f115eb2931fc3b98",
+    "tuning_history_after": {
+      "schema": "plan-anchor/tuning-history/2",
+      "history_id": "ANC-080-plan",
+      "events": [
+        {
+          "event_index": 1,
+          "previous_event_sha256": null,
+          "event": "question_set_sealed",
+          "protocol_version": "plan-anchor/question-tournament/2.0.0",
+          "authority": {
+            "intent_id": "phase-bj",
+            "intent_version": 1,
+            "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+            "anchor_id": "ANC-080",
+            "anchor_version": 3,
+            "anchor_record_sha256": "8a58c2b495842624b60061d69db8d5d1afb56b23b7a969d4acf7f4ef5d70cffc"
+          },
+          "oracle": {
+            "sha256": "26650d46c244a75e93efa2c55bc08b995f985eb96d8260f4c092f621d94f3663",
+            "case_ids": [
+              "fixture_pass",
+              "fixture_fail",
+              "paraphrase",
+              "silent",
+              "topical",
+              "conflict",
+              "irrelevant",
+              "boundary"
+            ],
+            "case_count": 8,
+            "repeat_count": 2
+          },
+          "candidate": {
+            "candidate_id": "explicit_copy",
+            "question_sha256": "e5fd3ed01a0ce7b262cb5abe126c08f8c8feec6a479aee399a30b53fc1cdc0fb"
+          },
+          "evidence": {
+            "canonical_request_sha256": [
+              "aadb50f4e11057097602c03d40fd743e4bd573788289df8ff905a050a654cb96",
+              "aadb50f4e11057097602c03d40fd743e4bd573788289df8ff905a050a654cb96",
+              "2f2523ad45961f5f2c050888d4df1674962c3d4329ab8e055b4f01c734a1df44",
+              "2f2523ad45961f5f2c050888d4df1674962c3d4329ab8e055b4f01c734a1df44",
+              "be24ec15419aae7ffb276919c6e3b7a10c5cd6d4bf965e2266db981fb0fe947f",
+              "be24ec15419aae7ffb276919c6e3b7a10c5cd6d4bf965e2266db981fb0fe947f",
+              "59eaf00a9798e416633d39791400f4028978e6af6802ff09c06d49041abeba5e",
+              "59eaf00a9798e416633d39791400f4028978e6af6802ff09c06d49041abeba5e",
+              "e27ef8ccdb8fa3a6d2ca00aecd130c7405303216aeb5448c1ba178c1bb4bb27b",
+              "e27ef8ccdb8fa3a6d2ca00aecd130c7405303216aeb5448c1ba178c1bb4bb27b",
+              "7a880c30480c92fad16ee9b988dbe18bb03c19e543c16f461013730bdb7bc818",
+              "7a880c30480c92fad16ee9b988dbe18bb03c19e543c16f461013730bdb7bc818",
+              "d7bc47a63e12672d22dd18eeca450ac96ba3652441a4a9711c7fc0aeaa7e826b",
+              "d7bc47a63e12672d22dd18eeca450ac96ba3652441a4a9711c7fc0aeaa7e826b",
+              "8659a72010879eb39217f15c7f8e70d64b3eefe8c1f608665d842171b7237d1e",
+              "8659a72010879eb39217f15c7f8e70d64b3eefe8c1f608665d842171b7237d1e",
+              "dd65ecf09724270d6f05b91d1ffc59ab13e71292be1e9ff3a2a0d9a1708e8be0",
+              "dd65ecf09724270d6f05b91d1ffc59ab13e71292be1e9ff3a2a0d9a1708e8be0",
+              "573adcedd969bb735c5a4fc087f89d81b4b039b5aaeb15a2931f2ed0ab8f4052",
+              "573adcedd969bb735c5a4fc087f89d81b4b039b5aaeb15a2931f2ed0ab8f4052",
+              "f84552db2415bf5691eaeada18d916ab7e370054f6b3724bf8efc854d4e8acd4",
+              "f84552db2415bf5691eaeada18d916ab7e370054f6b3724bf8efc854d4e8acd4",
+              "617fc94f2a1a93493420a26e3a4ca1f4f7f76cc18438fde4d6595984411417bb",
+              "617fc94f2a1a93493420a26e3a4ca1f4f7f76cc18438fde4d6595984411417bb",
+              "4bf96776c0b4d809c3d53651ea317cd870e382a09cce4b5991c8f2913ca0fbec",
+              "4bf96776c0b4d809c3d53651ea317cd870e382a09cce4b5991c8f2913ca0fbec",
+              "a6469ff92240782b6c7fd9ecd9de7b61ff581f10da7527b965426dd9ccaea5d6",
+              "a6469ff92240782b6c7fd9ecd9de7b61ff581f10da7527b965426dd9ccaea5d6",
+              "a26c20e2ea5173077e6db7feca9062c97a1e0f962b5f9f3f1b28a09a2503cf68",
+              "a26c20e2ea5173077e6db7feca9062c97a1e0f962b5f9f3f1b28a09a2503cf68",
+              "2e79773d233f5cc067434257a09918661a6d7021e9e2e06c3584d6f45a465214",
+              "2e79773d233f5cc067434257a09918661a6d7021e9e2e06c3584d6f45a465214",
+              "2382cd08e5557f34190868460e0a2e1db9473cc08e3b09f38812116967d407cf",
+              "2382cd08e5557f34190868460e0a2e1db9473cc08e3b09f38812116967d407cf",
+              "c1ef22b309854f9fedb17290e399c3fcb8ec67e8dc075165c8447cc85835bd46",
+              "c1ef22b309854f9fedb17290e399c3fcb8ec67e8dc075165c8447cc85835bd46",
+              "3925113b1bb7ea55861b04c64475b49eaafe7ee93764daaa2b23567e85d975d9",
+              "3925113b1bb7ea55861b04c64475b49eaafe7ee93764daaa2b23567e85d975d9",
+              "90e8d180709aa0ebdb5aa0302c97fc92ea8b866b3588f01c7c9fb8bdfdf37312",
+              "90e8d180709aa0ebdb5aa0302c97fc92ea8b866b3588f01c7c9fb8bdfdf37312",
+              "6995ffd3f8844c7a71346d0db7a046732a6aa5a76b68e0ce1741981cfd0546cc",
+              "6995ffd3f8844c7a71346d0db7a046732a6aa5a76b68e0ce1741981cfd0546cc",
+              "fd8a920f2b0bf7b19a85078519f4747a7641ea22acab088f39125c56fa7e3589",
+              "fd8a920f2b0bf7b19a85078519f4747a7641ea22acab088f39125c56fa7e3589",
+              "e44a4a51a234cbfae82c49f432527c2a95808d23ead4a26bcc1a19f527ac35d2",
+              "e44a4a51a234cbfae82c49f432527c2a95808d23ead4a26bcc1a19f527ac35d2",
+              "d4e8d2102614ae282afee899e6d95d0612eebe20de6ec1281f962359a29bfb79",
+              "d4e8d2102614ae282afee899e6d95d0612eebe20de6ec1281f962359a29bfb79"
+            ],
+            "raw_response_sha256": [
+              "18154f97d5e9f05ad36c725a56f9e6be15ad2399baf5df32df50553da4a8b035",
+              "18154f97d5e9f05ad36c725a56f9e6be15ad2399baf5df32df50553da4a8b035",
+              "dbcc3a676895b1c9dedb78b5e4597b971d1446b764c6bc1b946013fe663b63b3",
+              "71dc6e30ff810d1d81db340ad1c39389b11ff7ff84352209806d4e8fde8df6e2",
+              "02b78972b68763d52436cf8d64752d0398aa426896fd15b3b890c9597791b45d",
+              "02b78972b68763d52436cf8d64752d0398aa426896fd15b3b890c9597791b45d",
+              "019817f9e171a098c7daec7a65e27ec80cc245cbd821a8505c6736b14f533c56",
+              "f9a9e818612270dccf8e57c1e3b34703166f92544d0738187f86efbc04367ddd",
+              "1476eb12b26ffc9c98b8a7c19f85fa22839354f9c90fb1525687c7eeabcf4043",
+              "cddafd0e48b7f10d00b539486da435489db588e1f3c4bc07d9624d202f8ca248",
+              "a7c5eb13a9a44f57ffa9bff029817f3812186a8d8457ddb091c6b6736742fad9",
+              "1fe0d1792c7036101bcc8c6393471224d1bebf3e69583d2ce24d66242434964b",
+              "2d298e6122b4e936d4a8879c7a62a1eb138bdf692ce2448c04174c6ab162eef2",
+              "2d298e6122b4e936d4a8879c7a62a1eb138bdf692ce2448c04174c6ab162eef2",
+              "06726b9e483a297cffb8ce6090a29e5a59c18fbc9ea3ced5c6b4fead306b41be",
+              "aed97d1de0bc84afa6ab4514417825eda12cef042eb4fb0bdacf6fc82350562c",
+              "58dcdb3acbe6d922e12e72a774f400f279fe06d51d1deaabd0ac208a27576b72",
+              "58dcdb3acbe6d922e12e72a774f400f279fe06d51d1deaabd0ac208a27576b72",
+              "a15f3fe0f9f5b863b00d38c715a92eabc580553e15f165c28077a2d1d552ea46",
+              "e6b8f56caa1d6a5b3541625e68ff5ed5251482984dee872e05f088d80d6f32b2",
+              "a37fd79f7c2eb277cece3e400f9929020a2aecd7169db0efb992692746d1ea01",
+              "a37fd79f7c2eb277cece3e400f9929020a2aecd7169db0efb992692746d1ea01",
+              "a7ad337d5cd8c79c0afc334229b10f191d6897dd4c83f83a86e06d4bca06399a",
+              "427fdf45b62d48e1d5e0a5b2af4a1a8cac6102629d1e70f1f01e4f32250c9e24",
+              "7ee728d77d8d4b8913fd406a9650d9ea87b5bc35fd252df82c0adfd3f39f7f8b",
+              "60899da9e932e4f7bf8206b4ffa416f4dd6253dc2fd02257a54a0c68dce08d2a",
+              "12561c9fbcb70a7997005b2d1a2241e955524dc4c0202bdd65adaa341d8175f5",
+              "12561c9fbcb70a7997005b2d1a2241e955524dc4c0202bdd65adaa341d8175f5",
+              "5a7b83a38c91db0a0ee1a3794f01cd29b98825181ada063735977799adb48af1",
+              "5a7b83a38c91db0a0ee1a3794f01cd29b98825181ada063735977799adb48af1",
+              "699c23bb0478902f637c9edb12955fef070c46c11d2d40e0ae8f7a192acaf4a0",
+              "dbb242f4e4ed7c1dd5d403247b850cd462adcc22edebab3d418a6437d55ebaeb",
+              "f1b821e095d661048d27a2a98aba98ed9295719a44408f94db0dc3c0b865b890",
+              "afcf971c8421bf81f04dfae28c1e180b4a81f2b5ba539d18b8fb09bb6bb81900",
+              "99c293831533716e3d0d99dfdaa558db76b5f00b7fec476649c515be8f3f6f78",
+              "05509e6a8dfdef1506dd513e5c7976520db8fb0b9b2f0cc90b454a2faa431244",
+              "f9b6eb901d3c6b13459d3130693639072626a14a306678e85af45ed86167ab86",
+              "8ddf9cbe5a2a62dde996d5ea4a222317078a394371f3a556e9b4817eefda0a88",
+              "0ad8818b9cb0ec61bfff1ccf5df5a0bb50b05558ef4585d6f8980614c0b04123",
+              "0ad8818b9cb0ec61bfff1ccf5df5a0bb50b05558ef4585d6f8980614c0b04123",
+              "4696878222d3f516c870ac684e38e9080a1d14b7397473b2372700856716e216",
+              "6c6fc6423b31e72e3c9f54d35f91fce2f1f119fa89582dc9ffea731767182482",
+              "ef8e6e96965ccb88938024cb89f7f76f38fa4b0932c4b006a65563cf0964ff21",
+              "ef8e6e96965ccb88938024cb89f7f76f38fa4b0932c4b006a65563cf0964ff21",
+              "0c915e3fb5e9e20d1f7dc3798780c0740ae190ba71859dcec8fa6eeb47d2b3b8",
+              "0c915e3fb5e9e20d1f7dc3798780c0740ae190ba71859dcec8fa6eeb47d2b3b8",
+              "c247c3b87be55213220e81aebd4fee58ca4f60a0dd7769c128f6f248a8232db9",
+              "c247c3b87be55213220e81aebd4fee58ca4f60a0dd7769c128f6f248a8232db9"
+            ],
+            "run_ids": [
+              "ANC-080-default-fixture_pass-r1",
+              "ANC-080-default-fixture_pass-r2",
+              "ANC-080-default-fixture_fail-r1",
+              "ANC-080-default-fixture_fail-r2",
+              "ANC-080-default-paraphrase-r1",
+              "ANC-080-default-paraphrase-r2",
+              "ANC-080-default-silent-r1",
+              "ANC-080-default-silent-r2",
+              "ANC-080-default-topical-r1",
+              "ANC-080-default-topical-r2",
+              "ANC-080-default-conflict-r1",
+              "ANC-080-default-conflict-r2",
+              "ANC-080-default-irrelevant-r1",
+              "ANC-080-default-irrelevant-r2",
+              "ANC-080-default-boundary-r1",
+              "ANC-080-default-boundary-r2",
+              "ANC-080-explicit_copy-fixture_pass-r1",
+              "ANC-080-explicit_copy-fixture_pass-r2",
+              "ANC-080-explicit_copy-fixture_fail-r1",
+              "ANC-080-explicit_copy-fixture_fail-r2",
+              "ANC-080-explicit_copy-paraphrase-r1",
+              "ANC-080-explicit_copy-paraphrase-r2",
+              "ANC-080-explicit_copy-silent-r1",
+              "ANC-080-explicit_copy-silent-r2",
+              "ANC-080-explicit_copy-topical-r1",
+              "ANC-080-explicit_copy-topical-r2",
+              "ANC-080-explicit_copy-conflict-r1",
+              "ANC-080-explicit_copy-conflict-r2",
+              "ANC-080-explicit_copy-irrelevant-r1",
+              "ANC-080-explicit_copy-irrelevant-r2",
+              "ANC-080-explicit_copy-boundary-r1",
+              "ANC-080-explicit_copy-boundary-r2",
+              "ANC-080-pour_output-fixture_pass-r1",
+              "ANC-080-pour_output-fixture_pass-r2",
+              "ANC-080-pour_output-fixture_fail-r1",
+              "ANC-080-pour_output-fixture_fail-r2",
+              "ANC-080-pour_output-paraphrase-r1",
+              "ANC-080-pour_output-paraphrase-r2",
+              "ANC-080-pour_output-silent-r1",
+              "ANC-080-pour_output-silent-r2",
+              "ANC-080-pour_output-topical-r1",
+              "ANC-080-pour_output-topical-r2",
+              "ANC-080-pour_output-conflict-r1",
+              "ANC-080-pour_output-conflict-r2",
+              "ANC-080-pour_output-irrelevant-r1",
+              "ANC-080-pour_output-irrelevant-r2",
+              "ANC-080-pour_output-boundary-r1",
+              "ANC-080-pour_output-boundary-r2"
+            ]
+          },
+          "score": {
+            "exact_role_cells": 48,
+            "total_role_cells": 48,
+            "exact_semantic_verdicts": 16,
+            "total_semantic_verdicts": 16,
+            "stable_cases": 8,
+            "total_cases": 8,
+            "regressions": 0,
+            "confidence": {
+              "threshold": 0.8,
+              "cells_at_or_above_threshold": 46,
+              "total_cells": 48,
+              "minimum": 0.55,
+              "p10": 0.94,
+              "median": 1.0,
+              "mean": 0.9652083333333333
+            }
+          },
+          "decision": {
+            "status": "sealed",
+            "question_set_sha256": "e5fd3ed01a0ce7b262cb5abe126c08f8c8feec6a479aee399a30b53fc1cdc0fb",
+            "reason_code": "TOURNAMENT.EXACT"
+          },
+          "supersedes": null
+        }
+      ]
+    },
+    "tuning_history_after_sha256": "ab8b191e02c8dc885c9b6a0047dbed133678b651b94682debf0dc62fa754a9a0",
+    "production_semantics_unchanged": true,
+    "authority_citations": [
+      "ANC-080 v3 locked statement and quote",
+      "ANC-080 v3 approved pass/fail fixtures",
+      "Phase-BJ intent: pour metadata onto every sprint-family bead"
+    ],
+    "oracle_sha256": "26650d46c244a75e93efa2c55bc08b995f985eb96d8260f4c092f621d94f3663",
+    "sealed_question_set": {
+      "digest": "e5fd3ed01a0ce7b262cb5abe126c08f8c8feec6a479aee399a30b53fc1cdc0fb",
+      "questions": {
+        "relevant": {
+          "type": "choice",
+          "instructions": "Does `item.text` change the atm-bd-orchestration sprint-family pour or metadata on its generated beads? Judge overlap with `anchor.scope` only.",
+          "criteria": {
+            "yes": "The item changes the sprint-family pour, bead creation, or metadata on generated dev, fix, sanity, or QA beads.",
+            "no": "The item concerns another activity and would not affect this pour or its generated beads.",
+            "unclear": "The item does not identify which pour or bead family it affects."
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "instructions": "Does `item.text` affirmatively plan to copy pr_target from the sprint container to every generated dev, fix, sanity, and QA bead at pour time, as `anchor.statement` requires? Judge presence only.",
+          "criteria": {
+            "yes": "The text names pr_target and requires its value on each generated dev, fix, sanity, and QA bead when poured.",
+            "no": "The text is silent about pr_target, mentions it only generally, or lacks the full set of generated beads or pour-time copy.",
+            "unclear": "The text promises pr_target propagation but does not establish which generated beads receive it or when."
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "instructions": "Does an explicit decision in `item.text` prevent the pr_target copy required by `anchor.statement`? Mere silence or incomplete detail is no conflict.",
+          "criteria": {
+            "yes": "The item states that a required generated bead lacks pr_target, receives it only after pour, or derives it later instead of storing the copied value.",
+            "no": "No incompatible choice is stated; silence and general metadata mentions count as no conflict.",
+            "unclear": "A stated timing or recipient might conflict, but the text does not settle it."
+          }
+        }
+      }
+    },
+    "candidate_rankings": [
+      {
+        "candidate_id": "default",
+        "question_sha256": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05",
+        "score": {
+          "exact_role_cells": 43,
+          "total_role_cells": 48,
+          "exact_semantic_verdicts": 13,
+          "total_semantic_verdicts": 16,
+          "stable_cases": 7,
+          "total_cases": 8,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 38,
+          "total_cells": 48,
+          "minimum": 0.25,
+          "p10": 0.52,
+          "median": 1.0,
+          "mean": 0.8816666666666667
+        },
+        "accepted": false,
+        "complexity": 2542
+      },
+      {
+        "candidate_id": "explicit_copy",
+        "question_sha256": "e5fd3ed01a0ce7b262cb5abe126c08f8c8feec6a479aee399a30b53fc1cdc0fb",
+        "score": {
+          "exact_role_cells": 48,
+          "total_role_cells": 48,
+          "exact_semantic_verdicts": 16,
+          "total_semantic_verdicts": 16,
+          "stable_cases": 8,
+          "total_cases": 8,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 46,
+          "total_cells": 48,
+          "minimum": 0.55,
+          "p10": 0.94,
+          "median": 1.0,
+          "mean": 0.9652083333333333
+        },
+        "accepted": true,
+        "complexity": 1669
+      },
+      {
+        "candidate_id": "pour_output",
+        "question_sha256": "a8700bc846d6fc5e969219493487b90ccf2601cd7123def549a4dd818ee96792",
+        "score": {
+          "exact_role_cells": 46,
+          "total_role_cells": 48,
+          "exact_semantic_verdicts": 14,
+          "total_semantic_verdicts": 16,
+          "stable_cases": 8,
+          "total_cases": 8,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 44,
+          "total_cells": 48,
+          "minimum": 0.34,
+          "p10": 0.89,
+          "median": 1.0,
+          "mean": 0.93875
+        },
+        "accepted": false,
+        "complexity": 1507
+      }
+    ],
+    "acceptance_table": [
+      {
+        "candidate_id": "default",
+        "accepted": false,
+        "score": {
+          "exact_role_cells": 43,
+          "total_role_cells": 48,
+          "exact_semantic_verdicts": 13,
+          "total_semantic_verdicts": 16,
+          "stable_cases": 7,
+          "total_cases": 8,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 38,
+          "total_cells": 48,
+          "minimum": 0.25,
+          "p10": 0.52,
+          "median": 1.0,
+          "mean": 0.8816666666666667
+        }
+      },
+      {
+        "candidate_id": "explicit_copy",
+        "accepted": true,
+        "score": {
+          "exact_role_cells": 48,
+          "total_role_cells": 48,
+          "exact_semantic_verdicts": 16,
+          "total_semantic_verdicts": 16,
+          "stable_cases": 8,
+          "total_cases": 8,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 46,
+          "total_cells": 48,
+          "minimum": 0.55,
+          "p10": 0.94,
+          "median": 1.0,
+          "mean": 0.9652083333333333
+        }
+      },
+      {
+        "candidate_id": "pour_output",
+        "accepted": false,
+        "score": {
+          "exact_role_cells": 46,
+          "total_role_cells": 48,
+          "exact_semantic_verdicts": 14,
+          "total_semantic_verdicts": 16,
+          "stable_cases": 8,
+          "total_cases": 8,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 44,
+          "total_cells": 48,
+          "minimum": 0.34,
+          "p10": 0.89,
+          "median": 1.0,
+          "mean": 0.93875
+        }
+      }
+    ],
+    "evidence": {
+      "oracle": [
+        {
+          "id": "fixture_pass",
+          "text": "The pour copies the sprint container's pr_target value onto every generated sprint-family dev, fix, sanity and QA bead.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "verdict": "satisfied",
+          "rationale": "Approved pass fixture covers pr_target on every named generated bead."
+        },
+        {
+          "id": "fixture_fail",
+          "text": "The sprint-family pour writes no pr_target value onto its generated dev, fix, sanity or QA beads.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "verdict": "contradicted",
+          "rationale": "Approved fail fixture expressly omits pr_target from all named beads."
+        },
+        {
+          "id": "paraphrase",
+          "text": "At pour time, copy the sprint container's pr_target onto each generated dev, fix, sanity, and QA bead.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "verdict": "satisfied",
+          "rationale": "Equivalent complete copy requirement."
+        },
+        {
+          "id": "silent",
+          "text": "At pour time, copy branch and worktree from the sprint container onto generated dev, fix, sanity, and QA beads.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "verdict": "not_addressed",
+          "rationale": "Same pour but no pr_target directive."
+        },
+        {
+          "id": "topical",
+          "text": "Include pr_target metadata in sprint-family planning.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "verdict": "not_addressed",
+          "rationale": "Mentions topic without requiring per-bead copy at pour time."
+        },
+        {
+          "id": "conflict",
+          "text": "Keep pr_target only on the sprint container; generated dev, fix, sanity, and QA beads will not store it.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "verdict": "contradicted",
+          "rationale": "Explicitly rejects required copies."
+        },
+        {
+          "id": "irrelevant",
+          "text": "Change the console icon displayed for a stopped agent.",
+          "expected": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "verdict": "not_applicable",
+          "rationale": "Outside sprint-family pour."
+        },
+        {
+          "id": "boundary",
+          "text": "Copy pr_target to generated dev, fix, and sanity beads at pour time, but add it to QA beads only after QA dispatch.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "verdict": "contradicted",
+          "rationale": "Explicitly delays a required QA value."
+        }
+      ],
+      "candidate_responses": [
+        {
+          "candidate_id": "default",
+          "case_id": "fixture_pass",
+          "repeat": 1,
+          "run_id": "ANC-080-default-fixture_pass-r1",
+          "canonical_request_sha256": "aadb50f4e11057097602c03d40fd743e4bd573788289df8ff905a050a654cb96",
+          "raw_response_sha256": "18154f97d5e9f05ad36c725a56f9e6be15ad2399baf5df32df50553da4a8b035",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "fixture_pass",
+          "repeat": 2,
+          "run_id": "ANC-080-default-fixture_pass-r2",
+          "canonical_request_sha256": "aadb50f4e11057097602c03d40fd743e4bd573788289df8ff905a050a654cb96",
+          "raw_response_sha256": "18154f97d5e9f05ad36c725a56f9e6be15ad2399baf5df32df50553da4a8b035",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "fixture_fail",
+          "repeat": 1,
+          "run_id": "ANC-080-default-fixture_fail-r1",
+          "canonical_request_sha256": "2f2523ad45961f5f2c050888d4df1674962c3d4329ab8e055b4f01c734a1df44",
+          "raw_response_sha256": "dbcc3a676895b1c9dedb78b5e4597b971d1446b764c6bc1b946013fe663b63b3",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.52,
+            "conflict": 0.91
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "fixture_fail",
+          "repeat": 2,
+          "run_id": "ANC-080-default-fixture_fail-r2",
+          "canonical_request_sha256": "2f2523ad45961f5f2c050888d4df1674962c3d4329ab8e055b4f01c734a1df44",
+          "raw_response_sha256": "71dc6e30ff810d1d81db340ad1c39389b11ff7ff84352209806d4e8fde8df6e2",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.55,
+            "conflict": 0.92
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "paraphrase",
+          "repeat": 1,
+          "run_id": "ANC-080-default-paraphrase-r1",
+          "canonical_request_sha256": "be24ec15419aae7ffb276919c6e3b7a10c5cd6d4bf965e2266db981fb0fe947f",
+          "raw_response_sha256": "02b78972b68763d52436cf8d64752d0398aa426896fd15b3b890c9597791b45d",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "paraphrase",
+          "repeat": 2,
+          "run_id": "ANC-080-default-paraphrase-r2",
+          "canonical_request_sha256": "be24ec15419aae7ffb276919c6e3b7a10c5cd6d4bf965e2266db981fb0fe947f",
+          "raw_response_sha256": "02b78972b68763d52436cf8d64752d0398aa426896fd15b3b890c9597791b45d",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "silent",
+          "repeat": 1,
+          "run_id": "ANC-080-default-silent-r1",
+          "canonical_request_sha256": "59eaf00a9798e416633d39791400f4028978e6af6802ff09c06d49041abeba5e",
+          "raw_response_sha256": "019817f9e171a098c7daec7a65e27ec80cc245cbd821a8505c6736b14f533c56",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 0.58,
+            "compliance": 0.95,
+            "conflict": 0.52
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "silent",
+          "repeat": 2,
+          "run_id": "ANC-080-default-silent-r2",
+          "canonical_request_sha256": "59eaf00a9798e416633d39791400f4028978e6af6802ff09c06d49041abeba5e",
+          "raw_response_sha256": "f9a9e818612270dccf8e57c1e3b34703166f92544d0738187f86efbc04367ddd",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 0.52,
+            "compliance": 0.94,
+            "conflict": 0.48
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "topical",
+          "repeat": 1,
+          "run_id": "ANC-080-default-topical-r1",
+          "canonical_request_sha256": "e27ef8ccdb8fa3a6d2ca00aecd130c7405303216aeb5448c1ba178c1bb4bb27b",
+          "raw_response_sha256": "1476eb12b26ffc9c98b8a7c19f85fa22839354f9c90fb1525687c7eeabcf4043",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.25,
+            "conflict": 0.98
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "topical",
+          "repeat": 2,
+          "run_id": "ANC-080-default-topical-r2",
+          "canonical_request_sha256": "e27ef8ccdb8fa3a6d2ca00aecd130c7405303216aeb5448c1ba178c1bb4bb27b",
+          "raw_response_sha256": "cddafd0e48b7f10d00b539486da435489db588e1f3c4bc07d9624d202f8ca248",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "unclear",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.3,
+            "conflict": 0.98
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "conflict",
+          "repeat": 1,
+          "run_id": "ANC-080-default-conflict-r1",
+          "canonical_request_sha256": "7a880c30480c92fad16ee9b988dbe18bb03c19e543c16f461013730bdb7bc818",
+          "raw_response_sha256": "a7c5eb13a9a44f57ffa9bff029817f3812186a8d8457ddb091c6b6736742fad9",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.58,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "conflict",
+          "repeat": 2,
+          "run_id": "ANC-080-default-conflict-r2",
+          "canonical_request_sha256": "7a880c30480c92fad16ee9b988dbe18bb03c19e543c16f461013730bdb7bc818",
+          "raw_response_sha256": "1fe0d1792c7036101bcc8c6393471224d1bebf3e69583d2ce24d66242434964b",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.66,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "irrelevant",
+          "repeat": 1,
+          "run_id": "ANC-080-default-irrelevant-r1",
+          "canonical_request_sha256": "d7bc47a63e12672d22dd18eeca450ac96ba3652441a4a9711c7fc0aeaa7e826b",
+          "raw_response_sha256": "2d298e6122b4e936d4a8879c7a62a1eb138bdf692ce2448c04174c6ab162eef2",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "irrelevant",
+          "repeat": 2,
+          "run_id": "ANC-080-default-irrelevant-r2",
+          "canonical_request_sha256": "d7bc47a63e12672d22dd18eeca450ac96ba3652441a4a9711c7fc0aeaa7e826b",
+          "raw_response_sha256": "2d298e6122b4e936d4a8879c7a62a1eb138bdf692ce2448c04174c6ab162eef2",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "boundary",
+          "repeat": 1,
+          "run_id": "ANC-080-default-boundary-r1",
+          "canonical_request_sha256": "8659a72010879eb39217f15c7f8e70d64b3eefe8c1f608665d842171b7237d1e",
+          "raw_response_sha256": "06726b9e483a297cffb8ce6090a29e5a59c18fbc9ea3ced5c6b4fead306b41be",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.85,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "boundary",
+          "repeat": 2,
+          "run_id": "ANC-080-default-boundary-r2",
+          "canonical_request_sha256": "8659a72010879eb39217f15c7f8e70d64b3eefe8c1f608665d842171b7237d1e",
+          "raw_response_sha256": "aed97d1de0bc84afa6ab4514417825eda12cef042eb4fb0bdacf6fc82350562c",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.83,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "fixture_pass",
+          "repeat": 1,
+          "run_id": "ANC-080-explicit_copy-fixture_pass-r1",
+          "canonical_request_sha256": "dd65ecf09724270d6f05b91d1ffc59ab13e71292be1e9ff3a2a0d9a1708e8be0",
+          "raw_response_sha256": "58dcdb3acbe6d922e12e72a774f400f279fe06d51d1deaabd0ac208a27576b72",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.98,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "fixture_pass",
+          "repeat": 2,
+          "run_id": "ANC-080-explicit_copy-fixture_pass-r2",
+          "canonical_request_sha256": "dd65ecf09724270d6f05b91d1ffc59ab13e71292be1e9ff3a2a0d9a1708e8be0",
+          "raw_response_sha256": "58dcdb3acbe6d922e12e72a774f400f279fe06d51d1deaabd0ac208a27576b72",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.98,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "fixture_fail",
+          "repeat": 1,
+          "run_id": "ANC-080-explicit_copy-fixture_fail-r1",
+          "canonical_request_sha256": "573adcedd969bb735c5a4fc087f89d81b4b039b5aaeb15a2931f2ed0ab8f4052",
+          "raw_response_sha256": "a15f3fe0f9f5b863b00d38c715a92eabc580553e15f165c28077a2d1d552ea46",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 0.94,
+            "compliance": 1.0,
+            "conflict": 0.98
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "fixture_fail",
+          "repeat": 2,
+          "run_id": "ANC-080-explicit_copy-fixture_fail-r2",
+          "canonical_request_sha256": "573adcedd969bb735c5a4fc087f89d81b4b039b5aaeb15a2931f2ed0ab8f4052",
+          "raw_response_sha256": "e6b8f56caa1d6a5b3541625e68ff5ed5251482984dee872e05f088d80d6f32b2",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 0.95,
+            "compliance": 1.0,
+            "conflict": 0.98
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "paraphrase",
+          "repeat": 1,
+          "run_id": "ANC-080-explicit_copy-paraphrase-r1",
+          "canonical_request_sha256": "f84552db2415bf5691eaeada18d916ab7e370054f6b3724bf8efc854d4e8acd4",
+          "raw_response_sha256": "a37fd79f7c2eb277cece3e400f9929020a2aecd7169db0efb992692746d1ea01",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.97,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "paraphrase",
+          "repeat": 2,
+          "run_id": "ANC-080-explicit_copy-paraphrase-r2",
+          "canonical_request_sha256": "f84552db2415bf5691eaeada18d916ab7e370054f6b3724bf8efc854d4e8acd4",
+          "raw_response_sha256": "a37fd79f7c2eb277cece3e400f9929020a2aecd7169db0efb992692746d1ea01",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.97,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "silent",
+          "repeat": 1,
+          "run_id": "ANC-080-explicit_copy-silent-r1",
+          "canonical_request_sha256": "617fc94f2a1a93493420a26e3a4ca1f4f7f76cc18438fde4d6595984411417bb",
+          "raw_response_sha256": "a7ad337d5cd8c79c0afc334229b10f191d6897dd4c83f83a86e06d4bca06399a",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.95,
+            "compliance": 1.0,
+            "conflict": 0.94
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "silent",
+          "repeat": 2,
+          "run_id": "ANC-080-explicit_copy-silent-r2",
+          "canonical_request_sha256": "617fc94f2a1a93493420a26e3a4ca1f4f7f76cc18438fde4d6595984411417bb",
+          "raw_response_sha256": "427fdf45b62d48e1d5e0a5b2af4a1a8cac6102629d1e70f1f01e4f32250c9e24",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.95,
+            "compliance": 1.0,
+            "conflict": 0.95
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "topical",
+          "repeat": 1,
+          "run_id": "ANC-080-explicit_copy-topical-r1",
+          "canonical_request_sha256": "4bf96776c0b4d809c3d53651ea317cd870e382a09cce4b5991c8f2913ca0fbec",
+          "raw_response_sha256": "7ee728d77d8d4b8913fd406a9650d9ea87b5bc35fd252df82c0adfd3f39f7f8b",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.55,
+            "compliance": 0.82,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "topical",
+          "repeat": 2,
+          "run_id": "ANC-080-explicit_copy-topical-r2",
+          "canonical_request_sha256": "4bf96776c0b4d809c3d53651ea317cd870e382a09cce4b5991c8f2913ca0fbec",
+          "raw_response_sha256": "60899da9e932e4f7bf8206b4ffa416f4dd6253dc2fd02257a54a0c68dce08d2a",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.62,
+            "compliance": 0.82,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "conflict",
+          "repeat": 1,
+          "run_id": "ANC-080-explicit_copy-conflict-r1",
+          "canonical_request_sha256": "a6469ff92240782b6c7fd9ecd9de7b61ff581f10da7527b965426dd9ccaea5d6",
+          "raw_response_sha256": "12561c9fbcb70a7997005b2d1a2241e955524dc4c0202bdd65adaa341d8175f5",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "conflict",
+          "repeat": 2,
+          "run_id": "ANC-080-explicit_copy-conflict-r2",
+          "canonical_request_sha256": "a6469ff92240782b6c7fd9ecd9de7b61ff581f10da7527b965426dd9ccaea5d6",
+          "raw_response_sha256": "12561c9fbcb70a7997005b2d1a2241e955524dc4c0202bdd65adaa341d8175f5",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "irrelevant",
+          "repeat": 1,
+          "run_id": "ANC-080-explicit_copy-irrelevant-r1",
+          "canonical_request_sha256": "a26c20e2ea5173077e6db7feca9062c97a1e0f962b5f9f3f1b28a09a2503cf68",
+          "raw_response_sha256": "5a7b83a38c91db0a0ee1a3794f01cd29b98825181ada063735977799adb48af1",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "irrelevant",
+          "repeat": 2,
+          "run_id": "ANC-080-explicit_copy-irrelevant-r2",
+          "canonical_request_sha256": "a26c20e2ea5173077e6db7feca9062c97a1e0f962b5f9f3f1b28a09a2503cf68",
+          "raw_response_sha256": "5a7b83a38c91db0a0ee1a3794f01cd29b98825181ada063735977799adb48af1",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "boundary",
+          "repeat": 1,
+          "run_id": "ANC-080-explicit_copy-boundary-r1",
+          "canonical_request_sha256": "2e79773d233f5cc067434257a09918661a6d7021e9e2e06c3584d6f45a465214",
+          "raw_response_sha256": "699c23bb0478902f637c9edb12955fef070c46c11d2d40e0ae8f7a192acaf4a0",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "explicit_copy",
+          "case_id": "boundary",
+          "repeat": 2,
+          "run_id": "ANC-080-explicit_copy-boundary-r2",
+          "canonical_request_sha256": "2e79773d233f5cc067434257a09918661a6d7021e9e2e06c3584d6f45a465214",
+          "raw_response_sha256": "dbb242f4e4ed7c1dd5d403247b850cd462adcc22edebab3d418a6437d55ebaeb",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 0.98
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "fixture_pass",
+          "repeat": 1,
+          "run_id": "ANC-080-pour_output-fixture_pass-r1",
+          "canonical_request_sha256": "2382cd08e5557f34190868460e0a2e1db9473cc08e3b09f38812116967d407cf",
+          "raw_response_sha256": "f1b821e095d661048d27a2a98aba98ed9295719a44408f94db0dc3c0b865b890",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "fixture_pass",
+          "repeat": 2,
+          "run_id": "ANC-080-pour_output-fixture_pass-r2",
+          "canonical_request_sha256": "2382cd08e5557f34190868460e0a2e1db9473cc08e3b09f38812116967d407cf",
+          "raw_response_sha256": "afcf971c8421bf81f04dfae28c1e180b4a81f2b5ba539d18b8fb09bb6bb81900",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.98,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "fixture_fail",
+          "repeat": 1,
+          "run_id": "ANC-080-pour_output-fixture_fail-r1",
+          "canonical_request_sha256": "c1ef22b309854f9fedb17290e399c3fcb8ec67e8dc075165c8447cc85835bd46",
+          "raw_response_sha256": "99c293831533716e3d0d99dfdaa558db76b5f00b7fec476649c515be8f3f6f78",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.97,
+            "conflict": 0.89
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "fixture_fail",
+          "repeat": 2,
+          "run_id": "ANC-080-pour_output-fixture_fail-r2",
+          "canonical_request_sha256": "c1ef22b309854f9fedb17290e399c3fcb8ec67e8dc075165c8447cc85835bd46",
+          "raw_response_sha256": "05509e6a8dfdef1506dd513e5c7976520db8fb0b9b2f0cc90b454a2faa431244",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.97,
+            "conflict": 0.92
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "paraphrase",
+          "repeat": 1,
+          "run_id": "ANC-080-pour_output-paraphrase-r1",
+          "canonical_request_sha256": "3925113b1bb7ea55861b04c64475b49eaafe7ee93764daaa2b23567e85d975d9",
+          "raw_response_sha256": "f9b6eb901d3c6b13459d3130693639072626a14a306678e85af45ed86167ab86",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "paraphrase",
+          "repeat": 2,
+          "run_id": "ANC-080-pour_output-paraphrase-r2",
+          "canonical_request_sha256": "3925113b1bb7ea55861b04c64475b49eaafe7ee93764daaa2b23567e85d975d9",
+          "raw_response_sha256": "8ddf9cbe5a2a62dde996d5ea4a222317078a394371f3a556e9b4817eefda0a88",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.98,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "silent",
+          "repeat": 1,
+          "run_id": "ANC-080-pour_output-silent-r1",
+          "canonical_request_sha256": "90e8d180709aa0ebdb5aa0302c97fc92ea8b866b3588f01c7c9fb8bdfdf37312",
+          "raw_response_sha256": "0ad8818b9cb0ec61bfff1ccf5df5a0bb50b05558ef4585d6f8980614c0b04123",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.97,
+            "compliance": 0.98,
+            "conflict": 0.38
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "silent",
+          "repeat": 2,
+          "run_id": "ANC-080-pour_output-silent-r2",
+          "canonical_request_sha256": "90e8d180709aa0ebdb5aa0302c97fc92ea8b866b3588f01c7c9fb8bdfdf37312",
+          "raw_response_sha256": "0ad8818b9cb0ec61bfff1ccf5df5a0bb50b05558ef4585d6f8980614c0b04123",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.97,
+            "compliance": 0.98,
+            "conflict": 0.38
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "topical",
+          "repeat": 1,
+          "run_id": "ANC-080-pour_output-topical-r1",
+          "canonical_request_sha256": "6995ffd3f8844c7a71346d0db7a046732a6aa5a76b68e0ce1741981cfd0546cc",
+          "raw_response_sha256": "4696878222d3f516c870ac684e38e9080a1d14b7397473b2372700856716e216",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.34,
+            "compliance": 1.0,
+            "conflict": 0.97
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "topical",
+          "repeat": 2,
+          "run_id": "ANC-080-pour_output-topical-r2",
+          "canonical_request_sha256": "6995ffd3f8844c7a71346d0db7a046732a6aa5a76b68e0ce1741981cfd0546cc",
+          "raw_response_sha256": "6c6fc6423b31e72e3c9f54d35f91fce2f1f119fa89582dc9ffea731767182482",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.41,
+            "compliance": 1.0,
+            "conflict": 0.97
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "conflict",
+          "repeat": 1,
+          "run_id": "ANC-080-pour_output-conflict-r1",
+          "canonical_request_sha256": "fd8a920f2b0bf7b19a85078519f4747a7641ea22acab088f39125c56fa7e3589",
+          "raw_response_sha256": "ef8e6e96965ccb88938024cb89f7f76f38fa4b0932c4b006a65563cf0964ff21",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "conflict",
+          "repeat": 2,
+          "run_id": "ANC-080-pour_output-conflict-r2",
+          "canonical_request_sha256": "fd8a920f2b0bf7b19a85078519f4747a7641ea22acab088f39125c56fa7e3589",
+          "raw_response_sha256": "ef8e6e96965ccb88938024cb89f7f76f38fa4b0932c4b006a65563cf0964ff21",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "irrelevant",
+          "repeat": 1,
+          "run_id": "ANC-080-pour_output-irrelevant-r1",
+          "canonical_request_sha256": "e44a4a51a234cbfae82c49f432527c2a95808d23ead4a26bcc1a19f527ac35d2",
+          "raw_response_sha256": "0c915e3fb5e9e20d1f7dc3798780c0740ae190ba71859dcec8fa6eeb47d2b3b8",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "irrelevant",
+          "repeat": 2,
+          "run_id": "ANC-080-pour_output-irrelevant-r2",
+          "canonical_request_sha256": "e44a4a51a234cbfae82c49f432527c2a95808d23ead4a26bcc1a19f527ac35d2",
+          "raw_response_sha256": "0c915e3fb5e9e20d1f7dc3798780c0740ae190ba71859dcec8fa6eeb47d2b3b8",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "boundary",
+          "repeat": 1,
+          "run_id": "ANC-080-pour_output-boundary-r1",
+          "canonical_request_sha256": "d4e8d2102614ae282afee899e6d95d0612eebe20de6ec1281f962359a29bfb79",
+          "raw_response_sha256": "c247c3b87be55213220e81aebd4fee58ca4f60a0dd7769c128f6f248a8232db9",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "pour_output",
+          "case_id": "boundary",
+          "repeat": 2,
+          "run_id": "ANC-080-pour_output-boundary-r2",
+          "canonical_request_sha256": "d4e8d2102614ae282afee899e6d95d0612eebe20de6ec1281f962359a29bfb79",
+          "raw_response_sha256": "c247c3b87be55213220e81aebd4fee58ca4f60a0dd7769c128f6f248a8232db9",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        }
+      ]
+    },
+    "explanation": "The oracle was frozen before Jev. Three role-complete candidates each ran twice on every case. Exact role labels, threshold-zero verdicts, stable repeats, and zero regressions determine acceptance.",
+    "planner_action": "Review the frozen oracle and acceptance table before installing the sealed override.",
+    "question_action": null,
+    "sealed_question_set_digest_before": null,
+    "sealed_question_set_digest_after": "e5fd3ed01a0ce7b262cb5abe126c08f8c8feec6a479aee399a30b53fc1cdc0fb",
+    "authority_recommendations": []
+  },
+  "error": null,
+  "metadata": {
+    "duration_ms": 1547,
+    "tool_calls": 48,
+    "retry_count": 0,
+    "correlation_id": "ANC-080",
+    "jev_run_ids": [
+      "ANC-080-default-fixture_pass-r1",
+      "ANC-080-default-fixture_pass-r2",
+      "ANC-080-default-fixture_fail-r1",
+      "ANC-080-default-fixture_fail-r2",
+      "ANC-080-default-paraphrase-r1",
+      "ANC-080-default-paraphrase-r2",
+      "ANC-080-default-silent-r1",
+      "ANC-080-default-silent-r2",
+      "ANC-080-default-topical-r1",
+      "ANC-080-default-topical-r2",
+      "ANC-080-default-conflict-r1",
+      "ANC-080-default-conflict-r2",
+      "ANC-080-default-irrelevant-r1",
+      "ANC-080-default-irrelevant-r2",
+      "ANC-080-default-boundary-r1",
+      "ANC-080-default-boundary-r2",
+      "ANC-080-explicit_copy-fixture_pass-r1",
+      "ANC-080-explicit_copy-fixture_pass-r2",
+      "ANC-080-explicit_copy-fixture_fail-r1",
+      "ANC-080-explicit_copy-fixture_fail-r2",
+      "ANC-080-explicit_copy-paraphrase-r1",
+      "ANC-080-explicit_copy-paraphrase-r2",
+      "ANC-080-explicit_copy-silent-r1",
+      "ANC-080-explicit_copy-silent-r2",
+      "ANC-080-explicit_copy-topical-r1",
+      "ANC-080-explicit_copy-topical-r2",
+      "ANC-080-explicit_copy-conflict-r1",
+      "ANC-080-explicit_copy-conflict-r2",
+      "ANC-080-explicit_copy-irrelevant-r1",
+      "ANC-080-explicit_copy-irrelevant-r2",
+      "ANC-080-explicit_copy-boundary-r1",
+      "ANC-080-explicit_copy-boundary-r2",
+      "ANC-080-pour_output-fixture_pass-r1",
+      "ANC-080-pour_output-fixture_pass-r2",
+      "ANC-080-pour_output-fixture_fail-r1",
+      "ANC-080-pour_output-fixture_fail-r2",
+      "ANC-080-pour_output-paraphrase-r1",
+      "ANC-080-pour_output-paraphrase-r2",
+      "ANC-080-pour_output-silent-r1",
+      "ANC-080-pour_output-silent-r2",
+      "ANC-080-pour_output-topical-r1",
+      "ANC-080-pour_output-topical-r2",
+      "ANC-080-pour_output-conflict-r1",
+      "ANC-080-pour_output-conflict-r2",
+      "ANC-080-pour_output-irrelevant-r1",
+      "ANC-080-pour_output-irrelevant-r2",
+      "ANC-080-pour_output-boundary-r1",
+      "ANC-080-pour_output-boundary-r2"
+    ],
+    "planner_observation_trust": null,
+    "authoritative_sources_unchanged": true
+  }
+}
+```

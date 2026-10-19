@@ -1,0 +1,2342 @@
+{
+  "schema_version": "1.0.0",
+  "success": true,
+  "canceled": false,
+  "aborted_by": null,
+  "data": {
+    "operation": "tune",
+    "gate": "planning",
+    "accepted": true,
+    "tournament_protocol_version": "plan-anchor/question-tournament/2.0.0",
+    "production_confidence_threshold": 0.6,
+    "confidence_reference_threshold": 0.8,
+    "semantic_score": {
+      "exact_role_cells": 54,
+      "total_role_cells": 54,
+      "exact_semantic_verdicts": 18,
+      "total_semantic_verdicts": 18,
+      "stable_cases": 9,
+      "total_cases": 9,
+      "regressions": 0
+    },
+    "confidence_diagnostics": {
+      "threshold": 0.8,
+      "cells_at_or_above_threshold": 54,
+      "total_cells": 54,
+      "minimum": 0.83,
+      "p10": 0.97,
+      "median": 1.0,
+      "mean": 0.99
+    },
+    "tuning_history_before_sha256": "d251425b00a2749f725047ad8cae0c9bde63990942b6bd4320105af234bf3483",
+    "tuning_history_after": {
+      "schema": "plan-anchor/tuning-history/2",
+      "history_id": "ANC-084-plan",
+      "events": [
+        {
+          "event_index": 1,
+          "previous_event_sha256": null,
+          "event": "question_set_rejected",
+          "protocol_version": "plan-anchor/question-tournament/2.0.0",
+          "authority": {
+            "intent_id": "phase-bj",
+            "intent_version": 1,
+            "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+            "anchor_id": "ANC-084",
+            "anchor_version": 3,
+            "anchor_record_sha256": "a597708b695db9fd79d668d019b2a5fdbea57f3f7095c14dad1ecf7f72feafb8"
+          },
+          "oracle": {
+            "sha256": "457563b405e1e5986baae271140cd60545d3def320cf934db236829bfe6c44cb",
+            "case_ids": [
+              "fixture_pass",
+              "fixture_fail",
+              "paraphrase",
+              "silent",
+              "topical",
+              "conflict",
+              "irrelevant",
+              "boundary",
+              "exception"
+            ],
+            "case_count": 9,
+            "repeat_count": 2
+          },
+          "candidate": {
+            "candidate_id": "attempt_count",
+            "question_sha256": "f5bf34dd0cdd5e150665d5cf01bbe2fa8962a28f7b8a7aae2098287fedfbf087"
+          },
+          "evidence": {
+            "canonical_request_sha256": [
+              "c52c7b744f3f96bc6bec62dde3177ef5dab1b3350da8b8724dd0a6b30ebb1ab7",
+              "c52c7b744f3f96bc6bec62dde3177ef5dab1b3350da8b8724dd0a6b30ebb1ab7",
+              "2e582f6779d3cba7b505926625e380217b70861e06b2e9604326475c37d67064",
+              "2e582f6779d3cba7b505926625e380217b70861e06b2e9604326475c37d67064",
+              "91a499c48456b18071a3dfc0147919255b4f370148f9fb571d0f43d54af3797d",
+              "91a499c48456b18071a3dfc0147919255b4f370148f9fb571d0f43d54af3797d",
+              "f256b77a08ab128001554391113b4997169fb709bdc57945101bd590b9e63d4d",
+              "f256b77a08ab128001554391113b4997169fb709bdc57945101bd590b9e63d4d",
+              "b6473495985f6b9786cc358f2c9fd03773cf3f30a2e267f4583c9c10b55c8bb6",
+              "b6473495985f6b9786cc358f2c9fd03773cf3f30a2e267f4583c9c10b55c8bb6",
+              "a83d4fe549ba7e0698c7e924bb8374ba519502c35ac4bfa1db4636cd6bcd7600",
+              "a83d4fe549ba7e0698c7e924bb8374ba519502c35ac4bfa1db4636cd6bcd7600",
+              "1a289fc7d671a13fe892e04f3b37433b39045d1ff49dec915a54dcc4264ae3a5",
+              "1a289fc7d671a13fe892e04f3b37433b39045d1ff49dec915a54dcc4264ae3a5",
+              "dd0ed668c5a54e12760e0141feaffe74367fb44eaba2e6622fd6bd2d096787c5",
+              "dd0ed668c5a54e12760e0141feaffe74367fb44eaba2e6622fd6bd2d096787c5",
+              "dbcda75eb9a22cf15b0484fd8cec0d20a1be4efe47e9e05a011a5b02e808d8b4",
+              "dbcda75eb9a22cf15b0484fd8cec0d20a1be4efe47e9e05a011a5b02e808d8b4",
+              "2d3549232ece5355256f3f431b4e4ccbed6da94f8af755b8092939d3f58fe4b4",
+              "2d3549232ece5355256f3f431b4e4ccbed6da94f8af755b8092939d3f58fe4b4",
+              "055fbf39d4f6197df3304584943d05f48cb87b6805eeb619dab264dec154de12",
+              "055fbf39d4f6197df3304584943d05f48cb87b6805eeb619dab264dec154de12",
+              "b701e8738eb3f19cb965bbaf779b59ce5f1e3ea274d1072b79d9a5f67549a0c3",
+              "b701e8738eb3f19cb965bbaf779b59ce5f1e3ea274d1072b79d9a5f67549a0c3",
+              "2d19a8ecff5ac65ab6e0f309e3c0217cf4e1a8cb5965bd78ece7a428c5c0082f",
+              "2d19a8ecff5ac65ab6e0f309e3c0217cf4e1a8cb5965bd78ece7a428c5c0082f",
+              "e4202eadfc0a28dcec59c15b87c22de4262893ecb8f10cccf2219bff59857dca",
+              "e4202eadfc0a28dcec59c15b87c22de4262893ecb8f10cccf2219bff59857dca",
+              "6c0ca738b254381632dda00e52897198387e945e74f0112cec4b95c1dba66a7f",
+              "6c0ca738b254381632dda00e52897198387e945e74f0112cec4b95c1dba66a7f",
+              "0fe5fe37db5691c95d9ee8a3e2d058ebd72ff7a305a5167d5d82c9d0c4ffc03e",
+              "0fe5fe37db5691c95d9ee8a3e2d058ebd72ff7a305a5167d5d82c9d0c4ffc03e",
+              "6e33929b3f92ee57b5c07f73b80b366975273fe3867921e5d3aceaa88e17c444",
+              "6e33929b3f92ee57b5c07f73b80b366975273fe3867921e5d3aceaa88e17c444",
+              "2dee7827a05c0f113ebad9ceed21dbad9373102da3bed95150e050626a7adff9",
+              "2dee7827a05c0f113ebad9ceed21dbad9373102da3bed95150e050626a7adff9",
+              "106c6c7d815d9d4d54010fb5e2426c0c008c99ef81ccb465c07a8554f82eda58",
+              "106c6c7d815d9d4d54010fb5e2426c0c008c99ef81ccb465c07a8554f82eda58",
+              "6e7a709f8a439b99952e72e10493ebfaaed3b35529a1354a3c583fd91d4a216c",
+              "6e7a709f8a439b99952e72e10493ebfaaed3b35529a1354a3c583fd91d4a216c",
+              "f626e712936972759fef9280b7dfe629b5952336f8a62d8ded00d2bde904a5eb",
+              "f626e712936972759fef9280b7dfe629b5952336f8a62d8ded00d2bde904a5eb",
+              "847ac34a99a3cd0cbe2c55f6d5d462ac0acc3081f01af91e4e6eeca21d93e6fc",
+              "847ac34a99a3cd0cbe2c55f6d5d462ac0acc3081f01af91e4e6eeca21d93e6fc",
+              "ab7cd55e9e84324b8e1ba6cb3708c988530dbd6e127649216722754b123caf5d",
+              "ab7cd55e9e84324b8e1ba6cb3708c988530dbd6e127649216722754b123caf5d",
+              "e77386e59c5328d734c56bbfe17a9f7e6f8edeb2dd350067c69c8806948ec275",
+              "e77386e59c5328d734c56bbfe17a9f7e6f8edeb2dd350067c69c8806948ec275",
+              "3d13e284fd4f1fdc476e19df64ef840ddfe720d344c29177661622fe42976d25",
+              "3d13e284fd4f1fdc476e19df64ef840ddfe720d344c29177661622fe42976d25",
+              "6666456543cd9e283a0688be1a29cc93d853ea8997cabf14902bc348f8a20d82",
+              "6666456543cd9e283a0688be1a29cc93d853ea8997cabf14902bc348f8a20d82",
+              "5d127513f2ddc28eaea833c369ee0f7f993002dc764ed36fcd8f08a8ad781b67",
+              "5d127513f2ddc28eaea833c369ee0f7f993002dc764ed36fcd8f08a8ad781b67"
+            ],
+            "raw_response_sha256": [
+              "234f234ba75c635345bcdbfcb1c530bf0a60066831744dae282839f08c13d22b",
+              "234f234ba75c635345bcdbfcb1c530bf0a60066831744dae282839f08c13d22b",
+              "3d47f02816786ae10fe67e21b9df40f4774fc8cac66fc0aa464a9524babdcf88",
+              "4807d5b906f5b6935229f52279f6ab465709b3629be7d3f5086d221f117892d8",
+              "21d6232ec41fbc6c49e3ba1a50dcbd270fde15b3c87f3d9e80697fb4774a326a",
+              "6ce5b53967fb832ca2d7537f672f7fdac964fb9f90dbcfea1ae54b26d4e4068b",
+              "cec854a18b2272e39cf02dd3bdf60fb54d8b62d1142a88f7f37b440de6449687",
+              "2728767ace91ad56e8ea056e7a5f3894df90e33f21a15e99dd9e5b3145adaf9a",
+              "3637a0c746c631f48fed573fb5c5a159105b38930ca8df6f40f945ec6dd65ca2",
+              "442cec9d5c2277c5d441b6f40e648fb554c5016256957424f42b3fbe4495df76",
+              "7015da9e6701aa4349a7fa64328a06b06e5f4c287a82fe3714ba9c8367345eec",
+              "cde92c0fa6c2f56157047f3ed531928d8d6664d16d2b90c09f90ef77e710a900",
+              "c4b70768bf9c52b3c6dac2120e68f856be67c719cd6b7bb72ed795f6ed7854e8",
+              "c4b70768bf9c52b3c6dac2120e68f856be67c719cd6b7bb72ed795f6ed7854e8",
+              "00f3a5cf0526a2c37369d60e59a2ff2adbd4c66ee0673afbdf307fafd9a6bf5c",
+              "51d39636422165575fc8781cdacdabd79f665914a3965b788bafbfeb4ad94f53",
+              "03082abf970c00c395a8398c14a36b8cc733baf13dab87196ca8a785140ae08e",
+              "633377677db2063962c9db325db0079230c0e8a4a747d0d7dcef29197e53c038",
+              "219ede19d15ff45dbe8aff093fa239215ab1199615c1f2d211914e567acb0b2f",
+              "c81b6b13574b45c88e2cd9db446db2d923b58b4c51f5f73a17365c9799c75b07",
+              "36ecac81a4009a2488b39dcf6e29404886f780bd18e11351f2d0de72ca3b42ea",
+              "36ecac81a4009a2488b39dcf6e29404886f780bd18e11351f2d0de72ca3b42ea",
+              "8ae4701731f8133ded3da1ac5c8147277907b968b53f4e94d7b215f7960fadc7",
+              "b809db00a156e1d0e0fb2de6f3184292f51b99a6cbdfe638ab04581a562fd1df",
+              "3941b66a0af8d9bdae0c247cc5399b8b2ac9d63ca5ecece19db18580512d25bf",
+              "35ccdaeeade1fea9d9113006243a91cdb63c9dae0ef547043c653df10364b382",
+              "93b64003e41e28901f9a198d19005a3837b153e8264d077e5a4c1d706a0f55c1",
+              "f069032263927749f4fcc803b699708cb423bf7e014bdb51d1a8d60d0ed623de",
+              "ca7934554af92e698913ef4c0a99eeaa64372b468c46f3d43becd62f0763b585",
+              "ca7934554af92e698913ef4c0a99eeaa64372b468c46f3d43becd62f0763b585",
+              "edf5035c55ccada7fe39a0e418b6a8700c0acdeba00be1c81fc434c83f6de6d9",
+              "edf5035c55ccada7fe39a0e418b6a8700c0acdeba00be1c81fc434c83f6de6d9",
+              "63e1b9cd1cde89690a02731abfdf41da11af65c11a4f4da49c95ea8cdb66af47",
+              "63e1b9cd1cde89690a02731abfdf41da11af65c11a4f4da49c95ea8cdb66af47",
+              "dbfd3581384019ff26de06b26f1164649f6a7bca1c4c5bc86427a2ba165d0855",
+              "dbfd3581384019ff26de06b26f1164649f6a7bca1c4c5bc86427a2ba165d0855",
+              "998aac54131c06b4aac9da89911e950baa3eb406d1599ac31876292f44c05cd2",
+              "d12f59a9da7f8bb2ca327419a35495ea7e3b680b5c60efb11151cf7149b62cc9",
+              "dc11b6367a51a2a9e105d9f0bd118c16627a77d3ae442ee81ca9a6b915c2f80f",
+              "dc11b6367a51a2a9e105d9f0bd118c16627a77d3ae442ee81ca9a6b915c2f80f",
+              "d1598c9ac3f9e85c67b9389ae81766b817d59aa43f4fb0400bae2f1f5b35ff25",
+              "d1598c9ac3f9e85c67b9389ae81766b817d59aa43f4fb0400bae2f1f5b35ff25",
+              "fe62415f4b4ce5cd7b1a9b0b33739938aa14ce3f7ffe33fd414d67a8eaa0b555",
+              "6e5566c37c6a511c6691abbc2b8980f0ecad4f341494c356a0065fd81a899111",
+              "b8e42a65ee4e8fd38c87c7a4ce76caef82b5a6ea6932b09b570af7d72eafbbc4",
+              "b6e4ae01690a8463ef308eae4d3c1bd5e71fea87defcef98202c3f3fe23fad1f",
+              "07defaf48df2c020a719c876820c5f7eb304cb150610dcbf6666c279453a0b44",
+              "a9cf625f5ecdd8955326c4d217ee08a19fd5160e57c5ed684aec1f32dc704273",
+              "89b10cf41065ea7b95ff6b54f9d1675cfbc186c675af88c9336b3eff8c634f91",
+              "89b10cf41065ea7b95ff6b54f9d1675cfbc186c675af88c9336b3eff8c634f91",
+              "9b122e935d301bb6e48cb7ad9de3537ea7b17d83823b790f76365973ad317f96",
+              "9b122e935d301bb6e48cb7ad9de3537ea7b17d83823b790f76365973ad317f96",
+              "1a5829ac4839d42d540ac984267146f3a70065232a45674efd645b94e2893bf0",
+              "1a5829ac4839d42d540ac984267146f3a70065232a45674efd645b94e2893bf0"
+            ],
+            "run_ids": [
+              "ANC-084-default-fixture_pass-r1",
+              "ANC-084-default-fixture_pass-r2",
+              "ANC-084-default-fixture_fail-r1",
+              "ANC-084-default-fixture_fail-r2",
+              "ANC-084-default-paraphrase-r1",
+              "ANC-084-default-paraphrase-r2",
+              "ANC-084-default-silent-r1",
+              "ANC-084-default-silent-r2",
+              "ANC-084-default-topical-r1",
+              "ANC-084-default-topical-r2",
+              "ANC-084-default-conflict-r1",
+              "ANC-084-default-conflict-r2",
+              "ANC-084-default-irrelevant-r1",
+              "ANC-084-default-irrelevant-r2",
+              "ANC-084-default-boundary-r1",
+              "ANC-084-default-boundary-r2",
+              "ANC-084-default-exception-r1",
+              "ANC-084-default-exception-r2",
+              "ANC-084-attempt_count-fixture_pass-r1",
+              "ANC-084-attempt_count-fixture_pass-r2",
+              "ANC-084-attempt_count-fixture_fail-r1",
+              "ANC-084-attempt_count-fixture_fail-r2",
+              "ANC-084-attempt_count-paraphrase-r1",
+              "ANC-084-attempt_count-paraphrase-r2",
+              "ANC-084-attempt_count-silent-r1",
+              "ANC-084-attempt_count-silent-r2",
+              "ANC-084-attempt_count-topical-r1",
+              "ANC-084-attempt_count-topical-r2",
+              "ANC-084-attempt_count-conflict-r1",
+              "ANC-084-attempt_count-conflict-r2",
+              "ANC-084-attempt_count-irrelevant-r1",
+              "ANC-084-attempt_count-irrelevant-r2",
+              "ANC-084-attempt_count-boundary-r1",
+              "ANC-084-attempt_count-boundary-r2",
+              "ANC-084-attempt_count-exception-r1",
+              "ANC-084-attempt_count-exception-r2",
+              "ANC-084-slot_boundary-fixture_pass-r1",
+              "ANC-084-slot_boundary-fixture_pass-r2",
+              "ANC-084-slot_boundary-fixture_fail-r1",
+              "ANC-084-slot_boundary-fixture_fail-r2",
+              "ANC-084-slot_boundary-paraphrase-r1",
+              "ANC-084-slot_boundary-paraphrase-r2",
+              "ANC-084-slot_boundary-silent-r1",
+              "ANC-084-slot_boundary-silent-r2",
+              "ANC-084-slot_boundary-topical-r1",
+              "ANC-084-slot_boundary-topical-r2",
+              "ANC-084-slot_boundary-conflict-r1",
+              "ANC-084-slot_boundary-conflict-r2",
+              "ANC-084-slot_boundary-irrelevant-r1",
+              "ANC-084-slot_boundary-irrelevant-r2",
+              "ANC-084-slot_boundary-boundary-r1",
+              "ANC-084-slot_boundary-boundary-r2",
+              "ANC-084-slot_boundary-exception-r1",
+              "ANC-084-slot_boundary-exception-r2"
+            ]
+          },
+          "score": {
+            "exact_role_cells": 52,
+            "total_role_cells": 54,
+            "exact_semantic_verdicts": 16,
+            "total_semantic_verdicts": 18,
+            "stable_cases": 9,
+            "total_cases": 9,
+            "regressions": 0,
+            "confidence": {
+              "threshold": 0.8,
+              "cells_at_or_above_threshold": 51,
+              "total_cells": 54,
+              "minimum": 0.52,
+              "p10": 0.95,
+              "median": 1.0,
+              "mean": 0.9657407407407408
+            }
+          },
+          "decision": {
+            "status": "rejected",
+            "question_set_sha256": null,
+            "reason_code": "TOURNAMENT.SEMANTIC_MISMATCH"
+          },
+          "supersedes": null
+        },
+        {
+          "event_index": 2,
+          "previous_event_sha256": "e8cb5f69c0b94cded517ab7b7cf95d496568b589d9ae5ccfbac5cd1d5479cd36",
+          "event": "question_set_sealed",
+          "protocol_version": "plan-anchor/question-tournament/2.0.0",
+          "authority": {
+            "intent_id": "phase-bj",
+            "intent_version": 1,
+            "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+            "anchor_id": "ANC-084",
+            "anchor_version": 3,
+            "anchor_record_sha256": "a597708b695db9fd79d668d019b2a5fdbea57f3f7095c14dad1ecf7f72feafb8"
+          },
+          "oracle": {
+            "sha256": "457563b405e1e5986baae271140cd60545d3def320cf934db236829bfe6c44cb",
+            "case_ids": [
+              "fixture_pass",
+              "fixture_fail",
+              "paraphrase",
+              "silent",
+              "topical",
+              "conflict",
+              "irrelevant",
+              "boundary",
+              "exception"
+            ],
+            "case_count": 9,
+            "repeat_count": 2
+          },
+          "candidate": {
+            "candidate_id": "failure_path",
+            "question_sha256": "1cb050e7da744cc65abfb36708b273dde652f275aef419e61dbf29613b3c55c7"
+          },
+          "evidence": {
+            "canonical_request_sha256": [
+              "c52c7b744f3f96bc6bec62dde3177ef5dab1b3350da8b8724dd0a6b30ebb1ab7",
+              "c52c7b744f3f96bc6bec62dde3177ef5dab1b3350da8b8724dd0a6b30ebb1ab7",
+              "2e582f6779d3cba7b505926625e380217b70861e06b2e9604326475c37d67064",
+              "2e582f6779d3cba7b505926625e380217b70861e06b2e9604326475c37d67064",
+              "91a499c48456b18071a3dfc0147919255b4f370148f9fb571d0f43d54af3797d",
+              "91a499c48456b18071a3dfc0147919255b4f370148f9fb571d0f43d54af3797d",
+              "f256b77a08ab128001554391113b4997169fb709bdc57945101bd590b9e63d4d",
+              "f256b77a08ab128001554391113b4997169fb709bdc57945101bd590b9e63d4d",
+              "b6473495985f6b9786cc358f2c9fd03773cf3f30a2e267f4583c9c10b55c8bb6",
+              "b6473495985f6b9786cc358f2c9fd03773cf3f30a2e267f4583c9c10b55c8bb6",
+              "a83d4fe549ba7e0698c7e924bb8374ba519502c35ac4bfa1db4636cd6bcd7600",
+              "a83d4fe549ba7e0698c7e924bb8374ba519502c35ac4bfa1db4636cd6bcd7600",
+              "1a289fc7d671a13fe892e04f3b37433b39045d1ff49dec915a54dcc4264ae3a5",
+              "1a289fc7d671a13fe892e04f3b37433b39045d1ff49dec915a54dcc4264ae3a5",
+              "dd0ed668c5a54e12760e0141feaffe74367fb44eaba2e6622fd6bd2d096787c5",
+              "dd0ed668c5a54e12760e0141feaffe74367fb44eaba2e6622fd6bd2d096787c5",
+              "dbcda75eb9a22cf15b0484fd8cec0d20a1be4efe47e9e05a011a5b02e808d8b4",
+              "dbcda75eb9a22cf15b0484fd8cec0d20a1be4efe47e9e05a011a5b02e808d8b4",
+              "2d3549232ece5355256f3f431b4e4ccbed6da94f8af755b8092939d3f58fe4b4",
+              "2d3549232ece5355256f3f431b4e4ccbed6da94f8af755b8092939d3f58fe4b4",
+              "055fbf39d4f6197df3304584943d05f48cb87b6805eeb619dab264dec154de12",
+              "055fbf39d4f6197df3304584943d05f48cb87b6805eeb619dab264dec154de12",
+              "b701e8738eb3f19cb965bbaf779b59ce5f1e3ea274d1072b79d9a5f67549a0c3",
+              "b701e8738eb3f19cb965bbaf779b59ce5f1e3ea274d1072b79d9a5f67549a0c3",
+              "2d19a8ecff5ac65ab6e0f309e3c0217cf4e1a8cb5965bd78ece7a428c5c0082f",
+              "2d19a8ecff5ac65ab6e0f309e3c0217cf4e1a8cb5965bd78ece7a428c5c0082f",
+              "e4202eadfc0a28dcec59c15b87c22de4262893ecb8f10cccf2219bff59857dca",
+              "e4202eadfc0a28dcec59c15b87c22de4262893ecb8f10cccf2219bff59857dca",
+              "6c0ca738b254381632dda00e52897198387e945e74f0112cec4b95c1dba66a7f",
+              "6c0ca738b254381632dda00e52897198387e945e74f0112cec4b95c1dba66a7f",
+              "0fe5fe37db5691c95d9ee8a3e2d058ebd72ff7a305a5167d5d82c9d0c4ffc03e",
+              "0fe5fe37db5691c95d9ee8a3e2d058ebd72ff7a305a5167d5d82c9d0c4ffc03e",
+              "6e33929b3f92ee57b5c07f73b80b366975273fe3867921e5d3aceaa88e17c444",
+              "6e33929b3f92ee57b5c07f73b80b366975273fe3867921e5d3aceaa88e17c444",
+              "2dee7827a05c0f113ebad9ceed21dbad9373102da3bed95150e050626a7adff9",
+              "2dee7827a05c0f113ebad9ceed21dbad9373102da3bed95150e050626a7adff9",
+              "106c6c7d815d9d4d54010fb5e2426c0c008c99ef81ccb465c07a8554f82eda58",
+              "106c6c7d815d9d4d54010fb5e2426c0c008c99ef81ccb465c07a8554f82eda58",
+              "6e7a709f8a439b99952e72e10493ebfaaed3b35529a1354a3c583fd91d4a216c",
+              "6e7a709f8a439b99952e72e10493ebfaaed3b35529a1354a3c583fd91d4a216c",
+              "f626e712936972759fef9280b7dfe629b5952336f8a62d8ded00d2bde904a5eb",
+              "f626e712936972759fef9280b7dfe629b5952336f8a62d8ded00d2bde904a5eb",
+              "847ac34a99a3cd0cbe2c55f6d5d462ac0acc3081f01af91e4e6eeca21d93e6fc",
+              "847ac34a99a3cd0cbe2c55f6d5d462ac0acc3081f01af91e4e6eeca21d93e6fc",
+              "ab7cd55e9e84324b8e1ba6cb3708c988530dbd6e127649216722754b123caf5d",
+              "ab7cd55e9e84324b8e1ba6cb3708c988530dbd6e127649216722754b123caf5d",
+              "e77386e59c5328d734c56bbfe17a9f7e6f8edeb2dd350067c69c8806948ec275",
+              "e77386e59c5328d734c56bbfe17a9f7e6f8edeb2dd350067c69c8806948ec275",
+              "3d13e284fd4f1fdc476e19df64ef840ddfe720d344c29177661622fe42976d25",
+              "3d13e284fd4f1fdc476e19df64ef840ddfe720d344c29177661622fe42976d25",
+              "6666456543cd9e283a0688be1a29cc93d853ea8997cabf14902bc348f8a20d82",
+              "6666456543cd9e283a0688be1a29cc93d853ea8997cabf14902bc348f8a20d82",
+              "5d127513f2ddc28eaea833c369ee0f7f993002dc764ed36fcd8f08a8ad781b67",
+              "5d127513f2ddc28eaea833c369ee0f7f993002dc764ed36fcd8f08a8ad781b67",
+              "cb308106be3c5ec31088cbad961b643b0b51a85a78fbd9cd1f3a062d9bf234cf",
+              "cb308106be3c5ec31088cbad961b643b0b51a85a78fbd9cd1f3a062d9bf234cf",
+              "976b241c7573b3165d576d8964bbb58b9780758df595764f71785938da72fc61",
+              "976b241c7573b3165d576d8964bbb58b9780758df595764f71785938da72fc61",
+              "0f992583795a003c289c56397d950a8a76f9df5407508e19c0464661491af65b",
+              "0f992583795a003c289c56397d950a8a76f9df5407508e19c0464661491af65b",
+              "0b19a2fe60f1746ff012d3be647cfe91d3c4239527f68fc640b8c3aea18b9c6e",
+              "0b19a2fe60f1746ff012d3be647cfe91d3c4239527f68fc640b8c3aea18b9c6e",
+              "64fad29f93a383c0cce4c11c1abf54ea1107bfd98fcb0dd87bb3d08c4dc5c87f",
+              "64fad29f93a383c0cce4c11c1abf54ea1107bfd98fcb0dd87bb3d08c4dc5c87f",
+              "c9ab90ded2233340b3d7d84b941ebc9f1964867514f8a8d663b4a1417d400e81",
+              "c9ab90ded2233340b3d7d84b941ebc9f1964867514f8a8d663b4a1417d400e81",
+              "9622f32076c591ee9245f46fc08236476224efaab99c86fae82a7afff75857ad",
+              "9622f32076c591ee9245f46fc08236476224efaab99c86fae82a7afff75857ad",
+              "5383dcc5d0b44b0e9c98bc3494453e97fbe10dc2dbb59fcea01e7375c03530ae",
+              "5383dcc5d0b44b0e9c98bc3494453e97fbe10dc2dbb59fcea01e7375c03530ae",
+              "9d05fc0a96362aeef9963d5c62858c6d5eff0922bec60a7b57f7b74dcfcacb8f",
+              "9d05fc0a96362aeef9963d5c62858c6d5eff0922bec60a7b57f7b74dcfcacb8f"
+            ],
+            "raw_response_sha256": [
+              "234f234ba75c635345bcdbfcb1c530bf0a60066831744dae282839f08c13d22b",
+              "234f234ba75c635345bcdbfcb1c530bf0a60066831744dae282839f08c13d22b",
+              "3d47f02816786ae10fe67e21b9df40f4774fc8cac66fc0aa464a9524babdcf88",
+              "4807d5b906f5b6935229f52279f6ab465709b3629be7d3f5086d221f117892d8",
+              "21d6232ec41fbc6c49e3ba1a50dcbd270fde15b3c87f3d9e80697fb4774a326a",
+              "6ce5b53967fb832ca2d7537f672f7fdac964fb9f90dbcfea1ae54b26d4e4068b",
+              "cec854a18b2272e39cf02dd3bdf60fb54d8b62d1142a88f7f37b440de6449687",
+              "2728767ace91ad56e8ea056e7a5f3894df90e33f21a15e99dd9e5b3145adaf9a",
+              "3637a0c746c631f48fed573fb5c5a159105b38930ca8df6f40f945ec6dd65ca2",
+              "442cec9d5c2277c5d441b6f40e648fb554c5016256957424f42b3fbe4495df76",
+              "7015da9e6701aa4349a7fa64328a06b06e5f4c287a82fe3714ba9c8367345eec",
+              "cde92c0fa6c2f56157047f3ed531928d8d6664d16d2b90c09f90ef77e710a900",
+              "c4b70768bf9c52b3c6dac2120e68f856be67c719cd6b7bb72ed795f6ed7854e8",
+              "c4b70768bf9c52b3c6dac2120e68f856be67c719cd6b7bb72ed795f6ed7854e8",
+              "00f3a5cf0526a2c37369d60e59a2ff2adbd4c66ee0673afbdf307fafd9a6bf5c",
+              "51d39636422165575fc8781cdacdabd79f665914a3965b788bafbfeb4ad94f53",
+              "03082abf970c00c395a8398c14a36b8cc733baf13dab87196ca8a785140ae08e",
+              "633377677db2063962c9db325db0079230c0e8a4a747d0d7dcef29197e53c038",
+              "219ede19d15ff45dbe8aff093fa239215ab1199615c1f2d211914e567acb0b2f",
+              "c81b6b13574b45c88e2cd9db446db2d923b58b4c51f5f73a17365c9799c75b07",
+              "36ecac81a4009a2488b39dcf6e29404886f780bd18e11351f2d0de72ca3b42ea",
+              "36ecac81a4009a2488b39dcf6e29404886f780bd18e11351f2d0de72ca3b42ea",
+              "8ae4701731f8133ded3da1ac5c8147277907b968b53f4e94d7b215f7960fadc7",
+              "b809db00a156e1d0e0fb2de6f3184292f51b99a6cbdfe638ab04581a562fd1df",
+              "3941b66a0af8d9bdae0c247cc5399b8b2ac9d63ca5ecece19db18580512d25bf",
+              "35ccdaeeade1fea9d9113006243a91cdb63c9dae0ef547043c653df10364b382",
+              "93b64003e41e28901f9a198d19005a3837b153e8264d077e5a4c1d706a0f55c1",
+              "f069032263927749f4fcc803b699708cb423bf7e014bdb51d1a8d60d0ed623de",
+              "ca7934554af92e698913ef4c0a99eeaa64372b468c46f3d43becd62f0763b585",
+              "ca7934554af92e698913ef4c0a99eeaa64372b468c46f3d43becd62f0763b585",
+              "edf5035c55ccada7fe39a0e418b6a8700c0acdeba00be1c81fc434c83f6de6d9",
+              "edf5035c55ccada7fe39a0e418b6a8700c0acdeba00be1c81fc434c83f6de6d9",
+              "63e1b9cd1cde89690a02731abfdf41da11af65c11a4f4da49c95ea8cdb66af47",
+              "63e1b9cd1cde89690a02731abfdf41da11af65c11a4f4da49c95ea8cdb66af47",
+              "dbfd3581384019ff26de06b26f1164649f6a7bca1c4c5bc86427a2ba165d0855",
+              "dbfd3581384019ff26de06b26f1164649f6a7bca1c4c5bc86427a2ba165d0855",
+              "998aac54131c06b4aac9da89911e950baa3eb406d1599ac31876292f44c05cd2",
+              "d12f59a9da7f8bb2ca327419a35495ea7e3b680b5c60efb11151cf7149b62cc9",
+              "dc11b6367a51a2a9e105d9f0bd118c16627a77d3ae442ee81ca9a6b915c2f80f",
+              "dc11b6367a51a2a9e105d9f0bd118c16627a77d3ae442ee81ca9a6b915c2f80f",
+              "d1598c9ac3f9e85c67b9389ae81766b817d59aa43f4fb0400bae2f1f5b35ff25",
+              "d1598c9ac3f9e85c67b9389ae81766b817d59aa43f4fb0400bae2f1f5b35ff25",
+              "fe62415f4b4ce5cd7b1a9b0b33739938aa14ce3f7ffe33fd414d67a8eaa0b555",
+              "6e5566c37c6a511c6691abbc2b8980f0ecad4f341494c356a0065fd81a899111",
+              "b8e42a65ee4e8fd38c87c7a4ce76caef82b5a6ea6932b09b570af7d72eafbbc4",
+              "b6e4ae01690a8463ef308eae4d3c1bd5e71fea87defcef98202c3f3fe23fad1f",
+              "07defaf48df2c020a719c876820c5f7eb304cb150610dcbf6666c279453a0b44",
+              "a9cf625f5ecdd8955326c4d217ee08a19fd5160e57c5ed684aec1f32dc704273",
+              "89b10cf41065ea7b95ff6b54f9d1675cfbc186c675af88c9336b3eff8c634f91",
+              "89b10cf41065ea7b95ff6b54f9d1675cfbc186c675af88c9336b3eff8c634f91",
+              "9b122e935d301bb6e48cb7ad9de3537ea7b17d83823b790f76365973ad317f96",
+              "9b122e935d301bb6e48cb7ad9de3537ea7b17d83823b790f76365973ad317f96",
+              "1a5829ac4839d42d540ac984267146f3a70065232a45674efd645b94e2893bf0",
+              "1a5829ac4839d42d540ac984267146f3a70065232a45674efd645b94e2893bf0",
+              "aa1ead5088280add69b2245bcd75d788d4a8ef64f8c501fb0a4c2197f57f0a62",
+              "b57d44862d70235a629179065714e05866b99232d5612a8731fab5f99cdba0dd",
+              "62d88fd615331660f4af2a737f8dfc7fe318ef8c9b2f446c4dbbc6596b526bc1",
+              "62d88fd615331660f4af2a737f8dfc7fe318ef8c9b2f446c4dbbc6596b526bc1",
+              "146d3b426ae934503a530b541c212711cf82a6924cc1df0cf2bf771578036ecf",
+              "6233a6c2ac33c3152458de0131c4f4d682697a80d69996867e3d6c6db0210171",
+              "3320252917b38564f81c9f9dce1ffb63d72707d58db3003a2400fec079934471",
+              "3320252917b38564f81c9f9dce1ffb63d72707d58db3003a2400fec079934471",
+              "825295dc8529c1ee4cbc16194d1170ee828126155ae54295b5139ce75ce1f930",
+              "825295dc8529c1ee4cbc16194d1170ee828126155ae54295b5139ce75ce1f930",
+              "df27331c4ddc6ea7ae44884b396ba7515662874623fd58006a27676d96c3fa97",
+              "df27331c4ddc6ea7ae44884b396ba7515662874623fd58006a27676d96c3fa97",
+              "e308c558ef642cc9300ea019c1b7c4168767fff0718d23e01cd19f3a7b906d09",
+              "e308c558ef642cc9300ea019c1b7c4168767fff0718d23e01cd19f3a7b906d09",
+              "62d88fd615331660f4af2a737f8dfc7fe318ef8c9b2f446c4dbbc6596b526bc1",
+              "62d88fd615331660f4af2a737f8dfc7fe318ef8c9b2f446c4dbbc6596b526bc1",
+              "00b41f409ee5990a868b132d49486b2dd026013d940b94e04cbcd85cc64db2bd",
+              "00b41f409ee5990a868b132d49486b2dd026013d940b94e04cbcd85cc64db2bd"
+            ],
+            "run_ids": [
+              "ANC-084-default-fixture_pass-r1",
+              "ANC-084-default-fixture_pass-r2",
+              "ANC-084-default-fixture_fail-r1",
+              "ANC-084-default-fixture_fail-r2",
+              "ANC-084-default-paraphrase-r1",
+              "ANC-084-default-paraphrase-r2",
+              "ANC-084-default-silent-r1",
+              "ANC-084-default-silent-r2",
+              "ANC-084-default-topical-r1",
+              "ANC-084-default-topical-r2",
+              "ANC-084-default-conflict-r1",
+              "ANC-084-default-conflict-r2",
+              "ANC-084-default-irrelevant-r1",
+              "ANC-084-default-irrelevant-r2",
+              "ANC-084-default-boundary-r1",
+              "ANC-084-default-boundary-r2",
+              "ANC-084-default-exception-r1",
+              "ANC-084-default-exception-r2",
+              "ANC-084-attempt_count-fixture_pass-r1",
+              "ANC-084-attempt_count-fixture_pass-r2",
+              "ANC-084-attempt_count-fixture_fail-r1",
+              "ANC-084-attempt_count-fixture_fail-r2",
+              "ANC-084-attempt_count-paraphrase-r1",
+              "ANC-084-attempt_count-paraphrase-r2",
+              "ANC-084-attempt_count-silent-r1",
+              "ANC-084-attempt_count-silent-r2",
+              "ANC-084-attempt_count-topical-r1",
+              "ANC-084-attempt_count-topical-r2",
+              "ANC-084-attempt_count-conflict-r1",
+              "ANC-084-attempt_count-conflict-r2",
+              "ANC-084-attempt_count-irrelevant-r1",
+              "ANC-084-attempt_count-irrelevant-r2",
+              "ANC-084-attempt_count-boundary-r1",
+              "ANC-084-attempt_count-boundary-r2",
+              "ANC-084-attempt_count-exception-r1",
+              "ANC-084-attempt_count-exception-r2",
+              "ANC-084-slot_boundary-fixture_pass-r1",
+              "ANC-084-slot_boundary-fixture_pass-r2",
+              "ANC-084-slot_boundary-fixture_fail-r1",
+              "ANC-084-slot_boundary-fixture_fail-r2",
+              "ANC-084-slot_boundary-paraphrase-r1",
+              "ANC-084-slot_boundary-paraphrase-r2",
+              "ANC-084-slot_boundary-silent-r1",
+              "ANC-084-slot_boundary-silent-r2",
+              "ANC-084-slot_boundary-topical-r1",
+              "ANC-084-slot_boundary-topical-r2",
+              "ANC-084-slot_boundary-conflict-r1",
+              "ANC-084-slot_boundary-conflict-r2",
+              "ANC-084-slot_boundary-irrelevant-r1",
+              "ANC-084-slot_boundary-irrelevant-r2",
+              "ANC-084-slot_boundary-boundary-r1",
+              "ANC-084-slot_boundary-boundary-r2",
+              "ANC-084-slot_boundary-exception-r1",
+              "ANC-084-slot_boundary-exception-r2",
+              "ANC-084-failure_path-fixture_pass-r1",
+              "ANC-084-failure_path-fixture_pass-r2",
+              "ANC-084-failure_path-fixture_fail-r1",
+              "ANC-084-failure_path-fixture_fail-r2",
+              "ANC-084-failure_path-paraphrase-r1",
+              "ANC-084-failure_path-paraphrase-r2",
+              "ANC-084-failure_path-silent-r1",
+              "ANC-084-failure_path-silent-r2",
+              "ANC-084-failure_path-topical-r1",
+              "ANC-084-failure_path-topical-r2",
+              "ANC-084-failure_path-conflict-r1",
+              "ANC-084-failure_path-conflict-r2",
+              "ANC-084-failure_path-irrelevant-r1",
+              "ANC-084-failure_path-irrelevant-r2",
+              "ANC-084-failure_path-boundary-r1",
+              "ANC-084-failure_path-boundary-r2",
+              "ANC-084-failure_path-exception-r1",
+              "ANC-084-failure_path-exception-r2"
+            ]
+          },
+          "score": {
+            "exact_role_cells": 54,
+            "total_role_cells": 54,
+            "exact_semantic_verdicts": 18,
+            "total_semantic_verdicts": 18,
+            "stable_cases": 9,
+            "total_cases": 9,
+            "regressions": 0,
+            "confidence": {
+              "threshold": 0.8,
+              "cells_at_or_above_threshold": 54,
+              "total_cells": 54,
+              "minimum": 0.83,
+              "p10": 0.97,
+              "median": 1.0,
+              "mean": 0.99
+            }
+          },
+          "decision": {
+            "status": "sealed",
+            "question_set_sha256": "1cb050e7da744cc65abfb36708b273dde652f275aef419e61dbf29613b3c55c7",
+            "reason_code": "TOURNAMENT.EXACT"
+          },
+          "supersedes": {
+            "protocol_version": "plan-anchor/question-tournament/2.0.0",
+            "decision_sha256": "3b91e4b56d9f0ef8fda87e6c146ca79945997aba1fe0e5d71cb138c5ae3c83f7"
+          }
+        }
+      ]
+    },
+    "tuning_history_after_sha256": "c4ffff9eb5cf382f020bcd075ef60d3d569a438700f71bf2db55a918f2fe1795",
+    "production_semantics_unchanged": true,
+    "authority_citations": [
+      "ANC-084 v3 locked statement and quote",
+      "ANC-084 v3 approved pass/fail fixtures"
+    ],
+    "oracle_sha256": "457563b405e1e5986baae271140cd60545d3def320cf934db236829bfe6c44cb",
+    "sealed_question_set": {
+      "digest": "1cb050e7da744cc65abfb36708b273dde652f275aef419e61dbf29613b3c55c7",
+      "questions": {
+        "relevant": {
+          "type": "choice",
+          "instructions": "Does `item.text` touch the atm-bd-orchestration LLM/Jev call failure path, including logging, retry decisions, or when a slot reports failure? Judge subject overlap only; the item need not mention retries to be relevant.",
+          "criteria": {
+            "yes": "The item changes handling of an LLM/Jev call error, including logging it, retrying it, or reporting slot failure.",
+            "no": "The item changes an unrelated activity such as package publishing.",
+            "unclear": "The item mentions a failure or retry but does not identify whether it concerns LLM/Jev calls."
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "instructions": "Does `item.text` affirmatively require three retries after a retryable LLM call failure before the slot reports failure, as `anchor.statement` requires? Judge presence only.",
+          "criteria": {
+            "yes": "The item specifies three retries after the initial failed call, or four total attempts, before slot failure for retryable LLM errors.",
+            "no": "The item has no affirmative three-retry requirement for retryable LLM calls, even if it mentions retry handling or nonretryable errors.",
+            "unclear": "The item promises retries for retryable LLM errors but leaves the number or failure boundary unresolved."
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "instructions": "Does an explicit decision in `item.text` prevent the three retries required by `anchor.statement` for retryable LLM call failures? Silence is not conflict.",
+          "criteria": {
+            "yes": "The item states immediate slot failure or fewer than three retries for a retryable LLM call failure.",
+            "no": "No explicit incompatible decision exists; silence and immediate failure for nonretryable errors are no conflict.",
+            "unclear": "The item may shorten retryable-call retries but its timing or count is unresolved."
+          }
+        }
+      }
+    },
+    "candidate_rankings": [
+      {
+        "candidate_id": "default",
+        "question_sha256": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05",
+        "score": {
+          "exact_role_cells": 51,
+          "total_role_cells": 54,
+          "exact_semantic_verdicts": 15,
+          "total_semantic_verdicts": 18,
+          "stable_cases": 8,
+          "total_cases": 9,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 44,
+          "total_cells": 54,
+          "minimum": 0.25,
+          "p10": 0.41,
+          "median": 1.0,
+          "mean": 0.8824074074074074
+        },
+        "accepted": false,
+        "complexity": 2542
+      },
+      {
+        "candidate_id": "attempt_count",
+        "question_sha256": "f5bf34dd0cdd5e150665d5cf01bbe2fa8962a28f7b8a7aae2098287fedfbf087",
+        "score": {
+          "exact_role_cells": 52,
+          "total_role_cells": 54,
+          "exact_semantic_verdicts": 16,
+          "total_semantic_verdicts": 18,
+          "stable_cases": 9,
+          "total_cases": 9,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 51,
+          "total_cells": 54,
+          "minimum": 0.52,
+          "p10": 0.95,
+          "median": 1.0,
+          "mean": 0.9657407407407408
+        },
+        "accepted": false,
+        "complexity": 1686
+      },
+      {
+        "candidate_id": "slot_boundary",
+        "question_sha256": "61e8dd0ab72f32137127e55ec4a3eedcf19e9829d8deff31116f3bc0f2afa715",
+        "score": {
+          "exact_role_cells": 52,
+          "total_role_cells": 54,
+          "exact_semantic_verdicts": 16,
+          "total_semantic_verdicts": 18,
+          "stable_cases": 9,
+          "total_cases": 9,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 52,
+          "total_cells": 54,
+          "minimum": 0.61,
+          "p10": 0.92,
+          "median": 0.98,
+          "mean": 0.9568518518518518
+        },
+        "accepted": false,
+        "complexity": 1484
+      },
+      {
+        "candidate_id": "failure_path",
+        "question_sha256": "1cb050e7da744cc65abfb36708b273dde652f275aef419e61dbf29613b3c55c7",
+        "score": {
+          "exact_role_cells": 54,
+          "total_role_cells": 54,
+          "exact_semantic_verdicts": 18,
+          "total_semantic_verdicts": 18,
+          "stable_cases": 9,
+          "total_cases": 9,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 54,
+          "total_cells": 54,
+          "minimum": 0.83,
+          "p10": 0.97,
+          "median": 1.0,
+          "mean": 0.99
+        },
+        "accepted": true,
+        "complexity": 1750
+      }
+    ],
+    "acceptance_table": [
+      {
+        "candidate_id": "default",
+        "accepted": false,
+        "score": {
+          "exact_role_cells": 51,
+          "total_role_cells": 54,
+          "exact_semantic_verdicts": 15,
+          "total_semantic_verdicts": 18,
+          "stable_cases": 8,
+          "total_cases": 9,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 44,
+          "total_cells": 54,
+          "minimum": 0.25,
+          "p10": 0.41,
+          "median": 1.0,
+          "mean": 0.8824074074074074
+        }
+      },
+      {
+        "candidate_id": "attempt_count",
+        "accepted": false,
+        "score": {
+          "exact_role_cells": 52,
+          "total_role_cells": 54,
+          "exact_semantic_verdicts": 16,
+          "total_semantic_verdicts": 18,
+          "stable_cases": 9,
+          "total_cases": 9,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 51,
+          "total_cells": 54,
+          "minimum": 0.52,
+          "p10": 0.95,
+          "median": 1.0,
+          "mean": 0.9657407407407408
+        }
+      },
+      {
+        "candidate_id": "slot_boundary",
+        "accepted": false,
+        "score": {
+          "exact_role_cells": 52,
+          "total_role_cells": 54,
+          "exact_semantic_verdicts": 16,
+          "total_semantic_verdicts": 18,
+          "stable_cases": 9,
+          "total_cases": 9,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 52,
+          "total_cells": 54,
+          "minimum": 0.61,
+          "p10": 0.92,
+          "median": 0.98,
+          "mean": 0.9568518518518518
+        }
+      },
+      {
+        "candidate_id": "failure_path",
+        "accepted": true,
+        "score": {
+          "exact_role_cells": 54,
+          "total_role_cells": 54,
+          "exact_semantic_verdicts": 18,
+          "total_semantic_verdicts": 18,
+          "stable_cases": 9,
+          "total_cases": 9,
+          "regressions": 0
+        },
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 54,
+          "total_cells": 54,
+          "minimum": 0.83,
+          "p10": 0.97,
+          "median": 1.0,
+          "mean": 0.99
+        }
+      }
+    ],
+    "evidence": {
+      "oracle": [
+        {
+          "id": "fixture_pass",
+          "text": "A retryable LLM call failure receives three retries before the slot reports failure.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "verdict": "satisfied",
+          "rationale": "Approved pass fixture states three retries after a retryable call failure."
+        },
+        {
+          "id": "fixture_fail",
+          "text": "A retryable LLM call failure receives no retries before the slot reports failure.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "verdict": "contradicted",
+          "rationale": "Approved fail fixture expressly omits retries."
+        },
+        {
+          "id": "paraphrase",
+          "text": "For a retryable LLM call failure, make the initial call plus three further attempts before the slot fails.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "verdict": "satisfied",
+          "rationale": "Equivalent four-total-attempt outcome."
+        },
+        {
+          "id": "silent",
+          "text": "Record a structured error when an LLM call fails in a slot.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "verdict": "not_addressed",
+          "rationale": "Touches LLM call failure without retry plan."
+        },
+        {
+          "id": "topical",
+          "text": "Add retry handling for LLM calls during heavy traffic.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "verdict": "not_addressed",
+          "rationale": "Retry topic without specifying three retries before failure."
+        },
+        {
+          "id": "conflict",
+          "text": "After one retryable LLM call failure, report slot failure immediately without trying again.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "verdict": "contradicted",
+          "rationale": "Explicitly fails before required retries."
+        },
+        {
+          "id": "irrelevant",
+          "text": "Add a per-file hash manifest to the skill release archive.",
+          "expected": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "verdict": "not_applicable",
+          "rationale": "Outside LLM client retry behavior."
+        },
+        {
+          "id": "boundary",
+          "text": "For retryable LLM call errors, make only two retries and then fail the slot.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "verdict": "contradicted",
+          "rationale": "Explicitly caps retries below three."
+        },
+        {
+          "id": "exception",
+          "text": "For a nonretryable LLM call error, fail the slot immediately.",
+          "expected": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "verdict": "not_addressed",
+          "rationale": "Only nonretryable errors are described; does not rule out three retries for retryable errors."
+        }
+      ],
+      "candidate_responses": [
+        {
+          "candidate_id": "default",
+          "case_id": "fixture_pass",
+          "repeat": 1,
+          "run_id": "ANC-084-default-fixture_pass-r1",
+          "canonical_request_sha256": "c52c7b744f3f96bc6bec62dde3177ef5dab1b3350da8b8724dd0a6b30ebb1ab7",
+          "raw_response_sha256": "234f234ba75c635345bcdbfcb1c530bf0a60066831744dae282839f08c13d22b",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "fixture_pass",
+          "repeat": 2,
+          "run_id": "ANC-084-default-fixture_pass-r2",
+          "canonical_request_sha256": "c52c7b744f3f96bc6bec62dde3177ef5dab1b3350da8b8724dd0a6b30ebb1ab7",
+          "raw_response_sha256": "234f234ba75c635345bcdbfcb1c530bf0a60066831744dae282839f08c13d22b",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "fixture_fail",
+          "repeat": 1,
+          "run_id": "ANC-084-default-fixture_fail-r1",
+          "canonical_request_sha256": "2e582f6779d3cba7b505926625e380217b70861e06b2e9604326475c37d67064",
+          "raw_response_sha256": "3d47f02816786ae10fe67e21b9df40f4774fc8cac66fc0aa464a9524babdcf88",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.74,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "fixture_fail",
+          "repeat": 2,
+          "run_id": "ANC-084-default-fixture_fail-r2",
+          "canonical_request_sha256": "2e582f6779d3cba7b505926625e380217b70861e06b2e9604326475c37d67064",
+          "raw_response_sha256": "4807d5b906f5b6935229f52279f6ab465709b3629be7d3f5086d221f117892d8",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.74,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "paraphrase",
+          "repeat": 1,
+          "run_id": "ANC-084-default-paraphrase-r1",
+          "canonical_request_sha256": "91a499c48456b18071a3dfc0147919255b4f370148f9fb571d0f43d54af3797d",
+          "raw_response_sha256": "21d6232ec41fbc6c49e3ba1a50dcbd270fde15b3c87f3d9e80697fb4774a326a",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.86,
+            "conflict": 0.25
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "paraphrase",
+          "repeat": 2,
+          "run_id": "ANC-084-default-paraphrase-r2",
+          "canonical_request_sha256": "91a499c48456b18071a3dfc0147919255b4f370148f9fb571d0f43d54af3797d",
+          "raw_response_sha256": "6ce5b53967fb832ca2d7537f672f7fdac964fb9f90dbcfea1ae54b26d4e4068b",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.8,
+            "conflict": 0.37
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "silent",
+          "repeat": 1,
+          "run_id": "ANC-084-default-silent-r1",
+          "canonical_request_sha256": "f256b77a08ab128001554391113b4997169fb709bdc57945101bd590b9e63d4d",
+          "raw_response_sha256": "cec854a18b2272e39cf02dd3bdf60fb54d8b62d1142a88f7f37b440de6449687",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.58,
+            "compliance": 0.97,
+            "conflict": 0.98
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "silent",
+          "repeat": 2,
+          "run_id": "ANC-084-default-silent-r2",
+          "canonical_request_sha256": "f256b77a08ab128001554391113b4997169fb709bdc57945101bd590b9e63d4d",
+          "raw_response_sha256": "2728767ace91ad56e8ea056e7a5f3894df90e33f21a15e99dd9e5b3145adaf9a",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.58,
+            "compliance": 0.97,
+            "conflict": 0.97
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "topical",
+          "repeat": 1,
+          "run_id": "ANC-084-default-topical-r1",
+          "canonical_request_sha256": "b6473495985f6b9786cc358f2c9fd03773cf3f30a2e267f4583c9c10b55c8bb6",
+          "raw_response_sha256": "3637a0c746c631f48fed573fb5c5a159105b38930ca8df6f40f945ec6dd65ca2",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "unclear",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.35,
+            "conflict": 0.94
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "topical",
+          "repeat": 2,
+          "run_id": "ANC-084-default-topical-r2",
+          "canonical_request_sha256": "b6473495985f6b9786cc358f2c9fd03773cf3f30a2e267f4583c9c10b55c8bb6",
+          "raw_response_sha256": "442cec9d5c2277c5d441b6f40e648fb554c5016256957424f42b3fbe4495df76",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "unclear",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.37,
+            "conflict": 0.95
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "conflict",
+          "repeat": 1,
+          "run_id": "ANC-084-default-conflict-r1",
+          "canonical_request_sha256": "a83d4fe549ba7e0698c7e924bb8374ba519502c35ac4bfa1db4636cd6bcd7600",
+          "raw_response_sha256": "7015da9e6701aa4349a7fa64328a06b06e5f4c287a82fe3714ba9c8367345eec",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.85,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "conflict",
+          "repeat": 2,
+          "run_id": "ANC-084-default-conflict-r2",
+          "canonical_request_sha256": "a83d4fe549ba7e0698c7e924bb8374ba519502c35ac4bfa1db4636cd6bcd7600",
+          "raw_response_sha256": "cde92c0fa6c2f56157047f3ed531928d8d6664d16d2b90c09f90ef77e710a900",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.83,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "irrelevant",
+          "repeat": 1,
+          "run_id": "ANC-084-default-irrelevant-r1",
+          "canonical_request_sha256": "1a289fc7d671a13fe892e04f3b37433b39045d1ff49dec915a54dcc4264ae3a5",
+          "raw_response_sha256": "c4b70768bf9c52b3c6dac2120e68f856be67c719cd6b7bb72ed795f6ed7854e8",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "irrelevant",
+          "repeat": 2,
+          "run_id": "ANC-084-default-irrelevant-r2",
+          "canonical_request_sha256": "1a289fc7d671a13fe892e04f3b37433b39045d1ff49dec915a54dcc4264ae3a5",
+          "raw_response_sha256": "c4b70768bf9c52b3c6dac2120e68f856be67c719cd6b7bb72ed795f6ed7854e8",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "boundary",
+          "repeat": 1,
+          "run_id": "ANC-084-default-boundary-r1",
+          "canonical_request_sha256": "dd0ed668c5a54e12760e0141feaffe74367fb44eaba2e6622fd6bd2d096787c5",
+          "raw_response_sha256": "00f3a5cf0526a2c37369d60e59a2ff2adbd4c66ee0673afbdf307fafd9a6bf5c",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.41,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "boundary",
+          "repeat": 2,
+          "run_id": "ANC-084-default-boundary-r2",
+          "canonical_request_sha256": "dd0ed668c5a54e12760e0141feaffe74367fb44eaba2e6622fd6bd2d096787c5",
+          "raw_response_sha256": "51d39636422165575fc8781cdacdabd79f665914a3965b788bafbfeb4ad94f53",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.37,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "exception",
+          "repeat": 1,
+          "run_id": "ANC-084-default-exception-r1",
+          "canonical_request_sha256": "dbcda75eb9a22cf15b0484fd8cec0d20a1be4efe47e9e05a011a5b02e808d8b4",
+          "raw_response_sha256": "03082abf970c00c395a8398c14a36b8cc733baf13dab87196ca8a785140ae08e",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.97,
+            "compliance": 0.95,
+            "conflict": 0.97
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "default",
+          "case_id": "exception",
+          "repeat": 2,
+          "run_id": "ANC-084-default-exception-r2",
+          "canonical_request_sha256": "dbcda75eb9a22cf15b0484fd8cec0d20a1be4efe47e9e05a011a5b02e808d8b4",
+          "raw_response_sha256": "633377677db2063962c9db325db0079230c0e8a4a747d0d7dcef29197e53c038",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.97,
+            "compliance": 0.94,
+            "conflict": 0.97
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "fixture_pass",
+          "repeat": 1,
+          "run_id": "ANC-084-attempt_count-fixture_pass-r1",
+          "canonical_request_sha256": "2d3549232ece5355256f3f431b4e4ccbed6da94f8af755b8092939d3f58fe4b4",
+          "raw_response_sha256": "219ede19d15ff45dbe8aff093fa239215ab1199615c1f2d211914e567acb0b2f",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.97,
+            "compliance": 0.97,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "fixture_pass",
+          "repeat": 2,
+          "run_id": "ANC-084-attempt_count-fixture_pass-r2",
+          "canonical_request_sha256": "2d3549232ece5355256f3f431b4e4ccbed6da94f8af755b8092939d3f58fe4b4",
+          "raw_response_sha256": "c81b6b13574b45c88e2cd9db446db2d923b58b4c51f5f73a17365c9799c75b07",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.95,
+            "compliance": 0.97,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "fixture_fail",
+          "repeat": 1,
+          "run_id": "ANC-084-attempt_count-fixture_fail-r1",
+          "canonical_request_sha256": "055fbf39d4f6197df3304584943d05f48cb87b6805eeb619dab264dec154de12",
+          "raw_response_sha256": "36ecac81a4009a2488b39dcf6e29404886f780bd18e11351f2d0de72ca3b42ea",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 0.95,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "fixture_fail",
+          "repeat": 2,
+          "run_id": "ANC-084-attempt_count-fixture_fail-r2",
+          "canonical_request_sha256": "055fbf39d4f6197df3304584943d05f48cb87b6805eeb619dab264dec154de12",
+          "raw_response_sha256": "36ecac81a4009a2488b39dcf6e29404886f780bd18e11351f2d0de72ca3b42ea",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 0.95,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "paraphrase",
+          "repeat": 1,
+          "run_id": "ANC-084-attempt_count-paraphrase-r1",
+          "canonical_request_sha256": "b701e8738eb3f19cb965bbaf779b59ce5f1e3ea274d1072b79d9a5f67549a0c3",
+          "raw_response_sha256": "8ae4701731f8133ded3da1ac5c8147277907b968b53f4e94d7b215f7960fadc7",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.97,
+            "compliance": 0.97,
+            "conflict": 0.97
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "paraphrase",
+          "repeat": 2,
+          "run_id": "ANC-084-attempt_count-paraphrase-r2",
+          "canonical_request_sha256": "b701e8738eb3f19cb965bbaf779b59ce5f1e3ea274d1072b79d9a5f67549a0c3",
+          "raw_response_sha256": "b809db00a156e1d0e0fb2de6f3184292f51b99a6cbdfe638ab04581a562fd1df",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.98,
+            "compliance": 0.97,
+            "conflict": 0.97
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "silent",
+          "repeat": 1,
+          "run_id": "ANC-084-attempt_count-silent-r1",
+          "canonical_request_sha256": "2d19a8ecff5ac65ab6e0f309e3c0217cf4e1a8cb5965bd78ece7a428c5c0082f",
+          "raw_response_sha256": "3941b66a0af8d9bdae0c247cc5399b8b2ac9d63ca5ecece19db18580512d25bf",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.55,
+            "compliance": 1.0,
+            "conflict": 0.98
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "silent",
+          "repeat": 2,
+          "run_id": "ANC-084-attempt_count-silent-r2",
+          "canonical_request_sha256": "2d19a8ecff5ac65ab6e0f309e3c0217cf4e1a8cb5965bd78ece7a428c5c0082f",
+          "raw_response_sha256": "35ccdaeeade1fea9d9113006243a91cdb63c9dae0ef547043c653df10364b382",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.52,
+            "compliance": 1.0,
+            "conflict": 0.98
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "topical",
+          "repeat": 1,
+          "run_id": "ANC-084-attempt_count-topical-r1",
+          "canonical_request_sha256": "e4202eadfc0a28dcec59c15b87c22de4262893ecb8f10cccf2219bff59857dca",
+          "raw_response_sha256": "93b64003e41e28901f9a198d19005a3837b153e8264d077e5a4c1d706a0f55c1",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.97,
+            "compliance": 0.82,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "topical",
+          "repeat": 2,
+          "run_id": "ANC-084-attempt_count-topical-r2",
+          "canonical_request_sha256": "e4202eadfc0a28dcec59c15b87c22de4262893ecb8f10cccf2219bff59857dca",
+          "raw_response_sha256": "f069032263927749f4fcc803b699708cb423bf7e014bdb51d1a8d60d0ed623de",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.95,
+            "compliance": 0.79,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "conflict",
+          "repeat": 1,
+          "run_id": "ANC-084-attempt_count-conflict-r1",
+          "canonical_request_sha256": "6c0ca738b254381632dda00e52897198387e945e74f0112cec4b95c1dba66a7f",
+          "raw_response_sha256": "ca7934554af92e698913ef4c0a99eeaa64372b468c46f3d43becd62f0763b585",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "conflict",
+          "repeat": 2,
+          "run_id": "ANC-084-attempt_count-conflict-r2",
+          "canonical_request_sha256": "6c0ca738b254381632dda00e52897198387e945e74f0112cec4b95c1dba66a7f",
+          "raw_response_sha256": "ca7934554af92e698913ef4c0a99eeaa64372b468c46f3d43becd62f0763b585",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "irrelevant",
+          "repeat": 1,
+          "run_id": "ANC-084-attempt_count-irrelevant-r1",
+          "canonical_request_sha256": "0fe5fe37db5691c95d9ee8a3e2d058ebd72ff7a305a5167d5d82c9d0c4ffc03e",
+          "raw_response_sha256": "edf5035c55ccada7fe39a0e418b6a8700c0acdeba00be1c81fc434c83f6de6d9",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "irrelevant",
+          "repeat": 2,
+          "run_id": "ANC-084-attempt_count-irrelevant-r2",
+          "canonical_request_sha256": "0fe5fe37db5691c95d9ee8a3e2d058ebd72ff7a305a5167d5d82c9d0c4ffc03e",
+          "raw_response_sha256": "edf5035c55ccada7fe39a0e418b6a8700c0acdeba00be1c81fc434c83f6de6d9",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "boundary",
+          "repeat": 1,
+          "run_id": "ANC-084-attempt_count-boundary-r1",
+          "canonical_request_sha256": "6e33929b3f92ee57b5c07f73b80b366975273fe3867921e5d3aceaa88e17c444",
+          "raw_response_sha256": "63e1b9cd1cde89690a02731abfdf41da11af65c11a4f4da49c95ea8cdb66af47",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "boundary",
+          "repeat": 2,
+          "run_id": "ANC-084-attempt_count-boundary-r2",
+          "canonical_request_sha256": "6e33929b3f92ee57b5c07f73b80b366975273fe3867921e5d3aceaa88e17c444",
+          "raw_response_sha256": "63e1b9cd1cde89690a02731abfdf41da11af65c11a4f4da49c95ea8cdb66af47",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "exception",
+          "repeat": 1,
+          "run_id": "ANC-084-attempt_count-exception-r1",
+          "canonical_request_sha256": "2dee7827a05c0f113ebad9ceed21dbad9373102da3bed95150e050626a7adff9",
+          "raw_response_sha256": "dbfd3581384019ff26de06b26f1164649f6a7bca1c4c5bc86427a2ba165d0855",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "attempt_count",
+          "case_id": "exception",
+          "repeat": 2,
+          "run_id": "ANC-084-attempt_count-exception-r2",
+          "canonical_request_sha256": "2dee7827a05c0f113ebad9ceed21dbad9373102da3bed95150e050626a7adff9",
+          "raw_response_sha256": "dbfd3581384019ff26de06b26f1164649f6a7bca1c4c5bc86427a2ba165d0855",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "fixture_pass",
+          "repeat": 1,
+          "run_id": "ANC-084-slot_boundary-fixture_pass-r1",
+          "canonical_request_sha256": "106c6c7d815d9d4d54010fb5e2426c0c008c99ef81ccb465c07a8554f82eda58",
+          "raw_response_sha256": "998aac54131c06b4aac9da89911e950baa3eb406d1599ac31876292f44c05cd2",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.61,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "fixture_pass",
+          "repeat": 2,
+          "run_id": "ANC-084-slot_boundary-fixture_pass-r2",
+          "canonical_request_sha256": "106c6c7d815d9d4d54010fb5e2426c0c008c99ef81ccb465c07a8554f82eda58",
+          "raw_response_sha256": "d12f59a9da7f8bb2ca327419a35495ea7e3b680b5c60efb11151cf7149b62cc9",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.66,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "fixture_fail",
+          "repeat": 1,
+          "run_id": "ANC-084-slot_boundary-fixture_fail-r1",
+          "canonical_request_sha256": "6e7a709f8a439b99952e72e10493ebfaaed3b35529a1354a3c583fd91d4a216c",
+          "raw_response_sha256": "dc11b6367a51a2a9e105d9f0bd118c16627a77d3ae442ee81ca9a6b915c2f80f",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.98,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "fixture_fail",
+          "repeat": 2,
+          "run_id": "ANC-084-slot_boundary-fixture_fail-r2",
+          "canonical_request_sha256": "6e7a709f8a439b99952e72e10493ebfaaed3b35529a1354a3c583fd91d4a216c",
+          "raw_response_sha256": "dc11b6367a51a2a9e105d9f0bd118c16627a77d3ae442ee81ca9a6b915c2f80f",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.98,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "paraphrase",
+          "repeat": 1,
+          "run_id": "ANC-084-slot_boundary-paraphrase-r1",
+          "canonical_request_sha256": "f626e712936972759fef9280b7dfe629b5952336f8a62d8ded00d2bde904a5eb",
+          "raw_response_sha256": "d1598c9ac3f9e85c67b9389ae81766b817d59aa43f4fb0400bae2f1f5b35ff25",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.92,
+            "conflict": 0.95
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "paraphrase",
+          "repeat": 2,
+          "run_id": "ANC-084-slot_boundary-paraphrase-r2",
+          "canonical_request_sha256": "f626e712936972759fef9280b7dfe629b5952336f8a62d8ded00d2bde904a5eb",
+          "raw_response_sha256": "d1598c9ac3f9e85c67b9389ae81766b817d59aa43f4fb0400bae2f1f5b35ff25",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.92,
+            "conflict": 0.95
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "silent",
+          "repeat": 1,
+          "run_id": "ANC-084-slot_boundary-silent-r1",
+          "canonical_request_sha256": "847ac34a99a3cd0cbe2c55f6d5d462ac0acc3081f01af91e4e6eeca21d93e6fc",
+          "raw_response_sha256": "fe62415f4b4ce5cd7b1a9b0b33739938aa14ce3f7ffe33fd414d67a8eaa0b555",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.97,
+            "compliance": 0.94,
+            "conflict": 0.94
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "silent",
+          "repeat": 2,
+          "run_id": "ANC-084-slot_boundary-silent-r2",
+          "canonical_request_sha256": "847ac34a99a3cd0cbe2c55f6d5d462ac0acc3081f01af91e4e6eeca21d93e6fc",
+          "raw_response_sha256": "6e5566c37c6a511c6691abbc2b8980f0ecad4f341494c356a0065fd81a899111",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.97,
+            "compliance": 0.94,
+            "conflict": 0.89
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "topical",
+          "repeat": 1,
+          "run_id": "ANC-084-slot_boundary-topical-r1",
+          "canonical_request_sha256": "ab7cd55e9e84324b8e1ba6cb3708c988530dbd6e127649216722754b123caf5d",
+          "raw_response_sha256": "b8e42a65ee4e8fd38c87c7a4ce76caef82b5a6ea6932b09b570af7d72eafbbc4",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.94,
+            "compliance": 0.91,
+            "conflict": 0.97
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "topical",
+          "repeat": 2,
+          "run_id": "ANC-084-slot_boundary-topical-r2",
+          "canonical_request_sha256": "ab7cd55e9e84324b8e1ba6cb3708c988530dbd6e127649216722754b123caf5d",
+          "raw_response_sha256": "b6e4ae01690a8463ef308eae4d3c1bd5e71fea87defcef98202c3f3fe23fad1f",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 0.94,
+            "compliance": 0.94,
+            "conflict": 0.92
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "conflict",
+          "repeat": 1,
+          "run_id": "ANC-084-slot_boundary-conflict-r1",
+          "canonical_request_sha256": "e77386e59c5328d734c56bbfe17a9f7e6f8edeb2dd350067c69c8806948ec275",
+          "raw_response_sha256": "07defaf48df2c020a719c876820c5f7eb304cb150610dcbf6666c279453a0b44",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.91,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "conflict",
+          "repeat": 2,
+          "run_id": "ANC-084-slot_boundary-conflict-r2",
+          "canonical_request_sha256": "e77386e59c5328d734c56bbfe17a9f7e6f8edeb2dd350067c69c8806948ec275",
+          "raw_response_sha256": "a9cf625f5ecdd8955326c4d217ee08a19fd5160e57c5ed684aec1f32dc704273",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.92,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "irrelevant",
+          "repeat": 1,
+          "run_id": "ANC-084-slot_boundary-irrelevant-r1",
+          "canonical_request_sha256": "3d13e284fd4f1fdc476e19df64ef840ddfe720d344c29177661622fe42976d25",
+          "raw_response_sha256": "89b10cf41065ea7b95ff6b54f9d1675cfbc186c675af88c9336b3eff8c634f91",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.98,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "irrelevant",
+          "repeat": 2,
+          "run_id": "ANC-084-slot_boundary-irrelevant-r2",
+          "canonical_request_sha256": "3d13e284fd4f1fdc476e19df64ef840ddfe720d344c29177661622fe42976d25",
+          "raw_response_sha256": "89b10cf41065ea7b95ff6b54f9d1675cfbc186c675af88c9336b3eff8c634f91",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.98,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "boundary",
+          "repeat": 1,
+          "run_id": "ANC-084-slot_boundary-boundary-r1",
+          "canonical_request_sha256": "6666456543cd9e283a0688be1a29cc93d853ea8997cabf14902bc348f8a20d82",
+          "raw_response_sha256": "9b122e935d301bb6e48cb7ad9de3537ea7b17d83823b790f76365973ad317f96",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.95,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "boundary",
+          "repeat": 2,
+          "run_id": "ANC-084-slot_boundary-boundary-r2",
+          "canonical_request_sha256": "6666456543cd9e283a0688be1a29cc93d853ea8997cabf14902bc348f8a20d82",
+          "raw_response_sha256": "9b122e935d301bb6e48cb7ad9de3537ea7b17d83823b790f76365973ad317f96",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.95,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "exception",
+          "repeat": 1,
+          "run_id": "ANC-084-slot_boundary-exception-r1",
+          "canonical_request_sha256": "5d127513f2ddc28eaea833c369ee0f7f993002dc764ed36fcd8f08a8ad781b67",
+          "raw_response_sha256": "1a5829ac4839d42d540ac984267146f3a70065232a45674efd645b94e2893bf0",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.95,
+            "conflict": 0.92
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "slot_boundary",
+          "case_id": "exception",
+          "repeat": 2,
+          "run_id": "ANC-084-slot_boundary-exception-r2",
+          "canonical_request_sha256": "5d127513f2ddc28eaea833c369ee0f7f993002dc764ed36fcd8f08a8ad781b67",
+          "raw_response_sha256": "1a5829ac4839d42d540ac984267146f3a70065232a45674efd645b94e2893bf0",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.95,
+            "conflict": 0.92
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "fixture_pass",
+          "repeat": 1,
+          "run_id": "ANC-084-failure_path-fixture_pass-r1",
+          "canonical_request_sha256": "cb308106be3c5ec31088cbad961b643b0b51a85a78fbd9cd1f3a062d9bf234cf",
+          "raw_response_sha256": "aa1ead5088280add69b2245bcd75d788d4a8ef64f8c501fb0a4c2197f57f0a62",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.98,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "fixture_pass",
+          "repeat": 2,
+          "run_id": "ANC-084-failure_path-fixture_pass-r2",
+          "canonical_request_sha256": "cb308106be3c5ec31088cbad961b643b0b51a85a78fbd9cd1f3a062d9bf234cf",
+          "raw_response_sha256": "b57d44862d70235a629179065714e05866b99232d5612a8731fab5f99cdba0dd",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.97,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "fixture_fail",
+          "repeat": 1,
+          "run_id": "ANC-084-failure_path-fixture_fail-r1",
+          "canonical_request_sha256": "976b241c7573b3165d576d8964bbb58b9780758df595764f71785938da72fc61",
+          "raw_response_sha256": "62d88fd615331660f4af2a737f8dfc7fe318ef8c9b2f446c4dbbc6596b526bc1",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "fixture_fail",
+          "repeat": 2,
+          "run_id": "ANC-084-failure_path-fixture_fail-r2",
+          "canonical_request_sha256": "976b241c7573b3165d576d8964bbb58b9780758df595764f71785938da72fc61",
+          "raw_response_sha256": "62d88fd615331660f4af2a737f8dfc7fe318ef8c9b2f446c4dbbc6596b526bc1",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "paraphrase",
+          "repeat": 1,
+          "run_id": "ANC-084-failure_path-paraphrase-r1",
+          "canonical_request_sha256": "0f992583795a003c289c56397d950a8a76f9df5407508e19c0464661491af65b",
+          "raw_response_sha256": "146d3b426ae934503a530b541c212711cf82a6924cc1df0cf2bf771578036ecf",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.97,
+            "conflict": 0.97
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "paraphrase",
+          "repeat": 2,
+          "run_id": "ANC-084-failure_path-paraphrase-r2",
+          "canonical_request_sha256": "0f992583795a003c289c56397d950a8a76f9df5407508e19c0464661491af65b",
+          "raw_response_sha256": "6233a6c2ac33c3152458de0131c4f4d682697a80d69996867e3d6c6db0210171",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "yes",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.97,
+            "conflict": 0.98
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "silent",
+          "repeat": 1,
+          "run_id": "ANC-084-failure_path-silent-r1",
+          "canonical_request_sha256": "0b19a2fe60f1746ff012d3be647cfe91d3c4239527f68fc640b8c3aea18b9c6e",
+          "raw_response_sha256": "3320252917b38564f81c9f9dce1ffb63d72707d58db3003a2400fec079934471",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 0.98
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "silent",
+          "repeat": 2,
+          "run_id": "ANC-084-failure_path-silent-r2",
+          "canonical_request_sha256": "0b19a2fe60f1746ff012d3be647cfe91d3c4239527f68fc640b8c3aea18b9c6e",
+          "raw_response_sha256": "3320252917b38564f81c9f9dce1ffb63d72707d58db3003a2400fec079934471",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 0.98
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "topical",
+          "repeat": 1,
+          "run_id": "ANC-084-failure_path-topical-r1",
+          "canonical_request_sha256": "64fad29f93a383c0cce4c11c1abf54ea1107bfd98fcb0dd87bb3d08c4dc5c87f",
+          "raw_response_sha256": "825295dc8529c1ee4cbc16194d1170ee828126155ae54295b5139ce75ce1f930",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.83,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "topical",
+          "repeat": 2,
+          "run_id": "ANC-084-failure_path-topical-r2",
+          "canonical_request_sha256": "64fad29f93a383c0cce4c11c1abf54ea1107bfd98fcb0dd87bb3d08c4dc5c87f",
+          "raw_response_sha256": "825295dc8529c1ee4cbc16194d1170ee828126155ae54295b5139ce75ce1f930",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 0.83,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "conflict",
+          "repeat": 1,
+          "run_id": "ANC-084-failure_path-conflict-r1",
+          "canonical_request_sha256": "c9ab90ded2233340b3d7d84b941ebc9f1964867514f8a8d663b4a1417d400e81",
+          "raw_response_sha256": "df27331c4ddc6ea7ae44884b396ba7515662874623fd58006a27676d96c3fa97",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "conflict",
+          "repeat": 2,
+          "run_id": "ANC-084-failure_path-conflict-r2",
+          "canonical_request_sha256": "c9ab90ded2233340b3d7d84b941ebc9f1964867514f8a8d663b4a1417d400e81",
+          "raw_response_sha256": "df27331c4ddc6ea7ae44884b396ba7515662874623fd58006a27676d96c3fa97",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "irrelevant",
+          "repeat": 1,
+          "run_id": "ANC-084-failure_path-irrelevant-r1",
+          "canonical_request_sha256": "9622f32076c591ee9245f46fc08236476224efaab99c86fae82a7afff75857ad",
+          "raw_response_sha256": "e308c558ef642cc9300ea019c1b7c4168767fff0718d23e01cd19f3a7b906d09",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "irrelevant",
+          "repeat": 2,
+          "run_id": "ANC-084-failure_path-irrelevant-r2",
+          "canonical_request_sha256": "9622f32076c591ee9245f46fc08236476224efaab99c86fae82a7afff75857ad",
+          "raw_response_sha256": "e308c558ef642cc9300ea019c1b7c4168767fff0718d23e01cd19f3a7b906d09",
+          "roles": {
+            "relevance": "no",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "boundary",
+          "repeat": 1,
+          "run_id": "ANC-084-failure_path-boundary-r1",
+          "canonical_request_sha256": "5383dcc5d0b44b0e9c98bc3494453e97fbe10dc2dbb59fcea01e7375c03530ae",
+          "raw_response_sha256": "62d88fd615331660f4af2a737f8dfc7fe318ef8c9b2f446c4dbbc6596b526bc1",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "boundary",
+          "repeat": 2,
+          "run_id": "ANC-084-failure_path-boundary-r2",
+          "canonical_request_sha256": "5383dcc5d0b44b0e9c98bc3494453e97fbe10dc2dbb59fcea01e7375c03530ae",
+          "raw_response_sha256": "62d88fd615331660f4af2a737f8dfc7fe318ef8c9b2f446c4dbbc6596b526bc1",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "yes"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "exception",
+          "repeat": 1,
+          "run_id": "ANC-084-failure_path-exception-r1",
+          "canonical_request_sha256": "9d05fc0a96362aeef9963d5c62858c6d5eff0922bec60a7b57f7b74dcfcacb8f",
+          "raw_response_sha256": "00b41f409ee5990a868b132d49486b2dd026013d940b94e04cbcd85cc64db2bd",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        },
+        {
+          "candidate_id": "failure_path",
+          "case_id": "exception",
+          "repeat": 2,
+          "run_id": "ANC-084-failure_path-exception-r2",
+          "canonical_request_sha256": "9d05fc0a96362aeef9963d5c62858c6d5eff0922bec60a7b57f7b74dcfcacb8f",
+          "raw_response_sha256": "00b41f409ee5990a868b132d49486b2dd026013d940b94e04cbcd85cc64db2bd",
+          "roles": {
+            "relevance": "yes",
+            "compliance": "no",
+            "conflict": "no"
+          },
+          "confidence": {
+            "relevance": 1.0,
+            "compliance": 1.0,
+            "conflict": 1.0
+          },
+          "error": null
+        }
+      ],
+      "previous_unaccepted_event_sha256": "e8cb5f69c0b94cded517ab7b7cf95d496568b589d9ae5ccfbac5cd1d5479cd36"
+    },
+    "explanation": "The original frozen oracle was retained unchanged. A fourth role-complete candidate was tested twice on every case after the first three failed semantic acceptance.",
+    "planner_action": "Review oracle and acceptance table before installing sealed override.",
+    "question_action": null,
+    "sealed_question_set_digest_before": null,
+    "sealed_question_set_digest_after": "1cb050e7da744cc65abfb36708b273dde652f275aef419e61dbf29613b3c55c7",
+    "authority_recommendations": []
+  },
+  "error": null,
+  "metadata": {
+    "duration_ms": 2087,
+    "tool_calls": 72,
+    "retry_count": 0,
+    "correlation_id": "ANC-084",
+    "jev_run_ids": [
+      "ANC-084-default-fixture_pass-r1",
+      "ANC-084-default-fixture_pass-r2",
+      "ANC-084-default-fixture_fail-r1",
+      "ANC-084-default-fixture_fail-r2",
+      "ANC-084-default-paraphrase-r1",
+      "ANC-084-default-paraphrase-r2",
+      "ANC-084-default-silent-r1",
+      "ANC-084-default-silent-r2",
+      "ANC-084-default-topical-r1",
+      "ANC-084-default-topical-r2",
+      "ANC-084-default-conflict-r1",
+      "ANC-084-default-conflict-r2",
+      "ANC-084-default-irrelevant-r1",
+      "ANC-084-default-irrelevant-r2",
+      "ANC-084-default-boundary-r1",
+      "ANC-084-default-boundary-r2",
+      "ANC-084-default-exception-r1",
+      "ANC-084-default-exception-r2",
+      "ANC-084-attempt_count-fixture_pass-r1",
+      "ANC-084-attempt_count-fixture_pass-r2",
+      "ANC-084-attempt_count-fixture_fail-r1",
+      "ANC-084-attempt_count-fixture_fail-r2",
+      "ANC-084-attempt_count-paraphrase-r1",
+      "ANC-084-attempt_count-paraphrase-r2",
+      "ANC-084-attempt_count-silent-r1",
+      "ANC-084-attempt_count-silent-r2",
+      "ANC-084-attempt_count-topical-r1",
+      "ANC-084-attempt_count-topical-r2",
+      "ANC-084-attempt_count-conflict-r1",
+      "ANC-084-attempt_count-conflict-r2",
+      "ANC-084-attempt_count-irrelevant-r1",
+      "ANC-084-attempt_count-irrelevant-r2",
+      "ANC-084-attempt_count-boundary-r1",
+      "ANC-084-attempt_count-boundary-r2",
+      "ANC-084-attempt_count-exception-r1",
+      "ANC-084-attempt_count-exception-r2",
+      "ANC-084-slot_boundary-fixture_pass-r1",
+      "ANC-084-slot_boundary-fixture_pass-r2",
+      "ANC-084-slot_boundary-fixture_fail-r1",
+      "ANC-084-slot_boundary-fixture_fail-r2",
+      "ANC-084-slot_boundary-paraphrase-r1",
+      "ANC-084-slot_boundary-paraphrase-r2",
+      "ANC-084-slot_boundary-silent-r1",
+      "ANC-084-slot_boundary-silent-r2",
+      "ANC-084-slot_boundary-topical-r1",
+      "ANC-084-slot_boundary-topical-r2",
+      "ANC-084-slot_boundary-conflict-r1",
+      "ANC-084-slot_boundary-conflict-r2",
+      "ANC-084-slot_boundary-irrelevant-r1",
+      "ANC-084-slot_boundary-irrelevant-r2",
+      "ANC-084-slot_boundary-boundary-r1",
+      "ANC-084-slot_boundary-boundary-r2",
+      "ANC-084-slot_boundary-exception-r1",
+      "ANC-084-slot_boundary-exception-r2",
+      "ANC-084-failure_path-fixture_pass-r1",
+      "ANC-084-failure_path-fixture_pass-r2",
+      "ANC-084-failure_path-fixture_fail-r1",
+      "ANC-084-failure_path-fixture_fail-r2",
+      "ANC-084-failure_path-paraphrase-r1",
+      "ANC-084-failure_path-paraphrase-r2",
+      "ANC-084-failure_path-silent-r1",
+      "ANC-084-failure_path-silent-r2",
+      "ANC-084-failure_path-topical-r1",
+      "ANC-084-failure_path-topical-r2",
+      "ANC-084-failure_path-conflict-r1",
+      "ANC-084-failure_path-conflict-r2",
+      "ANC-084-failure_path-irrelevant-r1",
+      "ANC-084-failure_path-irrelevant-r2",
+      "ANC-084-failure_path-boundary-r1",
+      "ANC-084-failure_path-boundary-r2",
+      "ANC-084-failure_path-exception-r1",
+      "ANC-084-failure_path-exception-r2"
+    ],
+    "planner_observation_trust": null,
+    "authoritative_sources_unchanged": true
+  }
+}

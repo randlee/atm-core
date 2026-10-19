@@ -69,7 +69,7 @@ Intent: `docs/plans/phase-bj/intent.md`
 | ANC-060 | locked | dev and fix dispatch stay the lead's judgment | 2026-10-18 |
 | ANC-061 | locked | poller checks bd ready then the ATM task before assigning | 2026-10-18 |
 | ANC-062 | retired | stack linking advised, base alignment sufficient, lead owns hygiene | 2026-10-18 |
-| ANC-063 | locked | pour validates projected phase graph before writes | 2026-10-18 |
+| ANC-063 | retired | pour validates projected phase graph before writes | 2026-10-18 |
 | ANC-064 | retired | atm task transition hooks in atm-core, routed by role, failure keeps the task open | 2026-10-18 |
 | ANC-065 | locked | sanity links the layer on PASS; first PASS wins the top, the other gets rebase-required | 2026-10-18 |
 | ANC-066 | locked | sanity-stack subagent: one next-top layer per spawn, sequential; the race is its job | 2026-10-18 |
@@ -80,7 +80,19 @@ Intent: `docs/plans/phase-bj/intent.md`
 | ANC-071 | locked | max_sanity_rounds does not move on rebase-required | 2026-10-18 |
 | ANC-072 | locked | sanity FAIL handled entirely by ATM: sanity-fail.xml.j2 lists exactly what was NOT complete and references the sprint | 2026-10-18 |
 | ANC-073 | locked | atm-bd runs pages for sanity and quality: one line per run, newest first, JEV and LLM verdict and elapsed, dev name and icon | 2026-10-18 |
-| ANC-074 | locked | lead ruling 2026-10-18: Jev client owns three retries, four attempts total | 2026-10-18 |
+| ANC-074 | retired | lead ruling 2026-10-18: Jev client owns three retries, four attempts total | 2026-10-18 |
+| ANC-075 | locked | Publish full-skill sc-sha manifest | 2026-10-18 |
+| ANC-076 | locked | Verify installed skill files at install | 2026-10-18 |
+| ANC-077 | locked | Report installed file integrity status | 2026-10-18 |
+| ANC-078 | locked | Sprint-family beads carry branch | 2026-10-18 |
+| ANC-079 | locked | Sprint-family beads carry worktree | 2026-10-18 |
+| ANC-080 | locked | Sprint-family beads carry pr_target | 2026-10-18 |
+| ANC-081 | locked | Sprint-family beads carry difficulty | 2026-10-18 |
+| ANC-082 | locked | Every bead kind has a typed model | 2026-10-18 |
+| ANC-083 | locked | Validate every bead in the phase | 2026-10-18 |
+| ANC-084 | locked | Retry LLM call failures three times | 2026-10-18 |
+| ANC-085 | locked | Show API failure reason and distinct icon | 2026-10-18 |
+| ANC-086 | locked | No outage beads or refusal citations | 2026-10-18 |
 
 ## ANC-001
 
@@ -1312,7 +1324,7 @@ Anchor: The sprint pour must write branch, worktree, pr_target and difficulty on
 
 > file a gh issue to make sure the necessary info lands in the poured bead AND is validated w/ pydantic model and validation python method for all beads in phase.
 
-Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 3.
+Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: retired. Version 4.
 
 Summary: pour validates projected phase graph before writes
 
@@ -1551,7 +1563,7 @@ Anchor: A Jev API call failure gets up to three retries (four total attempts) at
 
 > this entire process of hold on re-dispatch sounds like a team trying to manage a reliable asset by making excuses not to deal with failures to call the agent properly.  (I suspect that a subagent sends too much context and jev returns error, instead of editing context, failure is returned.  There are occasionally LLM call fails during heavy traffic times which can be retried 3x before saying fail. )  Make sure that LLM failure reason shows up in severity table in tui AND the fail icon for typesafe API issue is distinctly different from jev answered 'all work NOT done'.  this `Class-bead append and citation on every refusal, and the checker-defect side channel.` also sounds like ceremony I did not know about or approve.
 
-Said by Rand, phase-bj planning 2026-10-18 (third round): Rand on the sanity runs table, Jev/LLM failures and refusal ceremony, 2026-10-18. Status: locked. Version 4.
+Said by Rand, phase-bj planning 2026-10-18 (third round): Rand on the sanity runs table, Jev/LLM failures and refusal ceremony, 2026-10-18. Status: retired. Version 5.
 
 Summary: lead ruling 2026-10-18: Jev client owns three retries, four attempts total
 
@@ -1564,3 +1576,219 @@ Fixtures:
 - pass: The Jev client retries a 502 under its bounded policy, then records API_FAILURE and the console shows its distinct icon and error.
 - fail: dev-sanity opens a -jev-outage class bead and the lead holds re-dispatch until it closes, or an API failure is shown with the same icon as a JEV FAIL.
 - fail: The client immediately fails a retryable 502, or the API_FAILURE row uses the JEV FAIL icon.
+
+## ANC-075
+
+Anchor: The package publish script must write a release-artifact manifest with one sc-sha path/hash entry for every shipped agent, skill, Python file, template, and script, plus the aggregate.
+
+> a package script inside the skill package computes the sc-sha of every shipped file (agents, skills, python, templates, scripts) and writes a manifest (per-file path + sha, plus the aggregate) into the release artifact.
+
+Said by Rand, atm-bd-orchestration issue #349 scope, 2026-10-18. Status: locked. Version 2.
+
+Summary: Publish full-skill sc-sha manifest
+
+Scope: edits the package publish script, release artifact contents, or packaged agents, skills, Python files, templates, or scripts
+
+Deterministic check to pair with the development gate: Inspect the package publish script and produced release archive; verify each shipped file has one path/hash manifest entry and the aggregate matches those entries.
+
+Fixtures:
+- pass: The package publish script puts path/hash manifest entries for every shipped agent, skill, Python file, template, and script in the release artifact and includes the aggregate.
+- fail: The package publish script includes only Python files in the release manifest and omits the aggregate hash.
+
+## ANC-076
+
+Anchor: The atm-bd skill installer must verify every installed file against the manifest published for the selected tag or --latest version.
+
+> `atm-bd skill` verifies every file against the published manifest for the version it installs (tag or `--latest`) and refuses a mismatch with the file list.
+
+Said by Rand, atm-bd-orchestration issue #349 scope, 2026-10-18. Status: locked. Version 2.
+
+Summary: Verify installed skill files at install
+
+Scope: edits the atm-bd skill installer or its version selection and file verification
+
+Deterministic check to pair with the development gate: Run installer fixtures for matching, modified, and missing files at a tag and --latest; verify mismatches stop installation and list each affected path.
+
+Fixtures:
+- pass: The atm-bd skill installer checks each installed file against the published manifest for the selected --latest release.
+- fail: The atm-bd skill installer accepts a release with a modified installed script without checking the published manifest.
+
+## ANC-077
+
+Anchor: The plugin doctor must report each installed file as ok, modified, missing, or extra.
+
+> reports per-file ok|modified|missing|extra
+
+Said by Rand, atm-bd-orchestration issue #349 scope, 2026-10-18. Status: locked. Version 2.
+
+Summary: Report installed file integrity status
+
+Scope: edits the plugin doctor or its installed-file integrity reporting
+
+Deterministic check to pair with the development gate: Run atm-hook-doctor.py against fixture installs containing unchanged, modified, missing, and extra files; assert one status per path.
+
+Fixtures:
+- pass: The plugin doctor reports every installed file as ok, modified, missing, or extra.
+- fail: The plugin doctor reports only aggregate PASS or FAIL and gives no status for individual installed files.
+
+## ANC-078
+
+Anchor: The branch value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.
+
+> when the sprint is poured, wouldn't the branch/worktree land in the dev (or fix), sanity and qa bead at that point?
+
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 3.
+
+Summary: Sprint-family beads carry branch
+
+Scope: atm-bd-orchestration sprint-family pour
+
+Deterministic check to pair with the development gate: Inspect rendered sprint-family beads and verify each dev, fix, sanity and QA bead has the expected branch value.
+
+Fixtures:
+- pass: The pour copies the sprint container's branch value onto every generated sprint-family dev, fix, sanity and QA bead.
+- fail: The sprint-family pour writes no branch value onto its generated dev, fix, sanity or QA beads.
+
+## ANC-079
+
+Anchor: The worktree value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.
+
+> when the sprint is poured, wouldn't the branch/worktree land in the dev (or fix), sanity and qa bead at that point?
+
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 3.
+
+Summary: Sprint-family beads carry worktree
+
+Scope: atm-bd-orchestration sprint-family pour
+
+Deterministic check to pair with the development gate: Inspect rendered sprint-family beads and verify each dev, fix, sanity and QA bead has the expected worktree value.
+
+Fixtures:
+- pass: The pour copies the sprint container's worktree value onto every generated sprint-family dev, fix, sanity and QA bead.
+- fail: The sprint-family pour writes no worktree value onto its generated dev, fix, sanity or QA beads.
+
+## ANC-080
+
+Anchor: The pr_target value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.
+
+> branch, worktree, pr_target, difficulty land on the sprint container (as today) AND on its sanity and QA beads at pour time, copied from the container.
+
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 3.
+
+Summary: Sprint-family beads carry pr_target
+
+Scope: atm-bd-orchestration sprint-family pour
+
+Deterministic check to pair with the development gate: Inspect rendered sprint-family beads and verify each dev, fix, sanity and QA bead has the expected pr_target value.
+
+Fixtures:
+- pass: The pour copies the sprint container's pr_target value onto every generated sprint-family dev, fix, sanity and QA bead.
+- fail: The sprint-family pour writes no pr_target value onto its generated dev, fix, sanity or QA beads.
+
+## ANC-081
+
+Anchor: The difficulty value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.
+
+> branch, worktree, pr_target, difficulty land on the sprint container (as today) AND on its sanity and QA beads at pour time, copied from the container.
+
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 3.
+
+Summary: Sprint-family beads carry difficulty
+
+Scope: atm-bd-orchestration sprint-family pour
+
+Deterministic check to pair with the development gate: Inspect rendered sprint-family beads and verify each dev, fix, sanity and QA bead has the expected difficulty value.
+
+Fixtures:
+- pass: The pour copies the sprint container's difficulty value onto every generated sprint-family dev, fix, sanity and QA bead.
+- fail: The sprint-family pour writes no difficulty value onto its generated dev, fix, sanity or QA beads.
+
+## ANC-082
+
+Anchor: Each bead kind in the phase must have a Pydantic model that names its required metadata keys.
+
+> A pydantic model for every bead kind in a phase, not just sprint and sanity: dev/sprint container, sanity, QA (with checked_bead and the round), gate, finding, fix, and their sanity/QA children. Each model names the required metadata keys; extra="allow" stays.
+
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 2.
+
+Summary: Every bead kind has a typed model
+
+Scope: atm-bd-orchestration bead schema
+
+Deterministic check to pair with the development gate: Validate fixtures for every phase bead kind and assert the selected Pydantic model enforces its required metadata keys.
+
+Fixtures:
+- pass: Every bead kind in the phase has a Pydantic model that names its required metadata keys.
+- fail: The phase finding bead kind has no Pydantic model.
+
+## ANC-083
+
+Anchor: One validation method must cover every bead in the phase.
+
+> One validation method that covers all beads in the phase.
+
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 2.
+
+Summary: Validate every bead in the phase
+
+Scope: atm-bd-orchestration bead schema validation
+
+Deterministic check to pair with the development gate: Run the phase validator over a fixture phase and confirm it visits every bead under the phase epic.
+
+Fixtures:
+- pass: The phase validation method visits every bead under the phase epic.
+- fail: The phase validation method skips a bead under the phase epic.
+
+## ANC-084
+
+Anchor: A retryable LLM call failure is retried three times before the slot reports failure.
+
+> There are occasionally LLM call fails during heavy traffic times which can be retried 3x before saying fail.
+
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 3.
+
+Summary: Retry LLM call failures three times
+
+Scope: atm-bd-orchestration Jev client retry behavior
+
+Deterministic check to pair with the development gate: With a controlled client returning retryable failures, assert four total attempts before slot failure.
+
+Fixtures:
+- pass: A retryable LLM call failure receives three retries before the slot reports failure.
+- fail: A retryable LLM call failure receives no retries before the slot reports failure.
+
+## ANC-085
+
+Anchor: The runs page severity table must show the LLM failure reason and use an icon distinct from a JEV not-done verdict for a TypeSafe API failure.
+
+> Make sure that LLM failure reason shows up in severity table in tui AND the fail icon for typesafe API issue is distinctly different from jev answered 'all work NOT done'.
+
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 2.
+
+Summary: Show API failure reason and distinct icon
+
+Scope: atm-bd-orchestration runs page severity table
+
+Deterministic check to pair with the development gate: Render an API failure and a JEV not-done verdict and assert the reason is visible and their icons differ.
+
+Fixtures:
+- pass: The runs page severity table shows the LLM failure reason and gives TypeSafe API failure a distinct icon from a JEV not-done verdict.
+- fail: The runs page severity table omits the LLM failure reason and uses the JEV not-done icon for a TypeSafe API failure.
+
+## ANC-086
+
+Anchor: The sanity and refusal flows must not use outage class beads or require refusal citations.
+
+> This `Class-bead append and citation on every refusal, and the checker-defect side channel.` also sounds like ceremony I did not know about or approve.
+
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 2.
+
+Summary: No outage beads or refusal citations
+
+Scope: atm-bd-orchestration sanity and refusal flows
+
+Deterministic check to pair with the development gate: Inspect the sanity and refusal flows and assert no outage class bead is opened and no refusal citation is required.
+
+Fixtures:
+- pass: The sanity and refusal flows open no outage class bead and require no refusal citation.
+- fail: The sanity flow opens an outage class bead or the refusal flow requires a citation.

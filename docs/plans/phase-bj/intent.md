@@ -33,4 +33,4 @@ task stays open until sanity passes.
 
 The phase-bi anchors (ANC-001..050, REQ-BI6-AC6) are carried unchanged in
 `anchors.json` so Jev judges phase-bj items against the same console
-rulings; ANC-051..074 are this phase's (ANC-062 retired to ANC-065). Rendered to `anchors.md`.
+rulings; ANC-051..086 are this phase's; ANC-063 and ANC-074 are retired and replaced by ANC-078..083 and ANC-084..086, respectively (ANC-062 retired to ANC-065). Rendered to `anchors.md`.
