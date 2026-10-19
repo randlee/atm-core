@@ -2212,4 +2212,191 @@ mod tests {
             assert_ne!(status, StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn hook_and_cron_routes_round_trip_through_the_handler_and_client_decoder() {
+        use super::map_api_response;
+        use atm_core::api::{ApiRequest, decode_http_response, encode_http_request};
+        use atm_core::boundary::{
+            CronSchedule, CronScheduleId, HookName, HookRegistration, PhaseId, StopCondition,
+        };
+        use atm_core::hook::{
+            CronEndRequest, CronListQuery, CronStartRequest, HookActionsResponse,
+            HookDisableRequest, HookListQuery, HookRegisterRequest,
+        };
+        use atm_core::protocol::RequestEnvelope;
+        use atm_core::send::{SendMessageSource, WriteRequest};
+        use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+
+        let caller: AgentName = "sender".parse().expect("agent");
+        let team: TeamName = "test-team".parse().expect("team");
+        let phase = PhaseId::parse("bk").expect("phase");
+        let at: IsoTimestamp = "2026-10-19T00:00:00Z".parse().expect("timestamp");
+        let registration = HookRegistration {
+            team: team.clone(),
+            phase: phase.clone(),
+            hook: HookName::parse("task.assign").expect("hook"),
+            module_path: "/modules/gate.wasm".into(),
+            cwd: "/work".into(),
+            timeout_ms: 1_000,
+            custom: serde_json::Map::new(),
+            active: true,
+            registered_by: caller.clone(),
+            registered_at: at,
+            disabled_at: None,
+        };
+        let schedule = CronSchedule {
+            id: CronScheduleId(1),
+            generation: 1,
+            team: team.clone(),
+            phase: phase.clone(),
+            name: "nightly".to_owned(),
+            cron_expr: "0 3 * * *".to_owned(),
+            module_path: "/modules/nightly.wasm".into(),
+            cwd: "/work".into(),
+            args: Vec::new(),
+            timeout_ms: 1_000,
+            jitter_s: 0,
+            custom: serde_json::Map::new(),
+            stop: StopCondition::Hook,
+            active: true,
+            created_by: caller.clone(),
+            created_at: "2026-10-19T00:00:00Z".parse().expect("timestamp"),
+            last_run_at: None,
+            last_outcome: None,
+            ended_at: None,
+        };
+        let write = WriteRequest::new(
+            std::path::PathBuf::from("/atm-home"),
+            std::path::PathBuf::from("/work"),
+            caller.clone(),
+            "recipient@test-team",
+            team.clone(),
+            SendMessageSource::Inline("hooked".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write request");
+
+        let register = RequestEnvelope::HookRegister(HookRegisterRequest {
+            caller_identity: caller.clone(),
+            caller_team: team.clone(),
+            phase: phase.clone(),
+            hook: "task.assign".to_owned(),
+            module_path: "/modules/gate.wasm".into(),
+            cwd: "/work".into(),
+            timeout_ms: 1_000,
+            custom: serde_json::json!({}),
+        });
+        let disable = RequestEnvelope::HookDisable(HookDisableRequest {
+            caller_identity: caller.clone(),
+            caller_team: team.clone(),
+            phase: phase.clone(),
+            hook: None,
+        });
+        let list = RequestEnvelope::HookList(HookListQuery {
+            caller_identity: caller.clone(),
+            caller_team: team.clone(),
+            phase: None,
+        });
+        let cron_start = RequestEnvelope::CronStart(CronStartRequest {
+            caller_identity: caller.clone(),
+            caller_team: team.clone(),
+            phase: phase.clone(),
+            name: "nightly".to_owned(),
+            cron_expr: "0 3 * * *".to_owned(),
+            module_path: "/modules/nightly.wasm".into(),
+            cwd: "/work".into(),
+            args: Vec::new(),
+            timeout_ms: 1_000,
+            stop: StopCondition::Hook,
+            custom: serde_json::json!({}),
+        });
+        let cron_end = RequestEnvelope::CronEnd(CronEndRequest {
+            caller_identity: caller.clone(),
+            caller_team: team.clone(),
+            phase: phase.clone(),
+            name: None,
+        });
+        let cron_list = RequestEnvelope::CronList(CronListQuery {
+            caller_identity: caller,
+            caller_team: team,
+            phase: None,
+        });
+
+        // Each of the six routes encodes, reaches the handler's decoder, and decodes to the
+        // same payload it was encoded from.
+        for (request, route) in [
+            (&register, "HookRegister"),
+            (&disable, "HookDisable"),
+            (&list, "HookList"),
+            (&cron_start, "CronStart"),
+            (&cron_end, "CronEnd"),
+            (&cron_list, "CronList"),
+        ] {
+            let http = encode_http_request(request, &[]).expect("encode route");
+            let decoded = decode_framework_request(http, 1 << 20).expect("handler decodes route");
+            let decoded_payload = match decoded {
+                ApiRequest::HookRegister(value) => serde_json::to_value(value),
+                ApiRequest::HookDisable(value) => serde_json::to_value(value),
+                ApiRequest::HookList(value) => serde_json::to_value(value),
+                ApiRequest::CronStart(value) => serde_json::to_value(value),
+                ApiRequest::CronEnd(value) => serde_json::to_value(value),
+                ApiRequest::CronList(value) => serde_json::to_value(value),
+                _ => panic!("{route} decoded to a different route"),
+            }
+            .expect("encode decoded payload");
+            let encoded = serde_json::to_value(request).expect("encode request");
+            assert_eq!(
+                decoded_payload, encoded[route],
+                "{route} payload round-trips"
+            );
+        }
+
+        // Each of the seven responses maps through the handler and decodes on the client to
+        // the same envelope. The HookActions body rides on a task write, as the wire does.
+        let write_request = RequestEnvelope::Write(Box::new(write));
+        let cases = [
+            (
+                &register,
+                ResponseEnvelope::HookRegistered(registration.clone()),
+            ),
+            (
+                &list,
+                ResponseEnvelope::HookList(vec![registration.clone()]),
+            ),
+            (&disable, ResponseEnvelope::HookDisabled(vec![registration])),
+            (
+                &write_request,
+                ResponseEnvelope::HookActions(HookActionsResponse { dispatched: 2 }),
+            ),
+            (&cron_start, ResponseEnvelope::CronStarted(schedule.clone())),
+            (
+                &cron_list,
+                ResponseEnvelope::CronList(vec![schedule.clone()]),
+            ),
+            (&cron_end, ResponseEnvelope::CronEnded(vec![schedule])),
+        ];
+        for (request, envelope) in cases {
+            let response = map_api_response(ApiResponse::new(envelope.clone()))
+                .expect("handler maps response");
+            let status = response.status().as_u16();
+            let headers: Vec<String> = response
+                .headers()
+                .iter()
+                .map(|(name, value)| format!("{name}: {}", value.to_str().expect("ascii header")))
+                .collect();
+            let body = to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("response body");
+            let decoded = decode_http_response(request, status, &headers, &body)
+                .expect("client decodes response");
+            assert_eq!(
+                serde_json::to_value(&decoded).expect("encode decoded response"),
+                serde_json::to_value(&envelope).expect("encode response"),
+            );
+        }
+    }
 }
