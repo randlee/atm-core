@@ -1,0 +1,1 @@
+The sprint edits the 0.16.1 release's contents to apply the new rename.

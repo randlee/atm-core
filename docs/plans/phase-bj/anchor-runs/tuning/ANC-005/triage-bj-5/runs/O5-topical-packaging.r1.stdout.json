@@ -1,0 +1,130 @@
+{
+  "success": true,
+  "data": {
+    "schema": "plan-anchoring/run/1",
+    "run_id": "plan-20261019T014333Z-oracle-O5-topical-packaging",
+    "gate": "plan",
+    "created_at": "2026-10-19T01:43:33+00:00",
+    "anchors_path": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/oracle/anchors.ANC-005.json",
+    "plan": "phase-bj",
+    "item": {
+      "id": "oracle-O5-topical-packaging",
+      "title": "",
+      "source": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/oracle/O5-topical-packaging.txt",
+      "chars": 301,
+      "truncated": false,
+      "chars_before_reduction": 301,
+      "code_reduced": {
+        "blocks": 0,
+        "lines": 0
+      }
+    },
+    "model_requested": "jev-latest",
+    "model_answered": "jev-1.13.0",
+    "threshold": 0.6,
+    "max_request_bytes": 24000,
+    "min_item_chars": 2000,
+    "dry_run": false,
+    "fixture": false,
+    "results": [
+      {
+        "anchor_id": "ANC-005",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "No sprint in this phase must change what ships in v0.16.1.",
+        "quote": "agreed 0.16.1 first, but we can plan this as part of next phase.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-16",
+        "context": "planning session 2026-10-17",
+        "anchor_version": 3,
+        "deterministic_check": "git diff v0.16.1..<phase base> shows no change from this phase's PRs; tag v0.16.1 predates the first sprint's first commit",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.38,
+            "probabilities": {
+              "yes": 0.59,
+              "no": 0.4,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.94,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.96,
+              "unclear": 0.03
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.3,
+            "probabilities": {
+              "yes": 0.43,
+              "no": 0.53,
+              "unclear": 0.04
+            }
+          }
+        },
+        "min_confidence": 0.3,
+        "explanation": "Jev was not confident (min confidence 0.30); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 1065,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "yes",
+            "confidence": 0.38
+          },
+          {
+            "ask": "first",
+            "role": "conflict",
+            "question_id": "contradicted",
+            "choice": "no",
+            "confidence": 0.3
+          }
+        ],
+        "attempts": 1,
+        "item_chars_sent": 301,
+        "item_shortened": false,
+        "request_bytes": 3194
+      }
+    ],
+    "summary": {
+      "counts": {
+        "underspecified": 1
+      },
+      "failing": [
+        "ANC-005"
+      ],
+      "leaning_counts": {
+        "satisfied": 1
+      },
+      "unstable": [],
+      "errors": [],
+      "excluded": [],
+      "shortened": [],
+      "pass": false
+    },
+    "path": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O5-topical-packaging.r1.json",
+    "run_path": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O5-topical-packaging.r1.json"
+  },
+  "error": null
+}

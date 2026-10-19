@@ -1,0 +1,880 @@
+{
+ "aborted_by": null,
+ "canceled": false,
+ "data": {
+  "acceptance_table": [
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "yes",
+       0.98
+      ],
+      "conflict": [
+       "no",
+       0.88
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "yes",
+       0.97
+      ],
+      "conflict": [
+       "no",
+       0.73
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "fixture_pass",
+    "expected": {
+     "compliance": "yes",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "probe": "approved_fixture_pass",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "satisfied",
+     "satisfied"
+    ],
+    "verdict_threshold_0": [
+     "satisfied",
+     "satisfied"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       0.97
+      ],
+      "conflict": [
+       "yes",
+       0.89
+      ],
+      "relevance": [
+       "yes",
+       0.98
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       0.98
+      ],
+      "conflict": [
+       "yes",
+       0.89
+      ],
+      "relevance": [
+       "yes",
+       0.98
+      ]
+     }
+    },
+    "case_id": "fixture_fail",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "approved_fixture_fail",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "yes",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "yes",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.98
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "paraphrase",
+    "expected": {
+     "compliance": "yes",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "probe": "compliant_paraphrase",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "satisfied",
+     "satisfied"
+    ],
+    "verdict_threshold_0": [
+     "satisfied",
+     "satisfied"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.98
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.98
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "silent",
+    "expected": {
+     "compliance": "no",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "not_addressed",
+    "probe": "silence",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "not_addressed",
+     "not_addressed"
+    ],
+    "verdict_threshold_0": [
+     "not_addressed",
+     "not_addressed"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       0.98
+      ],
+      "conflict": [
+       "yes",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       0.98
+      ],
+      "conflict": [
+       "yes",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "conflict_oldest",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "conflict",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       0.83
+      ],
+      "conflict": [
+       "yes",
+       0.98
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       0.82
+      ],
+      "conflict": [
+       "yes",
+       0.98
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "conflict_no_quality",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "conflict",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "no",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "no",
+       1.0
+      ]
+     }
+    },
+    "case_id": "irrelevant",
+    "expected": {
+     "compliance": "no",
+     "conflict": "no",
+     "relevance": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "probe": "irrelevant",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "verdict_threshold_0": [
+     "not_applicable",
+     "not_applicable"
+    ]
+   }
+  ],
+  "accepted": true,
+  "authority_citations": [
+   "ANC-073 v2 locked statement, scope and quote (anchors.json at 6d0c4455b)",
+   "ANC-073 v2 approved pass/fail fixtures",
+   "INTENT phase-bj v1 sha256 e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382 (context only)"
+  ],
+  "authority_recommendations": [],
+  "candidate_rankings": [
+   {
+    "accepted": true,
+    "candidate_id": "sealed",
+    "complexity": 2836,
+    "confidence": {
+     "cells_at_or_above_threshold": 41,
+     "mean": 0.97,
+     "median": 1.0,
+     "minimum": 0.73,
+     "p10": 0.88,
+     "threshold": 0.8,
+     "total_cells": 42
+    },
+    "production_threshold_0_6_verdict_mismatches": [],
+    "question_sha256": "7aee727422a5cfa6fbf1477993df8b5081d4bc614a1f8fdf0e5f771a09713232",
+    "score": {
+     "exact_role_cells": 42,
+     "exact_semantic_verdicts": 14,
+     "regressions": 0,
+     "stable_cases": 7,
+     "total_cases": 7,
+     "total_role_cells": 42,
+     "total_semantic_verdicts": 14
+    },
+    "selection_reason": "selected: the existing seal is semantically exact and stable on the independent oracle",
+    "semantic_mismatches": []
+   }
+  ],
+  "confidence_diagnostics": {
+   "cells_at_or_above_threshold": 41,
+   "mean": 0.97,
+   "median": 1.0,
+   "minimum": 0.73,
+   "p10": 0.88,
+   "threshold": 0.8,
+   "total_cells": 42
+  },
+  "confidence_reference_threshold": 0.8,
+  "evidence": {
+   "authoritative_sources_sha256": {
+    "docs/plans/phase-bj/anchors.json": "29cba9e93578617a95706f04fafb2c133ff1665b369f034b9a5fcc6754afbfdc",
+    "docs/plans/phase-bj/anchors.md": "95056af0a544ae410f2042744012c29bf4cefa33ab24aaa3c4a2586e0badc63c",
+    "docs/plans/phase-bj/intent.md": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382"
+   },
+   "baseline_candidate": "sealed",
+   "evidence_dir": "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b",
+   "files_sha256": {
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/candidates/sealed.json": "8cc977209e6d520a3d8142705c6af02e2389da9511eaf325c7866a38fb994f6b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/oracle.json": "099276e7033e7ba48cc24ac972072be8eba2d5f2bba522bae763d4dc9e23b07a",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/oracle.sha256": "b680d37ff49c03cc4123e5934d3a313b8fe1d8df1506b745637b7154127fc46f",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/request-vars.json": "46367a1059adb7e078d8c321361795f66c013d22f9c872669f1cfd14dd51cd8b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/request.json": "108872f504200bc20b5dae3b1e55f8ceb5b89a79c843c5e37e4ece502781e1e5",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/request.md": "c9f1f71c5ca744d0e5858d2e6e7a5e4f0ae94b8f4daf237ca96b435a301819ef",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-conflict_no_quality-r1.request.json": "a7d7f6a60c5ce3b1ab9216d483e35d6215a239f090c4f156968546f8cb826df5",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-conflict_no_quality-r1.response.json": "8d0353b6871734db43cf32629024929968e520bc847761b41ee57b9a7caee33b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-conflict_no_quality-r2.request.json": "a7d7f6a60c5ce3b1ab9216d483e35d6215a239f090c4f156968546f8cb826df5",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-conflict_no_quality-r2.response.json": "4ea910e87490248ee600081fa124e3771dd1483e4ce51ded35a283031f105193",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-conflict_oldest-r1.request.json": "38d4878af83ea8249a3f324c57c5891d995acc6d1c6fd6ab101a80a809a018f2",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-conflict_oldest-r1.response.json": "2afe6e37bede84e535a73b213758c0b76f84727bb9361d66153f8a793be74640",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-conflict_oldest-r2.request.json": "38d4878af83ea8249a3f324c57c5891d995acc6d1c6fd6ab101a80a809a018f2",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-conflict_oldest-r2.response.json": "2afe6e37bede84e535a73b213758c0b76f84727bb9361d66153f8a793be74640",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-fixture_fail-r1.request.json": "0ce9e96a3667c01391df429b39fdc92c553b3124079ac21652b8f2f79efa08a2",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-fixture_fail-r1.response.json": "49bad7920bd706fa7f625101977ee8451583af14faad82a10c9d97638e0efd45",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-fixture_fail-r2.request.json": "0ce9e96a3667c01391df429b39fdc92c553b3124079ac21652b8f2f79efa08a2",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-fixture_fail-r2.response.json": "0ddaa35c95be4551d1cefb0a72a0ded2d4a9159d728915713450a7c1044fbacc",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-fixture_pass-r1.request.json": "6197b499b34da5745c1ecaa8d478fdb18221d20f8ae6a3ad85e1328c33f75ef9",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-fixture_pass-r1.response.json": "e4beb28c037d184147858e10572d5dc46768dc537f787e52dabb9cefef003d38",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-fixture_pass-r2.request.json": "6197b499b34da5745c1ecaa8d478fdb18221d20f8ae6a3ad85e1328c33f75ef9",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-fixture_pass-r2.response.json": "341efaa49c5d0ea3cb733da485ae2a3eb28ad75686bb6ca99f1d25aa9ed4f5f0",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-irrelevant-r1.request.json": "622b25f22ffd74f1cfdd468c9b89ed86c753cfbfde611bcde8178c01c8715e28",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-irrelevant-r1.response.json": "0db36a9c7c06e391238f8ff03d701f44375eceb49ced0b922f6ec468c6a633d5",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-irrelevant-r2.request.json": "622b25f22ffd74f1cfdd468c9b89ed86c753cfbfde611bcde8178c01c8715e28",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-irrelevant-r2.response.json": "0db36a9c7c06e391238f8ff03d701f44375eceb49ced0b922f6ec468c6a633d5",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-paraphrase-r1.request.json": "62139a17e5bc4be646e58803255d52b5af3ed143c6af964aece11c272c49a303",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-paraphrase-r1.response.json": "53aadd45a345df4faa4d8a9a13eb5ea9a727086fa9a60799c7b20d033934bf1f",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-paraphrase-r2.request.json": "62139a17e5bc4be646e58803255d52b5af3ed143c6af964aece11c272c49a303",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-paraphrase-r2.response.json": "9fc52fa875627054f48809e75a938092bc34b21cc2dfb05ccc2fb94e5772ebd8",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-silent-r1.request.json": "8704a402375360ef75abd7faccc1ade9c57edd255ad8b3ade7adb94fe09067e9",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-silent-r1.response.json": "0c9401cf371ca741431aa207e6feab83b22f15fda2a4d89e8daccf3def13dc0c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-silent-r2.request.json": "8704a402375360ef75abd7faccc1ade9c57edd255ad8b3ade7adb94fe09067e9",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/runs/ANC-073-sealed-silent-r2.response.json": "0c9401cf371ca741431aa207e6feab83b22f15fda2a4d89e8daccf3def13dc0c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/score-sealed.json": "b3c5fd218fbea5098e01a17f816676d70d76e7f0c78d34902819794df79e4fdf"
+   },
+   "max_parallel_calls": 3,
+   "model_requested": "jev-latest",
+   "models_answered": [
+    "jev-1.13.0"
+   ],
+   "oracle_file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/oracle.json",
+   "oracle_frozen_before_first_jev_call": true,
+   "raw_response_hash_note": "raw_response_sha256 is the canonical-JSON digest of the validated Jev response object; canonical_request_sha256 is the digest of the exact request bytes sent",
+   "request_file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-073/rebind-6d0c4455b/request.json",
+   "request_sha256": "9f957ca586bbf90013686cecea5984ef7cb0b6e19509ffade4b16fab5c2ae6b0",
+   "unselected_candidates_excluded_from_production": true
+  },
+  "explanation": "Seal re-checked. The installed override (digest 7aee727422a5cfa6fbf1477993df8b5081d4bc614a1f8fdf0e5f771a09713232) equals the prior sealed set, and the prior anchor_record_sha256 reproduces from the current v2 record. The prior seal bound intent sha256 193feb73c68194e0c4d676f4b7efbe02e66c2008513d16ff61f0a670d605984d; the current intent is e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382 (commit bb0d797ff only rewrote the anchor-index sentence, which does not touch ANC-073). On an independently frozen oracle (7 cases x 2 repeats) the sealed set is semantically exact and stable, so the same questions are re-sealed under the current authority digests as event 2, superseding the prior decision.",
+  "gate": "planning",
+  "operation": "tune",
+  "oracle_sha256": "e570ac230eba899fe678cb82d1de556bd56321e5f49888dfcbda378f211a9ddf",
+  "planner_action": "Keep the installed ANC-073 plan override unchanged (digest 7aee727422a5cfa6fbf1477993df8b5081d4bc614a1f8fdf0e5f771a09713232); append this history event as the current seal. Production review keeps the 0.6 threshold.",
+  "production_confidence_threshold": 0.6,
+  "production_semantics_unchanged": true,
+  "question_action": null,
+  "sealed_question_set": {
+   "digest": "7aee727422a5cfa6fbf1477993df8b5081d4bc614a1f8fdf0e5f771a09713232",
+   "questions": {
+    "addressed": {
+     "criteria": {
+      "no": "The item leaves the page out, or names only the goal (visibility, less asking), or covers only some other part of the anchor.",
+      "unclear": "The item hints at a runs page but its contents cannot be told from the text.",
+      "yes": "The item includes that sanity runs page with its per-run columns, in any wording or as an example row."
+     },
+     "instructions": "Does `item.text` contain the concrete display `anchor.statement` asks for: a console page of sanity runs, newest first, one line per run, showing who did the work and the JEV and LLM results with their elapsed times? A wish to make results easier to see is not that display.",
+     "type": "choice"
+    },
+    "contradicted": {
+     "criteria": {
+      "no": "Nothing in the item is a ruled-out behaviour: it follows the anchor, is silent about it, or is about something else.",
+      "unclear": "The item describes runs display or timing in a way ambiguous enough that it might or might not be a ruled-out behaviour.",
+      "yes": "The item states a design or step that is one of the ruled-out behaviours."
+     },
+     "instructions": "Does `item.text` plan something that `anchor.statement` rules out? The anchor rules out: showing sanity runs only in dev-sanity's chat reply or rendering the runs table into that reply; having no sanity runs page or no quality runs page; listing oldest runs first or using more than one line per run; a sanity line without the dev, or without pass/fail or elapsed for JEV or for LLM; computing elapsed any other way than from the Jev client's return and a timer around the LLM subagent (for example from the gap between ledger timestamps); and rows that will never feed the OTel database. The quality line's columns, paging, and OTel export arriving in the next atm release are not ruled out. Silence is not a conflict. Judge conflict only.",
+     "type": "choice"
+    },
+    "relevant": {
+     "criteria": {
+      "no": "The item is about a different component or activity (for example the close hook, sanity FAIL routing, the pour, bead validation), even if it mentions sanity, beads or the lead.",
+      "unclear": "The item text is too vague to tell whether it touches any of these things.",
+      "yes": "The item describes work on a runs page or other display of sanity or quality runs, the sanity ledger row, jev_client.py's return value, how elapsed time is measured, or dev-sanity's spawning of its LLM subagent."
+     },
+     "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about how sanity and quality runs are recorded and shown: the atm-bd console runs pages, the sanity ledger row (elapsed per reviewer, dev identity), the value jev_client.py returns, and the dev-sanity spawn of the LLM subagent. Does `item.text` plan, change, or depend on one of these things? Judge subject overlap only, not whether the item obeys the anchor.",
+     "type": "choice"
+    }
+   }
+  },
+  "sealed_question_set_digest_after": "7aee727422a5cfa6fbf1477993df8b5081d4bc614a1f8fdf0e5f771a09713232",
+  "sealed_question_set_digest_before": null,
+  "semantic_score": {
+   "exact_role_cells": 42,
+   "exact_semantic_verdicts": 14,
+   "regressions": 0,
+   "stable_cases": 7,
+   "total_cases": 7,
+   "total_role_cells": 42,
+   "total_semantic_verdicts": 14
+  },
+  "tournament_protocol_version": "plan-anchor/question-tournament/2.0.0",
+  "tuning_history_after": {
+   "events": [
+    {
+     "authority": {
+      "anchor_id": "ANC-073",
+      "anchor_record_sha256": "9e4baa2b5cef94848c3b2991aab15b026f5a9323d808984e6872545d9c5fddd4",
+      "anchor_version": 2,
+      "intent_id": "phase-bj-intent",
+      "intent_sha256": "193feb73c68194e0c4d676f4b7efbe02e66c2008513d16ff61f0a670d605984d",
+      "intent_version": 1
+     },
+     "candidate": {
+      "candidate_id": "B-r1a2c1",
+      "question_sha256": "7aee727422a5cfa6fbf1477993df8b5081d4bc614a1f8fdf0e5f771a09713232"
+     },
+     "decision": {
+      "question_set_sha256": "7aee727422a5cfa6fbf1477993df8b5081d4bc614a1f8fdf0e5f771a09713232",
+      "reason_code": "TOURNAMENT.SEALED",
+      "status": "sealed"
+     },
+     "event": "question_set_sealed",
+     "event_index": 1,
+     "evidence": {
+      "canonical_request_sha256": [
+       "487c37203f129c75d756b474eb85c8cf192b32299644c8e3fd95ae268a9628a6",
+       "487c37203f129c75d756b474eb85c8cf192b32299644c8e3fd95ae268a9628a6",
+       "4feb81060f31078aa2c8fceffc22d4a196855cd1063580302d111f79761681f8",
+       "4feb81060f31078aa2c8fceffc22d4a196855cd1063580302d111f79761681f8",
+       "1d4b3f35349cb901cbc67dfbded0f79e43e8cf8d7ba03c2a7922ddf4c0106f00",
+       "1d4b3f35349cb901cbc67dfbded0f79e43e8cf8d7ba03c2a7922ddf4c0106f00",
+       "5e19b5b5e190bb62c2a4da7753c933ed779ef6263476d9f7b3408161e7391f22",
+       "5e19b5b5e190bb62c2a4da7753c933ed779ef6263476d9f7b3408161e7391f22",
+       "b9e6a77c727d251743623c670d295854f5ee22ab96c29a83ec350c0ec9efe74d",
+       "b9e6a77c727d251743623c670d295854f5ee22ab96c29a83ec350c0ec9efe74d",
+       "18854ce230e589f081bb6fe0882d142da89d14a7c039abec9d1d9f54ab22a013",
+       "18854ce230e589f081bb6fe0882d142da89d14a7c039abec9d1d9f54ab22a013",
+       "e20b6a4646abe059dd7b9e97cb4e9ed249ce4a4e6d5d3915d195b39ca02b52c1",
+       "e20b6a4646abe059dd7b9e97cb4e9ed249ce4a4e6d5d3915d195b39ca02b52c1",
+       "4e3a84868891d274e093290e93aabaf4d7c9f4c653dd21d8317d1d90533bbbe6",
+       "4e3a84868891d274e093290e93aabaf4d7c9f4c653dd21d8317d1d90533bbbe6",
+       "e53a8aaf6348ac90009910f3830b96494951e9cc5d349982b5f9a7287902d22b",
+       "e53a8aaf6348ac90009910f3830b96494951e9cc5d349982b5f9a7287902d22b",
+       "3995f5453cd6ebf1beb339c454b2f15d53daf69870190876309cfc84b46ccdd8",
+       "3995f5453cd6ebf1beb339c454b2f15d53daf69870190876309cfc84b46ccdd8",
+       "c1ffbdb31e9689603bb2d1004e2d9132258225ef8650ec6e7df0991558dc38b8",
+       "c1ffbdb31e9689603bb2d1004e2d9132258225ef8650ec6e7df0991558dc38b8",
+       "99e06a08720db729b6b70b78ecdc3157cd736b7ba4a4da06a54031f1bbc4aac0",
+       "99e06a08720db729b6b70b78ecdc3157cd736b7ba4a4da06a54031f1bbc4aac0",
+       "b9e4dd48ec020db9e64fe8b3b13abaaf434d2164fc0937f3ef25f8d279d25c2e",
+       "b9e4dd48ec020db9e64fe8b3b13abaaf434d2164fc0937f3ef25f8d279d25c2e",
+       "8a39be26ba8ad7ed3a9a5994c542624bd1331d7f252f13e8ce8544e64eb0bf87",
+       "8a39be26ba8ad7ed3a9a5994c542624bd1331d7f252f13e8ce8544e64eb0bf87",
+       "20c1e1e9a3c0b4e0919fe39a4e330d1e367f9e4939fd43a885748de2778f4779",
+       "20c1e1e9a3c0b4e0919fe39a4e330d1e367f9e4939fd43a885748de2778f4779",
+       "fd334f2886fbd6d35e3d512bb9749cfd51225783fc1280d0bbacaf6a6370709c",
+       "fd334f2886fbd6d35e3d512bb9749cfd51225783fc1280d0bbacaf6a6370709c",
+       "5173caebf0896869ccbd4fe3a9761246db2b9256519828dd949e4d201aaa6df8",
+       "5173caebf0896869ccbd4fe3a9761246db2b9256519828dd949e4d201aaa6df8",
+       "b5af15a91c01049881a4f32c8c5fae12fa48ce6933bc5ce9d4d386cb1bc6e47e",
+       "b5af15a91c01049881a4f32c8c5fae12fa48ce6933bc5ce9d4d386cb1bc6e47e",
+       "cda9e39dec65e0ecaa0a57d10dce43b719fb2036c7fa1192da9ab2a8c902c40b",
+       "cda9e39dec65e0ecaa0a57d10dce43b719fb2036c7fa1192da9ab2a8c902c40b",
+       "66222505a7ea119bf51f2ee1531ed31e1a9a3d90d8cfa61dee5c535f59b12e65",
+       "66222505a7ea119bf51f2ee1531ed31e1a9a3d90d8cfa61dee5c535f59b12e65"
+      ],
+      "raw_response_sha256": [
+       "d6841d02a8b3252ce63aed1e9849c345e94bd224d25b91223978030566a4a6eb",
+       "d0c3c7edb8629468a13103b1a3020873c93f8f3276c1ecea84b4aca52758094f",
+       "66cb7974eda24ab9bf9623f22941f5b379102476677ad269491f5d17b66eca26",
+       "e0524b96bac99a8c062f2a9d98de0f8f8337e00eefce4c35730baaf23554aa8c",
+       "d0c0311d72bbe08ccee2d0de3ae81f1e06e090272f8a7c9876107b03c7fa7ec0",
+       "d0c0311d72bbe08ccee2d0de3ae81f1e06e090272f8a7c9876107b03c7fa7ec0",
+       "e309fd1190a0a34564d325e3b544cbb8d1ce4b4a9efbc0614d154e30e212b6c2",
+       "93d7275c53e8fb36a8aa4bf79aa62d2d131ea8830055b760ce3f0e4005989644",
+       "b3b2c931257b85cd15fc1eb84a3cff8e77e6ec4579e0080c8115db7125e2c7dc",
+       "f0be548599435b05872b91f4145e6b2f683908cb6013ee507e74069a4dbb6ece",
+       "f923a4c1b66cf295307aa58b055453ded518444ffb92fb7e34eccf6ecec57413",
+       "f923a4c1b66cf295307aa58b055453ded518444ffb92fb7e34eccf6ecec57413",
+       "e51fbb5773634805adfbefad87feb915e7ba903a606f3821d915948da2a81b64",
+       "e51fbb5773634805adfbefad87feb915e7ba903a606f3821d915948da2a81b64",
+       "17db7c5b9fb9c078ed973287302a326460499a694a610231dc600a707aaa76b4",
+       "17db7c5b9fb9c078ed973287302a326460499a694a610231dc600a707aaa76b4",
+       "5e6139d64757da5bb3f286d06932dddffe4a07593e30eef8e9cbf8d8ee1b9be0",
+       "152f9340a20a53b404f12d1226c158f3f0d1eacb9d290e420deb438d87e02e19",
+       "1007b8f5847acf532d3a4e0368f2393bd903fd32721440c15a22a23d072defce",
+       "1007b8f5847acf532d3a4e0368f2393bd903fd32721440c15a22a23d072defce",
+       "ca62e1cd8dba01f36f55d385a36ca3c54fcb5304ce0d986c187c8115fa2d7bd5",
+       "ca62e1cd8dba01f36f55d385a36ca3c54fcb5304ce0d986c187c8115fa2d7bd5",
+       "0f4d81310fa30cee9ecb0785da484492db83777b76336805da69a0f937adce40",
+       "0f4d81310fa30cee9ecb0785da484492db83777b76336805da69a0f937adce40",
+       "dcc09d3015c52b2b888daf5c3dd1c4077903361da0deca472db0490af9fc2334",
+       "d60611f3c61f637c425ec6d53ed81f30c0966d080a3f330d6c990c2287a334b4",
+       "243a20070c1514626f11c72debe3f034ff0164d2e9b9ebad3d71f74a5d26fee7",
+       "c9684f645c1ed5609f5e019f7ad19e69fe624b2ee57cbeb6004bbf4a0f629d8a",
+       "a33e626c3ef8e29c5037fde6820e7b4cc9b96403f443baff580cf24875302930",
+       "8910d937d7494679a7225fe5606fbf5ef5183b9a727cd5b97fdc424bee6b47af",
+       "7ef46594ca072c8fbe29dd5b94e05dd7da754ac3b4289762d0028d146783a406",
+       "7ef46594ca072c8fbe29dd5b94e05dd7da754ac3b4289762d0028d146783a406",
+       "05ccd529b0f49435b82841cd1aea5e3bae11f15febc434e80c5c831b6d200ad2",
+       "c7a2d1e42426afb5c5452e79eab8dc7fb43bd611438e8d6309de1e8326a21f8f",
+       "bcd7364011f475086ed42c0117833b13eea356d550cdce5d58daa26fe3fbc45a",
+       "bcd7364011f475086ed42c0117833b13eea356d550cdce5d58daa26fe3fbc45a",
+       "8071fe032cde07cdc8b9bbaddc6836443835afcc21b1193a9a62b7bec2a6a40a",
+       "8e58a844917fedce8e22e068e8b1b81584db687132ba6629fbd8a498c580036f",
+       "a1bf50fb1ca08ff40fd018c2246640ce2b163bb93f9b224ce2ccbd9052a44232",
+       "78fab552df702dff5c5ceb600240be7e6e3e412ecb11b4988f80dc886798cd2a"
+      ],
+      "run_ids": [
+       "tune-ANC-073:confirm-B-r1a2c1:fixture-pass-1:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:fixture-pass-1:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:fixture-fail-1:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:fixture-fail-1:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:compliant-paraphrase:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:compliant-paraphrase:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:compliant-sprint-bead:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:compliant-sprint-bead:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:boundary-otel-deferred:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:boundary-otel-deferred:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:exception-quality-columns:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:exception-quality-columns:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:boundary-row-limit:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:boundary-row-limit:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:silent-llm-spawn:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:silent-llm-spawn:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:topical-only:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:topical-only:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:conflict-table-in-reply:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:conflict-table-in-reply:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:conflict-ledger-gap:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:conflict-ledger-gap:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:conflict-no-dev:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:conflict-no-dev:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:conflict-oldest-first:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:conflict-oldest-first:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:conflict-no-quality-page:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:conflict-no-quality-page:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:conflict-no-otel:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:conflict-no-otel:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:irrelevant-close-hook:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:irrelevant-close-hook:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:irrelevant-sanity-rejected:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:irrelevant-sanity-rejected:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:irrelevant-pour:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:irrelevant-pour:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:diag-jev-elapsed-only:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:diag-jev-elapsed-only:r2",
+       "tune-ANC-073:confirm-B-r1a2c1:diag-reply-only:r1",
+       "tune-ANC-073:confirm-B-r1a2c1:diag-reply-only:r2"
+      ]
+     },
+     "oracle": {
+      "case_count": 18,
+      "case_ids": [
+       "fixture-pass-1",
+       "fixture-fail-1",
+       "compliant-paraphrase",
+       "compliant-sprint-bead",
+       "boundary-otel-deferred",
+       "exception-quality-columns",
+       "boundary-row-limit",
+       "silent-llm-spawn",
+       "topical-only",
+       "conflict-table-in-reply",
+       "conflict-ledger-gap",
+       "conflict-no-dev",
+       "conflict-oldest-first",
+       "conflict-no-quality-page",
+       "conflict-no-otel",
+       "irrelevant-close-hook",
+       "irrelevant-sanity-rejected",
+       "irrelevant-pour"
+      ],
+      "repeat_count": 2,
+      "sha256": "e38748ba365988fc5437b99cbde5eebd132b27fdbcac98e46d9c44ff937f36b4"
+     },
+     "previous_event_sha256": null,
+     "protocol_version": "plan-anchor/question-tournament/2.0.0",
+     "score": {
+      "confidence": {
+       "cells_at_or_above_threshold": 94,
+       "mean": 0.976224,
+       "median": 1.0,
+       "minimum": 0.58,
+       "p10": 0.95,
+       "threshold": 0.8,
+       "total_cells": 98
+      },
+      "exact_role_cells": 98,
+      "exact_semantic_verdicts": 36,
+      "regressions": 0,
+      "stable_cases": 18,
+      "total_cases": 18,
+      "total_role_cells": 98,
+      "total_semantic_verdicts": 36
+     },
+     "supersedes": null
+    },
+    {
+     "authority": {
+      "anchor_id": "ANC-073",
+      "anchor_record_sha256": "dcf232380914875e921f3000588236d748d76a11552ac20192772385bcae2ca1",
+      "anchor_version": 2,
+      "intent_id": "phase-bj",
+      "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+      "intent_version": 1
+     },
+     "candidate": {
+      "candidate_id": "sealed",
+      "question_sha256": "7aee727422a5cfa6fbf1477993df8b5081d4bc614a1f8fdf0e5f771a09713232"
+     },
+     "decision": {
+      "question_set_sha256": "7aee727422a5cfa6fbf1477993df8b5081d4bc614a1f8fdf0e5f771a09713232",
+      "reason_code": "TOURNAMENT.REBOUND_CURRENT_AUTHORITY",
+      "status": "sealed"
+     },
+     "event": "question_set_sealed",
+     "event_index": 2,
+     "evidence": {
+      "canonical_request_sha256": [
+       "6197b499b34da5745c1ecaa8d478fdb18221d20f8ae6a3ad85e1328c33f75ef9",
+       "6197b499b34da5745c1ecaa8d478fdb18221d20f8ae6a3ad85e1328c33f75ef9",
+       "0ce9e96a3667c01391df429b39fdc92c553b3124079ac21652b8f2f79efa08a2",
+       "0ce9e96a3667c01391df429b39fdc92c553b3124079ac21652b8f2f79efa08a2",
+       "62139a17e5bc4be646e58803255d52b5af3ed143c6af964aece11c272c49a303",
+       "62139a17e5bc4be646e58803255d52b5af3ed143c6af964aece11c272c49a303",
+       "8704a402375360ef75abd7faccc1ade9c57edd255ad8b3ade7adb94fe09067e9",
+       "8704a402375360ef75abd7faccc1ade9c57edd255ad8b3ade7adb94fe09067e9",
+       "38d4878af83ea8249a3f324c57c5891d995acc6d1c6fd6ab101a80a809a018f2",
+       "38d4878af83ea8249a3f324c57c5891d995acc6d1c6fd6ab101a80a809a018f2",
+       "a7d7f6a60c5ce3b1ab9216d483e35d6215a239f090c4f156968546f8cb826df5",
+       "a7d7f6a60c5ce3b1ab9216d483e35d6215a239f090c4f156968546f8cb826df5",
+       "622b25f22ffd74f1cfdd468c9b89ed86c753cfbfde611bcde8178c01c8715e28",
+       "622b25f22ffd74f1cfdd468c9b89ed86c753cfbfde611bcde8178c01c8715e28"
+      ],
+      "raw_response_sha256": [
+       "dfb9c8f0d4b8fff305328bee8448b3bb5f101a22f109348d7331b3ab4af1f4e6",
+       "dc3182f87b40297aee664a9788979e5c6c83e176223a5244bd1fad1fe6f879ec",
+       "fc2b06dc39720089925e1491f9935b1e988b686713b7f88a8c38f9bc64ef5b8c",
+       "f9c80282afa6859998faa9f8b411a7e343fde5b14e93c3c812baa64e1f784f92",
+       "44952d73bc5dbcd30c412aed953cadb276098d21cbe5b923b13d4e1a36d67efb",
+       "1e7ebafc04de2dc6a1aac81af5b4383352c2dc9b6c3c022a0d093537b3630984",
+       "f9335b6f34d5cee5b972d5fc9c8adcf68dac961f0d5d8cecd7d3874a56fd1d70",
+       "f9335b6f34d5cee5b972d5fc9c8adcf68dac961f0d5d8cecd7d3874a56fd1d70",
+       "575ed5c945af6a00db12faea3005dd47691bb35865c696a3b3b0ffbd0447d1ab",
+       "575ed5c945af6a00db12faea3005dd47691bb35865c696a3b3b0ffbd0447d1ab",
+       "3dc36b686954f0716d71842614349257f1e6ab1221ffd1bb34d941c13d4d75b5",
+       "41e47bd2707a207076d9489c849c344c4cb1ad92b20172bc61592983febef60c",
+       "dd1132dbf263d31483887c7d29271dc7542aeda41792cb63317fcb2063cf0fda",
+       "dd1132dbf263d31483887c7d29271dc7542aeda41792cb63317fcb2063cf0fda"
+      ],
+      "run_ids": [
+       "ANC-073-sealed-fixture_pass-r1",
+       "ANC-073-sealed-fixture_pass-r2",
+       "ANC-073-sealed-fixture_fail-r1",
+       "ANC-073-sealed-fixture_fail-r2",
+       "ANC-073-sealed-paraphrase-r1",
+       "ANC-073-sealed-paraphrase-r2",
+       "ANC-073-sealed-silent-r1",
+       "ANC-073-sealed-silent-r2",
+       "ANC-073-sealed-conflict_oldest-r1",
+       "ANC-073-sealed-conflict_oldest-r2",
+       "ANC-073-sealed-conflict_no_quality-r1",
+       "ANC-073-sealed-conflict_no_quality-r2",
+       "ANC-073-sealed-irrelevant-r1",
+       "ANC-073-sealed-irrelevant-r2"
+      ]
+     },
+     "oracle": {
+      "case_count": 7,
+      "case_ids": [
+       "fixture_pass",
+       "fixture_fail",
+       "paraphrase",
+       "silent",
+       "conflict_oldest",
+       "conflict_no_quality",
+       "irrelevant"
+      ],
+      "repeat_count": 2,
+      "sha256": "e570ac230eba899fe678cb82d1de556bd56321e5f49888dfcbda378f211a9ddf"
+     },
+     "previous_event_sha256": "a2042f325a9b0560880740842b17dde41ee84e9dea1dc2cdaf276ab6c4d96098",
+     "protocol_version": "plan-anchor/question-tournament/2.0.0",
+     "score": {
+      "confidence": {
+       "cells_at_or_above_threshold": 41,
+       "mean": 0.97,
+       "median": 1.0,
+       "minimum": 0.73,
+       "p10": 0.88,
+       "threshold": 0.8,
+       "total_cells": 42
+      },
+      "exact_role_cells": 42,
+      "exact_semantic_verdicts": 14,
+      "regressions": 0,
+      "stable_cases": 7,
+      "total_cases": 7,
+      "total_role_cells": 42,
+      "total_semantic_verdicts": 14
+     },
+     "supersedes": {
+      "decision_sha256": "160f05ab889ec5e3e35c7742a7ab22ff9460d5a91eb4ddc66914815c0bb0cc3e",
+      "protocol_version": "plan-anchor/question-tournament/2.0.0"
+     }
+    }
+   ],
+   "history_id": "phase-bj-ANC-073-planning",
+   "schema": "plan-anchor/tuning-history/2"
+  },
+  "tuning_history_after_sha256": "6131171f6be34330a227a70ae46c0ad1f580201eaa320324bb002a429ccaee38",
+  "tuning_history_before_sha256": "8e98f5b72dc6da9e70e59cca189deb00bdd80ca85e984690cf3040fb60dccb90"
+ },
+ "error": null,
+ "metadata": {
+  "authoritative_sources_unchanged": true,
+  "correlation_id": "ANC-073-6d0c4455b",
+  "duration_ms": 500,
+  "jev_run_ids": [
+   "ANC-073-sealed-fixture_pass-r1",
+   "ANC-073-sealed-fixture_pass-r2",
+   "ANC-073-sealed-fixture_fail-r1",
+   "ANC-073-sealed-fixture_fail-r2",
+   "ANC-073-sealed-paraphrase-r1",
+   "ANC-073-sealed-paraphrase-r2",
+   "ANC-073-sealed-silent-r1",
+   "ANC-073-sealed-silent-r2",
+   "ANC-073-sealed-conflict_oldest-r1",
+   "ANC-073-sealed-conflict_oldest-r2",
+   "ANC-073-sealed-conflict_no_quality-r1",
+   "ANC-073-sealed-conflict_no_quality-r2",
+   "ANC-073-sealed-irrelevant-r1",
+   "ANC-073-sealed-irrelevant-r2"
+  ],
+  "planner_observation_trust": null,
+  "retry_count": 0,
+  "tool_calls": 14
+ },
+ "schema_version": "1.0.0",
+ "success": true
+}

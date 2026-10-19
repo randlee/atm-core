@@ -1,0 +1,144 @@
+{
+ "anchor_id": "ANC-053",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "267ce2b87ce7feabf5107f4ba19035f33d757cdb46b79c5e843cb062c07141ac",
+ "anchor_scope": "atm-task-close.py sanity role on PASS",
+ "anchor_statement": "When a sanity bead closes with PASS, the sanity close hook must assign the group's qa bead to the quality-mgr member with the qa template and vars as the phase lead, with no lead action.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-053-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The sanity role on PASS runs atm task assign quality-mgr --task-id <qa bead> --template qa-template.xml.j2 --vars <file> with the lead identity on that subprocess.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-053-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "On PASS the hook closes the sanity bead and the lead dispatches the qa bead on the next bd ready pass.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-053-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "When the sanity verdict is PASS, the sanity role of the close hook assigns the group's qa bead to quality-mgr with qa-template.xml.j2 and the shared vars, under the phase lead's identity, and the lead takes no step.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-053-probe-silent",
+   "probe": "silence",
+   "rationale": "In-scope PASS branch, silent about the qa assignment.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "On PASS the sanity role closes the dev's ATM task with the lead's identity.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_left_for_lead",
+   "item_id": "ANC-053-probe-conflict_left_for_lead",
+   "probe": "conflict",
+   "rationale": "No lead action is allowed.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "On PASS the hook only closes the sanity bead; the qa bead waits for the lead to assign it.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "exception_fail",
+   "item_id": "ANC-053-probe-exception_fail",
+   "probe": "exception",
+   "rationale": "Exception: the directive applies on PASS only; not assigning QA on FAIL is consistent and does not carry the PASS directive.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "On a sanity FAIL the hook reopens the dev bead and assigns no qa bead.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-053-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Every time atm-bd prints for a person is rendered in 24-hour local time.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

@@ -1,0 +1,38 @@
+{
+ "r0-default": {
+  "type": "choice",
+  "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+  "criteria": {
+   "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite.",
+   "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+   "unclear": "The item text is too vague to tell what part of the system it touches."
+  }
+ },
+ "r1-scope-signals": {
+  "type": "choice",
+  "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor about which console command may exist and be run, with the area it governs in `anchor.scope`. Decide whether the work in `item.text` falls in that area: it names, adds, removes, renames or aliases a command or entry point; it edits an install script, installer or the package's installed scripts; or it adds or changes a script, document, test or workflow that runs or describes running the console. Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+  "criteria": {
+   "yes": "The item names, adds, removes, renames or aliases a command or entry point, edits an install script or installer, or adds or changes something that runs or documents running the console.",
+   "no": "The item changes none of these: no command or entry point name, no install script or installer, and nothing that runs or documents running the console.",
+   "unclear": "The item text is too vague to tell whether it touches a command name, an install script or a caller of the console."
+  }
+ },
+ "r2-default-plus-scope": {
+  "type": "choice",
+  "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? For this anchor the subject includes, as `anchor.scope` says, any change to a command name, to an install script or installer, and to any script, document, test or workflow that runs the console. Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+  "criteria": {
+   "yes": "The item plans, changes, or depends on a command name, an install script or installer, or something that runs or documents running the console.",
+   "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+   "unclear": "The item text is too vague to tell what part of the system it touches."
+  }
+ },
+ "r3-touch-list": {
+  "type": "choice",
+  "instructions": "Does `item.text` touch any of the three things listed in `anchor.scope`: (1) the name of a command or installed entry point; (2) an install script, installer or install path; (3) a script, document, test or workflow that starts, runs or describes the console? Judge whether the item touches at least one of them. Do not judge whether the item obeys `anchor.statement`.",
+  "criteria": {
+   "yes": "The item touches a command or entry-point name, an install script, installer or install path, or a script, document, test or workflow that starts, runs or describes the console.",
+   "no": "The item touches none of the three: it changes something else, such as a message template, a data model or a review rule, and does not run or describe the console.",
+   "unclear": "The item text is too vague to tell whether it touches any of the three."
+  }
+ }
+}

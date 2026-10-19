@@ -1,0 +1,8651 @@
+{
+ "r0-incumbent": {
+  "exact_role_cells": 35,
+  "total_role_cells": 36,
+  "exact_semantic_verdicts": 17,
+  "total_semantic_verdicts": 18,
+  "stable_cases": 17,
+  "total_cases": 18,
+  "confidence": {
+   "threshold": 0.8,
+   "cells_at_or_above_threshold": 35,
+   "total_cells": 36,
+   "minimum": 0.3,
+   "p10": 0.89,
+   "median": 1.0,
+   "mean": 0.96
+  },
+  "relevant_role_confidence": {
+   "minimum": 0.3,
+   "mean": 0.9311,
+   "cells_at_or_above_0_8": 17
+  },
+  "production_underspecified_runs": 2,
+  "table": [
+   {
+    "case_id": "fixture_pass",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.64
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.66
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "fixture_fail",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.37
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.37
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "compliant_removal",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.77
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.79
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_script",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.86
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.88
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_feature",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.91
+      ],
+      "addressed": [
+       "yes",
+       0.31
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.89
+      ],
+      "addressed": [
+       "yes",
+       0.27
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "exception_directory_module",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.95
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_entry_point",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.83
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.8
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_forwarding_alias",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.59
+      ],
+      "contradicted": [
+       "yes",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.51
+      ],
+      "contradicted": [
+       "yes",
+       0.95
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_test",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.73
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.71
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.49
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.48
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_rename",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_config",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.82
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.8
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_verify",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.94
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.94
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_template",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_model",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "topical_only_outofscope",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.88
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.88
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "known_bj1_item",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.3
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.35
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "underspecified",
+     "underspecified"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": false
+   }
+  ]
+ },
+ "r1-any-one-suffices": {
+  "exact_role_cells": 32,
+  "total_role_cells": 36,
+  "exact_semantic_verdicts": 14,
+  "total_semantic_verdicts": 18,
+  "stable_cases": 17,
+  "total_cases": 18,
+  "confidence": {
+   "threshold": 0.8,
+   "cells_at_or_above_threshold": 31,
+   "total_cells": 36,
+   "minimum": 0.25,
+   "p10": 0.64,
+   "median": 0.98,
+   "mean": 0.8986
+  },
+  "relevant_role_confidence": {
+   "minimum": 0.25,
+   "mean": 0.81,
+   "cells_at_or_above_0_8": 13
+  },
+  "production_underspecified_runs": 8,
+  "table": [
+   {
+    "case_id": "fixture_pass",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.66
+      ],
+      "addressed": [
+       "no",
+       0.7
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.7
+      ],
+      "addressed": [
+       "no",
+       0.62
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": true
+   },
+   {
+    "case_id": "fixture_fail",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.52
+      ],
+      "addressed": [
+       "no",
+       0.31
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.49
+      ],
+      "addressed": [
+       "no",
+       0.35
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "compliant_removal",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.95
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.94
+      ],
+      "addressed": [
+       "yes",
+       0.82
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.95
+      ],
+      "addressed": [
+       "yes",
+       0.79
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_script",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.97
+      ],
+      "addressed": [
+       "yes",
+       0.88
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "yes",
+       0.89
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_feature",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.37
+      ],
+      "addressed": [
+       "yes",
+       0.27
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.48
+      ],
+      "addressed": [
+       "yes",
+       0.3
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "underspecified",
+     "underspecified"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": true
+   },
+   {
+    "case_id": "exception_directory_module",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.8
+      ],
+      "addressed": [
+       "yes",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.89
+      ],
+      "addressed": [
+       "yes",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_entry_point",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.79
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.85
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_forwarding_alias",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.53
+      ],
+      "contradicted": [
+       "yes",
+       0.95
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.58
+      ],
+      "contradicted": [
+       "yes",
+       0.94
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_test",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       0.74
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.76
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.89
+      ],
+      "addressed": [
+       "no",
+       0.51
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.92
+      ],
+      "addressed": [
+       "no",
+       0.49
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_rename",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.88
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.91
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_config",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.82
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.83
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_verify",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.25
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.27
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "underspecified",
+     "underspecified"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": false
+   },
+   {
+    "case_id": "irrelevant_template",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_model",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "topical_only_outofscope",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.92
+      ],
+      "addressed": [
+       "no",
+       0.92
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.92
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "known_bj1_item",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.64
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.66
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": true
+   }
+  ]
+ },
+ "r2-deliverable-scan": {
+  "exact_role_cells": 34,
+  "total_role_cells": 36,
+  "exact_semantic_verdicts": 16,
+  "total_semantic_verdicts": 18,
+  "stable_cases": 18,
+  "total_cases": 18,
+  "confidence": {
+   "threshold": 0.8,
+   "cells_at_or_above_threshold": 32,
+   "total_cells": 36,
+   "minimum": 0.33,
+   "p10": 0.79,
+   "median": 0.98,
+   "mean": 0.9169
+  },
+  "relevant_role_confidence": {
+   "minimum": 0.33,
+   "mean": 0.8472,
+   "cells_at_or_above_0_8": 14
+  },
+  "production_underspecified_runs": 6,
+  "table": [
+   {
+    "case_id": "fixture_pass",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.4
+      ],
+      "addressed": [
+       "no",
+       0.56
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.33
+      ],
+      "addressed": [
+       "no",
+       0.55
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "underspecified",
+     "underspecified"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": true
+   },
+   {
+    "case_id": "fixture_fail",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.91
+      ],
+      "addressed": [
+       "no",
+       0.35
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.95
+      ],
+      "addressed": [
+       "no",
+       0.27
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "compliant_removal",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.91
+      ],
+      "addressed": [
+       "yes",
+       0.77
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.92
+      ],
+      "addressed": [
+       "yes",
+       0.79
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_script",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.89
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "yes",
+       0.89
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_feature",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.76
+      ],
+      "addressed": [
+       "yes",
+       0.3
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.59
+      ],
+      "addressed": [
+       "yes",
+       0.37
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "underspecified"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": true
+   },
+   {
+    "case_id": "exception_directory_module",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.94
+      ],
+      "addressed": [
+       "yes",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.94
+      ],
+      "addressed": [
+       "yes",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_entry_point",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.82
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.79
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_forwarding_alias",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.49
+      ],
+      "contradicted": [
+       "yes",
+       0.94
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.56
+      ],
+      "contradicted": [
+       "yes",
+       0.95
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_test",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       0.73
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.73
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.86
+      ],
+      "addressed": [
+       "no",
+       0.56
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.88
+      ],
+      "addressed": [
+       "no",
+       0.51
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_rename",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.94
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_config",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.82
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.79
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_verify",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.95
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_template",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_model",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.94
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "topical_only_outofscope",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.86
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.95
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.82
+      ],
+      "addressed": [
+       "no",
+       0.92
+      ],
+      "contradicted": [
+       "no",
+       0.95
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "known_bj1_item",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.33
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.48
+      ],
+      "addressed": [
+       "no",
+       0.97
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "underspecified",
+     "underspecified"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   }
+  ]
+ },
+ "r3-scope-literal": {
+  "exact_role_cells": 31,
+  "total_role_cells": 36,
+  "exact_semantic_verdicts": 13,
+  "total_semantic_verdicts": 18,
+  "stable_cases": 17,
+  "total_cases": 18,
+  "confidence": {
+   "threshold": 0.8,
+   "cells_at_or_above_threshold": 31,
+   "total_cells": 36,
+   "minimum": 0.19,
+   "p10": 0.66,
+   "median": 0.97,
+   "mean": 0.9008
+  },
+  "relevant_role_confidence": {
+   "minimum": 0.19,
+   "mean": 0.8156,
+   "cells_at_or_above_0_8": 13
+  },
+  "production_underspecified_runs": 8,
+  "table": [
+   {
+    "case_id": "fixture_pass",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.88
+      ],
+      "addressed": [
+       "no",
+       0.62
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.85
+      ],
+      "addressed": [
+       "no",
+       0.59
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": true
+   },
+   {
+    "case_id": "fixture_fail",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.19
+      ],
+      "addressed": [
+       "no",
+       0.38
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.31
+      ],
+      "addressed": [
+       "no",
+       0.34
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": false
+   },
+   {
+    "case_id": "compliant_removal",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.82
+      ],
+      "addressed": [
+       "yes",
+       0.79
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.85
+      ],
+      "addressed": [
+       "yes",
+       0.79
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_script",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.91
+      ],
+      "addressed": [
+       "yes",
+       0.88
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.89
+      ],
+      "addressed": [
+       "yes",
+       0.89
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_feature",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.95
+      ],
+      "addressed": [
+       "yes",
+       0.4
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.94
+      ],
+      "addressed": [
+       "yes",
+       0.3
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": true
+   },
+   {
+    "case_id": "exception_directory_module",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.67
+      ],
+      "addressed": [
+       "yes",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.64
+      ],
+      "addressed": [
+       "yes",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.95
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_entry_point",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.94
+      ],
+      "addressed": [
+       "no",
+       0.8
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.94
+      ],
+      "addressed": [
+       "no",
+       0.83
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_forwarding_alias",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.89
+      ],
+      "addressed": [
+       "yes",
+       0.53
+      ],
+      "contradicted": [
+       "yes",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.86
+      ],
+      "addressed": [
+       "yes",
+       0.55
+      ],
+      "contradicted": [
+       "yes",
+       0.95
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_test",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       0.73
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       0.77
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.91
+      ],
+      "addressed": [
+       "no",
+       0.46
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.91
+      ],
+      "addressed": [
+       "no",
+       0.52
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_rename",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.83
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.85
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_config",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.82
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.79
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_verify",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.66
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.67
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_template",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_model",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "topical_only_outofscope",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       0.92
+      ],
+      "contradicted": [
+       "no",
+       0.95
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "known_bj1_item",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.41
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.48
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "underspecified",
+     "underspecified"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": true
+   }
+  ]
+ },
+ "r4-checklist-examples": {
+  "exact_role_cells": 32,
+  "total_role_cells": 36,
+  "exact_semantic_verdicts": 14,
+  "total_semantic_verdicts": 18,
+  "stable_cases": 17,
+  "total_cases": 18,
+  "confidence": {
+   "threshold": 0.8,
+   "cells_at_or_above_threshold": 30,
+   "total_cells": 36,
+   "minimum": 0.22,
+   "p10": 0.52,
+   "median": 0.98,
+   "mean": 0.8936
+  },
+  "relevant_role_confidence": {
+   "minimum": 0.22,
+   "mean": 0.7994,
+   "cells_at_or_above_0_8": 12
+  },
+  "production_underspecified_runs": 6,
+  "table": [
+   {
+    "case_id": "fixture_pass",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.52
+      ],
+      "addressed": [
+       "no",
+       0.62
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.61
+      ],
+      "addressed": [
+       "no",
+       0.64
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "underspecified",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": true
+   },
+   {
+    "case_id": "fixture_fail",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.22
+      ],
+      "addressed": [
+       "no",
+       0.38
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.27
+      ],
+      "addressed": [
+       "no",
+       0.35
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": false
+   },
+   {
+    "case_id": "compliant_removal",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.95
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.67
+      ],
+      "addressed": [
+       "yes",
+       0.76
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.66
+      ],
+      "addressed": [
+       "yes",
+       0.82
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_script",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.88
+      ],
+      "addressed": [
+       "yes",
+       0.89
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.88
+      ],
+      "addressed": [
+       "yes",
+       0.89
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_feature",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.88
+      ],
+      "addressed": [
+       "yes",
+       0.31
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.82
+      ],
+      "addressed": [
+       "yes",
+       0.22
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": true
+   },
+   {
+    "case_id": "exception_directory_module",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.74
+      ],
+      "addressed": [
+       "yes",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.72
+      ],
+      "addressed": [
+       "yes",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_entry_point",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.95
+      ],
+      "addressed": [
+       "no",
+       0.82
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       0.8
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_forwarding_alias",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.56
+      ],
+      "contradicted": [
+       "yes",
+       0.95
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.53
+      ],
+      "contradicted": [
+       "yes",
+       0.95
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_test",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.74
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.74
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.46
+      ],
+      "addressed": [
+       "no",
+       0.49
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.51
+      ],
+      "addressed": [
+       "no",
+       0.45
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_rename",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_config",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_verify",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.8
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.82
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_template",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_model",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "topical_only_outofscope",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.95
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.95
+      ],
+      "addressed": [
+       "no",
+       0.92
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "known_bj1_item",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.46
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.45
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "underspecified",
+     "underspecified"
+    ],
+    "role_match": {
+     "relevant": false,
+     "contradicted": true
+    },
+    "verdict_match": false,
+    "stable": true
+   }
+  ]
+ },
+ "r5-incumbent-no-conjunct": {
+  "exact_role_cells": 36,
+  "total_role_cells": 36,
+  "exact_semantic_verdicts": 18,
+  "total_semantic_verdicts": 18,
+  "stable_cases": 18,
+  "total_cases": 18,
+  "confidence": {
+   "threshold": 0.8,
+   "cells_at_or_above_threshold": 35,
+   "total_cells": 36,
+   "minimum": 0.31,
+   "p10": 0.91,
+   "median": 1.0,
+   "mean": 0.9614
+  },
+  "relevant_role_confidence": {
+   "minimum": 0.31,
+   "mean": 0.935,
+   "cells_at_or_above_0_8": 17
+  },
+  "production_underspecified_runs": 2,
+  "table": [
+   {
+    "case_id": "fixture_pass",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.64
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.73
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "fixture_fail",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.37
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.38
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "compliant_removal",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.74
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.77
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_script",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.88
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.86
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_feature",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.91
+      ],
+      "addressed": [
+       "yes",
+       0.23
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.92
+      ],
+      "addressed": [
+       "yes",
+       0.27
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "exception_directory_module",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.95
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_entry_point",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.79
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.85
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_forwarding_alias",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.46
+      ],
+      "contradicted": [
+       "yes",
+       0.95
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.58
+      ],
+      "contradicted": [
+       "yes",
+       0.95
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_test",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.77
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.74
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.46
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.52
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_rename",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_config",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.86
+      ],
+      "addressed": [
+       "no",
+       0.98
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.91
+      ],
+      "addressed": [
+       "no",
+       0.98
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_verify",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.95
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.95
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_template",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_model",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "topical_only_outofscope",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.85
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.89
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "known_bj1_item",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.45
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.31
+      ],
+      "addressed": [
+       "no",
+       0.97
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "underspecified",
+     "underspecified"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   }
+  ]
+ },
+ "r6-incumbent-any-step": {
+  "exact_role_cells": 36,
+  "total_role_cells": 36,
+  "exact_semantic_verdicts": 18,
+  "total_semantic_verdicts": 18,
+  "stable_cases": 18,
+  "total_cases": 18,
+  "confidence": {
+   "threshold": 0.8,
+   "cells_at_or_above_threshold": 35,
+   "total_cells": 36,
+   "minimum": 0.72,
+   "p10": 0.94,
+   "median": 1.0,
+   "mean": 0.9767
+  },
+  "relevant_role_confidence": {
+   "minimum": 0.72,
+   "mean": 0.9644,
+   "cells_at_or_above_0_8": 17
+  },
+  "production_underspecified_runs": 0,
+  "table": [
+   {
+    "case_id": "fixture_pass",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       0.59
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       0.58
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "fixture_fail",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.33
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.34
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "compliant_removal",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.79
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.79
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_script",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.89
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.88
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_feature",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.85
+      ],
+      "addressed": [
+       "yes",
+       0.3
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.89
+      ],
+      "addressed": [
+       "yes",
+       0.33
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "exception_directory_module",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.91
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_entry_point",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.83
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.82
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_forwarding_alias",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.58
+      ],
+      "contradicted": [
+       "yes",
+       0.95
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.52
+      ],
+      "contradicted": [
+       "yes",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_test",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.8
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.76
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.58
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.41
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_rename",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_config",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_verify",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.94
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.95
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_template",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_model",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "topical_only_outofscope",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.89
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.89
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "known_bj1_item",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.72
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.72
+      ],
+      "addressed": [
+       "no",
+       0.97
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   }
+  ]
+ },
+ "r7-incumbent-any-step-end-state": {
+  "exact_role_cells": 36,
+  "total_role_cells": 36,
+  "exact_semantic_verdicts": 18,
+  "total_semantic_verdicts": 18,
+  "stable_cases": 18,
+  "total_cases": 18,
+  "confidence": {
+   "threshold": 0.8,
+   "cells_at_or_above_threshold": 33,
+   "total_cells": 36,
+   "minimum": 0.46,
+   "p10": 0.89,
+   "median": 1.0,
+   "mean": 0.9572
+  },
+  "relevant_role_confidence": {
+   "minimum": 0.46,
+   "mean": 0.9278,
+   "cells_at_or_above_0_8": 15
+  },
+  "production_underspecified_runs": 2,
+  "table": [
+   {
+    "case_id": "fixture_pass",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       0.7
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       0.56
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "fixture_fail",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.37
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.33
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "compliant_removal",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.76
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.76
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_script",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.88
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.88
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_feature",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.64
+      ],
+      "addressed": [
+       "yes",
+       0.23
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.73
+      ],
+      "addressed": [
+       "yes",
+       0.27
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "exception_directory_module",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.95
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.97
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_entry_point",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.8
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.77
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_forwarding_alias",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.61
+      ],
+      "contradicted": [
+       "yes",
+       0.95
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.52
+      ],
+      "contradicted": [
+       "yes",
+       0.92
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_test",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.72
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.76
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.54
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.51
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_rename",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_config",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_verify",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.83
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.79
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_template",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_model",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.97
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "topical_only_outofscope",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.89
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.91
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "known_bj1_item",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.46
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.52
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "underspecified",
+     "underspecified"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   }
+  ]
+ },
+ "r8-incumbent-install-detail": {
+  "exact_role_cells": 36,
+  "total_role_cells": 36,
+  "exact_semantic_verdicts": 18,
+  "total_semantic_verdicts": 18,
+  "stable_cases": 18,
+  "total_cases": 18,
+  "confidence": {
+   "threshold": 0.8,
+   "cells_at_or_above_threshold": 35,
+   "total_cells": 36,
+   "minimum": 0.45,
+   "p10": 0.94,
+   "median": 1.0,
+   "mean": 0.9708
+  },
+  "relevant_role_confidence": {
+   "minimum": 0.45,
+   "mean": 0.9522,
+   "cells_at_or_above_0_8": 17
+  },
+  "production_underspecified_runs": 2,
+  "table": [
+   {
+    "case_id": "fixture_pass",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.48
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.67
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "fixture_fail",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.3
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.34
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "compliant_removal",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.76
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.82
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_script",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.88
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.89
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "subcommand_feature",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.89
+      ],
+      "addressed": [
+       "yes",
+       0.38
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.88
+      ],
+      "addressed": [
+       "yes",
+       0.22
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "exception_directory_module",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.97
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_entry_point",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.83
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.79
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_forwarding_alias",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.67
+      ],
+      "contradicted": [
+       "yes",
+       0.94
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "yes",
+       0.56
+      ],
+      "contradicted": [
+       "yes",
+       0.95
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_test",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.73
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.74
+      ],
+      "contradicted": [
+       "yes",
+       0.98
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "conflict_doc",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.48
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       0.51
+      ],
+      "contradicted": [
+       "yes",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "production_verdicts": [
+     "contradicted",
+     "contradicted"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_rename",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_config",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "silent_install_verify",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_template",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "irrelevant_model",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.98
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       1.0
+      ],
+      "addressed": [
+       "no",
+       1.0
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "topical_only_outofscope",
+    "expected": {
+     "relevant": "no",
+     "contradicted": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "observed": [
+     {
+      "relevant": [
+       "no",
+       0.92
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     },
+     {
+      "relevant": [
+       "no",
+       0.89
+      ],
+      "addressed": [
+       "no",
+       0.94
+      ],
+      "contradicted": [
+       "no",
+       0.97
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "production_verdicts": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   },
+   {
+    "case_id": "known_bj1_item",
+    "expected": {
+     "relevant": "yes",
+     "contradicted": "no"
+    },
+    "expected_verdict": "satisfied",
+    "observed": [
+     {
+      "relevant": [
+       "yes",
+       0.54
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     },
+     {
+      "relevant": [
+       "yes",
+       0.45
+      ],
+      "addressed": [
+       "no",
+       0.95
+      ],
+      "contradicted": [
+       "no",
+       1.0
+      ]
+     }
+    ],
+    "semantic_verdicts": [
+     "satisfied",
+     "satisfied"
+    ],
+    "production_verdicts": [
+     "underspecified",
+     "underspecified"
+    ],
+    "role_match": {
+     "relevant": true,
+     "contradicted": true
+    },
+    "verdict_match": true,
+    "stable": true
+   }
+  ]
+ }
+}

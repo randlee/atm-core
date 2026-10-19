@@ -1,0 +1,119 @@
+{
+ "events": [
+  {
+   "authority": {
+    "anchor_id": "ANC-061",
+    "anchor_record_sha256": "d1a160f6d96dc0d835cbbda2ee12c7c6ad1df2f0482fc721839e2491d50af86e",
+    "anchor_version": 2,
+    "intent_id": "phase-bj",
+    "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+    "intent_version": 1
+   },
+   "candidate": {
+    "candidate_id": "C_fail_roles_A",
+    "question_sha256": "bda0b1117180520bbd0f41c668d8f61f8c100a50751d73e522feb8ba731b87a4"
+   },
+   "decision": {
+    "question_set_sha256": "bda0b1117180520bbd0f41c668d8f61f8c100a50751d73e522feb8ba731b87a4",
+    "reason_code": "TOURNAMENT.SEMANTIC_EXACT",
+    "status": "sealed"
+   },
+   "event": "question_set_sealed",
+   "event_index": 1,
+   "evidence": {
+    "canonical_request_sha256": [
+     "4a11d42f101c93ef93081653d4e9c3dad3a6730bb634ef456ea252c496d63d1a",
+     "4a11d42f101c93ef93081653d4e9c3dad3a6730bb634ef456ea252c496d63d1a",
+     "591182ef20132ee436c30b665124a826581829ae2670c6faeedd32936f9778ee",
+     "591182ef20132ee436c30b665124a826581829ae2670c6faeedd32936f9778ee",
+     "9a5b84563d6e87ea66d9b2b197f7944c8235637ca939fcda2154d826ec64c637",
+     "9a5b84563d6e87ea66d9b2b197f7944c8235637ca939fcda2154d826ec64c637",
+     "fc50aa9e7c9c54812746fcd1d2cc3d4b0f17b540755850dc145bf579adc1632c",
+     "fc50aa9e7c9c54812746fcd1d2cc3d4b0f17b540755850dc145bf579adc1632c",
+     "1b0b67c07a58c3800703cca53173b48b84ca8110ae4c2cf261d50489c5b2cbf8",
+     "1b0b67c07a58c3800703cca53173b48b84ca8110ae4c2cf261d50489c5b2cbf8",
+     "e49b64964f82e6e3a37b96cec3d221d87f8968d2a3865d895596f09a9a076bca",
+     "e49b64964f82e6e3a37b96cec3d221d87f8968d2a3865d895596f09a9a076bca",
+     "7efd98bb5a6c69e33a8ae0c70ef2f40f165e0d2348a6f924b2cb99e7c024be90",
+     "7efd98bb5a6c69e33a8ae0c70ef2f40f165e0d2348a6f924b2cb99e7c024be90",
+     "88294a816249b499f6401c2ff8328848176281cc43faad72b6eb26d3f903b4a6",
+     "88294a816249b499f6401c2ff8328848176281cc43faad72b6eb26d3f903b4a6"
+    ],
+    "raw_response_sha256": [
+     "59b32e010563339576fb986c3539ea53e938ca8a24f2ec3d5380a8c040bf6f12",
+     "bf5cc1a555637ff8e86310f67a92b3ba6e3c4c03a626cce57f54dae0784c57bd",
+     "ec428cd4a2b9c6b4a0d0f89152102eb8ae94d04eb422fbeaed48ef94f9dc339a",
+     "17ec3b86bb76aef627981f10684640ecd8c8d8d1eea7a27467f2a1b2ce851083",
+     "95cc49118da1ede2bd720fb78311f9c9dc7aa326105e9559f1c72e8439428e19",
+     "52dbe93951c82f7d8bb605cf48d274b91e02c00de3551c49cca580dd550ab02b",
+     "5d162f51734364f778b8e73869acd9f47d26a39751224c4143e046c7fc1b2d2b",
+     "0b726783f76e3713a266408c84e30aabaff04ef3a299d650142496d288640c18",
+     "90b456ccc4875c6cb93ac1e8534d6c05dbcdd1d66f27827910b7c2385934300c",
+     "90b456ccc4875c6cb93ac1e8534d6c05dbcdd1d66f27827910b7c2385934300c",
+     "788ebfe97cf1089e3c10616ca08d0b7b3979b804e048ed94caeb2eede5d7fe61",
+     "365a85b4b7f25135e34d7bffaffdbf069f9ddbf69338d73c7b2eb387a5a3414a",
+     "a92cd9b2d47c5114fe8e45e05ba7314d4138665ea7be6048275eab9c05823278",
+     "de09a95ea39c63192cb467906a14d3be9f9ecf3981e93c771266d01aa53d2ed3",
+     "4471903b3a2b2f55cb1f8ccf3443201482581d8873290e677aa082087f3a1884",
+     "4471903b3a2b2f55cb1f8ccf3443201482581d8873290e677aa082087f3a1884"
+    ],
+    "run_ids": [
+     "ANC-061-C_fail_roles_A-fixture_pass-r1",
+     "ANC-061-C_fail_roles_A-fixture_pass-r2",
+     "ANC-061-C_fail_roles_A-fixture_fail-r1",
+     "ANC-061-C_fail_roles_A-fixture_fail-r2",
+     "ANC-061-C_fail_roles_A-paraphrase-r1",
+     "ANC-061-C_fail_roles_A-paraphrase-r2",
+     "ANC-061-C_fail_roles_A-silent-r1",
+     "ANC-061-C_fail_roles_A-silent-r2",
+     "ANC-061-C_fail_roles_A-topical-r1",
+     "ANC-061-C_fail_roles_A-topical-r2",
+     "ANC-061-C_fail_roles_A-conflict_order-r1",
+     "ANC-061-C_fail_roles_A-conflict_order-r2",
+     "ANC-061-C_fail_roles_A-conflict_no_check-r1",
+     "ANC-061-C_fail_roles_A-conflict_no_check-r2",
+     "ANC-061-C_fail_roles_A-irrelevant-r1",
+     "ANC-061-C_fail_roles_A-irrelevant-r2"
+    ]
+   },
+   "oracle": {
+    "case_count": 8,
+    "case_ids": [
+     "fixture_pass",
+     "fixture_fail",
+     "paraphrase",
+     "silent",
+     "topical",
+     "conflict_order",
+     "conflict_no_check",
+     "irrelevant"
+    ],
+    "repeat_count": 2,
+    "sha256": "2e5b65c84caaa724e2c79e638a57929deed61ea8801b74a2b79f6a86315e74cb"
+   },
+   "previous_event_sha256": null,
+   "protocol_version": "plan-anchor/question-tournament/2.0.0",
+   "score": {
+    "confidence": {
+     "cells_at_or_above_threshold": 40,
+     "mean": 0.93,
+     "median": 1.0,
+     "minimum": 0.53,
+     "p10": 0.62,
+     "threshold": 0.8,
+     "total_cells": 48
+    },
+    "exact_role_cells": 48,
+    "exact_semantic_verdicts": 16,
+    "regressions": 0,
+    "stable_cases": 8,
+    "total_cases": 8,
+    "total_role_cells": 48,
+    "total_semantic_verdicts": 16
+   },
+   "supersedes": null
+  }
+ ],
+ "history_id": "ANC-061-plan",
+ "schema": "plan-anchor/tuning-history/2"
+}

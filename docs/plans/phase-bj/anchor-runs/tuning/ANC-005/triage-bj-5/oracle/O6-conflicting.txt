@@ -1,0 +1,3 @@
+# Sprint: add the NOTICE file to 0.16.1
+
+Rebuild the atm-bd 0.16.1 wheel and sdist with NOTICE.txt included and re-upload them to PyPI as 0.16.1, then move the v0.16.1 tag to the rebuild commit.

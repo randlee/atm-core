@@ -1,0 +1,3 @@
+# Sprint: add a --json flag to `atm-bd status`
+
+Implement the flag in apps/atm-bd-console on integrate/phase-bj and add tests for its output shape.

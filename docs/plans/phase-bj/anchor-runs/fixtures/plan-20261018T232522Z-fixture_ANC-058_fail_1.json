@@ -1,0 +1,132 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T232522Z-fixture_ANC-058_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T23:25:22+00:00",
+  "anchors_path": "docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-058:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 110,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-058",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-task-close.py must take its input as one sc-compose --vars file that carries every value the role needs, must validate it by rendering a header-only j2 template in strict mode before any check runs, and must pass that same file unchanged to the atm task assign and atm send templates it runs.",
+      "quote": "the hook has vars specified by the hook python.  the hook input vars should be sc-compose --vars payload with every setting necessary to complete everything inside the hook.  the input to the hook would verify vars against pydantic model and reject any missing/unpopulated vars you could define this as a 'special unrendered sc-compose j2 w/ only compined header' so validation is trivial.  (this would skip the need for a pydantic model).  the same vars could be sent to ... same vars sent to 'atm ... --template --vars <shared-vars>'  and sc-compose bead ... --template --vars <shared-vars>",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "a vars file missing commit fails before any git or gh call with an err naming commit; the assign and send subprocess argv carry --vars <the same path>",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "9ef9e1d0934f89bc9befc3490684563131e0dfc424d9ae36a9231fbe13097d1d",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item plans work only in other components.",
+            "unclear": "The item's component cannot be identified.",
+            "yes": "The item plans work in atm-task-close.py or templates/task-close-vars.j2, whatever part of the hook it covers."
+          },
+          "instructions": "Is `item.text` about atm-task-close.py (the close hook) or templates/task-close-vars.j2, the subject of `anchor.statement` and `anchor.scope`? Answer about subject matter only.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not say this, including when it is silent about the hook's input, mentions it generically, or uses a different method.",
+            "unclear": "The item's wording about validation or forwarding is too vague to decide.",
+            "yes": "The item says the vars file is checked by a strict sc-compose render of a header-only (required_variables only) template and that the same file goes as --vars to the assign or send template."
+          },
+          "instructions": "Does `item.text` say that atm-task-close.py validates its sc-compose --vars file by rendering a header-only template in strict mode and passes that same file as --vars to the templates it runs, as `anchor.statement` directs? A mention of vars or templates without that validation and forwarding does not count. Judge presence only.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "The item states none of the ruled-out approaches for atm-task-close.py; silence, omissions, partial coverage, and work on other components are not conflicts.",
+            "unclear": "The item states an approach for atm-task-close.py's input that might or might not be one of the ruled-out ones.",
+            "yes": "The item explicitly states one of the ruled-out approaches for atm-task-close.py's input."
+          },
+          "instructions": "Does `item.text` state an approach for atm-task-close.py's own input that `anchor.statement` rules out? Ruled out for the hook: taking its values from anything other than one sc-compose --vars file (command-line flags, environment, several files); validating them with a separately defined schema or model of the hook's fields instead of the header-only template render; validating only after checks have started; giving the assign or send templates a rebuilt, edited, or second vars set instead of the same file. Only statements about atm-task-close.py count: an approach stated for another script or component is not a conflict, even if it uses a schema or model. Leaving a part out or naming only some of the commands is not a conflict either. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "no": 0.01,
+            "unclear": 0.0,
+            "yes": 0.99
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 1.0,
+            "unclear": 0.0,
+            "yes": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.92,
+          "probabilities": {
+            "no": 0.04,
+            "unclear": 0.01,
+            "yes": 0.95
+          }
+        }
+      },
+      "min_confidence": 0.92,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1055,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 110,
+      "item_shortened": false,
+      "request_bytes": 3191
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-058"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

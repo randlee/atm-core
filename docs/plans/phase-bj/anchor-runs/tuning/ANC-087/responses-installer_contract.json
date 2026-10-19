@@ -1,0 +1,524 @@
+[
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "ecd3b4d0b6ce0428cfa6461b38bb6ba4d7e10abdb840ccc7a873b03cc18069ed"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "81787fc4c6b8088f92808c3d06a1c8adaa2340568cb43bfe66d1ed773878e53d",
+  "case_id": "fixture_pass",
+  "confidence": {
+   "compliance": 0.97,
+   "conflict": 1.0,
+   "relevance": 0.98
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "satisfied",
+  "raw_response_sha256": "ecd3b4d0b6ce0428cfa6461b38bb6ba4d7e10abdb840ccc7a873b03cc18069ed",
+  "repeat": 1,
+  "roles": {
+   "compliance": "yes",
+   "conflict": "no",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-fixture_pass-r1",
+  "verdict": "satisfied"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "3fb8f62c6f890b0a586b87c871531e63d56c5d4f1848d92db001ef1fa3ed7cac"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "81787fc4c6b8088f92808c3d06a1c8adaa2340568cb43bfe66d1ed773878e53d",
+  "case_id": "fixture_pass",
+  "confidence": {
+   "compliance": 0.97,
+   "conflict": 1.0,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "satisfied",
+  "raw_response_sha256": "3fb8f62c6f890b0a586b87c871531e63d56c5d4f1848d92db001ef1fa3ed7cac",
+  "repeat": 2,
+  "roles": {
+   "compliance": "yes",
+   "conflict": "no",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-fixture_pass-r2",
+  "verdict": "satisfied"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "a999ff7a270ec351c0297014f031904944a0f1aaaba949d4287939062605ee0b"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "40064c249877da76a15b46cf5fe1906fac2c1512cb063a7015fb90d3ad7f67b9",
+  "case_id": "fixture_fail",
+  "confidence": {
+   "compliance": 0.77,
+   "conflict": 0.74,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "contradicted",
+  "raw_response_sha256": "a999ff7a270ec351c0297014f031904944a0f1aaaba949d4287939062605ee0b",
+  "repeat": 1,
+  "roles": {
+   "compliance": "no",
+   "conflict": "yes",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-fixture_fail-r1",
+  "verdict": "contradicted"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "a96e3b90dd2654e59b544cf11a1099849a6d52b272e1f1ebfdcadc9cd5d90f1b"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "40064c249877da76a15b46cf5fe1906fac2c1512cb063a7015fb90d3ad7f67b9",
+  "case_id": "fixture_fail",
+  "confidence": {
+   "compliance": 0.77,
+   "conflict": 0.74,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "contradicted",
+  "raw_response_sha256": "a96e3b90dd2654e59b544cf11a1099849a6d52b272e1f1ebfdcadc9cd5d90f1b",
+  "repeat": 2,
+  "roles": {
+   "compliance": "no",
+   "conflict": "yes",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-fixture_fail-r2",
+  "verdict": "contradicted"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "b37386390673b0e2db3ed1d61269b1628813fbe2d607cebc575ba9edb83fa99e"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "911a3d57a9023b1343dea5c5d98619f4d11cd9d6497e9e141696659b8e700a3e",
+  "case_id": "paraphrase",
+  "confidence": {
+   "compliance": 1.0,
+   "conflict": 1.0,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "satisfied",
+  "raw_response_sha256": "b37386390673b0e2db3ed1d61269b1628813fbe2d607cebc575ba9edb83fa99e",
+  "repeat": 1,
+  "roles": {
+   "compliance": "yes",
+   "conflict": "no",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-paraphrase-r1",
+  "verdict": "satisfied"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "b37386390673b0e2db3ed1d61269b1628813fbe2d607cebc575ba9edb83fa99e"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "911a3d57a9023b1343dea5c5d98619f4d11cd9d6497e9e141696659b8e700a3e",
+  "case_id": "paraphrase",
+  "confidence": {
+   "compliance": 1.0,
+   "conflict": 1.0,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "satisfied",
+  "raw_response_sha256": "b37386390673b0e2db3ed1d61269b1628813fbe2d607cebc575ba9edb83fa99e",
+  "repeat": 2,
+  "roles": {
+   "compliance": "yes",
+   "conflict": "no",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-paraphrase-r2",
+  "verdict": "satisfied"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "fd653b8d85684cfa7c32d7ff08ea1982541d3cfe432424b7fd472b8b9ec693b9"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "568d5c1d00ed3a686010e1101e80132790328666b43612598443eb951e8bbe63",
+  "case_id": "silent",
+  "confidence": {
+   "compliance": 1.0,
+   "conflict": 1.0,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "not_addressed",
+  "raw_response_sha256": "fd653b8d85684cfa7c32d7ff08ea1982541d3cfe432424b7fd472b8b9ec693b9",
+  "repeat": 1,
+  "roles": {
+   "compliance": "no",
+   "conflict": "no",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-silent-r1",
+  "verdict": "not_addressed"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "fd653b8d85684cfa7c32d7ff08ea1982541d3cfe432424b7fd472b8b9ec693b9"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "568d5c1d00ed3a686010e1101e80132790328666b43612598443eb951e8bbe63",
+  "case_id": "silent",
+  "confidence": {
+   "compliance": 1.0,
+   "conflict": 1.0,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "not_addressed",
+  "raw_response_sha256": "fd653b8d85684cfa7c32d7ff08ea1982541d3cfe432424b7fd472b8b9ec693b9",
+  "repeat": 2,
+  "roles": {
+   "compliance": "no",
+   "conflict": "no",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-silent-r2",
+  "verdict": "not_addressed"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "e76b1f24ec5bfbd0cb7b8998313ccdc584c5b1e5ae12119a77a96c6ad356726c"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "60c5ccf98789e71493d4f87db1887e9d31e65fae4f7979a7c46861e4c7383a5e",
+  "case_id": "topical",
+  "confidence": {
+   "compliance": 0.73,
+   "conflict": 1.0,
+   "relevance": 0.95
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "not_addressed",
+  "raw_response_sha256": "e76b1f24ec5bfbd0cb7b8998313ccdc584c5b1e5ae12119a77a96c6ad356726c",
+  "repeat": 1,
+  "roles": {
+   "compliance": "no",
+   "conflict": "no",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-topical-r1",
+  "verdict": "not_addressed"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "ed8b8e9763da6efe781af240f783e9eb9df603baace9a19ea77363e1a51be27e"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "60c5ccf98789e71493d4f87db1887e9d31e65fae4f7979a7c46861e4c7383a5e",
+  "case_id": "topical",
+  "confidence": {
+   "compliance": 0.77,
+   "conflict": 1.0,
+   "relevance": 0.95
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "not_addressed",
+  "raw_response_sha256": "ed8b8e9763da6efe781af240f783e9eb9df603baace9a19ea77363e1a51be27e",
+  "repeat": 2,
+  "roles": {
+   "compliance": "no",
+   "conflict": "no",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-topical-r2",
+  "verdict": "not_addressed"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "4644ce303ee6fdae13a03fb273556cc692ed5f56dd3e0efa9562028beaf4d98e"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "0fde7a3c30df014eb01bb5b1a4362a5327bb7d885bdc184e942467b665d94774",
+  "case_id": "conflict",
+  "confidence": {
+   "compliance": 1.0,
+   "conflict": 1.0,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "contradicted",
+  "raw_response_sha256": "4644ce303ee6fdae13a03fb273556cc692ed5f56dd3e0efa9562028beaf4d98e",
+  "repeat": 1,
+  "roles": {
+   "compliance": "no",
+   "conflict": "yes",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-conflict-r1",
+  "verdict": "contradicted"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "4644ce303ee6fdae13a03fb273556cc692ed5f56dd3e0efa9562028beaf4d98e"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "0fde7a3c30df014eb01bb5b1a4362a5327bb7d885bdc184e942467b665d94774",
+  "case_id": "conflict",
+  "confidence": {
+   "compliance": 1.0,
+   "conflict": 1.0,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "contradicted",
+  "raw_response_sha256": "4644ce303ee6fdae13a03fb273556cc692ed5f56dd3e0efa9562028beaf4d98e",
+  "repeat": 2,
+  "roles": {
+   "compliance": "no",
+   "conflict": "yes",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-conflict-r2",
+  "verdict": "contradicted"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "05058a4b97cf341a8a734c8906f6a0e45107fc541dd08c8dbf2cb430023a99e3"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "fe8aadb10728fe3645fb2be67cede6231c6e77117b52439d4ae789363fc9fd09",
+  "case_id": "irrelevant",
+  "confidence": {
+   "compliance": 1.0,
+   "conflict": 1.0,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "not_applicable",
+  "raw_response_sha256": "05058a4b97cf341a8a734c8906f6a0e45107fc541dd08c8dbf2cb430023a99e3",
+  "repeat": 1,
+  "roles": {
+   "compliance": "no",
+   "conflict": "no",
+   "relevance": "no"
+  },
+  "run_id": "ANC-087-installer_contract-irrelevant-r1",
+  "verdict": "not_applicable"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "05058a4b97cf341a8a734c8906f6a0e45107fc541dd08c8dbf2cb430023a99e3"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "fe8aadb10728fe3645fb2be67cede6231c6e77117b52439d4ae789363fc9fd09",
+  "case_id": "irrelevant",
+  "confidence": {
+   "compliance": 1.0,
+   "conflict": 1.0,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "not_applicable",
+  "raw_response_sha256": "05058a4b97cf341a8a734c8906f6a0e45107fc541dd08c8dbf2cb430023a99e3",
+  "repeat": 2,
+  "roles": {
+   "compliance": "no",
+   "conflict": "no",
+   "relevance": "no"
+  },
+  "run_id": "ANC-087-installer_contract-irrelevant-r2",
+  "verdict": "not_applicable"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "7800e6e545b32f3285d6185267a80d20d1c1b19e665f6e7f27e0aa4bbc0a8198"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "d71fbebb633743e0aca9495308339923834efc85419cf3aeab542e364a7e46df",
+  "case_id": "boundary",
+  "confidence": {
+   "compliance": 0.89,
+   "conflict": 0.95,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "contradicted",
+  "raw_response_sha256": "7800e6e545b32f3285d6185267a80d20d1c1b19e665f6e7f27e0aa4bbc0a8198",
+  "repeat": 1,
+  "roles": {
+   "compliance": "no",
+   "conflict": "yes",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-boundary-r1",
+  "verdict": "contradicted"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "3c81a63701ee305d07176861b8d98d8aebcc85f861295b5398f58c4276376b0f"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "d71fbebb633743e0aca9495308339923834efc85419cf3aeab542e364a7e46df",
+  "case_id": "boundary",
+  "confidence": {
+   "compliance": 0.91,
+   "conflict": 0.97,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "contradicted",
+  "raw_response_sha256": "3c81a63701ee305d07176861b8d98d8aebcc85f861295b5398f58c4276376b0f",
+  "repeat": 2,
+  "roles": {
+   "compliance": "no",
+   "conflict": "yes",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-boundary-r2",
+  "verdict": "contradicted"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "7757115d65f963e8b542ef9e9e3d4f0c9a7dfea8633dec9383af3f7b826e625d"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "a3819d219a2a156d2fc6e676150dc59ec29d3de55b3783887412e5b7f90fd41c",
+  "case_id": "exception",
+  "confidence": {
+   "compliance": 1.0,
+   "conflict": 1.0,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "satisfied",
+  "raw_response_sha256": "7757115d65f963e8b542ef9e9e3d4f0c9a7dfea8633dec9383af3f7b826e625d",
+  "repeat": 1,
+  "roles": {
+   "compliance": "yes",
+   "conflict": "no",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-exception-r1",
+  "verdict": "satisfied"
+ },
+ {
+  "attempts": [
+   {
+    "attempt": 1,
+    "error": null,
+    "raw_response_sha256": "7757115d65f963e8b542ef9e9e3d4f0c9a7dfea8633dec9383af3f7b826e625d"
+   }
+  ],
+  "candidate_id": "installer_contract",
+  "canonical_request_sha256": "a3819d219a2a156d2fc6e676150dc59ec29d3de55b3783887412e5b7f90fd41c",
+  "case_id": "exception",
+  "confidence": {
+   "compliance": 1.0,
+   "conflict": 1.0,
+   "relevance": 1.0
+  },
+  "error": null,
+  "model_answered": "jev-1.13.0",
+  "production_verdict": "satisfied",
+  "raw_response_sha256": "7757115d65f963e8b542ef9e9e3d4f0c9a7dfea8633dec9383af3f7b826e625d",
+  "repeat": 2,
+  "roles": {
+   "compliance": "yes",
+   "conflict": "no",
+   "relevance": "yes"
+  },
+  "run_id": "ANC-087-installer_contract-exception-r2",
+  "verdict": "satisfied"
+ }
+]

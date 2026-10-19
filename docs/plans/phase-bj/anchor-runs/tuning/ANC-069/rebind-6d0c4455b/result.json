@@ -1,0 +1,846 @@
+{
+ "aborted_by": null,
+ "canceled": false,
+ "data": {
+  "acceptance_table": [
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "yes",
+       0.95
+      ],
+      "conflict": [
+       "no",
+       0.89
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "yes",
+       0.95
+      ],
+      "conflict": [
+       "no",
+       0.89
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "fixture_pass",
+    "expected": {
+     "compliance": "yes",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "probe": "approved_fixture_pass",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "satisfied",
+     "satisfied"
+    ],
+    "verdict_threshold_0": [
+     "satisfied",
+     "satisfied"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       0.85
+      ],
+      "conflict": [
+       "yes",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       0.92
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       0.89
+      ],
+      "conflict": [
+       "yes",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       0.91
+      ]
+     }
+    },
+    "case_id": "fixture_fail",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "approved_fixture_fail",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "yes",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "yes",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "paraphrase",
+    "expected": {
+     "compliance": "yes",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "probe": "compliant_paraphrase",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "satisfied",
+     "satisfied"
+    ],
+    "verdict_threshold_0": [
+     "satisfied",
+     "satisfied"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.94
+      ],
+      "relevance": [
+       "yes",
+       0.98
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.97
+      ],
+      "relevance": [
+       "yes",
+       0.98
+      ]
+     }
+    },
+    "case_id": "silent",
+    "expected": {
+     "compliance": "no",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "not_addressed",
+    "probe": "silence",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "not_addressed",
+     "not_addressed"
+    ],
+    "verdict_threshold_0": [
+     "not_addressed",
+     "not_addressed"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       0.94
+      ],
+      "conflict": [
+       "yes",
+       0.97
+      ],
+      "relevance": [
+       "yes",
+       0.98
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       0.94
+      ],
+      "conflict": [
+       "yes",
+       0.95
+      ],
+      "relevance": [
+       "yes",
+       0.98
+      ]
+     }
+    },
+    "case_id": "conflict_graphql",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "conflict",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.69
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.72
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "conflict_env_budget",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "conflict",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "no",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "no",
+       1.0
+      ]
+     }
+    },
+    "case_id": "irrelevant",
+    "expected": {
+     "compliance": "no",
+     "conflict": "no",
+     "relevance": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "probe": "irrelevant",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "verdict_threshold_0": [
+     "not_applicable",
+     "not_applicable"
+    ]
+   }
+  ],
+  "accepted": true,
+  "authority_citations": [
+   "ANC-069 v2 locked statement, scope and quote (anchors.json at 6d0c4455b)",
+   "ANC-069 v2 approved pass/fail fixtures",
+   "INTENT phase-bj v1 sha256 e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382 (context only)"
+  ],
+  "authority_recommendations": [],
+  "candidate_rankings": [
+   {
+    "accepted": true,
+    "candidate_id": "sealed",
+    "complexity": 3583,
+    "confidence": {
+     "cells_at_or_above_threshold": 40,
+     "mean": 0.96,
+     "median": 1.0,
+     "minimum": 0.69,
+     "p10": 0.89,
+     "threshold": 0.8,
+     "total_cells": 42
+    },
+    "production_threshold_0_6_verdict_mismatches": [],
+    "question_sha256": "33764582ae268e29d5df0ca31f3989ef892074e42744bc04b3accfa0527be81c",
+    "score": {
+     "exact_role_cells": 42,
+     "exact_semantic_verdicts": 14,
+     "regressions": 0,
+     "stable_cases": 7,
+     "total_cases": 7,
+     "total_role_cells": 42,
+     "total_semantic_verdicts": 14
+    },
+    "selection_reason": "selected: the existing seal is semantically exact and stable on the independent oracle",
+    "semantic_mismatches": []
+   }
+  ],
+  "confidence_diagnostics": {
+   "cells_at_or_above_threshold": 40,
+   "mean": 0.96,
+   "median": 1.0,
+   "minimum": 0.69,
+   "p10": 0.89,
+   "threshold": 0.8,
+   "total_cells": 42
+  },
+  "confidence_reference_threshold": 0.8,
+  "evidence": {
+   "authoritative_sources_sha256": {
+    "docs/plans/phase-bj/anchors.json": "29cba9e93578617a95706f04fafb2c133ff1665b369f034b9a5fcc6754afbfdc",
+    "docs/plans/phase-bj/anchors.md": "95056af0a544ae410f2042744012c29bf4cefa33ab24aaa3c4a2586e0badc63c",
+    "docs/plans/phase-bj/intent.md": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382"
+   },
+   "baseline_candidate": "sealed",
+   "evidence_dir": "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b",
+   "files_sha256": {
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/candidates/sealed.json": "40548e558e64f1dbadb45c5cd17516f48060a7a1e70bbd82ce249faa52d1e7cc",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/oracle.json": "ce94e917f511515a429fa5ee4548ee8df781dc2100609cf43ddc63862446ddc8",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/oracle.sha256": "ee91cc6c2ec8ad0608085a16ce0cd65f860eeeed57d72a915e9e735a60321846",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/request-vars.json": "5acec70cca13c30ecafb5ce79978da5517e5d724747d005fcbfd1c4acc14a9da",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/request.json": "edc2cb1db84bef5b81b7a11862229f4a844a3068abd6c85dbe86088760ddbc0f",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/request.md": "4dd48e79d2d520a739cd57c564df2e89b6f3aba9d15b5f9f66217c8dcd1738c4",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-conflict_env_budget-r1.request.json": "1431cc852359acb1b5011127c387a8c821f5c96445a86ee55a8b030edd7b958c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-conflict_env_budget-r1.response.json": "313a8e431fb42abfdd7ed56ab28e770326dc9474bd16987096098967483e5e63",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-conflict_env_budget-r2.request.json": "1431cc852359acb1b5011127c387a8c821f5c96445a86ee55a8b030edd7b958c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-conflict_env_budget-r2.response.json": "b2aeeb36f4d4fbfe38b6ebca055b8f894f493268e641992ab8137507f217c130",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-conflict_graphql-r1.request.json": "a29f0bb4d7ee1e81427f94a13bf63c378ce919b42a55b84c5e8832752bc08f1b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-conflict_graphql-r1.response.json": "9bf8915f805a237184c676db77ddc20cb3be2d7047f039961966f007369f93f1",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-conflict_graphql-r2.request.json": "a29f0bb4d7ee1e81427f94a13bf63c378ce919b42a55b84c5e8832752bc08f1b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-conflict_graphql-r2.response.json": "fe33f7a9f9ee99def210d04ad8275ccdfff3b3f2f33a7ebd1225cd5dae98c2e3",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-fixture_fail-r1.request.json": "56a6703f72f9f29d8fa371d431c96c7130cda03d0f81e5d6520ec9c5c80ca7be",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-fixture_fail-r1.response.json": "272835f634026f8ba11a819ede23cb7a4c5573d792012951a983c107cf972fba",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-fixture_fail-r2.request.json": "56a6703f72f9f29d8fa371d431c96c7130cda03d0f81e5d6520ec9c5c80ca7be",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-fixture_fail-r2.response.json": "c8348f5579df2763eb7e0c8c8452ae473c1cc125bb7cef7007974fc674a437c5",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-fixture_pass-r1.request.json": "4a151eda6a41f9be2bc9855652bbc67006bfee4904184eccdd17b5ab6d9015ff",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-fixture_pass-r1.response.json": "a4afee0877afb908d6c66e62cec10bcb0c7243b10df814a09189b95a0d878c5c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-fixture_pass-r2.request.json": "4a151eda6a41f9be2bc9855652bbc67006bfee4904184eccdd17b5ab6d9015ff",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-fixture_pass-r2.response.json": "a4afee0877afb908d6c66e62cec10bcb0c7243b10df814a09189b95a0d878c5c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-irrelevant-r1.request.json": "d941fe7e8e3dea6fd34c654ca8014b5b0e1d519b31f193b1c075321cb1bf96c0",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-irrelevant-r1.response.json": "95cba9dc7f1872734d2a191d4068b0c836b9628ab3fe2a5dd3b3eca81e09f05a",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-irrelevant-r2.request.json": "d941fe7e8e3dea6fd34c654ca8014b5b0e1d519b31f193b1c075321cb1bf96c0",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-irrelevant-r2.response.json": "95cba9dc7f1872734d2a191d4068b0c836b9628ab3fe2a5dd3b3eca81e09f05a",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-paraphrase-r1.request.json": "8b09559cafb62ec698cf6979220faea6a5f158c43351e1f21d20d5e86c0beb46",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-paraphrase-r1.response.json": "99dd991315114592dd1305f134ef101b2ce66e184e4f649d648e69a76d496752",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-paraphrase-r2.request.json": "8b09559cafb62ec698cf6979220faea6a5f158c43351e1f21d20d5e86c0beb46",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-paraphrase-r2.response.json": "99dd991315114592dd1305f134ef101b2ce66e184e4f649d648e69a76d496752",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-silent-r1.request.json": "9fbf008fe70ca342f1aba0850687ce1eafa7d52333e17c73642e0241a8339d71",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-silent-r1.response.json": "162347f20dbe166fdc8a07710246d377b1e7afaa8654cde120d975005c816826",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-silent-r2.request.json": "9fbf008fe70ca342f1aba0850687ce1eafa7d52333e17c73642e0241a8339d71",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/runs/ANC-069-sealed-silent-r2.response.json": "b3246942f690a1ff31bfd49ca3e3decc3525af43071d866710af2b1cbb09961b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/score-sealed.json": "672860d9b99b37bc172e92b2b2e0ecf9d7729efcc9b9c67ef7373ffd8e9a69e5"
+   },
+   "max_parallel_calls": 3,
+   "model_requested": "jev-latest",
+   "models_answered": [
+    "jev-1.13.0"
+   ],
+   "oracle_file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/oracle.json",
+   "oracle_frozen_before_first_jev_call": true,
+   "raw_response_hash_note": "raw_response_sha256 is the canonical-JSON digest of the validated Jev response object; canonical_request_sha256 is the digest of the exact request bytes sent",
+   "request_file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-069/rebind-6d0c4455b/request.json",
+   "request_sha256": "32b23f5ae988851c1e7e4624022d72827c40aa91501734edb0f24e2f6e3439df",
+   "unselected_candidates_excluded_from_production": true
+  },
+  "explanation": "Seal re-checked. The installed override (digest 33764582ae268e29d5df0ca31f3989ef892074e42744bc04b3accfa0527be81c) equals the prior sealed set, and the prior anchor_record_sha256 reproduces from the current v2 record. The prior seal bound intent sha256 193feb73c68194e0c4d676f4b7efbe02e66c2008513d16ff61f0a670d605984d; the current intent is e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382 (commit bb0d797ff only rewrote the anchor-index sentence, which does not touch ANC-069). On an independently frozen oracle (7 cases x 2 repeats) the sealed set is semantically exact and stable, so the same questions are re-sealed under the current authority digests as event 2, superseding the prior decision.",
+  "gate": "planning",
+  "operation": "tune",
+  "oracle_sha256": "32426446b5152dd2d96a9f56c5ad1d6602146bcb639915d0f58720775830fda6",
+  "planner_action": "Keep the installed ANC-069 plan override unchanged (digest 33764582ae268e29d5df0ca31f3989ef892074e42744bc04b3accfa0527be81c); append this history event as the current seal. Production review keeps the 0.6 threshold.",
+  "production_confidence_threshold": 0.6,
+  "production_semantics_unchanged": true,
+  "question_action": null,
+  "sealed_question_set": {
+   "digest": "33764582ae268e29d5df0ca31f3989ef892074e42744bc04b3accfa0527be81c",
+   "questions": {
+    "addressed": {
+     "criteria": {
+      "no": "The item does not state the lean procedure: it is silent about it, or mentions budget, tokens, economy or lean only as a topic or goal, or describes a lean path made of different steps.",
+      "unclear": "The item refers to a lean or low-budget procedure but its steps are described too loosely to tell whether they are the base and ancestry checks the anchor requires.",
+      "yes": "The item states what the subagent does in lean mode or when GraphQL is unavailable, with the specific content: base compared with the recorded top and an ancestry or no-divergence check, done with a filtered REST pull list and local git (for example fetch, merge-base --is-ancestor) rather than GraphQL. Paraphrases count."
+     },
+     "instructions": "`anchor.statement` requires two things of the sanity-stack subagent: a budget input in its fenced JSON, and a lean procedure used in lean mode or whenever GraphQL is unavailable that checks only that the PR base equals the recorded top and that the head descends from it with no divergence, using one filtered REST pull list and local git, with no GraphQL call. Does `item.text` plan that lean procedure, with its specific checks or method, for the lean or GraphQL-unavailable case? Judge presence of this content only.",
+     "type": "choice"
+    },
+    "contradicted": {
+     "criteria": {
+      "no": "Nothing in the item is a ruled-out behaviour: it follows the anchor, is silent about it, only uses GraphQL in full mode while GraphQL is available, or is about something else.",
+      "unclear": "The item describes a lean or rate-limited path whose method is ambiguous enough that it might or might not use GraphQL, an unfiltered list, or extra verification.",
+      "yes": "The item states a design or step that is one of the ruled-out behaviours, such as explicitly having no budget option, calling GraphQL on the lean or GraphQL-unavailable path, waiting on GraphQL rather than falling back, loading the raw pull list, or verifying the whole stack in lean mode."
+     },
+     "instructions": "Does `item.text` plan something that `anchor.statement` rules out for the sanity-stack subagent? The anchor rules out: having no budget input; making any GraphQL call in lean mode or when GraphQL is unavailable (gh stack view, /sc-gh-stack-view and GraphQL API queries are GraphQL); waiting for GraphQL instead of using the REST and git check; reading an unfiltered pull list; or verifying more than base and ancestry in lean mode. GraphQL use in full mode while GraphQL is available is not ruled out. Silence about the anchor is not a conflict. Judge conflict only.",
+     "type": "choice"
+    },
+    "relevant": {
+     "criteria": {
+      "no": "The item is about a different component or activity (for example another script, sanity pass/fail handling, the console, a CLI command), even if it uses similar words such as git, REST, rebase or budget.",
+      "unclear": "The item text is too vague to tell whether the work it describes is done by the sanity-stack subagent.",
+      "yes": "The item describes work on the sanity-stack subagent: its fenced JSON input, its verification or linking of a stack layer, or its GitHub API or GraphQL usage."
+     },
+     "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about the sanity-stack subagent: the subagent that verifies a layer against the recorded stack top and links it. Does `item.text` plan, change, or depend on the sanity-stack subagent itself: its input, how it verifies or links a layer, or how it uses GitHub and git while doing so? Judge subject overlap only, not whether the item obeys the anchor.",
+     "type": "choice"
+    }
+   }
+  },
+  "sealed_question_set_digest_after": "33764582ae268e29d5df0ca31f3989ef892074e42744bc04b3accfa0527be81c",
+  "sealed_question_set_digest_before": null,
+  "semantic_score": {
+   "exact_role_cells": 42,
+   "exact_semantic_verdicts": 14,
+   "regressions": 0,
+   "stable_cases": 7,
+   "total_cases": 7,
+   "total_role_cells": 42,
+   "total_semantic_verdicts": 14
+  },
+  "tournament_protocol_version": "plan-anchor/question-tournament/2.0.0",
+  "tuning_history_after": {
+   "events": [
+    {
+     "authority": {
+      "anchor_id": "ANC-069",
+      "anchor_record_sha256": "3902d3241dd3e9c1ab719b272f823d42092d7bd8167755f54f9c8192af37d391",
+      "anchor_version": 2,
+      "intent_id": "phase-bj-intent",
+      "intent_sha256": "193feb73c68194e0c4d676f4b7efbe02e66c2008513d16ff61f0a670d605984d",
+      "intent_version": 1
+     },
+     "candidate": {
+      "candidate_id": "B-r1a1c1",
+      "question_sha256": "33764582ae268e29d5df0ca31f3989ef892074e42744bc04b3accfa0527be81c"
+     },
+     "decision": {
+      "question_set_sha256": "33764582ae268e29d5df0ca31f3989ef892074e42744bc04b3accfa0527be81c",
+      "reason_code": "TOURNAMENT.SEALED",
+      "status": "sealed"
+     },
+     "event": "question_set_sealed",
+     "event_index": 1,
+     "evidence": {
+      "canonical_request_sha256": [
+       "317cd2f686dd728c423538136c45d9c9bae0219f75997acbdbb1da23faa5ed7e",
+       "317cd2f686dd728c423538136c45d9c9bae0219f75997acbdbb1da23faa5ed7e",
+       "891ae4ce4f929a1025be8528e6424db0c593a5e141e43861f0bf9d878df11ab8",
+       "891ae4ce4f929a1025be8528e6424db0c593a5e141e43861f0bf9d878df11ab8",
+       "0faf5b0fd54b616a80a47fd64cc4f0fd180246616ba35debae118f0253e32c9a",
+       "0faf5b0fd54b616a80a47fd64cc4f0fd180246616ba35debae118f0253e32c9a",
+       "b601e35620e4915714406d090335da5fc28320d28c4c833d526442990f4aaf21",
+       "b601e35620e4915714406d090335da5fc28320d28c4c833d526442990f4aaf21",
+       "f8bb281f2070f3812dfa1bdb7ccda69a307d082978e23b75cdd88ee2bfd7b7d1",
+       "f8bb281f2070f3812dfa1bdb7ccda69a307d082978e23b75cdd88ee2bfd7b7d1",
+       "7cdc2122c7d13144ab6f017330a526cdb8d068eacb96631f7ac38a46f87dd0a4",
+       "7cdc2122c7d13144ab6f017330a526cdb8d068eacb96631f7ac38a46f87dd0a4",
+       "c6cdfbb76ce06b315d0f1818cbba3bc9c69223432885a0b51b479d2856fb8ba2",
+       "c6cdfbb76ce06b315d0f1818cbba3bc9c69223432885a0b51b479d2856fb8ba2",
+       "e5e43e85894e39c56fe3919a8687899577ec7ef954ff66635401f996d076657f",
+       "e5e43e85894e39c56fe3919a8687899577ec7ef954ff66635401f996d076657f",
+       "9a3b5dc85743cb280286971791a1297b8bb1f14ef1f3b5e82d217be59d882db6",
+       "9a3b5dc85743cb280286971791a1297b8bb1f14ef1f3b5e82d217be59d882db6",
+       "9fac32152aba3e9b17d271d329058f5f575332d3e0d464460c6739dfbf54068b",
+       "9fac32152aba3e9b17d271d329058f5f575332d3e0d464460c6739dfbf54068b",
+       "e3d900d12c1173d1638c7d34c6f88fefb1a15f163723904984dd70dccaeb4519",
+       "e3d900d12c1173d1638c7d34c6f88fefb1a15f163723904984dd70dccaeb4519",
+       "31c517c6e20c66b4a204119b053044ab71f44a60a1ec452e701491ac000500f0",
+       "31c517c6e20c66b4a204119b053044ab71f44a60a1ec452e701491ac000500f0",
+       "4d560c3e9eeb0fc2a5280dc4c7deaed6af3d4720bc5954bd76e2777165e09b2a",
+       "4d560c3e9eeb0fc2a5280dc4c7deaed6af3d4720bc5954bd76e2777165e09b2a",
+       "d2fb3dee31a5addf3fb2ab22f1c13e6b7c953004891647251c78eb5a525588ab",
+       "d2fb3dee31a5addf3fb2ab22f1c13e6b7c953004891647251c78eb5a525588ab",
+       "64b35aa323560c9a8a8f999a9ae0b268219aa788cb46a2d5e0b9f813fcb9592a",
+       "64b35aa323560c9a8a8f999a9ae0b268219aa788cb46a2d5e0b9f813fcb9592a"
+      ],
+      "raw_response_sha256": [
+       "96bc3d63da66ae524feeeda1253688ed8c38838e2089133da4bfd681e2c860f9",
+       "37c26342f336e4548f138c32cc4e3f8057ec7774481cc469e37a548f708f60cf",
+       "1816c57dcc9fedaa5a4db5d1c390a7836b0013b4ae05cbe1bb12a2d87c56c6c9",
+       "ab4cfdae5fe21199ca5beb4a989dd0fd54b7241ea67469e549fa4d3e31fd7d76",
+       "0287b5a3a7b7357ab2cb615cde14676e4abdcc2350df43c14a56ab40c4a37c2f",
+       "0287b5a3a7b7357ab2cb615cde14676e4abdcc2350df43c14a56ab40c4a37c2f",
+       "de1d3fafdf1a4ae0dab060e032f5619efb57c33a082f4f0db345ec49812035a5",
+       "ee31284b93212f8701ce6782be03a6a1ce06d8d133edd581c8ddabe71a87c5d9",
+       "ded5d95dd429ba42e417a60dd323a9198bea53ce2bed3dedbf9d3d8a5a62189c",
+       "444c9c21e8b35722103f743c00cb3ab17d57aada54806d33cc75643e2792f2a2",
+       "b6ef88c3f6bd4395ed0cec5b9542cc2f849049a99888ab91589efcefeabc80c3",
+       "02a43e0916519a4e582390c7fb9a74e30e80906c3171d672a37eb593b732b6af",
+       "0dd7d2939c4a2fb3b091a085f81963878f495ec5518371ecefc06e1511005f1d",
+       "0dd7d2939c4a2fb3b091a085f81963878f495ec5518371ecefc06e1511005f1d",
+       "ecf873d9bfe08bd52bdef4dba6355a1733f9515cbf3b98463a64d442373161f8",
+       "ecf873d9bfe08bd52bdef4dba6355a1733f9515cbf3b98463a64d442373161f8",
+       "ecf873d9bfe08bd52bdef4dba6355a1733f9515cbf3b98463a64d442373161f8",
+       "ecf873d9bfe08bd52bdef4dba6355a1733f9515cbf3b98463a64d442373161f8",
+       "7845da9aec0be9dd2366f3f006c95f9f5d30e919a75f9815910c1709765dfc13",
+       "7845da9aec0be9dd2366f3f006c95f9f5d30e919a75f9815910c1709765dfc13",
+       "03b290cf4a2d79556c072d1f9141e458b9cc41c2c9ab5a930f90418356ba47f4",
+       "fc0cd91357a419fc1afba064b0b94c98cb933f5d6e21bda76e0bb4cc2dc8d43d",
+       "7e96c02b8eee2432b44e8cf2a5f74317f24d3bd0d9ea3be2649bf0ba7df26860",
+       "7e96c02b8eee2432b44e8cf2a5f74317f24d3bd0d9ea3be2649bf0ba7df26860",
+       "48014b7402de79af61c913abf08c9f76a77f924e1c8964281b78865a59988ea2",
+       "48014b7402de79af61c913abf08c9f76a77f924e1c8964281b78865a59988ea2",
+       "f14f7323e624b0c1b9d32ae84300e01388f2dc78cb8c87d9e79da3508fa06cd3",
+       "cc6fa4798a7eb61dc0c04cf5829248366cdb9d3a8b7b894ccfd1526aa044ad33",
+       "68aaea7c8b36c716a106e1a9a52765706e40b8565c590048bb2f09d143c15d97",
+       "68aaea7c8b36c716a106e1a9a52765706e40b8565c590048bb2f09d143c15d97"
+      ],
+      "run_ids": [
+       "tune-ANC-069:confirm-B-r1a1c1:fixture-pass-1:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:fixture-pass-1:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:fixture-fail-1:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:fixture-fail-1:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:compliant-paraphrase:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:compliant-paraphrase:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:compliant-sprint-bead:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:compliant-sprint-bead:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:boundary-graphql-unavailable:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:boundary-graphql-unavailable:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:silent-sanity-stack:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:silent-sanity-stack:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:topical-only:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:topical-only:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:conflict-no-budget:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:conflict-no-budget:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:conflict-wait-for-graphql:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:conflict-wait-for-graphql:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:conflict-lean-graphql-checks:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:conflict-lean-graphql-checks:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:conflict-unfiltered-list:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:conflict-unfiltered-list:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:irrelevant-icons:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:irrelevant-icons:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:irrelevant-sanity-rejected:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:irrelevant-sanity-rejected:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:boundary-close-hook:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:boundary-close-hook:r2",
+       "tune-ANC-069:confirm-B-r1a1c1:diag-budget-field-only:r1",
+       "tune-ANC-069:confirm-B-r1a1c1:diag-budget-field-only:r2"
+      ]
+     },
+     "oracle": {
+      "case_count": 14,
+      "case_ids": [
+       "fixture-pass-1",
+       "fixture-fail-1",
+       "compliant-paraphrase",
+       "compliant-sprint-bead",
+       "boundary-graphql-unavailable",
+       "silent-sanity-stack",
+       "topical-only",
+       "conflict-no-budget",
+       "conflict-wait-for-graphql",
+       "conflict-lean-graphql-checks",
+       "conflict-unfiltered-list",
+       "irrelevant-icons",
+       "irrelevant-sanity-rejected",
+       "boundary-close-hook"
+      ],
+      "repeat_count": 2,
+      "sha256": "9debbc904310e740c48c29d80d0f54059de6f964a9347ae4874cf5cd7b5ba359"
+     },
+     "previous_event_sha256": null,
+     "protocol_version": "plan-anchor/question-tournament/2.0.0",
+     "score": {
+      "confidence": {
+       "cells_at_or_above_threshold": 78,
+       "mean": 0.9645,
+       "median": 1.0,
+       "minimum": 0.53,
+       "p10": 0.908,
+       "threshold": 0.8,
+       "total_cells": 80
+      },
+      "exact_role_cells": 80,
+      "exact_semantic_verdicts": 28,
+      "regressions": 0,
+      "stable_cases": 14,
+      "total_cases": 14,
+      "total_role_cells": 80,
+      "total_semantic_verdicts": 28
+     },
+     "supersedes": null
+    },
+    {
+     "authority": {
+      "anchor_id": "ANC-069",
+      "anchor_record_sha256": "42ecf1969b34b5c588a6ebdc7e4efddcb8125ef3f4a16a4176757e9a2e46439e",
+      "anchor_version": 2,
+      "intent_id": "phase-bj",
+      "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+      "intent_version": 1
+     },
+     "candidate": {
+      "candidate_id": "sealed",
+      "question_sha256": "33764582ae268e29d5df0ca31f3989ef892074e42744bc04b3accfa0527be81c"
+     },
+     "decision": {
+      "question_set_sha256": "33764582ae268e29d5df0ca31f3989ef892074e42744bc04b3accfa0527be81c",
+      "reason_code": "TOURNAMENT.REBOUND_CURRENT_AUTHORITY",
+      "status": "sealed"
+     },
+     "event": "question_set_sealed",
+     "event_index": 2,
+     "evidence": {
+      "canonical_request_sha256": [
+       "4a151eda6a41f9be2bc9855652bbc67006bfee4904184eccdd17b5ab6d9015ff",
+       "4a151eda6a41f9be2bc9855652bbc67006bfee4904184eccdd17b5ab6d9015ff",
+       "56a6703f72f9f29d8fa371d431c96c7130cda03d0f81e5d6520ec9c5c80ca7be",
+       "56a6703f72f9f29d8fa371d431c96c7130cda03d0f81e5d6520ec9c5c80ca7be",
+       "8b09559cafb62ec698cf6979220faea6a5f158c43351e1f21d20d5e86c0beb46",
+       "8b09559cafb62ec698cf6979220faea6a5f158c43351e1f21d20d5e86c0beb46",
+       "9fbf008fe70ca342f1aba0850687ce1eafa7d52333e17c73642e0241a8339d71",
+       "9fbf008fe70ca342f1aba0850687ce1eafa7d52333e17c73642e0241a8339d71",
+       "a29f0bb4d7ee1e81427f94a13bf63c378ce919b42a55b84c5e8832752bc08f1b",
+       "a29f0bb4d7ee1e81427f94a13bf63c378ce919b42a55b84c5e8832752bc08f1b",
+       "1431cc852359acb1b5011127c387a8c821f5c96445a86ee55a8b030edd7b958c",
+       "1431cc852359acb1b5011127c387a8c821f5c96445a86ee55a8b030edd7b958c",
+       "d941fe7e8e3dea6fd34c654ca8014b5b0e1d519b31f193b1c075321cb1bf96c0",
+       "d941fe7e8e3dea6fd34c654ca8014b5b0e1d519b31f193b1c075321cb1bf96c0"
+      ],
+      "raw_response_sha256": [
+       "fa534812268ca0e1a421a4362046294907f7d651ba20ecd593a92d89887cc04a",
+       "fa534812268ca0e1a421a4362046294907f7d651ba20ecd593a92d89887cc04a",
+       "a9a3d7e098416f4d4037abd056772b9e90ccfd119b0b00a739ff179b798230ea",
+       "7c549fdec9a9db670e8ba4c8ee90e59db1cdbe51f86c4f0aec6d06d07230ad08",
+       "73f0fd2706e5efd062649925a362836b0cd0e1bb90f9e1c7a6afe6a44efe7210",
+       "73f0fd2706e5efd062649925a362836b0cd0e1bb90f9e1c7a6afe6a44efe7210",
+       "6b669711b816ee9ed4009a0f7e0a736fc316ed2ecf266c6d6c4d20b7d888b343",
+       "c330cbee919bb68988de208b54997c68b85aa8c1cf57c1e06a204ad652862b3e",
+       "03f2b243f5ef0cf7f8acf37f5b37d96a61301915832f2ad64234552cdd6b2def",
+       "00d1e41137464b833eb93d6691534958e91ee6071641186e3535249acafcf9fd",
+       "d724690caaf3f1a312d20bb60fbc3032a4a8239dca85a3e4f8c8981d885e1712",
+       "526e7d3ea19c62f5529a24910904da0de3d468d591b3e789d4ad21f881bb30b2",
+       "ccad575b6176a75ff870affa5fe4be5019822d54627a038a738b01d4f52a5c71",
+       "ccad575b6176a75ff870affa5fe4be5019822d54627a038a738b01d4f52a5c71"
+      ],
+      "run_ids": [
+       "ANC-069-sealed-fixture_pass-r1",
+       "ANC-069-sealed-fixture_pass-r2",
+       "ANC-069-sealed-fixture_fail-r1",
+       "ANC-069-sealed-fixture_fail-r2",
+       "ANC-069-sealed-paraphrase-r1",
+       "ANC-069-sealed-paraphrase-r2",
+       "ANC-069-sealed-silent-r1",
+       "ANC-069-sealed-silent-r2",
+       "ANC-069-sealed-conflict_graphql-r1",
+       "ANC-069-sealed-conflict_graphql-r2",
+       "ANC-069-sealed-conflict_env_budget-r1",
+       "ANC-069-sealed-conflict_env_budget-r2",
+       "ANC-069-sealed-irrelevant-r1",
+       "ANC-069-sealed-irrelevant-r2"
+      ]
+     },
+     "oracle": {
+      "case_count": 7,
+      "case_ids": [
+       "fixture_pass",
+       "fixture_fail",
+       "paraphrase",
+       "silent",
+       "conflict_graphql",
+       "conflict_env_budget",
+       "irrelevant"
+      ],
+      "repeat_count": 2,
+      "sha256": "32426446b5152dd2d96a9f56c5ad1d6602146bcb639915d0f58720775830fda6"
+     },
+     "previous_event_sha256": "2b199f1613f53faa9208c442538a34b35e6a13a51ce2df6fc41d8cd8b291c13d",
+     "protocol_version": "plan-anchor/question-tournament/2.0.0",
+     "score": {
+      "confidence": {
+       "cells_at_or_above_threshold": 40,
+       "mean": 0.96,
+       "median": 1.0,
+       "minimum": 0.69,
+       "p10": 0.89,
+       "threshold": 0.8,
+       "total_cells": 42
+      },
+      "exact_role_cells": 42,
+      "exact_semantic_verdicts": 14,
+      "regressions": 0,
+      "stable_cases": 7,
+      "total_cases": 7,
+      "total_role_cells": 42,
+      "total_semantic_verdicts": 14
+     },
+     "supersedes": {
+      "decision_sha256": "41577e479523477f19d0da0ed6753455090be88cb90358a2b250832715f1ccdd",
+      "protocol_version": "plan-anchor/question-tournament/2.0.0"
+     }
+    }
+   ],
+   "history_id": "phase-bj-ANC-069-planning",
+   "schema": "plan-anchor/tuning-history/2"
+  },
+  "tuning_history_after_sha256": "d074b424455401eb7e7722d1dc9214de02e5a96a4386dedeeb68285a81ce02dc",
+  "tuning_history_before_sha256": "8a968b5dc4e165fc0449fd0185cb6a7cca6d65ab3e910b217217e87de984dfaf"
+ },
+ "error": null,
+ "metadata": {
+  "authoritative_sources_unchanged": true,
+  "correlation_id": "ANC-069-6d0c4455b",
+  "duration_ms": 600,
+  "jev_run_ids": [
+   "ANC-069-sealed-fixture_pass-r1",
+   "ANC-069-sealed-fixture_pass-r2",
+   "ANC-069-sealed-fixture_fail-r1",
+   "ANC-069-sealed-fixture_fail-r2",
+   "ANC-069-sealed-paraphrase-r1",
+   "ANC-069-sealed-paraphrase-r2",
+   "ANC-069-sealed-silent-r1",
+   "ANC-069-sealed-silent-r2",
+   "ANC-069-sealed-conflict_graphql-r1",
+   "ANC-069-sealed-conflict_graphql-r2",
+   "ANC-069-sealed-conflict_env_budget-r1",
+   "ANC-069-sealed-conflict_env_budget-r2",
+   "ANC-069-sealed-irrelevant-r1",
+   "ANC-069-sealed-irrelevant-r2"
+  ],
+  "planner_observation_trust": null,
+  "retry_count": 0,
+  "tool_calls": 14
+ },
+ "schema_version": "1.0.0",
+ "success": true
+}
