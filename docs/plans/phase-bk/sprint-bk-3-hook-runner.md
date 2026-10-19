@@ -3,46 +3,47 @@
 closure_type `boundary`; target_boundary `BOUNDARY-HookRunner` and
 `BOUNDARY-TaskCommands`; branch `sprint/bk-3-hook-runner`, PR above bk-2;
 difficulty hard; recommended_agent `arch-ctm`, recommended_model
-`gpt-5-codex`; parallel_safe with bk-4 (shared hunks: root `Cargo.toml`,
-`.just/lint-config.toml`), rebased before bk-4. Consumes
-bk-1 and bk-2 through `atm_core::boundary`.
-Governing text:
+`gpt-5-codex`; parallel_safe with bk-4 and its consumed symbols per
+`phase-bk-plan.md` wave 3. Governing text:
 `design.md` §2.2, §3 (D-3, D-5, D-8, D-10), §9.3, §9.5-§9.9, §9.11; `REQ-P-HOOK-001` §23.2, `REQ-P-HOOK-002` §23.3; ADR-068 D1, D2,
 D4, D5, D7, ADR-066, ADR-067.
 
 ## Scope boundary
 
-It edits nothing under `crates/atm/src`, `crates/atm-core`, `crates/atm-storage*` or
-`crates/atm-cron`.
+Owned paths, and nothing else (new unless marked edited):
 
-Owned paths:
-
-- `crates/atm-daemon-bootstrap/src/process_deadline.rs` (new),
-  `src/hook_runner.rs` (new), `src/lib.rs` (edited: mods and the
-  `build_replacement_handler` call sites `:471` (binding `_hook_runner`,
-  `_base_dispatcher`), `:1303`, `:1505`),
-  `src/telemetry_lifecycle_tests.rs` (edited: the call at `:172`),
-  `src/replacement_handler.rs` (edited: `compose_storage_router` `:268`,
-  `build_replacement_handler` `:204`, `design.md` §9.9);
+- `crates/atm-daemon-bootstrap/src/process_deadline.rs`,
+  `crates/atm-daemon-bootstrap/src/hook_runner.rs`,
+  `crates/atm-daemon-bootstrap/src/lib.rs` (edited: mods; the three
+  `build_replacement_handler` call sites, the first binding `_hook_runner`,
+  `_base_dispatcher`),
+  `crates/atm-daemon-bootstrap/src/telemetry_lifecycle_tests.rs` (edited:
+  its one call),
+  `crates/atm-daemon-bootstrap/src/replacement_handler.rs` (edited:
+  `compose_storage_router`, `build_replacement_handler`);
   `crates/atm-daemon-bootstrap/Cargo.toml` (edited: `async-trait`
   workspace dep; `[target.'cfg(unix)'.dependencies] rustix.workspace =
   true`); root `Cargo.toml` (`rustix = { version = "1.1", features
   = ["process"] }`, 1.1.4 locked)
 - `.just/lint-config.toml` (edited: `async-trait`, `rustix` in the
-  bootstrap allowlist `:153-155`; a `global_dependency_ownership` entry
+  bootstrap allowlist; a `global_dependency_ownership` entry
   limiting `rustix` to `process_deadline.rs`)
-- `crates/atm-http-runtime/src/` `task_commands.rs`, `hook_filter.rs`,
-  `hook_actions.rs`, `hook_registry_routes.rs` (new),
-  `storage_and_nudge_router.rs`
-  (edited: §9.9 fields on the struct `:54`, builders, `unhooked()`,
-  `write_unhooked` (body from `:991`), classify-and-call in
-  `write_with_request_id` `:973` and `dispatch_non_write` `:532`, six arms),
-  `message_handler.rs` (edited: six routes `:276`, arms in
-  `decode_framework_request` `:471`, `map_api_response` `:707`),
-  `lib.rs` (edited: mods)
-- `crates/atm-http-runtime/tests/hook_fixture/fixture_hook.py` (new)
-- `crates/atm-architecture/tests/process_spawn_sites.rs` (new)
-- `boundaries/atm-core/{hook-runner,task-commands,hook-action-dispatcher}.toml` (edited: `[status]`
+- `crates/atm-http-runtime/src/task_commands.rs`,
+  `crates/atm-http-runtime/src/hook_filter.rs`,
+  `crates/atm-http-runtime/src/hook_actions.rs`,
+  `crates/atm-http-runtime/src/hook_registry_routes.rs`,
+  `crates/atm-http-runtime/src/storage_and_nudge_router.rs`
+  (edited: §9.9 fields, builders, `unhooked()`, `write_unhooked`,
+  classify-and-call in `write_with_request_id` and `dispatch_non_write`,
+  six arms),
+  `crates/atm-http-runtime/src/message_handler.rs` (edited: six routes,
+  arms in `decode_framework_request`, `map_api_response`),
+  `crates/atm-http-runtime/src/lib.rs` (edited: mods)
+- `crates/atm-http-runtime/tests/hook_fixture/fixture_hook.py`
+- `crates/atm-architecture/tests/process_spawn_sites.rs`
+- `boundaries/atm-core/hook-runner.toml`,
+  `boundaries/atm-core/task-commands.toml`,
+  `boundaries/atm-core/hook-action-dispatcher.toml` (edited: `[status]`
   `concrete_landed` naming the implementers),
   `boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml` (edited:
   `io_owns` + `hook_process_spawn`; `process_spawn` in `io_forbidden` with
@@ -203,9 +204,9 @@ Log entries (ADR-067 fields, `tracing::info!`): `subsystem = "atm_hook"`, `actio
    timeout case is a child sleeping 3600 s under `timeout_ms = 200`.
    Budgets are tested through the pure `runner_budget` and
    `doctor_budget`, exhaustion with an expired deadline; `start_paused`
-   only with doubles. Filter tests use the doubles, the router harness
-   (`storage_and_nudge_router.rs:2008`) and `before_reply` on a tokio
-   `watch` to hold a reply; logs a `tracing_subscriber::Layer` (`:1274`).
+   only with doubles. Filter tests use the doubles, the router harness in
+   `storage_and_nudge_router.rs` tests and `before_reply` on a tokio
+   `watch` to hold a reply; logs a `tracing_subscriber::Layer`.
 
 ## Authoritative acceptance criteria
 

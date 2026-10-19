@@ -64,12 +64,8 @@ member of the team may start a schedule; the route checks membership only
 
 `atm cron` is its own workspace crate, `atm-cron`, the only implementation
 of the sealed core trait `atm_core::boundary::CronScheduler`
-(`start`, `end`, `list`); `AtmCron` has no other public operation
-besides `new` and `start_worker`, and tests fire ticks through the
-`ManualClock` test double. The crate depends on `atm-core` (every
-store and hook type through `atm_core::boundary`), `tokio`, `chrono`,
-`cron`, `async-trait`, `serde_json`, `getrandom` and `tracing`, and on none of
-`atm-storage`, `atm-http-runtime`, `atm-daemon-bootstrap` or the CLI. It
+(`start`, `end`, `list`); It reaches stores and hook types only through `atm_core::boundary`
+(dependencies in `design.md`). It
 runs hooks through the injected `HookRunner` and dispatches a reply's
 actions through the injected sealed core trait `HookActionDispatcher`,
 which `UnhookedRouter` implements below the task filter (ADR-068 D4), each
@@ -84,16 +80,14 @@ jitter_s)).next() + jitter_s` for the schedule's fixed `jitter_s`, so a
 restart inside an occurrence's jitter window still fires it, recomputed after startup, after each run and after a reload (ADR-065: UTC
 under the hood); a tick missed through a restart, a sleep or a long run is
 never replayed. A tick that arrives while the schedule's previous run is
-still executing is skipped and logged. The worker sleeps at most 30 s at a
-time, so a wall-clock jump is seen within one slice; a run that panics is
+still executing is skipped and logged. A run that panics is
 caught and recorded, and the worker keeps ticking. Rand (2026-10-18):
 "Random per-job offset so jobs don't all fire on :00 <-- we should do
 this. it should be random over remaining slots." `start` draws `jitter_s`
 once from an injected random source, uniform over the offsets in
 `[0, min(period_s / 2, 1800))` not held by another active schedule with
 the same expression (all of them when every offset is held); it is
-stored, so a restart keeps it; `start` holds a lock from the draw to the
-store write so concurrent starts see each other's offset. A restart in
+stored, so a restart keeps it. A restart in
 place sets `created_at` to now, and a reload keeps a worker slot only when
 the reloaded row is unchanged (id, `created_at`, expression, jitter, stop,
 module, cwd, args, timeout, custom); otherwise the slot's in-flight run is
@@ -149,28 +143,13 @@ bead is closed.
 
 Rand, round 5 (#1873 comment 6257361348, 2026-10-18, verbatim): "yes, we
 need storage for cron". ADR-063 D3's inventory of twelve semantic storage
-capabilities ("No thirteenth semantic capability is authorized by this
-ADR") is amended here, in this one place, to fourteen:
-
-13. `HookRegistrationStore` (ADR-068 D1, D5): one active registration per
-    team and hook, `disable` keeps the row.
-14. `CronScheduleStore` (D1, D4): schedules with a mandatory stop
-    condition, `end` and `record_stop` keep the row.
-
-Both are sealed with `atm_storage::contract::sealed::Sealed`, implemented
-only by `atm-storage-rusqlite`, re-exported through `atm_core::boundary`,
-with in-memory doubles in `atm_storage::testing`, re-exported by
-`atm-runtime-test-support`. Sprint bk-1
-updates ADR-036's inventory and `docs/atm-storage/boundaries.md` and owns
-those paths. No fifteenth capability is authorized by this ADR; the
-ADR-063 review check now reads "fourteen".
+capabilities is amended to fourteen: `HookRegistrationStore` (ADR-068 D1,
+D5) and `CronScheduleStore` (D1, D4).
 
 ## Consequences
 
 - `cron_schedule` is an additive SQLite MINOR object (ADR-061 D6 record of
   2026-10-18, shared with `hook_registration`).
-- The capability inventory is fourteen (D5); a storage trait outside that
-  list is a finding.
 - The `cron` crate enters the workspace for `atm-cron` only;
   `tokio-cron-scheduler` is not adopted; `atm-http-runtime` gains no cron
   dependency and no channel.
@@ -180,7 +159,3 @@ ADR-063 review check now reads "fourteen".
   `atm-cron` may be depended on by `atm-daemon-bootstrap` only.
 - `cron.stop` is the eighth hook name (six task hooks, `cron.tick`,
   `cron.stop`); `atm hook register` accepts neither cron name.
-- Review check: a replayed missed tick, two concurrent runs of one
-  schedule, a schedule loaded from anything but the store, a cron tick
-  that bypasses the hook runner or the stop check, a schedule row without
-  a stop condition, or a cron dependency outside `atm-cron`, is a finding.

@@ -61,14 +61,11 @@ Owned paths (new unless marked edited):
   `boundaries/atm-storage/cron-schedule-store.toml`,
   `boundaries/atm-storage-rusqlite/hook-registration-store-sqlite.toml`,
   `boundaries/atm-storage-rusqlite/cron-schedule-store-sqlite.toml`
-  (format of `boundaries/atm-storage/task-store.toml` and
-  `task-store-sqlite.toml`)
+  (format of the `task-store` and `task-store-sqlite` manifests)
 - `docs/atm-storage/boundaries.md` (edited: `## HookRegistrationStore`
   and `## CronScheduleStore` after `## TaskStore`),
-  `docs/adr/ADR-036-*.md` (one amendment paragraph, format of its Phase AQ
-  amendment, naming the two capabilities under ADR-069 D5),
-  `docs/adr/ADR-063-*.md` (edited: the two pointer phrases "(amended to
-  fourteen by ADR-069 D5)" at `:112` and `:186`, nothing else)
+  `docs/adr/ADR-036-storage-boundary-and-composition-topology.md` (one amendment paragraph, format of its Phase AQ
+  amendment, naming the two capabilities under ADR-069 D5)
 
 ## Public contract
 
@@ -232,8 +229,8 @@ below.
    "atm-runtime-test-support", "atm-storage-rusqlite"]` (no `atm-cron`:
    that crate reaches the stores only through `atm_core::boundary`); the
    rusqlite manifests `constructor = "pub(crate)"`, `visibility =
-   "private"`. `docs/atm-storage/boundaries.md` gains the two sections,
-   ADR-036 the amendment paragraph and ADR-063 the two pointer phrases.
+   "private"`. `docs/atm-storage/boundaries.md` gains the two sections
+   and ADR-036 the amendment paragraph.
 5. Tests, same unit, in the files named by each criterion below. New
    logic lives in new files; `.just/check_line_counts.py` passes.
 
@@ -256,7 +253,7 @@ below.
 - [ ] (REQ-BK-SCHEMA) `boundary:BOUNDARY-SharedDb-Sqlite` `crates/atm-storage-rusqlite/tests/hook_schema.rs::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created`: both tables are created by `ensure_schema` on an empty database and on a database created by the pre-bk `DB_MIGRATIONS` string; the frozen pre-bk statements still read and write afterwards (pattern `pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created`); `::hook_tables_have_no_sha_column` (D-2, ANC-016): no column of `hook_registration` or `cron_schedule` (`PRAGMA table_info`) has a name containing `sha`.
 - [ ] (REQ-BK-ERRORS) `boundary:BOUNDARY-AtmErrorCodes` `crates/atm-error/src/lib.rs` round-trip tables carry the six codes through `as_str`/`from_str`; `crates/atm-storage/src/error.rs::tests::hook_error_constructors_format_and_classify` asserts each §9.1 message, `is_validation` true for exactly the three validation codes, and that `hook_refused("bd not ready")` displays exactly `bd not ready` with no `Recovery:` line; `docs/atm-error-codes.md` lists each code once in §5.11 and once in §7.1.
 - [ ] `boundary:BOUNDARY-HookRegistrationStore` both store traits are sealed, their doubles are compiled only under `test-utils`, the two `atm-storage` manifests list each double as the sole test double, the rusqlite types are not constructible outside their crate; `just lint` boundary check passes with the four manifests.
-- [ ] `boundary:BOUNDARY-SharedDb-Sqlite` `docs/atm-storage/boundaries.md` has one section per new store; ADR-036 names both under ADR-069 D5; ADR-063's only change is the two pointer phrases (`git diff` of that file shows two changed lines).
+- [ ] `boundary:BOUNDARY-SharedDb-Sqlite` `docs/atm-storage/boundaries.md` has one section per new store; ADR-036 names both under ADR-069 D5.
 
 ## Authoritative validation
 

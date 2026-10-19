@@ -488,15 +488,9 @@ Team comes from the caller context as for every atm command (ADR-066).
 `atm hook register` and `atm cron start` are open to every roster member of
 the team (Rand 2026-10-18 round 4: "so any roster member for both").
 
-## 7. Sprint cut (by crate; hard dependencies name the consumed artefact)
+## 7. Sprint cut
 
-| Sprint | Crates | Consumes |
-| --- | --- | --- |
-| bk-1 hook registration and cron schedule stores | `atm-storage` (two sealed store traits, row types, `StopCondition`, in-memory doubles, the two budget constants, the six `AtmError` constructors and catalog guidance), `atm-storage-rusqlite` (DDL, impls), `atm-error` (six codes) | - |
-| bk-2 core hook contract, sealed traits and protocol | `atm-core` (`hook/`, `boundary/{task_commands,hook_runner,cron_scheduler,hook_action_dispatcher}.rs`, `boundary/mod.rs`, protocol and `api.rs` routes, `service_runtime.rs` store accessors, doctor report types), `atm-runtime` (store composition), `atm-runtime-test-support` (double re-exports), `openapi.yaml` | bk-1's row types, store traits and codes |
-| bk-3 hook runner and task integration | `atm-daemon-bootstrap` (runner, `compose_storage_router`), `atm-http-runtime` (`NormalTaskCommands`, `HookedTaskCommands`, snapshot, six route arms, `HookActionDispatcher` impl) | bk-2's hook types, `TaskCommands`, `TaskCommand::classify`, the four traits, the routes; bk-1's `HookRegistrationStore::active_all` |
-| bk-4 atm-cron crate | `atm-cron` (new), workspace `Cargo.toml`, `boundaries/atm-cron`, `release/` entries | bk-2's `HookRequest::for_cron`, `StopReply`, `HookRunner`, `CronScheduler`, `HookActionDispatcher` and the store re-exports; bk-1's `CronExprInvalid` |
-| bk-5 CLI, doctor, docs and cron composition | `atm`, `atm-http-runtime` (router `doctor()` only), `atm-daemon-bootstrap` (cron composition only), `docs/user-documents` | bk-2's protocol variants and doctor types; bk-3's `install_cron_scheduler`, the shared runner Arc, `HookRunner::doctor`; bk-4's `AtmCron`, `CronWorkerHandle` |
+The sprints, waves and consumed artefacts are in `phase-bk-plan.md`.
 
 **D-7 Contract types live in bk-2, codes in bk-1.** The first cut placed
 every `atm-core` change in bk-5. `atm-http-runtime -> atm-daemon-bootstrap`
@@ -511,15 +505,7 @@ bk-2's. The six error codes are bk-1's, because the stores raise
 `ATM_HOOK_MODULE_INVALID` and `ATM_HOOK_MALFORMED`.
 bk-5 keeps the CLI and the doctor collection.
 
-Waves: bk-1 (stores) alone; bk-2 (core contract) alone, since its sealed
-traits take bk-1's row types; bk-3 (runner and router) and bk-4
-(`atm-cron`) in parallel, since both consume only bk-2's traits and types
-and own disjoint paths, rebased onto the stack in that order
-(parallel-then-rebase, Rand 2026-10-12); bk-5 alone, since it composes
-bk-4's crate into bk-3's router and bootstrap and edits bk-3's `doctor()`.
-bk-5 is the integration sprint and carries the user documentation and the
-cron composition; a docs-only sprint would be thin (atm-beads plan
-guidelines). Each sprint carries its tests, never a live daemon. A test
+Each sprint carries its tests, never a live daemon. A test
 that spawns a real child runs on the real clock with a generous
 `timeout_ms` and asserts content; the timeout case uses a child that
 never finishes. Scheduling is tested with `ManualClock`, and

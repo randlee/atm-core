@@ -20,10 +20,15 @@ or `crates/atm-cron`.
 
 Owned paths (new unless marked edited):
 
-- under `crates/atm-core/src/`: `hook/{mod,request,reply}.rs`,
-  `boundary/{task_commands,hook_runner,cron_scheduler,hook_action_dispatcher}.rs`,
-  `boundary/mod.rs` (edited: four `mod` lines after `mod
-  template_composer;` `:86`, the re-exports), `lib.rs` (edited: `pub mod hook`)
+- `crates/atm-core/src/hook/mod.rs`, `crates/atm-core/src/hook/request.rs`,
+  `crates/atm-core/src/hook/reply.rs`,
+  `crates/atm-core/src/boundary/task_commands.rs`,
+  `crates/atm-core/src/boundary/hook_runner.rs`,
+  `crates/atm-core/src/boundary/cron_scheduler.rs`,
+  `crates/atm-core/src/boundary/hook_action_dispatcher.rs`,
+  `crates/atm-core/src/boundary/mod.rs` (edited: four `mod` lines after `mod
+  template_composer;` `:86`, the re-exports), `crates/atm-core/src/lib.rs`
+  (edited: `pub mod hook`)
 - `crates/atm-core/src/protocol.rs` (edited: six request and seven
   response variants, `HTTP_API_VERSION` `1.13.0`),
   `crates/atm-core/src/api.rs` (edited: the six routes of `design.md`
@@ -37,8 +42,8 @@ Owned paths (new unless marked edited):
   next to `task_store` (`:325`, `:506`, `:515`)),
   `crates/atm-runtime/src/composition.rs` (edited: the two stores next to
   `storage.task_store()` `:178` and `.with_task_store` `:193`)
-- `crates/atm-core/src/doctor/hooks.rs`, `doctor/mod.rs` (edited: `pub
-  mod hooks`), `doctor/report.rs` (edited: `hooks` on `DoctorReport`, `:467`)
+- `crates/atm-core/src/doctor/hooks.rs`, `crates/atm-core/src/doctor/mod.rs`
+  (edited: `pub mod hooks`), `crates/atm-core/src/doctor/report.rs` (edited: `hooks` on `DoctorReport`, `:467`)
 - `docs/atm-http-runtime/openapi.yaml`, `crates/atm/openapi.yaml`
   (edited: `info.version` `1.13.0`, the six paths, the new request,
   response and doctor schemas), `crates/atm/tests/openapi_surface_baseline.json`,

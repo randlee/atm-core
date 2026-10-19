@@ -156,46 +156,17 @@ hook-plug-in implementation." and "that covers the recursion path as well.
 adding ATM_HOOK=1 is a lot more logic branching that will be hard to
 test."
 
-- `atm_core::boundary::TaskCommands` is one sealed async trait with the
-  six methods `assign`, `start`, `close`, `move_task`, `list` and
-  `events`.
-- `NormalTaskCommands` (`atm-http-runtime`) is today's task path, and
-  `HookedTaskCommands` is the filter that implements the same trait over
-  it.
-- The router's HTTP entry calls the composed filter for task requests
-  from `AuthenticatedIngress::Local`. Other ingress, internal callers, hook
-  actions and cron actions use the normal path.
-- The filter resolves the active hook from an in-memory snapshot. The
-  snapshot is replaced on every register and disable commit, so the
-  request path reads no store.
-- A method with no registration calls the normal path with no spawn.
+- Hooks are an input filter over the one sealed task trait
+  `atm_core::boundary::TaskCommands`: the filter and today's task path
+  implement the same trait, and the filter sits between local HTTP input
+  and the normal path.
+- A hook's returned actions re-enter below the filter, so they never reach
+  a hook. There is no nesting variable or header.
+- The daemon runs the hook module, through one runner behind a sealed core
+  trait, in a fixed, cleared environment and the registered cwd.
 
-One runner lives in `atm-daemon-bootstrap` behind the sealed trait
-`atm_core::boundary::HookRunner`; every call takes a `HookTarget` built
-from a registration or a schedule. Actions go through the sealed trait
-`HookActionDispatcher`, implemented only by `UnhookedRouter`, a wrapper
-over the base router with no task filter, which the cron crate also calls
-(ADR-069 D2). A `dry_run` command's handled reply is validated and
-nothing is dispatched. There is no nesting variable or header. A
-nested `atm` call from a hook process is an ordinary request bounded by
-the hook timeout.
-
-The child's environment is exactly `ATM_TEAM`, `ATM_PHASE`, `PATH` and
-`HOME`, after `env_clear()`; on unix `PATH` and `HOME` are required. On
-Windows `HOME` is optional, `SystemRoot` and `USERPROFILE` are required,
-`PATH` is found case-insensitively and `python` is resolved with
-`PATHEXT`. These are copied from the daemon once at runner construction,
-and the child runs in the registered cwd. The daemon reads no
-configuration from its environment (ADR-066). The deadline is
-`min(TIMEOUT_MS, remaining request budget - 500 ms)` for a task hook,
-computed only in the runner; the filter passes the request deadline
-unchanged, has no budget check of its own, and returns the runner's
-`ATM_HOOK_TIMEOUT` unchanged when 500 ms or less remain. A cron run uses
-the schedule's own timeout (ADR-069 D3). The stdin write runs inside the
-same timeout as the wait, and a module that exits without reading stdin
-is judged by its exit status. On a timeout the child's process group is
-killed on unix. On Windows only the hook process is killed, not its
-children: a known limitation, with no Windows job-object code.
+The trait methods, types, environment, budget arithmetic and platform
+notes are in `docs/plans/phase-bk/design.md` §9.5 and §9.7.
 
 ### D5. Registration is per team and phase; phases are independent; any roster member may register
 
@@ -225,19 +196,14 @@ no lead check.
 
 ### D6. `atm doctor` calls `doctor()` for the caller's team
 
-`atm doctor` lists the active registrations and schedules of the caller's
-team, one entry per module, cwd, team and phase naming its hooks and
-schedules. Rand (2026-10-18): "doctor would need to know team, phase and it
-would return a dict/array (whatever is consistent w/ what doctor expects)".
-The module runs as `python3 <module> doctor` with stdin
-`{"schema_version", "hook": "doctor", "team", "phase", "custom"}` and
-replies `{"success": <bool>, "message": "<text>", "findings": [...]}`;
-`findings` is optional and each has the fields of atm's `DoctorFinding`
-(`severity`, `code`, `message`, `remediation`), with `code` the module's
-own string. Any other reply is `ATM_HOOK_MALFORMED` on the entry. The
-entry carries the findings with its module and phase, or its typed error.
-The calls run concurrently under the doctor request's budget. The section
-never makes doctor fatal and never changes the summary.
+Rand (2026-10-18): "the plug-in can run this check as part of 'doctor'
+it provides and IF a hook is installed, 'atm doctor' would call
+hook.doctor() when called from the team it is registered for." and
+"doctor would need to know team, phase and it would return a dict/array
+(whatever is consistent w/ what doctor expects)". `atm doctor` calls each
+registered module's `doctor` with the team and phase, and reports its
+findings in atm's own finding shape. It never makes doctor fatal. The
+request and reply JSON are in `design.md` §9.10.
 
 ### D7. One log entry per run and per action
 
@@ -247,15 +213,9 @@ outcome and elapsed time; no second file.
 
 ### D8. The hook request is its own versioned surface; the module is the consumer
 
-`HOOK_SCHEMA_VERSION` (`"1.0.0"`) versions the seven top-level keys and the
-reply shapes of D1 and D2 and moves independently of ADR-061's
-`HTTP_API_VERSION`. `request` embeds the current HTTP body as is: a MINOR
-(additive) HTTP API change may add a field inside `request` without a hook
-schema bump, and the hook module is the consumer that must tolerate
-additive fields there; a breaking HTTP API change to a hooked body is also
-a breaking change of this surface and bumps `HOOK_SCHEMA_VERSION` MAJOR
-under ADR-061 D3's approval gate. One test pins the seven top-level keys
-and, per hook, the `request` shape.
+The hook request and reply are a contract consumed by modules outside atm
+(atm-bd's hooks, phase bj). `HOOK_SCHEMA_VERSION` (`"1.0.0"`) versions it under
+ADR-061: an additive change is MINOR and a breaking change is MAJOR.
 
 ## Consequences
 
@@ -272,11 +232,3 @@ and, per hook, the `request` shape.
   registered in `atm-error-codes.md` in the sprint that adds them.
 - An action may name any routed command except the hook and cron registry
   routes, within the registration's team.
-- Review check: any of the following is a finding.
-  - A hook consulted after a storage write, or for an action.
-  - A malformed reply that runs the normal command.
-  - A daemon environment variable visible to the module beyond D4.
-  - A module sha stored by atm.
-  - A store read on the no-hook request path.
-  - A hook-name validator outside the register route.
-  - A lead check on register.

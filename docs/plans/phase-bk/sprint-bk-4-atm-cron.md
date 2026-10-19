@@ -21,13 +21,15 @@ storage, protocol, CLI, router or doctor code.
 Owned paths (new unless marked edited):
 
 - `crates/atm-cron/Cargo.toml`, `crates/atm-cron/src/lib.rs`,
-  `src/scheduler.rs` (`AtmCron`, the trait impl, `store_call`),
-  `src/worker.rs` (the loop, `Slot`), `src/clock.rs` (`Clock`,
-  `SystemClock`, `system_sleep_step`, and `ManualClock` behind `test-utils`), `src/jitter.rs`
-  (`JitterSource`, `SystemJitter`, `SeqJitter` behind `test-utils`,
-  `assign`), `src/tick.rs`
-  (one run, `CronRunOutcome`), `src/expr.rs` (the grammar), under
-  `crates/atm-cron/`; `crates/atm-cron/tests/worker.rs`,
+  `crates/atm-cron/src/scheduler.rs` (`AtmCron`, the trait impl, `store_call`),
+  `crates/atm-cron/src/worker.rs` (the loop, `Slot`),
+  `crates/atm-cron/src/clock.rs` (`Clock`, `SystemClock`,
+  `system_sleep_step`, and `ManualClock` behind `test-utils`),
+  `crates/atm-cron/src/jitter.rs` (`JitterSource`, `SystemJitter`,
+  `SeqJitter` behind `test-utils`, `assign`),
+  `crates/atm-cron/src/tick.rs` (one run, `CronRunOutcome`),
+  `crates/atm-cron/src/expr.rs` (the grammar);
+  `crates/atm-cron/tests/worker.rs`,
   `crates/atm-cron/tests/expr.rs`
 - `Cargo.toml` (edited: `"crates/atm-cron"` in `[workspace] members`
   after `"crates/atm-storage-rusqlite"`; `atm-cron = { path =
@@ -48,13 +50,11 @@ Owned paths (new unless marked edited):
   `manifest_section_rules` entry keeping `atm-runtime-test-support`
   dev-only for `crates/atm-cron/Cargo.toml`). bk-4 edits no `atm-core` or
   `atm-storage` manifest (bk-2 lists `atm-cron`).
-- `crates/atm-architecture/tests/boundary_enforcement.rs` (edited: the
-  ten forbidden edges below in `EXPECTED_FORBIDDEN_EDGES`)
 - `release/sc-publish-consumer-input.json` (edited: an `atm-cron` crate
   entry with `publish_order` 12, `required` true, `publish` true;
   `atm-daemon-bootstrap`, `atm-daemon`, `atm-graft`, `agent-team-mail`
   renumbered 13..16) and `release/publish-artifacts.toml` (re-rendered
-  from `release/publish-artifacts.toml.j2`, the same edit)
+  from its `.j2` template, the same edit)
 
 ## Public contract
 
@@ -206,7 +206,7 @@ io_forbidden = ["sqlite", "process_spawn", "http_server"]
 allowed_dependents = ["atm-daemon-bootstrap"]
 allowed_dependencies = ["async-trait", "atm-core", "chrono", "cron", "getrandom", "serde_json", "tokio", "tracing"]
 allowed_dev_dependencies = ["atm-core", "atm-runtime-test-support", "tokio", "tracing-subscriber"]
-forbidden_edges = ["atm-cron -> atm", "atm-cron -> atm-runtime", "atm-cron -> atm-storage", "atm-cron -> atm-http-runtime", "atm-cron -> atm-daemon-bootstrap", "atm-cron -> atm-storage-rusqlite", "atm-cron -> atm-herdr", "atm-cron -> atm-graft", "atm-core -> atm-cron", "atm-http-runtime -> atm-cron"]
+forbidden_edges = []   # allowed_dependents and allowed_dependencies are the guard (lint_boundaries.py)
 
 [references]
 scope = "outside_owner_crate"
@@ -245,8 +245,7 @@ notes = ["Phase bk sprint bk-4 (2026-10): first version."]
    `MAX_SLEEP_SLICE` in `SystemClock`; the full-row reload merge; a loaded row with no
    future occurrence ends; a panicking run is caught.
 4. `run_one` per the four steps above.
-5. The manifest, the lint-config entries, the ten forbidden edges and the
-   release entries.
+5. The manifest, the lint-config entries and the release entries.
 6. Tests, same unit, plain `#[tokio::test]` with
    `InMemoryCronScheduleStore`, `DummyHookRunner`,
    `RecordingHookActionDispatcher` and `ManualClock`. A tick fires only on
@@ -284,7 +283,7 @@ notes = ["Phase bk sprint bk-4 (2026-10): first version."]
 - [ ] `boundary:BOUNDARY-CronScheduler` `ticks_fire_only_when_the_manual_clock_reaches_them`: a started worker makes no runner call until `ManualClock::advance` reaches occurrence + `jitter_s`, then one; an ended row's occurrence passes with no call; `AtmCron` has no public method besides `new`, `start_worker` and the trait's.
 - [ ] `boundary:BOUNDARY-CronScheduler` `shutdown_joins_within_deadline_with_run_in_flight`.
 - [ ] (REQ-BK-LOG) `boundary:BOUNDARY-CronScheduler` `tick_and_stop_check_log_entries`: a `tracing_subscriber::Layer` capture sees one `atm_cron` `tick` entry per tick and one `stop_check` entry per `Hook` stop check, each with `team`, `phase`, `hook`, `schedule`, `outcome`, `elapsed_ms`; each tick action gets its one `atm_hook` `action` entry (`team`, `phase`, `hook`, `outcome`, `elapsed_ms`) from bk-3's `dispatch_actions`, not a second one here.
-- [ ] (REQ-BK-D3) `boundary:BOUNDARY-CronScheduler` `rg -n 'process::Command|HookRunner for' crates/atm-cron/src` is empty (the crate receives the one daemon runner); `cargo tree -p atm-cron -e normal --depth 1` lists exactly `allowed_dependencies`, and `cargo tree -p atm-cron` contains no `tokio-cron-scheduler`.
+- [ ] (REQ-BK-D3) `boundary:BOUNDARY-CronScheduler` `rg -n 'process::Command|HookRunner for' crates/atm-cron/src` is empty (the crate receives the one daemon runner).
 - [ ] `boundary:BOUNDARY-CronScheduler` `python3 -m unittest .just/tests/test_release_targets_manifest.py` passes with the renumbered release entries.
 
 ## Authoritative validation
