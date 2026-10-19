@@ -1,5 +1,5 @@
 {
-  "id": "atm-d-5",
+  "id": "{{ bead_prefix }}-d-5",
   "phase": "d",
   "sprint": "d-5",
   "title": "OTLP 2.0 signal model",
@@ -7,7 +7,7 @@
   "layer": 2,
   "branch": "sprint/d-5-otlp-signal-model",
   "pr_target": "sprint/d-4-error-enums",
-  "worktree": "../atm-core-worktrees/sprint/d-5-otlp-signal-model",
+  "worktree": "{{ worktree_base }}/sprint/d-5-otlp-signal-model",
   "relation": "must_follow",
   "closure_type": "boundary",
   "target_boundary": "example-otlp signal model",
@@ -24,7 +24,7 @@
     "OTLP-010"
   ],
   "release_train": "2.0",
-  "parent": "atm-phase-d",
+  "parent": "{{ bead_prefix }}-phase-d",
   "adrs": [
     "NONE"
   ],

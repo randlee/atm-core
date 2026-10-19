@@ -1,8 +1,12 @@
 {
-  "id": "atm-d-4-sanity",
-  "parent": "atm-phase-d",
-  "dev_bead": "atm-d-4",
+  "id": "{{ bead_prefix }}-d-4-sanity",
+  "parent": "{{ bead_prefix }}-phase-d",
+  "dev_bead": "{{ bead_prefix }}-d-4",
   "phase": "d",
   "sprint": "d-4",
-  "stack": "phase-d"
+  "stack": "phase-d",
+  "branch": "fix/d-4-example",
+  "worktree": "{{ worktree_base }}/fix/d-4-example",
+  "pr_target": "integrate/phase-d",
+  "difficulty": "normal"
 }

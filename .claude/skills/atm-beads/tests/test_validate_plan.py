@@ -4,12 +4,11 @@ from __future__ import annotations
 import copy
 import json
 import os
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
-from phase_fixtures import phase_data, phase_toml, write_phase
+from phase_fixtures import phase_data, phase_toml, run_subprocess, write_phase
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "validate-plan"
@@ -29,7 +28,7 @@ def poured(container_id: str, step: str, blocks: list[str]) -> dict:
     bead = {"id": f"{container_id}.group-{step}", "issue_type": "task", "status": "open", "labels": ["phase-t", f"stage:{step}"],
             "created_at": "2026-09-26T00:00:00Z",
             "dependencies": [{"dependency_type": "parent-child", "id": container_id}] + [{"dependency_type": "blocks", "id": b} for b in blocks],
-            "metadata": {"difficulty": "normal"}}
+            "metadata": {"difficulty": "normal", "branch": "sprint/test", "worktree": "wt", "pr_target": "integrate/phase-t"}}
     if step == "sanity":
         bead["metadata"]["dev_bead"] = f"{container_id}.group-dev"
     return bead
@@ -37,13 +36,16 @@ def poured(container_id: str, step: str, blocks: list[str]) -> dict:
 
 ROOT_EPIC = {"id": "x-phase-t", "issue_type": "epic", "status": "open", "created_at": "2026-09-25T00:00:00Z",
              "metadata": {"phase": "t", "integration_branch": "integrate/phase-t"}}
-VALID = [ROOT_EPIC,
+STACK = {"id": "x-phase-t.stack", "parent": "x-phase-t", "issue_type": "task", "status": "open",
+         "labels": ["phase-t", "stage:stack"], "metadata": {"phase": "t", "trunk": "integrate/phase-t",
+                                                           "stack_number": None, "layers": []}}
+VALID = [ROOT_EPIC, STACK,
          container("x-t-1"), poured("x-t-1", "dev", []), poured("x-t-1", "sanity", ["x-t-1.group-dev"]),
          container("x-t-2"), poured("x-t-2", "dev", ["x-t-1.group-sanity"]), poured("x-t-2", "sanity", ["x-t-2.group-dev"])]
 
 
 def git(cwd: Path, *args: str) -> str:
-    return subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=cwd, check=True,
+    return run_subprocess(["git", "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=cwd, check=True,
                           capture_output=True, text=True).stdout
 
 
@@ -58,7 +60,7 @@ class Repo(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.base = Path(self.tmp.name)
         self.repo = self.base / "repo"
-        subprocess.run(["git", "init", "-q", "-b", "main", str(self.repo)], check=True)
+        run_subprocess(["git", "init", "-q", "-b", "main", str(self.repo)], check=True)
         config = self.repo / ".claude/project/atm-bd-orchestration.yaml"
         config.parent.mkdir(parents=True)
         config.write_text("plans_dir: plans\nbead_prefix: x\n")
@@ -68,7 +70,7 @@ class Repo(unittest.TestCase):
         self.tmp.cleanup()
 
     def run_vp(self, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
-        return subprocess.run([str(SCRIPT), *args], cwd=self.repo, capture_output=True, text=True, env=env)
+        return run_subprocess([str(SCRIPT), *args], cwd=self.repo, capture_output=True, text=True, env=env)
 
     def run_beads(self, beads: list[dict], plan: list = PLAN, *extra: str) -> subprocess.CompletedProcess:
         (self.base / "plan.jsonl").write_text(lines(plan))
@@ -84,6 +86,19 @@ def broken(bid: str, change) -> list[dict]:
 
 
 class ValidatePlan(Repo):
+    def test_stack_is_required_only_for_open_phase(self):
+        without_stack = [bead for bead in VALID if bead["id"] != STACK["id"]]
+        result = self.run_beads(without_stack)
+        self.assertEqual(result.returncode, 5)
+        self.assertIn("x-phase-t.stack", result.stdout)
+        closed = copy.deepcopy(without_stack)
+        closed[0]["status"] = "closed"
+        self.assertEqual(self.run_beads(closed).returncode, 0)
+        wrong_parent = broken("x-phase-t.stack", lambda bead: bead.update(parent="wrong"))
+        self.assertEqual(self.run_beads(wrong_parent).returncode, 5)
+        wrong_trunk = broken("x-phase-t.stack", lambda bead: bead["metadata"].update(trunk="wrong"))
+        self.assertEqual(self.run_beads(wrong_trunk).returncode, 5)
+
     def test_valid(self):
         out = self.run_beads(VALID)
         self.assertEqual((out.returncode, out.stdout), (0, "plan valid: 2 sprints\n"), out.stderr)
@@ -107,7 +122,11 @@ class ValidatePlan(Repo):
                 out = self.run_beads(broken(bid, change) if bid else beads, plan)
                 got = out.stdout.splitlines()
                 self.assertEqual(out.returncode, 5, out.stderr)
-                self.assertEqual(len(got), 1, got)
+                if bid == "x-phase-t":
+                    self.assertEqual(len(got), 2, got)
+                    self.assertIn("x-phase-t.stack: missing stack bead", got[1])
+                else:
+                    self.assertEqual(len(got), 1, got)
                 self.assertTrue(got[0].startswith(want), got)
 
     def test_plan_file_schema(self):
@@ -138,7 +157,7 @@ class ValidatePlan(Repo):
         out = self.run_beads(VALID + [stray])
         self.assertEqual((out.returncode, out.stdout), (0, "plan valid: 2 sprints\n"))
         self.assertIn("warning: x-stray: task at the top level", out.stderr)
-        beads = broken("x-t-1.group-sanity", lambda b: b.update(metadata={"dev_bead": "x-t-2.group-dev"},
+        beads = broken("x-t-1.group-sanity", lambda b: b.update(metadata={**b["metadata"], "dev_bead": "x-t-2.group-dev"},
                                                                 dependencies=[{"dependency_type": "blocks", "id": "x-t-2.group-dev"}]))
         out = self.run_beads(beads)
         self.assertEqual(out.returncode, 0)
@@ -158,7 +177,7 @@ class ValidatePlan(Repo):
 
     def test_published_schemas_are_exported_from_the_models(self):
         with tempfile.TemporaryDirectory() as d:
-            subprocess.run(["python3", str(ROOT / "scripts" / "bead_schema.py"), "export", d], check=True)
+            run_subprocess(["python3", str(ROOT / "scripts" / "bead_schema.py"), "export", d], check=True)
             for exported in sorted(Path(d).iterdir()):
                 with self.subTest(schema=exported.name):
                     self.assertEqual((ROOT / "schemas" / exported.name).read_text(), exported.read_text(),
@@ -296,7 +315,7 @@ class LivePlan(Repo):
     def setUp(self):
         super().setUp()
         origin, bin_dir = self.base / "origin.git", self.base / "bin"
-        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+        run_subprocess(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
         git(self.repo, "remote", "add", "origin", str(origin))
         git(self.repo, "add", "-A")
         git(self.repo, "commit", "-qm", "config")
@@ -357,13 +376,18 @@ class FilePlan(LivePlan):
         return self.run_vp("--phase", "t", "--file", str(self.base / "beads.jsonl"), "--no-doctor", env=self.env)
 
     def test_a_new_plan_passes_before_its_groups_are_poured(self):
-        out = self.run_file([ROOT_EPIC, container("x-t-1"), container("x-t-2")], [])
+        out = self.run_file([ROOT_EPIC, STACK, container("x-t-1"), container("x-t-2")], [])
         self.assertEqual((out.returncode, out.stdout), (0, "plan valid: 2 sprints\n"), out.stderr)
         self.assertIn("warning: x-t-2: not poured yet", out.stderr)
 
+    def test_an_open_phase_requires_its_stack_bead_in_the_file(self):
+        out = self.run_file([ROOT_EPIC, container("x-t-1"), container("x-t-2")], [])
+        self.assertEqual(out.returncode, 5, out.stderr)
+        self.assertIn("x-phase-t.stack: missing stack bead", out.stdout)
+
     def test_a_plan_bead_with_an_assignee_or_no_parent_is_a_warning(self):
         orphan = {**{k: v for k, v in container("x-t-2").items() if k != "parent"}, "assignee": "my-dev"}
-        out = self.run_file([ROOT_EPIC, container("x-t-1"), orphan], [])
+        out = self.run_file([ROOT_EPIC, STACK, container("x-t-1"), orphan], [])
         self.assertEqual(out.returncode, 0, out.stdout)
         self.assertIn("warning: x-t-2: assignee set at plan time", out.stderr)
         self.assertIn("warning: x-t-2: task at the top level", out.stderr)

@@ -36,7 +36,7 @@ before proceeding.**
 ## Identity
 
 - `ATM_IDENTITY` and `BEADS_ACTOR` are already in every agent's environment
-  and are equal: the bare pane name (for example `worker-1`), never an alias (`atm-lead`) and
+  and are equal: the bare pane name (for example `worker-1`), never an alias (`{{ bead_prefix }}-lead`) and
   never a model class (`terra`).
 - A bead's assignee is the recipient's `ATM_IDENTITY`, set at dispatch; a planned bead carries only `difficulty`.
 

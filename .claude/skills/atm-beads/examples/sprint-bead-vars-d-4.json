@@ -1,5 +1,5 @@
 {
-  "id": "atm-d-4",
+  "id": "{{ bead_prefix }}-d-4",
   "phase": "d",
   "sprint": "d-4",
   "title": "Error enums",
@@ -7,7 +7,7 @@
   "layer": 1,
   "branch": "sprint/d-4-error-enums",
   "pr_target": "integrate/phase-d",
-  "worktree": "../atm-core-worktrees/sprint/d-4-error-enums",
+  "worktree": "{{ worktree_base }}/sprint/d-4-error-enums",
   "relation": "root",
   "closure_type": "boundary",
   "target_boundary": "example-types error enums",
@@ -22,7 +22,7 @@
     "NONE"
   ],
   "release_train": "2.0",
-  "parent": "atm-phase-d",
+  "parent": "{{ bead_prefix }}-phase-d",
   "adrs": [
     "ADR-011",
     "ADR-012",

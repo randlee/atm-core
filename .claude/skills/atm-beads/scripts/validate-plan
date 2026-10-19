@@ -10,6 +10,7 @@ Problems (exit 5), and nothing else:
   4. the toml's integration_branch differs from the root's metadata.integration_branch;
   5. a depends_on with no `blocks` edge from the dependent's dev bead (`<container>.group-dev`, or its
      container) to the predecessor's initial sanity bead (`<pred>.group-sanity`) or its sprint container.
+  6. an open phase root has no stack bead with that root as parent and its integration branch as trunk.
 Everything else is a warning on stderr: bd doctor errors, open non-epic beads at the top level, a plan-time
 assignee, a poured sanity bead whose metadata.dev_bead is not its group's dev bead, a group not poured yet
 before import (--file).
@@ -25,7 +26,7 @@ before import (--file).
                                                      one "<file>: <problem>" line per problem
 
 The phase file `.atm-bd/phase-<x>.toml` (tracked) names the plan file, root,
-integration branch, lead and seven existing installed assignment templates.
+integration branch, lead and six existing installed assignment templates.
 Without --index the plan file is read from origin/<integration_branch>:<plan>. The bead prefix is taken
 from the root id. Prints one "<bead>: <problem>" line per problem. Exit 0 valid, 5 problems, 2 validation
 could not run (no phase file, no plan file, bd or git failed). Report problems to the lead; never edit
@@ -145,6 +146,12 @@ def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], bef
     if branch != config["integration_branch"]:
         problems.append(f"{root_id}: metadata.integration_branch is {json.dumps(branch)}; "
                         f".atm-bd/phase-{beads.phase}.toml names {config['integration_branch']}")
+    stack_id = f"{root_id}.stack"
+    stack = beads.get(stack_id)
+    if root.get("status") != "closed" and (stack is None or parent_of(stack) != root_id
+                                          or (stack.get("metadata") or {}).get("trunk") != branch):
+        problems.append(f"{stack_id}: missing stack bead, wrong parent or wrong trunk; "
+                        "render stack-bead.json.j2 with the root vars and bd import it")
     planned = {r["sprint"]: plan_io.sprint_bead_id(prefix, r["sprint"]) for r in rows}
     for container in sorted(beads.sprint_containers() - set(planned.values())):
         problems.append(f"{container}: stage:sprint bead of phase-{beads.phase} that the plan file does not list")

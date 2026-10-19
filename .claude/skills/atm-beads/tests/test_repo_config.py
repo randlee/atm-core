@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+from phase_fixtures import run_subprocess
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -16,7 +17,7 @@ import sprint_index_common  # noqa: E402
 
 def make_repo(base: Path, config: str | None) -> Path:
     repo = base / "repo"
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    run_subprocess(["git", "init", "-q", str(repo)], check=True)
     if config is not None:
         path = repo / repo_config.RELATIVE_PATH
         path.parent.mkdir(parents=True)
@@ -59,7 +60,7 @@ class LoadTests(unittest.TestCase):
 
     def test_cli_get_prints_scalars_plainly_and_lists_as_json(self):
         repo = make_repo(self.base, "dev_sanity_member: my-sanity\nreviewers_round1: [req-x, arch-x]\n")
-        run = lambda *a: subprocess.run([sys.executable, str(SCRIPTS / "repo_config.py"), *a], cwd=repo,
+        run = lambda *a: run_subprocess([sys.executable, str(SCRIPTS / "repo_config.py"), *a], cwd=repo,
                                         capture_output=True, text=True)
         self.assertEqual(run("get", "dev_sanity_member").stdout, "my-sanity\n")
         self.assertEqual(json.loads(run("get", "reviewers_round1").stdout), ["req-x", "arch-x"])

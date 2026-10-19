@@ -22,6 +22,30 @@
     "SanityMetadata": {
       "additionalProperties": true,
       "properties": {
+        "branch": {
+          "minLength": 1,
+          "title": "Branch",
+          "type": "string"
+        },
+        "worktree": {
+          "minLength": 1,
+          "title": "Worktree",
+          "type": "string"
+        },
+        "pr_target": {
+          "minLength": 1,
+          "title": "Pr Target",
+          "type": "string"
+        },
+        "difficulty": {
+          "enum": [
+            "hard",
+            "normal",
+            "fast"
+          ],
+          "title": "Difficulty",
+          "type": "string"
+        },
         "dev_bead": {
           "minLength": 1,
           "title": "Dev Bead",
@@ -29,6 +53,10 @@
         }
       },
       "required": [
+        "branch",
+        "worktree",
+        "pr_target",
+        "difficulty",
         "dev_bead"
       ],
       "title": "SanityMetadata",
@@ -36,7 +64,7 @@
     }
   },
   "additionalProperties": true,
-  "description": "A sanity bead: it blocks on the bead it checks.",
+  "description": "A sanity bead links once to the bead it checks.",
   "properties": {
     "id": {
       "minLength": 1,

@@ -1,0 +1,120 @@
+{
+  "$defs": {
+    "Dependency": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "depends_on_id": {
+          "title": "Depends On Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "depends_on_id"
+      ],
+      "title": "Dependency",
+      "type": "object"
+    },
+    "LayerRecord": {
+      "additionalProperties": true,
+      "properties": {
+        "branch": {
+          "minLength": 1,
+          "title": "Branch",
+          "type": "string"
+        },
+        "pr": {
+          "title": "Pr",
+          "type": "integer"
+        },
+        "head": {
+          "minLength": 1,
+          "title": "Head",
+          "type": "string"
+        },
+        "base": {
+          "minLength": 1,
+          "title": "Base",
+          "type": "string"
+        },
+        "linked": {
+          "title": "Linked",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "branch",
+        "pr",
+        "head",
+        "base",
+        "linked"
+      ],
+      "title": "LayerRecord",
+      "type": "object"
+    },
+    "StackMetadata": {
+      "additionalProperties": true,
+      "properties": {
+        "trunk": {
+          "minLength": 1,
+          "title": "Trunk",
+          "type": "string"
+        },
+        "stack_number": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stack Number"
+        },
+        "layers": {
+          "items": {
+            "$ref": "#/$defs/LayerRecord"
+          },
+          "title": "Layers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "trunk",
+        "stack_number",
+        "layers"
+      ],
+      "title": "StackMetadata",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "dependencies": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Dependency"
+      },
+      "title": "Dependencies",
+      "type": "array"
+    },
+    "metadata": {
+      "$ref": "#/$defs/StackMetadata"
+    }
+  },
+  "required": [
+    "id",
+    "metadata"
+  ],
+  "title": "StackBead",
+  "type": "object"
+}

@@ -1,5 +1,5 @@
 {
-  "id": "atm-phase-d",
+  "id": "{{ bead_prefix }}-phase-d",
   "plan_scope": "epic",
   "phase": "d",
   "title": "logging, OTLP, and Python distribution",

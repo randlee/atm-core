@@ -8,7 +8,7 @@ The assignment for a sanity check bead. When and how it runs is in
 The member that fills the `dev-sanity` role (not a dev or fix agent, which
 would make sanity checks wait behind their work). The repository maps the
 role to a team-unique member in `roles:` of `.claude/agents/registry.yaml`
-(`atm-sanity` here), and the member's `[startup.<member>]` prompt in
+(`{{ dev_sanity_member }}` here), and the member's `[startup.<member>]` prompt in
 `.atm.toml` names the prompt it runs (`.claude/agents/dev-sanity.md`, which
 is the whole role and spawns the `sc-sanity-llm` and `sc-sanity-jev`
 subagents).
