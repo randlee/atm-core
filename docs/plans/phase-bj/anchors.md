@@ -95,6 +95,7 @@ Intent: `docs/plans/phase-bj/intent.md`
 | ANC-086 | retired | No outage beads or refusal citations | 2026-10-18 |
 | ANC-087 | locked | Manifest hashes every published skill file | 2026-10-18 |
 | ANC-088 | locked | Installer verifies skill files against manifest | 2026-10-18 |
+| ANC-089 | locked | one vars file = union of atm task and sc-compose bead template variables | 2026-10-18 |
 
 ## ANC-001
 
@@ -1202,25 +1203,25 @@ Fixtures:
 
 ## ANC-057
 
-Anchor: The sanity close hook must count FAIL rounds per sanity bead in metadata.sanity_round and, when the count reaches max_sanity_rounds from the repository configuration (default 5 when unset), must escalate to the phase lead instead of reopening the checked bead.
+Anchor: The sanity close hook must count FAIL rounds per sanity bead in metadata.sanity_round and, when the count exceeds max_sanity_rounds from the repository configuration (default 5 when unset), must escalate to team-lead instead of reopening the checked bead.
 
 > sure, we can have sanity keep a counter and when count exceeded escelate to team-lead.  I would default max-sanity to ~5 if not overridden in atm-bd repo git settings.
 
-Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 2.
+Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 3.
 
 Summary: sanity round counter with max_sanity_rounds default 5
 
 Scope: atm-task-close.py sanity role FAIL branch; .claude/project/atm-bd-orchestration.yaml key max_sanity_rounds rendered from registry.yaml
 
-Deterministic check to pair with the development gate: five FAIL runs in a scratch repo with no setting leave sanity_round at 5, the dev bead closed-not-reopened, and one SANITY.ROUND_CAP send to the lead; a repo value of 2 escalates on the second
+Deterministic check to pair with the development gate: six FAIL runs in a scratch repo with no setting leave sanity_round at 6, the dev bead closed-not-reopened on the sixth, and one SANITY.ROUND_CAP send to team-lead; five FAILs reopen the dev bead every time; a repo value of 2 escalates on the third
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-2`: the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only
 - `atm-bj-3`: the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook
 
 Fixtures:
-- pass: sanity_round goes 1, 2, 3, 4, 5; on the fifth FAIL the hook sends the lead SANITY.ROUND_CAP and reopens nothing; max_sanity_rounds: 2 in the repo config escalates on the second.
-- fail: The hook reopens the dev bead on every FAIL forever, or the cap is a constant in the script with no repository setting.
+- pass: sanity_round goes 1 to 5 with the dev bead reopened each time; on the sixth FAIL the hook sends team-lead SANITY.ROUND_CAP and reopens nothing; max_sanity_rounds: 2 escalates on the third.
+- fail: The hook escalates on the fifth FAIL with the default setting, or reopens the dev bead on every FAIL forever.
 
 ## ANC-058
 
@@ -1851,3 +1852,22 @@ Excluded from (not judged; the cell passes as `excluded`):
 Fixtures:
 - pass: The installer verifies skill files against the published manifest.
 - fail: The installer accepts skill files without comparing them to the published manifest.
+
+## ANC-089
+
+Anchor: The vars file given to atm-task-close.py must contain the union of the required variables of the atm task templates and the sc-compose bead templates it is passed to.
+
+> same vars sent to 'atm ... --template --vars <shared-vars>'  and sc-compose bead ... --template --vars <shared-vars>
+yes, json should be union of required variables for both templates.
+
+Said by Rand, phase-bj drift review 2026-10-18 (fenix relay, message 01M58YBB6RRSSCBMVM991MMAA3): Rand's answer on ANC-058, 2026-10-18. Status: locked. Version 2.
+
+Summary: one vars file = union of atm task and sc-compose bead template variables
+
+Scope: atm-task-close.py vars contract, task-close-vars.j2, the atm task and sc-compose bead templates the hook flow renders
+
+Deterministic check to pair with the development gate: strict-render dev-sanity-bead.json.j2, qa-bead.json.j2 and every role's atm template with the one test vars file; each render passes and task-close-vars.j2 required_variables is the union of their headers
+
+Fixtures:
+- pass: task-close-vars.j2 lists every required variable of dev-sanity-template.xml.j2, qa-template.xml.j2, dev-sanity-bead.json.j2 and qa-bead.json.j2, and the hook passes the same file as --vars to atm and to sc-compose.
+- fail: The hook keeps one vars file for the atm templates and builds a separate vars dict for the sc-compose bead templates.

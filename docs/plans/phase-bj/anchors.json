@@ -3588,7 +3588,7 @@
       "id": "ANC-057",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The sanity close hook must count FAIL rounds per sanity bead in metadata.sanity_round and, when the count reaches max_sanity_rounds from the repository configuration (default 5 when unset), must escalate to the phase lead instead of reopening the checked bead.",
+      "statement": "The sanity close hook must count FAIL rounds per sanity bead in metadata.sanity_round and, when the count exceeds max_sanity_rounds from the repository configuration (default 5 when unset), must escalate to team-lead instead of reopening the checked bead.",
       "quote": "sure, we can have sanity keep a counter and when count exceeded escelate to team-lead.  I would default max-sanity to ~5 if not overridden in atm-bd repo git settings.",
       "kind": "directive",
       "stated_by": "Rand",
@@ -3596,49 +3596,16 @@
       "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
       "summary": "sanity round counter with max_sanity_rounds default 5",
       "scope": "atm-task-close.py sanity role FAIL branch; .claude/project/atm-bd-orchestration.yaml key max_sanity_rounds rendered from registry.yaml",
-      "deterministic_check": "five FAIL runs in a scratch repo with no setting leave sanity_round at 5, the dev bead closed-not-reopened, and one SANITY.ROUND_CAP send to the lead; a repo value of 2 escalates on the second",
+      "deterministic_check": "six FAIL runs in a scratch repo with no setting leave sanity_round at 6, the dev bead closed-not-reopened on the sixth, and one SANITY.ROUND_CAP send to team-lead; five FAILs reopen the dev bead every time; a repo value of 2 escalates on the third",
       "fixtures": {
         "pass": [
-          "sanity_round goes 1, 2, 3, 4, 5; on the fifth FAIL the hook sends the lead SANITY.ROUND_CAP and reopens nothing; max_sanity_rounds: 2 in the repo config escalates on the second."
+          "sanity_round goes 1 to 5 with the dev bead reopened each time; on the sixth FAIL the hook sends team-lead SANITY.ROUND_CAP and reopens nothing; max_sanity_rounds: 2 escalates on the third."
         ],
         "fail": [
-          "The hook reopens the dev bead on every FAIL forever, or the cap is a constant in the script with no repository setting."
+          "The hook escalates on the fifth FAIL with the default setting, or reopens the dev bead on every FAIL forever."
         ]
       },
-      "question_overrides": {
-        "plan": {
-          "questions": {
-            "addressed": {
-              "criteria": {
-                "no": "The item does not state the directive: it is silent about it, names only the topic, or describes a different approach.",
-                "unclear": "The item states part of the directive's content but it cannot be determined whether it plans the directive itself.",
-                "yes": "The item says FAILs are counted in metadata.sanity_round on the sanity bead and that reaching max_sanity_rounds from the repository configuration (default 5) escalates to the lead instead of reopening."
-              },
-              "instructions": "`anchor.statement` requires that the sanity close hook counts FAIL rounds per sanity bead in metadata.sanity_round and, when the count reaches max_sanity_rounds from the repository configuration (default 5 when unset), escalates to the phase lead instead of reopening the checked bead. Does `item.text` state this directive's specific content as a step, constraint or decision? An item that only names the topic, or that keeps the count somewhere else, uses a fixed cap, or never escalates, does not state it. Judge presence of the directive only, not whether the item conflicts with it.",
-              "type": "choice"
-            },
-            "contradicted": {
-              "criteria": {
-                "no": "Nothing in the item is one of the ruled-out cases, including when the item is silent about the directive.",
-                "unclear": "The item is ambiguous enough that it might describe one of the ruled-out cases, but it cannot be determined.",
-                "yes": "The item states a plan, approach or decision that is one of the ruled-out cases."
-              },
-              "instructions": "Does `item.text` plan something that `anchor.statement` rules out? The anchor rules out: keeping the FAIL count anywhere other than metadata.sanity_round on the sanity bead, such as a local file or the dev bead; a cap fixed in the script with no repository setting, or a default other than 5; reopening the checked bead on every FAIL with no escalation; reopening instead of escalating once the cap is reached. These are not a conflict: silence about counting; sending the sanity-fail template on a FAIL below the cap. Judge conflict only.",
-              "type": "choice"
-            },
-            "relevant": {
-              "criteria": {
-                "no": "The item is about a different part of the system or a different activity and does not touch counting sanity FAIL rounds in metadata.sanity_round, the max_sanity_rounds setting, and escalation to the phase lead at the cap.",
-                "unclear": "The item text is too vague to tell whether it touches the anchor's subject.",
-                "yes": "The item plans or changes the sanity close hook's FAIL handling, the FAIL round count, max_sanity_rounds, or escalation at the cap."
-              },
-              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about counting sanity FAIL rounds in metadata.sanity_round, the max_sanity_rounds setting, and escalation to the phase lead at the cap. Does the work described in `item.text` plan, change, or depend on that subject? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
-              "type": "choice"
-            }
-          }
-        }
-      },
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -3672,6 +3639,16 @@
           "item": "atm-bj-3",
           "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:04:45+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "The sanity close hook must count FAIL rounds per sanity bead in metadata.sanity_round and, when the count reaches max_sanity_rounds from the repository configuration (default 5 when unset), must escalate to the phase lead instead of reopening the checked bead."
         }
       ],
       "exclude": [
@@ -6319,6 +6296,51 @@
         {
           "item": "atm-bj-3",
           "reason": "Installer verification belongs to bj-5, not bj-3 sanity-stack."
+        }
+      ]
+    },
+    {
+      "id": "ANC-089",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The vars file given to atm-task-close.py must contain the union of the required variables of the atm task templates and the sc-compose bead templates it is passed to.",
+      "quote": "same vars sent to 'atm ... --template --vars <shared-vars>'  and sc-compose bead ... --template --vars <shared-vars>\nyes, json should be union of required variables for both templates.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj drift review 2026-10-18 (fenix relay, message 01M58YBB6RRSSCBMVM991MMAA3): Rand's answer on ANC-058",
+      "summary": "one vars file = union of atm task and sc-compose bead template variables",
+      "scope": "atm-task-close.py vars contract, task-close-vars.j2, the atm task and sc-compose bead templates the hook flow renders",
+      "deterministic_check": "strict-render dev-sanity-bead.json.j2, qa-bead.json.j2 and every role's atm template with the one test vars file; each render passes and task-close-vars.j2 required_variables is the union of their headers",
+      "fixtures": {
+        "pass": [
+          "task-close-vars.j2 lists every required variable of dev-sanity-template.xml.j2, qa-template.xml.j2, dev-sanity-bead.json.j2 and qa-bead.json.j2, and the hook passes the same file as --vars to atm and to sc-compose."
+        ],
+        "fail": [
+          "The hook keeps one vars file for the atm templates and builds a separate vars dict for the sc-compose bead templates."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T02:04:52+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T02:05:00+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     }

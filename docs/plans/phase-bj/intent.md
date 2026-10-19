@@ -18,7 +18,7 @@ task stays open until sanity passes.
 
 - A dev or fix bead closes only through the hook; the dev's ATM task is closed by the sanity hook on PASS and the dev waits meanwhile.
 - Sanity and QA assignment never need the lead: the hook assigns, atm-bd assigns a ready bead with no task, both as the phase lead.
-- A sanity FAIL reopens the bead and sends the dev `sanity-fail` on the same open task; at `max_sanity_rounds` (default 5) the sanity bead waits on the lead.
+- A sanity FAIL reopens the bead and sends the dev `sanity-fail` on the same open task; past `max_sanity_rounds` (default 5) the sanity bead waits on team-lead.
 - The pour writes branch, worktree, pr_target and difficulty to every bead of a sprint family and a pydantic model per bead kind validates the whole phase.
 - atm-core issue #1873 (task transition hooks, 1.6.2) is the long-term home; the skill script stands in until it ships.
 - Sanity links the layer on PASS under the stack bead's claim: the stack bead holds the whole stack as ledger and lock, first PASS wins the top and the loser gets `rebase-required` (no round counted); a sanity-stack subagent handles one next-top layer per spawn, sequentially, with a lean mode and a lock timeout that never blocks the team.
@@ -33,4 +33,4 @@ task stays open until sanity passes.
 
 The phase-bi anchors (ANC-001..050, REQ-BI6-AC6) are carried unchanged in
 `anchors.json` so Jev judges phase-bj items against the same console
-rulings; ANC-051..086 are this phase's; ANC-063 and ANC-074 are retired and replaced by ANC-078..083 and ANC-084..086, respectively (ANC-062 retired to ANC-065). Rendered to `anchors.md`.
+rulings; ANC-051..089 are this phase's; ANC-063 and ANC-074 are retired and replaced by ANC-078..083 and ANC-084..086, respectively (ANC-062 retired to ANC-065). Rendered to `anchors.md`.
