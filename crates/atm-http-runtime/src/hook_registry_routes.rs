@@ -327,6 +327,104 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn dirty_reload_and_registration_write_serialize_on_the_bridge() {
+        let routes = routes();
+        let snapshot = routes.router.hooks.snapshot.clone().expect("snapshot");
+        // One failed refresh leaves the snapshot dirty; the store answers again after it.
+        routes.hooks.fail_active_all.store(true, Ordering::SeqCst);
+        assert!(snapshot.refresh().is_err());
+        routes.hooks.fail_active_all.store(false, Ordering::SeqCst);
+        let pause = Arc::new(routes.hooks.pause_next_active_all());
+
+        let reload = {
+            let snapshot = snapshot.clone();
+            let bridge = routes.router.control_path_sync_bridge.clone();
+            tokio::spawn(async move {
+                snapshot
+                    .current(&bridge, deadline(), &team(), &hook("task.assign"))
+                    .await
+            })
+        };
+        {
+            let pause = pause.clone();
+            tokio::task::spawn_blocking(move || pause.wait_entered())
+                .await
+                .expect("reload reached the store");
+        }
+        let write = {
+            let router = routes.router.clone();
+            tokio::spawn(async move {
+                router
+                    .hook_register(
+                        register_request("sender", "task.assign", "bk"),
+                        AuthenticatedIngress::Local,
+                        deadline(),
+                    )
+                    .await
+                    .map(|_| ())
+            })
+        };
+        pause.release();
+
+        reload.await.expect("reload task").expect("reload");
+        write.await.expect("write task").expect("write");
+        let rows = snapshot
+            .current(
+                &routes.router.control_path_sync_bridge,
+                deadline(),
+                &team(),
+                &hook("task.assign"),
+            )
+            .await
+            .expect("current");
+        assert_eq!(
+            rows.len(),
+            1,
+            "a reload that read before the write must not install its stale map after the write"
+        );
+    }
+
+    #[tokio::test]
+    async fn doctor_store_read_and_registration_write_serialize_on_the_bridge() {
+        let routes = routes();
+        let pause = Arc::new(routes.hooks.pause_next_active_all());
+
+        let doctor = {
+            let router = routes.router.clone();
+            tokio::spawn(
+                async move { crate::doctor_hooks::collect(&router, None, deadline()).await },
+            )
+        };
+        {
+            let pause = pause.clone();
+            tokio::task::spawn_blocking(move || pause.wait_entered())
+                .await
+                .expect("doctor reached the store");
+        }
+        let write = {
+            let router = routes.router.clone();
+            tokio::spawn(async move {
+                router
+                    .hook_register(
+                        register_request("sender", "task.assign", "bk"),
+                        AuthenticatedIngress::Local,
+                        deadline(),
+                    )
+                    .await
+                    .map(|_| ())
+            })
+        };
+        pause.release();
+
+        let entries = doctor.await.expect("doctor task");
+        write.await.expect("write task").expect("write");
+        assert!(
+            entries.is_empty(),
+            "the doctor read preceded the write, so it saw no rows"
+        );
+    }
+
     fn list_request() -> HookListQuery {
         HookListQuery {
             caller_identity: agent("sender"),
@@ -476,7 +574,13 @@ mod tests {
             .expect("bk");
         let snapshot = routes.router.hooks.snapshot.clone().expect("snapshot");
         let from_snapshot: Vec<String> = snapshot
-            .active(&team(), &hook("task.assign"))
+            .current(
+                &routes.router.control_path_sync_bridge,
+                deadline(),
+                &team(),
+                &hook("task.assign"),
+            )
+            .await
             .expect("active")
             .iter()
             .map(|row| row.phase.as_str().to_owned())
@@ -519,7 +623,13 @@ mod tests {
                 .await
                 .expect("disable");
             let active: Vec<String> = snapshot
-                .active(&team(), &hook("task.assign"))
+                .current(
+                    &routes.router.control_path_sync_bridge,
+                    deadline(),
+                    &team(),
+                    &hook("task.assign"),
+                )
+                .await
                 .expect("active")
                 .iter()
                 .map(|row| row.phase.as_str().to_owned())
@@ -569,6 +679,7 @@ mod tests {
             routes.router.hooks.snapshot.clone().expect("snapshot"),
             runner.clone(),
             routes.router.hook_chains(),
+            routes.router.control_path_sync_bridge.clone(),
         ));
         let in_flight = {
             let commands = commands.clone();

@@ -27,7 +27,7 @@ pub use crate::contract::DummyPendingNudgeStore;
 pub mod cron_schedule_store;
 pub mod hook_registration_store;
 pub use cron_schedule_store::InMemoryCronScheduleStore;
-pub use hook_registration_store::InMemoryHookRegistrationStore;
+pub use hook_registration_store::{ActiveAllPause, InMemoryHookRegistrationStore};
 
 /// A `GraftReceiverEndpointStore` that accepts every write and reports no
 /// lease. Used by callers that need a wired store to compile against but

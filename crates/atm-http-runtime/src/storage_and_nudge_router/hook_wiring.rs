@@ -55,10 +55,11 @@ impl StorageAndNudgeRouter {
         self
     }
 
-    /// Installs `filter` as the task-command body and takes its runner, snapshot
-    /// and chain tracker as this router's own. The filter is the only source of
-    /// those handles, so a router can never hold a runner, snapshot or tracker
-    /// that its filter does not use.
+    /// Installs `filter` as the task-command body and takes its runner, snapshot,
+    /// chain tracker and control-path bridge as this router's own. The filter is
+    /// the only source of those handles, so a router can never hold a runner,
+    /// snapshot or tracker that its filter does not use, and registry writes
+    /// share the bridge that snapshot reloads run on.
     #[must_use]
     pub fn with_hook_filter<D: HookActionDispatcher + 'static>(
         mut self,
@@ -68,6 +69,7 @@ impl StorageAndNudgeRouter {
         self.hooks.runner = Some(Arc::clone(filter.runner()));
         self.hooks.snapshot = Some(Arc::clone(filter.snapshot()));
         self.hooks.chains = Arc::clone(filter.chains());
+        self.control_path_sync_bridge = filter.bridge().clone();
         self
     }
 

@@ -233,6 +233,7 @@ mod tests {
             snapshot,
             runner.clone(),
             Arc::clone(&chains),
+            crate::hook_filter::test_support::bridge(),
         ));
         Held {
             commands,

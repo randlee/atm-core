@@ -3,8 +3,9 @@
 //! Every trait call bumps `calls`, so tests can assert how often a route
 //! touched the store (ANC-014).
 
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::{Mutex, PoisonError};
 
 use crate::contract::sealed;
 use crate::error::AtmError;
@@ -19,11 +20,55 @@ pub struct InMemoryHookRegistrationStore {
     pub calls: AtomicUsize,
     /// When set, `active_all` fails once with an injected error (refresh failure tests).
     pub fail_active_all: AtomicBool,
+    pause: Mutex<Option<PauseSlot>>,
+}
+
+/// The store's half of an [`ActiveAllPause`], taken by the next `active_all`.
+#[derive(Debug)]
+struct PauseSlot {
+    entered: SyncSender<()>,
+    release: Receiver<()>,
+}
+
+/// The test's half of a pause: waits for a paused `active_all` to reach the
+/// store, then lets it finish.
+#[derive(Debug)]
+pub struct ActiveAllPause {
+    entered: Mutex<Receiver<()>>,
+    release: SyncSender<()>,
+}
+
+impl ActiveAllPause {
+    /// Blocks until a store read has reached the pause.
+    pub fn wait_entered(&self) {
+        let entered = self.entered.lock().unwrap_or_else(PoisonError::into_inner);
+        let _ = entered.recv();
+    }
+
+    /// Lets the paused read finish with the rows it has read.
+    pub fn release(&self) {
+        let _ = self.release.send(());
+    }
 }
 
 impl InMemoryHookRegistrationStore {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The next `active_all` reports entry and then blocks until the returned
+    /// pause is released; later calls run unpaused.
+    pub fn pause_next_active_all(&self) -> ActiveAllPause {
+        let (entered_tx, entered_rx) = std::sync::mpsc::sync_channel(1);
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel(1);
+        *self.pause.lock().unwrap_or_else(PoisonError::into_inner) = Some(PauseSlot {
+            entered: entered_tx,
+            release: release_rx,
+        });
+        ActiveAllPause {
+            entered: Mutex::new(entered_rx),
+            release: release_tx,
+        }
     }
 
     fn record_call(&self) {
@@ -148,6 +193,15 @@ impl HookRegistrationStore for InMemoryHookRegistrationStore {
 
     fn active_all(&self) -> Result<Vec<HookRegistration>, AtmError> {
         self.record_call();
+        let pause = self
+            .pause
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(pause) = pause {
+            let _ = pause.entered.send(());
+            let _ = pause.release.recv();
+        }
         if self.fail_active_all.load(Ordering::SeqCst) {
             return Err(AtmError::new(
                 AtmErrorCode::InternalError,

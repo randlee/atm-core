@@ -191,6 +191,7 @@ mod tests {
             snapshot,
             runner,
             Arc::new(ChainTracker::new()),
+            router.control_path_sync_bridge.clone(),
         )
     }
 

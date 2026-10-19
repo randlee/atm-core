@@ -10,7 +10,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::api::RequestDeadline;
-use atm_core::boundary::{CronSchedule, HookRegistration};
+use atm_core::boundary::{
+    CronSchedule, CronScheduleStore, HookRegistration, HookRegistrationStore,
+};
 use atm_core::doctor::hooks::{HookDoctorEntry, HookDoctorError, HookDoctorReply};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::hook::HookTarget;
@@ -31,20 +33,27 @@ pub(crate) async fn collect(
     team: Option<&TeamName>,
     deadline: RequestDeadline,
 ) -> Vec<HookDoctorEntry> {
-    let Some(groups) = groups(router, team) else {
+    let Some(groups) = groups(router, team, deadline).await else {
         return Vec::new();
     };
     run_groups(router, groups, deadline).await
 }
 
-fn groups(router: &StorageAndNudgeRouter, team: Option<&TeamName>) -> Option<Vec<Group>> {
+async fn groups(
+    router: &StorageAndNudgeRouter,
+    team: Option<&TeamName>,
+    deadline: RequestDeadline,
+) -> Option<Vec<Group>> {
     let hooks = router.service_runtime.hook_registration_store().ok()?;
-    let registrations = hooks.active_all().ok()?;
     // A runtime without a cron store has no schedules; hook rows still report.
-    let cron_rows = match router.service_runtime.cron_schedule_store() {
-        Ok(schedules) => schedules.active_all().ok()?,
-        Err(_) => Vec::new(),
-    };
+    let cron = router.service_runtime.cron_schedule_store().ok();
+    // The store reads are one control-path bridge job, so they serialize with
+    // registry writes and never run on the request task.
+    let (registrations, cron_rows) = router
+        .control_path_sync_bridge
+        .run(deadline, move || read_rows(hooks.as_ref(), cron.as_deref()))
+        .await
+        .ok()?;
     let in_scope = |row_team: &TeamName| team.is_none_or(|team| team == row_team);
 
     let mut rows: BTreeMap<GroupKey, (Vec<HookRegistration>, Vec<CronSchedule>)> = BTreeMap::new();
@@ -87,6 +96,19 @@ fn groups(router: &StorageAndNudgeRouter, team: Option<&TeamName>) -> Option<Vec
             })
             .collect(),
     )
+}
+
+/// The active hook rows and schedules, read as one store snapshot.
+fn read_rows(
+    hooks: &dyn HookRegistrationStore,
+    cron: Option<&dyn CronScheduleStore>,
+) -> Result<(Vec<HookRegistration>, Vec<CronSchedule>), AtmError> {
+    let registrations = hooks.active_all()?;
+    let cron_rows = match cron {
+        Some(schedules) => schedules.active_all()?,
+        None => Vec::new(),
+    };
+    Ok((registrations, cron_rows))
 }
 
 fn group_key(

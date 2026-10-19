@@ -29,6 +29,7 @@ use atm_core::types::{AgentName, TeamName};
 
 use crate::hook_actions::UnhookedRouter;
 use crate::hook_chains::ChainTracker;
+use crate::router_support::ControlPathSyncBridge;
 
 type Chains = HashMap<(TeamName, HookName), Arc<[Arc<HookRegistration>]>>;
 
@@ -69,20 +70,42 @@ impl ActiveHookSnapshot {
         }
     }
 
-    /// The active chain for one team and hook; reloads first when dirty.
-    pub fn active(
-        &self,
+    /// The active chain for one team and hook. A dirty snapshot reloads first,
+    /// as a job on the control-path `bridge`: the reload then serializes with
+    /// every registry write, so it can never build from the store before a
+    /// commit and install that stale map after the commit's own refresh.
+    pub(crate) async fn current(
+        self: &Arc<Self>,
+        bridge: &ControlPathSyncBridge,
+        deadline: RequestDeadline,
         team: &TeamName,
         hook: &HookName,
     ) -> Result<Arc<[Arc<HookRegistration>]>, AtmError> {
         if self.dirty.load(Ordering::SeqCst) {
-            self.refresh()?;
+            let snapshot = Arc::clone(self);
+            bridge
+                .run(deadline, move || snapshot.reload_if_dirty())
+                .await?;
         }
+        Ok(self.chain(team, hook))
+    }
+
+    /// Reloads only when the dirty flag is still set once the bridge admits
+    /// the job, so a reload that a queued write already performed is skipped.
+    fn reload_if_dirty(&self) -> Result<(), AtmError> {
+        if self.dirty.load(Ordering::SeqCst) {
+            self.refresh()
+        } else {
+            Ok(())
+        }
+    }
+
+    fn chain(&self, team: &TeamName, hook: &HookName) -> Arc<[Arc<HookRegistration>]> {
         let chains = Arc::clone(&self.map.read().unwrap_or_else(PoisonError::into_inner));
-        Ok(chains
+        chains
             .get(&(team.clone(), hook.clone()))
             .cloned()
-            .unwrap_or_else(|| Arc::from(Vec::new())))
+            .unwrap_or_else(|| Arc::from(Vec::new()))
     }
 }
 
@@ -108,6 +131,7 @@ pub struct HookedTaskCommands<D: HookActionDispatcher = UnhookedRouter> {
     snapshot: Arc<ActiveHookSnapshot>,
     runner: Arc<dyn HookRunner>,
     chains: Arc<ChainTracker>,
+    bridge: ControlPathSyncBridge,
 }
 
 enum Decision {
@@ -117,12 +141,13 @@ enum Decision {
 }
 
 impl<D: HookActionDispatcher> HookedTaskCommands<D> {
-    pub fn new(
+    pub(crate) fn new(
         inner: Arc<dyn TaskCommands>,
         actions: Arc<D>,
         snapshot: Arc<ActiveHookSnapshot>,
         runner: Arc<dyn HookRunner>,
         chains: Arc<ChainTracker>,
+        bridge: ControlPathSyncBridge,
     ) -> Self {
         Self {
             inner,
@@ -130,6 +155,7 @@ impl<D: HookActionDispatcher> HookedTaskCommands<D> {
             snapshot,
             runner,
             chains,
+            bridge,
         }
     }
 
@@ -152,6 +178,11 @@ impl<D: HookActionDispatcher> HookedTaskCommands<D> {
     pub fn chains(&self) -> &Arc<ChainTracker> {
         &self.chains
     }
+
+    /// The control-path bridge that registry writes and snapshot reloads share.
+    pub(crate) fn bridge(&self) -> &ControlPathSyncBridge {
+        &self.bridge
+    }
 }
 
 impl<D: HookActionDispatcher + 'static> HookedTaskCommands<D> {
@@ -160,7 +191,10 @@ impl<D: HookActionDispatcher + 'static> HookedTaskCommands<D> {
             return cmd.call(&*self.inner, ctx).await;
         }
         let hook = cmd.hook_name();
-        let regs = self.snapshot.active(&ctx.caller_team, &hook)?;
+        let regs = self
+            .snapshot
+            .current(&self.bridge, ctx.deadline, &ctx.caller_team, &hook)
+            .await?;
         if regs.is_empty() {
             return cmd.call(&*self.inner, ctx).await;
         }
@@ -372,6 +406,7 @@ pub(crate) mod test_support {
 
     use super::{ActiveHookSnapshot, HookedTaskCommands};
     use crate::hook_chains::ChainTracker;
+    use crate::router_support::ControlPathSyncBridge;
 
     pub fn team() -> TeamName {
         "test-team".parse().expect("team")
@@ -395,6 +430,14 @@ pub(crate) mod test_support {
 
     pub fn deadline() -> RequestDeadline {
         RequestDeadline::after(std::time::Duration::from_secs(30))
+    }
+
+    /// A control-path bridge with the registry routes' capacity of one.
+    pub fn bridge() -> ControlPathSyncBridge {
+        ControlPathSyncBridge::new(
+            std::num::NonZeroUsize::new(1).expect("one bridge job"),
+            crate::RuntimeHealth::default(),
+        )
     }
 
     pub fn ctx(deadline: RequestDeadline) -> TaskCallCtx {
@@ -496,6 +539,7 @@ pub(crate) mod test_support {
             snapshot.clone(),
             runner.clone(),
             Arc::new(ChainTracker::new()),
+            bridge(),
         );
         Harness {
             inner,
@@ -520,6 +564,7 @@ pub(crate) mod test_support {
             snapshot,
             runner,
             router.hook_chains(),
+            router.control_path_sync_bridge.clone(),
         );
         router.with_hook_filter(Arc::new(filter))
     }
@@ -596,9 +641,9 @@ mod tests {
     use super::ActiveHookSnapshot;
     use super::HookedTaskCommands;
     use super::test_support::{
-        agent, assign_request, ctx, deadline, expect_err, handled_action, harness, harness_with,
-        hook, install_filter, local_host, phase, register, registration, reply, reply_error, shape,
-        targeted_phases, team,
+        agent, assign_request, bridge, ctx, deadline, expect_err, handled_action, harness,
+        harness_with, hook, install_filter, local_host, phase, register, registration, reply,
+        reply_error, shape, targeted_phases, team,
     };
     use crate::hook_chains::ChainTracker;
     use crate::storage_and_nudge_router::StorageAndNudgeRouter;
@@ -670,6 +715,7 @@ mod tests {
             snapshot,
             runner,
             base.hook_chains(),
+            base.control_path_sync_bridge.clone(),
         )
     }
 
@@ -890,6 +936,7 @@ mod tests {
             snapshot.clone(),
             runner.clone(),
             Arc::new(ChainTracker::new()),
+            fixture.router.control_path_sync_bridge.clone(),
         ));
         let router = fixture.router.clone().with_hook_filter(filter.clone());
         assert!(Arc::ptr_eq(&router.hook_chains(), filter.chains()));
@@ -1261,7 +1308,7 @@ mod tests {
     async fn refresh_failure_marks_dirty_and_the_next_call_reloads() {
         let store = Arc::new(InMemoryHookRegistrationStore::new());
         register(&store, "task.assign", "bj", 1);
-        let snapshot = ActiveHookSnapshot::load(store.clone()).expect("snapshot");
+        let snapshot = Arc::new(ActiveHookSnapshot::load(store.clone()).expect("snapshot"));
         store
             .register(registration("task.assign", "bk", 2))
             .expect("register");
@@ -1269,7 +1316,8 @@ mod tests {
         assert!(snapshot.refresh().is_err());
         store.fail_active_all.store(false, Ordering::SeqCst);
         let rows = snapshot
-            .active(&team(), &hook("task.assign"))
+            .current(&bridge(), deadline(), &team(), &hook("task.assign"))
+            .await
             .expect("reloaded active");
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[1].phase, phase("bk"));
