@@ -580,7 +580,7 @@ class BlockingFindingsHandoffTests(unittest.TestCase):
         cls.addClassCleanup(stop_server, root)
         init_workspace(cls.ws)
 
-    def written(self, sprint: str, qa: str, severity: str) -> Path:
+    def written(self, sprint: str, qa: str, severity: str, found_on_layer=None) -> Path:
         values = json.loads((EXAMPLES / "qa-template-fix-round-vars.json").read_text())
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "vars.json"
@@ -594,20 +594,25 @@ class BlockingFindingsHandoffTests(unittest.TestCase):
             self.assertIn(placeholder, shape)
             shape = shape.replace(placeholder, value)
         out = self.ws.root / f"{sprint}-{severity}-blocking.json"
-        out.write_text(json.dumps(json.loads(shape)))
+        document = json.loads(shape)
+        if found_on_layer is not None:
+            document["findings"][0]["found_on_layer"] = found_on_layer
+        out.write_text(json.dumps(document))
         return out
 
     def test_the_fix_round_shape_pours_and_a_non_blocking_one_is_refused(self):
         from test_bead_pour_mock import fix_group, group
+        from test_sanity_create_findings import module as sanity_module
         ws = self.ws
         sprint = ws.sprint("hz", 1)
         dev, sanity, qa = group(sprint)
         ws.groups("--sprint", sprint)
         ws.close(dev, "done")
         ws.close(sanity, "PASS")
-        result = ws.groups("--findings", self.written(sprint, qa, "blocking"))
+        result = ws.groups("--findings", self.written(sprint, qa, "blocking", found_on_layer=15))
         fix = fix_group(sprint, "qa1-f1", 2)[0]
         self.assertEqual(ws.show(fix)["metadata"]["reviewer"], "arch-qa")
+        self.assertEqual(sanity_module.parent_layer(ws.show(fix)["metadata"]), 15)
         refused = ws.groups("--findings", self.written(sprint, qa, "important"), expect=2)  # planted negative
         self.assertEqual(refused["targets"][0]["error"]["code"], "BEAD_GROUPS_NOT_BLOCKING")
         self.assertTrue(result["targets"])
@@ -633,16 +638,20 @@ class BlockingFindingsHandoffTests(unittest.TestCase):
 
     def test_the_round_one_shape_parses_and_pours_and_one_without_its_remedy_is_refused(self):
         from test_bead_pour_mock import fix_group, group
+        from test_sanity_create_findings import module as sanity_module
         ws = self.ws
         sprint = ws.sprint("hx", 1)
         _, _, qa = group(sprint)
         ws.groups("--sprint", sprint)
-        ws.groups("--findings", self.round_one(sprint, qa))
+        ws.groups("--findings", self.round_one(sprint, qa, found_on_layer=15))
         fix = fix_group(sprint, "qa1-f1")[0]
+        self.assertEqual(sanity_module.parent_layer(ws.show(fix)["metadata"]), 15)
         self.assertEqual({k: ws.show(fix)["metadata"][k] for k in ("reviewer", "difficulty")},
                          {"reviewer": "arch-qa", "difficulty": "normal"})
         ws.groups("--findings", self.round_one(sprint, qa, ref="qa1-f2", difficulty="hard"))
         self.assertEqual(ws.show(fix_group(sprint, "qa1-f2")[0])["metadata"]["difficulty"], "hard")
+        with self.assertRaises(sanity_module.HandoffError):
+            sanity_module.parent_layer(ws.show(fix_group(sprint, "qa1-f2")[0])["metadata"])
         # planted negatives: the old key-list shape is not JSON, and a finding without its remedy is refused
         with self.assertRaises(ValueError):
             json.loads('{"findings": [{"ref": "qa1-f1", "severity": "blocking", "reviewer", "title", "remedy", '

@@ -665,7 +665,7 @@ class BeadPourMockTests(unittest.TestCase):
         rows = [self.render(ws.root / ".claude/skills/atm-beads/templates/dev-sanity-bead.json.j2", {
                     "id": sanity, "parent": "t-phase-m", "dev_bead": finding, "phase": "m", "sprint": "m-1", "stack": "phase-m"}),
                 self.render(templates / "qa-bead.json.j2", {
-                    "id": qa, "checked_bead": finding, "parent": "t-phase-m", "blocked_by": sanity, "phase": "m", "sprint": "m-1",
+                    "id": qa, "checked_bead": finding, "sprint_bead": sprint, "parent": "t-phase-m", "blocked_by": sanity, "phase": "m", "sprint": "m-1",
                     "stack": "phase-m", "round": 1, "qa_member": "quality-mgr"})]
         assigned = ws.root / "assigned.jsonl"
         assigned.write_text("".join(json.dumps(r) + "\n" for r in rows))
@@ -674,6 +674,7 @@ class BeadPourMockTests(unittest.TestCase):
         assert ws.deps(sanity) == {"t-phase-m": "parent-child", finding: "blocks"}, ws.deps(sanity)
         assert ws.deps(qa) == {"t-phase-m": "parent-child", sanity: "blocks"}, ws.deps(qa)
         assert ws.show(qa)["metadata"]["checked_bead"] == finding
+        assert ws.show(qa)["metadata"]["sprint_bead"] == sprint
         ws.bd("update", finding, "--status", "in_progress", "--assignee", "pour-test")
         assert not {sanity, qa} & ws.ready()
         ws.close(finding, "fixed at abc1234")
