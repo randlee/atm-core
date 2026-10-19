@@ -1,4 +1,8 @@
 use std::ffi::OsString;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
+use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -98,7 +102,6 @@ fn executable(path: &Path) -> bool {
     }
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
         path.metadata()
             .is_ok_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
     }
@@ -245,7 +248,6 @@ fn check_status(output: &SpawnedOutput) -> Result<(), AtmError> {
     }
     #[cfg(unix)]
     {
-        use std::os::unix::process::ExitStatusExt;
         if let Some(signal) = output.status.signal() {
             return Err(AtmError::hook_exit(HookExitCause::Signal(signal)));
         }
