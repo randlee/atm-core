@@ -6303,7 +6303,7 @@
       "id": "ANC-089",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The vars file given to atm-task-close.py must contain the union of the required variables of the atm task templates and the sc-compose bead templates it is passed to.",
+      "statement": "The vars file given to atm-task-close.py must contain the union of the required variables of every template it is passed to, atm task templates and sc-compose bead templates alike, so one vars file serves every render.",
       "quote": "same vars sent to 'atm ... --template --vars <shared-vars>'  and sc-compose bead ... --template --vars <shared-vars>\nyes, json should be union of required variables for both templates.",
       "kind": "structural",
       "stated_by": "Rand",
@@ -6321,7 +6321,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -6341,6 +6341,14 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-19T02:19:05+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "The vars file given to atm-task-close.py must contain the union of the required variables of the atm task templates and the sc-compose bead templates it is passed to."
         }
       ]
     }

@@ -1855,12 +1855,12 @@ Fixtures:
 
 ## ANC-089
 
-Anchor: The vars file given to atm-task-close.py must contain the union of the required variables of the atm task templates and the sc-compose bead templates it is passed to.
+Anchor: The vars file given to atm-task-close.py must contain the union of the required variables of every template it is passed to, atm task templates and sc-compose bead templates alike, so one vars file serves every render.
 
 > same vars sent to 'atm ... --template --vars <shared-vars>'  and sc-compose bead ... --template --vars <shared-vars>
 yes, json should be union of required variables for both templates.
 
-Said by Rand, phase-bj drift review 2026-10-18 (fenix relay, message 01M58YBB6RRSSCBMVM991MMAA3): Rand's answer on ANC-058, 2026-10-18. Status: locked. Version 2.
+Said by Rand, phase-bj drift review 2026-10-18 (fenix relay, message 01M58YBB6RRSSCBMVM991MMAA3): Rand's answer on ANC-058, 2026-10-18. Status: locked. Version 3.
 
 Summary: one vars file = union of atm task and sc-compose bead template variables
 
