@@ -84,55 +84,70 @@ mod tests {
     #[test]
     fn hook_error_constructors_format_and_classify() {
         let exit = |cause| AtmError::hook_exit(cause).into_message();
-        assert!(
-            exit(HookExitCause::Exit {
-                code: 2,
-                stderr_tail: "boom".into()
-            })
-            .starts_with("HOOK.EXIT: exit 2: boom")
-        );
-        assert!(exit(HookExitCause::Signal(9)).starts_with("HOOK.EXIT: terminated by signal 9"));
-        assert!(
-            exit(HookExitCause::Spawn {
-                path: PathBuf::from("/h.py"),
-                cause: "denied".into()
-            })
-            .starts_with("HOOK.EXIT: cannot run /h.py: denied")
-        );
-        assert!(
-            exit(HookExitCause::Panic("oops".into()))
-                .starts_with("HOOK.EXIT: hook runner panicked: oops")
-        );
-        assert!(
-            exit(HookExitCause::Missing("python3 not found on PATH".into()))
-                .starts_with("HOOK.EXIT: python3 not found on PATH")
-        );
+        let recovery = "Fix the hook module so it starts and exits with a valid reply, then retry.";
+        for (cause, detail) in [
+            (
+                HookExitCause::Exit {
+                    code: 2,
+                    stderr_tail: "boom".into(),
+                },
+                "exit 2: boom",
+            ),
+            (HookExitCause::Signal(9), "terminated by signal 9"),
+            (
+                HookExitCause::Spawn {
+                    path: PathBuf::from("/h.py"),
+                    cause: "denied".into(),
+                },
+                "cannot run /h.py: denied",
+            ),
+            (
+                HookExitCause::Panic("oops".into()),
+                "hook runner panicked: oops",
+            ),
+            (
+                HookExitCause::Missing("python3 not found on PATH".into()),
+                "python3 not found on PATH",
+            ),
+        ] {
+            assert_eq!(
+                exit(cause),
+                format!("HOOK.EXIT: {detail}\n  Recovery: {recovery}")
+            );
+        }
 
         let phase = PhaseId::parse("bk").expect("phase");
         let timeout = AtmError::hook_timeout(&phase, "no reply within 2500 ms");
-        assert!(
-            timeout
-                .message()
-                .starts_with("HOOK.TIMEOUT: phase bk: no reply within 2500 ms")
+        assert_eq!(
+            timeout.message(),
+            concat!(
+                "HOOK.TIMEOUT: phase bk: no reply within 2500 ms\n  Recovery: ",
+                "Make the hook reply within its timeout or raise the timeout within the budget, then retry."
+            )
         );
-        assert!(
-            AtmError::hook_malformed("empty atm-action list")
-                .message()
-                .starts_with("HOOK.MALFORMED: empty atm-action list")
+        assert_eq!(
+            AtmError::hook_malformed("empty atm-action list").message(),
+            "HOOK.MALFORMED: empty atm-action list\n  Recovery: Make the hook reply match the JSON reply contract, then retry."
         );
-        assert!(
-            AtmError::hook_module_invalid("cron.tick is not a task hook")
-                .message()
-                .starts_with("HOOK.MODULE_INVALID: cron.tick is not a task hook")
+        assert_eq!(
+            AtmError::hook_module_invalid("cron.tick is not a task hook").message(),
+            concat!(
+                "HOOK.MODULE_INVALID: cron.tick is not a task hook\n  Recovery: ",
+                "Register a task hook module path and name the hook from the supported list, then retry."
+            )
         );
-        assert!(
-            AtmError::cron_expr_invalid("bad field")
-                .message()
-                .starts_with("CRON.EXPR_INVALID: bad field")
+        assert_eq!(
+            AtmError::cron_expr_invalid("bad field").message(),
+            concat!(
+                "CRON.EXPR_INVALID: bad field\n  Recovery: ",
+                "Use a five-field cron expression or an --until time later than now, then retry."
+            )
         );
 
         let refused = AtmError::hook_refused("bd not ready");
         assert_eq!(refused.message(), "bd not ready");
+        assert_eq!(refused.to_string(), "bd not ready");
+        assert!(!refused.to_string().contains("Recovery:"));
 
         let validation_codes = [
             AtmError::hook_module_invalid("x"),
