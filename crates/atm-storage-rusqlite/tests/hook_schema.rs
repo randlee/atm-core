@@ -12,7 +12,8 @@ use atm_storage_rusqlite::{SqliteStorageBackend, SqliteStorageFactory};
 use chrono::{TimeZone, Utc};
 use rusqlite::{Connection, params};
 
-const PRE_BB_DDL: &str = include_str!("fixtures/pre_bb_task_and_mail.sql");
+const PRE_BK_DB_MIGRATIONS: &str = include_str!("fixtures/pre_bk_db_migrations.sql");
+const PRE_BK_TASK_SCHEMA: &str = include_str!("fixtures/pre_bk_task_schema.sql");
 
 fn stamp(day: u32) -> IsoTimestamp {
     IsoTimestamp::from_datetime(
@@ -78,47 +79,138 @@ fn hook_tables(path: &std::path::Path) -> Vec<String> {
 
 #[test]
 fn pre_bk_ddl_set_reads_and_writes_after_hook_tables_created() {
-    let root = tempfile::tempdir().expect("tempdir");
-    let path = root.path().join("mail.db");
-    let connection = Connection::open(&path).expect("connection");
-    connection
-        .execute_batch(PRE_BB_DDL)
-        .expect("frozen pre-BB DDL");
-    drop(connection);
+    for seeded in [false, true] {
+        let root = tempfile::tempdir().expect("tempdir");
+        let path = root.path().join("mail.db");
+        let connection = Connection::open(&path).expect("connection");
+        if seeded {
+            pre_bk_schema(&connection);
+            write_pre_bk_rows(&connection, "before");
+            assert_pre_bk_rows(&connection, &["before"]);
+        }
+        assert!(hook_tables(&path).is_empty());
+        drop(connection);
 
-    let backend = SqliteStorageBackend::new(&path).expect("backend");
-    assert_eq!(
-        hook_tables(&path),
-        vec!["cron_schedule", "hook_registration"]
-    );
-    backend
-        .hook_registration_store()
-        .register(registration(stamp(1)))
-        .expect("hook write");
-    backend
-        .cron_schedule_store()
-        .start(cron("nightly"))
-        .expect("cron write");
-    drop(backend);
+        let backend = SqliteStorageBackend::new(&path).expect("backend");
+        assert_eq!(
+            hook_tables(&path),
+            vec!["cron_schedule", "hook_registration"]
+        );
+        backend
+            .hook_registration_store()
+            .register(registration(stamp(1)))
+            .expect("hook write");
+        backend
+            .cron_schedule_store()
+            .start(cron("nightly"))
+            .expect("cron write");
+        drop(backend);
 
-    let connection = Connection::open(&path).expect("pre-BB reader");
-    let tasks: u32 = connection
-        .query_row("SELECT COUNT(*) FROM tasks", [], |row| row.get(0))
-        .expect("frozen tasks read");
-    let events: u32 = connection
-        .query_row("SELECT COUNT(*) FROM task_events", [], |row| row.get(0))
-        .expect("frozen task_events read");
-    assert_eq!((tasks, events), (0, 0));
+        let connection = Connection::open(&path).expect("pre-bk reader");
+        assert_pre_bk_rows(&connection, if seeded { &["before"] } else { &[] });
+        pre_bk_schema(&connection);
+        write_pre_bk_rows(&connection, "after");
+        assert_pre_bk_rows(
+            &connection,
+            if seeded {
+                &["after", "before"]
+            } else {
+                &["after"]
+            },
+        );
+        drop(connection);
+
+        let backend = SqliteStorageBackend::new(&path).expect("reopen after old writes");
+        assert_eq!(
+            backend
+                .hook_registration_store()
+                .active_all()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(backend.cron_schedule_store().active_all().unwrap().len(), 1);
+    }
+}
+
+fn pre_bk_schema(connection: &Connection) {
     connection
-        .execute(
-            "INSERT INTO tasks
-                (team, task_id, assignee, assigner, state, position, assignment_message_id,
-                 description, assigned_at, updated_at)
-             VALUES ('test-team', 'BK6-COMPAT', 'worker', 'lead', 'assigned', 1, 'm1',
-                 'compat', '2026-10-01T12:00:00Z', '2026-10-01T12:00:00Z')",
-            [],
+        .execute_batch(PRE_BK_DB_MIGRATIONS)
+        .expect("frozen pre-bk DB_MIGRATIONS");
+    connection
+        .execute_batch(PRE_BK_TASK_SCHEMA)
+        .expect("frozen pre-bk task and handoff schema");
+}
+
+fn write_pre_bk_rows(connection: &Connection, marker: &str) {
+    for statement in [
+        "INSERT INTO mail_messages
+            (team, agent, message_key, envelope_json, from_agent, message_text, message_at)
+         VALUES ('test-team', ?1, 'atm:' || ?1, '{}', 'lead', ?1, '2026-10-01T12:00:00Z')",
+        "INSERT INTO mail_message_states (team, agent, message_key, read)
+         VALUES ('test-team', ?1, 'atm:' || ?1, 1)",
+        "INSERT INTO mail_seen_watermarks (team, agent, watermark)
+         VALUES ('test-team', ?1, ?1)",
+        "INSERT INTO team_roster (team_name, agent_name, member_kind, harness, updated_at)
+         VALUES ('test-team', ?1, 'permanent', 'codex-cli', '2026-10-01T12:00:00Z')",
+        "INSERT INTO tasks
+            (team, task_id, assignee, assigner, state, position, assignment_message_id,
+             description, assigned_at, updated_at)
+         VALUES ('test-team', ?1, ?1, 'lead', 'assigned', 1, ?1,
+             ?1, '2026-10-01T12:00:00Z', '2026-10-01T12:00:00Z')",
+        "INSERT INTO task_events (team, task_id, assignee, seq, at, event, actor, detail)
+         VALUES ('test-team', ?1, ?1, 1, '2026-10-01T12:00:00Z', 'assigned', 'lead', ?1)",
+        "INSERT INTO prompt_handoffs (team, agent, message_key, kind, task_id, trigger, at)
+         VALUES ('test-team', ?1, 'atm:' || ?1, 'task_ready', ?1, 'steer', '2026-10-01T12:00:00Z')",
+    ] {
+        assert_eq!(
+            connection
+                .execute(statement, params![marker])
+                .expect("pre-bk write"),
+            1
+        );
+    }
+}
+
+fn assert_pre_bk_rows(connection: &Connection, markers: &[&str]) {
+    let mut statement = connection
+        .prepare(
+            "SELECT 'mail_messages', message_text FROM mail_messages WHERE team = 'test-team'
+         UNION ALL SELECT 'mail_message_states', agent FROM mail_message_states
+             WHERE team = 'test-team' AND read = 1
+         UNION ALL SELECT 'mail_seen_watermarks', watermark FROM mail_seen_watermarks
+             WHERE team = 'test-team'
+         UNION ALL SELECT 'team_roster', agent_name FROM team_roster WHERE team_name = 'test-team'
+         UNION ALL SELECT 'tasks', description FROM tasks WHERE team = 'test-team'
+         UNION ALL SELECT 'task_events', detail FROM task_events WHERE team = 'test-team'
+         UNION ALL SELECT 'prompt_handoffs', task_id FROM prompt_handoffs WHERE team = 'test-team'
+         ORDER BY 1, 2",
         )
-        .expect("frozen tasks write");
+        .expect("pre-bk reads");
+    let actual = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap();
+    let expected: Vec<_> = [
+        "mail_message_states",
+        "mail_messages",
+        "mail_seen_watermarks",
+        "prompt_handoffs",
+        "task_events",
+        "tasks",
+        "team_roster",
+    ]
+    .into_iter()
+    .flat_map(|table| {
+        markers
+            .iter()
+            .map(move |marker| (table.to_owned(), (*marker).to_owned()))
+    })
+    .collect();
+    assert_eq!(actual, expected);
 }
 
 #[test]
