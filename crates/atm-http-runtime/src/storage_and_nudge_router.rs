@@ -1842,18 +1842,11 @@ pub(crate) mod tests {
         );
     }
 
-    async fn bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows_body(
-        through: bool,
-    ) {
-        let fixture = route_task_commands(fixture(true, None, None), through);
+    #[tokio::test]
+    async fn bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows() {
+        let fixture = fixture(true, None, None);
         assert_async_committed_rows(&fixture, false).await;
     }
-
-    through_normal_task_commands!(
-        bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows,
-        bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows_through_normal_task_commands,
-        bd2_plain_async_pipeline_retains_success_and_rejected_committed_rows_body
-    );
 
     async fn bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_body(
         through: bool,
@@ -4664,8 +4657,9 @@ pub(crate) mod tests {
         steer_emit_records_handoff_with_trigger_steer_body
     );
 
-    async fn steer_of_non_task_message_records_no_handoff_body(through: bool) {
-        let fixture = route_task_commands(fixture(true, None, None), through);
+    #[tokio::test]
+    async fn steer_of_non_task_message_records_no_handoff() {
+        let fixture = fixture(true, None, None);
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
 
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
@@ -4676,12 +4670,6 @@ pub(crate) mod tests {
             "a dispatch without task_transition writes no handoff"
         );
     }
-
-    through_normal_task_commands!(
-        steer_of_non_task_message_records_no_handoff,
-        steer_of_non_task_message_records_no_handoff_through_normal_task_commands,
-        steer_of_non_task_message_records_no_handoff_body
-    );
 
     #[test]
     fn queue_claim_records_no_handoff() {
