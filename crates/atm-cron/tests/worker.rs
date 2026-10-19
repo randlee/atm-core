@@ -294,6 +294,22 @@ async fn stopped_worker_refuses_start_end_and_list() {
 }
 
 #[tokio::test]
+async fn shutdown_before_first_worker_poll_refuses_commands() {
+    let fixture = Fixture::new();
+    let worker = fixture.cron.start_worker().await.unwrap();
+    worker.shutdown(tokio::time::Instant::now()).await;
+    assert!(
+        fixture
+            .cron
+            .list(None, None)
+            .await
+            .unwrap_err()
+            .message()
+            .contains("cron worker stopped")
+    );
+}
+
+#[tokio::test]
 async fn ticks_fire_only_when_the_manual_clock_reaches_them() {
     let fixture = Fixture::new();
     fixture.reply(HookReply::PassThrough);

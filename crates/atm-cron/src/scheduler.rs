@@ -64,9 +64,9 @@ impl AtmCron {
         let (shutdown, receiver) = oneshot::channel();
         let (running, settled) = watch::channel(0);
         let cron = self.clone();
-        let stopped = self.stopped.clone();
+        let guard = Stopped(self.stopped.clone());
         let worker = tokio::spawn(async move {
-            let _guard = Stopped(stopped);
+            let _guard = guard;
             worker::run(cron, rows, reload, receiver, running).await;
         });
         Ok(CronWorkerHandle {
