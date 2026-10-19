@@ -83,6 +83,23 @@ pub const BUSY_TIMEOUT_MARGIN: Duration = Duration::from_millis(500);
 /// the two bounds consistent by construction.
 pub const SQLITE_BUSY_TIMEOUT: Duration = SERVER_REQUEST_BUDGET.saturating_sub(BUSY_TIMEOUT_MARGIN);
 
+/// Reserve, in milliseconds, kept out of [`SERVER_REQUEST_BUDGET`] for the
+/// hook runner's own work after a hook's timeout (design §9.7).
+pub const HOOK_ACTION_RESERVE_MS: u64 = 500;
+
+/// Largest `timeout_ms` a task hook may register: the server budget minus
+/// [`HOOK_ACTION_RESERVE_MS`] (D-m). Enforced by the register route.
+pub const HOOK_TIMEOUT_MAX_MS: u32 = 2500;
+
+/// Largest `timeout_ms` a cron `cron.tick` or `cron.stop` hook may register
+/// (Rand 2026-10-18, design §9.8). Enforced by the cron start route.
+pub const CRON_TIMEOUT_MAX_MS: u32 = 30000;
+
+const _: () = assert!(
+    HOOK_TIMEOUT_MAX_MS as u128 + HOOK_ACTION_RESERVE_MS as u128
+        == SERVER_REQUEST_BUDGET.as_millis()
+);
+
 // Compile-time enforcement of the two contract invariants above: a same-host
 // client must always outlive the server budget it waits on, and a SQLite
 // writer-lock wait must never by itself consume the entire server budget.

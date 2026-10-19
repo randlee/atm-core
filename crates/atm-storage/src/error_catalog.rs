@@ -6,8 +6,15 @@ use crate::error_codes::AtmErrorCode;
 ///
 /// Adapters may provide bounded, non-secret detail, but the catalog owns the
 /// recovery guidance so no protocol or adapter creates another error shape.
+///
+/// A code whose guidance is empty renders the detail alone, so a hook's own
+/// refusal text is returned verbatim without a `Recovery:` line.
 pub(crate) fn render(code: AtmErrorCode, detail: impl Into<String>) -> String {
-    format!("{}\n  Recovery: {}", detail.into(), guidance(code))
+    let guidance = guidance(code);
+    if guidance.is_empty() {
+        return detail.into();
+    }
+    format!("{}\n  Recovery: {}", detail.into(), guidance)
 }
 
 pub(crate) fn render_code(code: AtmErrorCode) -> String {
@@ -49,6 +56,9 @@ const fn guidance_inner(code: AtmErrorCode) -> &'static str {
     if let Some(message) = post_send_guidance(code) {
         return message;
     }
+    if let Some(message) = hook_guidance(code) {
+        return message;
+    }
 
     match code {
         AtmErrorCode::InternalError => "Inspect the logged diagnostic context before retrying.",
@@ -64,6 +74,29 @@ const fn guidance_inner(code: AtmErrorCode) -> &'static str {
         }
         AtmErrorCode::HelpTopicNotFound => "Use `atm help --list` to inspect available topics.",
         _ => "Inspect the logged diagnostic context before retrying.",
+    }
+}
+
+const fn hook_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
+        AtmErrorCode::HookModuleInvalid => Some(
+            "Register a task hook module path and name the hook from the supported list, then retry.",
+        ),
+        AtmErrorCode::CronExprInvalid => {
+            Some("Use a five-field cron expression or an --until time later than now, then retry.")
+        }
+        // Empty on purpose: the hook's refusal text is the whole message.
+        AtmErrorCode::HookRefused => Some(""),
+        AtmErrorCode::HookExit => {
+            Some("Fix the hook module so it starts and exits with a valid reply, then retry.")
+        }
+        AtmErrorCode::HookTimeout => Some(
+            "Make the hook reply within its timeout or raise the timeout within the budget, then retry.",
+        ),
+        AtmErrorCode::HookMalformed => {
+            Some("Make the hook reply match the JSON reply contract, then retry.")
+        }
+        _ => None,
     }
 }
 

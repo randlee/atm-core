@@ -24,6 +24,11 @@ use crate::types::{AgentName, IsoTimestamp, MemberKey, OwnerGeneration, TaskId, 
 
 pub use crate::contract::DummyPendingNudgeStore;
 
+pub mod cron_schedule_store;
+pub mod hook_registration_store;
+pub use cron_schedule_store::InMemoryCronScheduleStore;
+pub use hook_registration_store::InMemoryHookRegistrationStore;
+
 /// A `GraftReceiverEndpointStore` that accepts every write and reports no
 /// lease. Used by callers that need a wired store to compile against but
 /// exercise no graft-receiver behavior in the fixture under test.

@@ -112,6 +112,9 @@ impl AtmError {
                 | AtmErrorCode::PeerWireModeInvalid
                 | AtmErrorCode::PeerWireModeSourceForbidden
                 | AtmErrorCode::PeerWirePlaintextAuthenticationRequired
+                | AtmErrorCode::HookModuleInvalid
+                | AtmErrorCode::CronExprInvalid
+                | AtmErrorCode::HookRefused
         )
     }
 

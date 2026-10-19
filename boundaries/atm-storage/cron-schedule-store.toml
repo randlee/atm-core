@@ -1,0 +1,52 @@
+boundary_id = "BOUNDARY-CronScheduleStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "CronScheduleStore"
+
+[public]
+trait = "CronScheduleStore"
+notes = "storage-neutral cron schedule capability (ADR-069 D4, D-i, D-9): one row per (team, phase, name) with a generation fence, so a run that outlives its slot never writes a restarted schedule; stores read no clock and every timestamp is an argument"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["cron_schedule_row_start", "cron_schedule_row_end", "cron_schedule_row_record", "cron_schedule_row_read"]
+io_forbidden = ["direct_sqlite_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-runtime-test-support", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite", "atm-storage -> atm-daemon", "atm-cron -> atm-storage", "atm-http-runtime -> atm-storage"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["NewCronSchedule", "CronScheduleId", "TeamName", "PhaseId", "IsoTimestamp", "StopCondition"]
+response_types = ["CronSchedule", "Vec<CronSchedule>", "bool"]
+error_types = ["AtmError"]
+notes = [
+  "start returns the stored row; an ended row is restarted in place with generation + 1 and its id kept (D-i)",
+  "record_run and record_stop write only while the row is active and its generation matches; Ok(false) means the write was fenced out",
+  "atm-cron reaches the stores only through atm_core::boundary, so it has no direct edge to atm-storage",
+]
+
+[testing]
+allowed_test_double_paths = [
+    "crate::testing::cron_schedule_store::InMemoryCronScheduleStore",
+]
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CRON-SCHEDULE-STORE-REFERENCES"]
+review_gates = ["no_cli_sqlite_lookup", "no_backend_to_core_edge_for_cron_schedule_store"]
+
+[status]
+state = "stub_landed"
+notes = ["bk-1 lands the sealed trait, its row and id types, the in-memory double and the contract tests; the rusqlite implementation is bk-6"]
