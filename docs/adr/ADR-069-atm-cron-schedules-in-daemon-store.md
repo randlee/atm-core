@@ -71,15 +71,16 @@ store and hook type through `atm_core::boundary`), `tokio`, `chrono`,
 `atm-storage`, `atm-http-runtime`, `atm-daemon-bootstrap` or the CLI. It
 runs hooks through the injected `HookRunner` and dispatches a reply's
 actions through the injected sealed core trait `HookActionDispatcher`,
-which the base router implements below the task filter (ADR-068 D4), each
+which `UnhookedRouter` implements below the task filter (ADR-068 D4), each
 action with a fresh `SERVER_REQUEST_BUDGET`. Store calls run on
 `spawn_blocking`. The daemon bootstrap composes the crate's `AtmCron`
 once, installs it in the router (the three cron routes call the trait, so
 parse-before-write and the reload signal are the crate's) and keeps the
 worker handle in `DaemonWorkers`, started from the active rows at daemon
 start and drained under the replacement-daemon deadline like the other
-workers. Each schedule's next time is `Schedule::after(&now).next()`
-plus the schedule's fixed `jitter_s`, recomputed after startup, after each run and after a reload (ADR-065: UTC
+workers. Each schedule's next time is `Schedule::after(&(now -
+jitter_s)).next() + jitter_s` for the schedule's fixed `jitter_s`, so a
+restart inside an occurrence's jitter window still fires it, recomputed after startup, after each run and after a reload (ADR-065: UTC
 under the hood); a tick missed through a restart, a sleep or a long run is
 never replayed. A tick that arrives while the schedule's previous run is
 still executing is skipped and logged. The worker sleeps at most 30 s at a
@@ -90,8 +91,12 @@ this. it should be random over remaining slots." `start` draws `jitter_s`
 once from an injected random source, uniform over the offsets in
 `[0, min(period_s / 2, 1800))` not held by another active schedule with
 the same expression (all of them when every offset is held); it is
-stored, so a restart keeps it, and the `until` and stop checks run at the
-jittered time. This reading of "remaining slots" is the design's, open to
+stored, so a restart keeps it; `start` holds a lock from the draw to the
+store write so concurrent starts see each other's offset. A restart in
+place sets `created_at` to now, and a reload keeps a worker slot only when
+the reloaded row is unchanged (id, `created_at`, expression, jitter, stop,
+module, cwd, args, timeout, custom); otherwise the slot's in-flight run is
+aborted and its outcome never recorded. This reading of "remaining slots" is the design's, open to
 Rand's correction. A `start` or `end` through the trait
 signals the worker to reload its rows, so no restart is needed.
 
@@ -108,7 +113,7 @@ for hook. cron might query gh, query bd, query atm aggregate
 information.... something more like a 30s timeout would be more
 reasonable, although I expect they will generally be much faster". That
 value is the module's `CRON_TIMEOUT_MS`, else `TIMEOUT_MS`, at most
-`CRON_TIMEOUT_MAX_MS` = 30 000, and each dispatched action gets its own
+`CRON_TIMEOUT_MAX_MS` = 30 000, checked by the cron start route, and each dispatched action gets its own
 `SERVER_REQUEST_BUDGET`. The reply follows
 ADR-068 D2: refused is recorded as `refused: <message>` with the schedule kept
 active, pass-through and not-applicable are recorded as ok, and a handled
@@ -121,7 +126,7 @@ names `as`, with ingress `Local`. Each run writes `last_run_at` and
 
 `atm cron start` requires exactly one of `--until <rfc3339>` and
 `--until-hook` (`StopCondition { Until(DateTime<Utc>), Hook }` on
-`NewCronSchedule`). The stop check precedes the run on every tick:
+`CronStartSpec` and the stored schedule). The stop check precedes the run on every tick:
 
 - `Until(t)`: the worker wakes at `min(next, t)`; once `now >= t` the
   schedule ends (`active = 0`, `ended_at`, `last_outcome = "stopped: until

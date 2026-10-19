@@ -105,15 +105,17 @@ pub struct HookRegistration {
 }
 pub trait HookRegistrationStore: crate::contract::sealed::Sealed + Send + Sync {   // sealed like TemplateCatalogStore (contract.rs:16)
     /// Upsert on (team, phase, hook); other phases' rows are untouched, any number may be active (D-5).
+    /// Active key: replaces module_path, cwd, timeout_ms, custom, registered_by; keeps registered_at (chain position).
+    /// Inactive key: as above plus registered_at = now, disabled_at = NULL, active = 1.
     fn register(&self, registration: HookRegistration) -> Result<HookRegistration, AtmError>;
     /// Sets active = 0 and disabled_at = now on the ACTIVE rows of (team, phase), or the one hook; an inactive row keeps its earlier disabled_at.
     /// Returns only the rows it changed; empty when none were active.
     fn disable(&self, team: &TeamName, phase: &PhaseId, hook: Option<&HookName>) -> Result<Vec<HookRegistration>, AtmError>;
-    /// Every active row for (team, hook), one per phase, ordered by registered_at then phase (D-5).
+    /// Every active row for (team, hook), one per phase, ordered by parsed registered_at asc then phase (D-5); empty Vec when none.
     fn active(&self, team: &TeamName, hook: &HookName) -> Result<Vec<HookRegistration>, AtmError>;
-    /// Every row of the team (doctor, `atm hook list`); phase filter optional.
+    /// Every row of the team (doctor, `atm hook list`); phase filter optional; active rows first, then registered_at, then phase.
     fn list(&self, team: &TeamName, phase: Option<&PhaseId>) -> Result<Vec<HookRegistration>, AtmError>;
-    /// Every active row of every team: the router's in-memory snapshot source (design D-8).
+    /// Every active row of every team, ordered by team, hook, parsed registered_at asc, phase: the snapshot source (D-8).
     fn active_all(&self) -> Result<Vec<HookRegistration>, AtmError>;
 }
 // crates/atm-storage/src/testing.rs (feature test-utils; re-exported by atm-runtime-test-support in bk-2)
@@ -138,7 +140,7 @@ pub enum StopCondition { Until { at: chrono::DateTime<chrono::Utc> }, Hook }
 pub struct NewCronSchedule { pub team: TeamName, pub phase: PhaseId, pub name: String, pub cron_expr: String, pub module_path: PathBuf, pub cwd: PathBuf, pub args: Vec<String>, pub timeout_ms: u32, pub jitter_s: u32, pub custom: serde_json::Map<String, serde_json::Value>, pub stop: StopCondition, pub created_by: AgentName }   // jitter_s is assigned by AtmCron::start (bk-4, design.md §5)
 pub trait CronScheduleStore: crate::contract::sealed::Sealed + Send + Sync {
     /// No row for (team, phase, name): INSERT. An ended row: UPDATE in place in one transaction, id kept, every field from `schedule`,
-    /// active = 1, ended_at, last_run_at, last_outcome NULL (D-i). An active row: Err(AtmError::validation("cron schedule <name> already active for phase <p>")).
+    /// active = 1, created_at = now, ended_at, last_run_at, last_outcome NULL (D-i; the new created_at stops a cron reload merging the old slot). An active row: Err(AtmError::validation("cron schedule <name> already active for phase <p>")).
     fn start(&self, schedule: NewCronSchedule) -> Result<CronSchedule, AtmError>;
     /// Active rows only, as HookRegistrationStore::disable; returns the rows changed.
     fn end(&self, team: &TeamName, phase: &PhaseId, name: Option<&str>) -> Result<Vec<CronSchedule>, AtmError>;
@@ -159,7 +161,7 @@ pub const CRON_TIMEOUT_MAX_MS: u32 = 30000;  // cron.tick / cron.stop only (Rand
 // hook_module_invalid, hook_refused, cron_expr_invalid); is_validation true for HookModuleInvalid, CronExprInvalid, HookRefused.
 
 // crates/atm-storage-rusqlite: pub(crate)-constructed, private outside the crate, exactly as SqliteTaskStore (task-store-sqlite.toml)
-pub(crate) struct SqliteHookRegistrationStore { db: SharedDb }   // register: INSERT OR REPLACE on (team, phase, hook)
+pub(crate) struct SqliteHookRegistrationStore { db: SharedDb }   // register: INSERT .. ON CONFLICT(team, phase, hook) DO UPDATE (an upsert, never INSERT OR REPLACE)
 pub(crate) struct SqliteCronScheduleStore { db: SharedDb }       // start: the UNIQUE and CHECK constraints map to AtmError::validation naming the constraint
 ```
 
@@ -209,7 +211,8 @@ below.
    budget constants.
 2. Errors: the six `AtmErrorCode` variants, their `is_validation` arms,
    catalog guidance, constructors and `docs/atm-error-codes.md` §5.11 and
-   §7.1 rows exactly as `design.md` §9.1.
+   §7.1 rows exactly as `design.md` §9.1, all in the sprint's first commit
+   (later sprints raise these codes).
 3. `atm-storage-rusqlite`: `hook_schema.rs` DDL wired into `ensure_schema`
    (`shared_db.rs:654` block, after `task_store::ensure_schema`, one
    line); `SqliteHookRegistrationStore` and `SqliteCronScheduleStore` on
@@ -234,18 +237,18 @@ below.
 
 ## Authoritative acceptance criteria
 
-- [ ] (ANC-002) `boundary:BOUNDARY-HookRegistrationStore` `crates/atm-storage-rusqlite/tests/hook_registration_store.rs::disable_keeps_rows_inactive`: `disable(team, phase, None)` leaves the rows present with `active == false` and `disabled_at` set; `active(team, hook)` then returns `None`; `list` still returns them.
-- [ ] (D-5) `boundary:BOUNDARY-HookRegistrationStore` `hook_registration_store.rs::register_second_phase_same_hook_succeeds`: registering `task.close` for phase `bk` while phase `bj`'s `task.close` is active succeeds, both stay active, and `active(team, task.close)` returns `[bj, bk]` in `registered_at` order; `disable(bj)` leaves `[bk]`.
+- [ ] (ANC-002) `boundary:BOUNDARY-HookRegistrationStore` `crates/atm-storage-rusqlite/tests/hook_registration_store.rs::disable_keeps_rows_inactive`: `disable(team, phase, None)` leaves the rows present with `active == false` and `disabled_at` set; `active(team, hook)` then returns an empty `Vec`; `list` still returns them.
+- [ ] (D-5) `boundary:BOUNDARY-HookRegistrationStore` `hook_registration_store.rs::register_second_phase_same_hook_succeeds`: registering `task.close` for phase `bk` while phase `bj`'s `task.close` is active succeeds, both stay active, and `active(team, task.close)` returns `[bj, bk]` in `registered_at` order; `disable(bj)` leaves `[bk]`; `::reregister_active_key_keeps_chain_position`: re-registering `bj` with a new `module_path` keeps its `registered_at`, the new path is stored and `active` still returns `[bj, bk]`; re-registering a disabled key sets `registered_at` to now and clears `disabled_at`, placing it last; `::disable_single_hook_leaves_other_hooks_of_phase_active`: `disable(bk, Some(task.close))` leaves `bk`'s `task.start` active.
 - [ ] `boundary:BOUNDARY-HookRegistrationStore` `hook_registration_store.rs::disable_twice_keeps_first_disabled_at` and `::disable_phase_with_no_rows_returns_empty`: a second `disable` returns `[]` and the row's `disabled_at` is unchanged; `disable` of a phase with no rows returns `[]`.
 - [ ] (ADR-068 D3) `boundary:BOUNDARY-HookRegistrationStore` `crates/atm-storage/tests/hook_stores_contract.rs::hook_name_parse_sets`: `parse_task_hook` accepts exactly the six task names and refuses `cron.tick`, `cron.stop` and `task.foo` with `ATM_HOOK_MODULE_INVALID`; `parse` accepts all eight and refuses `task.foo` with `ATM_HOOK_MALFORMED`; `::hook_name_deserialize_rejects_unknown` shows `serde_json::from_str::<HookName>("\"task.foo\"")` is `Err`.
 - [ ] `boundary:BOUNDARY-HookRegistrationStore` `hook_stores_contract.rs::phase_id_rejects_empty_uppercase_space_and_newline`: `PhaseId::parse` accepts `bk`, `bk-2`, a 32-character id, and refuses `""`, `Bk`, `b k`, `bk\n`, `2bk` and a 33-character id.
 - [ ] (ANC-011) `boundary:BOUNDARY-HookRegistrationStore` `hook_registration_store.rs::zero_timeout_fails_the_check`: `HookRegistration.timeout_ms` is `u32` and the DDL `CHECK(timeout_ms > 0)` rejects `0`; `HOOK_TIMEOUT_MAX_MS == 2500` and `HOOK_ACTION_RESERVE_MS == 500` (the module value is read by bk-5).
 - [ ] (Rand 2026-10-18 cron rulings) `boundary:BOUNDARY-CronScheduleStore` `cron_schedule_store.rs::jitter_and_custom_round_trip`: a schedule started with `jitter_s = 1799` and `custom = {"goal":"x","n":[1,{"y":null}]}` reads back from `list` and from `active_all()` on a reopened backend with both equal; `CRON_TIMEOUT_MAX_MS == 30000`; `hook_registration_store.rs::custom_round_trips_and_defaults_to_empty_object` stores a registration's `custom` and reads it back equal, and a row inserted by SQL without `custom` reads back as an empty map.
-- [ ] (D-8) `boundary:BOUNDARY-HookRegistrationStore` `hook_stores_contract.rs::active_all_spans_teams_and_counts_calls`: `active_all()` returns the active rows of two teams and omits disabled rows; `InMemoryHookRegistrationStore.calls` counts the call.
+- [ ] (D-8) `boundary:BOUNDARY-HookRegistrationStore` `hook_stores_contract.rs::active_all_spans_teams_and_counts_calls`: `active_all()` returns the active rows of two teams and omits disabled rows; `InMemoryHookRegistrationStore.calls` counts the call; `hook_registration_store.rs::active_all_order_equals_active_order_for_every_key`: for every (team, hook) the subsequence of `active_all()` equals `active(team, hook)`.
 - [ ] (ANC-018, ANC-020) `boundary:BOUNDARY-CronScheduleStore` `crates/atm-storage-rusqlite/tests/cron_schedule_store.rs::active_all_survives_reopen`: a schedule started on one backend is returned by `active_all()` on a second backend opened on the same file (the daemon-restart case: bk-4's worker loads exactly `active_all()` at daemon start), with `cron_expr` byte-identical and `stop` equal to the value started.
 - [ ] (ANC-023) `boundary:BOUNDARY-CronScheduleStore` `cron_schedule_store.rs::stop_condition_check_and_round_trip`: `NewCronSchedule` has no constructor without a `StopCondition`; an `INSERT` with `until_at NULL` and `stop_hook 0`, and one with both set, each fail the CHECK; `Until` round-trips as `until_at` RFC 3339 text and `Hook` as `stop_hook = 1`.
 - [ ] (ANC-024, ANC-025) `boundary:BOUNDARY-CronScheduleStore` `cron_schedule_store.rs::record_stop_ends_the_row_once`: `record_stop(id, t, "phase bead closed")` leaves `active == false`, `ended_at == t`, `last_outcome == "stopped: phase bead closed"` and `active_all()` omits it; a second call returns `Ok(false)` and changes nothing.
-- [ ] (D-i) `boundary:BOUNDARY-CronScheduleStore` `cron_schedule_store.rs::start_after_end_updates_in_place_and_keeps_the_id`: `start` of an ended name returns the same `id` with `active == true` and `ended_at`, `last_run_at`, `last_outcome` all `None`; `::start_refuses_active_duplicate` refuses a second `start` while the first is active.
+- [ ] (D-i) `boundary:BOUNDARY-CronScheduleStore` `cron_schedule_store.rs::start_after_end_updates_in_place_and_keeps_the_id`: `start` of an ended name returns the same `id` with `active == true`, a new `created_at`, and `ended_at`, `last_run_at`, `last_outcome` all `None`; `::start_refuses_active_duplicate` refuses a second `start` while the first is active.
 - [ ] `boundary:BOUNDARY-CronScheduleStore` `cron_schedule_store.rs::record_run_on_ended_row_changes_nothing`: after `end`, `record_run(id, t, "ok")` returns `Ok(false)` and `last_outcome` keeps its value.
 - [ ] (REQ-BK-SCHEMA) `boundary:BOUNDARY-SharedDb-Sqlite` `crates/atm-storage-rusqlite/tests/hook_schema.rs::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created`: both tables are created by `ensure_schema` on an empty database and on a database created by the pre-bk `DB_MIGRATIONS` string; the frozen pre-bk statements still read and write afterwards (pattern `pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created`).
 - [ ] (REQ-BK-ERRORS) `boundary:BOUNDARY-AtmErrorCodes` `crates/atm-error/src/lib.rs` round-trip tables carry the six codes through `as_str`/`from_str`; `crates/atm-storage/src/error.rs::tests::hook_error_constructors_format_and_classify` asserts each §9.1 message, `is_validation` true for exactly the three validation codes, and that `hook_refused("bd not ready")` displays exactly `bd not ready` with no `Recovery:` line; `docs/atm-error-codes.md` lists each code once in §5.11 and once in §7.1.
@@ -263,7 +266,7 @@ below.
 
 - No core hook type, sealed trait, route or protocol variant (bk-2:
   `HookRequest`, `HookReply`, `StopReply`, `HookAction`, `HookRunner`,
-  `CronScheduler`, `HookActionDispatcher`, the twelve envelope variants);
+  `CronScheduler`, `HookActionDispatcher`, the thirteen envelope variants);
   no hook process is spawned (bk-3); no tick fires (bk-4); no CLI command,
   `TIMEOUT_MS` read, exit-code arm or doctor section (bk-5).
 - `LocalServiceRuntime` accessors and the `atm-runtime` composition of the

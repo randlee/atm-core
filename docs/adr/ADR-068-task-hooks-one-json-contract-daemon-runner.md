@@ -101,8 +101,8 @@ The module prints exactly one JSON object on stdout:
   atm runs those commands in order instead of the original. `command` is
   any atm command with an HTTP route except `hook.register`,
   `hook.disable`, `hook.list`, `cron.start`, `cron.end` and `cron.list`;
-  `request` is that route's bare body; `as`, when present, replaces
-  `caller_identity`. Every action's team must equal the registration's
+  `request` is that route's bare body; `caller_identity` is `as` when
+  present, else the original caller, whatever the body held. Every action's team must equal the registration's
   team and `as` must be on the roster, else the reply is malformed and no
   action runs. An empty list is malformed. A failing action stops the
   list with no rollback, and the error names how many actions committed.
@@ -136,11 +136,12 @@ calls `cron(args)` and `stop(args)` (ADR-069 D3, D4) and `doctor(request)`
 (D6).
 
 The CLI reads `TIMEOUT_MS` from the file as text at `atm hook register`,
-and `CRON_TIMEOUT_MS` (else `TIMEOUT_MS`) at `atm cron start`, and sends
-it with the request. The file is on the
+and `CRON_TIMEOUT_MS` (else `TIMEOUT_MS`) at `atm cron start`, checking
+the grammar only, and sends it with the request. The file is on the
 caller's machine, so that read stays CLI-side. Everything else about a
-registration is validated by the daemon's route, which is the only
-validator of the hook name. atm stores and compares no module sha;
+registration, including the timeout caps, is validated by the daemon's
+route, which is the only validator of the hook name and the only cap
+check. atm stores and compares no module sha;
 integrity of the installed module is the plugin's own `doctor()`
 (atm-bd-orchestration #349).
 
@@ -170,24 +171,34 @@ test."
 - A method with no registration calls the normal path with no spawn.
 
 One runner lives in `atm-daemon-bootstrap` behind the sealed trait
-`atm_core::boundary::HookRunner`. Actions go through the sealed trait
-`HookActionDispatcher`, which the base router implements and the cron
-crate also calls (ADR-069 D2). There is no nesting variable or header. A
+`atm_core::boundary::HookRunner`; every call takes a `HookTarget` built
+from a registration or a schedule. Actions go through the sealed trait
+`HookActionDispatcher`, implemented only by `UnhookedRouter`, a wrapper
+over the base router with no task filter, which the cron crate also calls
+(ADR-069 D2). A `dry_run` command's handled reply is validated and
+nothing is dispatched. There is no nesting variable or header. A
 nested `atm` call from a hook process is an ordinary request bounded by
 the hook timeout.
 
 The child's environment is exactly `ATM_TEAM`, `ATM_PHASE`, `PATH` and
-`HOME`, after `env_clear()`. Windows adds `SystemRoot` and `USERPROFILE`.
-`PATH` and `HOME` are copied from the daemon once at runner construction,
+`HOME`, after `env_clear()`; on unix `PATH` and `HOME` are required. On
+Windows `HOME` is optional, `SystemRoot` and `USERPROFILE` are required,
+`PATH` is found case-insensitively and `python` is resolved with
+`PATHEXT`. These are copied from the daemon once at runner construction,
 and the child runs in the registered cwd. The daemon reads no
 configuration from its environment (ADR-066). The deadline is
-`min(TIMEOUT_MS, remaining request budget - 500 ms)` for a task hook; a
-cron run uses the schedule's own timeout (ADR-069 D3). On a timeout the
+`min(TIMEOUT_MS, remaining request budget - 500 ms)` for a task hook,
+computed only in the runner; the filter passes the request deadline
+unchanged and fails at once when 500 ms or less remain. A cron run uses
+the schedule's own timeout (ADR-069 D3). On a timeout the
 child's process group is killed on unix, and only the child on Windows.
 
 ### D5. Registration is per team and phase; phases are independent; any roster member may register
 
-`hook_registration` is keyed `(team, phase, hook)`; `atm hook disable
+`hook_registration` is keyed `(team, phase, hook)`; re-registering an active key replaces its module,
+cwd, timeout, custom and registrant and keeps `registered_at` (its chain
+position), while re-registering an inactive key sets `registered_at` to
+now (an upsert, never a replace); `atm hook disable
 --phase <x>` sets every row of the phase inactive and keeps it for `atm hook
 list`. Rand (2026-10-18): "phases are INDEPENDENT entities. they could have
 different hook implementations." / "tasks don't need phase. arch-ctm can
