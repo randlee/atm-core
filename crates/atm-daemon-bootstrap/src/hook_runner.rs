@@ -336,10 +336,6 @@ mod tests {
 
     struct TestEnv(BTreeMap<String, String>);
 
-    fn headline(error: &AtmError) -> &str {
-        error.message().lines().next().unwrap()
-    }
-
     impl EnvSource for TestEnv {
         fn var(&self, key: &str) -> Option<String> {
             self.0.get(key).cloned()
@@ -579,6 +575,7 @@ mod tests {
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
+        assert!(String::from_utf8_lossy(&output.stdout).contains("BK3_ENVIRONMENT_PROOF_COMPLETE"));
     }
 
     #[tokio::test]
@@ -599,6 +596,7 @@ mod tests {
             fs::read_to_string(fixture.target.cwd.join("fixture_cwd.txt")).unwrap(),
             fixture.target.cwd.to_str().unwrap()
         );
+        println!("BK3_ENVIRONMENT_PROOF_COMPLETE");
     }
 
     #[cfg(windows)]
@@ -619,7 +617,14 @@ mod tests {
         let error = fixture.run().await.unwrap_err();
         assert_eq!(error.code(), AtmErrorCode::HookExit);
         assert!(error.message().starts_with("HOOK.EXIT: exit 3: "));
-        assert!(headline(&error).ends_with("TAIL"));
+        assert_eq!(
+            error.message(),
+            AtmError::hook_exit(HookExitCause::Exit {
+                code: 3,
+                stderr_tail: format!("{}TAIL", "x".repeat(508)),
+            })
+            .message()
+        );
         assert!(!error.message().contains("prefix"));
     }
 
@@ -629,8 +634,8 @@ mod tests {
         let fixture = Fixture::new();
         fixture.script("import os,signal\nos.kill(os.getpid(),signal.SIGKILL)\n");
         assert_eq!(
-            headline(&fixture.run().await.unwrap_err()),
-            "HOOK.EXIT: terminated by signal 9"
+            fixture.run().await.unwrap_err().message(),
+            AtmError::hook_exit(HookExitCause::Signal(9)).message()
         );
     }
 
@@ -713,8 +718,12 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(
-            headline(&error),
-            "HOOK.TIMEOUT: phase bk: request budget exhausted before the hook ran"
+            error.message(),
+            AtmError::hook_timeout(
+                &fixture.target.phase,
+                "request budget exhausted before the hook ran"
+            )
+            .message()
         );
         fixture.no_spawn();
     }
@@ -728,8 +737,8 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(
-            headline(&error),
-            "HOOK.TIMEOUT: phase bk: doctor budget exhausted"
+            error.message(),
+            AtmError::hook_timeout(&fixture.target.phase, "doctor budget exhausted").message()
         );
         fixture.no_spawn();
     }
@@ -747,8 +756,9 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(
-            headline(&error),
-            "HOOK.TIMEOUT: phase bk: hook concurrency limit reached"
+            error.message(),
+            AtmError::hook_timeout(&fixture.target.phase, "hook concurrency limit reached")
+                .message()
         );
         fixture.no_spawn();
     }
@@ -761,8 +771,8 @@ mod tests {
         let error = fixture.run().await.unwrap_err();
         assert_eq!(error.code(), AtmErrorCode::HookTimeout);
         assert_eq!(
-            headline(&error),
-            "HOOK.TIMEOUT: phase bk: no reply within 200 ms"
+            error.message(),
+            AtmError::hook_timeout(&fixture.target.phase, "no reply within 200 ms").message()
         );
     }
 
