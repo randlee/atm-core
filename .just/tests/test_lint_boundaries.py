@@ -1239,6 +1239,30 @@ rusqlite = "0.37"
                 rendered,
             )
 
+    def test_exact_file_dependency_owner_allows_only_that_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_doc(repo_root, "atm-storage-rusqlite")
+            owned = "crates/atm-storage-rusqlite/src/only_owned.rs"
+            sibling = "crates/atm-storage-rusqlite/src/sibling.rs"
+            outside = "crates/atm-core/src/lib.rs"
+            (repo_root / ".just/lint-config.toml").write_text(
+                LINT_CONFIG.replace(
+                    'allowed_source_roots = ["crates/atm-storage-rusqlite/src"]',
+                    f'allowed_source_roots = ["{owned}"]',
+                ),
+                encoding="utf-8",
+            )
+            for path in [owned, sibling, outside]:
+                (repo_root / path).write_text("use rusqlite::Connection;\n", encoding="utf-8")
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            message = "only crates/atm-storage-rusqlite source may import rusqlite directly"
+            self.assertNotIn(f"{owned}:1: {message}", rendered)
+            self.assertIn(f"{sibling}:1: {message}", rendered)
+            self.assertIn(f"{outside}:1: {message}", rendered)
+
     def test_collect_boundary_violations_flags_non_dev_atm_core_edge(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

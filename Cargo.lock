@@ -216,6 +216,7 @@ name = "atm-daemon-bootstrap"
 version = "1.6.2"
 dependencies = [
  "agent-team-mail-core",
+ "async-trait",
  "atm-herdr",
  "atm-http-runtime",
  "atm-observability",
@@ -230,6 +231,7 @@ dependencies = [
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "peer-tls",
+ "rustix",
  "sc-observability-log",
  "serde",
  "serde_json",

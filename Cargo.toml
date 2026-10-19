@@ -68,6 +68,7 @@ getrandom = "0.3"
 syn = { version = "2", features = ["full", "parsing", "visit"] }
 semver = { version = "1", features = ["serde"] }
 async-trait = "0.1"
+rustix = { version = "1.1", features = ["process"] }
 atm-core = { package = "agent-team-mail-core", path = "crates/atm-core", version = "1.6.2" }
 atm-observability = { path = "crates/atm-observability", version = "1.6.2" }
 atm-daemon-bootstrap = { path = "crates/atm-daemon-bootstrap", version = "1.6.2" }
