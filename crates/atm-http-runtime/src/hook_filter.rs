@@ -333,6 +333,9 @@ impl<D: HookActionDispatcher + 'static> TaskCommands for HookedTaskCommands<D> {
 pub(crate) mod test_support {
     use std::sync::Arc;
 
+    /// Test-only agent identity; production-like ATM identities are not used in fixtures (RULE-009).
+    pub const TEST_AGENT: &str = "test-agent";
+
     use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
     use atm_core::boundary::HookOutcome;
     use atm_core::boundary::{
@@ -390,7 +393,7 @@ pub(crate) mod test_support {
         WriteRequest::new(
             "/home".into(),
             "/work".into(),
-            agent("solar"),
+            agent(TEST_AGENT),
             "dev@test-team",
             team(),
             SendMessageSource::Inline("body".into()),
@@ -543,7 +546,7 @@ mod tests {
         atm_core::list::ListQuery {
             home_dir: "/home".into(),
             current_dir: "/work".into(),
-            caller_identity: agent("solar"),
+            caller_identity: agent(super::test_support::TEST_AGENT),
             caller_team: team(),
             target_address: None,
             selection_mode: atm_core::types::ReadSelection::All,
