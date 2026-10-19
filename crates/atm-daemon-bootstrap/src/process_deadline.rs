@@ -37,6 +37,7 @@ pub(crate) const STDERR_CAP: u64 = 64 << 10;
 struct GroupKillGuard {
     #[cfg(unix)]
     pgid: Option<rustix::process::Pid>,
+    #[cfg(unix)]
     armed: bool,
 }
 
@@ -50,16 +51,24 @@ impl GroupKillGuard {
                 .id()
                 .and_then(|pid| i32::try_from(pid).ok())
                 .and_then(rustix::process::Pid::from_raw),
+            #[cfg(unix)]
             armed: true,
         }
     }
 
     fn kill(&self) {
+        #[cfg(unix)]
         if self.armed {
-            #[cfg(unix)]
             if let Some(pgid) = self.pgid {
                 let _ = rustix::process::kill_process_group(pgid, rustix::process::Signal::KILL);
             }
+        }
+    }
+
+    fn disarm(&mut self) {
+        #[cfg(unix)]
+        {
+            self.armed = false;
         }
     }
 }
@@ -157,7 +166,7 @@ pub(crate) async fn spawn_until(
         let _ = child.kill().await;
         child.wait().await.map_err(|error| failed(&spec, error))?;
     }
-    guard.armed = false;
+    guard.disarm();
     result.map(|(status, stdout, stderr)| SpawnedOutput {
         status,
         stdout,
@@ -197,11 +206,13 @@ pub(crate) fn environment_probe_output() -> std::process::Output {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    #[cfg(unix)]
     use std::io::Read;
 
     use atm_core::atm_temp::{EnvSource, ProcessEnvSource};
     use atm_core::error::AtmErrorCode;
     use tempfile::TempDir;
+    #[cfg(unix)]
     use tokio::sync::oneshot;
 
     use super::*;
@@ -229,7 +240,14 @@ mod tests {
         SpawnSpec {
             program: python(),
             args: arguments,
-            env: Vec::new(),
+            env: ["PATH", "HOME", "SystemRoot", "USERPROFILE"]
+                .into_iter()
+                .filter_map(|key| {
+                    ProcessEnvSource
+                        .var(key)
+                        .map(|value| (key.into(), value.into()))
+                })
+                .collect(),
             cwd: root.path().to_path_buf(),
         }
     }
