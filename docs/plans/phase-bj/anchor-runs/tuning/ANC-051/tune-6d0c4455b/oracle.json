@@ -1,0 +1,180 @@
+{
+ "anchor_id": "ANC-051",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "963a62fa2442b25e5b04614fccf42062ae5fa572b23331c3a10fed58d3474042",
+ "anchor_scope": "the sender of atm task assign in atm-task-close.py and in atm-bd dispatch; notices keep ANC-042",
+ "anchor_statement": "Every atm task assign that the close hook or atm-bd issues for a sanity or qa bead must run as the phase lead named in .atm-bd/phase-<x>.toml, set on that one subprocess, while every notice atm-bd sends keeps the constant sender atm-bd@tool.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-051-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture: assign runs as the lead from the phase file on that subprocess only; notices stay atm-bd@tool.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The hook assigns the sanity bead with ATM_IDENTITY=team-lead taken from .atm-bd/phase-bj.toml on that subprocess only; its dev-complete send goes out as the dev and atm-bd's notices as atm-bd@tool.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-051-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture: assigning as the dev or as atm-bd@tool, or taking the lead from the process environment, is ruled out by the statement.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The hook assigns the sanity bead as the dev, or atm-bd assigns it as atm-bd@tool, or the lead identity comes from the process environment instead of the phase file.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-051-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase of the statement for the atm-bd side, including the notice clause.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd's dispatch runs atm task assign for each ready qa bead with ATM_IDENTITY set, in that one subprocess's environment, to the lead read from .atm-bd/phase-bj.toml; the ATM notices atm-bd sends still come from atm-bd@tool.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-051-probe-silent",
+   "probe": "silence",
+   "rationale": "Issues a qa assign (in scope) but says nothing about which identity it runs as; silence is not conflict.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The sanity role of atm-task-close.py assigns the group's qa bead to quality-mgr with qa-template.xml.j2 and the shared vars file.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "topical",
+   "item_id": "ANC-051-probe-topical",
+   "probe": "topical_only",
+   "rationale": "Mentions the topic of sender identity without the directive's content.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Sender identities for the hook's ATM commands are listed in the design notes; this item only adds the commands themselves.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_global_env",
+   "item_id": "ANC-051-probe-conflict_global_env",
+   "probe": "conflict",
+   "rationale": "Process-wide identity makes notices leave as the lead, not atm-bd@tool, and is not set on the one assign subprocess.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd exports ATM_IDENTITY=team-lead for its whole process at startup, so every assignment and every notice it sends comes from the lead.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_notice_as_lead",
+   "item_id": "ANC-051-probe-conflict_notice_as_lead",
+   "probe": "conflict",
+   "rationale": "Notices must keep the constant sender atm-bd@tool.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd sends its ready-bead notices with --as set to the phase lead.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_env_source",
+   "item_id": "ANC-051-probe-conflict_env_source",
+   "probe": "conflict",
+   "rationale": "The lead must come from .atm-bd/phase-<x>.toml, not from the caller's environment (the fail fixture names this case).",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The close hook passes --as \"$ATM_IDENTITY\" taken from its own process environment when it assigns the sanity bead.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-051-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Console icon rendering does not touch assignment identity.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The console shows the sol icon next to every Codex agent of model sol in the agent list.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

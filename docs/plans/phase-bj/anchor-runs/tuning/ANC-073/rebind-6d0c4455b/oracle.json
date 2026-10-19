@@ -1,0 +1,144 @@
+{
+ "anchor_id": "ANC-073",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "dcf232380914875e921f3000588236d748d76a11552ac20192772385bcae2ca1",
+ "anchor_scope": "atm-bd console pages, the sanity ledger row schema (elapsed per reviewer, dev identity), jev_client.py return value, the dev-sanity LLM spawn",
+ "anchor_statement": "atm-bd must show a sanity runs page and a quality runs page, newest run on top, one line per run; the sanity line must carry a pass/fail column and an elapsed-time column for JEV and for LLM each, and a column with the name and nerd icon of the dev whose work was checked; elapsed comes from the Jev client's own return and from a timer fenced around the LLM subagent, and the same rows feed the OTel database in the next atm release.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-073-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The sanity page lists runs newest first: bj-2 #1904 dev solar (icon) JEV ✅ 41 s LLM ✅ 88 s; dev-sanity's reply carries only the verdict.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-073-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The runs table is rendered into dev-sanity's chat reply, or elapsed is the gap between two ledger timestamps, or the dev column is missing.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-073-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase of every clause.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd adds a sanity runs page and a quality runs page, newest run first, one row per run. A sanity row shows JEV pass/fail and elapsed, LLM pass/fail and elapsed, and the checked dev's name with its nerd icon; JEV elapsed is what the Jev client returns, LLM elapsed is a timer around the LLM subagent, and the same rows feed the OTel database in the next atm release.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-073-probe-silent",
+   "probe": "silence",
+   "rationale": "In-scope ledger rows, silent about the pages.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "dev-sanity writes one ledger row per sanity run.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_oldest",
+   "item_id": "ANC-073-probe-conflict_oldest",
+   "probe": "conflict",
+   "rationale": "Newest must be on top.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The sanity runs page lists runs oldest first.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_no_quality",
+   "item_id": "ANC-073-probe-conflict_no_quality",
+   "probe": "conflict",
+   "rationale": "Both pages are required.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Only the sanity runs page is built; there is no quality runs page.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-073-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The release sprint uploads to TestPyPI before PyPI.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

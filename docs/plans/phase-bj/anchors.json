@@ -201,6 +201,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-19T00:45:23+00:00",
+          "event": "excluded",
+          "item": "atm-bj-5",
+          "reason": "PyPI publication is phase-end work; bj-5 adds manifest and installation verification, not publication.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-5",
+          "reason": "PyPI publication is phase-end work; bj-5 adds manifest and installation verification, not publication."
         }
       ]
     },
@@ -5592,6 +5605,13 @@
           "item": "atm-bj-3",
           "reason": "The phase validator and bead_schema.py belong to bj-2, not bj-3 sanity-stack.",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T00:45:23+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "Phase validation is bj-2; bj-4 does not change it.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -5602,6 +5622,10 @@
         {
           "item": "atm-bj-3",
           "reason": "The phase validator and bead_schema.py belong to bj-2, not bj-3 sanity-stack."
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "Phase validation is bj-2; bj-4 does not change it."
         }
       ]
     },
@@ -5869,12 +5893,23 @@
           "item": "atm-bj-3",
           "reason": "Skill publication and its manifest belong to bj-5, not bj-3 sanity-stack.",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T00:45:23+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "The skill manifest belongs to bj-5 and is not touched by bj-4.",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-3",
           "reason": "Skill publication and its manifest belong to bj-5, not bj-3 sanity-stack."
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "The skill manifest belongs to bj-5 and is not touched by bj-4."
         }
       ]
     },

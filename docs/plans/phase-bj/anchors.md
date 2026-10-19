@@ -160,6 +160,9 @@ Scope: adds a publish or release sprint, touches pyproject.toml packaging
 
 Deterministic check to pair with the development gate: pip index versions atm-bd lists the release; a TestPyPI release exists with an earlier upload time
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-5`: PyPI publication is phase-end work; bj-5 adds manifest and installation verification, not publication.
+
 Fixtures:
 - pass: The last sprint uploads the package to TestPyPI, checks the install, and then uploads it to PyPI.
 - fail: The last sprint uploads the package straight to PyPI with no TestPyPI upload before it.
@@ -1740,6 +1743,7 @@ Deterministic check to pair with the development gate: Run the phase validator o
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-1`: The phase validator belongs to bj-2, not the bj-1 task-close hook.
 - `atm-bj-3`: The phase validator and bead_schema.py belong to bj-2, not bj-3 sanity-stack.
+- `atm-bj-4`: Phase validation is bj-2; bj-4 does not change it.
 
 Fixtures:
 - pass: The phase validation method visits every bead under the phase epic.
@@ -1815,6 +1819,7 @@ Deterministic check to pair with the development gate: Inspect a published skill
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-3`: Skill publication and its manifest belong to bj-5, not bj-3 sanity-stack.
+- `atm-bj-4`: The skill manifest belongs to bj-5 and is not touched by bj-4.
 
 Fixtures:
 - pass: The published skill has a manifest listing the hash of each shipped file.
