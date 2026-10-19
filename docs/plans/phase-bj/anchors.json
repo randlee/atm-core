@@ -659,7 +659,10 @@
             "deterministic_check",
             "fixtures"
           ],
-          "previous_statement": "The atm-bd skill subcommand given --latest must install the skills from the head of the main branch of the atm-bd-orchestration repository."
+          "previous_statement": "The atm-bd skill subcommand given --latest must install the skills from the head of the main branch of the atm-bd-orchestration repository.",
+          "approved_by": "Rand",
+          "approval_quote": "yes",
+          "approval_context": "Rand, 2026-10-19, before approving: 'a) a skill has a manifest when it is published. b) you can specify the version of skill you install on disk. <-- these are not in conflict'"
         }
       ]
     },
