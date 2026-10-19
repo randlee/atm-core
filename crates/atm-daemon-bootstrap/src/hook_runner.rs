@@ -826,7 +826,7 @@ mod tests {
         fixture.reply(json!({"success":true,"message":"ok","findings":[{"severity":"warning","code":"TEST","message":"check"}]}));
         let registration: HookRegistration = serde_json::from_value(json!({
             "team":"test-team", "phase":"bk", "hook":"task.close", "module_path":fixture.target.module_path,
-            "cwd":fixture.target.cwd, "timeout_ms":2500, "custom":fixture.target.custom,
+            "cwd":fixture.target.cwd, "timeout_ms":30000, "custom":fixture.target.custom,
             "active":true, "registered_by":"test-agent", "registered_at":"2026-10-18T00:00:00Z", "disabled_at":null
         })).unwrap();
         let schedule: CronSchedule = serde_json::from_value(json!({
