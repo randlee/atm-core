@@ -619,6 +619,9 @@ impl StorageAndNudgeRouter {
         let mut initial_runtime_status = runtime_health.snapshot();
         initial_runtime_status.bare_cli_queue_full_drops_total =
             bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
+        let caller_team = query.caller_team.clone();
+        let team_override = query.team_override.clone();
+        let all_teams = query.all_teams;
         let mut report = doctor_projection
             .project(
                 query.with_daemon_paths(self.daemon_home.clone()),
@@ -650,11 +653,20 @@ impl StorageAndNudgeRouter {
         report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
         project_counter_health(&mut report.observability, diagnostic_counters);
         append_counter_finding(&mut report.findings, diagnostic_counters);
-        let hook_team = report
-            .member_roster
-            .as_ref()
-            .map(|roster| roster.team.clone());
-        report.hooks = crate::doctor_hooks::collect(self, hook_team.as_ref(), deadline).await;
+        let hook_team = crate::doctor_hooks::hook_team(
+            all_teams,
+            report
+                .member_roster
+                .as_ref()
+                .map(|roster| roster.team.clone()),
+            team_override,
+            caller_team,
+        );
+        let hooks = crate::doctor_hooks::collect(self, hook_team.as_ref(), deadline).await;
+        report.hooks = hooks.entries;
+        if !hooks.findings.is_empty() {
+            atm_core::doctor::append_doctor_findings(&mut report, hooks.findings);
+        }
         Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
 
@@ -3099,6 +3111,62 @@ pub(crate) mod tests {
         assert_eq!(
             response.messages[0].body,
             "<atm><action>queued-before-migration</action></atm>"
+        );
+    }
+
+    #[tokio::test]
+    async fn doctor_reports_a_hook_store_read_failure_as_an_error_finding() {
+        let fixture = fixture(true, None, None);
+        // The double fails its next active read, so the failure is deterministic.
+        let hooks = Arc::new(atm_runtime_test_support::InMemoryHookRegistrationStore::default());
+        hooks
+            .fail_active_all
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let assembly =
+            open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let doctor_projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig::default(),
+            assembly
+                .service_runtime
+                .with_hook_registration_store(hooks.clone()),
+            assembly.doctor_ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start doctor projection");
+        let mut router = fixture.router.clone();
+        router.service_runtime = router
+            .service_runtime
+            .clone()
+            .with_hook_registration_store(hooks.clone());
+        let response = router
+            .with_doctor_projection(Arc::new(doctor_projection))
+            .dispatch(
+                ApiRequest::new(atm_core::protocol::RequestEnvelope::Doctor(
+                    atm_core::doctor::DoctorQuery::default(),
+                )),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("doctor response");
+        let ResponseEnvelope::Doctor(report) = response.into_inner() else {
+            panic!("expected a doctor report");
+        };
+        assert!(report.hooks.is_empty(), "the hook section stays empty");
+        let finding = report
+            .findings
+            .iter()
+            .find(|finding| finding.code == atm_core::error::AtmErrorCode::StoreQueryFailed)
+            .expect("a store read error finding");
+        assert_eq!(finding.severity, atm_core::doctor::DoctorSeverity::Error);
+        let error_findings = report
+            .findings
+            .iter()
+            .filter(|finding| finding.severity == atm_core::doctor::DoctorSeverity::Error)
+            .count();
+        assert_eq!(
+            report.summary.error_count, error_findings,
+            "the summary counts the appended finding"
         );
     }
 

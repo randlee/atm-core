@@ -185,6 +185,8 @@ pub enum AtmErrorCode {
     HookTimeout,
     /// A hook reply did not match the reply contract.
     HookMalformed,
+    /// A runtime store query failed; `ATM_STORE_QUERY_FAILED` in the error-code doc.
+    StoreQueryFailed,
 }
 
 impl AtmErrorCode {
@@ -380,6 +382,7 @@ impl AtmErrorCode {
             Self::HookExit => "ATM_HOOK_EXIT",
             Self::HookTimeout => "ATM_HOOK_TIMEOUT",
             Self::HookMalformed => "ATM_HOOK_MALFORMED",
+            Self::StoreQueryFailed => "ATM_STORE_QUERY_FAILED",
             _ => unreachable!("all AtmErrorCode variants must be covered by as_str helpers"),
         }
     }
@@ -591,6 +594,7 @@ fn parse_post_send_or_misc_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_HOOK_EXIT" => AtmErrorCode::HookExit,
         "ATM_HOOK_TIMEOUT" => AtmErrorCode::HookTimeout,
         "ATM_HOOK_MALFORMED" => AtmErrorCode::HookMalformed,
+        "ATM_STORE_QUERY_FAILED" => AtmErrorCode::StoreQueryFailed,
         _ => return None,
     })
 }

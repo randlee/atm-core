@@ -392,9 +392,11 @@ mod tests {
 
         let doctor = {
             let router = routes.router.clone();
-            tokio::spawn(
-                async move { crate::doctor_hooks::collect(&router, None, deadline()).await },
-            )
+            tokio::spawn(async move {
+                crate::doctor_hooks::collect(&router, None, deadline())
+                    .await
+                    .entries
+            })
         };
         {
             let pause = pause.clone();
