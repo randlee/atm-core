@@ -2314,12 +2314,23 @@
           "item": "atm-bj-4",
           "reason": "the status table and its markdown export are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T03:50:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "The status table and its markdown export are phase-bi console code; bj-3 ships agent prompts, the link script and its harness.",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-4",
           "reason": "the status table and its markdown export are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "The status table and its markdown export are phase-bi console code; bj-3 ships agent prompts, the link script and its harness."
         }
       ]
     },
@@ -2739,6 +2750,13 @@
           "item": "atm-bj-2",
           "reason": "BJ-2 plans bead schemas, formula producers and validation; it does not write or change the atm-bd observability event logger.",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T03:50:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-5",
+          "reason": "bj-5 prints install and doctor errors to the user and does not write or change atm-bd's sc-observability event writer.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2753,6 +2771,10 @@
         {
           "item": "atm-bj-2",
           "reason": "BJ-2 plans bead schemas, formula producers and validation; it does not write or change the atm-bd observability event logger."
+        },
+        {
+          "item": "atm-bj-5",
+          "reason": "bj-5 prints install and doctor errors to the user and does not write or change atm-bd's sc-observability event writer."
         }
       ]
     },
@@ -4008,7 +4030,7 @@
       "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
       "summary": "poller checks bd ready then the ATM task before assigning",
       "scope": "atm-bd dispatch candidate filter order for sanity and qa beads",
-      "deterministic_check": "dispatch.py reads bd ready first and atm task list second for each candidate; a tick against a sanity bead whose task the hook assigned emits no assign action",
+      "deterministic_check": "runner.py's tick reads bd ready first and atm task list second for each candidate; a tick against a sanity bead whose task the hook assigned emits no assign action",
       "fixtures": {
         "pass": [
           "atm-bd reads bd ready, then atm task list, and skips the sanity bead because its task already exists."
@@ -4050,7 +4072,7 @@
           }
         }
       },
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -4108,6 +4130,20 @@
           "item": "atm-bj-2",
           "reason": "bj-2 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T03:47:20+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check"
+          ]
+        },
+        {
+          "at": "2026-10-19T03:50:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd dispatch and its read order are bj-4's runner.py; bj-3's agents assign nothing through atm-bd.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -4118,6 +4154,10 @@
         {
           "item": "atm-bj-2",
           "reason": "bj-2 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd dispatch and its read order are bj-4's runner.py; bj-3's agents assign nothing through atm-bd."
         }
       ]
     },
@@ -6515,6 +6555,20 @@
           "item": "atm-bj-4",
           "reason": "The skill manifest belongs to bj-5 and is not touched by bj-4.",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T03:50:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the generated manifest.yaml block is the package inventory, not the published skill-manifest.json hash manifest, which is bj-5's",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T03:50:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the generated manifest.yaml block is the package inventory, not the published skill-manifest.json hash manifest, which is bj-5's",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -6525,6 +6579,14 @@
         {
           "item": "atm-bj-4",
           "reason": "The skill manifest belongs to bj-5 and is not touched by bj-4."
+        },
+        {
+          "item": "atm-bj-1",
+          "reason": "the generated manifest.yaml block is the package inventory, not the published skill-manifest.json hash manifest, which is bj-5's"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "the generated manifest.yaml block is the package inventory, not the published skill-manifest.json hash manifest, which is bj-5's"
         }
       ]
     },
@@ -6623,6 +6685,13 @@
           "item": "atm-bj-2",
           "reason": "Installer verification belongs to bj-5, not the bj-2 pour and validate-plan.",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T03:50:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "Installer verification belongs to bj-5; bj-4 only regenerates the inventory block with gen_manifest.py.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -6637,6 +6706,10 @@
         {
           "item": "atm-bj-2",
           "reason": "Installer verification belongs to bj-5, not the bj-2 pour and validate-plan."
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "Installer verification belongs to bj-5; bj-4 only regenerates the inventory block with gen_manifest.py."
         }
       ]
     },
