@@ -2934,7 +2934,39 @@
           "The hook assigns the sanity bead as the dev, or atm-bd assigns it as atm-bd@tool, or the lead identity comes from the process environment instead of the phase file."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not state the directive: it is silent about it, names only the topic, or describes a different approach.",
+                "unclear": "The item states part of the directive's content but it cannot be determined whether it plans the directive itself.",
+                "yes": "The item says the sanity or qa assignment runs as the phase lead read from .atm-bd/phase-<x>.toml, set on that assign call only."
+              },
+              "instructions": "`anchor.statement` requires that every `atm task assign` that the close hook or atm-bd issues for a sanity or qa bead runs as the phase lead named in .atm-bd/phase-<x>.toml, set on that one subprocess, while atm-bd's notices keep the sender atm-bd@tool. Does `item.text` state this directive's specific content as a step, constraint or decision? An item that only names the topic, or that runs the assignment or the notices under another identity, or takes the lead from the process environment, does not state it. Judge presence of the directive only, not whether the item conflicts with it.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+                "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+                "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+              },
+              "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+                "unclear": "The item text is too vague to tell what part of the system it touches.",
+                "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -3399,7 +3431,39 @@
           "On FAIL the hook creates a finding child per undone deliverable and the lead assigns dev-fix.xml.j2 on a new layer."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not state the directive: it is silent about it, names only the topic, or describes a different approach.",
+                "unclear": "The item states part of the directive's content but it cannot be determined whether it plans the directive itself.",
+                "yes": "The item says that on a sanity FAIL the checked bead is reopened to its assignee and the dev is sent the sanity-fail.xml.j2 message on the open task."
+              },
+              "instructions": "`anchor.statement` requires that on a sanity FAIL below the round cap the sanity close hook reopens the checked bead to its assignee and sends that dev the sanity-fail.xml.j2 template naming each undone deliverable on the dev's still-open task, creating no finding bead, new layer or new task. Does `item.text` state this directive's specific content as a step, constraint or decision? An item that only names the topic, or that creates finding beads, a new layer or a new task instead, does not state it. Judge presence of the directive only, not whether the item conflicts with it.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item is one of the ruled-out cases, including when the item is silent about the directive.",
+                "unclear": "The item is ambiguous enough that it might describe one of the ruled-out cases, but it cannot be determined.",
+                "yes": "The item states a plan, approach or decision that is one of the ruled-out cases."
+              },
+              "instructions": "Does `item.text` plan something that `anchor.statement` rules out? The anchor rules out: creating finding beads or child beads for a sanity FAIL; cutting a new layer or branch for the fix; creating or assigning a new ATM task for the fix; not reopening the checked bead on a FAIL that is below the round cap. These are not a conflict: silence about FAIL handling; escalating to the lead without reopening when a FAIL reaches max_sanity_rounds, because the statement covers only FAILs below the cap; incrementing the round counter. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+                "unclear": "The item text is too vague to tell what part of the system it touches.",
+                "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 3,
       "status": "locked",
       "promoted_to": null,
@@ -3484,29 +3548,29 @@
           "questions": {
             "addressed": {
               "criteria": {
-                "no": "The item does not plan this: it is silent, only mentions limiting rounds in general, or leaves out or changes the count, the repository setting, the default of five, or escalation on the FAIL that reaches the limit.",
-                "unclear": "The item plans part of the cap and it cannot be determined whether the rest is planned.",
-                "yes": "The item plans the per-bead round count, the repository-configurable limit with five as the default, and escalation to the lead instead of reopening on the FAIL that reaches the limit, as rules or as a worked sequence."
+                "no": "The item does not state the directive: it is silent about it, names only the topic, or describes a different approach.",
+                "unclear": "The item states part of the directive's content but it cannot be determined whether it plans the directive itself.",
+                "yes": "The item says FAILs are counted in metadata.sanity_round on the sanity bead and that reaching max_sanity_rounds from the repository configuration (default 5) escalates to the lead instead of reopening."
               },
-              "instructions": "Does `item.text` plan the sanity round cap in `anchor.statement`: sanity FAIL rounds are counted per sanity bead (for example in `sanity_round`), the number of rounds allowed comes from the repository's `max_sanity_rounds` setting with five used when it is not set, and the FAIL that reaches the allowed number goes to the lead instead of reopening the checked bead? The plan may state these as rules or as a worked sequence of rounds, for example the fifth FAIL escalating when nothing is configured and a configured value of 2 escalating on the second FAIL. Judge presence of this plan only, not conflict.",
+              "instructions": "`anchor.statement` requires that the sanity close hook counts FAIL rounds per sanity bead in metadata.sanity_round and, when the count reaches max_sanity_rounds from the repository configuration (default 5 when unset), escalates to the phase lead instead of reopening the checked bead. Does `item.text` state this directive's specific content as a step, constraint or decision? An item that only names the topic, or that keeps the count somewhere else, uses a fixed cap, or never escalates, does not state it. Judge presence of the directive only, not whether the item conflicts with it.",
               "type": "choice"
             },
             "contradicted": {
               "criteria": {
-                "no": "Nothing in the item is irreconcilable with the rule: it follows the rule, says nothing about the round limit, or plans only behaviour the rule allows.",
-                "unclear": "The item might or might not conflict with the rule; its wording does not settle it.",
-                "yes": "The item plans behaviour that cannot be reconciled with the anchor's round-cap rule."
+                "no": "Nothing in the item is one of the ruled-out cases, including when the item is silent about the directive.",
+                "unclear": "The item is ambiguous enough that it might describe one of the ruled-out cases, but it cannot be determined.",
+                "yes": "The item states a plan, approach or decision that is one of the ruled-out cases."
               },
-              "instructions": "Does `item.text` state a plan that cannot be reconciled with `anchor.statement`? The anchor requires that once a sanity bead's FAIL count reaches the repository's `max_sanity_rounds` (5 when unset) the hook escalates to the phase lead rather than reopening the checked bead. A plan conflicts if it says FAILs are reopened without limit, never escalates, hard-codes the cap with no repository setting, uses a different default, or waits until the count exceeds the cap. A plan that describes reopening on a FAIL but says nothing about a round limit is silent about the cap, not in conflict. Judge conflict only.",
+              "instructions": "Does `item.text` plan something that `anchor.statement` rules out? The anchor rules out: keeping the FAIL count anywhere other than metadata.sanity_round on the sanity bead, such as a local file or the dev bead; a cap fixed in the script with no repository setting, or a default other than 5; reopening the checked bead on every FAIL with no escalation; reopening instead of escalating once the cap is reached. These are not a conflict: silence about counting; sending the sanity-fail template on a FAIL below the cap. Judge conflict only.",
               "type": "choice"
             },
             "relevant": {
               "criteria": {
-                "no": "The item is about a different subject and says nothing about sanity FAIL handling or round limits.",
-                "unclear": "It is not possible to tell what subject the item is about.",
-                "yes": "The item is about sanity FAIL handling or the number of allowed sanity FAIL rounds."
+                "no": "The item is about a different part of the system or a different activity and does not touch counting sanity FAIL rounds in metadata.sanity_round, the max_sanity_rounds setting, and escalation to the phase lead at the cap.",
+                "unclear": "The item text is too vague to tell whether it touches the anchor's subject.",
+                "yes": "The item plans or changes the sanity close hook's FAIL handling, the FAIL round count, max_sanity_rounds, or escalation at the cap."
               },
-              "instructions": "Is `item.text` about the same subject as `anchor.statement`, namely what the sanity close hook does after a sanity FAIL and how many FAIL rounds are allowed before the lead is involved? A different approach to the same subject still counts as the same subject. Judge subject only.",
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about counting sanity FAIL rounds in metadata.sanity_round, the max_sanity_rounds setting, and escalation to the phase lead at the cap. Does the work described in `item.text` plan, change, or depend on that subject? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
               "type": "choice"
             }
           }
@@ -3670,7 +3734,39 @@
           "A GitHub 403 makes the hook exit with an error and the dev task cannot close, or dev-template.xml.j2 tells the dev to pass --skip-checks when gh fails."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item is silent about the directive, names the subject only, or plans a different approach.",
+                "unclear": "The item refers to the directive's content in words too vague to tell whether it is planned.",
+                "yes": "The item states it. The item says the hook continues with local git checks when GitHub fails or is rate limited, recording it, and that --skip-checks is described only in --help with the lead-permission note."
+              },
+              "instructions": "Read `item.text` for this directive from `anchor.statement`: atm-task-close.py proceeds with local git checks when GitHub is unreachable or rate limited and records that in its result, and offers --skip-checks, described only in its --help as needing the phase lead's permission and named in no template or prompt. Answer yes only when the item itself states that content. Answer no when the item is silent, mentions the subject without that content, or plans a different approach (for example it stops on a GitHub failure or describes --skip-checks in a template or prompt). Do not judge conflict.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item plans none of the numbered cases; it may be silent about the directive.",
+                "unclear": "The item may describe one of the numbered cases but its wording does not settle it.",
+                "yes": "The item plans one of the numbered cases."
+              },
+              "instructions": "`anchor.statement` says atm-task-close.py proceeds with local git checks when GitHub is unreachable or rate limited and records that in its result, and offers --skip-checks, described only in its --help as needing the phase lead's permission and named in no template or prompt. Does `item.text` plan any of these: (1) exiting with an error, blocking the close, or waiting because GitHub is unreachable or rate limited; (2) naming or explaining --skip-checks in a template, agent prompt or other instruction text the dev reads? Silence is never a conflict. Also not a conflict: silence about GitHub failures or the flag; leaving GitHub failure handling to a later sprint; ordinary PR and stack checks when GitHub works. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "No when the item works on something else, such as console display, logging or release packaging, and does not touch how atm-task-close.py behaves when GitHub is unreachable or rate limited, its PR and stack checks, and the --skip-checks flag and where it is described.",
+                "unclear": "The item text is too vague to tell whether it touches the anchor's subject.",
+                "yes": "Yes when the item plans or changes the hook's GitHub failure handling, its PR or stack checks, or the --skip-checks flag or its documentation."
+              },
+              "instructions": "Does `item.text` touch how atm-task-close.py behaves when GitHub is unreachable or rate limited, its PR and stack checks, and the --skip-checks flag and where it is described? Answer about subject matter only; whether the item follows `anchor.statement` is judged elsewhere.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -3840,7 +3936,39 @@
           "atm-bd caches the task list from the previous tick and assigns the sanity bead a second time."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not state the directive: it is silent about it, names only the topic, or describes a different approach.",
+                "unclear": "The item states part of the directive's content but it cannot be determined whether it plans the directive itself.",
+                "yes": "The item says atm-bd reads bd ready first and then checks the ATM tasks for that bead id, assigning only when none exists."
+              },
+              "instructions": "`anchor.statement` requires that atm-bd assigns a sanity or qa bead only when bd ready lists it and, checked after that, no ATM task with that bead id exists, so a bead whose task the hook already assigned is never assigned twice. Does `item.text` state this directive's specific content as a step, constraint or decision? An item that only names the topic, or that checks in another order, uses an earlier or cached task list, or skips the task check, does not state it. Judge presence of the directive only, not whether the item conflicts with it.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+                "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+                "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+              },
+              "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+                "unclear": "The item text is too vague to tell what part of the system it touches.",
+                "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -4366,7 +4494,39 @@
           "dev-sanity closes the sanity task refused because the lock was busy, or sends the dev a FAIL, or sends the user a message asking who holds the lock."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item is silent about the directive, names the subject only, or plans a different approach.",
+                "unclear": "The item refers to the directive's content in words too vague to tell whether it is planned.",
+                "yes": "The item states it. The item says sanity-stack's claim has a timeout, that on expiry it reports the holder, and that dev-sanity then keeps the task active and retries."
+              },
+              "instructions": "Read `item.text` for this directive from `anchor.statement`: sanity-stack takes a timeout for the stack bead claim and on expiry returns the holder's identity, claim time and active task, and dev-sanity then keeps the sanity task active, asks the holder once, continues other sanity work and retries, with no refusal, no FAIL to the dev and no escalation to a person. Answer yes only when the item itself states that content. Answer no when the item is silent, mentions the subject without that content, or plans a different approach (for example it waits without limit, refuses the task, fails the dev or asks a person). Do not judge conflict.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item plans none of the numbered cases; it may be silent about the directive.",
+                "unclear": "The item may describe one of the numbered cases but its wording does not settle it.",
+                "yes": "The item plans one of the numbered cases."
+              },
+              "instructions": "`anchor.statement` says sanity-stack takes a timeout for the stack bead claim and on expiry returns the holder's identity, claim time and active task, and dev-sanity then keeps the sanity task active, asks the holder once, continues other sanity work and retries, with no refusal, no FAIL to the dev and no escalation to a person. Does `item.text` plan any of these: (1) waiting on the claim with no time limit; (2) refusing or closing the sanity task because the lock is busy; (3) sending the dev a FAIL because of the lock; (4) escalating to a person about the lock, for example messaging Rand, the user or a human operator? Silence is never a conflict. Also not a conflict: silence about the lock timeout; messaging the lock holder once; claiming and releasing the stack bead around a write. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+                "unclear": "The item text is too vague to tell what part of the system it touches.",
+                "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -4536,7 +4696,39 @@
           "The qa role assigns the poured fix beads to devs, or sends the lead nothing on PASS."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not state this: it is silent about the qa role's close and status message, names only the topic, or describes a different approach.",
+                "unclear": "The item mentions the qa role's close or message but it cannot be determined whether it closes the bead and task and informs the lead.",
+                "yes": "The item says the qa role closes the qa bead and its task and sends the lead the qa status, and does not have the qa role assign anything; fix beads, if mentioned, are left for the lead."
+              },
+              "instructions": "`anchor.statement` requires that the qa role of the close hook closes the QA bead and its task and sends the phase lead a status message whatever the verdict, and assigns nothing; quality-mgr pours the fix groups before the close. Does `item.text` state that the qa role closes the qa bead and its task and sends the lead a status message, without the qa role assigning anything? A status message sent with no condition on the verdict counts for both PASS and FAIL. An item that only names the topic, or that messages the lead on one verdict only, assigns beads, or pours fix groups in the hook, does not state it. Judge presence of the directive only, not conflict.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+                "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+                "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+              },
+              "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity and does not touch the qa role of atm-task-close.py: its inputs and checks, what it closes, the status message to the phase lead, and whether it assigns anything.",
+                "unclear": "The item text is too vague to tell whether it touches the anchor's subject.",
+                "yes": "The item plans or changes anything the qa role of atm-task-close.py does, including its inputs, checks, close, messages or assignments."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about the qa role of atm-task-close.py: its inputs and checks, what it closes, the status message to the phase lead, and whether it assigns anything. Does the work described in `item.text` plan, change, or depend on that subject? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -4605,7 +4797,39 @@
           "sanity_round is 2 after two rebase-required outcomes."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item text is silent about the directive: it neither includes the directive's specific content nor references it.",
+                "unclear": "The item text alludes to the directive's topic but it is not possible to tell whether the directive itself is included.",
+                "yes": "The item text contains the directive's specific content, in its own words or the user's, as a step, constraint, or stated starting point."
+              },
+              "instructions": "Does `item.text` explicitly carry out, preserve, or plan for the directive given in `anchor.statement`? Look for the directive's specific content being present in the item: the same starting point, the same method, the same constraint, or an explicit step that does what the statement asks. A generic mention of the topic without the directive's specific content does not count. Judge presence of the directive only, not whether the item conflicts with it.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item plans none of the numbered cases; it may be silent about the directive.",
+                "unclear": "The item may describe one of the numbered cases but its wording does not settle it.",
+                "yes": "The item plans one of the numbered cases."
+              },
+              "instructions": "`anchor.statement` says a rebase-required outcome leaves metadata.sanity_round unchanged and does not count toward max_sanity_rounds. Does `item.text` plan any of these: (1) incrementing metadata.sanity_round on a rebase-required outcome; (2) counting rebase-required outcomes toward max_sanity_rounds, or escalating because of them? Silence is never a conflict. Also not a conflict: incrementing sanity_round on a sanity FAIL; silence about the counter; sending rebase-required to the dev. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+                "unclear": "The item text is too vague to tell what part of the system it touches.",
+                "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
