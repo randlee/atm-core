@@ -177,52 +177,136 @@ impl ChainTracker {
 
 #[cfg(test)]
 mod tests {
+    use std::pin::pin;
     use std::sync::Arc;
+    use std::task::{Context, Waker};
     use std::time::Duration;
 
     use atm_core::api::RequestDeadline;
-    use tokio::sync::oneshot;
+    use atm_core::boundary::{
+        DummyHookRunner, RecordingHookActionDispatcher, RecordingTaskCommands, TaskAssign,
+        TaskCommands,
+    };
+    use atm_core::hook::HookReply;
+    use atm_runtime_test_support::InMemoryHookRegistrationStore;
+    use tokio::sync::{Notify, oneshot, watch};
 
     use super::ChainTracker;
+    use crate::hook_filter::test_support::{
+        assign_request, ctx, deadline, expect_err, handled_action, register, reply,
+    };
+    use crate::hook_filter::{ActiveHookSnapshot, HookedTaskCommands};
+
+    /// A `task.assign` filter whose one hook waits on `hold` before it replies.
+    /// `entered` fires once a chain is live inside that wait.
+    struct Held {
+        commands: Arc<HookedTaskCommands<RecordingHookActionDispatcher>>,
+        chains: Arc<ChainTracker>,
+        actions: Arc<RecordingHookActionDispatcher>,
+        runner: Arc<DummyHookRunner>,
+    }
+
+    fn held_hook(hold: &watch::Receiver<bool>, entered: &Arc<Notify>) -> Held {
+        let store = Arc::new(InMemoryHookRegistrationStore::new());
+        register(&store, "task.assign", "bk", 1);
+        let runner = Arc::new(DummyHookRunner::default());
+        {
+            let hold = hold.clone();
+            let entered = Arc::clone(entered);
+            *runner.before_reply.lock().expect("before reply") = Some(Arc::new(move |_index| {
+                let entered = Arc::clone(&entered);
+                let mut hold = hold.clone();
+                Box::pin(async move {
+                    entered.notify_one();
+                    hold.wait_for(|released| *released)
+                        .await
+                        .expect("hold sender lives");
+                })
+            }));
+        }
+        let actions = Arc::new(RecordingHookActionDispatcher::default());
+        let chains = Arc::new(ChainTracker::new());
+        let snapshot = Arc::new(ActiveHookSnapshot::load(store).expect("snapshot"));
+        let commands = Arc::new(HookedTaskCommands::new(
+            Arc::new(RecordingTaskCommands::default()),
+            Arc::clone(&actions),
+            snapshot,
+            runner.clone(),
+            Arc::clone(&chains),
+        ));
+        Held {
+            commands,
+            chains,
+            actions,
+            runner,
+        }
+    }
+
+    /// Starts one held `task.assign` through the filter and returns its caller.
+    fn start_held_assign(
+        held: &Held,
+    ) -> tokio::task::JoinHandle<Result<atm_core::api::ApiResponse, atm_core::error::AtmError>>
+    {
+        let request = assign_request(false);
+        reply(
+            &held.runner,
+            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+        );
+        let commands = Arc::clone(&held.commands);
+        tokio::spawn(async move {
+            commands
+                .assign(TaskAssign(Box::new(request)), &ctx(deadline()))
+                .await
+        })
+    }
 
     #[tokio::test(start_paused = true)]
     async fn drain_waits_for_a_held_chain_then_returns_zero() {
-        let tracker = Arc::new(ChainTracker::new());
-        let (release, held) = oneshot::channel::<()>();
-        let chain = tracker
-            .spawn(async move {
-                let _ = held.await;
-                7
-            })
-            .expect("chain starts");
-        let drainer = tokio::spawn({
-            let tracker = Arc::clone(&tracker);
-            async move {
-                tracker
-                    .drain(RequestDeadline::after(Duration::from_secs(10)))
-                    .await
-            }
-        });
-        tokio::task::yield_now().await;
-        release.send(()).expect("chain is still held");
-        assert_eq!(drainer.await.expect("drain task"), 0);
-        assert_eq!(chain.await.expect("chain completes"), 7);
+        let (release, hold) = watch::channel(false);
+        let entered = Arc::new(Notify::new());
+        let held = held_hook(&hold, &entered);
+        let caller = start_held_assign(&held);
+        entered.notified().await;
+
+        // One poll while the chain is held: drain must not finish yet.
+        let mut drain = pin!(
+            held.chains
+                .drain(RequestDeadline::after(Duration::from_secs(10)))
+        );
+        let mut cx = Context::from_waker(Waker::noop());
+        assert!(drain.as_mut().poll(&mut cx).is_pending());
+
+        release.send_replace(true);
+        assert_eq!(drain.await, 0);
+        caller
+            .await
+            .expect("caller task")
+            .expect("assign completes");
+        assert_eq!(held.actions.calls.lock().expect("calls").len(), 1);
     }
 
     #[tokio::test(start_paused = true)]
     async fn drain_aborts_at_the_deadline() {
-        let tracker = ChainTracker::new();
-        let (_hold, held) = oneshot::channel::<()>();
-        let chain = tracker
-            .spawn(async move {
-                let _ = held.await;
-            })
-            .expect("chain starts");
-        let aborted = tracker
+        let (_release, hold) = watch::channel(false);
+        let entered = Arc::new(Notify::new());
+        let held = held_hook(&hold, &entered);
+        let caller = start_held_assign(&held);
+        entered.notified().await;
+
+        let aborted = held
+            .chains
             .drain(RequestDeadline::after(Duration::from_secs(1)))
             .await;
         assert_eq!(aborted, 1);
-        assert!(chain.await.expect_err("chain is aborted").is_cancelled());
+        let error = expect_err(caller.await.expect("caller task"));
+        assert!(
+            error
+                .message()
+                .contains("hook chain cancelled: daemon shutting down"),
+            "unexpected error: {}",
+            error.message()
+        );
+        assert!(held.actions.calls.lock().expect("calls").is_empty());
     }
 
     /// Interleaves an admitted chain with `begin_shutdown` and `drain`: the
