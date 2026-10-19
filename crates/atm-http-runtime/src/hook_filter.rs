@@ -20,7 +20,7 @@ use atm_core::boundary::{
     HookRegistrationStore, HookRunner, PhaseId, TaskAssign, TaskCallCtx, TaskClose, TaskCommand,
     TaskCommands, TaskEvents, TaskList, TaskStart, sealed,
 };
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::hook::{
     HookAction, HookActionsResponse, HookCaller, HookReply, HookRequest, HookTarget,
 };
@@ -255,7 +255,15 @@ async fn run_chain<D: HookActionDispatcher>(run: ChainRun<D>) -> Result<Decision
         let reply = match run.runner.run(&target, &request, run.deadline).await {
             Ok(outcome) => outcome.reply,
             Err(error) => {
-                log_run(&run.team, &reg.phase, &run.hook, "error", started);
+                log_run(
+                    &run.team,
+                    &reg.phase,
+                    &run.hook,
+                    &run.caller.identity,
+                    0,
+                    runner_error_outcome(&error),
+                    started,
+                );
                 return Err(error);
             }
         };
@@ -263,6 +271,8 @@ async fn run_chain<D: HookActionDispatcher>(run: ChainRun<D>) -> Result<Decision
             &run.team,
             &reg.phase,
             &run.hook,
+            &run.caller.identity,
+            reply_action_count(&reply),
             reply_outcome(&reply),
             started,
         );
@@ -305,24 +315,52 @@ async fn dispatch_handled<D: HookActionDispatcher>(
 }
 
 /// One ADR-067 `run` entry per hook call, logged by the chain that made the call.
-fn log_run(team: &TeamName, phase: &PhaseId, hook: &HookName, outcome: &str, started: Instant) {
+fn log_run(
+    team: &TeamName,
+    phase: &PhaseId,
+    hook: &HookName,
+    caller: &impl std::fmt::Display,
+    action_count: usize,
+    outcome: &str,
+    started: Instant,
+) {
     tracing::info!(
         subsystem = "atm_hook",
         action = "run",
         team = %team,
         phase = %phase,
         hook = %hook,
+        caller = %caller,
+        action_count,
         outcome,
         elapsed_ms = elapsed_ms(started),
     );
 }
 
+/// The ADR-067 outcome for a reply the runner returned.
 fn reply_outcome(reply: &HookReply) -> &'static str {
     match reply {
         HookReply::NotApplicable => "not_applicable",
         HookReply::PassThrough => "pass_through",
         HookReply::Refused { .. } => "refused",
-        HookReply::Handled(_) => "handled",
+        HookReply::Handled(_) => "actions",
+    }
+}
+
+/// The ADR-067 outcome for a runner failure, by its error code.
+fn runner_error_outcome(error: &AtmError) -> &'static str {
+    match error.code() {
+        AtmErrorCode::HookTimeout => "timeout",
+        AtmErrorCode::HookMalformed => "malformed",
+        _ => "exit",
+    }
+}
+
+/// The actions a `handled` reply names; every other reply names none.
+fn reply_action_count(reply: &HookReply) -> usize {
+    match reply {
+        HookReply::Handled(list) => list.len(),
+        _ => 0,
     }
 }
 

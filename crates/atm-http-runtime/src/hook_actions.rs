@@ -50,14 +50,14 @@ impl HookActionDispatcher for UnhookedRouter {
                         action.command
                     ))
                 })?;
-            requests.push((action.command.clone(), request));
+            requests.push((action.command.clone(), identity.clone(), request));
         }
         if spec.dry_run {
             return Ok(Vec::new());
         }
         let total = requests.len();
         let mut done = Vec::with_capacity(total);
-        for (index, (command, request)) in requests.into_iter().enumerate() {
+        for (index, (command, run_as, request)) in requests.into_iter().enumerate() {
             let started = Instant::now();
             let result = self
                 .0
@@ -68,7 +68,7 @@ impl HookActionDispatcher for UnhookedRouter {
                     next_request_id(),
                 )
                 .await;
-            log_action(&spec, &command, result.is_ok(), started);
+            log_action(&spec, &command, &run_as, result.is_ok(), started);
             let response = result.map_err(|error| {
                 error.with_context(format!(
                     "hook action {}/{total} ({command}) failed after {index} committed",
@@ -82,16 +82,23 @@ impl HookActionDispatcher for UnhookedRouter {
 }
 
 /// One ADR-067 `action` entry per dispatched action.
-fn log_action(spec: &DispatchSpec, command: &str, ok: bool, started: Instant) {
+fn log_action(
+    spec: &DispatchSpec,
+    command: &str,
+    run_as: &impl std::fmt::Display,
+    ok: bool,
+    started: Instant,
+) {
     tracing::info!(
         subsystem = "atm_hook",
         action = "action",
         team = %spec.team,
         phase = %spec.phase,
         hook = %spec.hook,
-        outcome = if ok { "ok" } else { "error" },
+        action_command = command,
+        run_as = %run_as,
+        outcome = if ok { "action_ok" } else { "action_err" },
         elapsed_ms = elapsed_ms(started),
-        command,
     );
 }
 
@@ -103,7 +110,7 @@ mod tests {
     use atm_core::boundary::{
         DispatchSpec, HookActionDispatcher, TaskAssign, TaskCallCtx, TaskClose, TaskCommands,
     };
-    use atm_core::error::AtmErrorCode;
+    use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::hook::{HookAction, HookActionsResponse, HookReply};
     use atm_core::protocol::ResponseEnvelope;
     use atm_core::send::WriteRequest;
@@ -498,8 +505,8 @@ mod tests {
         }
     }
 
-    /// The `atm_hook` entries as `(action, phase, hook, outcome)`, in emission order.
-    fn hook_entries(captured: &Captured) -> Vec<(String, String, String, String)> {
+    /// The `atm_hook` entries as sorted field pairs, timing excluded, in emission order.
+    fn hook_entries(captured: &Captured) -> Vec<Vec<(String, String)>> {
         let events = captured.0.lock().expect("captured log");
         events
             .iter()
@@ -509,25 +516,53 @@ mod tests {
                     .any(|(k, v)| k == "subsystem" && v == "atm_hook")
             })
             .map(|fields| {
-                let get = |name: &str| {
-                    fields
-                        .iter()
-                        .find(|(k, _)| k == name)
-                        .map(|(_, v)| v.clone())
-                        .unwrap_or_default()
-                };
-                (get("action"), get("phase"), get("hook"), get("outcome"))
+                let mut pairs: Vec<(String, String)> = fields
+                    .iter()
+                    .filter(|(k, _)| k != "elapsed_ms")
+                    .cloned()
+                    .collect();
+                pairs.sort();
+                pairs
             })
             .collect()
     }
 
-    fn entry(action: &str, phase: &str, outcome: &str) -> (String, String, String, String) {
-        (
-            action.to_owned(),
-            phase.to_owned(),
-            "task.assign".to_owned(),
-            outcome.to_owned(),
-        )
+    /// One expected `atm_hook` entry as sorted field pairs.
+    fn entry(fields: &[(&str, &str)]) -> Vec<(String, String)> {
+        let mut pairs: Vec<(String, String)> = fields
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect();
+        pairs.sort();
+        pairs
+    }
+
+    /// The expected `run` entry for `task.assign` in team `test-team`, called by `sender`.
+    fn run_entry(phase: &str, action_count: &str, outcome: &str) -> Vec<(String, String)> {
+        entry(&[
+            ("subsystem", "atm_hook"),
+            ("action", "run"),
+            ("team", "test-team"),
+            ("phase", phase),
+            ("hook", "task.assign"),
+            ("caller", "sender"),
+            ("action_count", action_count),
+            ("outcome", outcome),
+        ])
+    }
+
+    /// The expected `action` entry in phase `bk`, run as `sender` (the caller, with no `run_as`).
+    fn action_entry(outcome: &str) -> Vec<(String, String)> {
+        entry(&[
+            ("subsystem", "atm_hook"),
+            ("action", "action"),
+            ("team", "test-team"),
+            ("phase", "bk"),
+            ("hook", "task.assign"),
+            ("action_command", "task.assign"),
+            ("run_as", "sender"),
+            ("outcome", outcome),
+        ])
     }
 
     #[tokio::test]
@@ -562,9 +597,9 @@ mod tests {
         assert_eq!(
             hook_entries(&captured),
             vec![
-                entry("run", "bk", "handled"),
-                entry("action", "bk", "ok"),
-                entry("action", "bk", "ok"),
+                run_entry("bk", "2", "actions"),
+                action_entry("action_ok"),
+                action_entry("action_ok"),
             ]
         );
     }
@@ -603,11 +638,50 @@ mod tests {
         assert_eq!(
             hook_entries(&captured),
             vec![
-                entry("run", "bj", "not_applicable"),
-                entry("run", "bk", "handled"),
-                entry("action", "bk", "ok"),
-                entry("action", "bk", "ok"),
+                run_entry("bj", "0", "not_applicable"),
+                run_entry("bk", "2", "actions"),
+                action_entry("action_ok"),
+                action_entry("action_ok"),
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn runner_timeout_logs_a_timeout_run_and_no_action_entries() {
+        let captured = Captured::default();
+        let _guard =
+            tracing::subscriber::set_default(tracing_subscriber::layer::SubscriberExt::with(
+                tracing_subscriber::Registry::default(),
+                Capture(captured.clone()),
+            ));
+        let fixture = fixture(true, None, None);
+        let store = Arc::new(InMemoryHookRegistrationStore::default());
+        crate::hook_filter::test_support::register(&store, "task.assign", "bk", 1);
+        let runner = Arc::new(atm_core::boundary::DummyHookRunner::default());
+        runner
+            .replies
+            .lock()
+            .expect("replies")
+            .push_back(Err(AtmError::hook_timeout(
+                &crate::hook_filter::test_support::phase("bk"),
+                "hook exceeded its deadline",
+            )));
+        let commands = hooked(&fixture.router, &store, runner.clone());
+
+        let Err(error) = commands
+            .assign(
+                TaskAssign(Box::new(task_write_request(&fixture, "T-TIMEOUT-IN"))),
+                &sender_ctx(),
+            )
+            .await
+        else {
+            panic!("a runner timeout fails the hooked assign");
+        };
+
+        assert_eq!(error.code(), AtmErrorCode::HookTimeout);
+        assert_eq!(
+            hook_entries(&captured),
+            vec![run_entry("bk", "0", "timeout")]
         );
     }
 }
