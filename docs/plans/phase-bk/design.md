@@ -228,8 +228,10 @@ a lot more logic branching that will be hard to test." So:
   The method name is the hook name.
 - `NormalTaskCommands` (atm-http-runtime) implements it with today's task
   path, unchanged.
-- `HookedTaskCommands { inner: Arc<dyn TaskCommands>, actions: Arc<dyn
-  HookActionDispatcher>, snapshot, runner }` implements the same trait.
+- `HookedTaskCommands<D: HookActionDispatcher = UnhookedRouter> { inner:
+  Arc<dyn TaskCommands>, actions: Arc<D>, snapshot, runner }` implements
+  the same trait for every `D` (filter unit tests use the recording
+  double).
   A method with no active registration for the caller's team calls
   `inner` directly with no spawn: a plug-in that implements two of six
   hooks passes the other four through (Rand: "you need to handle the case
@@ -323,8 +325,9 @@ bump at plan review.
 exposing it's features." `atm cron` is the workspace crate `atm-cron`
 (`crates/atm-cron`), the only implementation of the sealed core trait
 `atm_core::boundary::CronScheduler` (`start`, `end`, `list`).
-`validate_expression` and `run_now` are inherent methods on `AtmCron`. The
-crate depends on `atm-core` (every store and hook type through
+`AtmCron` has no other public operation besides `new` and `start_worker`;
+tests fire ticks by advancing the `ManualClock` test double (feature
+`test-utils`). The crate depends on `atm-core` (every store and hook type through
 `atm_core::boundary`), `tokio`, `chrono`, the `cron` crate 0.17,
 `async-trait`, `serde_json`, `getrandom` (for `SystemJitter`, D-r) and
 `tracing`. It never depends on
@@ -516,9 +519,11 @@ and own disjoint paths, rebased onto the stack in that order
 bk-4's crate into bk-3's router and bootstrap and edits bk-3's `doctor()`.
 bk-5 is the integration sprint and carries the user documentation and the
 cron composition; a docs-only sprint would be thin (atm-beads plan
-guidelines). Each sprint carries its tests; hook execution
-is tested with a fixture module and a paused clock (`start_paused = true`),
-never a live daemon.
+guidelines). Each sprint carries its tests, never a live daemon. A test
+that spawns a real child runs on the real clock with a generous
+`timeout_ms` and asserts content; the timeout case uses a child that
+never finishes. Scheduling is tested with `ManualClock`, and
+`start_paused` only with doubles.
 
 **D-5 Phases are independent; hooks run in order until one handles.** Rand
 (2026-10-18): "phases are INDEPENDENT entities. they could have different
@@ -542,10 +547,11 @@ further rule is a fenix decision (2026-10-18) that Rand may override:
 
 - **One shared budget.** All hooks of one command run within the single
   request deadline. Each hook's deadline is `min(its TIMEOUT_MS, remaining
-  - HOOK_ACTION_RESERVE_MS)`, computed only in `DaemonHookRunner`. The
-  filter passes the request deadline unchanged and, when `remaining <=
-  HOOK_ACTION_RESERVE_MS`, fails the command with `ATM_HOOK_TIMEOUT`
-  naming the phase without calling the runner; a hook is never skipped.
+  - HOOK_ACTION_RESERVE_MS)`, computed only in `DaemonHookRunner` by the
+  pure `runner_budget`. The filter passes the request deadline unchanged
+  and has no budget check; a runner left without budget returns
+  `ATM_HOOK_TIMEOUT` naming the phase without spawning, and the filter
+  returns that error unchanged. A hook is never skipped.
 
 Cost: up to one spawn per active phase per hooked command, so a module must
 answer not-applicable quickly for a task it does not own. `atm cron start`
@@ -592,7 +598,7 @@ is appended. The CLI exit arms are bk-5's
 | Constructor | Message |
 | --- | --- |
 | `hook_exit(cause: HookExitCause)` | `Exit { code, stderr_tail }`: `HOOK.EXIT: exit <code>: <tail>`; `Signal(n)`: `HOOK.EXIT: terminated by signal <n>`; `Spawn { path, cause }`: `HOOK.EXIT: cannot run <path>: <cause>`; `Panic(payload)`: `HOOK.EXIT: hook runner panicked: <payload>`; `Missing(what)`: `HOOK.EXIT: <what>` (e.g. `python3 not found on PATH`) |
-| `hook_timeout(phase: &PhaseId, detail: &str)` | `HOOK.TIMEOUT: phase <p>: <detail>`; detail is `no reply within <n> ms` or `request budget exhausted before the hook ran` |
+| `hook_timeout(phase: &PhaseId, detail: &str)` | `HOOK.TIMEOUT: phase <p>: <detail>`; detail is `no reply within <n> ms`, `request budget exhausted before the hook ran` or `doctor budget exhausted` |
 | `hook_malformed(detail: &str)` | `HOOK.MALFORMED: <detail>` |
 | `hook_module_invalid(detail: &str)` | `HOOK.MODULE_INVALID: <detail>` |
 | `hook_refused(message: &str)` | `<message>` |
@@ -622,9 +628,10 @@ outcome is `ATM_HOOK_MALFORMED`.
 | `search` | `SearchRequest` | `as` absent; `query.team` absent or the registration team | `query.team`, forced to the registration team | none |
 | `doctor` | `DoctorQuery` | `as` absent; `all_teams` false; `team_override` absent or the registration team | `caller_team` and `team_override`, forced to the registration team | none |
 
-A `caller_team` other than the registration team is malformed (D-d).
 | `hook.register`, `hook.disable`, `hook.list`, `cron.start`, `cron.end`, `cron.list` | - | refused |
 | heartbeat, graft, reload, compatibility, queue, any other name | - | refused |
+
+A `caller_team` other than the registration team is malformed (D-d).
 
 ### 9.3 Routing a request to a `TaskCommands` method
 
@@ -727,15 +734,23 @@ Constants in `atm_storage::request_budget` (bk-1): `HOOK_TIMEOUT_MAX_MS =
   the cron start route above `CRON_TIMEOUT_MAX_MS`, each with
   `ATM_HOOK_MODULE_INVALID`. The routes are the only cap check; the CLI
   checks the grammar only (§9.8).
-- `DaemonHookRunner::run` and `::stop` alone compute the runner deadline
-  `min(timeout_ms, remaining - HOOK_ACTION_RESERVE_MS)`; at or below zero
-  they return `ATM_HOOK_TIMEOUT` without spawning. The filter passes
-  `ctx.deadline` unchanged after its own pre-check (D-5); `doctor` applies
-  `min(timeout_ms, remaining)` with no reserve.
+- `DaemonHookRunner::run` and `::stop` alone compute the runner deadline,
+  with the pure `runner_budget(timeout_ms, remaining) ->
+  Option<Duration>`: `min(timeout_ms, remaining - HOOK_ACTION_RESERVE_MS)`,
+  `None` at or below zero, which returns `ATM_HOOK_TIMEOUT` without
+  spawning. The filter passes `ctx.deadline` unchanged and has no check
+  of its own (D-5). `doctor` uses `doctor_budget`: `min(timeout_ms,
+  remaining)` with no reserve, `None` giving `ATM_HOOK_TIMEOUT` "doctor
+  budget exhausted" without spawning.
+- `RequestDeadline` (bk-2) derives `PartialEq, Eq` and gains
+  `remaining_ms()` (0 when expired) and `minus(Duration)`. Tests compare a
+  recorded deadline by equality to the one passed, or bound it, never
+  assert a time exactly.
 - Task-hook actions reuse the request's remaining deadline. A cron tick or
-  stop check passes `now + timeout_ms + HOOK_ACTION_RESERVE_MS`, so the
-  `min` gives exactly the row's `timeout_ms` (D-q). Each cron action gets
-  `now + SERVER_REQUEST_BUDGET`.
+  stop check passes `RequestDeadline::after(timeout_ms +
+  HOOK_ACTION_RESERVE_MS)`, so the runner's budget is the row's
+  `timeout_ms`, not the task-hook cap (D-q). Each cron action gets `now +
+  SERVER_REQUEST_BUDGET`.
 
 `DaemonHookRunner::new` does not fail. It builds the environment once with
 the pure `hook_env(env: &dyn EnvSource, team, phase, windows: bool)` under
@@ -748,15 +763,20 @@ literal `doctor` for `doctor`; every call takes a `HookTarget` (bk-2,
 
 `process_deadline::spawn_with_deadline(spec: SpawnSpec { program, args,
 env, cwd }, stdin, remaining)` builds the `tokio::process::Command`
-itself, writes and closes stdin, and joins the wait with both pipe reads
-under one timeout. stdout is capped at 1 MiB and stderr at 64 KiB through
+itself and spawns it. One `timeout(remaining)` joins the stdin write and
+close, the wait and both pipe reads, so a module that never reads stdin
+cannot block the daemon. A `BrokenPipe` write error is ignored: a module
+that exits without reading stdin is judged by its exit status and
+stdout. stdout is capped at 1 MiB and stderr at 64 KiB through
 bounded `take()` reads; overflow kills the child and is
 `ATM_HOOK_MALFORMED`. On unix the child gets `process_group(0)` and a
-timeout kills the group with
-`rustix::process::kill_process_group(Pid::from_raw(child.id() as i32),
-Signal::KILL)` (workspace `rustix` 1.1 with `process`, already in
-`Cargo.lock`, used only in `process_deadline.rs`); on Windows only the
-child is killed, which `hooks.md` documents. On elapsed the helper then
+timeout kills the group with `if let Some(pid) =
+child.id().and_then(|id| Pid::from_raw(id as i32)) {
+rustix::process::kill_process_group(pid, Signal::KILL) }` (workspace `rustix` 1.1 with `process`, already in
+`Cargo.lock`, used only in `process_deadline.rs`). On Windows only the
+hook process is killed and its children are not; this is a known
+limitation (ADR-068 D4), there is no Windows job-object code, and
+`hooks.md` documents it. On elapsed the helper then
 calls `kill().await` and returns a phase-less `SpawnFailure::TimedOut {
 after_ms }`, which `DaemonHookRunner` converts to `hook_timeout(phase, "no
 reply within <n> ms")`. `hook_runner.rs` spawns only through this helper;
@@ -774,9 +794,13 @@ reply within <n> ms")`. `hook_runner.rs` spawns only through this helper;
 | python exception in the module | `ATM_HOOK_EXIT` with the traceback tail |
 | panic in the daemon-side hook task | `ATM_HOOK_EXIT` `hook runner panicked: <payload>` |
 
-`HookedTaskCommands` (bk-3) runs the runner call, the reply parse and the
-action dispatch inside one `tokio::spawn` over cloned `Arc`s, and maps
-`JoinError::is_panic()` to that error. The cron tick (bk-4) already runs
+`HookedTaskCommands` (bk-3) runs the registration loop, each runner call,
+the chain decision and the action dispatch inside one `tokio::spawn` over
+cloned `Arc`s. The task returns `Result<Decision, AtmError>`, with `enum
+Decision { Inner, Refused(String), Done(ApiResponse) }`. The filter maps
+`JoinError::is_panic()` to that error, then performs `Inner` (the `inner`
+call) and `Refused` outside the spawn; `inner` is never called inside
+it. The cron tick (bk-4) already runs
 in a spawned task and maps a panicking `JoinError` the same way.
 
 ### 9.8 Module entrypoint and `TIMEOUT_MS`
@@ -828,14 +852,18 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
   AtmError>` errors on a second call. There are no `Noop` types.
 - bk-5, in `run_replacement_daemon_with_selector`
   (`crates/atm-daemon-bootstrap/src/lib.rs:445`) after
-  `build_replacement_handler` (`:471`): `let cron =
-  Arc::new(AtmCron::new(AtmCronDeps { dispatcher: base_dispatcher.clone() as Arc<dyn HookActionDispatcher>,
-  runner: hook_runner.clone(), .. })); handler.install_cron_scheduler(cron.clone())?;`
-- The cron worker starts after `start_replacement_runtime_or_abort`
-  (`:503`) returns `Ok` and before `emit_ready_signal_if_requested`
-  (`:624`). An initial `active_all` error aborts startup.
-- `shutdown_replacement_daemon` (`:805`) runs `cron_worker` as its first
-  step, before `listener`. `CronWorkerHandle::shutdown` stops scheduling,
+  `build_replacement_handler` (`:471`): `let cron = compose_cron(&handler,
+  AtmCronDeps { dispatcher: base_dispatcher.clone() as Arc<dyn
+  HookActionDispatcher>, runner: hook_runner.clone(), .. })?;`, where
+  `compose_cron` builds `AtmCron` and calls `install_cron_scheduler`.
+- `start_cron_worker(&cron, &mut workers)` runs after
+  `start_replacement_runtime_or_abort` (`:503`) returns `Ok` and before
+  `emit_ready_signal_if_requested` (`:624`). An initial `active_all` error
+  aborts startup.
+- `shutdown_replacement_daemon` (`:805`) calls `run_shutdown_steps` with
+  the listener's finish as a future; `cron_worker` is its first step,
+  before `listener`. The three functions are extracted so the in-crate
+  tests call them with no listener. `CronWorkerHandle::shutdown` stops scheduling,
   awaits in-flight runs until the deadline, then aborts them.
 
 ### 9.10 Doctor collection
@@ -879,11 +907,12 @@ atm's own `DoctorFinding` (`crates/atm-core/src/doctor/report.rs:38`):
 The entry carries `module_path`, `cwd`, `team`, `phase`, `timeout_ms`,
 the reply's `success`, `message` and `findings`, or `error` when the call
 fails. Every finding in the hooks section therefore carries its module and
-phase. The calls run concurrently with `join_all`. Each call gets
-`min(timeout_ms, remaining - 250 ms)`, where `timeout_ms` is the group's
-first row's (a registration's or a schedule's); an
-exhausted budget is `ATM_HOOK_TIMEOUT` "doctor budget exhausted" without a
-spawn. The section never fails doctor and never changes `summary`.
+phase. The calls run concurrently on a `tokio::task::JoinSet`. Each
+call is `HookRunner::doctor(target, deadline.minus(250 ms))`, and the
+runner's `doctor_budget` gives `min(timeout_ms, remaining)`, where
+`timeout_ms` is the group's first row's (a registration's or a
+schedule's); an exhausted budget is `ATM_HOOK_TIMEOUT` "doctor budget
+exhausted" without a spawn. The section never fails doctor and never changes `summary`.
 `DoctorReport.hooks` is `#[serde(default)] pub hooks:
 Vec<HookDoctorEntry>` without `skip_serializing_if`, so a report with no
 registration carries `"hooks": []`.

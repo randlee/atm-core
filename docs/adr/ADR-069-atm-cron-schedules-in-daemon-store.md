@@ -64,8 +64,9 @@ member of the team may start a schedule; the route checks membership only
 
 `atm cron` is its own workspace crate, `atm-cron`, the only implementation
 of the sealed core trait `atm_core::boundary::CronScheduler`
-(`start`, `end`, `list`); `validate_expression` and `run_now` are
-inherent methods of `AtmCron`. The crate depends on `atm-core` (every
+(`start`, `end`, `list`); `AtmCron` has no other public operation
+besides `new` and `start_worker`, and tests fire ticks through the
+`ManualClock` test double. The crate depends on `atm-core` (every
 store and hook type through `atm_core::boundary`), `tokio`, `chrono`,
 `cron`, `async-trait`, `serde_json`, `getrandom` and `tracing`, and on none of
 `atm-storage`, `atm-http-runtime`, `atm-daemon-bootstrap` or the CLI. It

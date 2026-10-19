@@ -5404,8 +5404,9 @@ Rulings: atm-core #1873 (Rand, 2026-10-18).
   and `cron_schedule` idempotently from `ensure_schema` as additive MINOR
   objects (ADR-061 D6 record 2026-10-18) and prove the pre-bk statements
   still read and write afterwards
-- hook execution must be tested with a fixture module and a paused clock,
-  never a live daemon (section 19)
+- hook execution must be tested with a fixture module on the real clock
+  (the timeout case a child that never finishes) and scheduling with a
+  manual test clock, never a live daemon (section 19)
 
 ## 24. `atm cron` (Phase BK)
 

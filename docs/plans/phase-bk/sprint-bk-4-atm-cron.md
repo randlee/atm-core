@@ -23,7 +23,7 @@ Owned paths (new unless marked edited):
 - `crates/atm-cron/Cargo.toml`, `crates/atm-cron/src/lib.rs`,
   `src/scheduler.rs` (`AtmCron`, the trait impl, `store_call`),
   `src/worker.rs` (the loop, `Slot`), `src/clock.rs` (`Clock`,
-  `SystemClock`, and `TokioClock` behind `test-utils`), `src/jitter.rs`
+  `SystemClock`, `system_sleep_step`, and `ManualClock` behind `test-utils`), `src/jitter.rs`
   (`JitterSource`, `SystemJitter`, `SeqJitter` behind `test-utils`,
   `assign`), `src/tick.rs`
   (one run, `CronRunOutcome`), `src/expr.rs` (the grammar), under
@@ -63,13 +63,19 @@ Owned paths (new unless marked edited):
 #![forbid(unsafe_code)]
 mod clock; mod expr; mod jitter; mod scheduler; mod tick; mod worker;
 pub use clock::{Clock, SystemClock}; pub use jitter::{JitterSource, SystemJitter};
-#[cfg(feature = "test-utils")] pub use {clock::TokioClock, jitter::SeqJitter};
+#[cfg(feature = "test-utils")] pub use {clock::ManualClock, jitter::SeqJitter};
 pub use scheduler::{AtmCron, AtmCronDeps, CronWorkerHandle};
 
 // crates/atm-cron/src/clock.rs
-pub trait Clock: Send + Sync { fn now(&self) -> DateTime<Utc>; }
-pub struct SystemClock;                                     // Utc::now()
-#[cfg(feature = "test-utils")] pub struct TokioClock { epoch: DateTime<Utc>, start: tokio::time::Instant }   // epoch + (tokio::time::Instant::now() - start): moves with a paused tokio clock
+#[async_trait]
+pub trait Clock: Send + Sync { fn now(&self) -> DateTime<Utc>; async fn sleep_until(&self, t: DateTime<Utc>); }   // returns once now() >= t
+pub struct SystemClock;   // Utc::now(); sleep_until loops tokio::time::sleep(system_sleep_step(Utc::now(), t)), so a wall-clock jump is seen within a slice
+pub(crate) const MAX_SLEEP_SLICE: Duration = Duration::from_secs(30);
+pub(crate) fn system_sleep_step(now: DateTime<Utc>, t: DateTime<Utc>) -> Duration;   // min(MAX_SLEEP_SLICE, t - now), zero when t <= now
+/// The test clock: time moves only on advance/set, so a test fires ticks without sleeping or controlling the tokio clock.
+#[cfg(feature = "test-utils")] pub struct ManualClock { now: tokio::sync::watch::Sender<DateTime<Utc>> }
+#[cfg(feature = "test-utils")] impl ManualClock { pub fn new(start: DateTime<Utc>) -> Self; pub fn advance(&self, d: chrono::Duration); pub fn set(&self, t: DateTime<Utc>); }
+// ManualClock::sleep_until = self.now.subscribe().wait_for(|n| *n >= t); advance and set use send_replace, so a waiting worker wakes on that call
 
 // crates/atm-cron/src/jitter.rs  (design.md §5 D-r, Rand 2026-10-18: "random over remaining slots")
 pub trait JitterSource: Send + Sync { fn below(&self, n: u32) -> u32; }   // uniform in [0, n), n >= 1
@@ -94,10 +100,6 @@ pub struct AtmCronDeps {
 pub struct AtmCron { deps: AtmCronDeps, reload: tokio::sync::watch::Sender<u64>, start_lock: tokio::sync::Mutex<()> }   // held from jitter draw to store write
 impl AtmCron {
     pub fn new(deps: AtmCronDeps) -> Self;
-    pub fn validate_expression(&self, cron_expr: &str) -> Result<(), AtmError>;       // expr::parse at clock.now()
-    /// unknown id: Err(validation "no such schedule"); ended: Err(validation "schedule ended");
-    /// in flight in the worker: Ok("skipped_in_flight"); else tick::run_one and Ok(the recorded outcome string).
-    pub async fn run_now(&self, id: CronScheduleId) -> Result<String, AtmError>;
     /// Loads active_all() once (Err aborts startup in bk-5), spawns the loop, returns the handle.
     pub async fn start_worker(self: &Arc<Self>) -> Result<CronWorkerHandle, AtmError>;
 }
@@ -115,12 +117,13 @@ pub struct CronWorkerHandle { shutdown: Mutex<Option<oneshot::Sender<()>>>, work
 impl CronWorkerHandle { pub async fn shutdown(&self, deadline: tokio::time::Instant); }   // stop scheduling, await in-flight runs until deadline, abort after
 
 // crates/atm-cron/src/worker.rs  (pub(crate))
-pub(crate) const MAX_SLEEP_SLICE: Duration = Duration::from_secs(30);
 struct Slot { schedule: CronSchedule, next: Option<DateTime<Utc>>, in_flight: Option<JoinHandle<CronRunOutcome>> }
 // next = schedule.after(&(now - Duration::seconds(jitter_s))).next().map(|o| o + Duration::seconds(jitter_s)); wake = min(next, until_at) for Until.
-// loop: select! { sleep(min(MAX_SLEEP_SLICE, earliest wake - now)) => run every due slot, reload.changed() => merge active_all(): a slot is kept only
+// loop: select! { biased; reload.changed() => merge active_all(), clock.sleep_until(earliest wake) => run every due slot, finished in_flight => ..,
+// shutdown => break }. The reload merge keeps a slot only
 // if the row equals its row on id, created_at, cron_expr, jitter_s, stop, module_path, cwd, args, timeout_ms, custom; else it is dropped, its
-// in_flight aborted (outcome never recorded) and a new slot built; finished in_flight => Stopped drops the slot, else next recomputed; shutdown => break }.
+// in_flight aborted (outcome never recorded) and a new slot built; a finished in_flight that is Stopped drops the slot, else next is recomputed.
+// biased order: a reload committed before a clock step is merged first; a due run starts before a shutdown sent after the step.
 // A loaded row with no future occurrence: store.record_stop(id, now, "no future occurrence").
 // A JoinError from a panicking run: outcome Exit with "hook runner panicked: <payload>", the worker keeps running (Rand panic ruling).
 
@@ -136,9 +139,10 @@ pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunO
    - `Until { at }` with `now >= at` calls `record_stop(id, now, "until
      reached")` and returns `Stopped`.
    - `Hook` calls `runner.stop(&HookTarget::from(schedule), ..)` with
-     `HookRequest::for_cron(target, caller, cron.stop, &args)` under the deadline `now + timeout_ms +
-     HOOK_ACTION_RESERVE_MS`, so the runner's §9.7 `min` gives exactly the
-     row's `timeout_ms` (up to `CRON_TIMEOUT_MAX_MS`).
+     `HookRequest::for_cron(target, caller, cron.stop, &args)` under
+     `RequestDeadline::after(timeout_ms + HOOK_ACTION_RESERVE_MS)`, so the
+     runner's `runner_budget` gives the row's `timeout_ms` (up to
+     `CRON_TIMEOUT_MAX_MS`) rather than the task-hook cap.
      `{"stop": true, "reason": r}` gives `record_stop` and `Stopped(r)`.
      `{"stop": false}` continues to step 2. An `Err` (`ATM_HOOK_EXIT`,
      `ATM_HOOK_TIMEOUT`, `ATM_HOOK_MALFORMED`) gives
@@ -238,15 +242,18 @@ notes = ["Phase bk sprint bk-4 (2026-10): first version."]
 3. The worker per `design.md` §5 rules: `next` from `clock.now()` after
    startup, each run and each reload, by the jitter formula above (no
    replay); one run in flight per schedule; sleep slices of
-   `MAX_SLEEP_SLICE`; the full-row reload merge; a loaded row with no
+   `MAX_SLEEP_SLICE` in `SystemClock`; the full-row reload merge; a loaded row with no
    future occurrence ends; a panicking run is caught.
 4. `run_one` per the four steps above.
 5. The manifest, the lint-config entries, the ten forbidden edges and the
    release entries.
-6. Tests, same unit, all `#[tokio::test(start_paused = true)]` with
+6. Tests, same unit, plain `#[tokio::test]` with
    `InMemoryCronScheduleStore`, `DummyHookRunner`,
-   `RecordingHookActionDispatcher` and `TokioClock`, so every time
-   step is an explicit `tokio::time::advance`.
+   `RecordingHookActionDispatcher` and `ManualClock`. A tick fires only on
+   `ManualClock::advance` or `set`; a test waits for a call through
+   `DummyHookRunner.before_reply` on a tokio `watch`, and reads rows after
+   `CronWorkerHandle::shutdown` has joined the in-flight runs. No test
+   sleeps or controls the tokio clock.
 
 ## Authoritative acceptance criteria
 
@@ -258,23 +265,23 @@ notes = ["Phase bk sprint bk-4 (2026-10): first version."]
 
 - [ ] (ADR-069 D1) `boundary:BOUNDARY-CronScheduler` `start_refuses_invalid_expression_before_store_write` (store write counter 0); `start_refuses_until_in_the_past`; `start_after_end_updates_in_place_and_keeps_the_id`; `start_returns_cron_expr_byte_identical`.
 - [ ] (ANC-023) `boundary:BOUNDARY-CronScheduler` `start_requires_one_stop_condition_by_type`: `CronScheduler::start` takes `CronStartSpec`, whose `stop: StopCondition` is not an `Option`, so none or both is unrepresentable; the returned row carries the same `stop`.
-- [ ] (ANC-020) `boundary:BOUNDARY-CronScheduler` `worker_schedules_only_active_rows`: two active and one ended row give two slots, each `next == schedule.after(&(now - jitter_s)).next() + jitter_s`; `initial_load_error_is_returned_by_start_worker`; `restart_inside_jitter_window_still_fires_that_occurrence` (`@hourly`, `jitter_s = 600`, clock 10:00:30: one call at 10:10).
+- [ ] (ANC-020) `boundary:BOUNDARY-CronScheduler` `worker_schedules_only_active_rows`: two active and one ended row give two slots, each `next == schedule.after(&(now - jitter_s)).next() + jitter_s`; `initial_load_error_is_returned_by_start_worker` (`fail_active_all`); `restart_inside_jitter_window_still_fires_that_occurrence` (`@hourly`, `jitter_s = 600`, `ManualClock` at 10:00:30: one call once advanced to 10:10).
 - [ ] (ADR-069 D2) `boundary:BOUNDARY-CronScheduler` `start_while_running_ticks_without_restart`, `end_stops_its_ticks`, `reload_keeps_in_flight_of_an_unchanged_slot`; `end_then_start_before_reload_applies_new_expression_and_jitter`; `stale_in_flight_outcome_not_recorded_on_restarted_row`; `restart_during_tick_aborts_run_writes_nothing_and_does_not_replay_after_reload`; `concurrent_starts_same_expression_get_distinct_jitter` (two `start` calls joined, J = 30, distinct `jitter_s`).
-- [ ] (REQ-BK-D4A) `boundary:BOUNDARY-CronScheduler` `missed_ticks_are_not_replayed_after_a_pause`: every-minute schedule, `advance(180 min)` in one step, one runner call, `next` is the first minute after the new now; `wall_clock_jump_is_seen_within_one_slice`.
-- [ ] (REQ-BK-D4B) `boundary:BOUNDARY-CronScheduler` `tick_while_in_flight_is_skipped_and_logged`: the `DummyHookRunner` reply is held by a `tokio::sync::Notify` across two due times; one call and one `skipped_in_flight` entry.
+- [ ] (REQ-BK-D4A) `boundary:BOUNDARY-CronScheduler` `missed_ticks_are_not_replayed_after_a_pause`: every-minute schedule, `ManualClock::advance(180 min)` in one step, one runner call, `next` is the first minute after the new now; `clock.rs::tests::system_sleep_step_is_capped_at_the_slice` (pure: one hour ahead gives 30 s, 10 s ahead gives 10 s, a past `t` gives zero), so `SystemClock` sees a wall-clock jump within one slice.
+- [ ] (REQ-BK-D4B) `boundary:BOUNDARY-CronScheduler` `tick_while_in_flight_is_skipped_and_logged`: the `DummyHookRunner` reply is held by `before_reply` while the clock passes two due times; one call and one `skipped_in_flight` entry.
 - [ ] (ANC-003, ANC-017) `boundary:BOUNDARY-CronScheduler` `tick_request_has_the_seven_keys_and_args_in_request_only`: the `HookRequest` in `DummyHookRunner.calls[0]` has exactly the task-hook keys `schema_version`, `hook`, `team`, `phase`, `caller`, `request`, `custom`; `hook == "cron.tick"`, `request == {"args":["status","--json"],"created_by":<created_by>}`, `custom` equal to the row's, `caller == {identity: created_by, team, host: AtmCronDeps.host}`; the `HookTarget` carries the row's `module_path`, `cwd`, `timeout_ms`.
 - [ ] (ANC-022) `boundary:BOUNDARY-CronScheduler` `custom_from_schedule_reaches_cron_tick` (and the `cron.stop` request): `custom` is byte-equal to the row's, never validated or rewritten; `two_schedules_same_module_different_custom_get_their_own`: two schedules on one `module_path` with `custom` `{"goal":"a"}` and `{"goal":"b"}` and different `created_by` each tick with their own `custom` and `request.created_by`.
-- [ ] (Rand 2026-10-18 cron timeout) `boundary:BOUNDARY-CronScheduler` `cron_tick_uses_cron_timeout_ms_not_timeout_ms`: a row with `timeout_ms = 20000` gives runner and stop-check deadlines of `now + 20 000 ms + HOOK_ACTION_RESERVE_MS`, above `HOOK_TIMEOUT_MAX_MS`; each action's deadline stays the dispatcher's `SERVER_REQUEST_BUDGET`.
+- [ ] (Rand 2026-10-18 cron timeout) `boundary:BOUNDARY-CronScheduler` `cron_tick_uses_cron_timeout_ms_not_timeout_ms`: a row with `timeout_ms = 20000` gives a stop-check and a tick call with `calls[i].0.timeout_ms == 20000` and `calls[i].2.remaining_ms()` above `HOOK_TIMEOUT_MAX_MS` and at most 20 500; the `DispatchCall` has `deadline == None`, so each action gets the dispatcher's `SERVER_REQUEST_BUDGET`.
 - [ ] (Rand 2026-10-18 jitter) `boundary:BOUNDARY-CronScheduler` `jitter_is_within_half_period_capped_at_30min` (`SeqJitter` records `n == 30` for `0 * * * * *`, `1800` for `@hourly` and `@daily`; `jitter_s < n`); `jitter_avoids_offsets_held_by_same_expression` (J = 30, 29 held: the one free offset; all 30 held: over [0, 30); another `cron_expr` holds nothing); `jitter_persists_across_restart` (a second `AtmCron` on the store keeps `jitter_s`, `SeqJitter.calls` empty); `fires_at_occurrence_plus_jitter` (`@hourly`, `jitter_s = 600`: no runner call at :00, one at :10; `Until { at: :05 }` ends at :05 without a run).
 - [ ] (ANC-004) `boundary:BOUNDARY-CronScheduler` `refused_records_and_dispatches_nothing`: `Refused { message: "quota" }` stops the tick before any action: `RecordingHookActionDispatcher.calls` is empty, the only store write is `record_run` with `last_outcome == "refused: quota"`, the `tick` entry's outcome is `refused`, and the schedule stays active. `pass_through_and_not_applicable_record_ok`: each reply gives `last_outcome == "ok"` and no dispatch.
 - [ ] (ANC-006, ANC-009, ANC-021) `boundary:BOUNDARY-CronScheduler` `three_actions_dispatch_once_in_order_as_created_by`: three `Handled` actions reach `dispatch_actions` once (the trait the filter calls), in order and unchanged (own `as` kept), `default_as == created_by`, `deadline == None`, `dry_run == false`; the row records `actions: 3`. Actions go only to `deps.dispatcher` (bk-3's `UnhookedRouter`, which consults no hook, ANC-008), never to a `TaskCommands`; bk-5's `cron_tick_action_runs_unhooked` proves it composed.
 - [ ] (ANC-006) `boundary:BOUNDARY-CronScheduler` `dispatcher_error_records_action_err`: a dispatcher with `fail_at == Some(1)` gives `last_outcome == "action_err: <code>"`, and `dispatch_actions` was called once (the dispatcher stops the list).
-- [ ] (ANC-012, REQ-BK-ERRORS) `boundary:BOUNDARY-CronScheduler` `runner_errors_record_and_dispatch_nothing`: a runner error fails the tick closed: `Err(ATM_HOOK_EXIT)`, `Err(ATM_HOOK_TIMEOUT)` (the runner killed the child) and `Err(ATM_HOOK_MALFORMED)` record `exit`, `timeout` and `malformed` with no dispatch, and the runner's deadline is `now + timeout_ms + HOOK_ACTION_RESERVE_MS`, so its §9.7 `min` kills the child at exactly `timeout_ms` (up to 30 000) with `ATM_HOOK_TIMEOUT`; `record_run_writes_each_outcome_class` covers every `CronRunOutcome` variant.
+- [ ] (ANC-012, REQ-BK-ERRORS) `boundary:BOUNDARY-CronScheduler` `runner_errors_record_and_dispatch_nothing`: a runner error fails the tick closed: `Err(ATM_HOOK_EXIT)`, `Err(ATM_HOOK_TIMEOUT)` (the runner killed the child) and `Err(ATM_HOOK_MALFORMED)` record `exit`, `timeout` and `malformed` with no dispatch, and the recorded deadline has `remaining_ms()` at most `timeout_ms + HOOK_ACTION_RESERVE_MS`; `record_run_writes_each_outcome_class` covers every `CronRunOutcome` variant.
 - [ ] (Rand panic ruling) `boundary:BOUNDARY-CronScheduler` `panicking_run_records_exit_and_worker_keeps_ticking`: a `DummyHookRunner` with `panic_on_run` records `exit` and the next due time runs again.
 - [ ] `boundary:BOUNDARY-CronScheduler` `record_run_after_end_mid_run_writes_nothing`; `loaded_row_without_future_occurrence_is_ended`.
 - [ ] (ANC-025) `boundary:BOUNDARY-CronScheduler` `until_reached_ends_the_schedule_without_a_run`: `Until { at: now + 90 s }` on an every-minute schedule runs once at 60 s, ends at 90 s with `active == false`, `ended_at == now + 90 s`, `last_outcome == "stopped: until reached"`, and makes no call at 120 s.
 - [ ] (ANC-024) `boundary:BOUNDARY-CronScheduler` `stop_hook_true_ends_the_schedule_with_its_reason`: `stop_replies` yields `{"stop": true, "reason": "phase bead closed"}`; the row has `last_outcome == "stopped: phase bead closed"`, `active == false`, and `DummyHookRunner` saw one `cron.stop` request and no `cron.tick`. `stop_hook_false_runs_the_tick`: one `cron.stop` then one `cron.tick`. `stop_hook_failure_skips_the_tick_and_keeps_the_row_active`: for each of `Err(ATM_HOOK_EXIT)`, `Err(ATM_HOOK_TIMEOUT)`, `Err(ATM_HOOK_MALFORMED)`, `active == true`, `stop_check_failed: <code>` is recorded, a `stop_check` entry logged, and no `cron.tick` runs.
-- [ ] `boundary:BOUNDARY-CronScheduler` `run_now_rules`: unknown id, ended row and in-flight row give the three results of the contract; otherwise the recorded string.
+- [ ] `boundary:BOUNDARY-CronScheduler` `ticks_fire_only_when_the_manual_clock_reaches_them`: a started worker makes no runner call until `ManualClock::advance` reaches occurrence + `jitter_s`, then one; an ended row's occurrence passes with no call; `AtmCron` has no public method besides `new`, `start_worker` and the trait's.
 - [ ] `boundary:BOUNDARY-CronScheduler` `shutdown_joins_within_deadline_with_run_in_flight`.
 - [ ] (REQ-BK-LOG) `boundary:BOUNDARY-CronScheduler` `tick_and_stop_check_log_entries`: a `tracing_subscriber::Layer` capture sees one `atm_cron` `tick` entry per tick and one `stop_check` entry per `Hook` stop check, each with `team`, `phase`, `hook`, `schedule`, `outcome`, `elapsed_ms`; each tick action gets its one `atm_hook` `action` entry (`team`, `phase`, `hook`, `outcome`, `elapsed_ms`) from bk-3's `dispatch_actions`, not a second one here.
 - [ ] (REQ-BK-D3) `boundary:BOUNDARY-CronScheduler` `rg -n 'process::Command|HookRunner for' crates/atm-cron/src` is empty (the crate receives the one daemon runner); `cargo tree -p atm-cron -e normal --depth 1` lists exactly `allowed_dependencies`, and `cargo tree -p atm-cron` contains no `tokio-cron-scheduler`.
@@ -291,4 +298,5 @@ notes = ["Phase bk sprint bk-4 (2026-10): first version."]
 
 - Composition (`AtmCron::new`, `install_cron_scheduler`, `start_worker`,
   the shutdown step) and the CLI are bk-5's; the routes are bk-3's. A live
-  tick through `DaemonHookRunner` is bk-5's `fixture_cron_receives_args`.
+  tick through `DaemonHookRunner` is bk-5's
+  `fixture_cron_receives_args_through_the_composed_scheduler`, on `ManualClock`.

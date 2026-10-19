@@ -189,9 +189,13 @@ and the child runs in the registered cwd. The daemon reads no
 configuration from its environment (ADR-066). The deadline is
 `min(TIMEOUT_MS, remaining request budget - 500 ms)` for a task hook,
 computed only in the runner; the filter passes the request deadline
-unchanged and fails at once when 500 ms or less remain. A cron run uses
-the schedule's own timeout (ADR-069 D3). On a timeout the
-child's process group is killed on unix, and only the child on Windows.
+unchanged, has no budget check of its own, and returns the runner's
+`ATM_HOOK_TIMEOUT` unchanged when 500 ms or less remain. A cron run uses
+the schedule's own timeout (ADR-069 D3). The stdin write runs inside the
+same timeout as the wait, and a module that exits without reading stdin
+is judged by its exit status. On a timeout the child's process group is
+killed on unix. On Windows only the hook process is killed, not its
+children: a known limitation, with no Windows job-object code.
 
 ### D5. Registration is per team and phase; phases are independent; any roster member may register
 
@@ -213,7 +217,7 @@ which decides; later hooks are not run. All not-applicable runs the normal
 command. One design decision (fenix, 2026-10-18, open to Rand):
 all hooks of one command share the one request deadline, each getting
 `min(TIMEOUT_MS, remaining - 500 ms)`, and a hook left without budget fails
-the command with `ATM_HOOK_TIMEOUT` naming its phase. The cost is up to one spawn per active phase per
+the command with the runner's `ATM_HOOK_TIMEOUT` naming its phase. The cost is up to one spawn per active phase per
 hooked command. Authority (Rand, round 4, settled): any roster member of
 the team may `atm hook register` and `atm cron start`; the daemon's
 register and start routes check team membership and nothing else. There is

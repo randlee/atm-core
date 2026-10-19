@@ -28,7 +28,8 @@ Owned paths (new unless marked edited):
   response variants, `HTTP_API_VERSION` `1.13.0`),
   `crates/atm-core/src/api.rs` (edited: the six routes of `design.md`
   §9.11, `HOOK_ACTIONS_HEADER = "X-ATM-Hook-Actions"` next to
-  `CLEAR_OUTCOME_HEADER` (`:31`), the `ApiRequest` variants),
+  `CLEAR_OUTCOME_HEADER` (`:31`), the `ApiRequest` variants, and on
+  `RequestDeadline` (`:760`) `PartialEq, Eq`, `remaining_ms`, `minus`),
   `crates/atm-core/src/transport/testing.rs` (edited: the new variants in
   `execute_inner`, about `:110-170`)
 - `crates/atm-core/src/service_runtime.rs` (edited: two fields, builders
@@ -93,6 +94,11 @@ impl HookAction { pub fn into_api_request(&self, team: &TeamName, default_as: &A
 pub struct StopReply { pub stop: bool, #[serde(default)] pub reason: Option<String> }
 impl StopReply { pub fn parse(stdout: &[u8]) -> Result<Self, AtmError>; }                 // {"stop":true,"reason":"<non-empty>"} | {"stop":false}
 
+// crates/atm-core/src/api.rs (edited :760): tests compare deadlines by equality to the passed value or bound them, never assert a time exactly
+#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub struct RequestDeadline(Instant);
+impl RequestDeadline { pub fn remaining_ms(self) -> u64;              // remaining() in whole ms, 0 when expired
+                       pub fn minus(self, d: Duration) -> Self; }     // the instant d earlier (checked_sub; self when not representable)
+
 // crates/atm-core/src/boundary/task_commands.rs: the trait, TaskCallCtx, the five newtypes and TaskCommand exactly as design.md §9.5
 #[cfg(any(test, feature = "test-utils"))]
 pub struct RecordingTaskCommands { pub calls: Mutex<Vec<(HookName, serde_json::Value)>>, pub response: Mutex<Option<ApiResponse>> }
@@ -107,9 +113,14 @@ pub trait HookRunner: sealed::Sealed + Send + Sync {
     async fn doctor(&self, target: &HookTarget, deadline: RequestDeadline) -> Result<HookDoctorReply, AtmError>;
     async fn stop(&self, target: &HookTarget, request: &HookRequest, deadline: RequestDeadline) -> Result<StopReply, AtmError>;
 }
+#[cfg(any(test, feature = "test-utils"))] #[derive(Clone, Debug)] pub enum HookCall { Run(HookRequest), Stop(HookRequest), Doctor }
+// each call records (target, call, deadline), awaits before_reply(call index) when set, then replies. The test supplies the hook from its own
+// runtime (a tokio watch: "call i started", then wait for "release"), so a held reply needs no sleep and atm-core takes no tokio dependency.
+#[cfg(any(test, feature = "test-utils"))] pub type BeforeReply = Arc<dyn Fn(usize) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 #[cfg(any(test, feature = "test-utils"))]
 pub struct DummyHookRunner { pub replies: Mutex<VecDeque<Result<HookOutcome, AtmError>>>, pub stop_replies: Mutex<VecDeque<Result<StopReply, AtmError>>>,
-                             pub doctor_replies: Mutex<VecDeque<Result<HookDoctorReply, AtmError>>>, pub calls: Mutex<Vec<(HookTarget, HookRequest)>>, pub panic_on_run: AtomicBool }
+    pub doctor_replies: Mutex<VecDeque<Result<HookDoctorReply, AtmError>>>, pub calls: Mutex<Vec<(HookTarget, HookCall, RequestDeadline)>>,
+    pub before_reply: Mutex<Option<BeforeReply>>, pub panic_on_run: AtomicBool }
 
 // crates/atm-core/src/boundary/cron_scheduler.rs  (design.md D-4: start, end, list only)
 #[async_trait]
@@ -132,14 +143,16 @@ pub trait HookActionDispatcher: sealed::Sealed + Send + Sync {
     async fn dispatch_actions(&self, hook: &HookName, team: &TeamName, phase: &PhaseId, default_as: &AgentName,
                               actions: Vec<HookAction>, deadline: Option<RequestDeadline>, dry_run: bool) -> Result<Vec<(String, ApiResponse)>, AtmError>;
 }
-#[cfg(any(test, feature = "test-utils"))] pub struct RecordingHookActionDispatcher { pub calls: Mutex<Vec<(HookName, TeamName, AgentName, Vec<HookAction>)>>,
+#[cfg(any(test, feature = "test-utils"))] #[derive(Clone, Debug)] pub struct DispatchCall { pub hook: HookName, pub team: TeamName, pub phase: PhaseId,
+    pub default_as: AgentName, pub actions: Vec<HookAction>, pub deadline: Option<RequestDeadline>, pub dry_run: bool }   // every argument, as passed
+#[cfg(any(test, feature = "test-utils"))] pub struct RecordingHookActionDispatcher { pub calls: Mutex<Vec<DispatchCall>>,
     pub fail_at: Option<usize>, pub panic_at: Option<usize> }   // panic_at: panics on that action index
 
 // crates/atm-core/src/boundary/mod.rs: mod task_commands; mod hook_runner; mod cron_scheduler; mod hook_action_dispatcher; then
 pub use atm_storage::{HookRegistrationStore, HookRegistration, HookName, PhaseId, CronScheduleStore, CronSchedule, NewCronSchedule, CronScheduleId, StopCondition};
 pub use atm_storage::request_budget::{HOOK_TIMEOUT_MAX_MS, CRON_TIMEOUT_MAX_MS, HOOK_ACTION_RESERVE_MS, SERVER_REQUEST_BUDGET};
 pub use crate::hook::HookTarget; pub use task_commands::*; pub use cron_scheduler::{CronScheduler, CronStartSpec}; pub use hook_action_dispatcher::HookActionDispatcher; pub use hook_runner::{HookRunner, HookOutcome};
-#[cfg(any(test, feature = "test-utils"))] pub use {cron_scheduler::RecordingCronScheduler, hook_action_dispatcher::RecordingHookActionDispatcher, hook_runner::DummyHookRunner};
+#[cfg(any(test, feature = "test-utils"))] pub use {cron_scheduler::RecordingCronScheduler, hook_action_dispatcher::{DispatchCall, RecordingHookActionDispatcher}, hook_runner::{BeforeReply, DummyHookRunner, HookCall}};
 
 // crates/atm-core/src/protocol.rs (HTTP API MINOR 1.12.0 -> 1.13.0); request fields are design.md §9.11
 RequestEnvelope::{ HookRegister(HookRegisterRequest), HookDisable(HookDisableRequest), HookList(HookListQuery),
@@ -221,7 +234,8 @@ pub fn cron_schedule_store(&self) -> Result<Arc<dyn CronScheduleStore>, AtmError
 - [ ] (ANC-024) `boundary:BOUNDARY-HookRunner` `reply.rs::tests::stop_reply_shapes`: accepts exactly `{"stop": true, "reason": "r"}` and `{"stop": false}`; `{"stop": true}`, `{"stop": true, "reason": ""}`, `{"stop": false, "reason": "x"}`, `{"stop": "yes"}`, `{"stop":1}` and an extra key fail with `ATM_HOOK_MALFORMED`.
 - [ ] (REQ-BK-ERRORS) `boundary:BOUNDARY-HookRunner` `reply.rs::tests::malformed_is_never_pass_through`: no malformed §9.4 row parses to `Ok(PassThrough)` or `Ok(NotApplicable)`, and `parse`'s `Err` reaches the caller unchanged; `HookRunner::run`'s doc states its `Err` set is `ATM_HOOK_EXIT`, `ATM_HOOK_TIMEOUT`, `ATM_HOOK_MALFORMED`.
 - [ ] (REQ-BK-D3) `boundary:BOUNDARY-HookRunner` `HookRunner` is the one runner trait, taking `&HookTarget` on every method, so one implementation serves task hooks, cron and doctor; the four traits are sealed with `atm_core::boundary::sealed::Sealed`, their doubles compile only under `test-utils`, each manifest lists its double as the sole test double; `just lint` boundary check passes with the four manifests; `crates/atm-architecture/tests/hook_trait_boundary.rs::bk_hook_and_cron_types_reach_runtime_crates_only_through_atm_core_boundary`: a `syn` visitor over the non-test `src` of `atm-http-runtime`, `atm-daemon-bootstrap`, `atm` and `atm-cron` finds no `atm_storage::` path naming a hook or cron type or constant re-exported above.
-- [ ] (REQ-BK-D3) `boundary:BOUNDARY-HookRunner` `hook_trait_boundary.rs::bk_task_commands_has_only_known_implementations`, `::bk_hook_runner_has_only_known_implementations`, `::bk_cron_scheduler_has_only_known_implementations` and `::bk_hook_action_dispatcher_has_only_known_implementations`: a `syn` visitor over every `crates/*/src` finds each `impl <Trait> for <T>` and asserts `T` is in `{NormalTaskCommands, HookedTaskCommands, RecordingTaskCommands}`, `{DaemonHookRunner, DummyHookRunner}`, `{AtmCron, RecordingCronScheduler}` and `{UnhookedRouter, RecordingHookActionDispatcher}` respectively.
+- [ ] (REQ-BK-D3) `boundary:BOUNDARY-HookRunner` `hook_trait_boundary.rs::bk_task_commands_has_only_known_implementations`, `::bk_hook_runner_has_only_known_implementations`, `::bk_cron_scheduler_has_only_known_implementations` and `::bk_hook_action_dispatcher_has_only_known_implementations`: a `syn` visitor over every `crates/*/src` finds each `impl <Trait> for <T>` and asserts the last path-segment ident of `T` (generic arguments ignored, so `impl<D: HookActionDispatcher + 'static> TaskCommands for HookedTaskCommands<D>` counts as `HookedTaskCommands`) is in `{NormalTaskCommands, HookedTaskCommands, RecordingTaskCommands}`, `{DaemonHookRunner, DummyHookRunner}`, `{AtmCron, RecordingCronScheduler}` and `{UnhookedRouter, RecordingHookActionDispatcher}` respectively.
+- [ ] (REQ-BK-TESTS) `boundary:BOUNDARY-AtmProtocol` `crates/atm-core/src/api.rs::tests::request_deadline_equality_minus_and_remaining_ms`: for one `d = RequestDeadline::after(10 s)`, `d.minus(4 s) == d.minus(1 s).minus(3 s)` and `d != d.minus(1 ms)`; `RequestDeadline::after(Duration::ZERO).remaining_ms() == 0`, `d.remaining_ms() <= 10_000` and `d.minus(20 s).remaining_ms() == 0`.
 - [ ] `boundary:BOUNDARY-AtmProtocol` `crates/atm-core/src/api.rs::tests::every_new_route_round_trips_encode_http_request_to_http_route_kind`: each of the six new envelopes encodes to `POST` on its §9.11 path and decodes back to its `HttpRouteKind`; `::hook_actions_header_decodes_to_hook_actions` turns a 200 with `X-ATM-Hook-Actions: 2` into `ResponseEnvelope::HookActions(HookActionsResponse { dispatched: 2 })`.
 - [ ] (ANC-023) `boundary:BOUNDARY-AtmProtocol` `cargo test -p atm --test openapi_surface` passes with `info.version == "1.13.0"` in both copies, the six paths and the new schemas; a `CronStart` body without `stop` fails to deserialize and `{"kind":"until","at":"2026-11-01T00:00:00Z"}` round-trips to `StopCondition::Until`.
 - [ ] `boundary:BOUNDARY-AtmRuntime-Composition` `crates/atm-runtime/src/composition.rs::tests::composition_installs_the_hook_and_cron_stores` (pattern `:347`) and `crates/atm-core/src/service_runtime.rs::tests::hook_and_cron_stores_report_the_not_installed_error` (pattern `:1264`).
