@@ -538,7 +538,6 @@ async fn cron_tick_uses_cron_timeout_ms_not_timeout_ms() {
     {
         let calls = fixture.runner.calls.lock().unwrap();
         assert_eq!(calls[0].0.timeout_ms, 20000);
-        assert!(calls[0].2.remaining_ms() > u64::from(atm_core::boundary::HOOK_TIMEOUT_MAX_MS));
         assert!(calls[0].2.remaining_ms() <= 20500);
     }
     release.send_replace(true);

@@ -93,10 +93,12 @@ pub(crate) async fn record(cron: &AtmCron, schedule: &CronSchedule, outcome: &Cr
     }
 }
 
+fn deadline_budget(timeout_ms: u32) -> Duration {
+    Duration::from_millis(u64::from(timeout_ms) + HOOK_ACTION_RESERVE_MS)
+}
+
 fn deadline(schedule: &CronSchedule) -> RequestDeadline {
-    RequestDeadline::after(Duration::from_millis(
-        u64::from(schedule.timeout_ms) + HOOK_ACTION_RESERVE_MS,
-    ))
+    RequestDeadline::after(deadline_budget(schedule.timeout_ms))
 }
 
 fn request(
@@ -227,6 +229,13 @@ mod tests {
         assert!(!stop_due(&stop, at - chrono::Duration::seconds(1)));
         assert!(stop_due(&stop, at));
         assert!(!stop_due(&StopCondition::Hook, at));
+    }
+
+    #[test]
+    fn cron_budget_is_not_the_task_hook_cap() {
+        let budget = deadline_budget(20000);
+        assert_eq!(budget, Duration::from_millis(20500));
+        assert!(budget > Duration::from_millis(u64::from(atm_core::boundary::HOOK_TIMEOUT_MAX_MS)));
     }
 
     #[cfg(feature = "test-utils")]
