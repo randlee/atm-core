@@ -1,7 +1,7 @@
 //! In-memory `CronScheduleStore` double (feature `test-utils`).
 //!
-//! `calls` counts every trait call and `writes` counts the successful
-//! `start`, `end`, `record_run` and `record_stop` calls. `fail_active_all`
+//! `calls` counts every trait call and `writes` counts `start`, `end`,
+//! `record_run` and `record_stop` calls that update at least one row. `fail_active_all`
 //! and `fail_writes` make those calls return an internal error, for the bk-4
 //! store-error and bk-5 initial-load tests.
 
@@ -159,7 +159,9 @@ impl CronScheduleStore for InMemoryCronScheduleStore {
             row.ended_at = Some(at);
             changed.push(row.clone());
         }
-        self.record_write();
+        if !changed.is_empty() {
+            self.record_write();
+        }
         Ok(changed)
     }
 
@@ -215,7 +217,9 @@ impl CronScheduleStore for InMemoryCronScheduleStore {
             }
             None => false,
         };
-        self.record_write();
+        if changed {
+            self.record_write();
+        }
         Ok(changed)
     }
 
@@ -241,7 +245,9 @@ impl CronScheduleStore for InMemoryCronScheduleStore {
             }
             None => false,
         };
-        self.record_write();
+        if changed {
+            self.record_write();
+        }
         Ok(changed)
     }
 }

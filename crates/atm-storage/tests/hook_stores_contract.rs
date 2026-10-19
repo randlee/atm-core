@@ -692,6 +692,54 @@ fn record_with_stale_generation_changes_nothing() {
 }
 
 #[test]
+fn cron_write_counter_excludes_fenced_and_noop_calls() {
+    use std::sync::atomic::Ordering;
+
+    let store = InMemoryCronScheduleStore::new();
+    let first = store
+        .start(cron_spec("nightly", StopCondition::Hook, stamp(3)))
+        .expect("start");
+    assert_eq!(store.writes.load(Ordering::SeqCst), 1);
+    assert!(store.record_run(first.id, 1, stamp(4), "ok").unwrap());
+    assert_eq!(store.writes.load(Ordering::SeqCst), 2);
+    assert_eq!(
+        store
+            .end(&team(), &phase("bk"), None, stamp(5))
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(store.writes.load(Ordering::SeqCst), 3);
+    assert!(
+        store
+            .end(&team(), &phase("bk"), None, stamp(6))
+            .unwrap()
+            .is_empty()
+    );
+    assert!(!store.record_run(first.id, 1, stamp(6), "ended").unwrap());
+    assert!(!store.record_stop(first.id, 1, stamp(6), "ended").unwrap());
+    assert_eq!(store.writes.load(Ordering::SeqCst), 3);
+
+    let restarted = store
+        .start(cron_spec("nightly", StopCondition::Hook, stamp(7)))
+        .expect("restart");
+    assert_eq!(restarted.id, first.id);
+    assert_eq!(restarted.generation, 2);
+    assert_eq!(store.writes.load(Ordering::SeqCst), 4);
+    assert!(!store.record_run(first.id, 1, stamp(8), "stale").unwrap());
+    assert_eq!(store.writes.load(Ordering::SeqCst), 4);
+    assert!(!store.record_stop(first.id, 1, stamp(8), "stale").unwrap());
+    assert_eq!(store.writes.load(Ordering::SeqCst), 4);
+    let missing = atm_storage::CronScheduleId(first.id.0 + 1);
+    assert!(!store.record_run(missing, 2, stamp(8), "missing").unwrap());
+    assert!(!store.record_stop(missing, 2, stamp(8), "missing").unwrap());
+    assert_eq!(store.writes.load(Ordering::SeqCst), 4);
+    assert!(store.record_stop(first.id, 2, stamp(9), "done").unwrap());
+    assert_eq!(store.writes.load(Ordering::SeqCst), 5);
+    assert_eq!(store.calls.load(Ordering::SeqCst), 12);
+}
+
+#[test]
 fn record_run_on_ended_row_changes_nothing() {
     let store = InMemoryCronScheduleStore::new();
     let row = store
