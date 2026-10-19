@@ -619,6 +619,13 @@
           "item": "bk-2",
           "reason": "bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher",
           "replaced": true
+        },
+        {
+          "at": "2026-10-19T03:33:34+00:00",
+          "event": "excluded",
+          "item": "bk-4",
+          "reason": "a cron tick replaces no atm task subcommand, so there is no normal logic to pass through to; bk-4 only records a pass-through reply as the tick outcome ok (ADR-069), as ANC-001 is judged on bk-3's filter",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -633,6 +640,10 @@
         {
           "item": "bk-5",
           "reason": "pass-through is bk-3's router path; bk-5 adds no task subcommand logic"
+        },
+        {
+          "item": "bk-4",
+          "reason": "a cron tick replaces no atm task subcommand, so there is no normal logic to pass through to; bk-4 only records a pass-through reply as the tick outcome ok (ADR-069), as ANC-001 is judged on bk-3's filter"
         }
       ]
     },
@@ -2272,6 +2283,13 @@
           "item": "bk-3",
           "reason": "restart survival is bk-1's table and bk-4's active_all load; bk-3's cron routes call the scheduler trait only",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T03:33:34+00:00",
+          "event": "excluded",
+          "item": "bk-5",
+          "reason": "restart survival is bk-1's table and bk-4's active_all load at worker start; bk-5 composes the worker and drives its restart test with ManualClock, so the load itself is bk-4's",
+          "replaced": true
         }
       ],
       "exclude": [
@@ -2280,12 +2298,12 @@
           "reason": "restart survival is bk-1's table and bk-4's active_all load; bk-2 persists nothing"
         },
         {
-          "item": "bk-5",
-          "reason": "restart survival is bk-1's table and bk-4's active_all load at worker start; bk-5 composes the worker but asserts composition through run_now, not a restart"
-        },
-        {
           "item": "bk-3",
           "reason": "restart survival is bk-1's table and bk-4's active_all load; bk-3's cron routes call the scheduler trait only"
+        },
+        {
+          "item": "bk-5",
+          "reason": "restart survival is bk-1's table and bk-4's active_all load at worker start; bk-5 composes the worker and drives its restart test with ManualClock, so the load itself is bk-4's"
         }
       ]
     },
@@ -2987,6 +3005,13 @@
           "item": "bk-1",
           "reason": "bk-1 defines the six ATM_HOOK_* and cron codes (ruling A) and raises constraint errors; fail-closed reply handling is bk-2's parse and bk-3's filter",
           "replaced": true
+        },
+        {
+          "at": "2026-10-19T03:33:34+00:00",
+          "event": "excluded",
+          "item": "bk-2",
+          "reason": "the requirement is the hooked command's fail-closed result (error returned to the caller, no subcommand logic run), which bk-3's runner and filter deliver and test; bk-2 supplies only HookReply::parse returning Err(ATM_HOOK_MALFORMED), which bk-3 calls",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2997,6 +3022,10 @@
         {
           "item": "bk-5",
           "reason": "fail-closed reply handling is bk-2's parse and bk-3's runner; bk-5 only prints the error codes it receives"
+        },
+        {
+          "item": "bk-2",
+          "reason": "the requirement is the hooked command's fail-closed result (error returned to the caller, no subcommand logic run), which bk-3's runner and filter deliver and test; bk-2 supplies only HookReply::parse returning Err(ATM_HOOK_MALFORMED), which bk-3 calls"
         }
       ]
     },
@@ -3330,25 +3359,25 @@
       "id": "REQ-BK-TESTS",
       "source_type": "REQ",
       "source_ref": "REQ-BK-TESTS",
-      "statement": "Hook and cron behavior is tested with a fixture hook module and a paused tokio clock; no test starts, targets or depends on a live daemon.",
-      "quote": "Hook and cron behavior is tested with a fixture hook module and a paused tokio clock; no test starts, targets or depends on a live daemon.",
+      "statement": "Hook execution is tested with a fixture hook module on the real clock, the timeout case using a child that never finishes, and cron scheduling with a manual test clock; no test starts, targets or depends on a live daemon.",
+      "quote": "Each sprint carries its tests, never a live daemon. A test that spawns a real child runs on the real clock with a generous `timeout_ms` and asserts content; the timeout case uses a child that never finishes. Scheduling is tested with `ManualClock`, and `start_paused` only with doubles.",
       "kind": "prohibition",
       "stated_by": "fenix (design.md, PR #1877)",
       "stated_at": "2026-10-18",
       "context": "phase-bk design decision docs/plans/phase-bk/design.md §7 (fenix, PR #1877); not a Rand ruling",
-      "summary": "Tests use a fixture module and paused clock, never a live daemon",
+      "summary": "Fixture module on the real clock, manual clock for scheduling, never a live daemon",
       "scope": "adds tests for hooks, cron, or doctor's hook section",
-      "deterministic_check": "rg -n 'atm daemon|ATM_DAEMON|spawn.*daemon' on the new tests matches nothing; cron tests use #[tokio::test(start_paused = true)]",
+      "deterministic_check": "rg -n 'atm daemon|ATM_DAEMON|spawn.*daemon' on the new tests matches nothing; no test that spawns fixture_hook.py uses start_paused; atm-cron scheduling tests advance ManualClock",
       "fixtures": {
         "pass": [
-          "Tests under crates/atm-daemon-bootstrap/src/hook_runner.rs use a tests/fixtures/hook_module.py and #[tokio::test(start_paused = true)]."
+          "Tests in crates/atm-daemon-bootstrap/src/hook_runner.rs spawn fixture_hook.py under #[tokio::test] on the real clock with timeout_ms = 30000, the timeout case uses a child that never finishes against timeout_ms = 200, and atm-cron's scheduling tests advance a ManualClock."
         ],
         "fail": [
           "The integration test starts a daemon on the default socket and registers a hook against it."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -3382,6 +3411,32 @@
           "item": "bk-2",
           "reason": "bk-2's tests are serde and parse unit tests; no hook module runs and no clock is read",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T03:33:35+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "Hook and cron behavior is tested with a fixture hook module and a paused tokio clock; no test starts, targets or depends on a live daemon."
+        },
+        {
+          "at": "2026-10-19T03:33:43+00:00",
+          "event": "updated",
+          "fields": [
+            "quote"
+          ],
+          "note": "register text re-captured from docs/plans/phase-bk/design.md D-4 after D-r3-c (Rand's no-flaky-test rule, CLAUDE.md: a real child runs on the real clock; start_paused only with doubles)"
+        },
+        {
+          "at": "2026-10-19T03:33:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ],
       "exclude": [

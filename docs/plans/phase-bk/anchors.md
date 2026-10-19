@@ -36,7 +36,7 @@ Intent: `docs/plans/phase-bk/intent.md`
 | REQ-BK-LOG | locked | One ADR-067 log entry per hook call and per action | 2026-10-18 |
 | REQ-BK-HOOK-CLI | locked | atm hook register | disable | list | 2026-10-18 |
 | REQ-BK-SCHEMA | locked | Two new tables as one ADR-061 minor schema bump | 2026-10-18 |
-| REQ-BK-TESTS | locked | Tests use a fixture module and paused clock, never a live daemon | 2026-10-18 |
+| REQ-BK-TESTS | locked | Fixture module on the real clock, manual clock for scheduling, never a live daemon | 2026-10-18 |
 | ANC-023 | locked | Mandatory stop condition on every cron schedule | 2026-10-18 |
 | ANC-024 | locked | Stop hook ends the schedule | 2026-10-18 |
 | ANC-025 | locked | Until time ends the schedule | 2026-10-18 |
@@ -151,6 +151,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `bk-2`: bk-2 defines the HookReply parse and the HookAction type only; refusing, passing through and dispatching are bk-3's HookedTaskCommands filter and HookActionDispatcher
 - `bk-1`: pass-through behaviour is bk-3's router path; bk-1 runs nothing
 - `bk-5`: pass-through is bk-3's router path; bk-5 adds no task subcommand logic
+- `bk-4`: a cron tick replaces no atm task subcommand, so there is no normal logic to pass through to; bk-4 only records a pass-through reply as the tick outcome ok (ADR-069), as ANC-001 is judged on bk-3's filter
 
 Fixtures:
 - pass: On {"result": "pass-through"} HookedTaskCommands calls inner (NormalTaskCommands) with the caller's original request unchanged.
@@ -497,8 +498,8 @@ Deterministic check to pair with the development gate: a paused-clock test inser
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `bk-2`: restart survival is bk-1's table and bk-4's active_all load; bk-2 persists nothing
-- `bk-5`: restart survival is bk-1's table and bk-4's active_all load at worker start; bk-5 composes the worker but asserts composition through run_now, not a restart
 - `bk-3`: restart survival is bk-1's table and bk-4's active_all load; bk-3's cron routes call the scheduler trait only
+- `bk-5`: restart survival is bk-1's table and bk-4's active_all load at worker start; bk-5 composes the worker and drives its restart test with ManualClock, so the load itself is bk-4's
 
 Fixtures:
 - pass: CronWorker::start reads every active row from CronScheduleStore at daemon boot and arms a timer for each, so no CLI call is needed after a restart.
@@ -659,6 +660,7 @@ Deterministic check to pair with the development gate: two tests: a fixture that
 Excluded from (not judged; the cell passes as `excluded`):
 - `bk-1`: bk-1 defines the six ATM_HOOK_* and cron codes (ruling A) and raises constraint errors; fail-closed reply handling is bk-2's parse and bk-3's filter
 - `bk-5`: fail-closed reply handling is bk-2's parse and bk-3's runner; bk-5 only prints the error codes it receives
+- `bk-2`: the requirement is the hooked command's fail-closed result (error returned to the caller, no subcommand logic run), which bk-3's runner and filter deliver and test; bk-2 supplies only HookReply::parse returning Err(ATM_HOOK_MALFORMED), which bk-3 calls
 
 Fixtures:
 - pass: The runner maps a non-zero status to AtmErrorCode::HookExit and an unparsable stdout to AtmErrorCode::HookMalformed, and the filter returns that error without calling inner.
@@ -716,7 +718,7 @@ Anchor: The hook_registration and cron_schedule tables are added in one ADR-061 
 
 > The hook_registration and cron_schedule tables are added in one ADR-061 minor bump of the storage schema version, applied by the existing migration path in atm-storage-rusqlite.
 
-Said by fenix (design.md, PR #1877), phase-bk design decision docs/plans/phase-bk/design.md §4; ADR-061 (fenix, PR #1877); not a Rand ruling, 2026-10-18. Status: locked. Version 3.
+Said by fenix (design.md, PR #1877), phase-bk design decision docs/plans/phase-bk/design.md §4; ADR-061 (fenix, PR #1877); not a Rand ruling, 2026-10-18. Status: locked. Version 4.
 
 Summary: Two new tables as one ADR-061 minor schema bump
 
@@ -731,29 +733,29 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `bk-3`: the storage schema change is bk-1; bk-3 edits no storage crate
 
 Fixtures:
-- pass: ensure_schema creates hook_registration and cron_schedule idempotently; ADR-061's D6 record of 2026-10-18 lists the MINOR change.
+- pass: The existing ensure_schema migration path in atm-storage-rusqlite creates hook_registration and cron_schedule together and idempotently, and ADR-061's D6 record of 2026-10-18 lists both tables as one MINOR storage schema change.
 - fail: Each sprint adds its own table with its own schema-version bump.
 
 ## REQ-BK-TESTS
 
-Anchor: Hook and cron behavior is tested with a fixture hook module and a paused tokio clock; no test starts, targets or depends on a live daemon.
+Anchor: Hook execution is tested with a fixture hook module on the real clock, the timeout case using a child that never finishes, and cron scheduling with a manual test clock; no test starts, targets or depends on a live daemon.
 
-> Hook and cron behavior is tested with a fixture hook module and a paused tokio clock; no test starts, targets or depends on a live daemon.
+> Each sprint carries its tests, never a live daemon. A test that spawns a real child runs on the real clock with a generous `timeout_ms` and asserts content; the timeout case uses a child that never finishes. Scheduling is tested with `ManualClock`, and `start_paused` only with doubles.
 
-Said by fenix (design.md, PR #1877), phase-bk design decision docs/plans/phase-bk/design.md §7 (fenix, PR #1877); not a Rand ruling, 2026-10-18. Status: locked. Version 2.
+Said by fenix (design.md, PR #1877), phase-bk design decision docs/plans/phase-bk/design.md §7 (fenix, PR #1877); not a Rand ruling, 2026-10-18. Status: locked. Version 4.
 
-Summary: Tests use a fixture module and paused clock, never a live daemon
+Summary: Fixture module on the real clock, manual clock for scheduling, never a live daemon
 
 Scope: adds tests for hooks, cron, or doctor's hook section
 
-Deterministic check to pair with the development gate: rg -n 'atm daemon|ATM_DAEMON|spawn.*daemon' on the new tests matches nothing; cron tests use #[tokio::test(start_paused = true)]
+Deterministic check to pair with the development gate: rg -n 'atm daemon|ATM_DAEMON|spawn.*daemon' on the new tests matches nothing; no test that spawns fixture_hook.py uses start_paused; atm-cron scheduling tests advance ManualClock
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `bk-1`: bk-1's tests are store round trips on a temp database; no hook module runs and no clock is read
 - `bk-2`: bk-2's tests are serde and parse unit tests; no hook module runs and no clock is read
 
 Fixtures:
-- pass: Tests under crates/atm-daemon-bootstrap/src/hook_runner.rs use a tests/fixtures/hook_module.py and #[tokio::test(start_paused = true)].
+- pass: Tests in crates/atm-daemon-bootstrap/src/hook_runner.rs spawn fixture_hook.py under #[tokio::test] on the real clock with timeout_ms = 30000, the timeout case uses a child that never finishes against timeout_ms = 200, and atm-cron's scheduling tests advance a ManualClock.
 - fail: The integration test starts a daemon on the default socket and registers a hook against it.
 
 ## ANC-023

@@ -228,3 +228,27 @@ return a dict/array"; plus the ATM_HOOK_* code names of design §9.1.
   REQ-BK-ERRORS; bk-3 ANC-021, REQ-BK-D3; bk-4 ANC-004, ANC-012, ANC-023,
   ANC-024, REQ-BK-ERRORS, REQ-BK-LOG) go to the round-2 fix layer as
   sprint-doc gaps; sprint docs were not edited in this round.
+
+## Round 8: r3 lock-time capture (2026-10-19)
+
+- ANC-005 excluded for bk-4 (v3 unchanged): a cron tick replaces no
+  subcommand; bk-4 only records a pass-through reply as tick outcome `ok`.
+- REQ-BK-ERRORS excluded for bk-2 (v4 unchanged, statement not touched):
+  the fail-closed result is bk-3's runner and filter; bk-2 supplies only
+  `HookReply::parse` returning `ATM_HOOK_MALFORMED`.
+- REQ-BK-TESTS v2 → v4: quote re-captured from design.md D-4 and D-r3-c
+  (real clock for a spawned child, `ManualClock` for scheduling,
+  `start_paused` only with doubles); statement, check and pass fixture
+  follow. A second fail fixture (start_paused with a real child) came back
+  underspecified and was dropped, not reworded; the original pair stands.
+- ANC-020 × bk-5 exclusion reason: `run_now` replaced by `ManualClock`
+  (v2 unchanged).
+- check-fixtures: REQ-BK-TESTS pass satisfied, fail contradicted.
+- Gate: bk-1 `plan-20261019T032107Z`, bk-2 `plan-20261019T033407Z`, bk-3
+  `plan-20261019T033409Z`, bk-4 `plan-20261019T033409Z`, bk-5
+  `plan-20261019T033407Z`; coverage 34/34. The four targeted cells are
+  resolved. Still low, all sprint-doc gaps outside this round: bk-2
+  ANC-022, ANC-023 (unstable); bk-3 REQ-BK-D3; bk-4 ANC-003, REQ-BK-LOG
+  (unstable); bk-5 ANC-023.
+- beads/plan.jsonl regenerated from the vars files; no `run_now` remains;
+  validate-plan: plan valid, 5 sprints.
