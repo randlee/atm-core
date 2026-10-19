@@ -723,27 +723,63 @@ mod tests {
         assert_eq!(stored, vec!["bk".to_owned()]);
     }
 
+    /// The longest a gate wait may block. It only fails a test that never reaches the
+    /// gate; nothing retries and nothing sleeps.
+    const GATE_WAIT_BOUND: std::time::Duration = std::time::Duration::from_secs(10);
+
+    /// Completes `wait`, or fails the test once the failure bound is exceeded.
+    async fn bounded<F: std::future::Future>(what: &str, wait: F) -> F::Output {
+        tokio::time::timeout(GATE_WAIT_BOUND, wait)
+            .await
+            .unwrap_or_else(|_| panic!("timed out after {GATE_WAIT_BOUND:?} waiting for {what}"))
+    }
+
+    /// The in-flight gate: the hook raises `entered`, then waits for `release`.
+    #[derive(Clone, Default)]
+    struct InFlightGate {
+        entered: Arc<Notify>,
+        release: Arc<Notify>,
+    }
+
+    impl InFlightGate {
+        /// Installs the gate as the runner's `before_reply` hook.
+        fn install(&self, runner: &atm_core::boundary::DummyHookRunner) {
+            let gate = self.clone();
+            *runner.before_reply.lock().expect("before reply") = Some(Arc::new(move |_index| {
+                let gate = gate.clone();
+                Box::pin(async move {
+                    gate.entered.notify_one();
+                    bounded(
+                        "the test to release the in-flight hook",
+                        gate.release.notified(),
+                    )
+                    .await;
+                })
+            }));
+        }
+
+        async fn wait_entered(&self) {
+            bounded(
+                "the in-flight hook to reach the runner",
+                self.entered.notified(),
+            )
+            .await;
+        }
+
+        fn release_hook(&self) {
+            self.release.notify_one();
+        }
+    }
+
     #[tokio::test]
     async fn disable_during_in_flight_hook_does_not_cancel_its_actions() {
         let routes = routes();
         register(&routes, register_request("sender", "task.assign", "bk"))
             .await
             .expect("register");
-        let entered = Arc::new(Notify::new());
-        let release = Arc::new(Notify::new());
+        let gate = InFlightGate::default();
         let runner = Arc::new(atm_core::boundary::DummyHookRunner::default());
-        {
-            let entered = entered.clone();
-            let release = release.clone();
-            *runner.before_reply.lock().expect("before reply") = Some(Arc::new(move |_index| {
-                let entered = entered.clone();
-                let release = release.clone();
-                Box::pin(async move {
-                    entered.notify_one();
-                    release.notified().await;
-                })
-            }));
-        }
+        gate.install(&runner);
         let mut request = crate::hook_filter::test_support::assign_request(false);
         request.to = Some("recipient@test-team".parse().expect("address"));
         reply(
@@ -769,7 +805,7 @@ mod tests {
                 commands.assign(TaskAssign(Box::new(request)), &ctx).await
             })
         };
-        entered.notified().await;
+        gate.wait_entered().await;
         routes
             .router
             .hook_disable(
@@ -784,8 +820,8 @@ mod tests {
             )
             .await
             .expect("disable while the hook is in flight");
-        release.notify_one();
-        let response = in_flight
+        gate.release_hook();
+        let response = bounded("the in-flight chain to complete", in_flight)
             .await
             .expect("join")
             .expect("in-flight chain completes");
