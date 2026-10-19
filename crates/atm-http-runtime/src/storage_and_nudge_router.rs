@@ -1607,6 +1607,42 @@ pub(crate) mod tests {
         )
     }
 
+    /// The router's `with_local_host` value is the caller host every hook request
+    /// the filter sees carries, so the request's `caller.host` is the router's host.
+    #[tokio::test]
+    async fn local_host_is_stamped_into_the_hook_caller_host() {
+        let fixture = fixture(true, None, None);
+        let store = Arc::new(atm_runtime_test_support::InMemoryHookRegistrationStore::new());
+        crate::hook_filter::test_support::register(&store, "task.assign", "bk", 1);
+        let runner = Arc::new(atm_core::boundary::DummyHookRunner::default());
+        crate::hook_filter::test_support::reply(&runner, atm_core::hook::HookReply::PassThrough);
+        let host: atm_core::types::HostName = "router-host".parse().expect("host");
+        let snapshot = Arc::new(
+            crate::hook_filter::ActiveHookSnapshot::load(store.clone()).expect("snapshot"),
+        );
+        let router = crate::hook_filter::test_support::install_filter(
+            fixture.router.clone().with_local_host(host.clone()),
+            snapshot,
+            runner.clone(),
+        );
+        router
+            .write_with_request_id(
+                task_write_request(&fixture, "T-HOST"),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(5)),
+                atm_core::protocol::next_request_id(),
+            )
+            .await
+            .expect("write through the filter");
+        let calls = runner.calls.lock().expect("calls");
+        match &calls[0].1 {
+            atm_core::boundary::HookCall::Run(request) => {
+                assert_eq!(request.caller.host, Some(host));
+            }
+            other => panic!("unexpected hook call {other:?}"),
+        }
+    }
+
     /// Installs `NormalTaskCommands` over this fixture's router when `through` is
     /// set, so the same task test exercises the hook task-command route.
     fn route_task_commands(mut fixture: Fixture, through: bool) -> Fixture {

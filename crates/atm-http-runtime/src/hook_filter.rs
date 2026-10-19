@@ -1045,6 +1045,28 @@ mod tests {
         let calls = h.runner.calls.lock().expect("calls");
         match &calls[0].1 {
             atm_core::boundary::HookCall::Run(request) => {
+                let value = serde_json::to_value(request).expect("request json");
+                let keys: std::collections::BTreeSet<&str> = value
+                    .as_object()
+                    .expect("request object")
+                    .keys()
+                    .map(String::as_str)
+                    .collect();
+                assert_eq!(
+                    keys,
+                    std::collections::BTreeSet::from([
+                        "caller",
+                        "custom",
+                        "hook",
+                        "phase",
+                        "request",
+                        "schema_version",
+                        "team",
+                    ])
+                );
+                assert_eq!(value["hook"], serde_json::json!("task.assign"));
+                assert_eq!(value["team"], serde_json::json!("test-team"));
+                assert_eq!(value["phase"], serde_json::json!("bk"));
                 assert_eq!(request.custom.get("goal"), Some(&serde_json::json!("ship")));
                 assert_eq!(request.caller.host, Some(local_host()));
                 assert_eq!(request.request, serde_json::to_value(&write).expect("json"));
