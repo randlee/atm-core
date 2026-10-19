@@ -1,0 +1,43 @@
+# phase-bj: mechanical close flow: close hook, stack bead, sanity-stack, runs tabs
+
+## Description
+
+Repository: randlee/atm-bd-orchestration. Code, worktrees, sprint branches and PRs live there, on its `integrate/phase-bj`; atm-core's `integrate/phase-bj` holds only this plan. The rulings are Rand's of 2026-10-18, anchored as ANC-051..088 in `docs/plans/phase-bj/anchors.md` (ANC-062 retired by ANC-065); the requirement docs are `docs/requirements/task-close-hook.md` and `docs/requirements/sanity-stack.md` of atm-bd-orchestration PR #342 with the dev, dev-sanity, team-lead and quality-mgr requirement items they amend.
+
+### Goal
+Dev work is not complete until sanity verifies it, and the lead does not need to intervene between a dev push and the QA assignment:
+- one script, `atm-task-close.py --role <dev|fix|sanity|qa> --vars <file>`, is the only way a dev, fix, sanity or qa task completes; it checks the minimum, closes the bead, reports to the lead and assigns the next bead as the phase lead (ANC-051..059, ANC-070);
+- the dev's ATM task stays open until the sanity close hook closes it on PASS; a sanity FAIL is one `sanity-fail.xml.j2` message to the dev on that open task, no finding children, counted in `metadata.sanity_round` up to `max_sanity_rounds` (default 5) (ANC-055..057, ANC-072);
+- the stack bead `<prefix>-phase-<x>.stack` is the ledger and the lock of the phase stack; the sanity side links the layer on PASS under its claim, first PASS wins the top and the other dev gets `rebase-required` without a round counted; a sanity-stack subagent handles one next-top layer per spawn, sequentially, with a lean mode and a lock timeout that never blocks the team and never escalates to a person (ANC-065..069, ANC-071);
+- the pour writes branch, worktree, pr_target and difficulty onto every generated dev, fix, sanity and QA bead and validates the projected phase graph before writes (ANC-083, atm-bd-orchestration #340);
+- `atm-bd console` shows a sanity runs tab and a quality runs tab, newest first, QA run-level verdict and elapsed, the dev's name and icon, and an API_FAILURE kind distinct from a FAIL verdict (ANC-073, atm-bd-orchestration #347).
+
+Dev and fix assignment stay the lead's (ANC-060); atm-bd assigns only a sanity or qa bead that `bd ready` lists with no ATM task (ANC-061).
+
+No per-reviewer quality metadata is promised: the producer is outside phase-bj, so the quality tab displays only fields and findings already written by in-scope producers.
+
+### Sprints
+| Sprint | Title | Relation | Depends on |
+|---|---|---|---|
+| bj-1 | close hook: atm-task-close.py roles dev, fix, sanity, qa; task-close-vars.j2, sanity-fail.xml.j2, rebase-required.xml.j2; max_sanity_rounds | root | - |
+| bj-2 | stack bead and sprint-family pour: stack-bead.json.j2, pour metadata, pydantic model per bead kind, validate-plan | root | - |
+| bj-3 | sanity-stack subagent and dev-sanity PASS wiring: sequential spawns, lock timeout, lean mode | must_follow | bj-1, bj-2 |
+| bj-4 | console sanity and quality runs tabs; measured elapsed and dev identity in the sanity ledger | parallel_safe | - |
+| bj-5 | out-of-band full-skill integrity manifest; install verification and hand-runnable plugin doctor | parallel_safe | - |
+
+`requirements` and `adrs` are `NONE` on every sprint: the atm-core requirement and ADR documents do not govern atm-bd-orchestration code; the governing text is the package's `docs/requirements/*.md` named per sprint.
+
+### BJ5 integrity addition (atm-bd-orchestration #349)
+`bj-5` publishes an out-of-band sc-sha manifest for all shipped skill files, verifies files against the selected release manifest during `atm-bd skill` install, and ships a hand-runnable plugin doctor reporting per-file status and aggregate PASS/FAIL. It uses sc-compose's Python sc-sha implementation, stores no SHA inside any file, leaves sc-publish unchanged, and has no dependency on atm-core. Anchors: ANC-087, ANC-088. requirements/adrs: NONE.
+
+## Acceptance criteria
+
+### Success Criteria
+- A dev bead closed through `atm-task-close.py --role dev` in a scratch repository leaves the dev's ATM task open, closes the bead, and assigns the sanity task as the phase lead with no lead action (ANC-052, ANC-055).
+- A sanity PASS through the hook closes the dev's task as the lead and assigns QA as the lead; a sanity FAIL sends one `sanity-fail` message on the dev's open task and creates no bead (ANC-053, ANC-056, ANC-072).
+- Two branches cut from the same top that both pass sanity: the first advances the stack bead from empty to singleton against trunk, the second is linked as the hosted top in `layers`; a conflicting second branch gets `rebase-required` and `sanity_round` does not move (ANC-065, ANC-067, ANC-071).
+- `validate-plan --phase bj` requires the stack bead and every generated dev, fix, sanity and QA bead carries branch, worktree, pr_target and difficulty (ANC-083).
+- `atm-bd console` shows the sanity and quality tabs with run-level QA verdict and elapsed, the dev's icon and name, and an API_FAILURE icon distinct from FAIL (ANC-073).
+- Every sprint's QA PASS at its head; the stack lands on `integrate/phase-bj` of atm-bd-orchestration; `just lint` and `just test` green there.
+- `atm-bd skill` verifies every installed file against the selected release manifest and refuses mismatches with the path list; `atm-hook-doctor.py` reports per-file integrity and aggregate PASS/FAIL from the install-recorded manifest, using sc-compose's Python sc-sha implementation only (ANC-087, ANC-088).
+- Phase BJ5 uses no atm-core dependency, embeds no SHA in shipped files, and leaves sc-publish unchanged.
