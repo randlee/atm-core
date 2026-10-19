@@ -27,7 +27,13 @@ paths:
         - $ref: '#/components/parameters/Agent'
         - $ref: '#/components/parameters/ChatId'
       responses:
-        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/ListOutcome' } } } }
+        '200':
+          description: Messages. A task-ledger list or events query answers HookActions instead when a task hook handled the command; the body then counts the actions and X-ATM-Hook-Actions carries the same count.
+          headers:
+            X-ATM-Hook-Actions:
+              description: Decimal count of hook actions dispatched; present only when the body is HookActions.
+              schema: { type: string }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ListOutcome' } } }
         default: { $ref: '#/components/responses/AtmError' }
     post:
       operationId: writeMessage
@@ -101,7 +107,13 @@ paths:
       description: Local-ingress-only reorder of an open task in its assignee's queue.
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TaskMoveRequest' } } } }
       responses:
-        '200': { description: Task move result, content: { application/json: { schema: { $ref: '#/components/schemas/TaskMoveOutcome' } } } }
+        '200':
+          description: Task move result. When a task hook handled the move, the body is HookActions instead; it counts the actions and X-ATM-Hook-Actions carries the same count.
+          headers:
+            X-ATM-Hook-Actions:
+              description: Decimal count of hook actions dispatched; present only when the body is HookActions.
+              schema: { type: string }
+          content: { application/json: { schema: { $ref: '#/components/schemas/TaskMoveOutcome' } } }
         default: { $ref: '#/components/responses/AtmError' }
   /graft/receiver/register:
     post:
@@ -657,7 +669,7 @@ components:
         hook: { type: string, description: A task hook name such as task.assign; cron.tick is refused. }
         module_path: { type: string }
         cwd: { type: string }
-        timeout_ms: { type: integer, format: uint32, minimum: 1 }
+        timeout_ms: { type: integer, format: uint32, minimum: 1, maximum: 2500 }
         custom: { type: object, description: Optional JSON object of at most 64 KiB; an absent value is an empty object. }
     HookDisableRequest:
       type: object
