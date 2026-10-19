@@ -1318,7 +1318,7 @@ Fixtures:
 
 Anchor: The dev template must tell the dev to run /sc-gh-stack and verify with /sc-gh-stack-view, but the close hook must accept a PR whose base equals the stack top when GraphQL is unavailable, so sanity and QA proceed; stack hygiene is the lead's, performed on the sanity PASS report.
 
-> agreed.  we should 'tell the agent' to /sc-gh-stack and verify w/ /sc-gh-stack-view, but if graphql not working, aligning base w/ top is sufficient so sanity/qa proceed.  lead is responsible for stack hygene.
+> agreed.  we should 'tell the agent' to /sc-gh-stack and verify w/ /sc-gh-stack-view, but if graphql not working, aligning base w/ top is sufficient so sanity/qa proceed.  lead is responsible for stack hygiene.
 
 Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: retired. Version 3.
 
@@ -1360,7 +1360,7 @@ Fixtures:
 
 Anchor: atm-core must run a repository-configured hook on task close (and later on the other task transitions) that receives role and a custom JSON payload defined by the hook, keeps the task open when the hook returns failure, and logs the result; until it ships, atm-task-close.py in the skill stands in for it.
 
-> Long term, I would like this to occur in a atm-task-close hook which we could tap into.  we should file this as an important gh issue on atm-core repo because I don't believe this hook exists today.  we should assign hooks for most of the atm task transitions.  that would allow us to implement different hooks in different orchestration patterns.  the atm-task-close hook would accept a 'custom' json set of fields which would be defined by the custom python (not atm).  atm would simply pass the json to the python function which would return a Result<T,E> and if the hook returned failure, the task would remain open.  the result would get logged.  The atm-task-close hook would ALSO be routed by 'role' or 'role' would be a mandetory input argument to the python script
+> Long term, I would like this to occur in a atm-task-close hook which we could tap into.  we should file this as an important gh issue on atm-core repo because I don't believe this hook exists today.  we should assign hooks for most of the atm task transitions.  that would allow us to implement different hooks in different orchestration patterns.  the atm-task-close hook would accept a 'custom' json set of fields which would be defined by the custom python (not atm).  atm would simply pass the json to the python function which would return a Result<T,E> and if the hook returned failure, the task would remain open.  the result would get logged.  The atm-task-close hook would ALSO be routed by 'role' or 'role' would be a mandatory input argument to the python script
 
 Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: retired. Version 3.
 
@@ -1423,7 +1423,7 @@ Fixtures:
 
 Anchor: A stack bead under the phase epic must hold the entire stack (ordered layers with branch, PR, head, base, linked) as the only record of layer order; sanity-stack and the lead must claim it before any stack write and release it after; when GraphQL is back the subagent links every layer recorded unlinked; the bead closes when the stack lands.
 
-> There needs to be local ledger the agent writes, which would be the phase bead if I understand properly.  entire stack would land in the phase bead.  |  One other responsibility of the subagent would be if graphql was out, but we can use not, it would stack ALL skipped layers.  |  On a side note, lead should probably coordinate w/ this agent as well when stacking work needs to be done.  this makes me think perhaps we need a stack-lock bead (child of phase epic).  stack-lock would be claimed before updating stack and returned to open when stack was complete.  (i believe using a bd as a lock is a known pattern.  stack-lock bead would represent a single stack, and woudl be closed when stack was merged.)
+> There needs to be local ledger the agent writes, which would be the phase bead if I understand properly.  entire stack would land in the phase bead.  |  One other responsibility of the subagent would be if graphql was out, but we can use not, it would stack ALL skipped layers.  |  On a side note, lead should probably coordinate w/ this agent as well when stacking work needs to be done.  this makes me think perhaps we need a stack-lock bead (child of phase epic).  stack-lock would be claimed before updating stack and returned to open when stack was complete.  (i believe using a bd as a lock is a known pattern.  stack-lock bead would represent a single stack, and would be closed when stack was merged.)
 
 Said by Rand, phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md), 2026-10-18. Status: locked. Version 2.
 
