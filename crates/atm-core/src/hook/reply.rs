@@ -89,6 +89,53 @@ impl HookAction {
         Ok(())
     }
 
+    fn write_request(&self, team: &TeamName, identity: &AgentName) -> Result<ApiRequest, AtmError> {
+        let mut request: WriteRequest = self.body()?;
+        self.check_team(&request.caller_team, team)?;
+        request.caller_identity = identity.clone();
+        match self.command.as_str() {
+            "send"
+                if request.task_id.is_none()
+                    && request.task_op.is_none()
+                    && request.task_complete.is_none()
+                    && request.acknowledges_message_id.is_none() => {}
+            "ack" if request.acknowledges_message_id.is_some() => {}
+            "task.assign" | "task.start" | "task.close" => {
+                let classified = TaskCommand::classify(ApiRequest::Write(Box::new(
+                    request.clone(),
+                )))
+                .map_err(|_| self.malformed("request does not classify as a task command"))?;
+                if classified.hook_name().as_str() != self.command {
+                    return Err(self.malformed("request classifies as a different task command"));
+                }
+            }
+            _ => {
+                return Err(
+                    self.malformed("request fields do not match the named send or ack command")
+                );
+            }
+        }
+        Ok(ApiRequest::Write(Box::new(request)))
+    }
+
+    fn list_request(&self, team: &TeamName, identity: &AgentName) -> Result<ApiRequest, AtmError> {
+        let mut request: ListQuery = self.body()?;
+        self.check_team(&request.caller_team, team)?;
+        let matches = matches!(
+            (self.command.as_str(), &request.task_ledger),
+            ("task.list", Some(TaskLedgerQuery::Tasks { .. }))
+                | ("task.events", Some(TaskLedgerQuery::Events { .. }))
+                | ("task.history", Some(TaskLedgerQuery::History { .. }))
+        );
+        if !matches {
+            return Err(self.malformed("task_ledger must match the named task query"));
+        }
+        request.caller_identity = identity.clone();
+        Ok(ApiRequest::Messages(Box::new(
+            MessageCollectionRequest::List(request),
+        )))
+    }
+
     pub fn into_api_request(
         &self,
         team: &TeamName,
@@ -97,35 +144,7 @@ impl HookAction {
         let identity = self.run_as.as_ref().unwrap_or(default_as);
         match self.command.as_str() {
             "send" | "ack" | "task.assign" | "task.start" | "task.close" => {
-                let mut request: WriteRequest = self.body()?;
-                self.check_team(&request.caller_team, team)?;
-                request.caller_identity = identity.clone();
-                match self.command.as_str() {
-                    "send"
-                        if request.task_id.is_none()
-                            && request.task_op.is_none()
-                            && request.task_complete.is_none()
-                            && request.acknowledges_message_id.is_none() => {}
-                    "ack" if request.acknowledges_message_id.is_some() => {}
-                    "task.assign" | "task.start" | "task.close" => {
-                        let classified =
-                            TaskCommand::classify(ApiRequest::Write(Box::new(request.clone())))
-                                .map_err(|_| {
-                                    self.malformed("request does not classify as a task command")
-                                })?;
-                        if classified.hook_name().as_str() != self.command {
-                            return Err(
-                                self.malformed("request classifies as a different task command")
-                            );
-                        }
-                    }
-                    _ => {
-                        return Err(self.malformed(
-                            "request fields do not match the named send or ack command",
-                        ));
-                    }
-                }
-                Ok(ApiRequest::Write(Box::new(request)))
+                self.write_request(team, identity)
             }
             "task.move" => {
                 let mut request: TaskMoveRequest = self.body()?;
@@ -133,23 +152,7 @@ impl HookAction {
                 request.caller_identity = identity.clone();
                 Ok(ApiRequest::TaskMove(request))
             }
-            "task.list" | "task.events" | "task.history" => {
-                let mut request: ListQuery = self.body()?;
-                self.check_team(&request.caller_team, team)?;
-                let matches = matches!(
-                    (self.command.as_str(), &request.task_ledger),
-                    ("task.list", Some(TaskLedgerQuery::Tasks { .. }))
-                        | ("task.events", Some(TaskLedgerQuery::Events { .. }))
-                        | ("task.history", Some(TaskLedgerQuery::History { .. }))
-                );
-                if !matches {
-                    return Err(self.malformed("task_ledger must match the named task query"));
-                }
-                request.caller_identity = identity.clone();
-                Ok(ApiRequest::Messages(Box::new(
-                    MessageCollectionRequest::List(request),
-                )))
-            }
+            "task.list" | "task.events" | "task.history" => self.list_request(team, identity),
             "read" => {
                 let mut request: ReadQuery = self.body()?;
                 self.check_team(&request.caller_team, team)?;
