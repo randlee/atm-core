@@ -142,6 +142,16 @@ impl<D: HookActionDispatcher> HookedTaskCommands<D> {
     pub fn actions(&self) -> &Arc<D> {
         &self.actions
     }
+
+    /// The active hook snapshot this wrapper reads its registrations from.
+    pub fn snapshot(&self) -> &Arc<ActiveHookSnapshot> {
+        &self.snapshot
+    }
+
+    /// The chain tracker this wrapper runs its hook chains under.
+    pub fn chains(&self) -> &Arc<ChainTracker> {
+        &self.chains
+    }
 }
 
 impl<D: HookActionDispatcher + 'static> HookedTaskCommands<D> {
@@ -495,6 +505,25 @@ pub(crate) mod test_support {
         }
     }
 
+    /// Installs a filter over `router` that takes its chain tracker from the
+    /// router, with the given snapshot and runner, and returns the router.
+    pub fn install_filter(
+        router: crate::storage_and_nudge_router::StorageAndNudgeRouter,
+        snapshot: Arc<ActiveHookSnapshot>,
+        runner: Arc<dyn atm_core::boundary::HookRunner>,
+    ) -> crate::storage_and_nudge_router::StorageAndNudgeRouter {
+        let filter = HookedTaskCommands::new(
+            Arc::new(crate::task_commands::NormalTaskCommands::new(
+                router.clone(),
+            )),
+            Arc::new(router.unhooked()),
+            snapshot,
+            runner,
+            router.hook_chains(),
+        );
+        router.with_hook_filter(Arc::new(filter))
+    }
+
     pub fn reply(runner: &DummyHookRunner, reply: HookReply) {
         runner
             .replies
@@ -547,10 +576,13 @@ mod tests {
     use atm_runtime_test_support::InMemoryHookRegistrationStore;
 
     use super::ActiveHookSnapshot;
+    use super::HookedTaskCommands;
     use super::test_support::{
         agent, assign_request, ctx, deadline, expect_err, handled_action, harness, harness_with,
-        hook, local_host, phase, register, registration, reply, reply_error, targeted_phases, team,
+        hook, install_filter, local_host, phase, register, registration, reply, reply_error,
+        targeted_phases, team,
     };
+    use crate::hook_chains::ChainTracker;
 
     fn list_query() -> atm_core::list::ListQuery {
         atm_core::list::ListQuery {
@@ -720,6 +752,35 @@ mod tests {
         assert_eq!(targeted_phases(&h.runner).len(), 1);
         assert_eq!(h.inner.calls.lock().expect("calls").len(), 1);
         assert!(h.actions.calls.lock().expect("calls").is_empty());
+    }
+
+    /// The router takes its runner, snapshot and chain tracker from the filter it
+    /// installs, so no handle can differ from the ones the filter runs through.
+    #[tokio::test]
+    async fn router_adopts_the_installed_filters_handles() {
+        let fixture = crate::storage_and_nudge_router::tests::fixture(true, None, None);
+        let store = Arc::new(InMemoryHookRegistrationStore::default());
+        let snapshot = Arc::new(ActiveHookSnapshot::load(store.clone()).expect("snapshot"));
+        let runner = Arc::new(atm_core::boundary::DummyHookRunner::default());
+        let filter = Arc::new(HookedTaskCommands::new(
+            Arc::new(crate::task_commands::NormalTaskCommands::new(
+                fixture.router.clone(),
+            )),
+            Arc::new(fixture.router.unhooked()),
+            snapshot.clone(),
+            runner.clone(),
+            Arc::new(ChainTracker::new()),
+        ));
+        let router = fixture.router.clone().with_hook_filter(filter.clone());
+        assert!(Arc::ptr_eq(&router.hook_chains(), filter.chains()));
+        assert!(Arc::ptr_eq(
+            router.hooks.snapshot.as_ref().expect("snapshot"),
+            &snapshot
+        ));
+        assert!(Arc::ptr_eq(
+            router.hooks.runner.as_ref().expect("runner"),
+            filter.runner()
+        ));
     }
 
     #[tokio::test]
@@ -1082,11 +1143,7 @@ mod tests {
         register(&store, "task.list", "bk", 1);
         let runner = Arc::new(atm_core::boundary::DummyHookRunner::default());
         let snapshot = Arc::new(ActiveHookSnapshot::load(store.clone()).expect("snapshot"));
-        let router = fixture
-            .router
-            .clone()
-            .with_hook_snapshot(snapshot)
-            .with_hook_runner(runner.clone());
+        let router = install_filter(fixture.router.clone(), snapshot, runner.clone());
         let mut query = list_query();
         query.caller_identity = agent("sender");
         query.caller_team = team();

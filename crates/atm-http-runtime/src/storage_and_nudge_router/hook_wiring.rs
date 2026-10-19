@@ -6,14 +6,16 @@
 use std::sync::{Arc, OnceLock};
 
 use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
-use atm_core::boundary::{CronScheduler, HookRunner, TaskCallCtx, TaskCommand, TaskCommands};
+use atm_core::boundary::{
+    CronScheduler, HookActionDispatcher, HookRunner, TaskCallCtx, TaskCommand, TaskCommands,
+};
 use atm_core::error::AtmError;
 use atm_core::protocol::RequestId;
 use atm_core::types::HostName;
 
 use crate::hook_actions::UnhookedRouter;
 use crate::hook_chains::ChainTracker;
-use crate::hook_filter::ActiveHookSnapshot;
+use crate::hook_filter::{ActiveHookSnapshot, HookedTaskCommands};
 use crate::task_commands::task_caller;
 
 use super::StorageAndNudgeRouter;
@@ -22,9 +24,9 @@ use super::StorageAndNudgeRouter;
 pub(crate) struct HookWiring {
     /// `None` runs the un-hooked bodies; `Some` routes each classified task command.
     pub task_commands: Option<Arc<dyn TaskCommands>>,
-    /// Shared with the filter; `None` makes the registry routes unavailable.
+    /// Set only by `with_hook_filter`, from the filter; `None` makes the registry routes unavailable.
     pub snapshot: Option<Arc<ActiveHookSnapshot>>,
-    /// Used by doctor only; the filter holds its own runner.
+    /// Set only by `with_hook_filter`, from the filter; doctor reads it.
     pub runner: Option<Arc<dyn HookRunner>>,
     /// Shared by every clone; unset makes cron routes unavailable.
     pub cron: Arc<OnceLock<Arc<dyn CronScheduler>>>,
@@ -53,15 +55,19 @@ impl StorageAndNudgeRouter {
         self
     }
 
+    /// Installs `filter` as the task-command body and takes its runner, snapshot
+    /// and chain tracker as this router's own. The filter is the only source of
+    /// those handles, so a router can never hold a runner, snapshot or tracker
+    /// that its filter does not use.
     #[must_use]
-    pub fn with_hook_runner(mut self, runner: Arc<dyn HookRunner>) -> Self {
-        self.hooks.runner = Some(runner);
-        self
-    }
-
-    #[must_use]
-    pub fn with_hook_snapshot(mut self, snapshot: Arc<ActiveHookSnapshot>) -> Self {
-        self.hooks.snapshot = Some(snapshot);
+    pub fn with_hook_filter<D: HookActionDispatcher + 'static>(
+        mut self,
+        filter: Arc<HookedTaskCommands<D>>,
+    ) -> Self {
+        self.hooks.task_commands = Some(Arc::clone(&filter) as Arc<dyn TaskCommands>);
+        self.hooks.runner = Some(Arc::clone(filter.runner()));
+        self.hooks.snapshot = Some(Arc::clone(filter.snapshot()));
+        self.hooks.chains = Arc::clone(filter.chains());
         self
     }
 

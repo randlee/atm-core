@@ -177,6 +177,7 @@ mod tests {
     use serde_json::{Map, Value, json};
 
     use super::collect;
+    use crate::hook_filter::ActiveHookSnapshot;
     use crate::hook_filter::test_support::{agent, at, deadline, hook, phase, team};
     use crate::storage_and_nudge_router::StorageAndNudgeRouter;
     use crate::storage_and_nudge_router::tests::fixture;
@@ -198,7 +199,12 @@ mod tests {
             .clone()
             .with_hook_registration_store(hooks.clone());
         if with_runner {
-            router = router.with_hook_runner(runner.clone() as Arc<dyn HookRunner>);
+            let snapshot = ActiveHookSnapshot::load(hooks.clone()).expect("snapshot");
+            router = crate::hook_filter::test_support::install_filter(
+                router,
+                Arc::new(snapshot),
+                runner.clone() as Arc<dyn HookRunner>,
+            );
         }
         Setup {
             _fixture: fixture,
