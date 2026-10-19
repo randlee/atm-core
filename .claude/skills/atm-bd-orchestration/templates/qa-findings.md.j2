@@ -1,0 +1,20 @@
+---
+name: qa-findings
+version: 1.0.0
+description: Run-level findings linked to one QA bead.
+format: markdown
+required_variables:
+  - findings
+---
+# Findings
+{% for finding in findings %}
+## {{ finding.id }} · {% if finding.severity == "blocking" %}❗{% elif finding.severity == "important" %}⚠️{% else %}•{% endif %} {{ finding.severity }} · {{ finding.category }}
+
+{% for ref in finding.refs %}`{{ ref }}` {% endfor %}
+
+{{ finding.issue }}
+
+**Required correction:** {{ finding.required_correction }}
+
+**Reviewer:** {{ finding.reviewer_display }}
+{% endfor %}

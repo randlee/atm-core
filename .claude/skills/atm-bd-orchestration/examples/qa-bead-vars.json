@@ -7,6 +7,8 @@
   "stack": "phase-d",
   "layer": 4,
   "branch": "sprint/d-4-otlp-sync-exporter",
+  "worktree": "/tmp/d-4",
+  "pr_target": "integrate/phase-d",
   "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
   "round": 1,
   "qa_member": "quality-mgr"

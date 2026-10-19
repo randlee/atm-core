@@ -20,6 +20,9 @@ required_variables:
   - sprint
   - stack
   - difficulty
+  - branch
+  - worktree
+  - pr_target
   - priority
   - edge_option
 defaults:
@@ -84,6 +87,9 @@ sprint = "{{{ sprint }}}"
 stack = "{{{ stack }}}"
 round = {{{ round }}}
 difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
 sprint_bead = "{{{ parent }}}"
 finding_ref = "{{{ finding_ref }}}"
 severity = "{{{ severity }}}"
@@ -109,6 +115,9 @@ labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:dev-sanity"]
 [steps.metadata]
 dev_bead = "{{{ parent }}}.{{{ ref }}}-fix"
 difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
 
 [[steps]]
 id = "qa"
@@ -126,6 +135,9 @@ sprint = "{{{ sprint }}}"
 stack = "{{{ stack }}}"
 round = {{{ round }}}
 difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
 checked_bead = "{{{ parent }}}.{{{ ref }}}-fix"
 finding_ref = "{{{ finding_ref }}}"
 reviewer = "{{{ reviewer }}}"

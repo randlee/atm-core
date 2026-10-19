@@ -9,7 +9,7 @@ plan file, the phase root and the integration branch:
     lead = "appointed-phase-lead"
 
 The required `templates` table names the installed assignment template for
-each of dev, dev_fix, fix, sanity, qa, plan_review and review.
+each of dev, fix, sanity, qa, plan_review and review.
 
 The plan file holds one JSON object per sprint, `{"sprint": "<name>"}` with an
 optional `"depends_on": ["<sprint name>", ...]` (hard dependencies only). It
@@ -32,11 +32,10 @@ SPRINT_NAME = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 # The sprint-group formula's attach ref (atm-bd-orchestration/formulas/sprint-group.relations.json).
 GROUP_REF = "group"
 PHASE_DIR = Path(".atm-bd")
-PHASE_KEYS = ("plan", "root", "integration_branch", "lead")
+PHASE_KEYS = ("plan", "root", "integration_branch")
 TEMPLATE_DIR = Path(".claude/skills/atm-bd-orchestration/templates")
 DEFAULT_TEMPLATES = {
     "dev": str(TEMPLATE_DIR / "dev-template.xml.j2"),
-    "dev_fix": str(TEMPLATE_DIR / "dev-fix.xml.j2"),
     "fix": str(TEMPLATE_DIR / "fix-assignment.xml.j2"),
     "sanity": str(TEMPLATE_DIR / "dev-sanity-template.xml.j2"),
     "qa": str(TEMPLATE_DIR / "qa-template.xml.j2"),
@@ -80,20 +79,29 @@ def phase_config_path(repo: Path, phase: str) -> Path:
 
 
 def validate_phase_config(repo: Path, phase: str, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate explicit phase settings and their installed assignment templates."""
+    """Validate the complete tracked phase settings."""
     path = phase_config_path(repo, phase)
     problems = []
     for key in PHASE_KEYS:
         if not isinstance(data.get(key), str) or not data[key].strip():
             problems.append(f"{key}: required nonempty string")
-    unknown = set(data) - set(PHASE_KEYS) - {"templates"}
+    unknown = set(data) - set(PHASE_KEYS) - {"lead", "templates", "code_checkout"}
     if unknown:
         problems.append(f"unknown key(s): {', '.join(sorted(unknown))}")
+    if "code_checkout" in data and (not isinstance(data["code_checkout"], str) or not data["code_checkout"].strip()
+                                     or Path(data["code_checkout"]).is_absolute()):
+        problems.append("code_checkout: optional repository-relative path to the code repository")
+    if not isinstance(data.get("lead"), str) or not data["lead"].strip():
+        problems.append("lead: required nonempty string")
     templates = data.get("templates")
-    if not isinstance(templates, dict):
+    if templates is None:
         problems.append("templates: required table with keys " + ", ".join(DEFAULT_TEMPLATES))
-    else:
-        extra = set(templates) - set(DEFAULT_TEMPLATES)
+    if templates is not None:
+        if not isinstance(templates, dict):
+            problems.append("templates: expected a table with keys " + ", ".join(DEFAULT_TEMPLATES))
+            templates = None
+    if isinstance(templates, dict):
+        extra = set(templates) - set(DEFAULT_TEMPLATES) - {"dev_fix"}
         if extra:
             problems.append(f"templates: unknown key(s): {', '.join(sorted(extra))}")
         for key in DEFAULT_TEMPLATES:
@@ -120,7 +128,7 @@ def validate_phase_config(repo: Path, phase: str, data: dict[str, Any]) -> dict[
 
 
 def load_phase_config(repo: Path, phase: str) -> dict[str, Any]:
-    """Read the phase's explicit lead, plan, root, branch and seven template paths."""
+    """Read and validate the complete phase settings."""
     path = phase_config_path(repo, phase)
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))

@@ -51,11 +51,8 @@ else its sprint container's, `metadata.sprint_bead`), its head must start with t
 (not checked when the QA bead's `metadata.quick_fix` is true: a Parallel Quick Fix has no sanity check),
 and the QA worktree HEAD must equal that PR head. Otherwise refuse
 `SANITY_STALE`; no layer or quick fix lacking QA PASS at that pinned head is
-mergeable. Reuse an existing workflow class bead for the same failure signature:
-append the task id, head, command and failure evidence, and cite the class id in
-the refusal. If no class matches, report the signature to the task assigner for
-classification and cite that message instead; do not create a per-task shadow
-or delay the refusal.
+mergeable. Close the task refused with `SANITY_STALE` and the command and failure
+evidence in `reason_md`; do not create a bead for the refusal.
 
 ## Plan Review
 

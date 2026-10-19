@@ -14,6 +14,11 @@ class ImportingDocsTests(unittest.TestCase):
         self.assertIn('scripts/validate-plan --phase <x>', procedure)
         self.assertNotIn('After importing a phase plan, export the sprint index', skill)
 
+    def test_planning_forbids_hand_written_stack_beads(self):
+        skill_dir = Path(__file__).resolve().parents[1]
+        planning = (skill_dir / 'resources/planning.md').read_text()
+        self.assertIn('A hand-written `bd create` is forbidden for these beads', planning)
+
 
 if __name__ == '__main__':
     unittest.main()
