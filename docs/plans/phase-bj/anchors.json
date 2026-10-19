@@ -239,8 +239,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "locked",
+      "version": 4,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -302,6 +302,12 @@
           "item": "atm-bj-5",
           "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:32:51+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand 2026-10-18: \"I thnk this is not relevant. that quote was to you/fenix while 0.16.1 was underway.\""
         }
       ],
       "exclude": [
@@ -1141,13 +1147,13 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "The atm-bd-console command must be replaced by the atm-bd console subcommand.",
-      "quote": "jes drop atm-bd-console\n'atm-bd-console' is to be removed/replaced w/ atm-bd console\natm-bd console would logically be in atm-bd-console module",
+      "quote": "jes drop atm-bd-console\n'atm-bd-console' is to be removed/replaced w/ atm-bd console\natm-bd console would logically be in atm-bd-console module\nI think I was discussing subcommands 'atm-bd console', 'atm-bd install', 'atm-bd cron', ...  This is a natural partition of the product.  all are atm-bd, different features are available.",
       "kind": "prohibition",
       "stated_by": "Rand",
       "stated_at": "2026-10-16",
       "context": "Rand 2026-10-19 ANC-022 ruling",
       "summary": "atm-bd-console is dropped, not aliased",
-      "scope": "edits the command name, install scripts or any caller of the console",
+      "scope": "adds, renames or invokes an atm-bd subcommand (atm-bd console, atm-bd skill, atm-bd cron) or the old atm-bd-console command",
       "deterministic_check": "command -v atm-bd-console fails, atm-bd console runs, rg finds no atm-bd-console invocation outside apps/atm-bd-console and atm_bd_console",
       "fixtures": {
         "pass": [
@@ -1181,7 +1187,7 @@
           }
         }
       },
-      "version": 4,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1237,6 +1243,29 @@
           "item": "atm-bj-2",
           "reason": "bj-2 ships the stack bead schema, the pour metadata and validate-plan; it does not name, install, edit the installer for, or run any console command",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "updated",
+          "fields": [
+            "quote",
+            "scope"
+          ],
+          "approved_by": "Rand"
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "updated",
+          "fields": [
+            "scope"
+          ]
+        },
+        {
+          "at": "2026-10-19T02:34:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "bj-3 ships agent prompts for sanity-stack and dev-sanity; it does not name, install or run any atm-bd subcommand",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1247,6 +1276,10 @@
         {
           "item": "atm-bj-2",
           "reason": "bj-2 ships the stack bead schema, the pour metadata and validate-plan; it does not name, install, edit the installer for, or run any console command"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "bj-3 ships agent prompts for sanity-stack and dev-sanity; it does not name, install or run any atm-bd subcommand"
         }
       ]
     },
@@ -3081,7 +3114,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "When a dev or fix bead closes, the group's sanity bead must be assigned to the dev-sanity member with the sanity template and vars without any lead action: by the dev's close hook in the same shell command as bd close, and by atm-bd when bd ready lists the sanity bead with no ATM task.",
-      "quote": "the first issue to solve is mechanical.  when dev or fix bd is closed, sanity 'bd ready' is true.  the atm-bd cron/console will 'atm task assign <bead-id> <sanity-agent> --template <template> --args <vars> automatically.  This assignment must be done --as <phase-lead>\n\"the atm-task-close hook would immediately call 'atm task assign' and 'bd close'\" (from ANC-061's quote)\nyes, this is an intentional race condition.  In reality it is more of a backup plan",
+      "quote": "the first issue to solve is mechanical.  when dev or fix bd is closed, sanity 'bd ready' is true.  the atm-bd cron/console will 'atm task assign <bead-id> <sanity-agent> --template <template> --args <vars> automatically.  This assignment must be done --as <phase-lead>\nthe atm-task-close hook would immediately call 'atm task assign' and 'bd close'\nyes, this is an intentional race condition.  In reality it is more of a backup plan",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
@@ -4525,7 +4558,7 @@
       "id": "ANC-068",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "sanity-stack must take a timeout for the stack bead claim, and on expiry must return the holder's identity, claim time and active task; dev-sanity must then keep the sanity task active, ask the holder once, continue other sanity work and retry; neither may refuse the task, fail the dev or escalate to a person.",
+      "statement": "sanity-stack must take a timeout for the stack bead claim, default 60 seconds, and on expiry must return the holder's identity, claim time and active task; dev-sanity must then keep the sanity task active, ask the holder once, continue other sanity work and retry; neither may refuse the task, fail the dev or escalate to a person.",
       "quote": "make sure there is a --timeout sent to the sanity-stack subagent for how long to wait if lock not available, sanity agent should also report who has the lock if --timeout occurs and lock could not be obtained.  This can not result in an team is blocked because agent could not get lock, likewise it can NOT result in escelate to HUMAN.  The team needs to know how to handle this and not disrupt work underway. ... 300 seconds and 15 seconds both seem quite long depending on how this is implemented.  can you attempt to claim w/ a 1-minute timeout for instance?",
       "kind": "directive",
       "stated_by": "Rand",
@@ -4575,7 +4608,7 @@
           }
         }
       },
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -4609,6 +4642,14 @@
           "item": "atm-bj-2",
           "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "sanity-stack must take a timeout for the stack bead claim, and on expiry must return the holder's identity, claim time and active task; dev-sanity must then keep the sanity task active, ask the holder once, continue other sanity work and retry; neither may refuse the task, fail the dev or escalate to a person."
         }
       ],
       "exclude": [
@@ -5392,7 +5433,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "The branch value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.",
-      "quote": "when the sprint is poured, wouldn't the branch/worktree land in the dev (or fix), sanity and qa bead at that point?",
+      "quote": "when the sprint is poured, wouldn't the branch/worktree land in the dev (or fix), sanity and qa bead at that point?\n078-081 this is the formula we need to pour (gap in current implementation) when dev/qa/sanity are poured (so all get the same info in bead).",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
@@ -5442,7 +5483,7 @@
         }
       },
       "version": 4,
-      "status": "retired",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -5479,6 +5520,48 @@
           "event": "retired",
           "replaced_by": null,
           "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "restored",
+          "approved_by": "Rand",
+          "approval_quote": "078-081 this is the formula we need to pour (gap in current implementation) when dev/qa/sanity are poured (so all get the same info in bead).",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T02:34:39+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-1's close hook only reads the fields the pour wrote",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:34:39+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-4's dispatch only reads the fields the pour wrote",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:34:39+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-1's close hook only reads the fields the pour wrote"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-4's dispatch only reads the fields the pour wrote"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path"
         }
       ]
     },
@@ -5487,7 +5570,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "The worktree value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.",
-      "quote": "when the sprint is poured, wouldn't the branch/worktree land in the dev (or fix), sanity and qa bead at that point?",
+      "quote": "when the sprint is poured, wouldn't the branch/worktree land in the dev (or fix), sanity and qa bead at that point?\n078-081 this is the formula we need to pour (gap in current implementation) when dev/qa/sanity are poured (so all get the same info in bead).",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
@@ -5537,7 +5620,7 @@
         }
       },
       "version": 4,
-      "status": "retired",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -5569,6 +5652,48 @@
           "event": "retired",
           "replaced_by": null,
           "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "restored",
+          "approved_by": "Rand",
+          "approval_quote": "078-081 this is the formula we need to pour (gap in current implementation) when dev/qa/sanity are poured (so all get the same info in bead).",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T02:34:39+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-1's close hook only reads the fields the pour wrote",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:34:39+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-4's dispatch only reads the fields the pour wrote",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:34:39+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-1's close hook only reads the fields the pour wrote"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-4's dispatch only reads the fields the pour wrote"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path"
         }
       ]
     },
@@ -5577,7 +5702,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "The pr_target value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.",
-      "quote": "branch, worktree, pr_target, difficulty land on the sprint container (as today) AND on its sanity and QA beads at pour time, copied from the container.",
+      "quote": "branch, worktree, pr_target, difficulty land on the sprint container (as today) AND on its sanity and QA beads at pour time, copied from the container.\n078-081 this is the formula we need to pour (gap in current implementation) when dev/qa/sanity are poured (so all get the same info in bead).",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
@@ -5627,7 +5752,7 @@
         }
       },
       "version": 4,
-      "status": "retired",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -5659,6 +5784,48 @@
           "event": "retired",
           "replaced_by": null,
           "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "restored",
+          "approved_by": "Rand",
+          "approval_quote": "078-081 this is the formula we need to pour (gap in current implementation) when dev/qa/sanity are poured (so all get the same info in bead).",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T02:34:39+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-1's close hook only reads the fields the pour wrote",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:34:39+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-4's dispatch only reads the fields the pour wrote",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:34:39+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-1's close hook only reads the fields the pour wrote"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-4's dispatch only reads the fields the pour wrote"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path"
         }
       ]
     },
@@ -5667,7 +5834,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "The difficulty value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.",
-      "quote": "branch, worktree, pr_target, difficulty land on the sprint container (as today) AND on its sanity and QA beads at pour time, copied from the container.",
+      "quote": "branch, worktree, pr_target, difficulty land on the sprint container (as today) AND on its sanity and QA beads at pour time, copied from the container.\n078-081 this is the formula we need to pour (gap in current implementation) when dev/qa/sanity are poured (so all get the same info in bead).",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
@@ -5717,7 +5884,7 @@
         }
       },
       "version": 4,
-      "status": "retired",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -5749,6 +5916,48 @@
           "event": "retired",
           "replaced_by": null,
           "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "restored",
+          "approved_by": "Rand",
+          "approval_quote": "078-081 this is the formula we need to pour (gap in current implementation) when dev/qa/sanity are poured (so all get the same info in bead).",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T02:34:39+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-1's close hook only reads the fields the pour wrote",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:34:39+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-4's dispatch only reads the fields the pour wrote",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:34:39+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-1's close hook only reads the fields the pour wrote"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "the pour and its sprint-family metadata are bj-2; bj-4's dispatch only reads the fields the pour wrote"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path"
         }
       ]
     },
@@ -5756,8 +5965,8 @@
       "id": "ANC-082",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Each bead kind in the phase must have a Pydantic model that names its required metadata keys.",
-      "quote": "A pydantic model for every bead kind in a phase, not just sprint and sanity: dev/sprint container, sanity, QA (with checked_bead and the round), gate, finding, fix, and their sanity/QA children. Each model names the required metadata keys; extra=\"allow\" stays.",
+      "statement": "validate-plan must validate every bead kind in the phase against a Pydantic model that names its required metadata keys.",
+      "quote": "A pydantic model for every bead kind in a phase, not just sprint and sanity: dev/sprint container, sanity, QA (with checked_bead and the round), gate, finding, fix, and their sanity/QA children. Each model names the required metadata keys; extra=\"allow\" stays.\nwe need model for every bead kind verified at validation.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
@@ -5767,15 +5976,15 @@
       "deterministic_check": "Validate fixtures for every phase bead kind and assert the selected Pydantic model enforces its required metadata keys.",
       "fixtures": {
         "pass": [
-          "Every bead kind in the phase has a Pydantic model that names its required metadata keys."
+          "validate-plan checks every bead kind in the phase (sprint container, dev, fix, sanity, QA, gate, finding) against its Pydantic model and rejects a bead missing a required metadata key."
         ],
         "fail": [
-          "The phase finding bead kind has no Pydantic model."
+          "validate-plan checks only sprint and sanity beads; a finding bead with no model passes unchecked."
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "retired",
+      "version": 5,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -5800,6 +6009,41 @@
           "event": "retired",
           "replaced_by": null,
           "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "restored",
+          "approved_by": "Rand",
+          "approval_quote": "we need model for every bead kind verified at validation.",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "Each bead kind in the phase must have a Pydantic model that names its required metadata keys."
+        },
+        {
+          "at": "2026-10-19T02:33:09+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T02:34:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path"
         }
       ]
     },
@@ -5927,26 +6171,26 @@
       "id": "ANC-084",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "An LLM or Jev call failure must be retried three times before reporting failure.",
-      "quote": "There are occasionally LLM call fails during heavy traffic times which can be retried 3x before saying fail.",
+      "statement": "A Jev call that returns an API-busy error must be retried up to three times before the API-busy failure is reported.",
+      "quote": "There are occasionally LLM call fails during heavy traffic times which can be retried 3x before saying fail.\nmost for jev, if API busy returned, retry before giving up/returning API-busy ( I see this at peak times, a couple retries one generally works).",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
       "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
       "summary": "Retry LLM call failures three times",
-      "scope": "LLM or Jev call failures",
-      "deterministic_check": "Controlled call failures verify three retries before failure is reported.",
+      "scope": "the Jev client used by dev-sanity and its sc-sanity-jev subagent",
+      "deterministic_check": "a controlled call that answers API-busy twice then succeeds yields the result; four API-busy answers report API-busy after the third retry",
       "fixtures": {
         "pass": [
-          "An LLM call failure is retried three times before failure is reported."
+          "A Jev call that gets API busy is retried; after three busy retries the slot reports API-busy."
         ],
         "fail": [
-          "A failed Jev call is reported as a failure without any retries."
+          "The first API-busy answer from Jev is reported as the sanity result with no retry."
         ]
       },
       "question_overrides": {},
-      "version": 6,
-      "status": "retired",
+      "version": 8,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -5996,6 +6240,33 @@
           "event": "retired",
           "replaced_by": null,
           "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "restored",
+          "approved_by": "Rand",
+          "approval_quote": "most for jev, if API busy returned, retry before giving up/returning API-busy ( I see this at peak times, a couple retries one generally works).",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "scope",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "An LLM or Jev call failure must be retried three times before reporting failure."
+        },
+        {
+          "at": "2026-10-19T02:34:27+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "scope"
+          ],
+          "previous_statement": "A Jev or LLM call that returns an API-busy error must be retried up to three times before the API-busy failure is reported."
         }
       ]
     },
@@ -6054,26 +6325,26 @@
       "id": "ANC-086",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The sanity and refusal flows must not use outage class beads or require refusal citations.",
-      "quote": "This `Class-bead append and citation on every refusal, and the checker-defect side channel.` also sounds like ceremony I did not know about or approve.",
+      "statement": "A sanity FAIL or refusal must be sent only as an ATM message, with no outage class bead and no refusal citation.",
+      "quote": "This `Class-bead append and citation on every refusal, and the checker-defect side channel.` also sounds like ceremony I did not know about or approve.\nyes sanity fail/refuse are just atm message to dev now.",
       "kind": "prohibition",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
       "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
       "summary": "No outage beads or refusal citations",
       "scope": "atm-bd-orchestration sanity and refusal flows",
-      "deterministic_check": "Inspect the sanity and refusal flows and assert no outage class bead is opened and no refusal citation is required.",
+      "deterministic_check": "the sanity FAIL and refusal paths send one ATM message to the dev and create no bead; no refusal path requires a citation",
       "fixtures": {
         "pass": [
-          "The sanity and refusal flows open no outage class bead and require no refusal citation."
+          "On FAIL dev-sanity sends the dev one ATM message; a refusal closes the task refused; neither creates a bead or cites a source."
         ],
         "fail": [
-          "The sanity flow opens an outage class bead or the refusal flow requires a citation."
+          "A sanity refusal opens an outage class bead and must cite the refusal reason's source."
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "retired",
+      "version": 5,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -6098,6 +6369,56 @@
           "event": "retired",
           "replaced_by": null,
           "reason": "Atomic replacement candidates failed testability; class-bead and citation behavior remains sprint design."
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "restored",
+          "approved_by": "Rand",
+          "approval_quote": "yes sanity fail/refuse are just atm message to dev now.",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T02:32:45+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "The sanity and refusal flows must not use outage class beads or require refusal citations."
+        },
+        {
+          "at": "2026-10-19T02:34:27+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "fixtures"
+          ],
+          "previous_statement": "A sanity FAIL or refusal must reach the dev only as an ATM message, with no outage class bead and no refusal citation."
+        },
+        {
+          "at": "2026-10-19T02:34:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "bj-2 ships the stack bead schema, the pour metadata and validate-plan; it has no sanity FAIL or refusal path",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:34:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "bj-4 renders the runs tabs and owns the Jev client; the sanity FAIL and refusal paths are bj-1's hook and bj-3's dev-sanity text",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "bj-2 ships the stack bead schema, the pour metadata and validate-plan; it has no sanity FAIL or refusal path"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "bj-4 renders the runs tabs and owns the Jev client; the sanity FAIL and refusal paths are bj-1's hook and bj-3's dev-sanity text"
         }
       ]
     },

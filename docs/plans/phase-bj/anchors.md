@@ -10,7 +10,7 @@ Intent: `docs/plans/phase-bj/intent.md`
 | ANC-002 | retired | skill fetched from main head by default; --ref overrides | 2026-10-16 |
 | ANC-003 | locked | skill install prints ref, sha and app version | 2026-10-16 |
 | ANC-004 | locked | phase ends with PyPI publish after TestPyPI rehearsal | 2026-10-16 |
-| ANC-005 | locked | nothing here changes v0.16.1 | 2026-10-16 |
+| ANC-005 | retired | nothing here changes v0.16.1 | 2026-10-16 |
 | ANC-006 | locked | plan lives as beads in this bd db | 2026-10-16 |
 | ANC-007 | retired | atm-bd-console kept as alias | 2026-10-16 |
 | ANC-008 | retired | no skill-set selector yet | 2026-10-16 |
@@ -84,15 +84,15 @@ Intent: `docs/plans/phase-bj/intent.md`
 | ANC-075 | retired | Publish full-skill sc-sha manifest | 2026-10-18 |
 | ANC-076 | retired | Verify installed skill files at install | 2026-10-18 |
 | ANC-077 | retired | Report installed file integrity status | 2026-10-18 |
-| ANC-078 | retired | Sprint-family beads carry branch | 2026-10-18 |
-| ANC-079 | retired | Sprint-family beads carry worktree | 2026-10-18 |
-| ANC-080 | retired | Sprint-family beads carry pr_target | 2026-10-18 |
-| ANC-081 | retired | Sprint-family beads carry difficulty | 2026-10-18 |
-| ANC-082 | retired | Every bead kind has a typed model | 2026-10-18 |
+| ANC-078 | locked | Sprint-family beads carry branch | 2026-10-18 |
+| ANC-079 | locked | Sprint-family beads carry worktree | 2026-10-18 |
+| ANC-080 | locked | Sprint-family beads carry pr_target | 2026-10-18 |
+| ANC-081 | locked | Sprint-family beads carry difficulty | 2026-10-18 |
+| ANC-082 | locked | Every bead kind has a typed model | 2026-10-18 |
 | ANC-083 | locked | Validate every bead in the phase | 2026-10-18 |
-| ANC-084 | retired | Retry LLM call failures three times | 2026-10-18 |
+| ANC-084 | locked | Retry LLM call failures three times | 2026-10-18 |
 | ANC-085 | retired | Show API failure reason and distinct icon | 2026-10-18 |
-| ANC-086 | retired | No outage beads or refusal citations | 2026-10-18 |
+| ANC-086 | locked | No outage beads or refusal citations | 2026-10-18 |
 | ANC-087 | locked | Manifest hashes every published skill file | 2026-10-18 |
 | ANC-088 | locked | Installer verifies skill files against manifest | 2026-10-18 |
 | ANC-089 | locked | one vars file = union of atm task and sc-compose bead template variables | 2026-10-18 |
@@ -174,7 +174,7 @@ Anchor: No sprint in this phase must change what ships in v0.16.1.
 
 > agreed 0.16.1 first, but we can plan this as part of next phase.
 
-Said by Rand, planning session 2026-10-17, 2026-10-16. Status: locked. Version 3.
+Said by Rand, planning session 2026-10-17, 2026-10-16. Status: retired. Version 4.
 
 Summary: nothing here changes v0.16.1
 
@@ -475,18 +475,20 @@ Anchor: The atm-bd-console command must be replaced by the atm-bd console subcom
 > jes drop atm-bd-console
 'atm-bd-console' is to be removed/replaced w/ atm-bd console
 atm-bd console would logically be in atm-bd-console module
+I think I was discussing subcommands 'atm-bd console', 'atm-bd install', 'atm-bd cron', ...  This is a natural partition of the product.  all are atm-bd, different features are available.
 
-Said by Rand, Rand 2026-10-19 ANC-022 ruling, 2026-10-16. Status: locked. Version 4.
+Said by Rand, Rand 2026-10-19 ANC-022 ruling, 2026-10-16. Status: locked. Version 5.
 
 Summary: atm-bd-console is dropped, not aliased
 
-Scope: edits the command name, install scripts or any caller of the console
+Scope: adds, renames or invokes an atm-bd subcommand (atm-bd console, atm-bd skill, atm-bd cron) or the old atm-bd-console command
 
 Deterministic check to pair with the development gate: command -v atm-bd-console fails, atm-bd console runs, rg finds no atm-bd-console invocation outside apps/atm-bd-console and atm_bd_console
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bi-5.group-anc-f1`: touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow
 - `atm-bj-2`: bj-2 ships the stack bead schema, the pour metadata and validate-plan; it does not name, install, edit the installer for, or run any console command
+- `atm-bj-3`: bj-3 ships agent prompts for sanity-stack and dev-sanity; it does not name, install or run any atm-bd subcommand
 
 Fixtures:
 - pass: After the sprint, atm-bd-console is not installed and no script, document, test or workflow in the repository invokes it.
@@ -1095,7 +1097,7 @@ Fixtures:
 Anchor: When a dev or fix bead closes, the group's sanity bead must be assigned to the dev-sanity member with the sanity template and vars without any lead action: by the dev's close hook in the same shell command as bd close, and by atm-bd when bd ready lists the sanity bead with no ATM task.
 
 > the first issue to solve is mechanical.  when dev or fix bd is closed, sanity 'bd ready' is true.  the atm-bd cron/console will 'atm task assign <bead-id> <sanity-agent> --template <template> --args <vars> automatically.  This assignment must be done --as <phase-lead>
-"the atm-task-close hook would immediately call 'atm task assign' and 'bd close'" (from ANC-061's quote)
+the atm-task-close hook would immediately call 'atm task assign' and 'bd close'
 yes, this is an intentional race condition.  In reality it is more of a backup plan
 
 Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 2.
@@ -1440,11 +1442,11 @@ Fixtures:
 
 ## ANC-068
 
-Anchor: sanity-stack must take a timeout for the stack bead claim, and on expiry must return the holder's identity, claim time and active task; dev-sanity must then keep the sanity task active, ask the holder once, continue other sanity work and retry; neither may refuse the task, fail the dev or escalate to a person.
+Anchor: sanity-stack must take a timeout for the stack bead claim, default 60 seconds, and on expiry must return the holder's identity, claim time and active task; dev-sanity must then keep the sanity task active, ask the holder once, continue other sanity work and retry; neither may refuse the task, fail the dev or escalate to a person.
 
 > make sure there is a --timeout sent to the sanity-stack subagent for how long to wait if lock not available, sanity agent should also report who has the lock if --timeout occurs and lock could not be obtained.  This can not result in an team is blocked because agent could not get lock, likewise it can NOT result in escelate to HUMAN.  The team needs to know how to handle this and not disrupt work underway. ... 300 seconds and 15 seconds both seem quite long depending on how this is implemented.  can you attempt to claim w/ a 1-minute timeout for instance?
 
-Said by Rand, phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md), 2026-10-18. Status: locked. Version 2.
+Said by Rand, phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md), 2026-10-18. Status: locked. Version 3.
 
 Summary: lock timeout: --timeout input, report the holder, never blocks the team, never a human
 
@@ -1649,14 +1651,20 @@ Fixtures:
 Anchor: The branch value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.
 
 > when the sprint is poured, wouldn't the branch/worktree land in the dev (or fix), sanity and qa bead at that point?
+078-081 this is the formula we need to pour (gap in current implementation) when dev/qa/sanity are poured (so all get the same info in bead).
 
-Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: retired. Version 4.
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 4.
 
 Summary: Sprint-family beads carry branch
 
 Scope: atm-bd-orchestration sprint-family pour
 
 Deterministic check to pair with the development gate: Inspect rendered sprint-family beads and verify each dev, fix, sanity and QA bead has the expected branch value.
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: the pour and its sprint-family metadata are bj-2; bj-1's close hook only reads the fields the pour wrote
+- `atm-bj-4`: the pour and its sprint-family metadata are bj-2; bj-4's dispatch only reads the fields the pour wrote
+- `atm-bj-3`: the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path
 
 Fixtures:
 - pass: The pour copies the sprint container's branch value onto every generated sprint-family dev, fix, sanity and QA bead.
@@ -1667,14 +1675,20 @@ Fixtures:
 Anchor: The worktree value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.
 
 > when the sprint is poured, wouldn't the branch/worktree land in the dev (or fix), sanity and qa bead at that point?
+078-081 this is the formula we need to pour (gap in current implementation) when dev/qa/sanity are poured (so all get the same info in bead).
 
-Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: retired. Version 4.
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 4.
 
 Summary: Sprint-family beads carry worktree
 
 Scope: atm-bd-orchestration sprint-family pour
 
 Deterministic check to pair with the development gate: Inspect rendered sprint-family beads and verify each dev, fix, sanity and QA bead has the expected worktree value.
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: the pour and its sprint-family metadata are bj-2; bj-1's close hook only reads the fields the pour wrote
+- `atm-bj-4`: the pour and its sprint-family metadata are bj-2; bj-4's dispatch only reads the fields the pour wrote
+- `atm-bj-3`: the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path
 
 Fixtures:
 - pass: The pour copies the sprint container's worktree value onto every generated sprint-family dev, fix, sanity and QA bead.
@@ -1685,14 +1699,20 @@ Fixtures:
 Anchor: The pr_target value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.
 
 > branch, worktree, pr_target, difficulty land on the sprint container (as today) AND on its sanity and QA beads at pour time, copied from the container.
+078-081 this is the formula we need to pour (gap in current implementation) when dev/qa/sanity are poured (so all get the same info in bead).
 
-Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: retired. Version 4.
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 4.
 
 Summary: Sprint-family beads carry pr_target
 
 Scope: atm-bd-orchestration sprint-family pour
 
 Deterministic check to pair with the development gate: Inspect rendered sprint-family beads and verify each dev, fix, sanity and QA bead has the expected pr_target value.
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: the pour and its sprint-family metadata are bj-2; bj-1's close hook only reads the fields the pour wrote
+- `atm-bj-4`: the pour and its sprint-family metadata are bj-2; bj-4's dispatch only reads the fields the pour wrote
+- `atm-bj-3`: the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path
 
 Fixtures:
 - pass: The pour copies the sprint container's pr_target value onto every generated sprint-family dev, fix, sanity and QA bead.
@@ -1703,8 +1723,9 @@ Fixtures:
 Anchor: The difficulty value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.
 
 > branch, worktree, pr_target, difficulty land on the sprint container (as today) AND on its sanity and QA beads at pour time, copied from the container.
+078-081 this is the formula we need to pour (gap in current implementation) when dev/qa/sanity are poured (so all get the same info in bead).
 
-Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: retired. Version 4.
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 4.
 
 Summary: Sprint-family beads carry difficulty
 
@@ -1712,17 +1733,23 @@ Scope: atm-bd-orchestration sprint-family pour
 
 Deterministic check to pair with the development gate: Inspect rendered sprint-family beads and verify each dev, fix, sanity and QA bead has the expected difficulty value.
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-1`: the pour and its sprint-family metadata are bj-2; bj-1's close hook only reads the fields the pour wrote
+- `atm-bj-4`: the pour and its sprint-family metadata are bj-2; bj-4's dispatch only reads the fields the pour wrote
+- `atm-bj-3`: the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path
+
 Fixtures:
 - pass: The pour copies the sprint container's difficulty value onto every generated sprint-family dev, fix, sanity and QA bead.
 - fail: The sprint-family pour writes no difficulty value onto its generated dev, fix, sanity or QA beads.
 
 ## ANC-082
 
-Anchor: Each bead kind in the phase must have a Pydantic model that names its required metadata keys.
+Anchor: validate-plan must validate every bead kind in the phase against a Pydantic model that names its required metadata keys.
 
 > A pydantic model for every bead kind in a phase, not just sprint and sanity: dev/sprint container, sanity, QA (with checked_bead and the round), gate, finding, fix, and their sanity/QA children. Each model names the required metadata keys; extra="allow" stays.
+we need model for every bead kind verified at validation.
 
-Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: retired. Version 3.
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 5.
 
 Summary: Every bead kind has a typed model
 
@@ -1730,9 +1757,12 @@ Scope: atm-bd-orchestration bead schema
 
 Deterministic check to pair with the development gate: Validate fixtures for every phase bead kind and assert the selected Pydantic model enforces its required metadata keys.
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-3`: the pour, its metadata and the bead models are bj-2; bj-3 is the sanity-stack agent and dev-sanity's PASS path
+
 Fixtures:
-- pass: Every bead kind in the phase has a Pydantic model that names its required metadata keys.
-- fail: The phase finding bead kind has no Pydantic model.
+- pass: validate-plan checks every bead kind in the phase (sprint container, dev, fix, sanity, QA, gate, finding) against its Pydantic model and rejects a bead missing a required metadata key.
+- fail: validate-plan checks only sprint and sanity beads; a finding bead with no model passes unchecked.
 
 ## ANC-083
 
@@ -1759,21 +1789,22 @@ Fixtures:
 
 ## ANC-084
 
-Anchor: An LLM or Jev call failure must be retried three times before reporting failure.
+Anchor: A Jev call that returns an API-busy error must be retried up to three times before the API-busy failure is reported.
 
 > There are occasionally LLM call fails during heavy traffic times which can be retried 3x before saying fail.
+most for jev, if API busy returned, retry before giving up/returning API-busy ( I see this at peak times, a couple retries one generally works).
 
-Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: retired. Version 6.
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 8.
 
 Summary: Retry LLM call failures three times
 
-Scope: LLM or Jev call failures
+Scope: the Jev client used by dev-sanity and its sc-sanity-jev subagent
 
-Deterministic check to pair with the development gate: Controlled call failures verify three retries before failure is reported.
+Deterministic check to pair with the development gate: a controlled call that answers API-busy twice then succeeds yields the result; four API-busy answers report API-busy after the third retry
 
 Fixtures:
-- pass: An LLM call failure is retried three times before failure is reported.
-- fail: A failed Jev call is reported as a failure without any retries.
+- pass: A Jev call that gets API busy is retried; after three busy retries the slot reports API-busy.
+- fail: The first API-busy answer from Jev is reported as the sanity result with no retry.
 
 ## ANC-085
 
@@ -1795,21 +1826,26 @@ Fixtures:
 
 ## ANC-086
 
-Anchor: The sanity and refusal flows must not use outage class beads or require refusal citations.
+Anchor: A sanity FAIL or refusal must be sent only as an ATM message, with no outage class bead and no refusal citation.
 
 > This `Class-bead append and citation on every refusal, and the checker-defect side channel.` also sounds like ceremony I did not know about or approve.
+yes sanity fail/refuse are just atm message to dev now.
 
-Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: retired. Version 3.
+Said by Rand, phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347, 2026-10-18. Status: locked. Version 5.
 
 Summary: No outage beads or refusal citations
 
 Scope: atm-bd-orchestration sanity and refusal flows
 
-Deterministic check to pair with the development gate: Inspect the sanity and refusal flows and assert no outage class bead is opened and no refusal citation is required.
+Deterministic check to pair with the development gate: the sanity FAIL and refusal paths send one ATM message to the dev and create no bead; no refusal path requires a citation
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bj-2`: bj-2 ships the stack bead schema, the pour metadata and validate-plan; it has no sanity FAIL or refusal path
+- `atm-bj-4`: bj-4 renders the runs tabs and owns the Jev client; the sanity FAIL and refusal paths are bj-1's hook and bj-3's dev-sanity text
 
 Fixtures:
-- pass: The sanity and refusal flows open no outage class bead and require no refusal citation.
-- fail: The sanity flow opens an outage class bead or the refusal flow requires a citation.
+- pass: On FAIL dev-sanity sends the dev one ATM message; a refusal closes the task refused; neither creates a bead or cites a source.
+- fail: A sanity refusal opens an outage class bead and must cite the refusal reason's source.
 
 ## ANC-087
 

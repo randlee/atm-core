@@ -25,7 +25,7 @@
 - The OTel export of the same rows (next atm release).
 
 ### Ownership and Retry Policy
-`jev_client.py` owns the sole retry policy: four total attempts maximum for transport errors, HTTP 502, and rate limiting; an oversized context is shortened and the call retried within the same attempt budget; only a context still too large after shortening is an API_FAILURE with that reason. Injected HTTP responses and a controlled clock assert attempt count, elapsed coverage across attempts, eventual success, and API_FAILURE error without sleeps. `runner.py` and `test_runner.py` own tick read ordering; `dispatch.py` and `test_dispatch.py` own only pure candidate filtering. This sprint owns the sanity-run-table template, example, `registry.yaml` entry, `config/legacy-owned.json` references and operational references in its fence; bj-1 owns its completion-template references, bj-3 owns its prompt references, and bj-3 owns manifest inventory edits. Historical changelog and anchor-run evidence are excluded from live-reference scans.
+`jev_client.py` owns the sole retry policy: four total attempts maximum (three retries) for transport errors, HTTP 502, an API-busy answer and rate limiting; an oversized context is shortened and the call retried within the same attempt budget; only a context still too large after shortening is an API_FAILURE with that reason. Injected HTTP responses and a controlled clock assert attempt count, elapsed coverage across attempts, eventual success, and API_FAILURE error without sleeps. `runner.py` and `test_runner.py` own tick read ordering; `dispatch.py` and `test_dispatch.py` own only pure candidate filtering. This sprint owns the sanity-run-table template, example, `registry.yaml` entry, `config/legacy-owned.json` references and operational references in its fence; bj-1 owns its completion-template references, bj-3 owns its prompt references, and bj-3 owns manifest inventory edits. Historical changelog and anchor-run evidence are excluded from live-reference scans.
 
 ## Acceptance criteria
 
@@ -46,4 +46,4 @@
 ### Validation
 - `just lint` and `just test` in the atm-bd-orchestration worktree (console tests run under `uv run --frozen`).
 - `atm-bd console --phase <x>` opened against the fixture ledger and a scratch bd phase, both tabs seen.
-- [ ] Injected HTTP/clock tests cover transport failure, 502, rate limit, oversized context shortened then retried, eventual success and API_FAILURE reason; assert max four total attempts and elapsed measured across retries with no sleeps.
+- [ ] Injected HTTP/clock tests cover transport failure, 502, an API-busy answer, rate limit, oversized context shortened then retried, eventual success and API_FAILURE reason; assert max four total attempts and elapsed measured across retries with no sleeps.
