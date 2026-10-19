@@ -6,8 +6,8 @@ closure_type `boundary`; target_boundary
 `hook_registration` and `cron_schedule` DDL; branch
 `sprint/bk-6-hook-stores-sqlite`, PR → `sprint/bk-2-hook-contract` (layer
 3); difficulty normal; recommended_agent `arch-ctm`, recommended_model
-`gpt-5-codex`. Wave 2, developed in parallel with bk-2 from bk-1's head and
-rebased onto bk-2's layer when both are done (parallel-then-rebase, Rand
+`gpt-5-codex`. Wave 2, developed from bk-1's head and rebased onto bk-2's layer
+when both are done (parallel-then-rebase, Rand
 2026-10-12). Consumes from bk-1: `HookRegistrationStore`,
 `CronScheduleStore`, `HookRegistration`, `CronSchedule`,
 `NewCronSchedule`, `StopCondition`, `CronScheduleId`, `HookName`,

@@ -3,7 +3,7 @@
 closure_type `boundary`; target_boundary `BOUNDARY-HookRunner`
 (`DaemonHookRunner` in `atm-daemon-bootstrap` over `spawn_with_deadline`);
 branch `sprint/bk-3-hook-runner`, PR → `sprint/bk-6-hook-stores-sqlite`
-(layer 4). Wave 3, parallel with bk-7 and bk-4: cut from the bk-2 head,
+(layer 4). Wave 2, parallel with bk-6, bk-7 and bk-4: cut from the bk-2 head,
 rebased onto layer 3 in order; it consumes from bk-2 the `HookRunner` trait,
 `HookTarget`, `HookRequest`, `HookReply::parse`, `StopReply::parse`,
 `HookDoctorRequest`, `HookDoctorReply::parse` and from bk-1 `HookExitCause`,
@@ -15,9 +15,10 @@ ADR-066.
 ## Scope boundary
 
 One crate: the process side of a hook. No filter, route, composition or
-store (bk-7, bk-5). The runner spawns only the registered module; atm runs no
-`bd` and touches no `.beads`, so every bead call happens inside the hook
-process. Owned paths (new unless marked edited):
+store (bk-7, bk-5). This sprint adds atm's hook subprocess call, and it
+spawns only `python3 <module_path>`: atm runs no `bd` and touches no
+`.beads`, so every bead call happens inside the hook process (ANC-010).
+Owned paths (new unless marked edited):
 
 - `crates/atm-daemon-bootstrap/src/process_deadline.rs`,
   `crates/atm-daemon-bootstrap/src/hook_runner.rs`,
@@ -29,8 +30,7 @@ process. Owned paths (new unless marked edited):
   `Cargo.toml` (`rustix = { version = "1.1", features = ["process"] }`);
   `Cargo.lock` (the resulting lock lines)
 - `.just/lint-config.toml` (edited: `async-trait`, `rustix` in the
-  bootstrap allowlist; a `global_dependency_ownership` entry limiting
-  `rustix` to `process_deadline.rs`)
+  bootstrap allowlist; the `rustix` ownership entry is bk-2's)
 - `crates/atm-daemon-bootstrap/tests/hook_fixture/fixture_hook.py`
   (bk-5's composition tests use it from the same crate)
 - `crates/atm-architecture/tests/process_spawn_sites.rs`
@@ -43,11 +43,20 @@ process. Owned paths (new unless marked edited):
   `boundaries/atm-daemon-bootstrap/daemon-observability.toml` (both:
   `async-trait`, `rustix` in `allowed_dependencies`)
 
-Root `Cargo.toml`, `Cargo.lock` and `.just/lint-config.toml` are also edited
-by bk-4 in the same wave; the later layer (bk-4) resolves those hunks when it
-rebases. Moving the shared hunks into bk-2 is refused: an unused `rustix`
-fails `cargo shear`, and lint entries naming files that do not exist fail
-`just lint`.
+bk-2 lands the `rustix` and `cron` ownership entries and the `atm-cron`
+section rule, which pass `just lint` early. The rest cannot move earlier:
+an unused `[workspace.dependencies]` line fails `cargo shear`
+(`unused_workspace_dependency`), an allowlisted dependency the manifest does
+not declare fails `just lint`, and an allowlist entry or `members` line for
+a crate that does not exist fails `just lint` and `cargo`. bk-3 and bk-4
+therefore edit disjoint lines of the same files. bk-3 adds one line to root
+`Cargo.toml` `[workspace.dependencies]` (`rustix`) and edits the existing
+`crates/atm-daemon-bootstrap/Cargo.toml` allowlist entry in
+`.just/lint-config.toml` (`async-trait`, `rustix`); bk-4 adds the
+`"crates/atm-cron"` `members` line and the `atm-cron` and `cron`
+`[workspace.dependencies]` lines, and a new `crates/atm-cron/Cargo.toml`
+allowlist entry. bk-4, the later layer, rebases onto bk-3 and regenerates
+`Cargo.lock` with `cargo check --workspace` rather than merging lock hunks.
 
 ## Public contract
 
@@ -118,8 +127,8 @@ unchanged and hooks get `spawn_until`.
    either), or a fully qualified `{tokio,std}::process::Command::new`. The
    recorded set: tokio — `atm-daemon-bootstrap/src/process_deadline.rs`,
    `atm-daemon-bootstrap/src/received_hook_selector.rs`,
-   `atm-herdr/src/transport_cli.rs`, `atm/src/send_to.rs`; std —
-   `atm-daemon-client/src/lib.rs`, `atm/src/internal_nudge.rs`,
+   `atm-herdr/src/transport_cli.rs`, `atm/src/commands/send_to.rs`; std —
+   `atm-daemon-client/src/lib.rs`, `atm/src/commands/internal_nudge.rs`,
    `sc-lint-boundary/src/graph.rs`. REQ-BK-D3's locked check names this
    file; `io_forbidden_source_modules` covers one crate's modules, this
    covers the workspace.
@@ -150,7 +159,7 @@ unchanged and hooks get `spawn_until`.
 - [ ] (ANC-003, ANC-022) `boundary:BOUNDARY-HookRunner` `stdin_is_the_request_and_custom_is_byte_identical`: `fixture_request.json` equals `serde_json::to_vec(&request)` and its `custom` equals `serde_json::to_string(&target.custom)` for `{"goal":"ship","n":[1,{"y":null}]}`; argv[1] is `request.hook`.
 - [ ] (REQ-BK-D1) `boundary:BOUNDARY-HookRunner` `runner_passes_daemon_path_and_home_values`: `fixture_env.json` keys are exactly `{ATM_TEAM, ATM_PHASE, PATH, HOME}` on unix with the values given to `new`, and `os.getcwd()` is the target cwd; `hook_env_rules` (pure, both `windows` values): unix without `HOME` or `PATH` is `hook_exit(Missing)`; windows without `HOME` succeeds, without `SystemRoot` or `USERPROFILE` fails, and `Path` is found as `PATH`; `#[cfg(windows)] windows_runner_works_without_home_and_with_path_cased_Path`.
 - [ ] (ADR-068 D3, ADR-069 D4, ANC-024) `boundary:BOUNDARY-HookRunner` `doctor_sends_team_phase_custom_and_returns_findings` (argv[1] `doctor` for a registration and a schedule target, stdin `HookDoctorRequest::for_target`; the §9.10 example gives one finding; `{"ok":1}` is `ATM_HOOK_MALFORMED`); `stop_parses_both_shapes_and_refuses_missing_reason` (argv[1] and stdin `hook` are `cron.stop`).
-- [ ] (REQ-BK-D3) `boundary:BOUNDARY-HookRunner` `process_spawn_sites.rs::process_spawn_sites_are_the_recorded_files` (the seven files above, split by `tokio`/`std`); `received_hook_selector.rs` is unchanged; `just lint` passes with `process_spawn` forbidden in `hook_runner` and `hook-runner.toml` `concrete_landed`.
+- [ ] (REQ-BK-D3) `boundary:BOUNDARY-HookRunner` `process_spawn_sites.rs::process_spawn_sites_are_the_recorded_files` (the seven files of deliverable 2, paths relative to `crates/`, split by `tokio`/`std`); `received_hook_selector.rs` is unchanged; `just lint` passes with `process_spawn` forbidden in `hook_runner` and `hook-runner.toml` `concrete_landed`.
 - [ ] (ANC-010) `boundary:BOUNDARY-HookRunner` `rg -n '"bd"|\.beads' crates/atm-daemon-bootstrap/src` matches nothing.
 
 ## Authoritative validation

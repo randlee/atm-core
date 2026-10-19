@@ -4,19 +4,18 @@ closure_type `contract`; target_boundary `atm_core::hook` and the four
 sealed `atm_core::boundary` traits `TaskCommands`, `HookRunner`,
 `CronScheduler`, `HookActionDispatcher` with their doubles; branch
 `sprint/bk-2-hook-contract`, PR → `sprint/bk-1-hook-stores` (layer 2).
-Consumes from bk-1 the hook and cron store types, the in-memory doubles,
-the budget constants and the error constructors. Governing text:
-`design.md` §2, §9.2-§9.5, §9.11 (inlined below). Requirements `REQ-CORE-HOOK-001` §23.4, `REQ-P-HOOK-001` §23.2,
-`REQ-P-HOOK-004` §11.5 (the doctor request and reply types); ADR-068 D1,
+Wave 1, beside bk-1. Consumes bk-1's store types, doubles, budget
+constants and error constructors as written in `sprint-bk-1-hook-stores.md`;
+starts with bk-1 and closes only after bk-1 completes, rebased onto bk-1's
+final head and validated on the real `atm-storage` code. Governing text:
+`design.md` §2, §9.2-§9.5, §9.11. Requirements `REQ-CORE-HOOK-001` §23.4, `REQ-P-HOOK-001` §23.2,
+`REQ-P-HOOK-004` §11.5; ADR-068 D1,
 D2, D3, D8, ADR-069 D2, D4.
 
 ## Scope boundary
 
 Every type and trait the runtime sprints consume; nothing that runs a
-process, serves a request or touches SQLite. No envelope or `ApiRequest`
-variant and no route: those change the only exhaustive matches
-(`message_handler.rs:707`, `storage_and_nudge_router.rs:532`), so they land
-with those arms in bk-7 and every layer builds.
+process, serves a request or touches SQLite (Non-closure).
 
 Owned paths (new unless marked edited):
 
@@ -46,6 +45,11 @@ Owned paths (new unless marked edited):
 - `crates/atm-runtime-test-support/src/lib.rs` (edited: re-exports of the
   two in-memory stores and the four core doubles; 361 production lines)
 - `crates/atm-architecture/tests/hook_trait_boundary.rs`
+- `.just/lint-config.toml` (edited): `global_dependency_ownership` entries (`rusqlite` format)
+  for `rustix` (`crates/atm-daemon-bootstrap/Cargo.toml`,
+  `src/process_deadline.rs`) and `cron` (`crates/atm-cron/Cargo.toml`,
+  `src`); a `manifest_section_rules` entry keeping
+  `atm-runtime-test-support` dev-only in `crates/atm-cron/Cargo.toml`
 
 ## Public contract
 
@@ -261,9 +265,8 @@ error surfaces); `TaskMove` is `task.move`; `Messages(List)` with
 
 ## Authoritative deliverables
 
-1. `atm-core::hook`: the types above. `parse` is the only reply parser; a
-   reply that is not one of the four shapes is `ATM_HOOK_MALFORMED` to the
-   caller, never pass-through or the normal command (Rand, 2026-10-18:
+1. `atm-core::hook`: the types above; `parse` is the only reply parser
+   (Rand, 2026-10-18:
    "manformed hook MUST return hook failed to caller (error)").
 2. `atm-core::boundary`: the four sealed traits, `test-utils` doubles,
    `TaskCommand`, `DispatchSpec` and the re-exports, so no crate but
@@ -278,9 +281,7 @@ error surfaces); `TaskMove` is `task.move`; `Messages(List)` with
    `["atm", "atm-cron", "atm-daemon-bootstrap", "atm-http-runtime",
    "atm-runtime-test-support"]`; `cron-scheduler.toml` and
    `hook-action-dispatcher.toml` `["atm-cron", "atm-daemon-bootstrap",
-   "atm-http-runtime", "atm-runtime-test-support"]`. Later sprints edit only
-   the `[status]` table of these four.
-7. Tests, same unit, in the files the criteria name.
+   "atm-http-runtime", "atm-runtime-test-support"]`.
 
 ## Authoritative acceptance criteria
 

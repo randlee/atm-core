@@ -31,20 +31,24 @@ targets the layer below.
 
 | Wave | Sprints | Hard dependency (consumed artefact) |
 | --- | --- | --- |
-| 1 | bk-1 | - |
-| 2 | bk-2, bk-6 | bk-2 ← bk-1: the store traits and types, doubles, codes, constructors, budget constants (`atm-core` depends on `atm-storage`). bk-6 ← bk-1: the two store traits and their row types, `CronSchedule.generation`, the contract tests' expectations |
-| 3 | bk-3, bk-7, bk-4 | bk-3 ← bk-2: `HookRunner`, `HookTarget`, `HookRequest`, the reply parsers, doctor request/reply. bk-7 ← bk-2: `TaskCommands`, `TaskCommand::classify`, `HookActionDispatcher`, `DispatchSpec`, the request structs, `check_limits`, the doubles. bk-4 ← bk-2: `CronScheduler`, `CronStartSpec`, `HookRequest::for_cron`, `DispatchSpec`, the doubles |
-| 4 | bk-5 | bk-5 ← bk-6: `StorageHandles` accessors; ← bk-3: `DaemonHookRunner`, `fixture_hook.py`; ← bk-7: routes, `HookedTaskCommands`, `ChainTracker`, `install_cron_scheduler`; ← bk-4: `AtmCron`, `CronWorkerHandle`, `ManualClock` |
+| 1 | bk-1, bk-2 | bk-2 ← bk-1: the store traits and types, doubles, codes, constructors, budget constants as written in `sprint-bk-1-hook-stores.md` (Public contract); bk-2's dev codes against that text from the start and closes only after bk-1 completes |
+| 2 | bk-6, bk-3, bk-7, bk-4 | bk-6 ← bk-1: the two store traits and their row types, `CronSchedule.generation`, the contract tests' expectations. bk-3 ← bk-2: `HookRunner`, `HookTarget`, `HookRequest`, the reply parsers, doctor request/reply. bk-7 ← bk-2: `TaskCommands`, `TaskCommand::classify`, `HookActionDispatcher`, `DispatchSpec`, the request structs, `check_limits`, the doubles. bk-4 ← bk-2: `CronScheduler`, `CronStartSpec`, `HookRequest::for_cron`, `DispatchSpec`, the doubles |
+| 3 | bk-5 | bk-5 ← bk-6: `StorageHandles` accessors; ← bk-3: `DaemonHookRunner`, `fixture_hook.py`; ← bk-7: routes, `HookedTaskCommands`, `ChainTracker`, `install_cron_scheduler`; ← bk-4: `AtmCron`, `CronWorkerHandle`, `ManualClock` |
 
-Critical path 4 waves (bk-1, bk-2, any of wave 3, bk-5). A 3-wave cut is not
-available: the codes and store types (bk-1) precede the core traits (bk-2)
-because `atm-core` depends on `atm-storage` (design D-7), and the CLI and
-composition need every runtime crate. The rusqlite work (bk-6) and the
-filter (bk-7) run beside other sprints instead of on the serial chain.
-Parallel sprints are cut from their dependency's head and rebased into the
-stack in layer order when done (Rand 2026-10-12); a later layer resolves
-the root `Cargo.toml`, `Cargo.lock` and `.just/lint-config.toml` hunks it
-shares with an earlier one.
+Critical path 3 waves. bk-1 and bk-2 are separate sprints developed
+concurrently by two agents (Rand, 2026-10-19: "I would do them in parallel w/ 2 agents."; and: "that works, he starts, then when bk-1 completes, he finishes"). bk-2's dev
+starts with bk-1's, coding `atm-core` against bk-1's atm-storage contract
+types in `sprint-bk-1-hook-stores.md`. bk-2 closes only after bk-1
+completes: it rebases onto bk-1's final head, runs its gates on the real
+`atm-storage` code, then closes; it never closes ahead of bk-1. Stack order
+stays bk-1 then bk-2, bk-2's PR targeting bk-1's branch. In beads,
+`atm-bk-2.group-sanity` is blocked by `atm-bk-1.group-dev` and
+`atm-bk-2.group-dev` is ready in wave 1. The CLI and composition (bk-5)
+need every runtime crate. Other parallel sprints are cut from their
+dependency's head and rebased into the stack in layer order when done
+(Rand 2026-10-12). The root `Cargo.toml` and `.just/lint-config.toml`
+lines bk-3 and bk-4 add are disjoint (`sprint-bk-3-hook-runner.md`, scope
+boundary); bk-4 regenerates `Cargo.lock` on its rebase.
 
 ## Decisions
 

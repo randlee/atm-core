@@ -5,13 +5,13 @@ closure_type `integration`; target_boundary the `atm` CLI (`atm hook`,
 filter, `atm-cron` and the shutdown order, over `req:REQ-P-HOOK-001`,
 `req:REQ-P-HOOK-003`, `req:REQ-P-HOOK-004`, `req:REQ-P-CRON-001`,
 `req:REQ-P-CRON-002`; branch `sprint/bk-5-hook-cli-doctor`, PR →
-`sprint/bk-4-atm-cron` (layer 7, wave 4). Consumes bk-6
+`sprint/bk-4-atm-cron` (layer 7, wave 3). Consumes bk-6
 (`StorageHandles::hook_registration_store`, `cron_schedule_store`), bk-3
 (`DaemonHookRunner`, `fixture_hook.py`), bk-7 (routes, `X-ATM-Hook-Actions`,
 `NormalTaskCommands`, `HookedTaskCommands`, `ActiveHookSnapshot`,
 `ChainTracker`, `unhooked()`, `install_cron_scheduler`, `DoctorReport.hooks`)
-and bk-4 (`AtmCron`, `AtmCronDeps`, `CronWorkerHandle`, `SystemClock`,
-`SystemJitter`, `ManualClock`, `SeqJitter`). Governing text: `design.md`
+and bk-4 (`AtmCron`, `AtmCronDeps`, `CronWorkerHandle`, the clocks and
+jitters). Governing text: `design.md`
 §2.3, §5, §6, §9.1, §9.8, §9.9, D-2, D-5, D-9; `REQ-P-HOOK-003` §23.1,
 `REQ-P-HOOK-004` §11.5, `REQ-P-CRON-001` §24.1, `REQ-P-CRON-002` §24.2,
 `REQ-P-USER-DOCS-001`, `REQ-P-USER-DOCS-002`; ADR-068 D3, D5, D6, ADR-069
@@ -19,13 +19,11 @@ D1, D2, ADR-066.
 
 ## Scope boundary
 
-No storage, protocol, runner, filter, route or scheduler code; nothing
-under `crates/atm-cron`, `crates/atm-core` or `crates/atm-http-runtime`;
+No storage, protocol, runner, filter, route or scheduler code;
 `crates/atm/Cargo.toml` unchanged. Owned paths (new unless marked edited;
-production lines by `.just/check_line_counts.py` rules):
+production line counts):
 
-- `crates/atm/src/commands/hook.rs`, `crates/atm/src/commands/cron.rs`
-  (each with its `#[cfg(test)] mod tests`),
+- `crates/atm/src/commands/hook.rs`, `crates/atm/src/commands/cron.rs`,
   `crates/atm/src/commands/hook_module.rs`, `crates/atm/src/commands/mod.rs`
   (edited: `Hook(HookCommand)`, `Cron(CronCommand)` in `enum Command` at
   `:118` and their arms; 130), `crates/atm/src/output/hooks.rs`
@@ -200,7 +198,8 @@ start_cron_worker(&cron, &mut workers).await?;
 ## Authoritative deliverables
 
 1. The two commands and the rules above (ADR-068 D3, ADR-069 D1).
-2. `read_timeout_ms` per design §9.8 (ANC-011).
+2. `read_timeout_ms` per design §9.8 (ANC-011); register hashes no module
+   (D-2, ANC-016) and runs no `bd` (ANC-010).
 3. `exit_code_for_atm_error` arms per design §9.1: the three validation
    codes exit 3; `HookExit`, `HookTimeout`, `HookMalformed` exit 1 through
    `_ => 1`.
@@ -210,22 +209,18 @@ start_cron_worker(&cron, &mut workers).await?;
    `<severity> <code>: <message>` per finding, or `Hooks: none`.
 5. Composition and shutdown as above (`REQ-P-CRON-002`, ADR-069 D2);
    the `atm-runtime` store wiring.
-6. `cli_surface_baseline.json` regenerated for the two subtrees only.
-7. The user documentation above; `cli-reference.md` lists every flag;
-   `hooks.md` keeps its front matter (REQ-P-USER-DOCS-002) and every
-   fenced `json` example parses.
-8. Tests, no live daemon (REQ-BK-TESTS).
+6. The user documentation above; `cli-reference.md` lists every flag.
+7. Tests, no live daemon (REQ-BK-TESTS).
    - CLI tests in `hook.rs`/`cron.rs` `mod tests` over
      `CliComposition::from_fake_transport` (`composition.rs:207`, pattern
      `send.rs:2680`); the `FakeClientTransport` handler records each
      `ApiRequest` and returns a scripted response. They assert the built
      request, refusals before any request, printing and exit codes; a
-     route-side refusal is scripted (the route is tested in bk-7).
+     route-side refusal is scripted.
    - `hook_cron_composition_tests.rs`: the `build_replacement_handler`
      handler on a temp-dir store plus `compose_cron`, `ManualClock`,
      `SeqJitter`, no listener. A real child through `DaemonHookRunner`
-     runs in a plain `#[tokio::test]`, its `timeout_ms = 30000` row stored
-     before composition. Synchronisation: `before_reply` cannot hold a real
+     runs in a plain `#[tokio::test]`. Synchronisation: `before_reply` cannot hold a real
      child, so each such test makes exactly one `ManualClock::advance` to
      one occurrence, then calls `CronWorkerHandle::shutdown` with a 60 s
      deadline, which joins the in-flight run; the files the fixture wrote
@@ -262,6 +257,7 @@ start_cron_worker(&cron, &mut workers).await?;
 - [ ] (ADR-069 D2) `req:REQ-P-CRON-002` `cron_scheduler_installed_once_and_cron_routes_reach_it` (a second `install_cron_scheduler` errors); `cron_worker_is_first_shutdown_step`: `run_shutdown_steps` with an `async { Ok(()) }` listener records steps beginning `cron_worker`, `hook_chains`, `listener`; `cron_initial_load_error_aborts_startup`: `start_cron_worker` with `fail_active_all` returns `Err`, `workers.cron` `None`.
 - [ ] (REQ-BK-D4A) `req:REQ-P-CRON-002` `daemon_restart_with_schedule_due_while_down_fires_once_at_next_occurrence_and_not_at_startup`: `ManualClock`, `DummyHookRunner`; a second `compose_cron` on the reopened store at 10:00:30 for a 10:00:00 occurrence makes no call before an advance, one at the next occurrence.
 - [ ] (ANC-017, ANC-024) `req:REQ-P-CRON-002` `fixture_cron_receives_args_through_the_composed_scheduler` (real clock, `DaemonHookRunner`, `fixture_cron.py`, an `--until-hook` schedule with `timeout_ms = 30000`): after an advance and `shutdown`, `cron.stop` then `cron.tick` (with `request.args`) are written, each `sys.argv[1:]` its hook name only, `last_outcome == "ok"`; with the stop marker, a second `start_cron_worker`, advance and `shutdown` give `"stopped: marker present"`, `active == false`.
+- [ ] (ANC-015, REQ-P-HOOK-004) `req:REQ-P-HOOK-004` `hook_cron_composition_tests.rs::doctor_runs_the_registered_module_doctor_for_its_team` (real clock, `DaemonHookRunner`): `fixture_hook.py` stored for team `bk`, phase `bk`, `custom` `{"goal":"ship"}`, replying `{"success":true,"message":"ok","findings":[one warning]}`; doctor for `bk` leaves `fixture_request.json` with that team, phase and `custom`, and one hooks entry with that team, phase, message and warning; doctor for `other` runs no module.
 
 Surface and docs:
 
@@ -279,5 +275,4 @@ Surface and docs:
 
 ## Non-closure
 
-- No scheduler, runner, filter or route code is written here. The
-  live-host walkthrough is the phase-ending gate's evidence.
+- The live-host walkthrough is the phase-ending gate's evidence.

@@ -534,8 +534,12 @@ sealed traits; bk-6 the rusqlite stores; bk-3 the runner
 envelope variants with HTTP 1.13.0, because the variants and their only
 exhaustive matches (`map_api_response`, `dispatch_non_write`) must change
 in one layer for every layer to build; bk-4 `atm-cron`; bk-5 the CLI, the
-composition, shutdown order and docs. Waves: bk-1; bk-2 with bk-6; bk-3,
-bk-7, bk-4; bk-5.
+composition, shutdown order and docs. Waves: bk-1 with bk-2; bk-6, bk-3,
+bk-7, bk-4; bk-5. bk-1 and bk-2 stay separate sprints developed
+concurrently by two agents (Rand, 2026-10-19: "I would do them in parallel w/ 2 agents."; and: "that works, he starts, then when bk-1 completes, he finishes"): bk-2
+codes against bk-1's atm-storage contract types from bk-1's sprint doc,
+starts with bk-1, and closes only after bk-1 completes, rebased onto
+bk-1's final head with its gates run on the real `atm-storage` code.
 
 Each sprint carries its tests, never a live daemon. A test
 that spawns a real child runs on the real clock with a generous

@@ -3,9 +3,11 @@
 closure_type `boundary`; target_boundary `BOUNDARY-CronScheduler` (the
 `atm-cron` crate behind bk-2's sealed `atm_core::boundary::CronScheduler`
 trait); branch `sprint/bk-4-atm-cron`, PR → `sprint/bk-7-hook-filter`
-(layer 6). Wave 3, parallel with bk-3 and bk-7: cut from the bk-2 head and
-rebased onto layer 5 in order; it resolves the root `Cargo.toml`,
-`Cargo.lock` and `.just/lint-config.toml` hunks it shares with bk-3. It
+(layer 6). Wave 2, parallel with bk-6, bk-3 and bk-7: cut from the bk-2 head and
+rebased onto layer 5 in order. Its root `Cargo.toml` and
+`.just/lint-config.toml` lines are disjoint from bk-3's (bk-3 sprint doc,
+scope boundary); on the rebase it regenerates `Cargo.lock` with `cargo
+check --workspace` instead of merging lock hunks. It
 consumes through `atm_core::boundary` bk-2's `CronScheduler`,
 `CronStartSpec`, `HookRunner`, `HookActionDispatcher`, `DispatchSpec`,
 `HookRequest::for_cron`, the doubles, and bk-1's `CronScheduleStore`
@@ -46,13 +48,10 @@ Owned paths (new unless marked edited):
   `crates/atm-cron/Cargo.toml` with `boundary_record_path =
   "boundaries/atm-cron/cron-scheduler.toml"` and `allowed_dependencies =
   ["async-trait", "atm-core", "atm-runtime-test-support", "chrono", "cron",
-  "getrandom", "serde_json", "tokio", "tracing"]`, and one
-  `[[boundaries.global_dependency_ownership]]` entry with `dependency =
-  "cron"`, `allowed_manifest_paths = ["crates/atm-cron/Cargo.toml"]`,
-  `allowed_source_roots = ["crates/atm-cron/src"]`, format of the
-  `rusqlite` entry; `tracing-subscriber` in the crate's dev allowlist; a
-  `manifest_section_rules` entry keeping `atm-runtime-test-support`
-  dev-only for `crates/atm-cron/Cargo.toml`); `Cargo.lock`. bk-2's core
+  "getrandom", "serde_json", "tokio", "tracing"]` and
+  `tracing-subscriber` in the crate's dev allowlist; the `cron` ownership
+  entry and the `atm-runtime-test-support` section rule are bk-2's);
+  `Cargo.lock`. bk-2's core
   manifests already list `atm-cron` as a dependent.
 - `release/sc-publish-consumer-input.json` (edited: an `atm-cron` crate
   entry with `publish_order` 12, `required` true, `publish` true;
