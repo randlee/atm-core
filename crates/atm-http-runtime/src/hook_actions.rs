@@ -111,7 +111,7 @@ mod tests {
 
     use crate::hook_chains::ChainTracker;
     use crate::hook_filter::test_support::{
-        agent, ctx, deadline, handled_action, hook, phase, reply, team,
+        agent, ctx, deadline, handled_action, hook, phase, reply, shape, team,
     };
     use crate::hook_filter::{ActiveHookSnapshot, HookedTaskCommands};
     use crate::storage_and_nudge_router::StorageAndNudgeRouter;
@@ -266,6 +266,15 @@ mod tests {
             )
             .await
             .expect("close through hook");
+        let http = crate::message_handler::map_api_response(response.clone())
+            .expect("http response for hook actions");
+        assert_eq!(http.status(), axum::http::StatusCode::OK);
+        assert_eq!(
+            http.headers()
+                .get("x-atm-hook-actions")
+                .and_then(|value| value.to_str().ok()),
+            Some("1")
+        );
         match response.into_inner() {
             ResponseEnvelope::HookActions(HookActionsResponse { dispatched }) => {
                 assert_eq!(dispatched, 1);
@@ -443,10 +452,14 @@ mod tests {
             )
             .await
             .expect("direct send");
-        assert_eq!(
-            std::mem::discriminant(&via_action[0].1.clone().into_inner()),
-            std::mem::discriminant(&direct.into_inner())
-        );
+        let via_action_json =
+            serde_json::to_value(via_action[0].1.clone().into_inner()).expect("action json");
+        let direct_json = serde_json::to_value(direct.into_inner()).expect("cli json");
+        assert_eq!(shape(&via_action_json), shape(&direct_json));
+        assert!(matches!(
+            via_action[0].1.clone().into_inner(),
+            ResponseEnvelope::Send(_)
+        ));
     }
 
     type CapturedEvents = Arc<std::sync::Mutex<Vec<Vec<(String, String)>>>>;

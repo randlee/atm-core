@@ -559,6 +559,25 @@ pub(crate) mod test_support {
             Ok(_) => panic!("expected an error"),
         }
     }
+
+    /// Each leaf replaced by its JSON type name: two responses compare equal when
+    /// they carry the same fields, whatever the generated ids and timestamps are.
+    pub fn shape(value: &serde_json::Value) -> serde_json::Value {
+        use serde_json::Value;
+        let name = match value {
+            Value::Object(map) => {
+                return Value::Object(map.iter().map(|(k, v)| (k.clone(), shape(v))).collect());
+            }
+            Value::Array(items) => {
+                return Value::Array(items.iter().map(shape).collect());
+            }
+            Value::Null => "null",
+            Value::Bool(_) => "bool",
+            Value::Number(_) => "number",
+            Value::String(_) => "string",
+        };
+        Value::String(name.to_owned())
+    }
 }
 
 #[cfg(test)]
@@ -578,7 +597,7 @@ mod tests {
     use super::HookedTaskCommands;
     use super::test_support::{
         agent, assign_request, ctx, deadline, expect_err, handled_action, harness, harness_with,
-        hook, install_filter, local_host, phase, register, registration, reply, reply_error,
+        hook, install_filter, local_host, phase, register, registration, reply, reply_error, shape,
         targeted_phases, team,
     };
     use crate::hook_chains::ChainTracker;
@@ -659,25 +678,6 @@ mod tests {
         store: &(dyn atm_core::test_support::TaskStore + Send + Sync),
     ) -> Vec<atm_core::test_support::TaskRow> {
         store.list_tasks(&team(), None).expect("ledger rows")
-    }
-
-    /// Each leaf replaced by its JSON type name: two responses compare equal when
-    /// they carry the same fields, whatever the generated ids and timestamps are.
-    fn shape(value: &serde_json::Value) -> serde_json::Value {
-        use serde_json::Value;
-        let name = match value {
-            Value::Object(map) => {
-                return Value::Object(map.iter().map(|(k, v)| (k.clone(), shape(v))).collect());
-            }
-            Value::Array(items) => {
-                return Value::Array(items.iter().map(shape).collect());
-            }
-            Value::Null => "null",
-            Value::Bool(_) => "bool",
-            Value::Number(_) => "number",
-            Value::String(_) => "string",
-        };
-        Value::String(name.to_owned())
     }
 
     #[test]

@@ -750,7 +750,7 @@ fn map_write_response(response: ApiResponse) -> Result<Response, AtmError> {
     }
 }
 
-fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
+pub(crate) fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
     match response.into_inner() {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => json_response(
             StatusCode::CREATED,

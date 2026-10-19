@@ -754,9 +754,36 @@ mod tests {
             ResponseEnvelope::CronStarted(schedule) => {
                 assert_eq!(schedule.created_by, agent("sender"));
                 assert_eq!(schedule.custom, custom.as_object().expect("object").clone());
+                assert!(
+                    matches!(schedule.stop, atm_core::boundary::StopCondition::Hook),
+                    "the stop condition reaches the response unchanged"
+                );
             }
             other => panic!("expected CronStarted, got {other:?}"),
         }
+        let stored_stop = routes.cron.rows.lock().expect("rows")[0].stop.clone();
+        assert!(
+            matches!(stored_stop, atm_core::boundary::StopCondition::Hook),
+            "the scheduler stores the stop condition unchanged"
+        );
+        let duplicate = routes
+            .router
+            .cron_start(
+                cron_request("sender", 5_000, custom.clone()),
+                AuthenticatedIngress::Local,
+            )
+            .await
+            .expect_err("an active schedule refuses a second start");
+        assert!(
+            duplicate.is_validation(),
+            "the scheduler error keeps its class"
+        );
+        assert!(
+            duplicate
+                .message()
+                .contains("cron schedule is already active"),
+            "the scheduler error passes through: {duplicate}"
+        );
         routes
             .router
             .cron_list(
@@ -784,7 +811,7 @@ mod tests {
             .expect("cron end");
         assert_eq!(
             *routes.cron.calls.lock().expect("calls"),
-            vec!["start", "list", "end"]
+            vec!["start", "start", "list", "end"]
         );
     }
 
