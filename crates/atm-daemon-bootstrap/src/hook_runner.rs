@@ -603,7 +603,7 @@ mod tests {
 
     #[cfg(windows)]
     #[tokio::test]
-    async fn windows_runner_works_without_home_and_with_path_cased_Path() {
+    async fn windows_runner_works_without_home_and_with_mixed_case_path() {
         let mut fixture = Fixture::new();
         fixture.env.0.remove("HOME");
         let path = fixture.env.0.remove("PATH").unwrap();
