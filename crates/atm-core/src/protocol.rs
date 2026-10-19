@@ -7,6 +7,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use atm_storage::{CronSchedule, HookRegistration};
 use interprocess::local_socket::Name;
 #[cfg(not(windows))]
 use interprocess::local_socket::{GenericFilePath, ToFsName};
@@ -19,6 +20,10 @@ use crate::doctor::{DoctorQuery, DoctorReport};
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::home;
+use crate::hook::{
+    CronEndRequest, CronListQuery, CronStartRequest, HookActionsResponse, HookDisableRequest,
+    HookListQuery, HookRegisterRequest,
+};
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
 use crate::schema::AtmMessageId;
@@ -75,6 +80,12 @@ pub enum RequestEnvelope {
     Search(Box<SearchRequest>),
     /// Authenticated local control request that reloads the daemon's durable runtime view.
     ReloadRuntimeView,
+    HookRegister(HookRegisterRequest),
+    HookDisable(HookDisableRequest),
+    HookList(HookListQuery),
+    CronStart(CronStartRequest),
+    CronEnd(CronEndRequest),
+    CronList(CronListQuery),
 }
 
 /// Shared protocol response envelope.
@@ -96,11 +107,19 @@ pub enum ResponseEnvelope {
     Doctor(Box<DoctorReport>),
     Search(Box<SearchResponse>),
     RuntimeViewReloaded,
+    HookRegistered(HookRegistration),
+    HookList(Vec<HookRegistration>),
+    HookDisabled(Vec<HookRegistration>),
+    CronStarted(CronSchedule),
+    CronList(Vec<CronSchedule>),
+    CronEnded(Vec<CronSchedule>),
+    /// Hook actions ran in place of the hooked command; the count is also sent in `X-ATM-Hook-Actions`.
+    HookActions(HookActionsResponse),
     Error(AtmError),
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.12.0";
+pub const HTTP_API_VERSION: &str = "1.13.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskMoveRequest {
@@ -939,6 +958,94 @@ mod tests {
         let error = serde_json::from_slice::<RequestEnvelope15>(&task_move)
             .expect_err("1.5 enum must reject the 1.6-only variant");
         assert!(error.to_string().contains("unknown variant `TaskMove`"));
+    }
+
+    #[test]
+    fn codec_preserves_protocol_1_12_0_fixtures() {
+        // The 1.12 request variants, pinned by wire tag. A 1.12 reader decodes
+        // exactly these; the six hook and cron routes added in 1.13 are absent.
+        const REQUEST_VARIANTS_12: &[&str] = &[
+            "Write",
+            "TaskMove",
+            "CompatibilityPreflight",
+            "Heartbeat",
+            "QueueGetNext",
+            "GraftReceiverRegister",
+            "GraftReceiverRefresh",
+            "GraftReceiverUnregister",
+            "GraftReceiverLookup",
+            "List",
+            "Peek",
+            "Receive",
+            "Clear",
+            "Doctor",
+            "Search",
+            "ReloadRuntimeView",
+        ];
+        let wire_tag = |bytes: &[u8]| -> String {
+            match serde_json::from_slice::<serde_json::Value>(bytes).expect("request is json") {
+                serde_json::Value::String(tag) => tag,
+                serde_json::Value::Object(map) if map.len() == 1 => {
+                    map.keys().next().cloned().expect("one variant key")
+                }
+                other => panic!("unexpected request shape: {other}"),
+            }
+        };
+
+        let queue = serde_json::to_vec(&RequestEnvelope::QueueGetNext(QueueGetNextRequest {
+            team: TeamName::from_validated(TEST_TEAM),
+            member: AgentName::from_validated(TEST_SENDER),
+        }))
+        .expect("queue fixture");
+        let reload =
+            serde_json::to_vec(&RequestEnvelope::ReloadRuntimeView).expect("reload fixture");
+        for fixture in [queue, reload] {
+            serde_json::from_slice::<RequestEnvelope>(&fixture).expect("1.13 decodes 1.12 fixture");
+            assert!(REQUEST_VARIANTS_12.contains(&wire_tag(&fixture).as_str()));
+        }
+
+        // A 1.13-only route is not a 1.12 request.
+        let hook_list =
+            serde_json::to_vec(&RequestEnvelope::HookList(crate::hook::HookListQuery {
+                caller_identity: AgentName::from_validated(TEST_SENDER),
+                caller_team: TeamName::from_validated(TEST_TEAM),
+                phase: None,
+            }))
+            .expect("hook list fixture");
+        assert_eq!(wire_tag(&hook_list), "HookList");
+        assert!(!REQUEST_VARIANTS_12.contains(&wire_tag(&hook_list).as_str()));
+    }
+
+    #[test]
+    fn doctor_report_1_13_hooks_are_ignored_by_a_1_12_reader() {
+        // A partial mirror of the 1.12 DoctorReport: it reads one field and
+        // ignores the unknown `hooks` array a 1.13 daemon writes.
+        #[derive(Debug, Deserialize)]
+        struct DoctorReport12 {
+            recommendations: Vec<String>,
+        }
+
+        let entry = crate::doctor::hooks::HookDoctorEntry {
+            module_path: "/modules/gate.wasm".into(),
+            cwd: "/work".into(),
+            team: TeamName::from_validated(TEST_TEAM),
+            phase: crate::boundary::PhaseId::parse("bk").expect("phase"),
+            hooks: vec![crate::boundary::HookName::parse("task.assign").expect("hook")],
+            schedules: Vec::new(),
+            timeout_ms: 1_000,
+            success: Some(true),
+            message: Some("ok".to_owned()),
+            findings: Vec::new(),
+            error: None,
+        };
+        let report = serde_json::json!({
+            "recommendations": ["keep the hook timeout short"],
+            "hooks": [serde_json::to_value(&entry).expect("entry json")],
+        });
+
+        let pinned: DoctorReport12 =
+            serde_json::from_value(report).expect("a 1.12 reader ignores hooks");
+        assert_eq!(pinned.recommendations, vec!["keep the hook timeout short"]);
     }
 
     #[test]

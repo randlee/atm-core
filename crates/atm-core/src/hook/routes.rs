@@ -84,9 +84,18 @@ fn path_limit(path: &Path, field: &str) -> Result<(), AtmError> {
     Ok(())
 }
 
+/// An absent `custom` deserializes to `Null`; it means an empty map.
+fn custom_or_empty(custom: &Value) -> Value {
+    if custom.is_null() {
+        Value::Object(serde_json::Map::new())
+    } else {
+        custom.clone()
+    }
+}
+
 impl HookRegisterRequest {
     pub fn check_limits(&self) -> Result<Map<String, Value>, AtmError> {
-        let custom = custom_object(self.custom.clone())?;
+        let custom = custom_object(custom_or_empty(&self.custom))?;
         path_limit(&self.module_path, "module_path")?;
         path_limit(&self.cwd, "cwd")?;
         Ok(custom)
@@ -95,7 +104,7 @@ impl HookRegisterRequest {
 
 impl CronStartRequest {
     pub fn check_limits(&self) -> Result<Map<String, Value>, AtmError> {
-        let custom = custom_object(self.custom.clone())?;
+        let custom = custom_object(custom_or_empty(&self.custom))?;
         path_limit(&self.module_path, "module_path")?;
         path_limit(&self.cwd, "cwd")?;
         if self.name.is_empty() || self.name.len() > CRON_NAME_MAX_BYTES {

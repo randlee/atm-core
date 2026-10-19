@@ -528,11 +528,57 @@ fn decode_framework_request(
         Some(HttpRouteKind::RuntimeReload) => serde_json::from_slice::<()>(body)
             .map(|()| ApiRequest::ReloadRuntimeView)
             .map_err(|source| invalid_framework_body("runtime reload", source)),
+        Some(
+            kind @ (HttpRouteKind::HookRegister
+            | HttpRouteKind::HookDisable
+            | HttpRouteKind::HookList
+            | HttpRouteKind::CronStart
+            | HttpRouteKind::CronEnd
+            | HttpRouteKind::CronList),
+        ) => decode_hook_cron_request(kind, body)
+            .expect("hook and cron route kind must decode to a hook or cron request"),
         None => Err(AtmError::validation_with_recovery(
             format!("unsupported daemon HTTP route {method} {}", request.path),
             "use a method and path from the daemon HTTP route contract and retry",
         )),
     }
+}
+
+/// Decodes one of the six hook and cron routes added in HTTP API 1.13.0.
+///
+/// Returns `None` for any other route kind so the caller's route dispatch
+/// stays exhaustive over `HttpRouteKind` without duplicating these arms.
+fn decode_hook_cron_request(
+    kind: HttpRouteKind,
+    body: &[u8],
+) -> Option<Result<ApiRequest, AtmError>> {
+    Some(match kind {
+        HttpRouteKind::HookRegister => {
+            serde_json::from_slice::<atm_core::hook::HookRegisterRequest>(body)
+                .map(ApiRequest::HookRegister)
+                .map_err(|source| invalid_framework_body("hook register", source))
+        }
+        HttpRouteKind::HookDisable => {
+            serde_json::from_slice::<atm_core::hook::HookDisableRequest>(body)
+                .map(ApiRequest::HookDisable)
+                .map_err(|source| invalid_framework_body("hook disable", source))
+        }
+        HttpRouteKind::HookList => serde_json::from_slice::<atm_core::hook::HookListQuery>(body)
+            .map(ApiRequest::HookList)
+            .map_err(|source| invalid_framework_body("hook list", source)),
+        HttpRouteKind::CronStart => {
+            serde_json::from_slice::<atm_core::hook::CronStartRequest>(body)
+                .map(ApiRequest::CronStart)
+                .map_err(|source| invalid_framework_body("cron start", source))
+        }
+        HttpRouteKind::CronEnd => serde_json::from_slice::<atm_core::hook::CronEndRequest>(body)
+            .map(ApiRequest::CronEnd)
+            .map_err(|source| invalid_framework_body("cron end", source)),
+        HttpRouteKind::CronList => serde_json::from_slice::<atm_core::hook::CronListQuery>(body)
+            .map(ApiRequest::CronList)
+            .map_err(|source| invalid_framework_body("cron list", source)),
+        _ => return None,
+    })
 }
 
 /// Decodes one of the four local-ingress-only graft receiver routes.
@@ -733,8 +779,32 @@ fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
         ResponseEnvelope::Doctor(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::Search(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::RuntimeViewReloaded => json_response(StatusCode::OK, &(), None),
+        ResponseEnvelope::HookRegistered(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::HookList(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::HookDisabled(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::CronStarted(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::CronList(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::CronEnded(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::HookActions(value) => hook_actions_response(&value),
         ResponseEnvelope::Error(error) => Ok(error_response(error)),
     }
+}
+
+fn hook_actions_response(
+    outcome: &atm_core::hook::HookActionsResponse,
+) -> Result<Response, AtmError> {
+    let mut response = json_response(StatusCode::OK, outcome, None)?;
+    let count = HeaderValue::from_str(&outcome.dispatched.to_string()).map_err(|source| {
+        AtmError::new(
+            atm_core::error::AtmErrorCode::SerializationFailed,
+            "failed to serialize hook actions header",
+        )
+        .with_cause(source)
+    })?;
+    response
+        .headers_mut()
+        .insert(atm_core::api::HOOK_ACTIONS_HEADER, count);
+    Ok(response)
 }
 
 fn clear_response(outcome: &atm_core::clear::ClearOutcome) -> Result<Response, AtmError> {
@@ -1949,6 +2019,20 @@ mod tests {
                     }
                 },
                 "responses": {
+                    "200": {
+                        "description": "A task hook handled the command and its actions ran in order; the body counts them. Added in HTTP API 1.13.0.",
+                        "headers": {
+                            "X-ATM-Hook-Actions": {
+                                "description": "Decimal count of hook actions dispatched; equals HookActions.dispatched.",
+                                "schema": {"type": "string"}
+                            }
+                        },
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/HookActions"}
+                            }
+                        }
+                    },
                     "201": {
                         "description": "Created message",
                         "content": {
@@ -1960,7 +2044,7 @@ mod tests {
                     "default": {"$ref": "#/components/responses/AtmError"}
                 }
             }),
-            "the parsed OpenAPI write operation must remain the AL.1 compatibility oracle"
+            "the parsed OpenAPI write operation must remain the AL.1 compatibility oracle; HTTP API 1.13.0 adds only the 200 HookActions response"
         );
 
         let search_operation = openapi
@@ -2021,5 +2105,111 @@ mod tests {
         assert!(!include_str!("message_handler.rs").contains(&forbidden));
         let forbidden = ["Peer", "Message", "Array"].concat();
         assert!(!include_str!("message_handler.rs").contains(&forbidden));
+    }
+
+    #[tokio::test]
+    async fn peer_ingress_hook_and_cron_routes_are_refused() {
+        use crate::storage_and_nudge_router::tests::fixture;
+        use atm_core::api::{ApiRequest, RequestDeadline};
+        use atm_core::boundary::StopCondition;
+        use atm_core::hook::{
+            CronEndRequest, CronListQuery, CronStartRequest, HookDisableRequest, HookListQuery,
+            HookRegisterRequest,
+        };
+
+        let fixture = fixture(true, None, None);
+        let caller = |name: &str| name.parse().expect("agent");
+        let team: atm_core::types::TeamName = "test-team".parse().expect("team");
+        let phase = crate::hook_filter::test_support::phase("bk");
+        let requests = vec![
+            ApiRequest::HookRegister(HookRegisterRequest {
+                caller_identity: caller("sender"),
+                caller_team: team.clone(),
+                phase: phase.clone(),
+                hook: "task.assign".to_owned(),
+                module_path: "/modules/gate.wasm".into(),
+                cwd: "/work".into(),
+                timeout_ms: 1_000,
+                custom: serde_json::json!({}),
+            }),
+            ApiRequest::HookDisable(HookDisableRequest {
+                caller_identity: caller("sender"),
+                caller_team: team.clone(),
+                phase: phase.clone(),
+                hook: None,
+            }),
+            ApiRequest::HookList(HookListQuery {
+                caller_identity: caller("sender"),
+                caller_team: team.clone(),
+                phase: None,
+            }),
+            ApiRequest::CronStart(CronStartRequest {
+                caller_identity: caller("sender"),
+                caller_team: team.clone(),
+                phase: phase.clone(),
+                name: "nightly".to_owned(),
+                cron_expr: "0 3 * * *".to_owned(),
+                module_path: "/modules/nightly.wasm".into(),
+                cwd: "/work".into(),
+                args: Vec::new(),
+                timeout_ms: 1_000,
+                stop: StopCondition::Hook,
+                custom: serde_json::json!({}),
+            }),
+            ApiRequest::CronEnd(CronEndRequest {
+                caller_identity: caller("sender"),
+                caller_team: team.clone(),
+                phase: phase.clone(),
+                name: None,
+            }),
+            ApiRequest::CronList(CronListQuery {
+                caller_identity: caller("sender"),
+                caller_team: team.clone(),
+                phase: None,
+            }),
+        ];
+        assert_eq!(requests.len(), 6, "every hook and cron route is covered");
+        for request in requests {
+            let route = format!("{request:?}");
+            let error = fixture
+                .router
+                .dispatch(
+                    request,
+                    atm_core::api::AuthenticatedIngress::Peer,
+                    RequestDeadline::after(Duration::from_secs(5)),
+                )
+                .await
+                .expect_err("peer ingress is refused");
+            assert!(error.is_validation(), "{route} was refused: {error}");
+        }
+    }
+
+    #[test]
+    fn error_response_maps_hook_codes_to_400_and_503() {
+        use atm_core::boundary::HookExitCause;
+        use atm_core::error::AtmError;
+
+        let phase = crate::hook_filter::test_support::phase("bk");
+        let client_errors = [
+            AtmError::hook_module_invalid("module path is not absolute"),
+            AtmError::cron_expr_invalid("expected five fields"),
+            AtmError::hook_refused("refused by the hook"),
+        ];
+        for error in client_errors {
+            assert_eq!(
+                super::error_response(error).status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        let server_errors = [
+            AtmError::hook_exit(HookExitCause::Panic("boom".to_owned())),
+            AtmError::hook_timeout(&phase, "exceeded 1000 ms"),
+            AtmError::hook_malformed("reply is not JSON"),
+        ];
+        for error in server_errors {
+            let status = super::error_response(error).status();
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+            assert_ne!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        }
     }
 }

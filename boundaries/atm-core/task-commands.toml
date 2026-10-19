@@ -45,5 +45,5 @@ process_spawn = ["atm_core::boundary::task_commands"]
 socket_io = ["atm_core::boundary::task_commands"]
 
 [status]
-state = "active"
-notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters."]
+state = "concrete_landed"
+notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters.", "BK.7 concrete_landed in atm-http-runtime: NormalTaskCommands (pass-through), HookedTaskCommands (hook filter over the dispatcher) and UnhookedRouter (the dispatcher used when no hook is installed)."]

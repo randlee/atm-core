@@ -4,7 +4,7 @@
 //! touched the store (ANC-014).
 
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use crate::contract::sealed;
 use crate::error::AtmError;
@@ -17,6 +17,8 @@ use crate::types::{IsoTimestamp, TeamName};
 pub struct InMemoryHookRegistrationStore {
     rows: Mutex<Vec<HookRegistration>>,
     pub calls: AtomicUsize,
+    /// When set, `active_all` fails once with an injected error (refresh failure tests).
+    pub fail_active_all: AtomicBool,
 }
 
 impl InMemoryHookRegistrationStore {
@@ -146,6 +148,12 @@ impl HookRegistrationStore for InMemoryHookRegistrationStore {
 
     fn active_all(&self) -> Result<Vec<HookRegistration>, AtmError> {
         self.record_call();
+        if self.fail_active_all.load(Ordering::SeqCst) {
+            return Err(AtmError::new(
+                AtmErrorCode::InternalError,
+                "injected hook registration active_all failure",
+            ));
+        }
         let rows = self.lock()?;
         let mut selected: Vec<HookRegistration> =
             rows.iter().filter(|row| row.active).cloned().collect();

@@ -11,6 +11,10 @@ use serde::de::DeserializeOwned;
 use crate::clear::ClearQuery;
 use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
+use crate::hook::{
+    CronEndRequest, CronListQuery, CronStartRequest, HookActionsResponse, HookDisableRequest,
+    HookListQuery, HookRegisterRequest,
+};
 use crate::list::ListQuery;
 use crate::protocol::{
     CompatibilityPreflight, QueueGetNextRequest, RequestEnvelope, ResponseEnvelope,
@@ -29,6 +33,9 @@ pub use crate::protocol::HTTP_API_VERSION;
 /// clear route. Framework adapters use this shared contract instead of
 /// inventing a JSON body for a no-content response.
 pub const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
+/// HTTP response header carrying the dispatched-action count for a hooked command
+/// that ran hook actions in place of the write (ADR-068). The body repeats the count.
+pub const HOOK_ACTIONS_HEADER: &str = "X-ATM-Hook-Actions";
 const MESSAGES_PATH: &str = "/v1/atm/messages";
 const INSPECT_PATH: &str = "/v1/atm/messages/inspect";
 const READ_PATH: &str = "/v1/atm/messages/read";
@@ -43,6 +50,12 @@ const GRAFT_RECEIVER_UNREGISTER_PATH: &str = "/v1/atm/graft/receiver/unregister"
 const GRAFT_RECEIVER_LOOKUP_PATH: &str = "/v1/atm/graft/receiver/lookup";
 const RUNTIME_RELOAD_PATH: &str = "/v1/atm/runtime/reload";
 const SEARCH_PATH: &str = "/v1/atm/messages/search";
+const HOOK_REGISTER_PATH: &str = "/v1/atm/hooks/register";
+const HOOK_DISABLE_PATH: &str = "/v1/atm/hooks/disable";
+const HOOK_LIST_PATH: &str = "/v1/atm/hooks/list";
+const CRON_START_PATH: &str = "/v1/atm/cron/start";
+const CRON_END_PATH: &str = "/v1/atm/cron/end";
+const CRON_LIST_PATH: &str = "/v1/atm/cron/list";
 
 /// One registered HTTP route, published from the same constants as request encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -69,6 +82,12 @@ pub enum HttpRouteKind {
     GraftReceiverUnregister,
     GraftReceiverLookup,
     Search,
+    HookRegister,
+    HookDisable,
+    HookList,
+    CronStart,
+    CronEnd,
+    CronList,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -192,6 +211,48 @@ const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
             path_template: TASK_MOVE_PATH,
         },
     },
+    HttpRouteSpec {
+        kind: HttpRouteKind::HookRegister,
+        route: HttpRoute {
+            method: "POST",
+            path_template: HOOK_REGISTER_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::HookDisable,
+        route: HttpRoute {
+            method: "POST",
+            path_template: HOOK_DISABLE_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::HookList,
+        route: HttpRoute {
+            method: "POST",
+            path_template: HOOK_LIST_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::CronStart,
+        route: HttpRoute {
+            method: "POST",
+            path_template: CRON_START_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::CronEnd,
+        route: HttpRoute {
+            method: "POST",
+            path_template: CRON_END_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::CronList,
+        route: HttpRoute {
+            method: "POST",
+            path_template: CRON_LIST_PATH,
+        },
+    },
 ];
 
 /// Registered HTTP route inventory for documentation conformance tests.
@@ -219,6 +280,12 @@ fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
         HttpRouteKind::GraftReceiverLookup => &HTTP_ROUTE_SPECS[13],
         HttpRouteKind::GraftReceiverRefresh => &HTTP_ROUTE_SPECS[14],
         HttpRouteKind::TaskMove => &HTTP_ROUTE_SPECS[15],
+        HttpRouteKind::HookRegister => &HTTP_ROUTE_SPECS[16],
+        HttpRouteKind::HookDisable => &HTTP_ROUTE_SPECS[17],
+        HttpRouteKind::HookList => &HTTP_ROUTE_SPECS[18],
+        HttpRouteKind::CronStart => &HTTP_ROUTE_SPECS[19],
+        HttpRouteKind::CronEnd => &HTTP_ROUTE_SPECS[20],
+        HttpRouteKind::CronList => &HTTP_ROUTE_SPECS[21],
     }
 }
 
@@ -233,6 +300,12 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
         RequestEnvelope::Doctor(_) => HttpRouteKind::Doctor,
         RequestEnvelope::Search(_) => HttpRouteKind::Search,
         RequestEnvelope::ReloadRuntimeView => HttpRouteKind::RuntimeReload,
+        RequestEnvelope::HookRegister(_) => HttpRouteKind::HookRegister,
+        RequestEnvelope::HookDisable(_) => HttpRouteKind::HookDisable,
+        RequestEnvelope::HookList(_) => HttpRouteKind::HookList,
+        RequestEnvelope::CronStart(_) => HttpRouteKind::CronStart,
+        RequestEnvelope::CronEnd(_) => HttpRouteKind::CronEnd,
+        RequestEnvelope::CronList(_) => HttpRouteKind::CronList,
         RequestEnvelope::CompatibilityPreflight(_) => HttpRouteKind::Compatibility,
         RequestEnvelope::Heartbeat(_) => HttpRouteKind::Heartbeat,
         RequestEnvelope::QueueGetNext(_) => HttpRouteKind::QueueGetNext,
@@ -323,7 +396,34 @@ pub fn decode_http_response(
     if !(200..300).contains(&status) {
         return decode_response_body(body, "error").map(ResponseEnvelope::Error);
     }
+    if let Some(count) = http_header(headers, HOOK_ACTIONS_HEADER) {
+        return decode_hook_actions_response(count, body).map(ResponseEnvelope::HookActions);
+    }
     decode_success_response(request, body)
+}
+
+/// A hook-actions body is only valid with its header, and the two counts must agree.
+fn decode_hook_actions_response(
+    header_count: &str,
+    body: &[u8],
+) -> Result<HookActionsResponse, AtmError> {
+    let response: HookActionsResponse = decode_response_body(body, "hook actions")?;
+    let header_count: usize = header_count.parse().map_err(|_| {
+        AtmError::validation_with_recovery(
+            "daemon hook actions header is not a count",
+            "ensure the daemon sends X-ATM-Hook-Actions as a decimal count",
+        )
+    })?;
+    if header_count != response.dispatched {
+        return Err(AtmError::validation_with_recovery(
+            format!(
+                "daemon hook actions header says {header_count} but body says {}",
+                response.dispatched
+            ),
+            "ensure the daemon sends the same count in the header and the body",
+        ));
+    }
+    Ok(response)
 }
 
 fn decode_no_content_response(
@@ -386,6 +486,12 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         // URL-safe `request` query value in `encode_http_request`.
         RequestEnvelope::Search(_) => Ok(Vec::new()),
         RequestEnvelope::ReloadRuntimeView => serde_json::to_vec(&()),
+        RequestEnvelope::HookRegister(value) => serde_json::to_vec(value),
+        RequestEnvelope::HookDisable(value) => serde_json::to_vec(value),
+        RequestEnvelope::HookList(value) => serde_json::to_vec(value),
+        RequestEnvelope::CronStart(value) => serde_json::to_vec(value),
+        RequestEnvelope::CronEnd(value) => serde_json::to_vec(value),
+        RequestEnvelope::CronList(value) => serde_json::to_vec(value),
     }
     .map_err(AtmError::from)
 }
@@ -458,6 +564,24 @@ fn decode_success_response(
             .map(|value| ResponseEnvelope::Search(Box::new(value))),
         RequestEnvelope::ReloadRuntimeView => decode_response_body::<()>(body, "runtime reload")
             .map(|()| ResponseEnvelope::RuntimeViewReloaded),
+        RequestEnvelope::HookRegister(_) => {
+            decode_response_body(body, "hook register").map(ResponseEnvelope::HookRegistered)
+        }
+        RequestEnvelope::HookDisable(_) => {
+            decode_response_body(body, "hook disable").map(ResponseEnvelope::HookDisabled)
+        }
+        RequestEnvelope::HookList(_) => {
+            decode_response_body(body, "hook list").map(ResponseEnvelope::HookList)
+        }
+        RequestEnvelope::CronStart(_) => {
+            decode_response_body(body, "cron start").map(ResponseEnvelope::CronStarted)
+        }
+        RequestEnvelope::CronEnd(_) => {
+            decode_response_body(body, "cron end").map(ResponseEnvelope::CronEnded)
+        }
+        RequestEnvelope::CronList(_) => {
+            decode_response_body(body, "cron list").map(ResponseEnvelope::CronList)
+        }
     }
 }
 
@@ -489,6 +613,12 @@ pub enum ApiRequest {
         agent: crate::types::AgentName,
     },
     ReloadRuntimeView,
+    HookRegister(HookRegisterRequest),
+    HookDisable(HookDisableRequest),
+    HookList(HookListQuery),
+    CronStart(CronStartRequest),
+    CronEnd(CronEndRequest),
+    CronList(CronListQuery),
 }
 
 #[derive(Debug, Clone)]
@@ -529,6 +659,12 @@ impl ApiRequest {
                 RequestEnvelope::GraftReceiverLookup { team, agent }
             }
             Self::ReloadRuntimeView => RequestEnvelope::ReloadRuntimeView,
+            Self::HookRegister(request) => RequestEnvelope::HookRegister(request),
+            Self::HookDisable(request) => RequestEnvelope::HookDisable(request),
+            Self::HookList(query) => RequestEnvelope::HookList(query),
+            Self::CronStart(request) => RequestEnvelope::CronStart(request),
+            Self::CronEnd(request) => RequestEnvelope::CronEnd(request),
+            Self::CronList(query) => RequestEnvelope::CronList(query),
         }
     }
 }
@@ -564,6 +700,12 @@ impl From<RequestEnvelope> for ApiRequest {
                 Self::GraftReceiverLookup { team, agent }
             }
             RequestEnvelope::ReloadRuntimeView => Self::ReloadRuntimeView,
+            RequestEnvelope::HookRegister(request) => Self::HookRegister(request),
+            RequestEnvelope::HookDisable(request) => Self::HookDisable(request),
+            RequestEnvelope::HookList(query) => Self::HookList(query),
+            RequestEnvelope::CronStart(request) => Self::CronStart(request),
+            RequestEnvelope::CronEnd(request) => Self::CronEnd(request),
+            RequestEnvelope::CronList(query) => Self::CronList(query),
         }
     }
 }
@@ -751,6 +893,113 @@ mod tests {
             serde_json::from_slice(&encoded.body).expect("task move request body");
         assert_eq!(decoded.task_id.as_str(), "T1");
         assert_eq!(decoded.target, MoveTarget::Head);
+    }
+
+    #[test]
+    fn hook_routes_round_trip_and_check_the_header() {
+        use super::{HOOK_ACTIONS_HEADER, decode_http_response};
+        use crate::boundary::{PhaseId, StopCondition};
+        use crate::hook::{
+            CronEndRequest, CronListQuery, CronStartRequest, HookActionsResponse,
+            HookDisableRequest, HookListQuery, HookRegisterRequest,
+        };
+        use crate::protocol::ResponseEnvelope;
+
+        let caller: AgentName = "sender".parse().expect("agent");
+        let team: TeamName = "test-team".parse().expect("team");
+        let phase = PhaseId::parse("bk").expect("phase");
+        let routes = [
+            (
+                RequestEnvelope::HookRegister(HookRegisterRequest {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    phase: phase.clone(),
+                    hook: "task.assign".to_owned(),
+                    module_path: "/modules/gate.wasm".into(),
+                    cwd: "/work".into(),
+                    timeout_ms: 1_000,
+                    custom: serde_json::json!({}),
+                }),
+                "/v1/atm/hooks/register",
+            ),
+            (
+                RequestEnvelope::HookDisable(HookDisableRequest {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    phase: phase.clone(),
+                    hook: None,
+                }),
+                "/v1/atm/hooks/disable",
+            ),
+            (
+                RequestEnvelope::HookList(HookListQuery {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    phase: None,
+                }),
+                "/v1/atm/hooks/list",
+            ),
+            (
+                RequestEnvelope::CronStart(CronStartRequest {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    phase: phase.clone(),
+                    name: "nightly".to_owned(),
+                    cron_expr: "0 3 * * *".to_owned(),
+                    module_path: "/modules/nightly.wasm".into(),
+                    cwd: "/work".into(),
+                    args: Vec::new(),
+                    timeout_ms: 1_000,
+                    stop: StopCondition::Hook,
+                    custom: serde_json::json!({}),
+                }),
+                "/v1/atm/cron/start",
+            ),
+            (
+                RequestEnvelope::CronEnd(CronEndRequest {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    phase: phase.clone(),
+                    name: None,
+                }),
+                "/v1/atm/cron/end",
+            ),
+            (
+                RequestEnvelope::CronList(CronListQuery {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    phase: None,
+                }),
+                "/v1/atm/cron/list",
+            ),
+        ];
+        for (request, path) in &routes {
+            let http = encode_http_request(request, &[]).expect("encode hook route");
+            assert_eq!(http.method, "POST");
+            assert_eq!(http.path, *path);
+            let body: serde_json::Value = serde_json::from_slice(&http.body).expect("json body");
+            assert!(body.is_object(), "{path} sends a JSON object");
+        }
+
+        let register = &routes[0].0;
+        let actions =
+            serde_json::to_vec(&HookActionsResponse { dispatched: 2 }).expect("actions body");
+        let with_header = vec![format!("{HOOK_ACTIONS_HEADER}: 2")];
+        match decode_http_response(register, 200, &with_header, &actions) {
+            Ok(ResponseEnvelope::HookActions(HookActionsResponse { dispatched })) => {
+                assert_eq!(dispatched, 2);
+            }
+            other => panic!("expected HookActions with the header, got {other:?}"),
+        }
+        assert!(
+            decode_http_response(register, 200, &[], &actions).is_err(),
+            "HookActions without the header is refused"
+        );
+        let mismatch = vec![format!("{HOOK_ACTIONS_HEADER}: 3")];
+        assert!(
+            decode_http_response(register, 200, &mismatch, &actions).is_err(),
+            "the header and body counts must agree"
+        );
     }
 }
 

@@ -45,5 +45,5 @@ process_spawn = ["atm_core::boundary::hook_action_dispatcher"]
 socket_io = ["atm_core::boundary::hook_action_dispatcher"]
 
 [status]
-state = "active"
-notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters."]
+state = "concrete_landed"
+notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters.", "BK.7 concrete_landed in atm-http-runtime: UnhookedRouter implements HookActionDispatcher over the storage and nudge router; each committed action emits one ADR-067 atm_hook action entry."]

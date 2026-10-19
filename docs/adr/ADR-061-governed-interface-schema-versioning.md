@@ -100,6 +100,19 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-10-19 — Phase BK.7 hook filter and hook/cron routes:** `HTTP_API_VERSION`
+  moves from `1.12.0` to `1.13.0`. The additive surface is six POST routes
+  (`/v1/atm/hooks/register`, `/hooks/disable`, `/hooks/list`, `/cron/start`,
+  `/cron/end`, `/cron/list`), their request and response schemas, the
+  `X-ATM-Hook-Actions` response header on a task-command write that a task hook
+  answered through its actions, the `hooks` array on `DoctorReport`, and six
+  error codes (`ATM_HOOK_MODULE_INVALID`, `ATM_CRON_EXPR_INVALID`,
+  `ATM_HOOK_REFUSED`, `ATM_HOOK_EXIT`, `ATM_HOOK_TIMEOUT`,
+  `ATM_HOOK_MALFORMED`). A 1.12 consumer ignores `DoctorReport.hooks`; its
+  `AtmErrorCode::from_str` returns `UnknownAtmErrorCode` for the six codes and
+  its codec rejects the new routes' request variants, so it never receives
+  them. This is a minor, backward-compatible bump; the OpenAPI baseline records
+  it as one reviewed `openapi/version` change.
 - **2026-10-13 — Phase E4E template variable resolution:** `HTTP_API_VERSION`
   moves from `1.11.0` to `1.12.0`. The new additive
   `TEMPLATE_VARIABLE_RESOLUTION_FAILED` code identifies template-variable

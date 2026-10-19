@@ -43,6 +43,8 @@ use crate::router_support::{
     write_response,
 };
 
+pub(crate) mod hook_wiring;
+mod non_write_dispatch;
 mod roster_ingress;
 
 /// The replacement implementation of the canonical write operation.
@@ -52,10 +54,10 @@ mod roster_ingress;
 /// type has no concrete SQLite, tmux, graft, or legacy-daemon dependency.
 #[derive(Clone)]
 pub struct StorageAndNudgeRouter {
-    service_runtime: LocalServiceRuntime,
+    pub(crate) service_runtime: LocalServiceRuntime,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
-    control_path_sync_bridge: ControlPathSyncBridge,
+    pub(crate) control_path_sync_bridge: ControlPathSyncBridge,
     write_source_preflight_bridge: WriteSourcePreflightBridge,
     async_mailbox_runtime: Option<Arc<dyn AsyncMailboxRuntime>>,
     doctor_projection: Option<Arc<dyn DoctorProjection>>,
@@ -73,6 +75,7 @@ pub struct StorageAndNudgeRouter {
     member_state_transition_sink: Option<Arc<dyn crate::MemberStateTransitionSink>>,
     detached_received_hooks: DetachedReceivedHooks,
     task_telemetry: atm_runtime::TaskTelemetryRuntime,
+    pub(crate) hooks: hook_wiring::HookWiring,
 }
 
 impl StorageAndNudgeRouter {
@@ -90,7 +93,7 @@ impl StorageAndNudgeRouter {
         )
     }
 
-    pub(super) async fn list_messages(
+    pub(crate) async fn list_messages(
         &self,
         query: ListQuery,
         deadline: RequestDeadline,
@@ -147,6 +150,7 @@ impl StorageAndNudgeRouter {
             member_state_transition_sink: None,
             detached_received_hooks: DetachedReceivedHooks::default(),
             task_telemetry: atm_runtime::TaskTelemetryRuntime::disabled(),
+            hooks: hook_wiring::HookWiring::default(),
         }
     }
 
@@ -529,61 +533,6 @@ impl StorageAndNudgeRouter {
         warnings
     }
 
-    async fn dispatch_non_write(
-        &self,
-        request: ApiRequest,
-        ingress: AuthenticatedIngress,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        if deadline.expired() {
-            return Err(AtmError::daemon_unavailable(
-                "request deadline expired before replacement route dispatch",
-            ));
-        }
-        match request {
-            ApiRequest::Write(_) => unreachable!("writes use the canonical write path"),
-            ApiRequest::Messages(request) => match *request {
-                atm_core::api::MessageCollectionRequest::List(query) => {
-                    self.list_messages(query, deadline).await
-                }
-                atm_core::api::MessageCollectionRequest::Peek(query) => {
-                    self.peek_messages(query, deadline).await
-                }
-                atm_core::api::MessageCollectionRequest::Receive(query) => {
-                    self.receive_messages(query, deadline).await
-                }
-            },
-            ApiRequest::Clear(query) => self.clear_messages(query, deadline).await,
-            ApiRequest::Doctor(query) => self.doctor(query, deadline).await,
-            ApiRequest::Search(request) => self.search(*request, ingress, deadline).await,
-            ApiRequest::CompatibilityPreflight(preflight) => Ok(ApiResponse::new(
-                ResponseEnvelope::CompatibilityVerdict(compatibility_verdict(preflight)),
-            )),
-            ApiRequest::Heartbeat(request) => self.heartbeat(request, ingress, deadline).await,
-            ApiRequest::QueueGetNext(request) => {
-                self.queue_get_next(request, ingress, deadline).await
-            }
-            ApiRequest::TaskMove(request) => self.task_move(request, ingress, deadline).await,
-            ApiRequest::GraftReceiverRegister(request) => {
-                self.graft_receiver_register(request, ingress, deadline)
-                    .await
-            }
-            ApiRequest::GraftReceiverRefresh(request) => {
-                self.graft_receiver_refresh(request, ingress, deadline)
-                    .await
-            }
-            ApiRequest::GraftReceiverUnregister(request) => {
-                self.graft_receiver_unregister(request, ingress, deadline)
-                    .await
-            }
-            ApiRequest::GraftReceiverLookup { team, agent } => {
-                self.graft_receiver_lookup(team, agent, ingress, deadline)
-                    .await
-            }
-            ApiRequest::ReloadRuntimeView => self.reload_runtime_view(ingress),
-        }
-    }
-
     async fn clear_messages(
         &self,
         query: ClearQuery,
@@ -605,7 +554,7 @@ impl StorageAndNudgeRouter {
             .await
     }
 
-    async fn task_move(
+    pub(crate) async fn task_move(
         &self,
         request: atm_core::protocol::TaskMoveRequest,
         ingress: AuthenticatedIngress,
@@ -701,6 +650,11 @@ impl StorageAndNudgeRouter {
         report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
         project_counter_health(&mut report.observability, diagnostic_counters);
         append_counter_finding(&mut report.findings, diagnostic_counters);
+        let hook_team = report
+            .member_roster
+            .as_ref()
+            .map(|roster| roster.team.clone());
+        report.hooks = crate::doctor_hooks::collect(self, hook_team.as_ref(), deadline).await;
         Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
 
@@ -972,6 +926,67 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
 
     fn write_with_request_id(
         &self,
+        request: atm_core::send::WriteRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        Box::pin(async move {
+            let Some(commands) = self.hooks.task_commands.clone() else {
+                return self
+                    .write_unhooked(request, ingress, deadline, request_id)
+                    .await;
+            };
+            match atm_core::boundary::TaskCommand::classify(ApiRequest::Write(Box::new(request))) {
+                Ok(command) => {
+                    self.call_task_command(&*commands, command, ingress, deadline, request_id)
+                        .await
+                }
+                Err(ApiRequest::Write(request)) => {
+                    self.write_unhooked(*request, ingress, deadline, request_id)
+                        .await
+                }
+                Err(_) => unreachable!("classify returns a write request unchanged"),
+            }
+        })
+    }
+
+    fn dispatch(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        StorageAndNudgeRouter::dispatch(self, request, ingress, deadline)
+    }
+
+    fn dispatch_with_request_id(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        Box::pin(async move {
+            match request {
+                ApiRequest::Write(request) => {
+                    self.write_with_request_id(*request, ingress, deadline, request_id)
+                        .await
+                }
+                request => {
+                    self.dispatch_non_write(request, ingress, deadline, request_id)
+                        .await
+                }
+            }
+        })
+    }
+}
+
+impl StorageAndNudgeRouter {
+    /// The un-hooked write body: the single owner of the write path that
+    /// `NormalTaskCommands` and an un-hooked router both call.
+    pub(crate) fn write_unhooked(
+        &self,
         mut request: atm_core::send::WriteRequest,
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
@@ -1045,33 +1060,6 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                 return Err(error);
             }
             Ok(ApiResponse::new(write_response(committed.outcome)))
-        })
-    }
-
-    fn dispatch(
-        &self,
-        request: ApiRequest,
-        ingress: AuthenticatedIngress,
-        deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        StorageAndNudgeRouter::dispatch(self, request, ingress, deadline)
-    }
-
-    fn dispatch_with_request_id(
-        &self,
-        request: ApiRequest,
-        ingress: AuthenticatedIngress,
-        deadline: RequestDeadline,
-        request_id: RequestId,
-    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        Box::pin(async move {
-            match request {
-                ApiRequest::Write(request) => {
-                    self.write_with_request_id(*request, ingress, deadline, request_id)
-                        .await
-                }
-                request => self.dispatch_non_write(request, ingress, deadline).await,
-            }
         })
     }
 }
@@ -1555,18 +1543,19 @@ pub(crate) mod tests {
         }
     }
 
-    struct Fixture {
-        _temporary_root: TempDir,
-        router: StorageAndNudgeRouter,
-        message_store: Arc<dyn MessageStore + Send + Sync>,
-        pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
-        task_store: Arc<dyn TaskStore + Send + Sync>,
-        async_task_ledger_reader: Arc<atm_runtime_test_support::InMemoryTaskLedgerReader>,
+    pub(crate) struct Fixture {
+        pub(crate) _temporary_root: TempDir,
+        pub(crate) router: StorageAndNudgeRouter,
+        pub(crate) message_store: Arc<dyn MessageStore + Send + Sync>,
+        pub(crate) pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+        pub(crate) task_store: Arc<dyn TaskStore + Send + Sync>,
+        pub(crate) async_task_ledger_reader:
+            Arc<atm_runtime_test_support::InMemoryTaskLedgerReader>,
         received_hook: Arc<RecordingReceivedHook>,
-        runtime_health: RuntimeHealth,
-        database_path: PathBuf,
-        home_dir: PathBuf,
-        current_dir: PathBuf,
+        pub(crate) runtime_health: RuntimeHealth,
+        pub(crate) database_path: PathBuf,
+        pub(crate) home_dir: PathBuf,
+        pub(crate) current_dir: PathBuf,
     }
 
     /// Test-only opaque adapter: it preserves the selected authenticated-peer
@@ -1600,7 +1589,7 @@ pub(crate) mod tests {
         }
     }
 
-    fn fixture(
+    pub(crate) fn fixture(
         with_recipient: bool,
         hook_failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
@@ -1920,7 +1909,7 @@ pub(crate) mod tests {
         service_runtime.with_graft_receiver_endpoint_store(store)
     }
 
-    fn write_request(home_dir: PathBuf, current_dir: PathBuf) -> WriteRequest {
+    pub(crate) fn write_request(home_dir: PathBuf, current_dir: PathBuf) -> WriteRequest {
         WriteRequest::new(
             home_dir,
             current_dir,
@@ -1936,7 +1925,7 @@ pub(crate) mod tests {
         .expect("write request")
     }
 
-    fn task_write_request(fixture: &Fixture, task_id: &str) -> WriteRequest {
+    pub(crate) fn task_write_request(fixture: &Fixture, task_id: &str) -> WriteRequest {
         let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
         request.task_id = Some(task_id.parse().expect("task id"));
         request.requires_ack = true;

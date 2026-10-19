@@ -635,6 +635,7 @@ fn build_doctor_report(
         drift_findings,
         runtime_status,
         bootstrap_trace,
+        hooks: Vec::new(),
     }
 }
 

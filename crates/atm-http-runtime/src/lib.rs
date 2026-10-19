@@ -53,6 +53,7 @@ use tokio::task::JoinHandle;
 mod bare_cli_fifo;
 mod client;
 mod diagnostics_route;
+mod doctor_hooks;
 mod doctor_observability;
 mod health_route;
 mod herdr_escalation;
@@ -61,6 +62,10 @@ mod herdr_queue_wake_escalation;
 #[cfg(test)]
 mod herdr_queue_wake_test_gates;
 mod herdr_task_disposition;
+mod hook_actions;
+mod hook_chains;
+mod hook_filter;
+mod hook_registry_routes;
 mod http1_server;
 mod loopback_read;
 mod loopback_tcp;
@@ -76,6 +81,7 @@ mod runtime_listener;
 mod runtime_maintenance;
 mod runtime_setup;
 mod storage_and_nudge_router;
+mod task_commands;
 mod task_telemetry;
 #[cfg(unix)]
 mod unix_socket;
