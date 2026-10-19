@@ -16,6 +16,10 @@ pub struct HookRegisterRequest {
     pub caller_identity: AgentName,
     pub caller_team: TeamName,
     pub phase: PhaseId,
+    /// Raw on the wire on purpose: the register route validates it with
+    /// `HookName::parse_task_hook`, so a bad name keeps the `HOOK.MODULE_INVALID`
+    /// response. A validated serde type would move that rejection into the
+    /// framework decode and change the response code.
     pub hook: String,
     pub module_path: PathBuf,
     pub cwd: PathBuf,
@@ -29,6 +33,8 @@ pub struct HookDisableRequest {
     pub caller_identity: AgentName,
     pub caller_team: TeamName,
     pub phase: PhaseId,
+    /// Raw on the wire for the same reason as `HookRegisterRequest::hook`: the
+    /// disable route validates it with `HookName::parse_task_hook`.
     pub hook: Option<String>,
 }
 

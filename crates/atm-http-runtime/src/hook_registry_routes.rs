@@ -468,16 +468,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn disable_refuses_cron_and_unknown_hook_names_and_keeps_rows() {
+        let routes = routes();
+        register(&routes, register_request("sender", "task.assign", "bk"))
+            .await
+            .expect("register");
+        for name in ["cron.tick", "task.bogus"] {
+            let result = routes
+                .router
+                .hook_disable(
+                    HookDisableRequest {
+                        caller_identity: agent("sender"),
+                        caller_team: team(),
+                        phase: phase("bk"),
+                        hook: Some(name.to_owned()),
+                    },
+                    AuthenticatedIngress::Local,
+                    deadline(),
+                )
+                .await;
+            let Err(err) = result else {
+                panic!("disable must refuse the non-task hook name {name}");
+            };
+            assert_eq!(err.code(), AtmErrorCode::HookModuleInvalid);
+            assert!(err.message().contains(name));
+        }
+        let active = routes.hooks.active_all().expect("rows");
+        assert_eq!(active.len(), 1, "a refused disable changes no rows");
+    }
+
+    #[tokio::test]
     async fn register_refuses_cron_tick_unknown_name_and_over_cap_timeout() {
         let routes = routes();
         let tick = register(&routes, register_request("sender", "cron.tick", "bk"))
             .await
             .expect_err("cron.tick is not a task hook");
-        assert!(tick.is_validation() || tick.code() == AtmErrorCode::HookModuleInvalid);
+        assert_eq!(tick.code(), AtmErrorCode::HookModuleInvalid);
+        assert!(tick.message().contains("cron.tick is not a task hook"));
         let unknown = register(&routes, register_request("sender", "task.bogus", "bk"))
             .await
             .expect_err("unknown task hook");
-        assert!(unknown.is_validation() || unknown.code() == AtmErrorCode::HookModuleInvalid);
+        assert_eq!(unknown.code(), AtmErrorCode::HookModuleInvalid);
+        assert!(unknown.message().contains("unknown hook name task.bogus"));
         let mut over = register_request("sender", "task.assign", "bk");
         over.timeout_ms = atm_core::boundary::HOOK_TIMEOUT_MAX_MS + 1;
         let capped = register(&routes, over).await.expect_err("over cap timeout");
