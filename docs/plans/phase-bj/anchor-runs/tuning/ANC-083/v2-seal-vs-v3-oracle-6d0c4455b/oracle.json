@@ -1,0 +1,212 @@
+{
+ "anchor_id": "ANC-083",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "4c9471d85b94567507debad756f4c711208a70d35be21b755200bd46628d2856",
+ "anchor_scope": "atm-bd-orchestration bead schema validation",
+ "anchor_statement": "A single validation method must validate every bead in the phase.",
+ "anchor_version": 3,
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-083-v3-probe-1",
+   "probe": "fixture_pass",
+   "rationale": "Approved ANC-083 v3 pass fixture: one phase validation method that visits every bead under the phase epic is the directive itself.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The phase validation method visits every bead under the phase epic.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-083-v3-probe-2",
+   "probe": "fixture_fail",
+   "rationale": "Approved ANC-083 v3 fail fixture: a method that skips a bead in the phase cannot be reconciled with 'validate every bead in the phase'; the item does not carry out the directive.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The phase validation method skips a bead under the phase epic.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-083-v3-probe-3",
+   "probe": "paraphrase",
+   "rationale": "Compliant paraphrase of the quote 'One validation method that covers all beads in the phase': one command, all beads of the phase.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Provide one command, `atm-bd validate-phase <epic>`, that checks all beads belonging to the phase in a single pass.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "per_kind_dispatch",
+   "item_id": "ANC-083-v3-probe-4",
+   "probe": "per_kind_dispatch",
+   "rationale": "Boundary: per-kind models dispatched from one method are still a single validation method; INTENT phase-bj v1 states 'a pydantic model per bead kind validates the whole phase'. Per-kind models are not multiple validation methods.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Add `validate_phase()`, which walks every bead under the phase epic and checks each one against the pydantic model for its bead kind (sprint, dev, fix, sanity, qa, stack).",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "out_of_phase_excluded",
+   "item_id": "ANC-083-v3-probe-5",
+   "probe": "out_of_phase_excluded",
+   "rationale": "Exception/boundary: the statement scopes coverage to beads 'in the phase'; leaving other phases' beads out is not a conflict.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "`validate_phase()` validates every bead under the phase epic and ignores beads that belong to other phases.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-083-v3-probe-6",
+   "probe": "silent",
+   "rationale": "Silence: the item changes bead schema validation (in scope) but says nothing about a single method or coverage of every bead; silence is not conflict.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Add a pydantic model for the qa bead kind that requires the branch, worktree, pr_target and difficulty fields.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "topical",
+   "item_id": "ANC-083-v3-probe-7",
+   "probe": "topical",
+   "rationale": "Topical-only: mentions bead validation but states neither one method nor coverage of every bead in the phase, and rules out neither.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Add bead schema validation to atm-bd-orchestration so malformed beads are caught early.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_per_kind_commands",
+   "item_id": "ANC-083-v3-probe-8",
+   "probe": "conflict_per_kind_commands",
+   "rationale": "Direct conflict: several separate methods and explicitly no method that validates the whole phase, contrary to 'a single validation method must validate every bead in the phase'.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Give each bead kind its own validation command (validate-sprint, validate-dev, validate-qa); the lead runs whichever applies, and there is no phase-wide validation.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "two_methods_full_coverage",
+   "item_id": "ANC-083-v3-probe-9",
+   "probe": "two_methods_full_coverage",
+   "rationale": "Conflict on 'single': every bead is covered, but by two separate methods with no single method validating every bead in the phase.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Sprint-family beads are validated by `validate_family()` and the stack bead by a separate `validate_stack()` check, with no single entry point that covers both.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "boundary_partial",
+   "item_id": "ANC-083-v3-probe-10",
+   "probe": "boundary_partial",
+   "rationale": "Boundary on 'every': a single method exists but leaves beads of the phase unvalidated, which cannot be reconciled with 'validate every bead in the phase'.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "One `validate_phase()` method checks the sprint and dev beads under the phase epic; sanity, qa and stack beads are not validated.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-083-v3-probe-11",
+   "probe": "irrelevant",
+   "rationale": "Irrelevant: console icon work touches neither bead validation nor atm-bd-orchestration bead schemas.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Change the ATM console's agent row icons to Nerd Font glyphs.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "converted_from": "docs/plans/phase-bj/anchor-runs/tuning/ANC-083-v3/oracle.json",
+ "frozen_before_first_jev_call": true,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "source_oracle_canonical_sha256": "81c3c5be4339b641fd4ba2a7e2bb718009f88c38a3be568723482ab451ae1ecd"
+}

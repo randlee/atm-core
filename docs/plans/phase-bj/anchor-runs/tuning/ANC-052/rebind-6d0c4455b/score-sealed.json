@@ -1,0 +1,485 @@
+{
+ "anchor_id": "ANC-052",
+ "candidate_id": "sealed",
+ "confidence": {
+  "cells_at_or_above_threshold": 46,
+  "mean": 0.98,
+  "median": 1.0,
+  "minimum": 0.66,
+  "p10": 0.97,
+  "threshold": 0.8,
+  "total_cells": 48
+ },
+ "elapsed_s": 0.6,
+ "missing_responses": [],
+ "models_answered": [
+  "jev-1.13.0"
+ ],
+ "oracle_sha256": "4bd16f31ce94d29854aefc4d58e9dcfd434bcaf9beef0cd0805c842f41542ff0",
+ "production_threshold_0_6_verdict_mismatches": [],
+ "question_sha256": "fd2fb8d6bbd1f6c191d007d0274150c7b48d9b2a92df053ac86699f39793de58",
+ "retry_count": 0,
+ "rows": [
+  {
+   "answers": {
+    "r1": {
+     "compliance": [
+      "yes",
+      1.0
+     ],
+     "conflict": [
+      "no",
+      0.95
+     ],
+     "relevance": [
+      "yes",
+      1.0
+     ]
+    },
+    "r2": {
+     "compliance": [
+      "yes",
+      1.0
+     ],
+     "conflict": [
+      "no",
+      0.97
+     ],
+     "relevance": [
+      "yes",
+      1.0
+     ]
+    }
+   },
+   "case_id": "fixture_pass",
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "expected_verdict": "satisfied",
+   "probe": "approved_fixture_pass",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "stable": true,
+   "verdict_production_0_6": [
+    "satisfied",
+    "satisfied"
+   ],
+   "verdict_threshold_0": [
+    "satisfied",
+    "satisfied"
+   ]
+  },
+  {
+   "answers": {
+    "r1": {
+     "compliance": [
+      "no",
+      1.0
+     ],
+     "conflict": [
+      "yes",
+      1.0
+     ],
+     "relevance": [
+      "yes",
+      1.0
+     ]
+    },
+    "r2": {
+     "compliance": [
+      "no",
+      1.0
+     ],
+     "conflict": [
+      "yes",
+      1.0
+     ],
+     "relevance": [
+      "yes",
+      1.0
+     ]
+    }
+   },
+   "case_id": "fixture_fail",
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "expected_verdict": "contradicted",
+   "probe": "approved_fixture_fail",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "stable": true,
+   "verdict_production_0_6": [
+    "contradicted",
+    "contradicted"
+   ],
+   "verdict_threshold_0": [
+    "contradicted",
+    "contradicted"
+   ]
+  },
+  {
+   "answers": {
+    "r1": {
+     "compliance": [
+      "yes",
+      1.0
+     ],
+     "conflict": [
+      "no",
+      0.98
+     ],
+     "relevance": [
+      "yes",
+      1.0
+     ]
+    },
+    "r2": {
+     "compliance": [
+      "yes",
+      1.0
+     ],
+     "conflict": [
+      "no",
+      0.98
+     ],
+     "relevance": [
+      "yes",
+      1.0
+     ]
+    }
+   },
+   "case_id": "paraphrase",
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "expected_verdict": "satisfied",
+   "probe": "compliant_paraphrase",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "stable": true,
+   "verdict_production_0_6": [
+    "satisfied",
+    "satisfied"
+   ],
+   "verdict_threshold_0": [
+    "satisfied",
+    "satisfied"
+   ]
+  },
+  {
+   "answers": {
+    "r1": {
+     "compliance": [
+      "no",
+      1.0
+     ],
+     "conflict": [
+      "no",
+      1.0
+     ],
+     "relevance": [
+      "yes",
+      0.66
+     ]
+    },
+    "r2": {
+     "compliance": [
+      "no",
+      1.0
+     ],
+     "conflict": [
+      "no",
+      1.0
+     ],
+     "relevance": [
+      "yes",
+      0.69
+     ]
+    }
+   },
+   "case_id": "silent",
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "expected_verdict": "not_addressed",
+   "probe": "silence",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "stable": true,
+   "verdict_production_0_6": [
+    "not_addressed",
+    "not_addressed"
+   ],
+   "verdict_threshold_0": [
+    "not_addressed",
+    "not_addressed"
+   ]
+  },
+  {
+   "answers": {
+    "r1": {
+     "compliance": [
+      "no",
+      1.0
+     ],
+     "conflict": [
+      "no",
+      1.0
+     ],
+     "relevance": [
+      "yes",
+      0.98
+     ]
+    },
+    "r2": {
+     "compliance": [
+      "no",
+      1.0
+     ],
+     "conflict": [
+      "no",
+      1.0
+     ],
+     "relevance": [
+      "yes",
+      0.97
+     ]
+    }
+   },
+   "case_id": "topical",
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "expected_verdict": "not_addressed",
+   "probe": "topical_only",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "stable": true,
+   "verdict_production_0_6": [
+    "not_addressed",
+    "not_addressed"
+   ],
+   "verdict_threshold_0": [
+    "not_addressed",
+    "not_addressed"
+   ]
+  },
+  {
+   "answers": {
+    "r1": {
+     "compliance": [
+      "no",
+      1.0
+     ],
+     "conflict": [
+      "yes",
+      1.0
+     ],
+     "relevance": [
+      "yes",
+      1.0
+     ]
+    },
+    "r2": {
+     "compliance": [
+      "no",
+      1.0
+     ],
+     "conflict": [
+      "yes",
+      0.98
+     ],
+     "relevance": [
+      "yes",
+      1.0
+     ]
+    }
+   },
+   "case_id": "conflict_lead",
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "expected_verdict": "contradicted",
+   "probe": "conflict",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "stable": true,
+   "verdict_production_0_6": [
+    "contradicted",
+    "contradicted"
+   ],
+   "verdict_threshold_0": [
+    "contradicted",
+    "contradicted"
+   ]
+  },
+  {
+   "answers": {
+    "r1": {
+     "compliance": [
+      "no",
+      1.0
+     ],
+     "conflict": [
+      "yes",
+      0.97
+     ],
+     "relevance": [
+      "yes",
+      1.0
+     ]
+    },
+    "r2": {
+     "compliance": [
+      "no",
+      1.0
+     ],
+     "conflict": [
+      "yes",
+      0.97
+     ],
+     "relevance": [
+      "yes",
+      1.0
+     ]
+    }
+   },
+   "case_id": "conflict_notice",
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "expected_verdict": "contradicted",
+   "probe": "conflict",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "stable": true,
+   "verdict_production_0_6": [
+    "contradicted",
+    "contradicted"
+   ],
+   "verdict_threshold_0": [
+    "contradicted",
+    "contradicted"
+   ]
+  },
+  {
+   "answers": {
+    "r1": {
+     "compliance": [
+      "no",
+      1.0
+     ],
+     "conflict": [
+      "no",
+      1.0
+     ],
+     "relevance": [
+      "no",
+      1.0
+     ]
+    },
+    "r2": {
+     "compliance": [
+      "no",
+      1.0
+     ],
+     "conflict": [
+      "no",
+      1.0
+     ],
+     "relevance": [
+      "no",
+      1.0
+     ]
+    }
+   },
+   "case_id": "irrelevant",
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "expected_verdict": "not_applicable",
+   "probe": "irrelevant",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "stable": true,
+   "verdict_production_0_6": [
+    "not_applicable",
+    "not_applicable"
+   ],
+   "verdict_threshold_0": [
+    "not_applicable",
+    "not_applicable"
+   ]
+  }
+ ],
+ "run_ids": [
+  "ANC-052-sealed-fixture_pass-r1",
+  "ANC-052-sealed-fixture_pass-r2",
+  "ANC-052-sealed-fixture_fail-r1",
+  "ANC-052-sealed-fixture_fail-r2",
+  "ANC-052-sealed-paraphrase-r1",
+  "ANC-052-sealed-paraphrase-r2",
+  "ANC-052-sealed-silent-r1",
+  "ANC-052-sealed-silent-r2",
+  "ANC-052-sealed-topical-r1",
+  "ANC-052-sealed-topical-r2",
+  "ANC-052-sealed-conflict_lead-r1",
+  "ANC-052-sealed-conflict_lead-r2",
+  "ANC-052-sealed-conflict_notice-r1",
+  "ANC-052-sealed-conflict_notice-r2",
+  "ANC-052-sealed-irrelevant-r1",
+  "ANC-052-sealed-irrelevant-r2"
+ ],
+ "score": {
+  "exact_role_cells": 48,
+  "exact_semantic_verdicts": 16,
+  "regressions": 0,
+  "stable_cases": 8,
+  "total_cases": 8,
+  "total_role_cells": 48,
+  "total_semantic_verdicts": 16
+ },
+ "semantic_accepted": true,
+ "semantic_mismatches": []
+}

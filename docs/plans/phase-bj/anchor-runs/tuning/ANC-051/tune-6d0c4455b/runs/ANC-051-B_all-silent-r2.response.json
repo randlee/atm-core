@@ -1,0 +1,39 @@
+{
+ "answers": {
+  "addressed": {
+   "choice": "no",
+   "confidence": 1.0,
+   "probabilities": {
+    "no": 1.0,
+    "unclear": 0.0,
+    "yes": 0.0
+   },
+   "type": "choice"
+  },
+  "contradicted": {
+   "choice": "no",
+   "confidence": 0.49,
+   "probabilities": {
+    "no": 0.66,
+    "unclear": 0.21,
+    "yes": 0.13
+   },
+   "type": "choice"
+  },
+  "relevant": {
+   "choice": "yes",
+   "confidence": 0.83,
+   "probabilities": {
+    "no": 0.11,
+    "unclear": 0.0,
+    "yes": 0.89
+   },
+   "type": "choice"
+  }
+ },
+ "model": "jev-1.13.0",
+ "usage": {
+  "input_tokens": 1214,
+  "output_tokens": 117
+ }
+}
