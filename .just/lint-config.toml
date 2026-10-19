@@ -202,6 +202,11 @@ owner_manifest_path = "crates/atm-template-sc-compose/Cargo.toml"
 boundary_record_path = "boundaries/atm-template-sc-compose/sc-composer.toml"
 allowed_dependencies = ["atm-core", "atm-storage", "base64", "sc-composer", "sc-sha", "serde_json"]
 
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-cron/Cargo.toml"
+boundary_record_path = "boundaries/atm-cron/cron-scheduler.toml"
+allowed_dependencies = ["async-trait", "atm-core", "atm-runtime-test-support", "chrono", "cron", "getrandom", "serde_json", "tokio", "tracing", "tracing-subscriber"]
+
 [[boundaries.global_dependency_ownership]]
 dependency = "rusqlite"
 allowed_manifest_paths = ["crates/atm-storage-rusqlite/Cargo.toml"]
