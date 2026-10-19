@@ -837,6 +837,7 @@ Deterministic check to pair with the development gate: the first two emitted lin
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-4`: the status table and its markdown export are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+- `atm-bj-3`: The status table and its markdown export are phase-bi console code; bj-3 ships agent prompts, the link script and its harness.
 
 Fixtures:
 - pass: The markdown emitter's first two lines are exactly | sprint | state | ci | pr | and |---|:-:|:-:|---|, followed by one row per sprint with a glyph in each icon slot.
@@ -981,6 +982,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-1`: atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's
 - `atm-bj-3`: atm-bd's log line format is atm-bd tool code; bj-3 edits agent prompts only
 - `atm-bj-2`: BJ-2 plans bead schemas, formula producers and validation; it does not write or change the atm-bd observability event logger.
+- `atm-bj-5`: bj-5 prints install and doctor errors to the user and does not write or change atm-bd's sc-observability event writer.
 
 Fixtures:
 - pass: A gh failure with exit 1 and stderr 'gh: API rate limit already exceeded for user ID 8083956.' is logged at level error with message `check gh and retry` gh api graphql [1] gh: API rate limit already exceeded for user ID 8083956.
@@ -1298,17 +1300,18 @@ Anchor: atm-bd must assign a sanity or qa bead only when bd ready lists it and, 
 
 > There is the possibility of a race condition, however the atm-task-close hook would immediately call 'atm task assign' and 'bd close' we could even call 'atm task assign' before 'bd close'  (ideally these are both done in a single shell command so the delay is ~1ms, much faster than the cron/poller would see the problem.  We could insure the poller looked at 'bd ready' first and in the case 'bd ready' was true then check ... then check 'atm task' for assignment.  (this should avoid race condition).
 
-Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 2.
+Said by Rand, phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342), 2026-10-18. Status: locked. Version 3.
 
 Summary: poller checks bd ready then the ATM task before assigning
 
 Scope: atm-bd dispatch candidate filter order for sanity and qa beads
 
-Deterministic check to pair with the development gate: dispatch.py reads bd ready first and atm task list second for each candidate; a tick against a sanity bead whose task the hook assigned emits no assign action
+Deterministic check to pair with the development gate: runner.py's tick reads bd ready first and atm task list second for each candidate; a tick against a sanity bead whose task the hook assigned emits no assign action
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-1`: bj-1 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8
 - `atm-bj-2`: bj-2 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8
+- `atm-bj-3`: atm-bd dispatch and its read order are bj-4's runner.py; bj-3's agents assign nothing through atm-bd.
 
 Fixtures:
 - pass: atm-bd reads bd ready, then atm task list, and skips the sanity bead because its task already exists.
@@ -1864,6 +1867,8 @@ Deterministic check to pair with the development gate: Inspect a published skill
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-3`: Skill publication and its manifest belong to bj-5, not bj-3 sanity-stack.
 - `atm-bj-4`: The skill manifest belongs to bj-5 and is not touched by bj-4.
+- `atm-bj-1`: the generated manifest.yaml block is the package inventory, not the published skill-manifest.json hash manifest, which is bj-5's
+- `atm-bj-2`: the generated manifest.yaml block is the package inventory, not the published skill-manifest.json hash manifest, which is bj-5's
 
 Fixtures:
 - pass: The published skill has a manifest listing the hash of each shipped file.
@@ -1887,6 +1892,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-1`: Installer verification belongs to bj-5, not the bj-1 task-close hook.
 - `atm-bj-3`: Installer verification belongs to bj-5, not bj-3 sanity-stack.
 - `atm-bj-2`: Installer verification belongs to bj-5, not the bj-2 pour and validate-plan.
+- `atm-bj-4`: Installer verification belongs to bj-5; bj-4 only regenerates the inventory block with gen_manifest.py.
 
 Fixtures:
 - pass: The installer verifies skill files against the published manifest.

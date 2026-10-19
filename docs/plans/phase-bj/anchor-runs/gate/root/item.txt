@@ -19,9 +19,9 @@ Dev and fix assignment stay the lead's (ANC-060); atm-bd assigns only a sanity o
 |---|---|---|---|
 | bj-1 | close hook: atm-task-close.py roles dev, fix, sanity, qa; task-close-vars.j2, sanity-fail.xml.j2, rebase-required.xml.j2; max_sanity_rounds | root | - |
 | bj-2 | stack bead and sprint-family pour: stack-bead.json.j2, pour metadata, pydantic model per bead kind, validate-plan | root | - |
-| bj-3 | sanity-stack subagent and dev-sanity PASS wiring: sequential spawns, lock timeout, lean mode | must_follow | bj-1, bj-2 |
+| bj-3 | sanity-stack subagent and dev-sanity PASS wiring: sequential spawns, lock timeout, lean mode | must_follow | bj-1, bj-2, bj-4 |
 | bj-4 | console sanity and quality runs tabs; measured elapsed and dev identity in the sanity ledger | parallel_safe | - |
-| bj-5 | out-of-band full-skill integrity manifest; install verification and hand-runnable plugin doctor | parallel_safe | - |
+| bj-5 | skill integrity manifest; install verification and hand-runnable plugin doctor | parallel_safe | - |
 
 ## Acceptance criteria
 
