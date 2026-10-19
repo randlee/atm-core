@@ -1,0 +1,6 @@
+# Sprint: ship a LICENSE notice in the atm-bd wheel
+
+1. apps/atm-bd-console/hatch_build.py: force-include NOTICE.txt in the wheel and the sdist built from this branch.
+2. Test: `uv build` output contains NOTICE.txt.
+
+The change lands on integrate/phase-bj and is released with the next atm-bd version.

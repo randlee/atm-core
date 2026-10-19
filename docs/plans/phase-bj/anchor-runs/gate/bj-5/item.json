@@ -1,0 +1,56 @@
+[
+  {
+    "id": "atm-bj-5",
+    "title": "bj-5: out-of-band skill integrity manifest; install verification and hand-runnable doctor",
+    "issue_type": "task",
+    "status": "open",
+    "priority": 2,
+    "description": "## Goal\nFor atm-bd-orchestration issue #349, publish an out-of-band sc-sha manifest for every file shipped by the skill, verify those files before `atm-bd skill` installs a selected tag or `--latest`, and provide a plugin doctor usable without atm-core. This is phase-bj work in atm-bd-orchestration, independent of bj-1 through bj-4. Anchors: ANC-075..077. The integrity manifest is generated into the package release artifact; no file contains an embedded SHA. Hashing uses only the Python sc-sha implementation shipped by sc-compose; no second hasher is added. The sc-publish kit is unchanged.\n\n## Deliverables\n1. `skills/atm-bd-orchestration/scripts/publish-skill-manifest.py`: package script called by the existing package publish flow; enumerate all shipped agents, skills, Python files, templates, and scripts; compute sc-sha per path with sc-compose's Python implementation; write path/hash entries and the composition aggregate into the release artifact. This does not modify the sc-publish kit.\n2. `atm-bd skill` installer entry point (`skills/atm-beads/scripts/atm-bd-skill` and `skill-install.py`): for the selected release tag or `--latest`, verify each downloaded file against that release's published manifest before the installer renders any team, prefix or member value into it (the manifest covers the files as published); refuse mismatches and list the affected paths. After rendering, persist the version and the sha of each file as installed in the install record next to the installed files; doctor checks that record, because a rendered file's installed bytes differ from its published bytes by design.\n3. `skills/atm-bd-orchestration/scripts/atm-hook-doctor.py`: hand-runnable plugin command using the same verifier as `hook.doctor()`; report every file as `ok`, `modified`, `missing`, or `extra`, and aggregate `PASS`/`FAIL`. Keep the check in the plugin so phase-bj can run it without atm-core; phase-bk registration delegates to this same function.\n4. Test manifest coverage and stable sc-sha parity, install pass/refusal behavior for a tag and `--latest`, and doctor statuses/aggregate using deterministic fixture trees and controlled file contents. Never write hashes into source files; do not introduce a second hashing implementation.\n\n## Required Work\n- Scope source: Rand's atm-bd-orchestration issue #349 and its comments; no additional implementation scope is implied.\n- `requirements` and `adrs` are `NONE`: the governing specification is issue #349, and atm-core phase-bk's future hook registration is a caller only.\n- Preserve bj-3's ownership of `manifest.yaml`; this sprint owns the separate release integrity manifest and does not change the sc-publish kit.\n\n## Does Not Close\n- Phase-bk changes in atm-core that register `hook.doctor()`; this sprint exposes the plugin-side callable only.\n- Any embedded SHA header, hash inside a shipped file, or second hasher.\n- Changes to sc-publish.\n",
+    "design": "## Public Contract\nThe package release artifact contains a versioned integrity manifest with one `{path, sc_sha}` record for each shipped agent, skill, Python file, template, and script, plus the aggregate composition hash. The manifest is out-of-band. The package script calls sc-compose's shipped Python sc-sha implementation with the Rust crate's normalization rules; this sprint adds no hasher.\n\n`atm-bd skill <tag|--latest>` resolves the same release artifact it installs, verifies all installed paths before success, reports a deterministic mismatch path list, and refuses a modified or missing packaged file. The install record identifies the version and the manifest used for that install.\n\n`atm-hook-doctor.py` loads the install record and calls a shared plugin verification function. Per-path results are `ok|modified|missing|extra`; the aggregate is `PASS|FAIL`. The same function is exposed as `hook.doctor()` for phase-bk registration and does not import atm-core.\n\n## Exact Targets\n- new `skills/atm-bd-orchestration/scripts/publish-skill-manifest.py`, `scripts/atm-hook-doctor.py`, and focused script tests\n- new `skills/atm-beads/scripts/atm-bd-skill` command and `skill-install.py` verification module, with focused tests\n- edited package README only for the new manual doctor command\n- no edits to bj-1..bj-4 owned files, `manifest.yaml`, or sc-publish\n",
+    "acceptance_criteria": "## Acceptance Criteria\n- [ ] (ANC-075) A strict package build creates a release artifact manifest with exactly one sc-sha entry for every shipped agent, skill, Python file, template, and script, and the aggregate equals the sorted-path composition hash; a changed shipped file changes its manifest entry.\n- [ ] The publish script calls the sc-compose Python sc-sha implementation and matches sc-sha's UTF-8, line-ending normalization, BOM, lowercase hex, and aggregate behavior; no SHA value is embedded in any source file and no second hasher is implemented. sc-publish files and behavior are unchanged.\n- [ ] (ANC-076) `atm-bd skill <tag>` and `atm-bd skill --latest` install a matching artifact; a modified or missing file makes each command fail before install completion and names each affected path. Extra installed files are surfaced by doctor.\n- [ ] Install records persist the selected version and the exact published manifest used. The doctor reads this install record rather than recomputing an expected manifest from the current package checkout.\n- [ ] (ANC-077) Hand-running `python3 plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/atm-hook-doctor.py` emits one `ok|modified|missing|extra` result per fixture path and aggregate `PASS|FAIL`; both aggregate outcomes are covered.\n- [ ] The verifier function called by the script is the same callable exposed as `hook.doctor()` when phase bk registers it; the plugin check has no atm-core dependency.\n- [ ] Tests use deterministic fixture files and explicit expected contents/paths; no sleeps, races, timing thresholds, or event-loop ordering.\n\n## Validation\n- Strict-render the package and manifest inputs, then run focused integrity-manifest, install-verification, and doctor tests in the atm-bd-orchestration worktree.\n- Verify no in-file hashes and no sc-publish changes in the PR diff.\n- `just lint` and `just test` in the atm-bd-orchestration worktree; validate the plan at `atm-core` with `validate-plan --file docs/plans/phase-bj/beads/plan.jsonl --phase bj --index docs/plans/phase-bj.jsonl`.\n",
+    "labels": [
+      "phase-bj",
+      "stage:sprint",
+      "stack:phase-bj"
+    ],
+    "dependencies": [
+      {
+        "issue_id": "atm-bj-5",
+        "depends_on_id": "atm-phase-bj",
+        "type": "parent-child"
+      }
+    ],
+    "metadata": {
+      "phase": "bj",
+      "sprint": "bj-5",
+      "stack": "phase-bj",
+      "layer": 5,
+      "branch": "sprint/bj-5-skill-integrity",
+      "pr_target": "integrate/phase-bj",
+      "worktree": "/Users/randlee/github/atm-bd-orchestration-worktrees/sprint/bj-5-skill-integrity",
+      "relation": "parallel_safe",
+      "closure_type": "boundary",
+      "target_boundary": "atm-bd-orchestration package integrity manifest generation, atm-bd skill installation verification, and plugin doctor",
+      "owned_paths": [
+        "plugins/atm-bd-orchestration/tests/test_skill_integrity.py",
+        "plugins/atm-bd-orchestration/skills/atm-beads/scripts/atm-bd-skill",
+        "plugins/atm-bd-orchestration/skills/atm-beads/tests/test_skill_integrity.py",
+        "plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/publish-skill-manifest.py",
+        "plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/atm-hook-doctor.py",
+        "plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/tests/test_skill_manifest.py",
+        "plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/tests/test_atm_hook_doctor.py",
+        "plugins/atm-bd-orchestration/README.md",
+        "plugins/atm-bd-orchestration/skills/atm-beads/scripts/skill-install.py"
+      ],
+      "model_class": "",
+      "difficulty": "hard",
+      "requirements": [
+        "NONE"
+      ],
+      "adrs": [
+        "NONE"
+      ],
+      "release_train": ""
+    }
+  }
+]

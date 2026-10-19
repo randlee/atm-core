@@ -1,0 +1,146 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T232158Z-atm-bj-2",
+  "gate": "plan",
+  "created_at": "2026-10-18T23:21:58+00:00",
+  "anchors_path": "docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "atm-bj-2",
+    "title": "bj-2: stack bead and sprint-family pour: stack-bead.json.j2, pour metadata, pydantic model per bead kind, validate-plan",
+    "source": "/private/tmp/claude-501/-Users-randlee-github-atm-core/48324f08-3c24-4d63-8574-a78f4d2d167d/scratchpad/bj-plan/item-atm-bj-2.txt",
+    "chars": 6138,
+    "truncated": false,
+    "chars_before_reduction": 6138,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-060",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd must not assign dev or fix beads; the lead assigns them, the dev starts its next queued task when the sanity hook closes its current task, and a qa fix bead goes to the dev the lead picks at the finding's difficulty.",
+      "quote": "dev assignment is not mechanical.  this works as it does now.  dev agent will start next queued task as soon as sanity pass.  a different dev will get qa fix beads at appropriate level set by lead.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "atm-bd's actions.jsonl over a tick with a ready dev bead and no task holds no assign for it; the candidate filter in dispatch.py admits only sanity and qa stages",
+      "kind": "prohibition",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "2a580609cab144f1ff7d30906434da7ce9a9097e71dfe2f0eaff8b9f63a7eb71",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "Carrying out the item changes none of these; it only touches unrelated behaviour, files, or presentation.",
+            "unclear": "The item does not say enough to tell what carrying it out would change.",
+            "yes": "Carrying out the item changes or relies on bead assignment, atm-bd dispatch, or when a dev starts its next task."
+          },
+          "instructions": "Consider what `item.text` would change if it were carried out. Would any of it change or rely on assigning beads to agents, atm-bd's dispatch tick and its candidate filter, or the moment a dev takes up its next queued task? These are what `anchor.statement` governs. Judge whether the subject overlaps; do not judge compliance.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not state any part of this rule.",
+            "unclear": "The item mentions dev or fix assignment in a way that may or may not state the rule.",
+            "yes": "The item explicitly states some part of this rule."
+          },
+          "instructions": "Does `item.text` state the rule in `anchor.statement` itself: that atm-bd does not assign dev or fix beads and the lead assigns them (picking the dev for a qa fix bead), with the dev starting its next queued task when the sanity hook closes its current one? Any one part stated explicitly counts. Judge presence only.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "The item leaves dev and fix assignment to the lead, or does not mention it; mechanical sanity or qa assignment alone does not count.",
+            "unclear": "The item describes an assignment mechanism but it cannot be told whether it covers dev or fix beads.",
+            "yes": "The item has atm-bd, a hook or script, or the dev itself assign, select, or claim a dev or fix bead."
+          },
+          "instructions": "Does `item.text` plan for a dev or fix bead to be assigned or claimed by anything other than the lead (atm-bd's dispatch, a hook or script, or the dev picking its own next bead), or for a dev to take new work other than its next queued task? Silence about dev and fix assignment is not a conflict. Mechanical assignment of sanity or qa beads is allowed by the anchor and is not a conflict. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.27,
+          "probabilities": {
+            "no": 0.51,
+            "unclear": 0.01,
+            "yes": 0.48
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.8,
+          "probabilities": {
+            "no": 0.87,
+            "unclear": 0.05,
+            "yes": 0.08
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "no": 0.98,
+            "unclear": 0.0,
+            "yes": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.27,
+      "explanation": "Jev was not confident (min confidence 0.27); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 2722,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.27
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 6138,
+      "item_shortened": false,
+      "request_bytes": 8940
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1
+    },
+    "failing": [
+      "ANC-060"
+    ],
+    "leaning_counts": {
+      "not_applicable": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

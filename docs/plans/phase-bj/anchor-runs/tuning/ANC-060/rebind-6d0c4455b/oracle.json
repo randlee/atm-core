@@ -1,0 +1,143 @@
+{
+ "anchor_id": "ANC-060",
+ "anchor_kind": "prohibition",
+ "anchor_record_sha256": "018a87885c1a7aacdfd1d26b95f142235ee390d12b03c13c78cca2e25843c461",
+ "anchor_scope": "atm-bd dispatch: sanity and qa beads only; dev, fix and finding beads are the lead's",
+ "anchor_statement": "atm-bd must not assign dev or fix beads; the lead assigns them, the dev starts its next queued task when the sanity hook closes its current task, and a qa fix bead goes to the dev the lead picks at the finding's difficulty.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-060-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "A tick with a ready dev bead and a ready sanity bead assigns the sanity bead and emits a notice for the dev bead; the lead picks the dev.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-060-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd assigns the ready dev bead to the first idle member of its difficulty tier.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-060-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd dispatch only ever assigns sanity and qa beads; for ready dev, fix and finding beads it posts a notice and the lead chooses the developer.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent_refrains",
+   "item_id": "ANC-060-probe-silent_refrains",
+   "probe": "silence",
+   "rationale": "Prohibition: in-scope dispatch that refrains from dev assignment and is silent about it; satisfied.",
+   "scored_roles": [
+    "relevance",
+    "conflict"
+   ],
+   "text": "atm-bd assigns a ready qa bead to quality-mgr.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_fix",
+   "item_id": "ANC-060-probe-conflict_fix",
+   "probe": "conflict",
+   "rationale": "Fix beads are the lead's to assign.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd assigns each poured qa fix bead to the dev who wrote the layer.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_idle",
+   "item_id": "ANC-060-probe-conflict_idle",
+   "probe": "conflict",
+   "rationale": "Dev beads are the lead's to assign.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "When a dev goes idle, atm-bd assigns it the next ready dev bead.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-060-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The console shows the sol icon next to every Codex agent of model sol in the agent list.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

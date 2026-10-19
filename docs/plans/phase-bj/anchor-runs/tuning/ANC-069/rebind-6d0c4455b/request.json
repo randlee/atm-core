@@ -1,0 +1,267 @@
+{
+ "authority": {
+  "anchors": {
+   "records": [
+    {
+     "check": "with GH_TOKEN scoped to REST only, a lean spawn completes with zero graphql calls in the gh debug log and the layer recorded linked false; the REST call is filtered to number, base, head, sha, draft",
+     "context": "phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md)",
+     "deterministic_check": "with GH_TOKEN scoped to REST only, a lean spawn completes with zero graphql calls in the gh debug log and the layer recorded linked false; the REST call is filtered to number, base, head, sha, draft",
+     "fixtures": {
+      "fail": [
+       "The subagent runs /sc-gh-stack-view or gh stack view --json in lean mode, or reads the raw 365 KB pull list into its context."
+      ],
+      "pass": [
+       "budget: lean: the subagent reads the recorded top, fetches, checks merge-base --is-ancestor, reads base.ref from the filtered REST list, appends the layer with linked false."
+      ]
+     },
+     "id": "ANC-069",
+     "kind": "directive",
+     "quote": "yes, so basically if graphql is out, or we are watching our tokens (this should be an input arg to the fenced json input of the subagent) the subagent should make sure the branches are aligned and there is no divergence.",
+     "scope": "sanity-stack input budget and its lean procedure",
+     "source_ref": "",
+     "source_type": "ANC",
+     "state": "locked",
+     "statement": "sanity-stack must take a budget input in its fenced JSON; in lean mode, or whenever GraphQL is unavailable, it must verify only that the PR base equals the recorded top and that the head descends from it with no divergence, using one filtered REST pull list and local git, and must make no GraphQL call.",
+     "summary": "lean mode: GraphQL out or token budget means alignment and no divergence only",
+     "version": 2
+    }
+   ],
+   "sha256": "40c43a127ecedde18ad4d0dab2ee0406d6f691dabd6f4b87a3e54a2db94d8d3c"
+  },
+  "intent": {
+   "content": "# Intent - phase-bj: mechanical close flow\n\nWritten 2026-10-18 by fenix from Rand's rulings of 2026-10-18 (atm-core #1873 comment 1, atm-bd-orchestration #340, docs PR atm-bd-orchestration #342). One page at most. Jev questions are judged against the anchors, not this document.\n\n## What this plan is for\n\nDev work is not complete until sanity verifies it, and nothing between a dev\npush and the QA assignment should need the lead. Today the dev closes its own\ntask on push, the lead hand-assigns every sanity and QA task, and atm-bd has\nnever issued an assignment because its dispatch reads branch and worktree\nfrom beads the pour never wrote them to. This phase makes the dev, fix,\nsanity and qa closes one script, `atm-task-close.py`, that verifies the\nminimum (PR open on `pr_target`, pushed head, rebased), closes the bead,\nreports to the lead and assigns the next bead as the phase lead; the dev's\ntask stays open until sanity passes.\n\n## What success looks like\n\n- A dev or fix bead closes only through the hook; the dev's ATM task is closed by the sanity hook on PASS and the dev waits meanwhile.\n- Sanity and QA assignment never need the lead: the hook assigns, atm-bd assigns a ready bead with no task, both as the phase lead.\n- A sanity FAIL reopens the bead and sends the dev `sanity-rejected` on the same task and branch; `max_sanity_rounds` (default 5) escalates to the lead.\n- The pour writes branch, worktree, pr_target and difficulty to every bead of a sprint family and a pydantic model per bead kind validates the whole phase.\n- atm-core issue #1873 (task transition hooks, 1.6.2) is the long-term home; the skill script stands in until it ships.\n- Sanity links the layer on PASS under the stack bead's claim: the stack bead holds the whole stack as ledger and lock, first PASS wins the top and the loser gets `rebase-required` (no round counted); a sanity-stack subagent handles one next-top layer per spawn, sequentially, with a lean mode and a lock timeout that never blocks the team.\n\n## What is deliberately out of scope\n\n- Mechanical dev or fix assignment: the lead picks the dev (ANC-060).\n- Whole-stack verification in the hook: the lead owns stack hygiene (ANC-054, ANC-062).\n- The small phase-bi console fixes (self-addressed send, icons, agent rows): they close in phase-bi.\n\n## Anchors\n\nThe phase-bi anchors (ANC-001..050, REQ-BI6-AC6) are carried unchanged in\n`anchors.json` so Jev judges phase-bj items against the same console\nrulings; ANC-051..086 are this phase's; ANC-063 and ANC-074 are retired and replaced by ANC-078..083 and ANC-084..086, respectively (ANC-062 retired to ANC-065). Rendered to `anchors.md`.\n",
+   "id": "phase-bj",
+   "sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+   "version": 1
+  }
+ },
+ "candidate_minimum": 3,
+ "confidence_reference_threshold": 0.8,
+ "correlation_id": "ANC-069-6d0c4455b",
+ "current_questions": {
+  "questions": {
+   "addressed": {
+    "criteria": {
+     "no": "The item does not state the lean procedure: it is silent about it, or mentions budget, tokens, economy or lean only as a topic or goal, or describes a lean path made of different steps.",
+     "unclear": "The item refers to a lean or low-budget procedure but its steps are described too loosely to tell whether they are the base and ancestry checks the anchor requires.",
+     "yes": "The item states what the subagent does in lean mode or when GraphQL is unavailable, with the specific content: base compared with the recorded top and an ancestry or no-divergence check, done with a filtered REST pull list and local git (for example fetch, merge-base --is-ancestor) rather than GraphQL. Paraphrases count."
+    },
+    "instructions": "`anchor.statement` requires two things of the sanity-stack subagent: a budget input in its fenced JSON, and a lean procedure used in lean mode or whenever GraphQL is unavailable that checks only that the PR base equals the recorded top and that the head descends from it with no divergence, using one filtered REST pull list and local git, with no GraphQL call. Does `item.text` plan that lean procedure, with its specific checks or method, for the lean or GraphQL-unavailable case? Judge presence of this content only.",
+    "type": "choice"
+   },
+   "contradicted": {
+    "criteria": {
+     "no": "Nothing in the item is a ruled-out behaviour: it follows the anchor, is silent about it, only uses GraphQL in full mode while GraphQL is available, or is about something else.",
+     "unclear": "The item describes a lean or rate-limited path whose method is ambiguous enough that it might or might not use GraphQL, an unfiltered list, or extra verification.",
+     "yes": "The item states a design or step that is one of the ruled-out behaviours, such as explicitly having no budget option, calling GraphQL on the lean or GraphQL-unavailable path, waiting on GraphQL rather than falling back, loading the raw pull list, or verifying the whole stack in lean mode."
+    },
+    "instructions": "Does `item.text` plan something that `anchor.statement` rules out for the sanity-stack subagent? The anchor rules out: having no budget input; making any GraphQL call in lean mode or when GraphQL is unavailable (gh stack view, /sc-gh-stack-view and GraphQL API queries are GraphQL); waiting for GraphQL instead of using the REST and git check; reading an unfiltered pull list; or verifying more than base and ancestry in lean mode. GraphQL use in full mode while GraphQL is available is not ruled out. Silence about the anchor is not a conflict. Judge conflict only.",
+    "type": "choice"
+   },
+   "relevant": {
+    "criteria": {
+     "no": "The item is about a different component or activity (for example another script, sanity pass/fail handling, the console, a CLI command), even if it uses similar words such as git, REST, rebase or budget.",
+     "unclear": "The item text is too vague to tell whether the work it describes is done by the sanity-stack subagent.",
+     "yes": "The item describes work on the sanity-stack subagent: its fenced JSON input, its verification or linking of a stack layer, or its GitHub API or GraphQL usage."
+    },
+    "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about the sanity-stack subagent: the subagent that verifies a layer against the recorded stack top and links it. Does `item.text` plan, change, or depend on the sanity-stack subagent itself: its input, how it verifies or links a layer, or how it uses GitHub and git while doing so? Judge subject overlap only, not whether the item obeys the anchor.",
+    "type": "choice"
+   }
+  },
+  "roles": {
+   "compliance": "addressed",
+   "conflict": "contradicted",
+   "relevance": "relevant"
+  }
+ },
+ "diagnostic_plan": null,
+ "gate": "planning",
+ "operation": "tune",
+ "production_confidence_threshold": 0.6,
+ "repeat_count": 2,
+ "runtime": {
+  "agent": "anchor-tuning",
+  "contract_script": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/.claude/skills/plan-anchoring/scripts/anchor_tuning_contract.py",
+  "contract_sha256": "8f464aa751aa4ef3e17a04cbe5d5be6aa29e9c86f134819f29610584532aa7eb",
+  "harness": "claude",
+  "model": "opus",
+  "script": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/.claude/skills/plan-anchoring/scripts/jev_judge.py",
+  "sha256": "575229a11ef03dcbf3f26f657639c086dc1915f584f555e78ed940c2c0df9254",
+  "version": "0.6.1",
+  "workspace": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj"
+ },
+ "schema_version": "2.0.0",
+ "template": {
+  "id": "anchor-tuning-tune-request",
+  "sha256": "d8d6796121bb8155af53277053b25fe9cf99ead86ba55f51b19df8962b441ed3",
+  "version": "0.4.1"
+ },
+ "tournament_protocol_version": "plan-anchor/question-tournament/2.0.0",
+ "tuning_history": {
+  "events": [
+   {
+    "authority": {
+     "anchor_id": "ANC-069",
+     "anchor_record_sha256": "3902d3241dd3e9c1ab719b272f823d42092d7bd8167755f54f9c8192af37d391",
+     "anchor_version": 2,
+     "intent_id": "phase-bj-intent",
+     "intent_sha256": "193feb73c68194e0c4d676f4b7efbe02e66c2008513d16ff61f0a670d605984d",
+     "intent_version": 1
+    },
+    "candidate": {
+     "candidate_id": "B-r1a1c1",
+     "question_sha256": "33764582ae268e29d5df0ca31f3989ef892074e42744bc04b3accfa0527be81c"
+    },
+    "decision": {
+     "question_set_sha256": "33764582ae268e29d5df0ca31f3989ef892074e42744bc04b3accfa0527be81c",
+     "reason_code": "TOURNAMENT.SEALED",
+     "status": "sealed"
+    },
+    "event": "question_set_sealed",
+    "event_index": 1,
+    "evidence": {
+     "canonical_request_sha256": [
+      "317cd2f686dd728c423538136c45d9c9bae0219f75997acbdbb1da23faa5ed7e",
+      "317cd2f686dd728c423538136c45d9c9bae0219f75997acbdbb1da23faa5ed7e",
+      "891ae4ce4f929a1025be8528e6424db0c593a5e141e43861f0bf9d878df11ab8",
+      "891ae4ce4f929a1025be8528e6424db0c593a5e141e43861f0bf9d878df11ab8",
+      "0faf5b0fd54b616a80a47fd64cc4f0fd180246616ba35debae118f0253e32c9a",
+      "0faf5b0fd54b616a80a47fd64cc4f0fd180246616ba35debae118f0253e32c9a",
+      "b601e35620e4915714406d090335da5fc28320d28c4c833d526442990f4aaf21",
+      "b601e35620e4915714406d090335da5fc28320d28c4c833d526442990f4aaf21",
+      "f8bb281f2070f3812dfa1bdb7ccda69a307d082978e23b75cdd88ee2bfd7b7d1",
+      "f8bb281f2070f3812dfa1bdb7ccda69a307d082978e23b75cdd88ee2bfd7b7d1",
+      "7cdc2122c7d13144ab6f017330a526cdb8d068eacb96631f7ac38a46f87dd0a4",
+      "7cdc2122c7d13144ab6f017330a526cdb8d068eacb96631f7ac38a46f87dd0a4",
+      "c6cdfbb76ce06b315d0f1818cbba3bc9c69223432885a0b51b479d2856fb8ba2",
+      "c6cdfbb76ce06b315d0f1818cbba3bc9c69223432885a0b51b479d2856fb8ba2",
+      "e5e43e85894e39c56fe3919a8687899577ec7ef954ff66635401f996d076657f",
+      "e5e43e85894e39c56fe3919a8687899577ec7ef954ff66635401f996d076657f",
+      "9a3b5dc85743cb280286971791a1297b8bb1f14ef1f3b5e82d217be59d882db6",
+      "9a3b5dc85743cb280286971791a1297b8bb1f14ef1f3b5e82d217be59d882db6",
+      "9fac32152aba3e9b17d271d329058f5f575332d3e0d464460c6739dfbf54068b",
+      "9fac32152aba3e9b17d271d329058f5f575332d3e0d464460c6739dfbf54068b",
+      "e3d900d12c1173d1638c7d34c6f88fefb1a15f163723904984dd70dccaeb4519",
+      "e3d900d12c1173d1638c7d34c6f88fefb1a15f163723904984dd70dccaeb4519",
+      "31c517c6e20c66b4a204119b053044ab71f44a60a1ec452e701491ac000500f0",
+      "31c517c6e20c66b4a204119b053044ab71f44a60a1ec452e701491ac000500f0",
+      "4d560c3e9eeb0fc2a5280dc4c7deaed6af3d4720bc5954bd76e2777165e09b2a",
+      "4d560c3e9eeb0fc2a5280dc4c7deaed6af3d4720bc5954bd76e2777165e09b2a",
+      "d2fb3dee31a5addf3fb2ab22f1c13e6b7c953004891647251c78eb5a525588ab",
+      "d2fb3dee31a5addf3fb2ab22f1c13e6b7c953004891647251c78eb5a525588ab",
+      "64b35aa323560c9a8a8f999a9ae0b268219aa788cb46a2d5e0b9f813fcb9592a",
+      "64b35aa323560c9a8a8f999a9ae0b268219aa788cb46a2d5e0b9f813fcb9592a"
+     ],
+     "raw_response_sha256": [
+      "96bc3d63da66ae524feeeda1253688ed8c38838e2089133da4bfd681e2c860f9",
+      "37c26342f336e4548f138c32cc4e3f8057ec7774481cc469e37a548f708f60cf",
+      "1816c57dcc9fedaa5a4db5d1c390a7836b0013b4ae05cbe1bb12a2d87c56c6c9",
+      "ab4cfdae5fe21199ca5beb4a989dd0fd54b7241ea67469e549fa4d3e31fd7d76",
+      "0287b5a3a7b7357ab2cb615cde14676e4abdcc2350df43c14a56ab40c4a37c2f",
+      "0287b5a3a7b7357ab2cb615cde14676e4abdcc2350df43c14a56ab40c4a37c2f",
+      "de1d3fafdf1a4ae0dab060e032f5619efb57c33a082f4f0db345ec49812035a5",
+      "ee31284b93212f8701ce6782be03a6a1ce06d8d133edd581c8ddabe71a87c5d9",
+      "ded5d95dd429ba42e417a60dd323a9198bea53ce2bed3dedbf9d3d8a5a62189c",
+      "444c9c21e8b35722103f743c00cb3ab17d57aada54806d33cc75643e2792f2a2",
+      "b6ef88c3f6bd4395ed0cec5b9542cc2f849049a99888ab91589efcefeabc80c3",
+      "02a43e0916519a4e582390c7fb9a74e30e80906c3171d672a37eb593b732b6af",
+      "0dd7d2939c4a2fb3b091a085f81963878f495ec5518371ecefc06e1511005f1d",
+      "0dd7d2939c4a2fb3b091a085f81963878f495ec5518371ecefc06e1511005f1d",
+      "ecf873d9bfe08bd52bdef4dba6355a1733f9515cbf3b98463a64d442373161f8",
+      "ecf873d9bfe08bd52bdef4dba6355a1733f9515cbf3b98463a64d442373161f8",
+      "ecf873d9bfe08bd52bdef4dba6355a1733f9515cbf3b98463a64d442373161f8",
+      "ecf873d9bfe08bd52bdef4dba6355a1733f9515cbf3b98463a64d442373161f8",
+      "7845da9aec0be9dd2366f3f006c95f9f5d30e919a75f9815910c1709765dfc13",
+      "7845da9aec0be9dd2366f3f006c95f9f5d30e919a75f9815910c1709765dfc13",
+      "03b290cf4a2d79556c072d1f9141e458b9cc41c2c9ab5a930f90418356ba47f4",
+      "fc0cd91357a419fc1afba064b0b94c98cb933f5d6e21bda76e0bb4cc2dc8d43d",
+      "7e96c02b8eee2432b44e8cf2a5f74317f24d3bd0d9ea3be2649bf0ba7df26860",
+      "7e96c02b8eee2432b44e8cf2a5f74317f24d3bd0d9ea3be2649bf0ba7df26860",
+      "48014b7402de79af61c913abf08c9f76a77f924e1c8964281b78865a59988ea2",
+      "48014b7402de79af61c913abf08c9f76a77f924e1c8964281b78865a59988ea2",
+      "f14f7323e624b0c1b9d32ae84300e01388f2dc78cb8c87d9e79da3508fa06cd3",
+      "cc6fa4798a7eb61dc0c04cf5829248366cdb9d3a8b7b894ccfd1526aa044ad33",
+      "68aaea7c8b36c716a106e1a9a52765706e40b8565c590048bb2f09d143c15d97",
+      "68aaea7c8b36c716a106e1a9a52765706e40b8565c590048bb2f09d143c15d97"
+     ],
+     "run_ids": [
+      "tune-ANC-069:confirm-B-r1a1c1:fixture-pass-1:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:fixture-pass-1:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:fixture-fail-1:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:fixture-fail-1:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:compliant-paraphrase:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:compliant-paraphrase:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:compliant-sprint-bead:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:compliant-sprint-bead:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:boundary-graphql-unavailable:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:boundary-graphql-unavailable:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:silent-sanity-stack:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:silent-sanity-stack:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:topical-only:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:topical-only:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:conflict-no-budget:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:conflict-no-budget:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:conflict-wait-for-graphql:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:conflict-wait-for-graphql:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:conflict-lean-graphql-checks:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:conflict-lean-graphql-checks:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:conflict-unfiltered-list:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:conflict-unfiltered-list:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:irrelevant-icons:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:irrelevant-icons:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:irrelevant-sanity-rejected:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:irrelevant-sanity-rejected:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:boundary-close-hook:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:boundary-close-hook:r2",
+      "tune-ANC-069:confirm-B-r1a1c1:diag-budget-field-only:r1",
+      "tune-ANC-069:confirm-B-r1a1c1:diag-budget-field-only:r2"
+     ]
+    },
+    "oracle": {
+     "case_count": 14,
+     "case_ids": [
+      "fixture-pass-1",
+      "fixture-fail-1",
+      "compliant-paraphrase",
+      "compliant-sprint-bead",
+      "boundary-graphql-unavailable",
+      "silent-sanity-stack",
+      "topical-only",
+      "conflict-no-budget",
+      "conflict-wait-for-graphql",
+      "conflict-lean-graphql-checks",
+      "conflict-unfiltered-list",
+      "irrelevant-icons",
+      "irrelevant-sanity-rejected",
+      "boundary-close-hook"
+     ],
+     "repeat_count": 2,
+     "sha256": "9debbc904310e740c48c29d80d0f54059de6f964a9347ae4874cf5cd7b5ba359"
+    },
+    "previous_event_sha256": null,
+    "protocol_version": "plan-anchor/question-tournament/2.0.0",
+    "score": {
+     "confidence": {
+      "cells_at_or_above_threshold": 78,
+      "mean": 0.9645,
+      "median": 1.0,
+      "minimum": 0.53,
+      "p10": 0.908,
+      "threshold": 0.8,
+      "total_cells": 80
+     },
+     "exact_role_cells": 80,
+     "exact_semantic_verdicts": 28,
+     "regressions": 0,
+     "stable_cases": 14,
+     "total_cases": 14,
+     "total_role_cells": 80,
+     "total_semantic_verdicts": 28
+    },
+    "supersedes": null
+   }
+  ],
+  "history_id": "phase-bj-ANC-069-planning",
+  "schema": "plan-anchor/tuning-history/2"
+ }
+}

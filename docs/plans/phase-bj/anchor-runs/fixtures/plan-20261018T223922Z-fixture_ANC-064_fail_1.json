@@ -1,0 +1,105 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T223922Z-fixture_ANC-064_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T22:39:22+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-064:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 90,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-064",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-core must run a repository-configured hook on task close (and later on the other task transitions) that receives role and a custom JSON payload defined by the hook, keeps the task open when the hook returns failure, and logs the result; until it ships, atm-task-close.py in the skill stands in for it.",
+      "quote": "Long term, I would like this to occur in a atm-task-close hook which we could tap into.  we should file this as an important gh issue on atm-core repo because I don't believe this hook exists today.  we should assign hooks for most of the atm task transitions.  that would allow us to implement different hooks in different orchestration patterns.  the atm-task-close hook would accept a 'custom' json set of fields which would be defined by the custom python (not atm).  atm would simply pass the json to the python function which would return a Result<T,E> and if the hook returned failure, the task would remain open.  the result would get logged.  The atm-task-close hook would ALSO be routed by 'role' or 'role' would be a mandetory input argument to the python script",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "with a configured hook that returns failure, atm task close <id> completed leaves the task active and the hook result appears in atm task events; with no hook configured the close behaves as today",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.66,
+          "probabilities": {
+            "yes": 0.16,
+            "no": 0.77,
+            "unclear": 0.07
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.95,
+            "no": 0.04,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.66,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1083,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 90,
+      "item_shortened": false,
+      "request_bytes": 3299
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-064"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

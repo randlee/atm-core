@@ -1,0 +1,180 @@
+{
+ "anchor_id": "ANC-065",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "eb1b9f16ed78fbb450906c6060dd8e855b6b7d045ba4c16c9863f42eb40a60b2",
+ "anchor_scope": "dev-sanity PASS procedure, sanity-stack, the sanity close hook's PASS precondition, templates/rebase-required.xml.j2; replaces ANC-062's lead-links clause",
+ "anchor_statement": "On a sanity PASS the sanity side must link the checked PR as the new top of the phase stack before the close hook runs; when the checked head does not descend from the recorded top because another layer linked first, it must send the dev rebase-required on the dev's open task instead of linking, and the dev must rebase before every resubmission.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-065-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Sanity PASS on branch A links A as the top; sanity PASS on branch B, cut from the old top, sends the dev rebase-required and writes nothing; the dev rebases B onto A and runs its hook again.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-065-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The lead links the layer when it reads the sanity PASS report, or sanity closes the dev's task and assigns QA with the PR still unlinked.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-065-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase of every clause.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "After a sanity PASS, dev-sanity links the PR as the new stack top and only then runs the close hook. If the head no longer descends from the recorded top because another PASS was linked first, it sends the dev rebase-required on the same task and links nothing; the dev rebases onto the new top before every resubmission.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-065-probe-silent",
+   "probe": "silence",
+   "rationale": "In-scope stacking bookkeeping, silent about link-before-close and rebase-required.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "sanity-stack records each linked layer's branch, PR and head in the stack bead's metadata.layers.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "topical",
+   "item_id": "ANC-065-probe-topical",
+   "probe": "topical_only",
+   "rationale": "Topic only.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "This item touches the phase stack.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_lead_links",
+   "item_id": "ANC-065-probe-conflict_lead_links",
+   "probe": "conflict",
+   "rationale": "The sanity side links on PASS; the anchor replaces the lead-links clause.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The lead links each sanity-passed PR into the stack during its daily stack pass.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_auto_rebase",
+   "item_id": "ANC-065-probe-conflict_auto_rebase",
+   "probe": "conflict",
+   "rationale": "It must send the dev rebase-required instead of linking.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "When the passed head does not descend from the recorded top, sanity-stack rebases the branch itself and links it.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_link_after_close",
+   "item_id": "ANC-065-probe-conflict_link_after_close",
+   "probe": "conflict",
+   "rationale": "Linking must happen before the close hook runs.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The close hook closes the sanity bead and assigns QA first, and the PR is linked into the stack afterwards.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-065-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The console shows the sol icon next to every Codex agent of model sol in the agent list.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

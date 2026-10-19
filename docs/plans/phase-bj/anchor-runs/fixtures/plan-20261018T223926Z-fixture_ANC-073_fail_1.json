@@ -1,0 +1,105 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T223926Z-fixture_ANC-073_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T22:39:26+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-073:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 139,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-073",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd must show a sanity runs page and a quality runs page, newest run on top, one line per run; the sanity line must carry a pass/fail column and an elapsed-time column for JEV and for LLM each, and a column with the name and nerd icon of the dev whose work was checked; elapsed comes from the Jev client's own return and from a timer fenced around the LLM subagent, and the same rows feed the OTel database in the next atm release.",
+      "quote": "sanity agent never does it and I always need to ask.  it is the only thing I want to see from sanity agent.  perhaps we should consider adding a tui page for both sanity and quality which showed the runs sorted by most recent (on top).  the sanity page would have 1 line per run and both jev + llm would have columns for pass/fail AND elapsed time (which is currently not calculated properly).  Regarding calculation, can't this be returned from the jev.py method call and a timer fencing around the llm agent?  I would also like to have a column for what dev (name and nerd icon) did the work under review.  This would remove the agent distraction and show the data I want to see (and get into otel db on next atm release).",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18 (third round): Rand on the sanity runs table, Jev/LLM failures and refusal ceremony",
+      "anchor_version": 2,
+      "deterministic_check": "the console has a sanity page and a quality page; a ledger row has jev_elapsed_s, llm_elapsed_s and dev fields; jev_client.py returns elapsed; the dev-sanity prompt wraps the LLM spawn in a start/end time; the sanity reply template no longer renders the runs table",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.66,
+          "probabilities": {
+            "yes": 0.15,
+            "no": 0.77,
+            "unclear": 0.08
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.97,
+            "no": 0.02,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.66,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1120,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 139,
+      "item_shortened": false,
+      "request_bytes": 3485
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-073"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

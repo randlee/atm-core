@@ -1,0 +1,364 @@
+{
+  "candidates": {
+    "C0-baseline": {
+      "complexity_chars": 3013,
+      "digest": "f22725d9663f41928c9ac5c8bdc1e5cf9be037eaac409b3f0912dec887518707",
+      "questions": {
+        "faithful": {
+          "criteria": {
+            "no": "Even after ordinary normalization, the statement requires a new policy, implementation choice, strength, trigger, or outcome.",
+            "unclear": "Ordinary normalization does not settle whether the meaning was preserved.",
+            "yes": "Those normalization rules are sufficient and no substantive requirement was invented."
+          },
+          "instructions": "Is anchor.statement a faithful formal requirement derived from anchor.quote? Preserve meaning, not wording: informal directives may become must, print may become emit to stdout, machine-readable JSON may become JSON, and one directive in a compound quote may become one anchor. Do not penalize vagueness here.",
+          "type": "choice"
+        },
+        "observable": {
+          "criteria": {
+            "no": "It supplies only a subjective quality, undefined shorthand, or an approval with no observable record.",
+            "unclear": "Some evidence is named, but the observation needed to settle compliance remains ambiguous.",
+            "yes": "It names evidence or behavior that can be inspected with a determinate outcome."
+          },
+          "instructions": "Does anchor.statement define a checkable behavior or artifact without relying on an undefined label or an approval that has no identified record? Judge only whether the stated outcome can be observed.",
+          "type": "choice"
+        },
+        "scoped": {
+          "criteria": {
+            "no": "No work area or applicability set is identifiable.",
+            "unclear": "An area is named but its applicability cannot be determined.",
+            "yes": "A reviewer can identify the work area where this anchor applies, including an explicit all-items set."
+          },
+          "instructions": "Do anchor.statement and anchor.scope identify the governed activity, component, artifact, or explicit global set, independent of whether the requirement itself is vague or otherwise defective?",
+          "type": "choice"
+        },
+        "self_contained": {
+          "criteria": {
+            "no": "At least one decisive term is an undefined quality or private label, or compliance depends on an approval with no identified record.",
+            "unclear": "A possible outside-context dependency exists but the statement does not show whether it is decisive.",
+            "yes": "None of those outside-context dependencies is needed; ordinary technical terms, concrete prohibitions, lists, and explicit input/action/outcome conditions are sufficient."
+          },
+          "instructions": "Is anchor.statement independently understandable and applicable without any of these disqualifiers: an undefined subjective quality (for example robust), private shorthand, or a human approval that has no identified recorded artifact? Ignore grammar, bundling, fidelity, and scope.",
+          "type": "choice"
+        },
+        "single_constraint": {
+          "criteria": {
+            "no": "At least two independently enforceable duties are joined in the statement.",
+            "unclear": "The statement leaves independence of its duties ambiguous.",
+            "yes": "All details enforce the same invariant and would be evaluated together."
+          },
+          "instructions": "Is anchor.statement one invariant applied to a subject, trigger, and possibly several output surfaces? Do not count the number of nouns or listed artifacts; count independently enforceable duties.",
+          "type": "choice"
+        }
+      }
+    },
+    "C1-concise": {
+      "complexity_chars": 3153,
+      "digest": "362777cfb9aa8a421526213e999058d22ec36f4db414aadb2869891c02514e12",
+      "questions": {
+        "faithful": {
+          "criteria": {
+            "no": "The statement adds a policy, algorithm, strength, threshold, trigger, or outcome the quote does not contain.",
+            "unclear": "It cannot be told whether the change goes beyond allowed normalization.",
+            "yes": "The statement is the quote's requirement after allowed normalization only."
+          },
+          "instructions": "Compare anchor.statement with anchor.quote. Does the statement keep the quote's meaning without inventing a requirement? Allowed normalization: informal wording may become must or never, print may become emit to stdout or stderr, synonyms may replace the user's words, one directive of a compound quote may become one anchor, and a concrete value, identifier, path, or output channel may be named for something the quote already describes. Vagueness is judged elsewhere; do not penalize it here.",
+          "type": "choice"
+        },
+        "observable": {
+          "criteria": {
+            "no": "Compliance rests on a subjective quality, an undefined label, or an approval with no named record.",
+            "unclear": "Something concrete is named, but which observation settles compliance is ambiguous.",
+            "yes": "A concrete artifact, output, path, value, or behavior settles compliance."
+          },
+          "instructions": "Could a reviewer inspect a concrete artifact, output, location, or behavior and decide whether anchor.statement holds? A subjective quality (for example robust), an undefined label or code, or an approval with no named record gives nothing to inspect.",
+          "type": "choice"
+        },
+        "scoped": {
+          "criteria": {
+            "no": "No work area or applicability set can be identified.",
+            "unclear": "An area is named but which work it covers cannot be determined.",
+            "yes": "A reviewer can name the work area or explicit global set where the anchor applies."
+          },
+          "instructions": "Do anchor.statement and anchor.scope together name the activity, component, artifact, or explicit all-items set the requirement governs? Judge only whether the area is identifiable, not whether the requirement is good.",
+          "type": "choice"
+        },
+        "self_contained": {
+          "criteria": {
+            "no": "At least one disqualifier decides compliance.",
+            "unclear": "A possible disqualifier is present but it is not clear whether it decides compliance.",
+            "yes": "No disqualifier is present; the statement can be applied as written."
+          },
+          "instructions": "Can a reviewer apply anchor.statement with no private context? Disqualifiers: an undefined subjective quality (for example robust), a private label or code with no definition, or a human approval with no identified record. Ordinary technical terms, paths, flags, environment variable names, prohibitions, and explicit conditions are sufficient. Ignore grammar, bundling, fidelity, and scope.",
+          "type": "choice"
+        },
+        "single_constraint": {
+          "criteria": {
+            "no": "Two or more duties that could each be satisfied or violated separately are joined.",
+            "unclear": "It cannot be told whether the parts are separate duties.",
+            "yes": "Exactly one duty; every detail would be checked by the same test."
+          },
+          "instructions": "Count the independently enforceable duties in anchor.statement. One duty applied to one subject under one trigger counts once even when it lists several outputs, surfaces, or values. Does the statement contain exactly one duty?",
+          "type": "choice"
+        }
+      }
+    },
+    "C2-examples": {
+      "complexity_chars": 3566,
+      "digest": "06f0e97dc67bad0cc1fcb4bfbb81d61a1ba3557e7a3687b5b91f9cbb42a02579",
+      "questions": {
+        "faithful": {
+          "criteria": {
+            "no": "Even after allowed normalization, the statement requires a new policy, implementation choice, strength, trigger, or outcome, for example a specific algorithm or limit the quote never named.",
+            "unclear": "Ordinary normalization does not settle whether the meaning was preserved.",
+            "yes": "Those normalization rules are sufficient and no substantive requirement was invented."
+          },
+          "instructions": "Is anchor.statement a faithful formal requirement derived from anchor.quote? Preserve meaning, not wording. Allowed normalization: informal wording may become must or never, print may become emit to stdout or stderr, synonyms may replace the user's words, one directive of a compound quote may become one anchor, and a concrete value, identifier, path, or output channel may be named for something the quote already describes. Do not penalize vagueness here.",
+          "type": "choice"
+        },
+        "observable": {
+          "criteria": {
+            "no": "It supplies only a subjective quality (for example robust or clean), undefined shorthand (for example an unexplained code or label), or an approval with no observable record.",
+            "unclear": "Some evidence is named, but the observation needed to settle compliance remains ambiguous.",
+            "yes": "It names evidence or behavior that can be inspected with a determinate outcome."
+          },
+          "instructions": "Does anchor.statement define a checkable behavior or artifact without relying on an undefined label or an approval that has no identified record? Judge only whether the stated outcome can be observed.",
+          "type": "choice"
+        },
+        "scoped": {
+          "criteria": {
+            "no": "No work area or applicability set is identifiable.",
+            "unclear": "An area is named but its applicability cannot be determined.",
+            "yes": "A reviewer can identify the work area where this anchor applies, including an explicit all-items set."
+          },
+          "instructions": "Do anchor.statement and anchor.scope identify the governed activity, component, artifact, or explicit global set, independent of whether the requirement itself is vague or otherwise defective?",
+          "type": "choice"
+        },
+        "self_contained": {
+          "criteria": {
+            "no": "At least one decisive term is an undefined quality (for example robust) or private label (for example an unexplained code), or compliance depends on an approval with no identified record.",
+            "unclear": "A possible outside-context dependency exists but the statement does not show whether it is decisive.",
+            "yes": "None of those outside-context dependencies is needed; ordinary technical terms, concrete prohibitions, lists, and explicit input/action/outcome conditions are sufficient."
+          },
+          "instructions": "Is anchor.statement independently understandable and applicable without any of these disqualifiers: an undefined subjective quality (for example robust), private shorthand, or a human approval that has no identified recorded artifact? Ignore grammar, bundling, fidelity, and scope.",
+          "type": "choice"
+        },
+        "single_constraint": {
+          "criteria": {
+            "no": "At least two independently enforceable duties are joined in the statement, for example two components each given their own obligation, or one component given two unrelated obligations.",
+            "unclear": "The statement leaves independence of its duties ambiguous.",
+            "yes": "All details enforce the same invariant and would be evaluated together, for example one prohibition covering several output streams, or one trigger with one required result."
+          },
+          "instructions": "Is anchor.statement one invariant applied to a subject, trigger, and possibly several output surfaces? Do not count the number of nouns or listed artifacts; count independently enforceable duties.",
+          "type": "choice"
+        }
+      }
+    },
+    "C3-procedure": {
+      "complexity_chars": 3049,
+      "digest": "693312aa5e51b60bc14ec8c006d3a0a9f3328091c466a7806e8fd68dd3981a47",
+      "questions": {
+        "faithful": {
+          "criteria": {
+            "no": "An invented policy, algorithm, strength, trigger, or outcome remains.",
+            "unclear": "It cannot be decided whether a remaining difference is normalization.",
+            "yes": "No invented requirement remains after Step 3."
+          },
+          "instructions": "Step 1: read the requirement in anchor.quote. Step 2: read anchor.statement. Step 3: discard differences that are allowed normalization. Allowed normalization: informal wording may become must or never, print may become emit to stdout or stderr, synonyms may replace the user's words, one directive of a compound quote may become one anchor, and a concrete value, identifier, path, or output channel may be named for something the quote already describes. Step 4: answer whether any remaining difference adds a policy, algorithm, strength, trigger, or outcome. Vagueness is not a difference.",
+          "type": "choice"
+        },
+        "observable": {
+          "criteria": {
+            "no": "Only a subjective quality, an undefined label, or an unrecorded approval is offered.",
+            "unclear": "An observation is named but it would not settle compliance.",
+            "yes": "A determinate observation exists."
+          },
+          "instructions": "Step 1: identify what a reviewer would look at to check anchor.statement (a file, path, output stream, value, command result, or behavior). Step 2: if the only thing to check is a subjective quality, an undefined label, or an approval with no named record, there is nothing to look at. Answer whether a determinate observation exists.",
+          "type": "choice"
+        },
+        "scoped": {
+          "criteria": {
+            "no": "Nothing governed can be named.",
+            "unclear": "An area is mentioned but its applicability cannot be determined.",
+            "yes": "The governed area or explicit global set can be named."
+          },
+          "instructions": "Step 1: read anchor.scope and anchor.statement. Step 2: name the activity, component, artifact, or explicit global set they govern. Answer whether Step 2 succeeds, regardless of other defects in the requirement.",
+          "type": "choice"
+        },
+        "self_contained": {
+          "criteria": {
+            "no": "At least one decisive term is flagged.",
+            "unclear": "A term might be flagged but it is unclear whether it decides compliance.",
+            "yes": "No decisive term is flagged."
+          },
+          "instructions": "Step 1: find every term in anchor.statement that decides compliance. Step 2: flag a term only if it is an undefined subjective quality (for example robust), private shorthand with no definition, or a human approval with no identified record. Ordinary technical terms, paths, flags, environment variable names, prohibitions, and explicit conditions are not flagged. Ignore grammar, bundling, fidelity, and scope. Answer whether no term is flagged.",
+          "type": "choice"
+        },
+        "single_constraint": {
+          "criteria": {
+            "no": "Two or more separately enforceable duties remain.",
+            "unclear": "The merge cannot be decided from the statement.",
+            "yes": "One duty remains after merging."
+          },
+          "instructions": "Step 1: list the duties anchor.statement imposes. Step 2: merge duties that share a subject and trigger and would always be checked together, even when they name several outputs or values. Step 3: answer whether one duty remains.",
+          "type": "choice"
+        }
+      }
+    },
+    "C4-baseline-faithful": {
+      "complexity_chars": 3139,
+      "digest": "bdf081e1fda0bc21c9c2518e0e10471d48c5f436592346c328a7f45c4b18e85f",
+      "questions": {
+        "faithful": {
+          "criteria": {
+            "no": "Even after ordinary normalization, the statement requires a new policy, implementation choice, strength, trigger, or outcome.",
+            "unclear": "Ordinary normalization does not settle whether the meaning was preserved.",
+            "yes": "Those normalization rules are sufficient and no substantive requirement was invented."
+          },
+          "instructions": "Is anchor.statement a faithful formal requirement derived from anchor.quote? Preserve meaning, not wording: informal wording may become must or never, print may become emit to stdout or stderr, synonyms may replace the user's words, one directive of a compound quote may become one anchor, and a concrete value, identifier, path, or output channel may be named for something the quote already describes. Do not penalize vagueness here.",
+          "type": "choice"
+        },
+        "observable": {
+          "criteria": {
+            "no": "It supplies only a subjective quality, undefined shorthand, or an approval with no observable record.",
+            "unclear": "Some evidence is named, but the observation needed to settle compliance remains ambiguous.",
+            "yes": "It names evidence or behavior that can be inspected with a determinate outcome."
+          },
+          "instructions": "Does anchor.statement define a checkable behavior or artifact without relying on an undefined label or an approval that has no identified record? Judge only whether the stated outcome can be observed.",
+          "type": "choice"
+        },
+        "scoped": {
+          "criteria": {
+            "no": "No work area or applicability set is identifiable.",
+            "unclear": "An area is named but its applicability cannot be determined.",
+            "yes": "A reviewer can identify the work area where this anchor applies, including an explicit all-items set."
+          },
+          "instructions": "Do anchor.statement and anchor.scope identify the governed activity, component, artifact, or explicit global set, independent of whether the requirement itself is vague or otherwise defective?",
+          "type": "choice"
+        },
+        "self_contained": {
+          "criteria": {
+            "no": "At least one decisive term is an undefined quality or private label, or compliance depends on an approval with no identified record.",
+            "unclear": "A possible outside-context dependency exists but the statement does not show whether it is decisive.",
+            "yes": "None of those outside-context dependencies is needed; ordinary technical terms, concrete prohibitions, lists, and explicit input/action/outcome conditions are sufficient."
+          },
+          "instructions": "Is anchor.statement independently understandable and applicable without any of these disqualifiers: an undefined subjective quality (for example robust), private shorthand, or a human approval that has no identified recorded artifact? Ignore grammar, bundling, fidelity, and scope.",
+          "type": "choice"
+        },
+        "single_constraint": {
+          "criteria": {
+            "no": "At least two independently enforceable duties are joined in the statement.",
+            "unclear": "The statement leaves independence of its duties ambiguous.",
+            "yes": "All details enforce the same invariant and would be evaluated together."
+          },
+          "instructions": "Is anchor.statement one invariant applied to a subject, trigger, and possibly several output surfaces? Do not count the number of nouns or listed artifacts; count independently enforceable duties.",
+          "type": "choice"
+        }
+      }
+    },
+    "C5-minimal": {
+      "complexity_chars": 1859,
+      "digest": "c14bdf4c3a9a137c029759f494709e5312e468aff28a73fe49de52b2870621f8",
+      "questions": {
+        "faithful": {
+          "criteria": {
+            "no": "A policy, algorithm, strength, trigger, or outcome was added.",
+            "unclear": "Cannot tell.",
+            "yes": "Meaning kept; nothing invented."
+          },
+          "instructions": "Does anchor.statement keep anchor.quote's meaning without adding a requirement? Changes of wording, strength words like must, output channel names, concrete values for described things, and choosing one directive of several are allowed. Ignore vagueness.",
+          "type": "choice"
+        },
+        "observable": {
+          "criteria": {
+            "no": "No concrete check exists.",
+            "unclear": "A check is suggested but would not settle compliance.",
+            "yes": "Yes, a concrete check exists."
+          },
+          "instructions": "Can compliance with anchor.statement be checked by inspecting a concrete artifact, output, or behavior? Subjective qualities, undefined labels, and unrecorded approvals cannot be inspected.",
+          "type": "choice"
+        },
+        "scoped": {
+          "criteria": {
+            "no": "No area is identifiable.",
+            "unclear": "An area is named but its reach is unclear.",
+            "yes": "The area is identifiable."
+          },
+          "instructions": "Do anchor.statement and anchor.scope identify where the requirement applies (an activity, component, artifact, or explicit global set)? Ignore other defects.",
+          "type": "choice"
+        },
+        "self_contained": {
+          "criteria": {
+            "no": "A disqualifier decides compliance.",
+            "unclear": "A possible disqualifier of uncertain weight.",
+            "yes": "No disqualifier."
+          },
+          "instructions": "Is anchor.statement applicable without private context? Disqualified only by an undefined subjective quality, undefined private shorthand, or an approval with no identified record. Ignore grammar, bundling, fidelity, and scope.",
+          "type": "choice"
+        },
+        "single_constraint": {
+          "criteria": {
+            "no": "Two or more separable duties.",
+            "unclear": "Cannot tell.",
+            "yes": "Exactly one duty."
+          },
+          "instructions": "Does anchor.statement impose exactly one independently enforceable duty? Several outputs of one duty count once.",
+          "type": "choice"
+        }
+      }
+    },
+    "C6-negative-first": {
+      "complexity_chars": 3013,
+      "digest": "a45b13d195bfa2f607a28ebfc2e0b6849e394dad874838e8b38704c94f7d31ea",
+      "questions": {
+        "faithful": {
+          "criteria": {
+            "no": "At least one addition beyond allowed normalization.",
+            "unclear": "Whether a difference is an addition cannot be decided.",
+            "yes": "No addition beyond allowed normalization."
+          },
+          "instructions": "Look for anything anchor.statement requires that anchor.quote does not: a new policy, algorithm, strength, threshold, trigger, or outcome. Allowed normalization: informal wording may become must or never, print may become emit to stdout or stderr, synonyms may replace the user's words, one directive of a compound quote may become one anchor, and a concrete value, identifier, path, or output channel may be named for something the quote already describes. Vagueness is not an addition. Is the statement free of additions?",
+          "type": "choice"
+        },
+        "observable": {
+          "criteria": {
+            "no": "The outcome is only a subjective quality, an undefined label, or an unrecorded approval.",
+            "unclear": "A concrete thing is named but whether it settles compliance is ambiguous.",
+            "yes": "None of those is the whole outcome and a concrete artifact or behavior is named."
+          },
+          "instructions": "Look for what would make anchor.statement uncheckable: the outcome is only a subjective quality (for example robust), an undefined label or code, or an approval with no identified record. If none of these is the whole outcome, is a concrete artifact or behavior named that a reviewer can inspect?",
+          "type": "choice"
+        },
+        "scoped": {
+          "criteria": {
+            "no": "The governed area is unknown.",
+            "unclear": "An area is named but its applicability cannot be determined.",
+            "yes": "The governed area is identifiable."
+          },
+          "instructions": "Look for whether anchor.statement and anchor.scope leave the governed area unknown. An explicit all-items set counts as an area. Other defects in the requirement do not matter here. Is the governed activity, component, artifact, or global set identifiable?",
+          "type": "choice"
+        },
+        "self_contained": {
+          "criteria": {
+            "no": "At least one such term decides compliance.",
+            "unclear": "A possible such term is present but its weight is unclear.",
+            "yes": "No such term is present."
+          },
+          "instructions": "Look for a decisive term in anchor.statement that needs outside context: an undefined subjective quality (for example robust), private shorthand with no definition, or a human approval with no identified record. Ordinary technical terms, paths, flags, environment variable names, prohibitions, and explicit conditions need no outside context. Ignore grammar, bundling, fidelity, and scope. Is the statement free of such terms?",
+          "type": "choice"
+        },
+        "single_constraint": {
+          "criteria": {
+            "no": "A second, separately enforceable duty exists.",
+            "unclear": "Whether a part is a second duty cannot be decided.",
+            "yes": "No second duty exists."
+          },
+          "instructions": "Look for a second duty in anchor.statement: an obligation on a different subject, or a second obligation on the same subject that could be met while the first is broken. Listing several outputs, surfaces, or values for one obligation is not a second duty. Is the statement free of a second duty?",
+          "type": "choice"
+        }
+      }
+    }
+  },
+  "pool_sha256": "d8829e18852696ff7df22a3c21b19b39d5bf63f39f34b94a85447358f21a6757",
+  "round": 1,
+  "schema": "anchor-tuning/testability-candidate-pool/1"
+}

@@ -1,0 +1,173 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261019T000256Z-atm-bj-4",
+  "gate": "plan",
+  "created_at": "2026-10-19T00:02:56+00:00",
+  "anchors_path": "docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "atm-bj-4",
+    "title": "",
+    "source": "/tmp/atm-bj-4-plan-item.txt",
+    "chars": 11571,
+    "truncated": false,
+    "chars_before_reduction": 11571,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-084",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "An LLM call failure may be retried three times before the slot reports failure.",
+      "quote": "There are occasionally LLM call fails during heavy traffic times which can be retried 3x before saying fail.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "anchor_version": 2,
+      "deterministic_check": "With a controlled client returning retryable failures, assert four total attempts before slot failure.",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.96,
+            "no": 0.04,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.8,
+          "probabilities": {
+            "yes": 0.09,
+            "no": 0.87,
+            "unclear": 0.04
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.71,
+          "probabilities": {
+            "yes": 0.8099999999999999,
+            "no": 0.18,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.71,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 4008,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 11571,
+      "item_shortened": false,
+      "request_bytes": 14510
+    },
+    {
+      "anchor_id": "ANC-085",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The runs page severity table must show the LLM failure reason and use an icon distinct from a JEV not-done verdict for a TypeSafe API failure.",
+      "quote": "Make sure that LLM failure reason shows up in severity table in tui AND the fail icon for typesafe API issue is distinctly different from jev answered 'all work NOT done'.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "anchor_version": 2,
+      "deterministic_check": "Render an API failure and a JEV not-done verdict and assert the reason is visible and their icons differ.",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4023,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 11571,
+      "item_shortened": false,
+      "request_bytes": 14572
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1,
+      "satisfied": 1
+    },
+    "failing": [
+      "ANC-084"
+    ],
+    "leaning_counts": {
+      "contradicted": 1,
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

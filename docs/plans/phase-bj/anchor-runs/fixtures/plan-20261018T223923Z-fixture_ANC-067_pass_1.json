@@ -1,0 +1,101 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T223923Z-fixture_ANC-067_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T22:39:23+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-067:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 200,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-067",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A stack bead under the phase epic must hold the entire stack (ordered layers with branch, PR, head, base, linked) as the only record of layer order; sanity-stack and the lead must claim it before any stack write and release it after; when GraphQL is back the subagent links every layer recorded unlinked; the bead closes when the stack lands.",
+      "quote": "There needs to be local ledger the agent writes, which would be the phase bead if I understand properly.  entire stack would land in the phase bead.  |  One other responsibility of the subagent would be if graphql was out, but we can use not, it would stack ALL skipped layers.  |  On a side note, lead should probably coordinate w/ this agent as well when stacking work needs to be done.  this makes me think perhaps we need a stack-lock bead (child of phase epic).  stack-lock would be claimed before updating stack and returned to open when stack was complete.  (i believe using a bd as a lock is a known pattern.  stack-lock bead would represent a single stack, and woudl be closed when stack was merged.)",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md)",
+      "anchor_version": 2,
+      "deterministic_check": "bd show <stack bead> --json after two links shows layers in link order; a link attempted without the claim is absent from the procedures; a lean-mode layer shows linked false and the next full-mode spawn links it first",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.97,
+            "no": 0.02,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.86,
+          "probabilities": {
+            "yes": 0.08,
+            "no": 0.91,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.86,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1100,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 200,
+      "item_shortened": false,
+      "request_bytes": 3421
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

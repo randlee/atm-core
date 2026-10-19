@@ -1,0 +1,180 @@
+{
+ "anchor_id": "ANC-055",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "f612975b4894eaf00f42f7080f14c6d9269f58f20e327d1dbf8afee6d374c888",
+ "anchor_scope": "the dev and fix roles never call atm task close completed; the sanity role does, on PASS, for the checked bead's task",
+ "anchor_statement": "The ATM task of a dev or fix bead must stay open after the dev's close hook runs and must be closed only by the sanity close hook on PASS, as the lead; the dev waits for that close or for the sanity-fail message and starts no other task meanwhile.",
+ "anchor_version": 3,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-055-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "After the dev role runs, atm task list still shows the dev task active; the sanity role on PASS closes it as the lead and the dev's next queued task starts.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-055-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture: the dev role closes its own task and starts the next task before sanity.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The dev role closes the dev's ATM task with dev-complete.md.j2 and the dev starts its next queued task before sanity has run.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-055-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase of every clause.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The dev and fix roles of atm-task-close.py never run atm task close; the sanity role closes the checked bead's ATM task, with the lead's identity, only on PASS, and until then the dev stays on that task and starts nothing else.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-055-probe-silent",
+   "probe": "silence",
+   "rationale": "The dev close hook is in scope; closing the bead says nothing about the ATM task, and silence is not conflict.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The dev role verifies the PR is open on pr_target, the head is pushed and the branch is rebased, then runs bd close on the dev bead.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "topical",
+   "item_id": "ANC-055-probe-topical",
+   "probe": "topical_only",
+   "rationale": "Topic only.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "This item touches the lifecycle of the dev's ATM task; the details are worked out in a later sprint.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_fail_closes",
+   "item_id": "ANC-055-probe-conflict_fail_closes",
+   "probe": "conflict",
+   "rationale": "The task may be closed only by the sanity hook on PASS.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "On a sanity FAIL the sanity role closes the dev's ATM task and the dev is given a new task for the fix.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_dev_next",
+   "item_id": "ANC-055-probe-conflict_dev_next",
+   "probe": "conflict",
+   "rationale": "The dev must wait and start no other task meanwhile.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "While sanity checks its work, the dev starts its next queued task.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "boundary_fix",
+   "item_id": "ANC-055-probe-boundary_fix",
+   "probe": "boundary",
+   "rationale": "Boundary: the statement covers fix beads as well as dev beads.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "For a fix bead the fix role leaves the fixer's ATM task open; only the sanity close hook closes it, on PASS and as the lead, and the fixer waits for that close or for the sanity-fail message before anything else.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-055-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated console work.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The console shows the sol icon next to every Codex agent of model sol in the agent list.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

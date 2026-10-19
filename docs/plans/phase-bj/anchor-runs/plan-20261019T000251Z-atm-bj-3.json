@@ -1,0 +1,263 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261019T000251Z-atm-bj-3",
+  "gate": "plan",
+  "created_at": "2026-10-19T00:02:51+00:00",
+  "anchors_path": "docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "atm-bj-3",
+    "title": "",
+    "source": "/tmp/atm-bj-3-plan-item.txt",
+    "chars": 10806,
+    "truncated": false,
+    "chars_before_reduction": 10806,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-084",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "An LLM call failure may be retried three times before the slot reports failure.",
+      "quote": "There are occasionally LLM call fails during heavy traffic times which can be retried 3x before saying fail.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "anchor_version": 2,
+      "deterministic_check": "With a controlled client returning retryable failures, assert four total attempts before slot failure.",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.96,
+            "no": 0.04,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.23,
+          "probabilities": {
+            "yes": 0.49,
+            "no": 0.45,
+            "unclear": 0.06
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.4,
+          "probabilities": {
+            "yes": 0.6,
+            "no": 0.39,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.23,
+      "explanation": "Jev was not confident (min confidence 0.23); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 3740,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.23
+        },
+        {
+          "ask": "first",
+          "role": "conflict",
+          "question_id": "contradicted",
+          "choice": "yes",
+          "confidence": 0.4
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 10806,
+      "item_shortened": false,
+      "request_bytes": 13741
+    },
+    {
+      "anchor_id": "ANC-085",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The runs page severity table must show the LLM failure reason and use an icon distinct from a JEV not-done verdict for a TypeSafe API failure.",
+      "quote": "Make sure that LLM failure reason shows up in severity table in tui AND the fail icon for typesafe API issue is distinctly different from jev answered 'all work NOT done'.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "anchor_version": 2,
+      "deterministic_check": "Render an API failure and a JEV not-done verdict and assert the reason is visible and their icons differ.",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.46,
+          "probabilities": {
+            "yes": 0.35,
+            "no": 0.64,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.74,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.83,
+            "unclear": 0.13
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.06,
+            "no": 0.93,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.46,
+      "explanation": "Jev was not confident (min confidence 0.46); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 3755,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.46
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 10806,
+      "item_shortened": false,
+      "request_bytes": 13803
+    },
+    {
+      "anchor_id": "ANC-086",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The sanity and refusal flows must not use outage class beads or require refusal citations.",
+      "quote": "This `Class-bead append and citation on every refusal, and the checker-defect side channel.` also sounds like ceremony I did not know about or approve.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "anchor_version": 2,
+      "deterministic_check": "Inspect the sanity and refusal flows and assert no outage class bead is opened and no refusal citation is required.",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.02,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.95,
+            "no": 0.04,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.96,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.94,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 3738,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 10806,
+      "item_shortened": false,
+      "request_bytes": 13751
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 2,
+      "satisfied": 1
+    },
+    "failing": [
+      "ANC-084",
+      "ANC-085"
+    ],
+    "leaning_counts": {
+      "contradicted": 1,
+      "not_applicable": 1,
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

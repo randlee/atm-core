@@ -1,0 +1,162 @@
+{
+ "anchor_id": "ANC-066",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "166f7c1dd93557d2918ff9ffd965cb27bc5149c6e4c20d280f36471b7991b121",
+ "anchor_scope": "agents/sanity-stack.md, agents/dev-sanity.md PASS handling",
+ "anchor_statement": "dev-sanity must spawn the sanity-stack subagent for the link whenever more than one sanity task is open (or its own inline link failed), one spawn at a time in verdict order; each spawn handles exactly one next-top layer and the close procedure runs only after it returns stacked.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-066-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "With three sanity tasks open dev-sanity spawns sanity-stack for the first PASS, waits for stacked, then spawns it for the next; each spawn links one layer.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-066-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "dev-sanity spawns one sanity-stack per PASS in parallel, or one spawn links several layers at once.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-066-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase of every clause.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "If two or more sanity tasks are open, or its own link attempt failed, dev-sanity hands the link to the sanity-stack subagent: it spawns one at a time in the order the verdicts arrived, each spawn links a single next-top layer, and dev-sanity runs the close procedure only after the spawn returns stacked.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-066-probe-silent",
+   "probe": "silence",
+   "rationale": "In-scope subagent input, silent about when and how it is spawned.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "sanity-stack takes the checked bead id and the budget in its fenced JSON input.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "exception_single",
+   "item_id": "ANC-066-probe-exception_single",
+   "probe": "exception",
+   "rationale": "Exception: the spawn rule applies only with more than one open task or a failed inline link; this item is outside that condition and does not conflict.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "With only one sanity task open and no failed link, dev-sanity links the passed layer inline itself.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_close_early",
+   "item_id": "ANC-066-probe-conflict_close_early",
+   "probe": "conflict",
+   "rationale": "The close must wait for stacked.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "dev-sanity runs the close procedure as soon as it has spawned sanity-stack, without waiting for its result.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_parallel",
+   "item_id": "ANC-066-probe-conflict_parallel",
+   "probe": "conflict",
+   "rationale": "Spawns must be sequential.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "dev-sanity spawns a sanity-stack subagent for every PASS at once so the layers link in parallel.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-066-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Every time atm-bd prints for a person is rendered in 24-hour local time.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

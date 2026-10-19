@@ -1,0 +1,194 @@
+{
+  "success": true,
+  "data": {
+    "threshold": 0.6,
+    "dry_run": false,
+    "fixture": false,
+    "path": "docs/plans/phase-bj/anchors.json",
+    "anchors": [
+      {
+        "id": "ANC-012",
+        "statement": "The atm-bd skill subcommand given --latest must install the skills from the latest published release of the atm-bd-orchestration repository.",
+        "quote": "atm-bd --latest (latest on repo)",
+        "scope": "adds or changes the --latest option",
+        "verdict": "inconclusive",
+        "failing": [
+          "observable",
+          "faithful",
+          "self_contained"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.94,
+            "probabilities": {
+              "no": 0.04,
+              "unclear": 0,
+              "yes": 0.96
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.51,
+            "probabilities": {
+              "no": 0.1,
+              "unclear": 0.23,
+              "yes": 0.67
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.41,
+            "probabilities": {
+              "no": 0.37,
+              "unclear": 0.02,
+              "yes": 0.61
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.95,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.02,
+              "yes": 0.97
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.62,
+            "probabilities": {
+              "no": 0.16,
+              "unclear": 0.09,
+              "yes": 0.75
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.95,
+            "probabilities": {
+              "no": 0.03,
+              "unclear": 0,
+              "yes": 0.97
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.46,
+            "probabilities": {
+              "no": 0.11,
+              "unclear": 0.25,
+              "yes": 0.64
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.43,
+            "probabilities": {
+              "no": 0.35,
+              "unclear": 0.03,
+              "yes": 0.62
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.94,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.03,
+              "yes": 0.96
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.52,
+            "probabilities": {
+              "no": 0.21,
+              "unclear": 0.11,
+              "yes": 0.68
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "observable",
+            "faithful",
+            "self_contained"
+          ],
+          "low_confidence": [
+            "observable",
+            "faithful",
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.94,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.46,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "yes",
+              "confidence": 0.41,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.94,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.52,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "needs_work": [
+      "ANC-012"
+    ],
+    "pass": false
+  },
+  "error": null
+}

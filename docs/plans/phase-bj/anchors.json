@@ -201,6 +201,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-19T00:45:23+00:00",
+          "event": "excluded",
+          "item": "atm-bj-5",
+          "reason": "PyPI publication is phase-end work; bj-5 adds manifest and installation verification, not publication.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-5",
+          "reason": "PyPI publication is phase-end work; bj-5 adds manifest and installation verification, not publication."
         }
       ]
     },
@@ -254,6 +267,63 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:46:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T01:47:08+00:00",
+          "event": "excluded",
+          "item": "atm-bj-5",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships"
+        },
+        {
+          "item": "atm-bj-1",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships"
+        },
+        {
+          "item": "atm-bj-5",
+          "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships"
         }
       ]
     },
@@ -476,6 +546,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the atm-bd skill install subcommand is not touched by bj-2",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "the atm-bd skill install subcommand is not touched by bj-2"
         }
       ]
     },
@@ -528,25 +611,25 @@
       "id": "ANC-012",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The atm-bd skill subcommand given --latest must install the skills from the head of the main branch of the atm-bd-orchestration repository.",
+      "statement": "The atm-bd skill subcommand given --latest must install the skills from the latest published release of the atm-bd-orchestration repository.",
       "quote": "atm-bd --latest (latest on repo)",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-16",
       "context": "planning session 2026-10-17: skill sources redesigned, agreed (yes)",
-      "summary": "skill --latest installs main head",
+      "summary": "skill --latest installs the latest published release",
       "scope": "adds or changes the --latest option",
-      "deterministic_check": "run atm-bd skill --latest and diff the installed files against git show origin/main",
+      "deterministic_check": "Run atm-bd skill --latest and diff the installed files against the files of the newest published release tag.",
       "fixtures": {
         "pass": [
-          "atm-bd skill --latest installs the skills from the head of the main branch of atm-bd-orchestration."
+          "atm-bd skill --latest installs the skills from the newest published release of atm-bd-orchestration."
         ],
         "fail": [
-          "atm-bd skill --latest installs the skills bundled in the installed package."
+          "atm-bd skill --latest installs the unreleased head of the main branch instead of the latest published release."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -566,6 +649,20 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-19T01:02:22+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "The atm-bd skill subcommand given --latest must install the skills from the head of the main branch of the atm-bd-orchestration repository.",
+          "approved_by": "Rand",
+          "approval_quote": "yes",
+          "approval_context": "Rand, 2026-10-19, before approving: 'a) a skill has a manifest when it is published. b) you can specify the version of skill you install on disk. <-- these are not in conflict'"
         }
       ]
     },
@@ -1043,15 +1140,15 @@
       "id": "ANC-022",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke the atm-bd-console command; the directory apps/atm-bd-console and the module atm_bd_console are not that command.",
-      "quote": "jes drop atm-bd-console",
+      "statement": "The atm-bd-console command must be replaced by the atm-bd console subcommand.",
+      "quote": "jes drop atm-bd-console\n'atm-bd-console' is to be removed/replaced w/ atm-bd console\natm-bd console would logically be in atm-bd-console module",
       "kind": "prohibition",
       "stated_by": "Rand",
       "stated_at": "2026-10-16",
-      "context": "planning session 2026-10-17: answer to whether to drop the alias",
+      "context": "Rand 2026-10-19 ANC-022 ruling",
       "summary": "atm-bd-console is dropped, not aliased",
       "scope": "edits the command name, install scripts or any caller of the console",
-      "deterministic_check": "after uv tool install, command -v atm-bd-console finds nothing; rg atm-bd-console over scripts, docs, tests and workflows finds no invocation",
+      "deterministic_check": "command -v atm-bd-console fails, atm-bd console runs, rg finds no atm-bd-console invocation outside apps/atm-bd-console and atm_bd_console",
       "fixtures": {
         "pass": [
           "After the sprint, atm-bd-console is not installed and no script, document, test or workflow in the repository invokes it."
@@ -1060,8 +1157,31 @@
           "After the sprint, atm-bd-console remains as an alias that bead-queues still calls."
         ]
       },
-      "question_overrides": {},
-      "version": 3,
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "relevant": {
+              "type": "choice",
+              "instructions": "Does `item.text` touch any of the three things listed in `anchor.scope`: (1) the name of a command or installed entry point; (2) an install script, installer or install path; (3) a script, document, test or workflow that starts, runs or describes the console? Judge whether the item touches at least one of them. One deliverable or step anywhere in the item is enough, even when the rest of the item is about other work; an item whose only such step edits an install script, such as install.py, touches (2) even if it never mentions the console. Do not judge whether the item obeys `anchor.statement`.",
+              "criteria": {
+                "yes": "The item touches a command or entry-point name, an install script, installer or install path, or a script, document, test or workflow that starts, runs or describes the console.",
+                "no": "The item touches none of the three: it changes something else, such as a message template, a data model or a review rule.",
+                "unclear": "The item text is too vague to tell whether it touches any of the three."
+              }
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item text does not keep, add or run a hyphenated atm-bd-console command: it is silent about it, removes it, or names only the `atm-bd console` subcommand (with a space), the directory apps/atm-bd-console or the module atm_bd_console.",
+                "unclear": "The item text refers to a console command but it is not possible to tell whether it means the hyphenated atm-bd-console command or the `atm-bd console` subcommand.",
+                "yes": "The item text keeps, adds, aliases or runs a command named atm-bd-console (hyphenated), for example as an installed entry point, a console script, a compatibility alias, or a command line in a script, document, test or workflow."
+              },
+              "instructions": "`anchor.statement` forbids one thing: a command named atm-bd-console (one hyphenated word) existing after installation, or any script, document, test or workflow running that hyphenated command. Decide whether `item.text` keeps, adds, aliases or runs that hyphenated atm-bd-console command. `atm-bd console`, written with a space, is a different command: the `console` subcommand of the `atm-bd` command; running, documenting or extending it is not a conflict. The directory apps/atm-bd-console and the Python module atm_bd_console are not the command either. Silence about atm-bd-console is not a conflict. Judge conflict only.",
+              "type": "choice"
+            }
+          }
+        }
+      },
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1096,12 +1216,37 @@
           "item": "atm-bi-5.group-anc-f1",
           "reason": "touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow",
           "replaced": false
+        },
+        {
+          "at": "2026-10-19T01:27:51+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "quote",
+            "context",
+            "deterministic_check"
+          ],
+          "previous_statement": "After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke the atm-bd-console command; the directory apps/atm-bd-console and the module atm_bd_console are not that command.",
+          "previous_quote": "jes drop atm-bd-console",
+          "previous_context": "planning session 2026-10-17: answer to whether to drop the alias",
+          "previous_deterministic_check": "after uv tool install, command -v atm-bd-console finds nothing; rg atm-bd-console over scripts, docs, tests and workflows finds no invocation"
+        },
+        {
+          "at": "2026-10-19T01:53:44+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "bj-2 ships the stack bead schema, the pour metadata and validate-plan; it does not name, install, edit the installer for, or run any console command",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bi-5.group-anc-f1",
           "reason": "touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "bj-2 ships the stack bead schema, the pour metadata and validate-plan; it does not name, install, edit the installer for, or run any console command"
         }
       ]
     },
@@ -1456,6 +1601,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:31:19+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "bj-1 edits the close hook script and its templates and renders no bead, sprint, PR or CI state in the console; ANC-028 scope is console rendering (relevance no at 0.56 and 0.79, leaning not_applicable, same applicability-noise class as the other phase-bi exclusions)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
+        },
+        {
+          "item": "atm-bj-1",
+          "reason": "bj-1 edits the close hook script and its templates and renders no bead, sprint, PR or CI state in the console; ANC-028 scope is console rendering (relevance no at 0.56 and 0.79, leaning not_applicable, same applicability-noise class as the other phase-bi exclusions)"
         }
       ]
     },
@@ -1687,6 +1856,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T23:48:09+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "BJ-1 does not own console PR status-table rendering; it changes only the close hook and its templates.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "BJ-1 does not own console PR status-table rendering; it changes only the close hook and its templates."
         }
       ]
     },
@@ -1732,6 +1914,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -1829,6 +2024,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -1927,6 +2135,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -2053,6 +2274,19 @@
             "fixtures"
           ],
           "previous_statement": "The emitted markdown must match the spec's form byte for byte: header | sprint | state | ci | pr |, alignment row |---|:-:|:-:|---|, one row per sprint with a glyph in each icon slot, and two emissions over the same snapshot must produce identical bytes."
+        },
+        {
+          "at": "2026-10-18T22:51:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table and its markdown export are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table and its markdown export are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -2098,6 +2332,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -2188,6 +2435,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "atm-bd's sender address and logging are not touched by bj-4",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "atm-bd's sender address and logging are not touched by bj-4"
         }
       ]
     },
@@ -2233,6 +2515,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:51:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "atm-bd's sender address is not touched by bj-4; the lead identity on dispatch's assign subprocess is ANC-051's and unchanged",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "atm-bd's sender address is not touched by bj-4; the lead identity on dispatch's assign subprocess is ANC-051's and unchanged"
         }
       ]
     },
@@ -2368,6 +2685,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:46:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd's log line format is atm-bd tool code; bj-3 edits agent prompts only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:49:24+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "BJ-2 plans bead schemas, formula producers and validation; it does not write or change the atm-bd observability event logger.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd's log line format is atm-bd tool code; bj-3 edits agent prompts only"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "BJ-2 plans bead schemas, formula producers and validation; it does not write or change the atm-bd observability event logger."
         }
       ]
     },
@@ -2413,6 +2765,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "atm-bd's sender address and logging are not touched by bj-4",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:48:09+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "BJ-1 does not own cached console error logging or PR display; its scope is the close hook.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "atm-bd's sender address and logging are not touched by bj-4"
+        },
+        {
+          "item": "atm-bj-1",
+          "reason": "BJ-1 does not own cached console error logging or PR display; its scope is the close hook."
         }
       ]
     },
@@ -2503,6 +2890,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:47:48+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd's GitHub quota read is atm-bd tool code; bj-3 edits agent prompts only",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd's GitHub quota read is atm-bd tool code; bj-3 edits agent prompts only"
         }
       ]
     },
@@ -2548,6 +2959,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:56+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-4",
+          "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
         }
       ]
     },
@@ -2572,7 +2996,39 @@
           "The hook assigns the sanity bead as the dev, or atm-bd assigns it as atm-bd@tool, or the lead identity comes from the process environment instead of the phase file."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not state the directive: it is silent about it, names only the topic, or describes a different approach.",
+                "unclear": "The item states part of the directive's content but it cannot be determined whether it plans the directive itself.",
+                "yes": "The item says the sanity or qa assignment runs as the phase lead read from .atm-bd/phase-<x>.toml, set on that assign call only."
+              },
+              "instructions": "`anchor.statement` requires that every `atm task assign` that the close hook or atm-bd issues for a sanity or qa bead runs as the phase lead named in .atm-bd/phase-<x>.toml, set on that one subprocess, while atm-bd's notices keep the sender atm-bd@tool. Does `item.text` state this directive's specific content as a step, constraint or decision? An item that only names the topic, or that runs the assignment or the notices under another identity, or takes the lead from the process environment, does not state it. Judge presence of the directive only, not whether the item conflicts with it.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+                "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+                "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+              },
+              "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+                "unclear": "The item text is too vague to tell what part of the system it touches.",
+                "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -2593,6 +3049,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:49:24+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "BJ-2 plans bead formula and validation behavior only; the phase-lead identity of close-hook and dispatch assignments is implemented by BJ-1 and BJ-4.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "BJ-2 plans bead formula and validation behavior only; the phase-lead identity of close-hook and dispatch assignments is implemented by BJ-1 and BJ-4."
         }
       ]
     },
@@ -2601,7 +3081,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "When a dev or fix bead closes, the group's sanity bead must be assigned to the dev-sanity member with the sanity template and vars without any lead action: by the dev's close hook in the same shell command as bd close, and by atm-bd when bd ready lists the sanity bead with no ATM task.",
-      "quote": "the first issue to solve is mechanical.  when dev or fix bd is closed, sanity 'bd ready' is true.  the atm-bd cron/console will 'atm task assign <bead-id> <sanity-agent> --template <template> --args <vars> automatically.  This assignment must be done --as <phase-lead>",
+      "quote": "the first issue to solve is mechanical.  when dev or fix bd is closed, sanity 'bd ready' is true.  the atm-bd cron/console will 'atm task assign <bead-id> <sanity-agent> --template <template> --args <vars> automatically.  This assignment must be done --as <phase-lead>\n\"the atm-task-close hook would immediately call 'atm task assign' and 'bd close'\" (from ANC-061's quote)\nyes, this is an intentional race condition.  In reality it is more of a backup plan",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
@@ -2617,7 +3097,39 @@
           "The lead reads the dev-complete report and runs atm task assign for the sanity bead by hand, or atm-bd only logs a notice that the sanity bead is ready."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item contains no planned sanity assignment by the close hook or by atm-bd: it is about something else, only names the topic or a goal, or describes only notices, reports, or lead actions.",
+                "unclear": "The item describes some automatic sanity assignment but the text is too vague to tell who performs it or when.",
+                "yes": "Both the close-hook assignment in the same command as bd close and the atm-bd assignment of ready sanity beads without a task appear in the item as planned behaviour, in any wording."
+              },
+              "instructions": "Check `item.text` for the specific mechanism that `anchor.statement` requires. Two things must be planned in the item: a close hook or close script that, when a dev or fix bead closes, runs the sanity bead's task assignment in the same shell command as bd close; and atm-bd assigning the sanity bead on its own when bd ready lists it and it has no ATM task. A statement of intent such as 'sanity should be automated' or 'smoother hand-off' is not the mechanism. A notice, report, or message is not an assignment. Judge whether the mechanism is present, not whether anything conflicts with it.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item does not commit to a differing approach; it is silent, consistent with the anchor, or about something else.",
+                "unclear": "The item hints at a different approach but does not state it clearly enough to tell.",
+                "yes": "The item explicitly commits to one of these differing approaches."
+              },
+              "instructions": "Does `item.text` commit to an approach for sanity assignment that differs from the one `anchor.statement` requires? Look for an explicit statement in the item that a person (for example the lead) performs or triggers a sanity assignment, that the close hook does not assign, that atm-bd does not assign ready sanity beads, that only a notice is sent, or that some kind of bead (dev or fix) is left out. A script or hook that runs the assignment under the phase lead's identity (for example `atm task assign ... --as <phase lead>`) is not a lead action; a lead action is the lead personally performing, approving, or triggering the step. An item that does not mention sanity assignment at all, or mentions it only as a goal, does not differ from the anchor. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+                "unclear": "The item text is too vague to tell what part of the system it touches.",
+                "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -2638,6 +3150,50 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:31:19+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "bj-4 plans only the atm-bd dispatch read order of ANC-061; the close-hook assignment path of ANC-052 is bj-1, which satisfies ANC-052, and the sealed ANC-052 addressed question requires both paths in one item (the two-path reading is the ANC-052 clarity item for Rand)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:23:08+00:00",
+          "event": "updated",
+          "fields": [
+            "quote"
+          ],
+          "reason": "drift finding 4: the close-hook path came from ANC-061's quote; Rand 2026-10-18 confirmed the hook assigns first and atm-bd is the backup",
+          "approved_by": "Rand"
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "bj-4 plans only the atm-bd dispatch read order of ANC-061; the close-hook assignment path of ANC-052 is bj-1, which satisfies ANC-052, and the sealed ANC-052 addressed question requires both paths in one item (the two-path reading is the ANC-052 clarity item for Rand)"
         }
       ]
     },
@@ -2662,7 +3218,39 @@
           "On PASS the hook closes the sanity bead and the lead dispatches the qa bead on the next bd ready pass."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not contain that hook step: QA assignment is not mentioned, is left to the lead or another component, or runs under a non-lead identity.",
+                "unclear": "The item refers to a QA assignment after sanity but it cannot be told who performs it or as whom.",
+                "yes": "The item has the hook, on sanity PASS, run the qa assignment to quality-mgr with the qa template and vars under the phase lead identity (`--as <phase-lead>`, or the lead identity on the subprocess)."
+              },
+              "instructions": "Read `anchor.statement`: on a sanity PASS the close hook must hand the group's qa bead to quality-mgr itself, as the phase lead, with the qa template and vars. Is that hand-off written into `item.text` as something the hook does? An item that leaves the QA assignment to a person, to a later dispatch pass, or to another identity does not contain it; an item that only says QA follows does not contain it. Judge presence only.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item keeps the assignment with the hook or its sanity role under the lead identity, or does not mention who assigns the qa bead, or only adds a report to the lead.",
+                "unclear": "The item mentions the QA assignment but it cannot be told whether the hook or the lead identity is kept.",
+                "yes": "The item has the lead, a person, or another component assign the qa bead after sanity passes, says the hook does not assign it, or has the assignment made under an identity other than the phase lead."
+              },
+              "instructions": "Does `item.text` take the QA assignment after a sanity PASS away from the close hook, or away from the phase lead's identity? `anchor.statement` requires the hook (its sanity role in `atm-task-close.py`) to assign the qa bead to quality-mgr as the phase lead, with no lead action. Silence about the QA assignment is not a conflict; a report to the lead is not a conflict. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item covers only something else: the dev or fix close, assigning the sanity bead, a sanity FAIL, or an unrelated area of the system.",
+                "unclear": "The item mentions the close hook, sanity, or QA, but it cannot be told whether it concerns what happens after a sanity PASS.",
+                "yes": "The item describes the sanity role of the close hook on PASS, or says who or what assigns the qa bead or starts QA after sanity passes."
+              },
+              "instructions": "Does `item.text` deal with the moment a sanity bead closes with PASS, or with handing the qa bead to quality-mgr after that PASS? Judge subject matter only, not whether the item follows `anchor.statement`.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -2683,6 +3271,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2690,26 +3291,26 @@
       "id": "ANC-054",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "atm-task-close.py must switch on a mandatory --role argument, and for the dev and fix roles must check only that a PR exists on pr_target, that the pushed head is the PR head and that origin/<pr_target> is an ancestor of it; it must not check any other layer of the stack or run lint or tests.",
+      "statement": "For dev and fix roles, task close must check only an open branch PR, pushed/PR head equality, and HEAD descent from the stack top (last layer, else pr_target); it must not check other layers or run lint or tests.",
       "quote": "there should be a switch on role, then depending on role, this will verify that the pr is created, that it is stacked on the layer below (I think this can be determined locally by verifying the base is the previous top of stack).  The checks should be minimal to insure rebase occurred, maintaining the entire stack is NOT dev agents responsibility.  We can not create conditions that it is impossible for the dev agent to complete due to unnecessary python complexity.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
       "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
-      "summary": "close hook: role switch, minimal PR and rebase checks only",
-      "scope": "the check set of atm-task-close.py for the dev and fix roles",
-      "deterministic_check": "the dev-role check list in the script source has exactly the PR-exists, head-equals and ancestor checks; a scratch stack whose lower layer is misaligned still passes a correctly based top layer",
+      "summary": "lead ruling 2026-10-18: current stack top with empty-ledger fallback",
+      "scope": "atm-task-close.py dev/fix admission",
+      "deterministic_check": "Tests verify these three admission checks, the empty-layer fallback, and that no other stack layers, lint, or tests are checked.",
       "fixtures": {
         "pass": [
-          "The dev role checks: PR open on pr_target, HEAD equals origin/<branch> equals the PR head, origin/<pr_target> is an ancestor. Nothing else."
+          "The dev role checks an open branch PR, pushed and PR heads match, and HEAD descends from the last layer or pr_target when no layer exists; it checks no other layer and runs no lint or tests."
         ],
         "fail": [
-          "The dev role also verifies every lower layer's base, runs gh stack view, or reruns the test command before closing."
+          "The dev role requires every stack layer to be coherent or runs a test suite before it can close."
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 6,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2728,6 +3329,67 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:43:05+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "scope",
+            "summary",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "atm-task-close.py must switch on a mandatory --role argument, and for the dev and fix roles must check only that a PR exists on pr_target, that the pushed head is the PR head and that origin/<pr_target> is an ancestor of it; it must not check any other layer of the stack or run lint or tests."
+        },
+        {
+          "at": "2026-10-18T23:43:50+00:00",
+          "event": "updated",
+          "fields": [
+            "summary",
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:14:44+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "scope",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "For dev and fix roles, atm-task-close.py must require --role, verify that an open PR exists for the branch, that the pushed head equals the PR head, and that HEAD descends from the current stack top: the last entry of the stack bead layers, or pr_target when layers is empty; it must not run lint or tests."
+        },
+        {
+          "at": "2026-10-19T00:27:02+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2735,7 +3397,7 @@
       "id": "ANC-055",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The ATM task of a dev or fix bead must stay open after the dev's close hook runs and must be closed only by the sanity close hook on PASS, as the lead; the dev waits for that close or for the sanity-rejected message and starts no other task meanwhile.",
+      "statement": "The ATM task of a dev or fix bead must stay open after the dev's close hook runs and must be closed only by the sanity close hook on PASS, as the lead; the dev waits for that close or for the sanity-fail message and starts no other task meanwhile.",
       "quote": "I would NOT close the atm task until AFTER sanity is green.  This simplifies the dev<->sanity loop.  in the atm-task-close hook for sanity, if sanity pass, THEN atm task is closed (and dev can begin on next task in the queue), sanity task is closed",
       "kind": "directive",
       "stated_by": "Rand",
@@ -2753,7 +3415,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2773,6 +3435,49 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:48:07+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "The ATM task of a dev or fix bead must stay open after the dev's close hook runs and must be closed only by the sanity close hook on PASS, as the lead; the dev waits for that close or for the sanity-rejected message and starts no other task meanwhile."
+        },
+        {
+          "at": "2026-10-18T22:51:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the dev task's open and close lifecycle is the close hook's (bj-1); bj-4 reads runs and dispatches sanity and qa beads only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:48:58+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "BJ-2 ships stack schema, pour and validation only; whether the dev ATM task stays open through sanity is implemented by the BJ-1 close hook.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "the dev task's open and close lifecycle is the close hook's (bj-1); bj-4 reads runs and dispatches sanity and qa beads only"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "BJ-2 ships stack schema, pour and validation only; whether the dev ATM task stays open through sanity is implemented by the BJ-1 close hook."
         }
       ]
     },
@@ -2780,25 +3485,57 @@
       "id": "ANC-056",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "On a sanity FAIL below the round cap, the sanity close hook must reopen the checked bead to its assignee and send that dev the sanity-rejected template naming each undone deliverable, on the dev's still-open task; it must not create finding beads, a new layer or a new task.",
+      "statement": "On a sanity FAIL below the round cap, the sanity close hook must reopen the checked bead to its assignee and send that dev the sanity-fail.xml.j2 template naming each undone deliverable, on the dev's still-open task; it must not create finding beads, a new layer or a new task.",
       "quote": "If sanity fails, dev bead is re-opened and 'atm send <dev-agent> --template <sanity-rejected-template>'",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
       "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
       "summary": "sanity FAIL reopens the bead and sends sanity-rejected",
-      "scope": "atm-task-close.py sanity role on FAIL; templates/sanity-rejected.md.j2; retirement of sanity-create-findings and dev-fix.xml.j2",
-      "deterministic_check": "run the sanity role with verdict FAIL in a scratch repo: the checked bead is open with its assignee, the dev received one sanity-rejected message, bd list --parent <checked bead> is empty, no new ATM task exists",
+      "scope": "atm-task-close.py sanity role on FAIL; templates/sanity-fail.xml.j2; retirement of sanity-create-findings and dev-fix.xml.j2",
+      "deterministic_check": "run the sanity role with verdict FAIL in a scratch repo: the checked bead is open with its assignee, the dev received one sanity-fail message, bd list --parent <checked bead> is empty, no new ATM task exists",
       "fixtures": {
         "pass": [
-          "On FAIL the hook runs bd update <dev bead> --status open --assignee <dev> and atm send <dev> --template sanity-rejected.md.j2 --vars <file>; the dev fixes on the same branch."
+          "On FAIL the hook runs bd update <dev bead> --status open --assignee <dev> and atm send <dev> --template sanity-fail.xml.j2 --vars <file>; the dev fixes on the same branch."
         ],
         "fail": [
           "On FAIL the hook creates a finding child per undone deliverable and the lead assigns dev-fix.xml.j2 on a new layer."
         ]
       },
-      "question_overrides": {},
-      "version": 2,
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not state the directive: it is silent about it, names only the topic, or describes a different approach.",
+                "unclear": "The item states part of the directive's content but it cannot be determined whether it plans the directive itself.",
+                "yes": "The item says that on a sanity FAIL the checked bead is reopened to its assignee and the dev is sent the sanity-fail.xml.j2 message on the open task."
+              },
+              "instructions": "`anchor.statement` requires that on a sanity FAIL below the round cap the sanity close hook reopens the checked bead to its assignee and sends that dev the sanity-fail.xml.j2 template naming each undone deliverable on the dev's still-open task, creating no finding bead, new layer or new task. Does `item.text` state this directive's specific content as a step, constraint or decision? An item that only names the topic, or that creates finding beads, a new layer or a new task instead, does not state it. Judge presence of the directive only, not whether the item conflicts with it.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item is one of the ruled-out cases, including when the item is silent about the directive.",
+                "unclear": "The item is ambiguous enough that it might describe one of the ruled-out cases, but it cannot be determined.",
+                "yes": "The item states a plan, approach or decision that is one of the ruled-out cases."
+              },
+              "instructions": "Does `item.text` plan something that `anchor.statement` rules out? The anchor rules out: creating finding beads or child beads for a sanity FAIL; cutting a new layer or branch for the fix; creating or assigning a new ATM task for the fix; not reopening the checked bead on a FAIL that is below the round cap. These are not a conflict: silence about FAIL handling; escalating to the lead without reopening when a FAIL reaches max_sanity_rounds, because the statement covers only FAILs below the cap; incrementing the round counter. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+                "unclear": "The item text is too vague to tell what part of the system it touches.",
+                "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2818,6 +3555,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:48:07+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "scope",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "On a sanity FAIL below the round cap, the sanity close hook must reopen the checked bead to its assignee and send that dev the sanity-rejected template naming each undone deliverable, on the dev's still-open task; it must not create finding beads, a new layer or a new task."
+        },
+        {
+          "at": "2026-10-18T23:32:28+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "bj-2 plans the stack bead, the pour and validate-plan and does not write the sanity close hook or sanity-fail.xml.j2; the sanity FAIL path of ANC-056 is bj-1 (addressed yes at 0.70 then 0.55 on unchanged text, leaning satisfied, the near-threshold class)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "bj-2 plans the stack bead, the pour and validate-plan and does not write the sanity close hook or sanity-fail.xml.j2; the sanity FAIL path of ANC-056 is bj-1 (addressed yes at 0.70 then 0.55 on unchanged text, leaning satisfied, the near-threshold class)"
         }
       ]
     },
@@ -2825,7 +3597,7 @@
       "id": "ANC-057",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The sanity close hook must count FAIL rounds per sanity bead in metadata.sanity_round and, when the count reaches max_sanity_rounds from the repository configuration (default 5 when unset), must escalate to the phase lead instead of reopening the checked bead.",
+      "statement": "The sanity close hook must count FAIL rounds per sanity bead in metadata.sanity_round and, when the count exceeds max_sanity_rounds from the repository configuration (default 5 when unset), must escalate to team-lead instead of reopening the checked bead.",
       "quote": "sure, we can have sanity keep a counter and when count exceeded escelate to team-lead.  I would default max-sanity to ~5 if not overridden in atm-bd repo git settings.",
       "kind": "directive",
       "stated_by": "Rand",
@@ -2833,17 +3605,16 @@
       "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
       "summary": "sanity round counter with max_sanity_rounds default 5",
       "scope": "atm-task-close.py sanity role FAIL branch; .claude/project/atm-bd-orchestration.yaml key max_sanity_rounds rendered from registry.yaml",
-      "deterministic_check": "five FAIL runs in a scratch repo with no setting leave sanity_round at 5, the dev bead closed-not-reopened, and one SANITY.ROUND_CAP send to the lead; a repo value of 2 escalates on the second",
+      "deterministic_check": "six FAIL runs in a scratch repo with no setting leave sanity_round at 6, the dev bead closed-not-reopened on the sixth, and one SANITY.ROUND_CAP send to team-lead; five FAILs reopen the dev bead every time; a repo value of 2 escalates on the third",
       "fixtures": {
         "pass": [
-          "sanity_round goes 1, 2, 3, 4, 5; on the fifth FAIL the hook sends the lead SANITY.ROUND_CAP and reopens nothing; max_sanity_rounds: 2 in the repo config escalates on the second."
+          "sanity_round goes 1 to 5 with the dev bead reopened each time; on the sixth FAIL the hook sends team-lead SANITY.ROUND_CAP and reopens nothing; max_sanity_rounds: 2 escalates on the third."
         ],
         "fail": [
-          "The hook reopens the dev bead on every FAIL forever, or the cap is a constant in the script with no repository setting."
+          "The hook escalates on the fifth FAIL with the default setting, or reopens the dev bead on every FAIL forever."
         ]
       },
-      "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2863,6 +3634,40 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T02:04:45+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "The sanity close hook must count FAIL rounds per sanity bead in metadata.sanity_round and, when the count reaches max_sanity_rounds from the repository configuration (default 5 when unset), must escalate to the phase lead instead of reopening the checked bead."
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2887,7 +3692,39 @@
           "The hook defines a pydantic model of its own fields and builds a second vars dict for the assignment template."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not say this, including when it is silent about the hook's input, mentions it generically, or uses a different method.",
+                "unclear": "The item's wording about validation or forwarding is too vague to decide.",
+                "yes": "The item says the vars file is checked by a strict sc-compose render of a header-only (required_variables only) template and that the same file goes as --vars to the assign or send template."
+              },
+              "instructions": "Does `item.text` say that atm-task-close.py validates its sc-compose --vars file by rendering a header-only template in strict mode and passes that same file as --vars to the templates it runs, as `anchor.statement` directs? A mention of vars or templates without that validation and forwarding does not count. Judge presence only.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item states none of the ruled-out approaches for atm-task-close.py; silence, omissions, partial coverage, and work on other components are not conflicts.",
+                "unclear": "The item states an approach for atm-task-close.py's input that might or might not be one of the ruled-out ones.",
+                "yes": "The item explicitly states one of the ruled-out approaches for atm-task-close.py's input."
+              },
+              "instructions": "Does `item.text` state an approach for atm-task-close.py's own input that `anchor.statement` rules out? Ruled out for the hook: taking its values from anything other than one sc-compose --vars file (command-line flags, environment, several files); validating them with a separately defined schema or model of the hook's fields instead of the header-only template render; validating only after checks have started; giving the assign or send templates a rebuilt, edited, or second vars set instead of the same file. Only statements about atm-task-close.py count: an approach stated for another script or component is not a conflict, even if it uses a schema or model. Leaving a part out or naming only some of the commands is not a conflict either. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item plans work only in other components.",
+                "unclear": "The item's component cannot be identified.",
+                "yes": "The item plans work in atm-task-close.py or templates/task-close-vars.j2, whatever part of the hook it covers."
+              },
+              "instructions": "Is `item.text` about atm-task-close.py (the close hook) or templates/task-close-vars.j2, the subject of `anchor.statement` and `anchor.scope`? Answer about subject matter only.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -2908,6 +3745,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2932,7 +3782,39 @@
           "A GitHub 403 makes the hook exit with an error and the dev task cannot close, or dev-template.xml.j2 tells the dev to pass --skip-checks when gh fails."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item is silent about the directive, names the subject only, or plans a different approach.",
+                "unclear": "The item refers to the directive's content in words too vague to tell whether it is planned.",
+                "yes": "The item states it. The item says the hook continues with local git checks when GitHub fails or is rate limited, recording it, and that --skip-checks is described only in --help with the lead-permission note."
+              },
+              "instructions": "Read `item.text` for this directive from `anchor.statement`: atm-task-close.py proceeds with local git checks when GitHub is unreachable or rate limited and records that in its result, and offers --skip-checks, described only in its --help as needing the phase lead's permission and named in no template or prompt. Answer yes only when the item itself states that content. Answer no when the item is silent, mentions the subject without that content, or plans a different approach (for example it stops on a GitHub failure or describes --skip-checks in a template or prompt). Do not judge conflict.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item plans none of the numbered cases; it may be silent about the directive.",
+                "unclear": "The item may describe one of the numbered cases but its wording does not settle it.",
+                "yes": "The item plans one of the numbered cases."
+              },
+              "instructions": "`anchor.statement` says atm-task-close.py proceeds with local git checks when GitHub is unreachable or rate limited and records that in its result, and offers --skip-checks, described only in its --help as needing the phase lead's permission and named in no template or prompt. Does `item.text` plan any of these: (1) exiting with an error, blocking the close, or waiting because GitHub is unreachable or rate limited; (2) naming or explaining --skip-checks in a template, agent prompt or other instruction text the dev reads? Silence is never a conflict. Also not a conflict: silence about GitHub failures or the flag; leaving GitHub failure handling to a later sprint; ordinary PR and stack checks when GitHub works. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "No when the item works on something else, such as console display, logging or release packaging, and does not touch how atm-task-close.py behaves when GitHub is unreachable or rate limited, its PR and stack checks, and the --skip-checks flag and where it is described.",
+                "unclear": "The item text is too vague to tell whether it touches the anchor's subject.",
+                "yes": "Yes when the item plans or changes the hook's GitHub failure handling, its PR or stack checks, or the --skip-checks flag or its documentation."
+              },
+              "instructions": "Does `item.text` touch how atm-task-close.py behaves when GitHub is unreachable or rate limited, its PR and stack checks, and the --skip-checks flag and where it is described? Answer about subject matter only; whether the item follows `anchor.statement` is judged elsewhere.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -2953,6 +3835,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -2977,7 +3872,39 @@
           "atm-bd assigns the ready dev bead to the first idle member of its difficulty tier."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not state any part of this rule.",
+                "unclear": "The item mentions dev or fix assignment in a way that may or may not state the rule.",
+                "yes": "The item explicitly states some part of this rule."
+              },
+              "instructions": "Does `item.text` state the rule in `anchor.statement` itself: that atm-bd does not assign dev or fix beads and the lead assigns them (picking the dev for a qa fix bead), with the dev starting its next queued task when the sanity hook closes its current one? Any one part stated explicitly counts. Judge presence only.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item leaves dev and fix assignment to the lead, or does not mention it; mechanical sanity or qa assignment alone does not count.",
+                "unclear": "The item describes an assignment mechanism but it cannot be told whether it covers dev or fix beads.",
+                "yes": "The item has atm-bd, a hook or script, or the dev itself assign, select, or claim a dev or fix bead."
+              },
+              "instructions": "Does `item.text` plan for a dev or fix bead to be assigned or claimed by anything other than the lead (atm-bd's dispatch, a hook or script, or the dev picking its own next bead), or for a dev to take new work other than its next queued task? Silence about dev and fix assignment is not a conflict. Mechanical assignment of sanity or qa beads is allowed by the anchor and is not a conflict. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "Carrying out the item changes none of these; it only touches unrelated behaviour, files, or presentation.",
+                "unclear": "The item does not say enough to tell what carrying it out would change.",
+                "yes": "Carrying out the item changes or relies on bead assignment, atm-bd dispatch, or when a dev starts its next task."
+              },
+              "instructions": "Consider what `item.text` would change if it were carried out. Would any of it change or rely on assigning beads to agents, atm-bd's dispatch tick and its candidate filter, or the moment a dev takes up its next queued task? These are what `anchor.statement` governs. Judge whether the subject overlaps; do not judge compliance.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -2998,6 +3925,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:46:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "atm-bd dispatch and the lead's dev assignment are not touched by bj-3; its agents assign nothing",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:47:49+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "atm-bd dispatch is not touched by bj-4; the runs tabs assign nothing",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:22:28+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "bj-2 writes the pour metadata and the stack bead and does not touch atm-bd dispatch or any assignment; the dispatch candidate filter ANC-060 governs is unchanged (same ground as the ANC-061 exclusion)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "atm-bd dispatch and the lead's dev assignment are not touched by bj-3; its agents assign nothing"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "atm-bd dispatch is not touched by bj-4; the runs tabs assign nothing"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "bj-2 writes the pour metadata and the stack bead and does not touch atm-bd dispatch or any assignment; the dispatch candidate filter ANC-060 governs is unchanged (same ground as the ANC-061 exclusion)"
         }
       ]
     },
@@ -3022,7 +3984,39 @@
           "atm-bd caches the task list from the previous tick and assigns the sanity bead a second time."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not state the directive: it is silent about it, names only the topic, or describes a different approach.",
+                "unclear": "The item states part of the directive's content but it cannot be determined whether it plans the directive itself.",
+                "yes": "The item says atm-bd reads bd ready first and then checks the ATM tasks for that bead id, assigning only when none exists."
+              },
+              "instructions": "`anchor.statement` requires that atm-bd assigns a sanity or qa bead only when bd ready lists it and, checked after that, no ATM task with that bead id exists, so a bead whose task the hook already assigned is never assigned twice. Does `item.text` state this directive's specific content as a step, constraint or decision? An item that only names the topic, or that checks in another order, uses an earlier or cached task list, or skips the task check, does not state it. Judge presence of the directive only, not whether the item conflicts with it.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+                "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+                "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+              },
+              "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+                "unclear": "The item text is too vague to tell what part of the system it touches.",
+                "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -3043,6 +4037,54 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "bj-1 does not touch atm-bd dispatch; the hook assigns the sanity task itself and dispatch's bd-ready-then-task check is phase-bi code left unchanged",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "atm-bd dispatch is not touched by bj-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:49:47+00:00",
+          "event": "exclusion_removed",
+          "item": "atm-bj-1"
+        },
+        {
+          "at": "2026-10-18T22:49:47+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "bj-1 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:49:47+00:00",
+          "event": "exclusion_removed",
+          "item": "atm-bj-2"
+        },
+        {
+          "at": "2026-10-18T22:49:47+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "bj-2 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "bj-1 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "bj-2 does not touch atm-bd dispatch; the read order ANC-061 names is bj-4's deliverable 8"
         }
       ]
     },
@@ -3101,26 +4143,28 @@
       "id": "ANC-063",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The sprint pour must write branch, worktree, pr_target and difficulty onto every dev, fix, sanity and qa bead of the sprint family, and a pydantic model per bead kind with one validation method over every bead of the phase must fail the pour on any missing value.",
+      "statement": "The sprint pour must write branch, worktree, pr_target and difficulty onto every generated dev, fix, sanity and qa bead, and validate the projected full phase graph, including rendered prospective beads, before any persistent write; missing values fail without changing the database.",
       "quote": "file a gh issue to make sure the necessary info lands in the poured bead AND is validated w/ pydantic model and validation python method for all beads in phase.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
       "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
-      "summary": "pour writes branch, worktree, pr_target and difficulty to every bead and validates the phase",
-      "scope": "bead-groups pour, bead_schema.py models, validate-plan; atm-bd-orchestration #340",
-      "deterministic_check": "pour a sprint in a scratch repo and bd show each poured bead: the four keys are present; remove branch from one bead and the phase validation method exits non-zero naming it",
+      "summary": "pour validates projected phase graph before writes",
+      "scope": "formula producers and bead-groups projected pour; bead_schema.py and validate-plan phase validation",
+      "deterministic_check": "Injected tests omit metadata from existing and prospective sc-compose records and assert zero mutating calls plus unchanged database state in normal and --validate mode.",
       "fixtures": {
         "pass": [
-          "bd show atm-bj-2.group-sanity shows branch, worktree, pr_target, difficulty; validate-plan --phase bj runs validate_phase() over all beads and fails on a missing key."
+          "bd show atm-bj-2.group-sanity shows branch, worktree, pr_target, difficulty; validate-plan --phase bj runs validate_phase() over all beads and fails on a missing key.",
+          "The pour validates all current and rendered prospective records first and makes no write when one is invalid."
         ],
         "fail": [
-          "Only the sprint container carries branch and worktree, and bead_schema.py validates sprint and sanity beads only."
+          "Only the sprint container carries branch and worktree, and bead_schema.py validates sprint and sanity beads only.",
+          "The pour attaches prospective records and only then reports a missing metadata key."
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 4,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3139,6 +4183,48 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:42+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the sprint pour is bj-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:47:48+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the sprint pour is bj-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:43:06+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "scope",
+            "summary",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "The sprint pour must write branch, worktree, pr_target and difficulty onto every dev, fix, sanity and qa bead of the sprint family, and a pydantic model per bead kind with one validation method over every bead of the phase must fail the pour on any missing value."
+        },
+        {
+          "at": "2026-10-19T00:01:35+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-078",
+          "reason": "compound anchor split per granularity rule; tuner AUTHORITY.AMBIGUOUS"
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the sprint pour is bj-2"
+        },
+        {
+          "item": "atm-bj-1",
+          "reason": "the sprint pour is bj-2"
         }
       ]
     },
@@ -3164,8 +4250,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3184,6 +4270,47 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:40+00:00",
+          "event": "excluded",
+          "item": "atm-phase-bj",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the atm-core task-transition hook is withheld from this phase by Rand (atm-core #1873); atm-task-close.py in the skill stands in for it",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T23:28:14+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "atm-core scope; carried into phase bk anchors (docs/plans/phase-bk)"
         }
       ]
     },
@@ -3229,6 +4356,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the link on PASS and the rebase-required path are bj-3; bj-1 only refuses a PASS close whose vars carry no stack result and ships the rebase-required template",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the link on PASS and the rebase-required path are bj-3; bj-1 only refuses a PASS close whose vars carry no stack result and ships the rebase-required template"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write"
         }
       ]
     },
@@ -3274,6 +4425,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:41+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the sanity-stack subagent and dev-sanity's spawn rule are bj-3",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:51:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the sanity-stack subagent and dev-sanity's spawn rule are bj-3",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the sanity-stack subagent and dev-sanity's spawn rule are bj-3"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "the sanity-stack subagent and dev-sanity's spawn rule are bj-3"
         }
       ]
     },
@@ -3319,6 +4505,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead"
         }
       ]
     },
@@ -3343,7 +4542,39 @@
           "dev-sanity closes the sanity task refused because the lock was busy, or sends the dev a FAIL, or sends the user a message asking who holds the lock."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item is silent about the directive, names the subject only, or plans a different approach.",
+                "unclear": "The item refers to the directive's content in words too vague to tell whether it is planned.",
+                "yes": "The item states it. The item says sanity-stack's claim has a timeout, that on expiry it reports the holder, and that dev-sanity then keeps the task active and retries."
+              },
+              "instructions": "Read `item.text` for this directive from `anchor.statement`: sanity-stack takes a timeout for the stack bead claim and on expiry returns the holder's identity, claim time and active task, and dev-sanity then keeps the sanity task active, asks the holder once, continues other sanity work and retries, with no refusal, no FAIL to the dev and no escalation to a person. Answer yes only when the item itself states that content. Answer no when the item is silent, mentions the subject without that content, or plans a different approach (for example it waits without limit, refuses the task, fails the dev or asks a person). Do not judge conflict.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item plans none of the numbered cases; it may be silent about the directive.",
+                "unclear": "The item may describe one of the numbered cases but its wording does not settle it.",
+                "yes": "The item plans one of the numbered cases."
+              },
+              "instructions": "`anchor.statement` says sanity-stack takes a timeout for the stack bead claim and on expiry returns the holder's identity, claim time and active task, and dev-sanity then keeps the sanity task active, asks the holder once, continues other sanity work and retries, with no refusal, no FAIL to the dev and no escalation to a person. Does `item.text` plan any of these: (1) waiting on the claim with no time limit; (2) refusing or closing the sanity task because the lock is busy; (3) sending the dev a FAIL because of the lock; (4) escalating to a person about the lock, for example messaging Rand, the user or a human operator? Silence is never a conflict. Also not a conflict: silence about the lock timeout; messaging the lock holder once; claiming and releasing the stack bead around a write. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+                "unclear": "The item text is too vague to tell what part of the system it touches.",
+                "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -3364,6 +4595,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write"
         }
       ]
     },
@@ -3388,7 +4643,39 @@
           "The subagent runs /sc-gh-stack-view or gh stack view --json in lean mode, or reads the raw 365 KB pull list into its context."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not state the lean procedure: it is silent about it, or mentions budget, tokens, economy or lean only as a topic or goal, or describes a lean path made of different steps.",
+                "unclear": "The item refers to a lean or low-budget procedure but its steps are described too loosely to tell whether they are the base and ancestry checks the anchor requires.",
+                "yes": "The item states what the subagent does in lean mode or when GraphQL is unavailable, with the specific content: base compared with the recorded top and an ancestry or no-divergence check, done with a filtered REST pull list and local git (for example fetch, merge-base --is-ancestor) rather than GraphQL. Paraphrases count."
+              },
+              "instructions": "`anchor.statement` requires two things of the sanity-stack subagent: a budget input in its fenced JSON, and a lean procedure used in lean mode or whenever GraphQL is unavailable that checks only that the PR base equals the recorded top and that the head descends from it with no divergence, using one filtered REST pull list and local git, with no GraphQL call. Does `item.text` plan that lean procedure, with its specific checks or method, for the lean or GraphQL-unavailable case? Judge presence of this content only.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item is a ruled-out behaviour: it follows the anchor, is silent about it, only uses GraphQL in full mode while GraphQL is available, or is about something else.",
+                "unclear": "The item describes a lean or rate-limited path whose method is ambiguous enough that it might or might not use GraphQL, an unfiltered list, or extra verification.",
+                "yes": "The item states a design or step that is one of the ruled-out behaviours, such as explicitly having no budget option, calling GraphQL on the lean or GraphQL-unavailable path, waiting on GraphQL rather than falling back, loading the raw pull list, or verifying the whole stack in lean mode."
+              },
+              "instructions": "Does `item.text` plan something that `anchor.statement` rules out for the sanity-stack subagent? The anchor rules out: having no budget input; making any GraphQL call in lean mode or when GraphQL is unavailable (gh stack view, /sc-gh-stack-view and GraphQL API queries are GraphQL); waiting for GraphQL instead of using the REST and git check; reading an unfiltered pull list; or verifying more than base and ancestry in lean mode. GraphQL use in full mode while GraphQL is available is not ruled out. Silence about the anchor is not a conflict. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different component or activity (for example another script, sanity pass/fail handling, the console, a CLI command), even if it uses similar words such as git, REST, rebase or budget.",
+                "unclear": "The item text is too vague to tell whether the work it describes is done by the sanity-stack subagent.",
+                "yes": "The item describes work on the sanity-stack subagent: its fenced JSON input, its verification or linking of a stack layer, or its GitHub API or GraphQL usage."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about the sanity-stack subagent: the subagent that verifies a layer against the recorded stack top and links it. Does `item.text` plan, change, or depend on the sanity-stack subagent itself: its input, how it verifies or links a layer, or how it uses GitHub and git while doing so? Judge subject overlap only, not whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -3409,6 +4696,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:54+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "the stack bead writes, the claim timeout and lean mode are bj-2 and bj-3; the hook reads no stack bead"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "the link, the sanity-stack subagent, the claim timeout and lean mode are bj-3; bj-2 ships the stack bead they write"
         }
       ]
     },
@@ -3433,7 +4744,39 @@
           "The qa role assigns the poured fix beads to devs, or sends the lead nothing on PASS."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not state this: it is silent about the qa role's close and status message, names only the topic, or describes a different approach.",
+                "unclear": "The item mentions the qa role's close or message but it cannot be determined whether it closes the bead and task and informs the lead.",
+                "yes": "The item says the qa role closes the qa bead and its task and sends the lead the qa status, and does not have the qa role assign anything; fix beads, if mentioned, are left for the lead."
+              },
+              "instructions": "`anchor.statement` requires that the qa role of the close hook closes the QA bead and its task and sends the phase lead a status message whatever the verdict, and assigns nothing; quality-mgr pours the fix groups before the close. Does `item.text` state that the qa role closes the qa bead and its task and sends the lead a status message, without the qa role assigning anything? A status message sent with no condition on the verdict counts for both PASS and FAIL. An item that only names the topic, or that messages the lead on one verdict only, assigns beads, or pours fix groups in the hook, does not state it. Judge presence of the directive only, not conflict.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+                "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+                "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+              },
+              "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity and does not touch the qa role of atm-task-close.py: its inputs and checks, what it closes, the status message to the phase lead, and whether it assigns anything.",
+                "unclear": "The item text is too vague to tell whether it touches the anchor's subject.",
+                "yes": "The item plans or changes anything the qa role of atm-task-close.py does, including its inputs, checks, close, messages or assignments."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about the qa role of atm-task-close.py: its inputs and checks, what it closes, the status message to the phase lead, and whether it assigns anything. Does the work described in `item.text` plan, change, or depend on that subject? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -3454,6 +4797,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the hook's roles, identity, checks, FAIL counter and messages are bj-1; bj-3's procedures end by running that hook"
         }
       ]
     },
@@ -3478,7 +4845,39 @@
           "sanity_round is 2 after two rebase-required outcomes."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item text is silent about the directive: it neither includes the directive's specific content nor references it.",
+                "unclear": "The item text alludes to the directive's topic but it is not possible to tell whether the directive itself is included.",
+                "yes": "The item text contains the directive's specific content, in its own words or the user's, as a step, constraint, or stated starting point."
+              },
+              "instructions": "Does `item.text` explicitly carry out, preserve, or plan for the directive given in `anchor.statement`? Look for the directive's specific content being present in the item: the same starting point, the same method, the same constraint, or an explicit step that does what the statement asks. A generic mention of the topic without the directive's specific content does not count. Judge presence of the directive only, not whether the item conflicts with it.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "The item plans none of the numbered cases; it may be silent about the directive.",
+                "unclear": "The item may describe one of the numbered cases but its wording does not settle it.",
+                "yes": "The item plans one of the numbered cases."
+              },
+              "instructions": "`anchor.statement` says a rebase-required outcome leaves metadata.sanity_round unchanged and does not count toward max_sanity_rounds. Does `item.text` plan any of these: (1) incrementing metadata.sanity_round on a rebase-required outcome; (2) counting rebase-required outcomes toward max_sanity_rounds, or escalating because of them? Silence is never a conflict. Also not a conflict: incrementing sanity_round on a sanity FAIL; silence about the counter; sending rebase-required to the dev. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+                "unclear": "The item text is too vague to tell what part of the system it touches.",
+                "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -3499,6 +4898,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T23:48:09+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "BJ-2 ships stack schema, pour and validation only; the rebase-required sanity path is owned by BJ-1 and BJ-3.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "BJ-2 ships stack schema, pour and validation only; the rebase-required sanity path is owned by BJ-1 and BJ-3."
         }
       ]
     },
@@ -3544,6 +4956,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:55+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:47:49+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the sanity-fail message and the hook's FAIL branch are bj-1",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T01:11:07+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "the sanity FAIL message and branch are bj-1; bj-4's tabs only read QA run and finding data already on beads",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-2",
+          "reason": "the close hook's roles, checks, round counter and messages are bj-1; bj-2 ships the stack bead schema and the pour only"
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "the sanity-fail message and the hook's FAIL branch are bj-1"
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "the sanity FAIL message and branch are bj-1; bj-4's tabs only read QA run and finding data already on beads"
         }
       ]
     },
@@ -3568,7 +5015,39 @@
           "The runs table is rendered into dev-sanity's chat reply, or elapsed is the gap between two ledger timestamps, or the dev column is missing."
         ]
       },
-      "question_overrides": {},
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item leaves the page out, or names only the goal (visibility, less asking), or covers only some other part of the anchor.",
+                "unclear": "The item hints at a runs page but its contents cannot be told from the text.",
+                "yes": "The item includes that sanity runs page with its per-run columns, in any wording or as an example row."
+              },
+              "instructions": "Does `item.text` contain the concrete display `anchor.statement` asks for: a console page of sanity runs, newest first, one line per run, showing who did the work and the JEV and LLM results with their elapsed times? A wish to make results easier to see is not that display.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item is a ruled-out behaviour: it follows the anchor, is silent about it, or is about something else.",
+                "unclear": "The item describes runs display or timing in a way ambiguous enough that it might or might not be a ruled-out behaviour.",
+                "yes": "The item states a design or step that is one of the ruled-out behaviours."
+              },
+              "instructions": "Does `item.text` plan something that `anchor.statement` rules out? The anchor rules out: showing sanity runs only in dev-sanity's chat reply or rendering the runs table into that reply; having no sanity runs page or no quality runs page; listing oldest runs first or using more than one line per run; a sanity line without the dev, or without pass/fail or elapsed for JEV or for LLM; computing elapsed any other way than from the Jev client's return and a timer around the LLM subagent (for example from the gap between ledger timestamps); and rows that will never feed the OTel database. The quality line's columns, paging, and OTel export arriving in the next atm release are not ruled out. Silence is not a conflict. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different component or activity (for example the close hook, sanity FAIL routing, the pour, bead validation), even if it mentions sanity, beads or the lead.",
+                "unclear": "The item text is too vague to tell whether it touches any of these things.",
+                "yes": "The item describes work on a runs page or other display of sanity or quality runs, the sanity ledger row, jev_client.py's return value, how elapsed time is measured, or dev-sanity's spawning of its LLM subagent."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about how sanity and quality runs are recorded and shown: the atm-bd console runs pages, the sanity ledger row (elapsed per reviewer, dev identity), the value jev_client.py returns, and the dev-sanity spawn of the LLM subagent. Does `item.text` plan, change, or depend on one of these things? Judge subject overlap only, not whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
       "version": 2,
       "status": "locked",
       "promoted_to": null,
@@ -3589,6 +5068,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T22:44:42+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "the runs pages and the ledger row schema are bj-4; bj-3 adds only the LLM timer and retry wording in dev-sanity.md whose values bj-4's rows carry",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-18T22:46:40+00:00",
+          "event": "excluded",
+          "item": "atm-bj-2",
+          "reason": "the runs pages and the sanity ledger are bj-4; bj-2 ships the stack bead schema and the pour only",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "the runs pages and the ledger row schema are bj-4; bj-3 adds only the LLM timer and retry wording in dev-sanity.md whose values bj-4's rows carry"
+        },
+        {
+          "item": "atm-bj-2",
+          "reason": "the runs pages and the sanity ledger are bj-4; bj-2 ships the stack bead schema and the pour only"
         }
       ]
     },
@@ -3596,26 +5099,28 @@
       "id": "ANC-074",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "A Jev or LLM call failure must be retried up to three times before the slot reports failure; the failure reason must appear in the runs page severity table with an icon distinct from a JEV verdict that the work is not done; and no workflow class bead, outage bead, hold on re-dispatch, refusal citation or checker-defect side channel may exist in the sanity or refusal flows.",
+      "statement": "A Jev API call failure gets up to three retries (four total attempts) at the Jev client boundary before the slot reports failure; its reason must appear in the runs page severity table with an icon distinct from a JEV FAIL verdict; no workflow class bead, outage bead, hold on re-dispatch, refusal citation or checker-defect side channel may exist in the sanity or refusal flows.",
       "quote": "this entire process of hold on re-dispatch sounds like a team trying to manage a reliable asset by making excuses not to deal with failures to call the agent properly.  (I suspect that a subagent sends too much context and jev returns error, instead of editing context, failure is returned.  There are occasionally LLM call fails during heavy traffic times which can be retried 3x before saying fail. )  Make sure that LLM failure reason shows up in severity table in tui AND the fail icon for typesafe API issue is distinctly different from jev answered 'all work NOT done'.  this `Class-bead append and citation on every refusal, and the checker-defect side channel.` also sounds like ceremony I did not know about or approve.",
       "kind": "prohibition",
       "stated_by": "Rand",
       "stated_at": "2026-10-18",
       "context": "phase-bj planning 2026-10-18 (third round): Rand on the sanity runs table, Jev/LLM failures and refusal ceremony",
-      "summary": "API failures: retry three times, reason in the runs page, a distinct icon from a JEV FAIL; no outage beads, no hold, no refusal citations",
-      "scope": "jev_client.py and the LLM spawn retry; the ledger row kind field; the console severity table icons; dev-sanity 9, 10, 15, 25, dev 6, team-lead 30, 41, quality-mgr 3",
-      "deterministic_check": "grep the agents and requirements for 'class bead', 'outage' bead and 'cite' in refusal steps returns nothing; jev_client.py retries three times on a transport error; the console maps kind API_FAILURE to a different icon than verdict FAIL",
+      "summary": "lead ruling 2026-10-18: Jev client owns three retries, four attempts total",
+      "scope": "jev_client.py single retry boundary; ledger kind; console severity icon; sanity/refusal flows; the LLM coordinator adds no second retry loop",
+      "deterministic_check": "Injected client tests assert up to four total attempts for transport/502/rate-limit failures with controlled clock, oversized-context no-retry, elapsed and API_FAILURE reason; console maps API_FAILURE to a distinct icon.",
       "fixtures": {
         "pass": [
-          "A Jev 502 is retried three times, then the row reads kind API_FAILURE with the error text and the page shows the plug icon, not the red cross of a FAIL verdict; dev-sanity re-runs on the next task with no bead opened."
+          "A Jev 502 is retried three times, then the row reads kind API_FAILURE with the error text and the page shows the plug icon, not the red cross of a FAIL verdict; dev-sanity re-runs on the next task with no bead opened.",
+          "The Jev client retries a 502 under its bounded policy, then records API_FAILURE and the console shows its distinct icon and error."
         ],
         "fail": [
-          "dev-sanity opens a -jev-outage class bead and the lead holds re-dispatch until it closes, or an API failure is shown with the same icon as a JEV FAIL."
+          "dev-sanity opens a -jev-outage class bead and the lead holds re-dispatch until it closes, or an API failure is shown with the same icon as a JEV FAIL.",
+          "The client immediately fails a retryable 502, or the API_FAILURE row uses the JEV FAIL icon."
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 5,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3634,6 +5139,1225 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-18T23:43:06+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "scope",
+            "summary",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "A Jev or LLM call failure must be retried up to three times before the slot reports failure; the failure reason must appear in the runs page severity table with an icon distinct from a JEV verdict that the work is not done; and no workflow class bead, outage bead, hold on re-dispatch, refusal citation or checker-defect side channel may exist in the sanity or refusal flows."
+        },
+        {
+          "at": "2026-10-18T23:44:49+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check"
+          ],
+          "previous_statement": "A Jev API call failure must be retried at the Jev client boundary up to three times before the slot reports failure; its reason must appear in the runs page severity table with an icon distinct from a JEV FAIL verdict; no workflow class bead, outage bead, hold on re-dispatch, refusal citation or checker-defect side channel may exist in the sanity or refusal flows."
+        },
+        {
+          "at": "2026-10-19T00:01:35+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-084",
+          "reason": "compound anchor split per granularity rule; tuner AUTHORITY.AMBIGUOUS"
+        }
+      ]
+    },
+    {
+      "id": "ANC-075",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The package publish script must write a release-artifact manifest with one sc-sha path/hash entry for every shipped agent, skill, Python file, template, and script, plus the aggregate.",
+      "quote": "a package script inside the skill package computes the sc-sha of every shipped file (agents, skills, python, templates, scripts) and writes a manifest (per-file path + sha, plus the aggregate) into the release artifact.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-bd-orchestration issue #349 scope",
+      "summary": "Publish full-skill sc-sha manifest",
+      "scope": "edits the package publish script, release artifact contents, or packaged agents, skills, Python files, templates, or scripts",
+      "deterministic_check": "Inspect the package publish script and produced release archive; verify each shipped file has one path/hash manifest entry and the aggregate matches those entries.",
+      "fixtures": {
+        "pass": [
+          "The package publish script puts path/hash manifest entries for every shipped agent, skill, Python file, template, and script in the release artifact and includes the aggregate."
+        ],
+        "fail": [
+          "The package publish script includes only Python files in the release manifest and omits the aggregate hash."
+        ]
+      },
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "relevant": {
+              "type": "choice",
+              "instructions": "Compare `item.text` with `anchor.scope`. Does the item operate on package publishing, release contents, shipped file selection, or the archive manifest?",
+              "criteria": {
+                "yes": "It works on the skill package publisher or its release artifact and files.",
+                "no": "It works wholly outside the package publishing and archive area.",
+                "unclear": "The affected package or output cannot be identified."
+              }
+            },
+            "addressed": {
+              "type": "choice",
+              "instructions": "Read `item.text` for an affirmative output contract matching `anchor.statement`: one sc-sha path/hash entry for each file actually shipped among agents, skills, Python, templates, and scripts, with an aggregate in the archive. Do not infer this from a heading.",
+              "criteria": {
+                "yes": "The publisher is planned to emit the complete per-file sc-sha entries and aggregate in the release archive.",
+                "no": "No affirmative complete output contract is stated, even if a manifest is named.",
+                "unclear": "The output commitment is stated but coverage of shipped files or aggregate cannot be determined."
+              }
+            },
+            "contradicted": {
+              "type": "choice",
+              "instructions": "Would an explicit decision in `item.text` prevent the output required by `anchor.statement`? Distinguish an explicit exclusion from mere absence of detail.",
+              "criteria": {
+                "yes": "The text expressly limits the files included, rejects sc-sha, defers the aggregate, or leaves the manifest out of the artifact.",
+                "no": "No stated decision rules out the full output; silence is no.",
+                "unclear": "The text suggests a possible exclusion but does not settle it."
+              }
+            }
+          }
+        }
+      },
+      "version": 3,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-18T23:52:42+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-18T23:53:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:16:40+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-087",
+          "reason": "Replace issue-author reference design with Rand verbatim and its per-file manifest constraint."
+        }
+      ]
+    },
+    {
+      "id": "ANC-076",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd skill installer must verify every installed file against the manifest published for the selected tag or --latest version.",
+      "quote": "`atm-bd skill` verifies every file against the published manifest for the version it installs (tag or `--latest`) and refuses a mismatch with the file list.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-bd-orchestration issue #349 scope",
+      "summary": "Verify installed skill files at install",
+      "scope": "edits the atm-bd skill installer or its version selection and file verification",
+      "deterministic_check": "Run installer fixtures for matching, modified, and missing files at a tag and --latest; verify mismatches stop installation and list each affected path.",
+      "fixtures": {
+        "pass": [
+          "The atm-bd skill installer checks each installed file against the published manifest for the selected --latest release."
+        ],
+        "fail": [
+          "The atm-bd skill installer accepts a release with a modified installed script without checking the published manifest."
+        ]
+      },
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "It only mentions checksums or manifest publication, verifies a subset, uses a different version, or says nothing about file comparison.",
+                "unclear": "It names manifest checking but leaves it impossible to tell whether installed files and the selected release's manifest are compared.",
+                "yes": "It explicitly plans per-file verification against the manifest for the selected release version."
+              },
+              "instructions": "Does `item.text` plan to compare every installed skill file with the published manifest belonging to the selected tag or --latest version? Judge stated verification, not conflict.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "It says nothing about verification, or plans compatible selected-version verification.",
+                "unclear": "The proposed checking behavior is too vague to know whether it conflicts.",
+                "yes": "It accepts a mismatch without checking, checks only a subset, or checks against another version's manifest."
+              },
+              "instructions": "Does `item.text` make an installer choice incompatible with verifying every installed file against the published manifest of the selected tag or --latest release? Silence is not conflict.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item only produces a release manifest or changes unrelated software without touching installer operation or its description.",
+                "unclear": "The text names the skill package but leaves whether installer operation is involved uncertain.",
+                "yes": "The item changes the installer, its help or documentation, release selection, or installed-file manifest checking."
+              },
+              "instructions": "Does `item.text` concern atm-bd skill installer operation or the description of that operation, including version selection and installed-file verification? Judge subject overlap only.",
+              "type": "choice"
+            }
+          }
+        }
+      },
+      "version": 3,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-18T23:52:59+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-18T23:53:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:16:45+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-088",
+          "reason": "Replace issue-author reference design with Rand verbatim and the install verification constraint."
+        }
+      ]
+    },
+    {
+      "id": "ANC-077",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The plugin doctor must report each installed file as ok, modified, missing, or extra.",
+      "quote": "reports per-file ok|modified|missing|extra",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-bd-orchestration issue #349 scope",
+      "summary": "Report installed file integrity status",
+      "scope": "edits the plugin doctor or its installed-file integrity reporting",
+      "deterministic_check": "Run atm-hook-doctor.py against fixture installs containing unchanged, modified, missing, and extra files; assert one status per path.",
+      "fixtures": {
+        "pass": [
+          "The plugin doctor reports every installed file as ok, modified, missing, or extra."
+        ],
+        "fail": [
+          "The plugin doctor reports only aggregate PASS or FAIL and gives no status for individual installed files."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-18T23:53:14+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-18T23:53:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:17:12+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Replacement from Rand verbatim failed the testability rubric; old quote was issue-author reference design."
+        }
+      ]
+    },
+    {
+      "id": "ANC-078",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The branch value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.",
+      "quote": "when the sprint is poured, wouldn't the branch/worktree land in the dev (or fix), sanity and qa bead at that point?",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "summary": "Sprint-family beads carry branch",
+      "scope": "atm-bd-orchestration sprint-family pour",
+      "deterministic_check": "Inspect rendered sprint-family beads and verify each dev, fix, sanity and QA bead has the expected branch value.",
+      "fixtures": {
+        "pass": [
+          "The pour copies the sprint container's branch value onto every generated sprint-family dev, fix, sanity and QA bead."
+        ],
+        "fail": [
+          "The sprint-family pour writes no branch value onto its generated dev, fix, sanity or QA beads."
+        ]
+      },
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The text does not include the complete source-to-all-targets requirement, including when it mentions a branch field only generally, leaves out a named bead kind, or gives another source.",
+                "unclear": "The text suggests that the sprint record's branch value is copied to the complete set of generated bead kinds, but leaves timing or the set of recipients uncertain.",
+                "yes": "The text states that every generated dev, fix, sanity, and QA bead receives the sprint record's branch value during pour, including by copy, inheritance, or propagation."
+              },
+              "instructions": "Does `item.text` require the pour to take the branch field from the sprint record and place that same value on each generated dev, fix, sanity, and QA bead? 'Copy', 'inherit', and 'propagate' can express the same operation. Judge presence only, not whether another clause conflicts.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "It does not explicitly choose an incompatible outcome; silence, general branch-field mentions, or omission of details are not contradictions.",
+                "unclear": "It gives conflicting or ambiguous directions, so whether the generated beads receive the sprint branch cannot be determined.",
+                "yes": "The text explicitly assigns another branch source, rejects copying the sprint branch, or excludes a required bead kind from receiving that branch value."
+              },
+              "instructions": "Does `item.text` explicitly require an outcome incompatible with assigning the sprint record's branch value to every generated dev, fix, sanity, and QA bead during pour? Do not infer conflict from silence or a merely incomplete description.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item concerns a different activity and does not affect branch assignment to generated sprint-family beads during pour.",
+                "unclear": "The text is too vague to determine whether it concerns branch assignment to generated sprint-family beads during pour.",
+                "yes": "The item plans, changes, or depends on branch assignment for one or more of those generated sprint-family beads during pour, whether it copies correctly, copies incompletely, or conflicts."
+              },
+              "instructions": "Does `item.text` concern assigning or preserving the branch field on generated dev, fix, sanity, or QA beads during an atm-bd-orchestration sprint-family pour? Judge only overlap with this subject, not compliance.",
+              "type": "choice"
+            }
+          }
+        }
+      },
+      "version": 4,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T00:01:04+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-19T00:01:34+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:02:00+00:00",
+          "event": "locked",
+          "reason": "lead ruling: atomic replacement; rubric run, inconclusive; retained as proposed by task authority"
+        },
+        {
+          "at": "2026-10-19T00:03:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:27:03+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        }
+      ]
+    },
+    {
+      "id": "ANC-079",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The worktree value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.",
+      "quote": "when the sprint is poured, wouldn't the branch/worktree land in the dev (or fix), sanity and qa bead at that point?",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "summary": "Sprint-family beads carry worktree",
+      "scope": "atm-bd-orchestration sprint-family pour",
+      "deterministic_check": "Inspect rendered sprint-family beads and verify each dev, fix, sanity and QA bead has the expected worktree value.",
+      "fixtures": {
+        "pass": [
+          "The pour copies the sprint container's worktree value onto every generated sprint-family dev, fix, sanity and QA bead."
+        ],
+        "fail": [
+          "The sprint-family pour writes no worktree value onto its generated dev, fix, sanity or QA beads."
+        ]
+      },
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The text does not include the complete source-to-all-targets requirement, including when it mentions a worktree field only generally, leaves out a named bead kind, or gives another source.",
+                "unclear": "The text suggests the sprint record's worktree value is copied to the complete set of generated bead kinds, but leaves timing or recipients uncertain.",
+                "yes": "The text states that every generated dev, fix, sanity, and QA bead receives the sprint record's worktree value during pour, including by copy, inheritance, or propagation."
+              },
+              "instructions": "Does `item.text` require the pour to take the worktree field from the sprint record and place that same value on each generated dev, fix, sanity, and QA bead? 'Copy', 'inherit', and 'propagate' can express the same operation. Judge presence only, not whether another clause conflicts.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "It does not explicitly choose an incompatible outcome; silence, general worktree-field mentions, or omission of details are not contradictions.",
+                "unclear": "The text gives conflicting or ambiguous directions, so whether the generated beads receive the sprint worktree cannot be determined.",
+                "yes": "The text explicitly assigns another worktree source, rejects copying the sprint worktree, or excludes a required bead kind from receiving that value."
+              },
+              "instructions": "Does `item.text` explicitly require an outcome incompatible with assigning the sprint record's worktree value to every generated dev, fix, sanity, and QA bead during pour? Do not infer conflict from silence or a merely incomplete description.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item concerns a different activity and does not affect worktree assignment to generated sprint-family beads during pour.",
+                "unclear": "The text is too vague to determine whether it concerns worktree assignment to generated sprint-family beads during pour.",
+                "yes": "The item plans, changes, or depends on worktree assignment for one or more of those generated sprint-family beads during pour, whether it copies correctly, copies incompletely, or conflicts."
+              },
+              "instructions": "Does `item.text` concern assigning or preserving the worktree field on generated dev, fix, sanity, or QA beads during an atm-bd-orchestration sprint-family pour? Judge subject overlap only, not compliance.",
+              "type": "choice"
+            }
+          }
+        }
+      },
+      "version": 4,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T00:01:16+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T00:01:34+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:03:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:27:03+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        }
+      ]
+    },
+    {
+      "id": "ANC-080",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The pr_target value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.",
+      "quote": "branch, worktree, pr_target, difficulty land on the sprint container (as today) AND on its sanity and QA beads at pour time, copied from the container.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "summary": "Sprint-family beads carry pr_target",
+      "scope": "atm-bd-orchestration sprint-family pour",
+      "deterministic_check": "Inspect rendered sprint-family beads and verify each dev, fix, sanity and QA bead has the expected pr_target value.",
+      "fixtures": {
+        "pass": [
+          "The pour copies the sprint container's pr_target value onto every generated sprint-family dev, fix, sanity and QA bead."
+        ],
+        "fail": [
+          "The sprint-family pour writes no pr_target value onto its generated dev, fix, sanity or QA beads."
+        ]
+      },
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "relevant": {
+              "type": "choice",
+              "instructions": "Does `item.text` change the atm-bd-orchestration sprint-family pour or metadata on its generated beads? Judge overlap with `anchor.scope` only.",
+              "criteria": {
+                "yes": "The item changes the sprint-family pour, bead creation, or metadata on generated dev, fix, sanity, or QA beads.",
+                "no": "The item concerns another activity and would not affect this pour or its generated beads.",
+                "unclear": "The item does not identify which pour or bead family it affects."
+              }
+            },
+            "addressed": {
+              "type": "choice",
+              "instructions": "Does `item.text` affirmatively plan to copy pr_target from the sprint container to every generated dev, fix, sanity, and QA bead at pour time, as `anchor.statement` requires? Judge presence only.",
+              "criteria": {
+                "yes": "The text names pr_target and requires its value on each generated dev, fix, sanity, and QA bead when poured.",
+                "no": "The text is silent about pr_target, mentions it only generally, or lacks the full set of generated beads or pour-time copy.",
+                "unclear": "The text promises pr_target propagation but does not establish which generated beads receive it or when."
+              }
+            },
+            "contradicted": {
+              "type": "choice",
+              "instructions": "Does an explicit decision in `item.text` prevent the pr_target copy required by `anchor.statement`? Mere silence or incomplete detail is no conflict.",
+              "criteria": {
+                "yes": "The item states that a required generated bead lacks pr_target, receives it only after pour, or derives it later instead of storing the copied value.",
+                "no": "No incompatible choice is stated; silence and general metadata mentions count as no conflict.",
+                "unclear": "A stated timing or recipient might conflict, but the text does not settle it."
+              }
+            }
+          }
+        }
+      },
+      "version": 4,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T00:01:17+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T00:01:34+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:03:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:27:03+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        }
+      ]
+    },
+    {
+      "id": "ANC-081",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The difficulty value must be copied to every generated sprint-family dev, fix, sanity and QA bead at pour time.",
+      "quote": "branch, worktree, pr_target, difficulty land on the sprint container (as today) AND on its sanity and QA beads at pour time, copied from the container.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "summary": "Sprint-family beads carry difficulty",
+      "scope": "atm-bd-orchestration sprint-family pour",
+      "deterministic_check": "Inspect rendered sprint-family beads and verify each dev, fix, sanity and QA bead has the expected difficulty value.",
+      "fixtures": {
+        "pass": [
+          "The pour copies the sprint container's difficulty value onto every generated sprint-family dev, fix, sanity and QA bead."
+        ],
+        "fail": [
+          "The sprint-family pour writes no difficulty value onto its generated dev, fix, sanity or QA beads."
+        ]
+      },
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The text does not include the complete source-to-all-targets requirement, including when it mentions a difficulty field only generally, leaves out a named bead kind, or gives another source.",
+                "unclear": "The text suggests the sprint record's difficulty value is copied to the complete set of generated bead kinds, but leaves timing or recipients uncertain.",
+                "yes": "The text states that every generated dev, fix, sanity, and QA bead receives the sprint record's difficulty value during pour, including by copy, inheritance, or propagation."
+              },
+              "instructions": "Does `item.text` require the pour to take the difficulty field from the sprint record and place that same value on each generated dev, fix, sanity, and QA bead? 'Copy', 'inherit', and 'propagate' can express the same operation. Judge presence only, not whether another clause conflicts.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "It does not explicitly choose an incompatible outcome; silence, general difficulty-field mentions, or omission of details are not contradictions.",
+                "unclear": "The text gives conflicting or ambiguous directions, so whether the generated beads receive the sprint difficulty cannot be determined.",
+                "yes": "The text explicitly assigns another difficulty source, rejects copying the sprint difficulty, or excludes a required bead kind from receiving that value."
+              },
+              "instructions": "Does `item.text` explicitly require an outcome incompatible with assigning the sprint record's difficulty value to every generated dev, fix, sanity, and QA bead during pour? Do not infer conflict from silence or a merely incomplete description.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item concerns a different activity and does not affect difficulty assignment to generated sprint-family beads during pour.",
+                "unclear": "The text is too vague to determine whether it concerns difficulty assignment to generated sprint-family beads during pour.",
+                "yes": "The item plans, changes, or depends on difficulty assignment for one or more of those generated sprint-family beads during pour, whether it copies correctly, copies incompletely, or conflicts."
+              },
+              "instructions": "Does `item.text` concern assigning or preserving the difficulty field on generated dev, fix, sanity, or QA beads during an atm-bd-orchestration sprint-family pour? Judge subject overlap only, not compliance.",
+              "type": "choice"
+            }
+          }
+        }
+      },
+      "version": 4,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T00:01:17+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T00:01:35+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:03:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:27:03+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        }
+      ]
+    },
+    {
+      "id": "ANC-082",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each bead kind in the phase must have a Pydantic model that names its required metadata keys.",
+      "quote": "A pydantic model for every bead kind in a phase, not just sprint and sanity: dev/sprint container, sanity, QA (with checked_bead and the round), gate, finding, fix, and their sanity/QA children. Each model names the required metadata keys; extra=\"allow\" stays.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "summary": "Every bead kind has a typed model",
+      "scope": "atm-bd-orchestration bead schema",
+      "deterministic_check": "Validate fixtures for every phase bead kind and assert the selected Pydantic model enforces its required metadata keys.",
+      "fixtures": {
+        "pass": [
+          "Every bead kind in the phase has a Pydantic model that names its required metadata keys."
+        ],
+        "fail": [
+          "The phase finding bead kind has no Pydantic model."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T00:01:17+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T00:01:35+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:27:03+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        }
+      ]
+    },
+    {
+      "id": "ANC-083",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A single validation method must validate every bead in the phase.",
+      "quote": "One validation method that covers all beads in the phase.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "summary": "Validate every bead in the phase",
+      "scope": "atm-bd-orchestration bead schema validation",
+      "deterministic_check": "Run the phase validator over a fixture phase and confirm it visits every bead under the phase epic.",
+      "fixtures": {
+        "pass": [
+          "The phase validation method visits every bead under the phase epic."
+        ],
+        "fail": [
+          "The phase validation method skips a bead under the phase epic."
+        ]
+      },
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not describe one method covering every bead in the phase: it is silent about validation coverage, mentions validation only in general, uses several separate methods, or says some beads of the phase are skipped or not validated.",
+                "unclear": "The item mentions a phase validation method but it is not possible to tell whether that one method covers every bead of the phase.",
+                "yes": "The item names one validation method, function, command or entry point and says it checks every bead, all beads, or the whole phase."
+              },
+              "instructions": "`anchor.statement` requires one validation method that validates every bead in the phase. Does `item.text` state such a method: a single method, function, command or entry point that checks all beads of the phase (for example every bead under the phase epic)? One method that checks each bead against a model or schema for its kind still counts as one method. Leaving out beads of other phases does not matter. Judge presence of this directive only, not whether the item conflicts with it.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item conflicts with one method validating every bead in the phase, including when the item is silent about it.",
+                "unclear": "The item is ambiguous enough that it might describe split validation or skipped beads, but it cannot be determined.",
+                "yes": "The item splits validation across separate methods with no single one covering every bead of the phase, or says a bead or bead kind of the phase is skipped or not validated."
+              },
+              "instructions": "Does `item.text` plan bead validation in a way that `anchor.statement` rules out? The anchor rules out two things: (1) splitting validation across several separate methods or commands with no single method that validates every bead in the phase; (2) a phase validation method that skips some beads of the phase or some bead kinds. These are not a conflict: silence about validation coverage; a general mention of validation; one method that uses a different model per bead kind; leaving out beads that belong to other phases. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different part of the system, such as console display, messaging or release work, and does not touch bead validation or bead schemas.",
+                "unclear": "The item text is too vague to tell whether it touches bead validation.",
+                "yes": "The item plans or changes bead validation, a bead schema or model, a validation command or method, or which beads are validated."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor about validating the beads of an atm-bd-orchestration phase (`anchor.statement`, `anchor.scope`). Does the work described in `item.text` plan, change, or depend on how beads are validated: bead schemas or models, a validator, validation commands, or which beads of a phase get checked? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T00:01:18+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T00:01:35+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:27:01+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "One validation method must cover every bead in the phase."
+        },
+        {
+          "at": "2026-10-19T00:37:17+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "The phase validator belongs to bj-2, not the bj-1 task-close hook.",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T00:37:17+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "The phase validator and bead_schema.py belong to bj-2, not bj-3 sanity-stack.",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T00:45:23+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "Phase validation is bj-2; bj-4 does not change it.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "The phase validator belongs to bj-2, not the bj-1 task-close hook."
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "The phase validator and bead_schema.py belong to bj-2, not bj-3 sanity-stack."
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "Phase validation is bj-2; bj-4 does not change it."
+        }
+      ]
+    },
+    {
+      "id": "ANC-084",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "An LLM or Jev call failure must be retried three times before reporting failure.",
+      "quote": "There are occasionally LLM call fails during heavy traffic times which can be retried 3x before saying fail.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "summary": "Retry LLM call failures three times",
+      "scope": "LLM or Jev call failures",
+      "deterministic_check": "Controlled call failures verify three retries before failure is reported.",
+      "fixtures": {
+        "pass": [
+          "An LLM call failure is retried three times before failure is reported."
+        ],
+        "fail": [
+          "A failed Jev call is reported as a failure without any retries."
+        ]
+      },
+      "question_overrides": {},
+      "version": 6,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T00:01:18+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T00:01:35+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:04:39+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "An LLM call failure may be retried three times before the slot reports failure."
+        },
+        {
+          "at": "2026-10-19T00:14:47+00:00",
+          "event": "updated",
+          "fields": [
+            "scope",
+            "deterministic_check"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:15:17+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "fixtures"
+          ],
+          "previous_statement": "A retryable LLM call failure is retried three times before the slot reports failure."
+        },
+        {
+          "at": "2026-10-19T00:27:04+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Calibrated live rubric remained inconclusive after one clarity-only rewrite; retained as sprint design under lead ruling."
+        }
+      ]
+    },
+    {
+      "id": "ANC-085",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The runs page severity table must show the LLM failure reason and use an icon distinct from a JEV not-done verdict for a TypeSafe API failure.",
+      "quote": "Make sure that LLM failure reason shows up in severity table in tui AND the fail icon for typesafe API issue is distinctly different from jev answered 'all work NOT done'.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "summary": "Show API failure reason and distinct icon",
+      "scope": "atm-bd-orchestration runs page severity table",
+      "deterministic_check": "Render an API failure and a JEV not-done verdict and assert the reason is visible and their icons differ.",
+      "fixtures": {
+        "pass": [
+          "The runs page severity table shows the LLM failure reason and gives TypeSafe API failure a distinct icon from a JEV not-done verdict."
+        ],
+        "fail": [
+          "The runs page severity table omits the LLM failure reason and uses the JEV not-done icon for a TypeSafe API failure."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T00:01:18+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T00:01:35+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:17:12+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Compound anchor split candidates remained inconclusive on the testability rubric; lead directed no untestable lock."
+        }
+      ]
+    },
+    {
+      "id": "ANC-086",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The sanity and refusal flows must not use outage class beads or require refusal citations.",
+      "quote": "This `Class-bead append and citation on every refusal, and the checker-defect side channel.` also sounds like ceremony I did not know about or approve.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand rulings, atm-bd-orchestration #340 and #347",
+      "summary": "No outage beads or refusal citations",
+      "scope": "atm-bd-orchestration sanity and refusal flows",
+      "deterministic_check": "Inspect the sanity and refusal flows and assert no outage class bead is opened and no refusal citation is required.",
+      "fixtures": {
+        "pass": [
+          "The sanity and refusal flows open no outage class bead and require no refusal citation."
+        ],
+        "fail": [
+          "The sanity flow opens an outage class bead or the refusal flow requires a citation."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T00:01:19+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T00:01:35+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:17:31+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Atomic replacement candidates failed testability; class-bead and citation behavior remains sprint design."
+        }
+      ]
+    },
+    {
+      "id": "ANC-087",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The published skill must include a manifest containing the hash of every shipped file.",
+      "quote": "when atm-bd is published, the sha must be calculated and stored in a manifest for every file. then the installer can check against the published manifest to verify the file has not changed. we should do this for the entire skill. all agents/skills/python files.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-bd-orchestration issue #349, Rand verbatim",
+      "summary": "Manifest hashes every published skill file",
+      "scope": "atm-bd skill publishing",
+      "deterministic_check": "Inspect a published skill manifest and verify each shipped file has a hash.",
+      "fixtures": {
+        "pass": [
+          "The published skill has a manifest listing the hash of each shipped file."
+        ],
+        "fail": [
+          "The published skill manifest omits the hash for a shipped file."
+        ]
+      },
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not require a hash of every shipped file: it is silent, mentions integrity or verification only in general, hashes only the archive as a whole, or hashes only some shipped files.",
+                "unclear": "The item mentions a manifest or file hashes but it cannot be told whether every shipped file gets a hash.",
+                "yes": "The item states that the published skill ships a manifest or hash list containing a hash for each shipped file, in wording such as every file, each file, or all agent, skill and Python files."
+              },
+              "instructions": "Does `item.text` require the published skill to include a manifest that records a hash (for example a SHA-256) of every shipped file, as `anchor.statement` requires? Shipped files include the skill's agent, skill and Python files. Judge presence only, not conflict.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "No explicit incompatible decision exists: the item is silent about hashes or manifests, or leaves out only files that are not shipped in the skill.",
+                "unclear": "The item may leave some shipped files unhashed, but which files are shipped or hashed is unresolved.",
+                "yes": "The item states that a shipped file is left unhashed or out of the manifest, that only a whole-archive hash is published instead of per-file hashes, or that no manifest is published."
+              },
+              "instructions": "Does an explicit decision in `item.text` prevent the published skill's manifest from holding a hash of every shipped file? Silence is not conflict.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item concerns a different activity, such as runtime retry behavior or task assignment, and does not touch skill publishing.",
+                "unclear": "The item mentions a release or package but it cannot be told whether it concerns publishing the atm-bd skill.",
+                "yes": "The item plans, changes, or depends on publishing or releasing the atm-bd skill, its package contents, or a release manifest or hash list."
+              },
+              "instructions": "Does `item.text` touch how the atm-bd skill is published or released, including what the published package contains, a release manifest, or file hashes shipped with it? Judge subject overlap only; the item need not mention hashes to be relevant.",
+              "type": "choice"
+            }
+          }
+        }
+      },
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T00:16:05+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-19T00:16:35+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:16:35+00:00",
+          "event": "locked",
+          "reason": "Lead's scoped replacement of ANC-075 with Rand's verbatim issue quote; live rubric testable"
+        },
+        {
+          "at": "2026-10-19T00:37:17+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "Skill publication and its manifest belong to bj-5, not bj-3 sanity-stack.",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T00:45:23+00:00",
+          "event": "excluded",
+          "item": "atm-bj-4",
+          "reason": "The skill manifest belongs to bj-5 and is not touched by bj-4.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-3",
+          "reason": "Skill publication and its manifest belong to bj-5, not bj-3 sanity-stack."
+        },
+        {
+          "item": "atm-bj-4",
+          "reason": "The skill manifest belongs to bj-5 and is not touched by bj-4."
+        }
+      ]
+    },
+    {
+      "id": "ANC-088",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd installer must verify skill files against the published manifest.",
+      "quote": "when atm-bd is published, the sha must be calculated and stored in a manifest for every file. then the installer can check against the published manifest to verify the file has not changed. we should do this for the entire skill. all agents/skills/python files.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-bd-orchestration issue #349, Rand verbatim",
+      "summary": "Installer verifies skill files against manifest",
+      "scope": "atm-bd skill installer",
+      "deterministic_check": "Install a skill with a changed file and verify it is detected against the published manifest.",
+      "fixtures": {
+        "pass": [
+          "The installer verifies skill files against the published manifest."
+        ],
+        "fail": [
+          "The installer accepts skill files without comparing them to the published manifest."
+        ]
+      },
+      "question_overrides": {
+        "plan": {
+          "questions": {
+            "addressed": {
+              "criteria": {
+                "no": "The item does not plan that check: it is silent about it, only publishes or mentions a manifest, or checks only part of the skill's files.",
+                "unclear": "The item mentions checking installed files, but the text does not show whether the check is against the published manifest or covers the skill's files.",
+                "yes": "The item has the installer check the skill's files against the published manifest."
+              },
+              "instructions": "`anchor.statement` requires the atm-bd installer to verify the skill's files against the published manifest. Does `item.text` plan that verification? Count it only when the item has the installer compare the files it installs (the skill's agent, skill and Python files) against the published manifest, for example by checking each file's digest against that file's manifest entry. Publishing a manifest with no installer check, an installer change that never mentions the check, or checking only some of the skill's files while others go unchecked does not count. Judge whether the verification is planned; do not judge whether the item also plans something that conflicts with it.",
+              "type": "choice"
+            },
+            "contradicted": {
+              "criteria": {
+                "no": "Nothing in the item would install or accept a skill file without the manifest check; this includes items that never mention the check.",
+                "unclear": "The item might let some files or situations skip the check, but the text is ambiguous.",
+                "yes": "The item plans to install or accept some or all of the skill's files, in some or all situations, without checking them against the published manifest."
+              },
+              "instructions": "`anchor.statement` requires the atm-bd installer to verify the skill's files against the published manifest. Does `item.text` plan something that rule forbids? A conflict is an item that has the installer install or accept skill files without that check: skipping or disabling the comparison, leaving some of the skill's files out of it, or installing unverified files in some situation, such as when the manifest cannot be fetched. Silence about verification is not a conflict. Judge conflict only.",
+              "type": "choice"
+            },
+            "relevant": {
+              "criteria": {
+                "no": "The item is about a different component or activity and touches neither the installer's handling of skill files nor the published manifest.",
+                "unclear": "The item text is too vague to tell which component or activity it changes.",
+                "yes": "The item plans, changes, or depends on the atm-bd installer's handling of the skill's files (agents, skills, Python files) or on the published file manifest, directly or as a clear prerequisite."
+              },
+              "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work in `item.text` touch the subject of `anchor.statement`: how the atm-bd installer handles or installs the skill's files, or the published per-file manifest that the installer checks them against? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+              "type": "choice"
+            }
+          }
+        }
+      },
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T00:16:43+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T00:16:45+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T00:37:17+00:00",
+          "event": "excluded",
+          "item": "atm-bj-1",
+          "reason": "Installer verification belongs to bj-5, not the bj-1 task-close hook.",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-19T00:37:17+00:00",
+          "event": "excluded",
+          "item": "atm-bj-3",
+          "reason": "Installer verification belongs to bj-5, not bj-3 sanity-stack.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bj-1",
+          "reason": "Installer verification belongs to bj-5, not the bj-1 task-close hook."
+        },
+        {
+          "item": "atm-bj-3",
+          "reason": "Installer verification belongs to bj-5, not bj-3 sanity-stack."
+        }
+      ]
+    },
+    {
+      "id": "ANC-089",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The vars file given to atm-task-close.py must contain the union of the required variables of every template it is passed to, atm task templates and sc-compose bead templates alike, so one vars file serves every render.",
+      "quote": "same vars sent to 'atm ... --template --vars <shared-vars>'  and sc-compose bead ... --template --vars <shared-vars>\nyes, json should be union of required variables for both templates.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj drift review 2026-10-18 (fenix relay, message 01M58YBB6RRSSCBMVM991MMAA3): Rand's answer on ANC-058",
+      "summary": "one vars file = union of atm task and sc-compose bead template variables",
+      "scope": "atm-task-close.py vars contract, task-close-vars.j2, the atm task and sc-compose bead templates the hook flow renders",
+      "deterministic_check": "strict-render dev-sanity-bead.json.j2, qa-bead.json.j2 and every role's atm template with the one test vars file; each render passes and task-close-vars.j2 required_variables is the union of their headers",
+      "fixtures": {
+        "pass": [
+          "task-close-vars.j2 lists every required variable of dev-sanity-template.xml.j2, qa-template.xml.j2, dev-sanity-bead.json.j2 and qa-bead.json.j2, and the hook passes the same file as --vars to atm and to sc-compose."
+        ],
+        "fail": [
+          "The hook keeps one vars file for the atm templates and builds a separate vars dict for the sc-compose bead templates."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-19T02:04:52+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-10-19T02:05:00+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-19T02:19:05+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "The vars file given to atm-task-close.py must contain the union of the required variables of the atm task templates and the sc-compose bead templates it is passed to."
         }
       ]
     }

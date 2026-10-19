@@ -1,0 +1,114 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T223924Z-fixture_ANC-069_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T22:39:24+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-069:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 173,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-069",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "sanity-stack must take a budget input in its fenced JSON; in lean mode, or whenever GraphQL is unavailable, it must verify only that the PR base equals the recorded top and that the head descends from it with no divergence, using one filtered REST pull list and local git, and must make no GraphQL call.",
+      "quote": "yes, so basically if graphql is out, or we are watching our tokens (this should be an input arg to the fenced json input of the subagent) the subagent should make sure the branches are aligned and there is no divergence.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md)",
+      "anchor_version": 2,
+      "deterministic_check": "with GH_TOKEN scoped to REST only, a lean spawn completes with zero graphql calls in the gh debug log and the layer recorded linked false; the REST call is filtered to number, base, head, sha, draft",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.97,
+            "no": 0.02,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.59,
+          "probabilities": {
+            "yes": 0.25,
+            "no": 0.73,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.59,
+      "explanation": "Jev was not confident (min confidence 0.59); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1073,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "conflict",
+          "question_id": "contradicted",
+          "choice": "no",
+          "confidence": 0.59
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 173,
+      "item_shortened": false,
+      "request_bytes": 3295
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1
+    },
+    "failing": [
+      "ANC-069"
+    ],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

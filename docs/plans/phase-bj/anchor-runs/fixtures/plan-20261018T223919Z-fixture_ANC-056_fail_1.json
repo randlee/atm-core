@@ -1,0 +1,103 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T223919Z-fixture_ANC-056_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T22:39:19+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-056:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 115,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-056",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "On a sanity FAIL below the round cap, the sanity close hook must reopen the checked bead to its assignee and send that dev the sanity-rejected template naming each undone deliverable, on the dev's still-open task; it must not create finding beads, a new layer or a new task.",
+      "quote": "If sanity fails, dev bead is re-opened and 'atm send <dev-agent> --template <sanity-rejected-template>'",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "run the sanity role with verdict FAIL in a scratch repo: the checked bead is open with its assignee, the dev received one sanity-rejected message, bd list --parent <checked bead> is empty, no new ATM task exists",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.88,
+          "probabilities": {
+            "yes": 0.05,
+            "no": 0.92,
+            "unclear": 0.03
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.88,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1076,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 115,
+      "item_shortened": false,
+      "request_bytes": 3287
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-056"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

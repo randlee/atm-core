@@ -1,0 +1,162 @@
+{
+ "anchor_id": "ANC-052",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "416a6e9b8656624ce698e0942c37c73db5af7a6fc05b2b15da496bd7b6c2ba3f",
+ "anchor_scope": "atm-task-close.py dev and fix roles; atm-bd dispatch of sanity beads",
+ "anchor_statement": "When a dev or fix bead closes, the group's sanity bead must be assigned to the dev-sanity member with the sanity template and vars without any lead action: by the dev's close hook in the same shell command as bd close, and by atm-bd when bd ready lists the sanity bead with no ATM task.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-052-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The dev role of atm-task-close.py runs atm task assign atm-sanity --task-id <sanity bead> and bd close <dev bead> in one shell command; an atm-bd tick finds a ready sanity bead with no task and assigns it.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-052-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The lead reads the dev-complete report and runs atm task assign for the sanity bead by hand, or atm-bd only logs a notice that the sanity bead is ready.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-052-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase of every clause.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "When the fix role closes a fix bead it runs atm task assign <dev-sanity member> --task-id <sanity bead> --template sanity.xml.j2 --vars <file> and bd close <fix bead> in one shell command; separately, each atm-bd tick assigns the same way any sanity bead that bd ready lists with no ATM task. The lead does nothing.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-052-probe-silent",
+   "probe": "silence",
+   "rationale": "In-scope dev close, silent about sanity assignment.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The dev role checks that the PR is open on pr_target before it runs bd close.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "topical",
+   "item_id": "ANC-052-probe-topical",
+   "probe": "topical_only",
+   "rationale": "Topic only.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "This item covers what happens when a dev bead closes.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_lead",
+   "item_id": "ANC-052-probe-conflict_lead",
+   "probe": "conflict",
+   "rationale": "No lead action is allowed.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "After the dev reports complete, the lead assigns the sanity bead to dev-sanity.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_notice",
+   "item_id": "ANC-052-probe-conflict_notice",
+   "probe": "conflict",
+   "rationale": "atm-bd must assign it (the fail fixture names this case).",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd posts a 'sanity ready' notice to the lead instead of assigning the ready sanity bead.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-052-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The console shows the sol icon next to every Codex agent of model sol in the agent list.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

@@ -1,0 +1,144 @@
+{
+ "anchor_id": "ANC-058",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "2a5f7ee417a9f392582cece367d92ea79cf534aaa6199cb3ca18fb7e0659ec4b",
+ "anchor_scope": "the input contract of atm-task-close.py; templates/task-close-vars.j2",
+ "anchor_statement": "atm-task-close.py must take its input as one sc-compose --vars file that carries every value the role needs, must validate it by rendering a header-only j2 template in strict mode before any check runs, and must pass that same file unchanged to the atm task assign and atm send templates it runs.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-058-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The hook renders task-close-vars.j2 (required_variables only) with sc-compose in strict mode and refuses a file missing pr_number; the same path is passed as --vars to atm task assign.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-058-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The hook defines a pydantic model of its own fields and builds a second vars dict for the assignment template.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-058-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-task-close.py takes a single sc-compose --vars file holding every value its role needs, first renders the header-only task-close-vars.j2 in strict mode so a missing value stops it before any check, and passes that same file unchanged as --vars to every atm task assign and atm send template it runs.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-058-probe-silent",
+   "probe": "silence",
+   "rationale": "In-scope hook check, silent about its input contract.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The hook checks that the PR head equals the pushed head.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_flags",
+   "item_id": "ANC-058-probe-conflict_flags",
+   "probe": "conflict",
+   "rationale": "Input must be one vars file.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The hook takes --pr-number, --branch and --role as separate command-line flags instead of a vars file.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_late_validation",
+   "item_id": "ANC-058-probe-conflict_late_validation",
+   "probe": "conflict",
+   "rationale": "Validation must precede any check.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The hook runs its PR and git checks first and validates the vars file at the end.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-058-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Every time atm-bd prints for a person is rendered in 24-hour local time.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

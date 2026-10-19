@@ -1,0 +1,112 @@
+{
+ "events": [
+  {
+   "authority": {
+    "anchor_id": "ANC-068",
+    "anchor_record_sha256": "cb104d17be029e1e42c49099320b8aaec83ede25bb2cd864acc3e88264801452",
+    "anchor_version": 2,
+    "intent_id": "phase-bj",
+    "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+    "intent_version": 1
+   },
+   "candidate": {
+    "candidate_id": "D_fail_roles_B",
+    "question_sha256": "0168baed51cf78290b6decb88fb1f71ea6fed14d19ade7ea3bb534c90a931e10"
+   },
+   "decision": {
+    "question_set_sha256": "0168baed51cf78290b6decb88fb1f71ea6fed14d19ade7ea3bb534c90a931e10",
+    "reason_code": "TOURNAMENT.SEMANTIC_EXACT",
+    "status": "sealed"
+   },
+   "event": "question_set_sealed",
+   "event_index": 1,
+   "evidence": {
+    "canonical_request_sha256": [
+     "3d0c5d23e25abc5461220f06d42015a7341f68e06bfbee5128a776dcedaa9274",
+     "3d0c5d23e25abc5461220f06d42015a7341f68e06bfbee5128a776dcedaa9274",
+     "3aa2a2f203bb5987fc2b355eb2295bfc9c4fcd025ede4c46ddbb9370f498d29f",
+     "3aa2a2f203bb5987fc2b355eb2295bfc9c4fcd025ede4c46ddbb9370f498d29f",
+     "3b305591886111253ce7ff19f2c7ced808fdff9835d4e9b70d0d18c7b2d28c79",
+     "3b305591886111253ce7ff19f2c7ced808fdff9835d4e9b70d0d18c7b2d28c79",
+     "62b0fb9b05075f63c113ac5243166ae00ff31365a62522d5a8eebb62f86f2feb",
+     "62b0fb9b05075f63c113ac5243166ae00ff31365a62522d5a8eebb62f86f2feb",
+     "fe7d0f4f857c8688318d01a0844ecb1138cadc11bf79aad5f844a8ebb988756b",
+     "fe7d0f4f857c8688318d01a0844ecb1138cadc11bf79aad5f844a8ebb988756b",
+     "e8d15c00c4f62d14866a89226eb171b2246924b0fa24aea1224e715f3c5191f6",
+     "e8d15c00c4f62d14866a89226eb171b2246924b0fa24aea1224e715f3c5191f6",
+     "90a4146394537fae4ab75abfa488bbe3f86f2d27199d66c2beaf2c4faf309ce2",
+     "90a4146394537fae4ab75abfa488bbe3f86f2d27199d66c2beaf2c4faf309ce2"
+    ],
+    "raw_response_sha256": [
+     "ff0ef963d81676e707a338cf33dd5f78a405b1e8a006a234b3c5caf07e39c9df",
+     "6797588b0d2bb8ec6863671f1a0c7368f95a6d27d2573f93dac0d2c34482b916",
+     "8aafa83f694625c3903c95964206968ad11ccb39d8258f81849b4af854fb487e",
+     "af2fa77bc7f3a69f55633c58cd4faf51e38d9133aef14b5e5dcf379c2c61c4d9",
+     "5efd65b288bc6590e7b405075a12364ce4bcb151eb5d215c9a7c1ee1fa191617",
+     "dc422c1e3232f39448de69b35ed93938c94cd291fbdac3b4753c6f226c9bbb6d",
+     "056e330427f35f81073cbf4392dd72b1e78ab138602b2e8a2e1e19ebf8c36f5a",
+     "bbdff109165848b01d0d6ac13e4b543292271ba33a1ddcaece1fb28fc2e3a90b",
+     "f51a673b47b5be16a682285ea41d5decfa0e3867f83022c6be7373e1dc45cb99",
+     "f51a673b47b5be16a682285ea41d5decfa0e3867f83022c6be7373e1dc45cb99",
+     "13d9d44f9542685f151ebed82d00200fd122622ae3fa68ea9f39cf6965f6fa8a",
+     "60a7f70cf037d409267081aea2f493117a2aaf2c96b69f1472a1b3d13937eaf1",
+     "de5bccfe54cdcc23b1317ac5b26fc649d7a1ab97cdd22be9f09187205b4304cf",
+     "de5bccfe54cdcc23b1317ac5b26fc649d7a1ab97cdd22be9f09187205b4304cf"
+    ],
+    "run_ids": [
+     "ANC-068-D_fail_roles_B-fixture_pass-r1",
+     "ANC-068-D_fail_roles_B-fixture_pass-r2",
+     "ANC-068-D_fail_roles_B-fixture_fail-r1",
+     "ANC-068-D_fail_roles_B-fixture_fail-r2",
+     "ANC-068-D_fail_roles_B-paraphrase-r1",
+     "ANC-068-D_fail_roles_B-paraphrase-r2",
+     "ANC-068-D_fail_roles_B-silent-r1",
+     "ANC-068-D_fail_roles_B-silent-r2",
+     "ANC-068-D_fail_roles_B-conflict_no_timeout-r1",
+     "ANC-068-D_fail_roles_B-conflict_no_timeout-r2",
+     "ANC-068-D_fail_roles_B-conflict_human-r1",
+     "ANC-068-D_fail_roles_B-conflict_human-r2",
+     "ANC-068-D_fail_roles_B-irrelevant-r1",
+     "ANC-068-D_fail_roles_B-irrelevant-r2"
+    ]
+   },
+   "oracle": {
+    "case_count": 7,
+    "case_ids": [
+     "fixture_pass",
+     "fixture_fail",
+     "paraphrase",
+     "silent",
+     "conflict_no_timeout",
+     "conflict_human",
+     "irrelevant"
+    ],
+    "repeat_count": 2,
+    "sha256": "c62549f8dcffefa09a3ce8716c3014ea5cb31ea5f104e1feb39fc4c348809394"
+   },
+   "previous_event_sha256": null,
+   "protocol_version": "plan-anchor/question-tournament/2.0.0",
+   "score": {
+    "confidence": {
+     "cells_at_or_above_threshold": 41,
+     "mean": 0.97,
+     "median": 1.0,
+     "minimum": 0.79,
+     "p10": 0.83,
+     "threshold": 0.8,
+     "total_cells": 42
+    },
+    "exact_role_cells": 42,
+    "exact_semantic_verdicts": 14,
+    "regressions": 0,
+    "stable_cases": 7,
+    "total_cases": 7,
+    "total_role_cells": 42,
+    "total_semantic_verdicts": 14
+   },
+   "supersedes": null
+  }
+ ],
+ "history_id": "ANC-068-plan",
+ "schema": "plan-anchor/tuning-history/2"
+}

@@ -1,0 +1,384 @@
+{
+ "cases": [
+  {
+   "anchor": {
+    "quote": "the release command needs to write a JSON manifest to dist/release.json",
+    "scope": "release command output",
+    "statement": "The release command must write a JSON manifest to dist/release.json."
+   },
+   "case_id": "a0-01-valid-directive",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "One supported, observable, scoped directive.",
+   "requirement_form_lint": "pass",
+   "title": "valid directive"
+  },
+  {
+   "anchor": {
+    "quote": "do not print raw auth tokens in request logs or errors",
+    "scope": "request logging and error output",
+    "statement": "The request logger must never write raw authentication tokens to stdout or stderr."
+   },
+   "case_id": "a0-02-valid-prohibition",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "Concrete negative prose is a valid, self-contained prohibition.",
+   "requirement_form_lint": "pass",
+   "title": "explicit prohibition"
+  },
+  {
+   "anchor": {
+    "quote": "keep the parser module under src/parser",
+    "scope": "repository structure",
+    "statement": "The parser module must remain under src/parser/."
+   },
+   "case_id": "a0-03-structural-scope",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "A path is observable and structural scope is identifiable.",
+   "requirement_form_lint": "pass",
+   "title": "structural scope"
+  },
+  {
+   "anchor": {
+    "quote": "all CLI commands should print JSON on stdout",
+    "scope": "all CLI subcommands",
+    "statement": "Every CLI subcommand must emit a JSON object on stdout."
+   },
+   "case_id": "a0-04-global-scope",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "An explicit global command boundary is valid scope.",
+   "requirement_form_lint": "pass",
+   "title": "global scope"
+  },
+  {
+   "anchor": {
+    "quote": "Use cargo for compilation, and run pytest for integration tests.",
+    "scope": "build compilation",
+    "statement": "The build pipeline must use cargo for compilation."
+   },
+   "case_id": "a0-05-atomic-from-multi-directive",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "The statement may capture one supported directive without exhausting the quote.",
+   "requirement_form_lint": "pass",
+   "title": "one atomic anchor from multi-directive quote"
+  },
+  {
+   "anchor": {
+    "quote": "the CLI must emit JSON and the daemon must write an audit log",
+    "scope": "CLI output and daemon audit",
+    "statement": "The CLI must emit JSON and the daemon must write an audit log."
+   },
+   "case_id": "a0-06-genuinely-bundled",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "no"
+   },
+   "rationale": "Two independently satisfiable obligations must split.",
+   "requirement_form_lint": "pass",
+   "title": "genuinely bundled statement"
+  },
+  {
+   "anchor": {
+    "quote": "encrypt backup archives",
+    "scope": "backup storage",
+    "statement": "Backup archives must use AES-256-GCM encryption."
+   },
+   "case_id": "a0-07-unsupported-elaboration",
+   "expected": {
+    "faithful": "no",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "The algorithm and strength are an unsupported added policy.",
+   "requirement_form_lint": "pass",
+   "title": "unsupported policy elaboration"
+  },
+  {
+   "anchor": {
+    "quote": "make the installer robust",
+    "scope": "installer behavior",
+    "statement": "The installer must be robust."
+   },
+   "case_id": "a0-08-vague-outcome",
+   "expected": {
+    "faithful": "yes",
+    "observable": "no",
+    "scoped": "yes",
+    "self_contained": "no",
+    "single_constraint": "yes"
+   },
+   "rationale": "Robust has no observable outcome and requires private interpretation.",
+   "requirement_form_lint": "pass",
+   "title": "vague outcome"
+  },
+  {
+   "anchor": {
+    "quote": "with --privacy, replace email addresses with [redacted]",
+    "scope": "exporter privacy mode",
+    "statement": "When --privacy is set, the exporter must replace every email address with [redacted]."
+   },
+   "case_id": "a0-09-explicit-testable-condition",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "A trigger/action/outcome condition is self-contained.",
+   "requirement_form_lint": "pass",
+   "title": "explicit condition"
+  },
+  {
+   "anchor": {
+    "quote": "test a transport failure with a canary TypeSafe key and make sure console output and saved run files contain neither the key nor its bearer header",
+    "scope": "transport-error output and persisted run artifacts",
+    "statement": "When TYPESAFE_API_KEY is set to canary-123 and transport fails, stdout, stderr, and saved run artifacts must omit canary-123 and Authorization: Bearer canary-123."
+   },
+   "case_id": "a0-10-api-key-redaction",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "Concrete input/action/outcome proves redaction without literal statement-token dependence.",
+   "requirement_form_lint": "pass",
+   "title": "API-key output redaction"
+  },
+  {
+   "anchor": {
+    "quote": "make the deploy path satisfy R7",
+    "scope": "deployment",
+    "statement": "The deploy path must satisfy R7."
+   },
+   "case_id": "a0-11-private-shorthand",
+   "expected": {
+    "faithful": "yes",
+    "observable": "no",
+    "scoped": "yes",
+    "self_contained": "no",
+    "single_constraint": "yes"
+   },
+   "rationale": "R7 is undefined private shorthand.",
+   "requirement_form_lint": "pass",
+   "title": "private shorthand"
+  },
+  {
+   "anchor": {
+    "quote": "only publish after the release lead says yes",
+    "scope": "package publishing",
+    "statement": "The package may publish only when the release lead approves."
+   },
+   "case_id": "a0-12-unrecorded-approval",
+   "expected": {
+    "faithful": "yes",
+    "observable": "no",
+    "scoped": "yes",
+    "self_contained": "no",
+    "single_constraint": "yes"
+   },
+   "rationale": "No recorded approval artifact or decision rule is identified.",
+   "requirement_form_lint": "pass",
+   "title": "unrecorded approval dependency"
+  },
+  {
+   "anchor": {
+    "quote": "The service must log requests as JSON and retry failed requests twice.",
+    "scope": "request logging",
+    "statement": "The service must write request logs as JSON."
+   },
+   "case_id": "a0-13-shared-quote-first-atomic",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "First of two distinct atomic anchors from one quote.",
+   "requirement_form_lint": "pass",
+   "title": "first atomic anchor sharing quote"
+  },
+  {
+   "anchor": {
+    "quote": "The service must log requests as JSON and retry failed requests twice.",
+    "scope": "failed request handling",
+    "statement": "The service must retry failed requests twice."
+   },
+   "case_id": "a0-14-shared-quote-second-atomic",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "Second of two distinct atomic anchors from one quote.",
+   "requirement_form_lint": "pass",
+   "title": "second atomic anchor sharing quote"
+  },
+  {
+   "anchor": {
+    "quote": "CLI output must always be JSON",
+    "scope": "all CLI commands",
+    "statement": "Every CLI command must emit JSON to stdout."
+   },
+   "case_id": "a0-15-duplicate-first",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "Individually valid; dedupe is statement-based.",
+   "requirement_form_lint": "pass",
+   "title": "duplicate statement with first quote"
+  },
+  {
+   "anchor": {
+    "quote": "all commands should print machine-readable JSON",
+    "scope": "all CLI commands",
+    "statement": "Every CLI command must emit JSON to stdout."
+   },
+   "case_id": "a0-16-duplicate-second",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "Same testable statement despite different provenance.",
+   "requirement_form_lint": "pass",
+   "title": "duplicate statement with different quote"
+  },
+  {
+   "anchor": {
+    "quote": "you need to record the build digest in build.json",
+    "scope": "build output",
+    "statement": "You need to record the build digest in build.json."
+   },
+   "case_id": "a0-17-nondeclarative-form",
+   "expected": {
+    "faithful": "yes",
+    "observable": "yes",
+    "scoped": "yes",
+    "self_contained": "yes",
+    "single_constraint": "yes"
+   },
+   "rationale": "Semantic cells are positive, but deterministic grammar lint must reject second-person instruction form.",
+   "requirement_form_lint": "fail",
+   "title": "deterministic requirement-form failure"
+  }
+ ],
+ "cases_sha256": "46fc0d8d72eb489a55a7ed753b4cbabf43b707a9d469191f581cb9893d1e092a",
+ "confidence_reference_threshold": 0.8,
+ "corpus_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/.claude/skills/plan-anchoring/assets/fixtures/testability-calibration.v2.json",
+ "corpus_payload_schema": "plan-anchor/testability-calibration-corpus/1",
+ "corpus_sha256": "ce5f4efcfee74ecc767bb8c140bf749ef2e33c779f82397d5c42d96698a7b1bc",
+ "dedupe_pairs": [
+  {
+   "a": {
+    "quote": "The service must log requests as JSON and retry failed requests twice.",
+    "scope": "request logging",
+    "statement": "The service must write request logs as JSON."
+   },
+   "b": {
+    "quote": "The service must log requests as JSON and retry failed requests twice.",
+    "scope": "failed request handling",
+    "statement": "The service must retry failed requests twice."
+   },
+   "expected": "no",
+   "pair_id": "dup-01-shared-quote-distinct",
+   "rationale": "Same quote, distinct atomic obligations."
+  },
+  {
+   "a": {
+    "quote": "CLI output must always be JSON",
+    "scope": "all CLI commands",
+    "statement": "Every CLI command must emit JSON to stdout."
+   },
+   "b": {
+    "quote": "all commands should print machine-readable JSON",
+    "scope": "all CLI commands",
+    "statement": "Every CLI command must emit JSON to stdout."
+   },
+   "expected": "yes",
+   "pair_id": "dup-02-same-statement-different-quotes",
+   "rationale": "Identical statement, different provenance."
+  },
+  {
+   "a": {
+    "quote": "retry service unavailable twice",
+    "scope": "API client",
+    "statement": "The API client must retry HTTP 503 responses twice."
+   },
+   "b": {
+    "quote": "two retries for 503",
+    "scope": "API client",
+    "statement": "On HTTP 503, the API client must make two retry attempts."
+   },
+   "expected": "yes",
+   "pair_id": "dup-03-paraphrased-duplicate",
+   "rationale": "Mutually entailing paraphrases."
+  },
+  {
+   "a": {
+    "quote": "retry 503 twice",
+    "scope": "API client",
+    "statement": "The API client must retry HTTP 503 responses twice."
+   },
+   "b": {
+    "quote": "log 503 as JSON",
+    "scope": "API client",
+    "statement": "The API client must log HTTP 503 responses as JSON."
+   },
+   "expected": "no",
+   "pair_id": "dup-04-related-distinct",
+   "rationale": "Related subject, different obligations."
+  }
+ ],
+ "descriptor_schema": "plan-anchor/testability-calibration/2",
+ "frozen_before_first_jev_call": true,
+ "production_confidence_threshold": 0.6,
+ "role_mapping": {
+  "atomicity": "single_constraint"
+ },
+ "schema": "anchor-tuning/testability-oracle/1"
+}

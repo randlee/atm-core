@@ -1,0 +1,101 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T223918Z-fixture_ANC-055_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T22:39:18+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-055:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 156,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-055",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The ATM task of a dev or fix bead must stay open after the dev's close hook runs and must be closed only by the sanity close hook on PASS, as the lead; the dev waits for that close or for the sanity-rejected message and starts no other task meanwhile.",
+      "quote": "I would NOT close the atm task until AFTER sanity is green.  This simplifies the dev<->sanity loop.  in the atm-task-close hook for sanity, if sanity pass, THEN atm task is closed (and dev can begin on next task in the queue), sanity task is closed",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "grep atm-task-close.py: no atm task close completed in the dev or fix role; the sanity PASS branch closes the checked bead's task with the lead identity; atm task events of a dev task show the close after the sanity PASS",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1072,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 156,
+      "item_shortened": false,
+      "request_bytes": 3295
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

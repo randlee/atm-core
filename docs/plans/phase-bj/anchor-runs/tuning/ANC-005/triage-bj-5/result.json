@@ -1,0 +1,654 @@
+{
+ "schema_version": "1.0.0",
+ "success": true,
+ "canceled": false,
+ "aborted_by": null,
+ "data": {
+  "acceptance_table": [
+   {
+    "canonical_request_sha256": "0074d12ca524ce78b02157b300bd25106ef8840f0f357c75897b6e7453c05453",
+    "case_id": "O1-fixture-pass",
+    "expected": {
+     "contradicted": "no",
+     "relevant": [
+      "yes"
+     ],
+     "verdict": [
+      "satisfied"
+     ]
+    },
+    "oracle_match": true,
+    "repeats": [
+     {
+      "contradicted": [
+       "no",
+       1.0
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O1-fixture-pass.r1.json",
+      "p_contradicted_yes": 0.0,
+      "relevant": [
+       "yes",
+       0.95
+      ],
+      "run_id": "plan-20261019T014332Z-oracle-O1-fixture-pass",
+      "verdict": "satisfied"
+     },
+     {
+      "contradicted": [
+       "no",
+       1.0
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O1-fixture-pass.r2.json",
+      "p_contradicted_yes": 0.0,
+      "relevant": [
+       "yes",
+       0.97
+      ],
+      "run_id": "plan-20261019T014332Z-oracle-O1-fixture-pass",
+      "verdict": "satisfied"
+     }
+    ],
+    "source": "ANC-005 fixtures.pass[0] (approved)",
+    "stable_choice": true
+   },
+   {
+    "canonical_request_sha256": "966341460cf59268e40d1e9cca78b4189774a57c017257163e06305ef357ee27",
+    "case_id": "O2-fixture-fail",
+    "expected": {
+     "contradicted": "yes",
+     "relevant": [
+      "yes"
+     ],
+     "verdict": [
+      "contradicted"
+     ]
+    },
+    "oracle_match": true,
+    "repeats": [
+     {
+      "contradicted": [
+       "yes",
+       1.0
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O2-fixture-fail.r1.json",
+      "p_contradicted_yes": 1.0,
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "run_id": "plan-20261019T014332Z-oracle-O2-fixture-fail",
+      "verdict": "contradicted"
+     },
+     {
+      "contradicted": [
+       "yes",
+       1.0
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O2-fixture-fail.r2.json",
+      "p_contradicted_yes": 1.0,
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "run_id": "plan-20261019T014332Z-oracle-O2-fixture-fail",
+      "verdict": "contradicted"
+     }
+    ],
+    "source": "ANC-005 fixtures.fail[0] (approved)",
+    "stable_choice": true
+   },
+   {
+    "canonical_request_sha256": "c5542ac2ce6c5df1131163aab153d110f4c2632be791dec0a0c771e53bf1c7b4",
+    "case_id": "O3-compliant",
+    "expected": {
+     "contradicted": "no",
+     "relevant": [
+      "yes"
+     ],
+     "verdict": [
+      "satisfied"
+     ]
+    },
+    "oracle_match": false,
+    "repeats": [
+     {
+      "contradicted": [
+       "no",
+       0.98
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O3-compliant.r1.json",
+      "p_contradicted_yes": 0.01,
+      "relevant": [
+       "yes",
+       0.56
+      ],
+      "run_id": "plan-20261019T014332Z-oracle-O3-compliant",
+      "verdict": "underspecified"
+     },
+     {
+      "contradicted": [
+       "no",
+       0.98
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O3-compliant.r2.json",
+      "p_contradicted_yes": 0.01,
+      "relevant": [
+       "yes",
+       0.56
+      ],
+      "run_id": "plan-20261019T014332Z-oracle-O3-compliant",
+      "verdict": "underspecified"
+     }
+    ],
+    "source": "probe",
+    "stable_choice": true
+   },
+   {
+    "canonical_request_sha256": "45f1ba35b5ae68128225b019447aec192897c48611039221f1d75a03a576b82b",
+    "case_id": "O4-silent",
+    "expected": {
+     "contradicted": "no",
+     "relevant": [
+      "yes",
+      "no"
+     ],
+     "verdict": [
+      "not_applicable",
+      "satisfied"
+     ]
+    },
+    "oracle_match": false,
+    "repeats": [
+     {
+      "contradicted": [
+       "no",
+       0.41
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O4-silent.r1.json",
+      "p_contradicted_yes": 0.35,
+      "relevant": [
+       "yes",
+       0.4
+      ],
+      "run_id": "plan-20261019T014333Z-oracle-O4-silent",
+      "verdict": "underspecified"
+     },
+     {
+      "contradicted": [
+       "no",
+       0.45
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O4-silent.r2.json",
+      "p_contradicted_yes": 0.33,
+      "relevant": [
+       "yes",
+       0.37
+      ],
+      "run_id": "plan-20261019T014333Z-oracle-O4-silent",
+      "verdict": "underspecified"
+     }
+    ],
+    "source": "probe",
+    "stable_choice": true
+   },
+   {
+    "canonical_request_sha256": "d555c7c15c76a70941aed1f79e1d2264e63c882f0d827c82747e1c45e6d548bb",
+    "case_id": "O5-topical-packaging",
+    "expected": {
+     "contradicted": "no",
+     "relevant": [
+      "yes",
+      "no"
+     ],
+     "verdict": [
+      "not_applicable",
+      "satisfied"
+     ]
+    },
+    "oracle_match": false,
+    "repeats": [
+     {
+      "contradicted": [
+       "no",
+       0.3
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O5-topical-packaging.r1.json",
+      "p_contradicted_yes": 0.43,
+      "relevant": [
+       "yes",
+       0.38
+      ],
+      "run_id": "plan-20261019T014333Z-oracle-O5-topical-packaging",
+      "verdict": "underspecified"
+     },
+     {
+      "contradicted": [
+       "no",
+       0.28
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O5-topical-packaging.r2.json",
+      "p_contradicted_yes": 0.45,
+      "relevant": [
+       "yes",
+       0.28
+      ],
+      "run_id": "plan-20261019T014333Z-oracle-O5-topical-packaging",
+      "verdict": "underspecified"
+     }
+    ],
+    "source": "probe",
+    "stable_choice": true
+   },
+   {
+    "canonical_request_sha256": "653439220b9e68a3150fd658dc2e0c7ffbfd7a855e4330f6a3bda69193a808c0",
+    "case_id": "O6-conflicting",
+    "expected": {
+     "contradicted": "yes",
+     "relevant": [
+      "yes"
+     ],
+     "verdict": [
+      "contradicted"
+     ]
+    },
+    "oracle_match": true,
+    "repeats": [
+     {
+      "contradicted": [
+       "yes",
+       0.89
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O6-conflicting.r1.json",
+      "p_contradicted_yes": 0.93,
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "run_id": "plan-20261019T014333Z-oracle-O6-conflicting",
+      "verdict": "contradicted"
+     },
+     {
+      "contradicted": [
+       "yes",
+       0.92
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O6-conflicting.r2.json",
+      "p_contradicted_yes": 0.95,
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "run_id": "plan-20261019T014333Z-oracle-O6-conflicting",
+      "verdict": "contradicted"
+     }
+    ],
+    "source": "probe",
+    "stable_choice": true
+   },
+   {
+    "canonical_request_sha256": "9f91a342cadbfab3bb388ba69435c1418601c218cb906fbb67b2d151b69a9602",
+    "case_id": "O7-irrelevant",
+    "expected": {
+     "contradicted": "no",
+     "relevant": [
+      "no"
+     ],
+     "verdict": [
+      "not_applicable"
+     ]
+    },
+    "oracle_match": false,
+    "repeats": [
+     {
+      "contradicted": [
+       "no",
+       0.18
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O7-irrelevant.r1.json",
+      "p_contradicted_yes": 0.44,
+      "relevant": [
+       "yes",
+       0.45
+      ],
+      "run_id": "plan-20261019T014333Z-oracle-O7-irrelevant",
+      "verdict": "underspecified"
+     },
+     {
+      "contradicted": [
+       "no",
+       0.28
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O7-irrelevant.r2.json",
+      "p_contradicted_yes": 0.39,
+      "relevant": [
+       "yes",
+       0.28
+      ],
+      "run_id": "plan-20261019T014333Z-oracle-O7-irrelevant",
+      "verdict": "underspecified"
+     }
+    ],
+    "source": "probe",
+    "stable_choice": true
+   },
+   {
+    "canonical_request_sha256": "0f3945d55db69cf9dec94e2b3865ec7da3e23dea69b47e9352ca68f364d0a0a5",
+    "case_id": "O8-boundary-base",
+    "expected": {
+     "contradicted": "no",
+     "relevant": [
+      "yes"
+     ],
+     "verdict": [
+      "satisfied"
+     ]
+    },
+    "oracle_match": true,
+    "repeats": [
+     {
+      "contradicted": [
+       "no",
+       1.0
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O8-boundary-base.r1.json",
+      "p_contradicted_yes": 0.0,
+      "relevant": [
+       "yes",
+       0.97
+      ],
+      "run_id": "plan-20261019T014333Z-oracle-O8-boundary-base",
+      "verdict": "satisfied"
+     },
+     {
+      "contradicted": [
+       "no",
+       1.0
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O8-boundary-base.r2.json",
+      "p_contradicted_yes": 0.0,
+      "relevant": [
+       "yes",
+       0.95
+      ],
+      "run_id": "plan-20261019T014333Z-oracle-O8-boundary-base",
+      "verdict": "satisfied"
+     }
+    ],
+    "source": "probe",
+    "stable_choice": true
+   },
+   {
+    "canonical_request_sha256": "7dcc211406507b4d3c4f7de5121bc740c441e7aee08abcac6379a76ace850abf",
+    "case_id": "O9-exception-backport",
+    "expected": {
+     "contradicted": "yes",
+     "relevant": [
+      "yes"
+     ],
+     "verdict": [
+      "contradicted"
+     ]
+    },
+    "oracle_match": true,
+    "repeats": [
+     {
+      "contradicted": [
+       "yes",
+       0.89
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O9-exception-backport.r1.json",
+      "p_contradicted_yes": 0.93,
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "run_id": "plan-20261019T014333Z-oracle-O9-exception-backport",
+      "verdict": "contradicted"
+     },
+     {
+      "contradicted": [
+       "yes",
+       0.85
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O9-exception-backport.r2.json",
+      "p_contradicted_yes": 0.9,
+      "relevant": [
+       "yes",
+       1.0
+      ],
+      "run_id": "plan-20261019T014333Z-oracle-O9-exception-backport",
+      "verdict": "contradicted"
+     }
+    ],
+    "source": "probe",
+    "stable_choice": true
+   },
+   {
+    "canonical_request_sha256": "4bece711b1fa35e4c93e5605fdea1ca4a2f3972be098ec27bf10e5e4dfdff0cd",
+    "case_id": "O10-bj-5",
+    "expected": {
+     "contradicted": "no",
+     "relevant": [
+      "yes",
+      "no"
+     ],
+     "verdict": [
+      "not_applicable",
+      "satisfied"
+     ]
+    },
+    "oracle_match": false,
+    "repeats": [
+     {
+      "contradicted": [
+       "no",
+       0.52
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O10-bj-5.r1.json",
+      "p_contradicted_yes": 0.28,
+      "relevant": [
+       "no",
+       0.51
+      ],
+      "run_id": "plan-20261019T014332Z-atm-bj-5",
+      "verdict": "underspecified"
+     },
+     {
+      "contradicted": [
+       "no",
+       0.58
+      ],
+      "file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/O10-bj-5.r2.json",
+      "p_contradicted_yes": 0.25,
+      "relevant": [
+       "no",
+       0.55
+      ],
+      "run_id": "plan-20261019T014332Z-atm-bj-5",
+      "verdict": "underspecified"
+     }
+    ],
+    "source": "review.canonical_request.state.item.text (byte-identical)",
+    "stable_choice": true
+   }
+  ],
+  "authority_citations": [
+   "ANC-005 v3 statement: \"No sprint in this phase must change what ships in v0.16.1.\" (kind prohibition: relevance and conflict gate; silence is compliance, verdict-gating.md)",
+   "ANC-005 v3 fixtures.pass[0]: \"The sprint changes only the new atm-bd code and leaves everything v0.16.1 ships untouched.\" (approved; expected passing)",
+   "ANC-005 v3 deterministic_check: \"git diff v0.16.1..<phase base> shows no change from this phase's PRs; tag v0.16.1 predates the first sprint's first commit\"",
+   "Frozen oracle a6516110 case O7-irrelevant (expected relevant=no, contradicted=no, not_applicable): a dashboard CSS change touches nothing v0.16.1 ships",
+   "Frozen oracle a6516110 cases O3-compliant, O4-silent, O5-topical-packaging (expected contradicted=no confident; passing verdict)",
+   "INTENT phase-bj v2 (sha 19ed8747): phase work lands after the v0.16.1 release; nothing in scope re-releases v0.16.1"
+  ],
+  "authority_recommendations": [
+   {
+    "anchor_id": "ANC-005",
+    "item": "atm-bj-5",
+    "reason": "this sprint lands on integrate/phase-bj after the v0.16.1 tag and changes nothing that v0.16.1 ships",
+    "type": "exclude",
+    "versions_nothing": true
+   },
+   {
+    "ambiguity": "'No sprint ... must change' can be read as 'no sprint is required to change'; the prior statement and the prohibition kind mean 'may not'.",
+    "anchor_id": "ANC-005",
+    "field": "statement",
+    "meaning_unchanged_because": "Restores the modal of the v1 statement ('No sprint in this phase may change what ships in v0.16.1, ...'); the prohibited act and object are identical.",
+    "proposed_text": "No sprint in this phase may change what ships in v0.16.1.",
+    "requires_user_approval": true,
+    "type": "clarity",
+    "version": 3
+   },
+   {
+    "ambiguity": "'any sprint dispatch' is left over from the removed clause 'no sprint may start before the v0.16.1 tag exists' and makes every sprint nominally in scope, which the oracle shows Jev reads as relevance on unrelated work (O7).",
+    "anchor_id": "ANC-005",
+    "field": "scope",
+    "meaning_unchanged_because": "The dispatch-ordering clause was already removed from the statement in the 2026-10-17 update; the remaining prohibition only governs what v0.16.1 ships. This narrows scope wording to the statement's subject; if Rand reads it as a scope change, it needs his approval and versions ANC-005.",
+    "proposed_text": "any change to the v0.16.1 tag, its release branch, or its published wheel and sdist",
+    "requires_user_approval": true,
+    "type": "clarity",
+    "version": 3
+   }
+  ],
+  "candidate_rankings": [],
+  "disposition": "question_defect",
+  "evidence": {
+   "affected_tournament": {
+    "anchor_id": "ANC-005",
+    "gate": "planning",
+    "roles": [
+     "relevant",
+     "contradicted"
+    ],
+    "scope": "ANC-005 question_overrides only; the shared default plan question set and every other anchor stay sealed"
+   },
+   "authoritative_sources": {
+    "after": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/sources.after.sha256",
+    "before": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/sources.before.sha256",
+    "changed_during_run": [
+     "docs/plans/phase-bj/beads/plan.jsonl (mtime 2026-10-18 18:44:54 local, by a concurrent writer, not this agent; versus HEAD only the atm-bj-3 record differs, the atm-bj-5 record is identical to HEAD and to the item text judged here)"
+    ],
+    "unchanged": [
+     "anchors.json",
+     "anchors.md",
+     "intent.md",
+     "beads/atm-phase-bj.vars.json"
+    ],
+    "unchanged_by_this_agent": true
+   },
+   "canonical_request_reproduced": {
+    "byte_identical": true,
+    "dry_run": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/runs/canonical/O10-bj-5.dry.json"
+   },
+   "defect_finding": "The sealed relevant/contradicted pair cannot separate a sprint that does not touch v0.16.1 from one that might change it. On the authority-unambiguous irrelevant probe O7 (a CSS palette change) Jev answers relevant=yes (0.45/0.28) and contradicted=no at 0.18/0.28 with p(yes)=0.44/0.39; the silent (O4) and future-packaging (O5) probes fail the same way (contradicted confidence 0.28-0.45). Even the explicitly compliant O3 fails relevance confidence (0.56 both repeats). Explicit-v0.16.1 cases (O1, O2, O6, O8, O9) land exactly. bj-5 (O10) reproduces the gate cell: relevant=no 0.51/0.55, contradicted=no 0.52/0.58, underspecified, matching the recorded r2d answers. The failure pattern tracks the question's handling of silence, not bj-5 text.",
+   "limitations": "run_id has second resolution, so both repeats of a case share one run_id; the distinct out files are the records. Live run files do not embed requests; canonical requests were regenerated by --dry-run from identical inputs and hashed. Network fetch of atm-bd-orchestration failed; tag facts are from the local clone.",
+   "oracle_file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/oracle/oracle.json",
+   "oracle_frozen_before_first_jev_call": true,
+   "plan_check": "No bj-5 deliverable rebuilds, re-tags, re-uploads or edits v0.16.1: bj-5 edits atm-bd-console source and plugin scripts on integrate/phase-bj so only artifacts built afterwards carry skill-manifest.json. In /Users/randlee/github/atm-bd-orchestration, v0.16.1 = 4c86104d (2026-10-16) and v0.16.2 = f1ba283b (2026-10-17) are tagged, v0.16.1 is an ancestor of origin/main, and v0.17.2..v0.17.4 already exist. No conflicting or missing plan text under a prohibition, so plan_violation has no citable plan text.",
+   "planner_observation_assessment": "Not relied on. The hypothesis that 'any sprint dispatch' scope drives the instability is consistent with the oracle (O7 relevance=yes on unrelated work) but the disposition rests on the oracle failures, not on the planner's claim.",
+   "questions_sha256_used": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd (default plan question set v1, no ANC-005 override)",
+   "request_sha256": "e1dfec1ee7fa356a3a450dcc145bc24221fc2f38fb935028622c70db24ceeff5",
+   "score": {
+    "cases": 10,
+    "failed": [
+     "O3-compliant",
+     "O4-silent",
+     "O5-topical-packaging",
+     "O7-irrelevant",
+     "O10-bj-5"
+    ],
+    "matched": [
+     "O1-fixture-pass",
+     "O2-fixture-fail",
+     "O6-conflicting",
+     "O8-boundary-base",
+     "O9-exception-backport"
+    ],
+    "oracle_matches": 5,
+    "stable_verdicts": 10
+   },
+   "scoring": "per case: both repeats must give a verdict in the accepted set, an accepted relevance choice at confidence >= 0.6 and the expected conflict choice at confidence >= 0.6 (production threshold 0.6, jev_judge decide kind=prohibition, --no-confirm, 2 repeats)",
+   "source_digest_verified": {
+    "entry": "results[ANC-005]",
+    "file": "docs/plans/phase-bj/anchor-runs/gate/bj-5/out-r2d.json",
+    "match": true,
+    "sha256": "ca296d518a2cc5c1de4380146c66f51350273ac3b1747ae62247742e6d1b3063"
+   },
+   "template": {
+    "id": "anchor-tuning-review-feedback",
+    "sha256": "d94fc238030de850c9c6ab5b4a8d202373aca132d77782f5403c648e44659505",
+    "version": "0.4.1"
+   }
+  },
+  "explanation": "question_defect. Under the frozen oracle (sha a6516110), the sealed planning questions fail ANC-005 on 4 of 10 authority-determined cases besides bj-5: an unrelated CSS sprint (O7) is judged relevant and not confidently uncontradicted, silent and future-packaging sprints (O4, O5) get contradicted p(yes) 0.33-0.45, and an explicitly compliant sprint (O3) misses relevance confidence. bj-5 contains no text that changes v0.16.1 (tags v0.16.1/v0.16.2 published; work lands on integrate/phase-bj), so there is no plan text to fix under ANC-005. Reopen only the ANC-005 planning relevant/contradicted tournament; the sealed digest is unchanged until a replacement passes this oracle without regression.",
+  "gate": "planning",
+  "operation": "triage",
+  "oracle_sha256": "a6516110fb0c45df026835f4355d606a88805565b1e442ff59494ea8044139a8",
+  "planner_action": "Do not edit bj-5 for ANC-005. Either request an anchor-tuning `tune` operation for ANC-005 (roles relevant, contradicted) against this frozen oracle, or apply the exclude recommendation below, which matches bj-1..bj-4's existing ANC-005 exclusions and versions nothing; re-judge bj-5 for ANC-005 only.",
+  "question_action": "reopen_affected_tournament",
+  "sealed_question_set": {
+   "digest": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05",
+   "questions": {
+    "addressed": {
+     "criteria": {
+      "no": "The item text is silent about the directive: it neither includes the directive's specific content nor references it.",
+      "unclear": "The item text alludes to the directive's topic but it is not possible to tell whether the directive itself is included.",
+      "yes": "The item text contains the directive's specific content, in its own words or the user's, as a step, constraint, or stated starting point."
+     },
+     "instructions": "Does `item.text` explicitly carry out, preserve, or plan for the directive given in `anchor.statement`? Look for the directive's specific content being present in the item: the same starting point, the same method, the same constraint, or an explicit step that does what the statement asks. A generic mention of the topic without the directive's specific content does not count. Judge presence of the directive only, not whether the item conflicts with it.",
+     "type": "choice"
+    },
+    "contradicted": {
+     "criteria": {
+      "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+      "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+      "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+     },
+     "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+     "type": "choice"
+    },
+    "relevant": {
+     "criteria": {
+      "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+      "unclear": "The item text is too vague to tell what part of the system it touches.",
+      "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+     },
+     "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+     "type": "choice"
+    }
+   }
+  },
+  "sealed_question_set_digest_after": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05",
+  "sealed_question_set_digest_before": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05"
+ },
+ "error": null,
+ "metadata": {
+  "authoritative_sources_unchanged": false,
+  "correlation_id": "triage-ANC-005-atm-bj-5-plan-20261019T013819Z-atm-bj-5.json",
+  "duration_ms": 480000,
+  "jev_run_ids": [
+   "plan-20261019T014332Z-oracle-O1-fixture-pass",
+   "plan-20261019T014332Z-oracle-O1-fixture-pass",
+   "plan-20261019T014332Z-oracle-O2-fixture-fail",
+   "plan-20261019T014332Z-oracle-O2-fixture-fail",
+   "plan-20261019T014332Z-oracle-O3-compliant",
+   "plan-20261019T014332Z-oracle-O3-compliant",
+   "plan-20261019T014333Z-oracle-O4-silent",
+   "plan-20261019T014333Z-oracle-O4-silent",
+   "plan-20261019T014333Z-oracle-O5-topical-packaging",
+   "plan-20261019T014333Z-oracle-O5-topical-packaging",
+   "plan-20261019T014333Z-oracle-O6-conflicting",
+   "plan-20261019T014333Z-oracle-O6-conflicting",
+   "plan-20261019T014333Z-oracle-O7-irrelevant",
+   "plan-20261019T014333Z-oracle-O7-irrelevant",
+   "plan-20261019T014333Z-oracle-O8-boundary-base",
+   "plan-20261019T014333Z-oracle-O8-boundary-base",
+   "plan-20261019T014333Z-oracle-O9-exception-backport",
+   "plan-20261019T014333Z-oracle-O9-exception-backport",
+   "plan-20261019T014332Z-atm-bj-5",
+   "plan-20261019T014332Z-atm-bj-5"
+  ],
+  "planner_observation_trust": "untrusted",
+  "retry_count": 0,
+  "tool_calls": 30
+ }
+}
