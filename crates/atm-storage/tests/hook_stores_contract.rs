@@ -27,7 +27,7 @@ fn stamp(day: u32) -> IsoTimestamp {
 }
 
 fn team() -> TeamName {
-    TeamName::from_validated("atm-dev")
+    TeamName::from_validated("test-team")
 }
 
 fn phase(value: &str) -> PhaseId {
@@ -54,7 +54,7 @@ fn registration(
         timeout_ms: 2500,
         custom: serde_json::Map::new(),
         active: true,
-        registered_by: AgentName::from_validated("arch-ctm"),
+        registered_by: AgentName::from_validated("test-agent"),
         registered_at: at,
         disabled_at: None,
     }
@@ -76,7 +76,7 @@ fn cron_spec(name: &str, stop: StopCondition, created_at: IsoTimestamp) -> NewCr
             .expect("object literal")
             .clone(),
         stop,
-        created_by: AgentName::from_validated("arch-ctm"),
+        created_by: AgentName::from_validated("test-agent"),
         created_at,
     }
 }
@@ -92,7 +92,7 @@ fn disable_keeps_rows_inactive() {
     let store = InMemoryHookRegistrationStore::new();
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bj",
             "task.close",
             "/h.py",
@@ -120,7 +120,7 @@ fn register_second_phase_same_hook_succeeds() {
     let store = InMemoryHookRegistrationStore::new();
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bj",
             "task.close",
             "/bj.py",
@@ -129,7 +129,7 @@ fn register_second_phase_same_hook_succeeds() {
         .expect("bj");
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bk",
             "task.close",
             "/bk.py",
@@ -150,7 +150,7 @@ fn reregister_active_key_keeps_chain_position() {
     let store = InMemoryHookRegistrationStore::new();
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bj",
             "task.close",
             "/bj.py",
@@ -159,7 +159,7 @@ fn reregister_active_key_keeps_chain_position() {
         .expect("bj");
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bk",
             "task.close",
             "/bk.py",
@@ -168,7 +168,7 @@ fn reregister_active_key_keeps_chain_position() {
         .expect("bk");
     let again = store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bj",
             "task.close",
             "/bj-new.py",
@@ -184,7 +184,7 @@ fn reregister_disabled_key_lists_last() {
     let store = InMemoryHookRegistrationStore::new();
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bj",
             "task.close",
             "/bj.py",
@@ -193,7 +193,7 @@ fn reregister_disabled_key_lists_last() {
         .expect("bj");
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bk",
             "task.close",
             "/bk.py",
@@ -205,7 +205,7 @@ fn reregister_disabled_key_lists_last() {
         .expect("disable");
     let again = store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bj",
             "task.close",
             "/bj.py",
@@ -224,7 +224,7 @@ fn disable_single_hook_leaves_other_hooks_of_phase_active() {
     let store = InMemoryHookRegistrationStore::new();
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bj",
             "task.close",
             "/a.py",
@@ -233,7 +233,7 @@ fn disable_single_hook_leaves_other_hooks_of_phase_active() {
         .expect("close");
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bj",
             "task.start",
             "/b.py",
@@ -263,7 +263,7 @@ fn list_orders_active_first_then_registered_at_then_phase() {
     let store = InMemoryHookRegistrationStore::new();
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bj",
             "task.close",
             "/a.py",
@@ -272,7 +272,7 @@ fn list_orders_active_first_then_registered_at_then_phase() {
         .expect("bj");
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bl",
             "task.close",
             "/a.py",
@@ -281,7 +281,7 @@ fn list_orders_active_first_then_registered_at_then_phase() {
         .expect("bl");
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bk",
             "task.close",
             "/a.py",
@@ -295,7 +295,7 @@ fn list_orders_active_first_then_registered_at_then_phase() {
     assert_eq!(phases(&rows), ["bl", "bk", "bj"]);
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bl",
             "task.start",
             "/c.py",
@@ -304,7 +304,7 @@ fn list_orders_active_first_then_registered_at_then_phase() {
         .expect("bl start");
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bk",
             "task.start",
             "/c.py",
@@ -320,7 +320,7 @@ fn disable_twice_keeps_first_disabled_at() {
     let store = InMemoryHookRegistrationStore::new();
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bj",
             "task.close",
             "/a.py",
@@ -405,7 +405,7 @@ fn active_all_spans_teams_and_counts_calls() {
     let store = InMemoryHookRegistrationStore::new();
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bj",
             "task.close",
             "/a.py",
@@ -439,7 +439,7 @@ fn active_all_spans_teams_and_counts_calls() {
     assert_eq!(
         keys,
         [
-            ("atm-dev".to_owned(), "task.close".to_owned()),
+            ("test-team".to_owned(), "task.close".to_owned()),
             ("other".to_owned(), "task.close".to_owned())
         ]
     );
@@ -450,7 +450,7 @@ fn active_all_order_equals_active_order_for_every_key() {
     let store = InMemoryHookRegistrationStore::new();
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bk",
             "task.close",
             "/a.py",
@@ -459,7 +459,7 @@ fn active_all_order_equals_active_order_for_every_key() {
         .expect("bk");
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bj",
             "task.close",
             "/a.py",
@@ -468,7 +468,7 @@ fn active_all_order_equals_active_order_for_every_key() {
         .expect("bj");
     store
         .register(registration(
-            "atm-dev",
+            "test-team",
             "bl",
             "task.close",
             "/a.py",
