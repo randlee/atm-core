@@ -1263,8 +1263,8 @@
    ],
    "calls_paths": [
     "docs/plans/phase-bj/anchor-runs/tuning/ANC-022/runs/calls-c0-default.jsonl",
-    "docs/plans/phase-bj/anchor-runs/tuning/ANC-022/runs/calls-c1-homonym-callout-c2-token-procedure-c3-default-plus-homonym-c4-plan-keeps-or-runs-c5-two-names-contrast.jsonl",
-    "docs/plans/phase-bj/anchor-runs/tuning/ANC-022/runs/calls-r1-scope-signals+c1-homonym-callout-r2-default-plus-scope+c1-homonym-callout-r3-touch-list+c1-homonym-callout-r1-scope-signals+c4-plan-keeps-or-runs-r2-default-plus-scope+c4-plan-keeps-or-runs-r3-touch-list+c4-plan-keeps-or-runs.jsonl"
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-022/runs/calls-c1-to-c5.jsonl",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-022/runs/calls-r1-to-r3.jsonl"
    ],
    "jev_calls": 336,
    "jev_errors": 0,
