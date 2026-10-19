@@ -1,285 +1,255 @@
 # Sprint bk-2 — core hook contract, sealed traits and protocol
 
 closure_type `contract`; target_boundary the core hook contract
-(`atm_core::hook`, the sealed `atm_core::boundary::{HookRunner,
-CronScheduler, HookActionDispatcher}`), the six registry and schedule
-protocol variants, and the `ATM_HOOK_*`/`ATM_CRON_*` error codes; branch
-`sprint/bk-2-hook-contract`, PR → the stack top above bk-1
-(`sprint/bk-1-hook-stores`); difficulty normal. Consumes bk-1: `HookName`,
-`PhaseId`, `HookRegistration`, `HookRegistrationStore`, `CronSchedule`,
-`NewCronSchedule`, `StopCondition`, `CronScheduleId`, `CronScheduleStore`,
-`InMemoryHookRegistrationStore`, `InMemoryCronScheduleStore`. Governing
-text: `design.md` §2, D-3, D-4, D-6, D-7, D-9; anchors ANC-003, ANC-007,
-ANC-013, ANC-022, REQ-BK-D3, REQ-BK-ERRORS. Requirements
-`REQ-CORE-HOOK-001`, `REQ-CORE-HOOK-002`, `REQ-P-HOOK-001` §23.2 (the
-contract types); ADR-068 D1, D2, D3, D8, ADR-069 D2, D4 (`cron.stop` reply),
-ADR-061 D5 (record of 2026-10-18 already on this branch).
+(`atm_core::hook`, the sealed `atm_core::boundary::{TaskCommands,
+HookRunner, CronScheduler, HookActionDispatcher}`), the six registry and
+schedule protocol variants and their routes, and the store wiring into
+`LocalServiceRuntime`; branch `sprint/bk-2-hook-contract`, PR → the stack
+top above bk-1 (`sprint/bk-1-hook-stores`); difficulty normal;
+recommended_agent `arch-ctm`, recommended_model `gpt-5-codex`. Consumes
+bk-1: `HookName`, `PhaseId`, `HookRegistration`, `HookRegistrationStore`,
+`CronSchedule`, `NewCronSchedule`, `StopCondition`, `CronScheduleId`,
+`CronScheduleStore`, the two in-memory doubles and the six error codes
+and constructors. Governing text: `design.md` §2, §9.2, §9.3, §9.4, §9.5,
+§9.11, D-3, D-4, D-6, D-7, D-9, D-10; anchors ANC-003, ANC-007, ANC-013,
+ANC-022, REQ-BK-D3, REQ-BK-ERRORS. Requirements `REQ-CORE-HOOK-001`,
+`REQ-P-HOOK-001` §23.2; ADR-068 D1, D2, D3, D8, ADR-069 D2, D4, ADR-061 D5.
 
 ## Scope boundary
 
-This sprint owns every type and trait the runtime sprints consume and
-nothing that runs a process, serves a request or touches SQLite: the hook
-request/reply/action types, the three sealed boundary traits with their
-`Noop` defaults and test doubles, the storage re-exports, the protocol
-variants, the error codes and the OpenAPI schemas. It edits no file under
-`crates/atm-storage*`, `crates/atm-http-runtime`,
-`crates/atm-daemon-bootstrap`, `crates/atm` or `crates/atm-core/src/doctor`.
+This sprint owns every type, trait and route the runtime sprints consume
+and nothing that runs a process, serves a request or touches SQLite. It
+edits no file under `crates/atm-storage*`, `crates/atm-error`,
+`crates/atm-http-runtime`, `crates/atm-daemon-bootstrap`, `crates/atm/src`
+or `crates/atm-cron`.
 
 Owned paths (new unless marked edited):
 
-- `crates/atm-core/src/hook/mod.rs`, `crates/atm-core/src/hook/request.rs`,
-  `crates/atm-core/src/hook/reply.rs`,
-  `crates/atm-core/src/boundary/hook_runner.rs`,
-  `crates/atm-core/src/boundary/cron_scheduler.rs`,
-  `crates/atm-core/src/boundary/hook_action_dispatcher.rs`,
-  `crates/atm-core/src/boundary/mod.rs` (edited: re-exports below, the
-  `mod.rs:10-36` pattern), `crates/atm-core/src/lib.rs` (edited:
-  `pub mod hook`), `crates/atm-core/src/service_runtime.rs` (edited:
-  `hook_registration_store()` and `cron_schedule_store()` next to
-  `task_store()`, line 515), `crates/atm-core/src/protocol.rs` (edited: six
-  request and six response variants, `HTTP_API_VERSION` to `1.13.0`),
-  `crates/atm-core/src/api.rs` (edited: six `ApiRequest` variants mirroring
-  the protocol ones, `From<RequestEnvelope>` arms at line 536,
-  `ApiRequest::task_envelope`)
-- `crates/atm-error/src/error_codes.rs` (edited: six variants),
-  `docs/atm-error-codes.md` (edited: new `### 5.11 Task Hooks And Cron`
-  with one `#### 5.11.n` entry per code and six `## 7.1` table rows)
-- `docs/atm-http-runtime/openapi.yaml` and `crates/atm/openapi.yaml`
-  (edited: `info.version` `1.13.0`, the twelve new schemas under
-  `components.schemas`; the paths are bk-3's),
-  `crates/atm/tests/openapi_surface_baseline.json` (edited: the version and
-  schema additions), `docs/adr/ADR-061-governed-interface-schema-versioning.md`
-  (edited: one D5 record line for `1.12.0` to `1.13.0`)
-- `boundaries/atm-core/hook-runner.toml`,
-  `boundaries/atm-core/cron-scheduler.toml`,
-  `boundaries/atm-core/hook-action-dispatcher.toml` (the last two
-  `visibility = "trait_only"`, format of
-  `boundaries/atm-core/message-received-hook-emitter.toml`)
+- `crates/atm-core/src/hook/mod.rs`, `hook/request.rs`, `hook/reply.rs`
+  (under `crates/atm-core/src/`), `crates/atm-core/src/boundary/task_commands.rs`,
+  `boundary/hook_runner.rs`, `boundary/cron_scheduler.rs`,
+  `boundary/hook_action_dispatcher.rs`, `crates/atm-core/src/boundary/mod.rs`
+  (edited: four `mod` lines after `mod template_composer;` at `:86` and the
+  re-exports below), `crates/atm-core/src/lib.rs` (edited: `pub mod hook`)
+- `crates/atm-core/src/protocol.rs` (edited: six request and seven
+  response variants, `HTTP_API_VERSION` `1.13.0`),
+  `crates/atm-core/src/api.rs` (edited: the six routes of `design.md`
+  §9.11, `HOOK_ACTIONS_HEADER = "X-ATM-Hook-Actions"` next to
+  `CLEAR_OUTCOME_HEADER` (`:31`), the `ApiRequest` variants),
+  `crates/atm-core/src/transport/testing.rs` (edited: the new variants in
+  `execute_inner`, about `:110-170`)
+- `crates/atm-core/src/service_runtime.rs` (edited: two fields, builders
+  `with_hook_registration_store`/`with_cron_schedule_store` and accessors
+  next to `task_store` (`:325`, `:506`, `:515`)),
+  `crates/atm-runtime/src/composition.rs` (edited: the two stores next to
+  `storage.task_store()` `:178` and `.with_task_store` `:193`);
+  `crates/atm/src/composition.rs` installs no store (no `with_task_store`
+  call there) and is unchanged
+- `crates/atm-core/src/doctor/hooks.rs` (new: `HookDoctorEntry`,
+  `HookDoctorError`), `crates/atm-core/src/doctor/mod.rs` (edited: `pub mod
+  hooks`), `crates/atm-core/src/doctor/report.rs` (edited: `hooks` on
+  `DoctorReport`, `:467`)
+- `docs/atm-http-runtime/openapi.yaml`, `crates/atm/openapi.yaml`
+  (edited: `info.version` `1.13.0`, the six paths, the new request,
+  response and doctor schemas), `crates/atm/tests/openapi_surface_baseline.json`,
+  `docs/adr/ADR-061-governed-interface-schema-versioning.md` (edited: one
+  D5 record line for `1.12.0` to `1.13.0`)
+- `boundaries/atm-core/task-commands.toml` (`BOUNDARY-TaskCommands`), `boundaries/atm-core/hook-runner.toml` (`BOUNDARY-HookRunner`),
+  `boundaries/atm-core/cron-scheduler.toml` (`boundary_id =
+  "BOUNDARY-CronSchedulerTrait"`, distinct from bk-4's
+  `BOUNDARY-CronScheduler`), `boundaries/atm-core/hook-action-dispatcher.toml` (`BOUNDARY-HookActionDispatcher`)
+  (all `visibility = "trait_only"`, `constructor = "none"`, format of
+  `boundaries/atm-core/message-received-hook-emitter.toml`, implementers
+  named in `[status] notes`)
 - `crates/atm-runtime-test-support/src/lib.rs` (edited: `pub use
   atm_storage::testing::{InMemoryHookRegistrationStore,
-  InMemoryCronScheduleStore}`, `pub use atm_core::boundary::{DummyHookRunner,
-  RecordingHookActionDispatcher, RecordingCronScheduler}`), so that
-  `atm-http-runtime`, `atm-cron` and `atm` reach every double without an
-  `atm_storage` import
+  InMemoryCronScheduleStore}` and `pub use atm_core::boundary::{DummyHookRunner,
+  RecordingHookActionDispatcher, RecordingCronScheduler,
+  RecordingTaskCommands}`)
 
 ## Public contract
 
 ```rust
 // crates/atm-core/src/hook/request.rs  (design.md §2.1, ANC-003, ANC-022)
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HookCaller { pub identity: AgentName, pub team: TeamName, pub host: Option<HostName> }   // types via atm_core::types
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HookRequest {
-    pub schema_version: String,   // "1.0.0"
-    pub hook: HookName, pub team: TeamName, pub phase: PhaseId,
-    pub caller: HookCaller,       // { identity: AgentName, team: TeamName, host: Option<HostName> }: host is the daemon's configured AtmConfig.local_host, null when the operator has not set it
-    pub request: serde_json::Value, // the RequestEnvelope JSON (D-6); {"args": [...]} for cron.tick and cron.stop
-    pub custom: serde_json::Value,  // passed through unchanged; atm defines nothing inside
+    pub schema_version: String,     // HOOK_SCHEMA_VERSION
+    pub hook: HookName, pub team: TeamName, pub phase: PhaseId, pub caller: HookCaller,
+    pub request: serde_json::Value, // the bare HTTP body (TaskCommand::request_body); {"args": [...], "created_by": "<agent>"} for cron.tick and cron.stop
+    pub custom: serde_json::Map<String, serde_json::Value>,  // the registration's (or schedule's) stored custom, unchanged (Rand 2026-10-18)
 }
 pub const HOOK_SCHEMA_VERSION: &str = "1.0.0";   // independent of HTTP_API_VERSION (ADR-068 D8)
-impl HookRequest { pub fn for_envelope(reg: &HookRegistration, caller: HookCaller, envelope: &RequestEnvelope) -> Result<Self, AtmError>;
-                   pub fn for_cron(reg: &HookRegistration, caller: HookCaller, hook: HookName, args: &[String]) -> Self; }   // hook is cron.tick or cron.stop
-pub fn hook_name_for(request: &ApiRequest) -> Option<HookName>;   // D-6 mapping on the router's type; None for un-hooked requests
-// crates/atm-core/src/api.rs addition
-impl ApiRequest { /// The six task-bearing variants back in wire form (Write => RequestEnvelope::Write, TaskMove => TaskMove, Messages with task_ledger Some => List); None otherwise.
-    pub fn task_envelope(&self) -> Option<RequestEnvelope>; }
-
-// crates/atm-core/src/hook/reply.rs  (design.md §2.2, ANC-004..007, ANC-009, D-9)
-#[derive(Deserialize)]
-#[serde(untagged)]
-pub enum HookReply {
-    Refused { success: False, message: String },
-    Actions { success: True, #[serde(rename = "atm-action")] actions: Vec<HookAction> },
-    PassThrough { success: True },
+pub const HOOK_CUSTOM_MAX_BYTES: usize = 65_536;   // serialized size cap on a registration's custom (design.md §2.1)
+/// The route's check (bk-3): a non-object or a serialized size above HOOK_CUSTOM_MAX_BYTES is hook_module_invalid naming the limit.
+pub fn custom_object(value: serde_json::Value) -> Result<serde_json::Map<String, serde_json::Value>, AtmError>;
+impl HookRequest {
+    pub fn for_task(reg: &HookRegistration, caller: HookCaller, command: &TaskCommand) -> Self;   // custom = reg.custom
+    pub fn for_cron(reg: &HookRegistration, caller: HookCaller, hook: HookName, args: &[String]) -> Self;   // hook is cron.tick or cron.stop; custom = reg.custom; request.created_by = caller.identity
 }
-#[derive(Deserialize)]
-pub struct HookAction { pub command: HookName, #[serde(rename = "as")] pub run_as: Option<AgentName>, pub request: serde_json::Value }
-impl HookReply { pub fn parse(stdout: &[u8]) -> Result<Self, AtmError>; } // Err = AtmErrorCode::HookMalformed
-/// Reply of `cron.stop`: exactly `{"stop": true, "reason": "<text>"}` or `{"stop": false}`; anything else is HookMalformed.
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+
+// crates/atm-core/src/hook/reply.rs  (design.md §9.2, §9.4)
+pub enum HookReply { Handled(Vec<HookAction>), PassThrough, NotApplicable, Refused { message: String } }   // no serde derive
+impl HookReply { pub fn parse(stdout: &[u8]) -> Result<Self, AtmError>; }                  // §9.4; every other stdout is AtmError::hook_malformed
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HookAction { pub command: String, #[serde(rename = "as", default)] pub run_as: Option<AgentName>, pub request: serde_json::Value }
+impl HookAction { pub fn into_api_request(&self) -> Result<ApiRequest, AtmError>; }       // §9.2 table; `as` replaces caller_identity on Write, TaskMove, List
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StopReply { pub stop: bool, #[serde(default)] pub reason: Option<String> }
-impl StopReply { pub fn parse(stdout: &[u8]) -> Result<Self, AtmError>; }  // stop == true without a reason, or stop == false with one, is HookMalformed
-impl HookAction { pub fn envelope(&self) -> Result<RequestEnvelope, AtmError>; }
-// envelope(): Err(HookMalformed) unless command.is_task_hook(); deserializes `request` as RequestEnvelope; Err(HookMalformed) unless
-// hook_name_for(&ApiRequest::from(envelope.clone())) == Some(command) (D-6: an action can only be one of the six task commands, never a registry,
-// cron or other route); then applies `as` to caller_identity on Write, TaskMove, List (ANC-007, ANC-009).
+impl StopReply { pub fn parse(stdout: &[u8]) -> Result<Self, AtmError>; }                 // {"stop":true,"reason":"<non-empty>"} | {"stop":false}
 
-// crates/atm-core/src/boundary/hook_runner.rs  (design.md D-3, REQ-BK-D3)
-pub struct HookOutcome { pub reply: HookReply, pub elapsed_ms: u64 }
+// crates/atm-core/src/boundary/task_commands.rs: the trait, TaskCallCtx, the five newtypes and TaskCommand exactly as design.md §9.5
+#[cfg(any(test, feature = "test-utils"))]
+pub struct RecordingTaskCommands { pub calls: Mutex<Vec<(HookName, serde_json::Value)>>, pub response: Mutex<Option<ApiResponse>> }
+
+// crates/atm-core/src/boundary/hook_runner.rs  (design.md D-3, §9.7)
+#[derive(Debug)] pub struct HookOutcome { pub reply: HookReply, pub elapsed_ms: u64 }
 #[async_trait]
 pub trait HookRunner: sealed::Sealed + Send + Sync {
-    /// Spawns the registered module once with `request` on stdin; Err is HookExit, HookTimeout or HookMalformed.
-    async fn run(&self, registration: &HookRegistration, request: &HookRequest) -> Result<HookOutcome, AtmError>;
-    /// `python3 <module> doctor`; same deadline rules. Used by `atm doctor` (ANC-015).
-    async fn doctor(&self, registration: &HookRegistration) -> Result<serde_json::Value, AtmError>;
-    /// `python3 <module> cron.stop` with `request` (hook cron.stop) on stdin; same deadline rules; parsed with StopReply::parse (ADR-069 D4).
-    async fn stop(&self, registration: &HookRegistration, request: &HookRequest) -> Result<StopReply, AtmError>;
+    /// Spawns the module once with `request` on stdin under `deadline` (§9.7); Err is HookExit, HookTimeout or HookMalformed.
+    async fn run(&self, registration: &HookRegistration, request: &HookRequest, deadline: RequestDeadline) -> Result<HookOutcome, AtmError>;
+    /// argv "doctor", stdin HookDoctorRequest::for_registration(registration); Ok is the parsed HookDoctorReply (design.md §9.10).
+    async fn doctor(&self, registration: &HookRegistration, deadline: RequestDeadline) -> Result<HookDoctorReply, AtmError>;
+    async fn stop(&self, registration: &HookRegistration, request: &HookRequest, deadline: RequestDeadline) -> Result<StopReply, AtmError>;
 }
-pub struct NoopHookRunner;                                           // production default when no runner is injected: Err(HookExit "no hook runner composed")
-#[cfg(any(test, feature = "test-utils"))] pub struct DummyHookRunner { pub replies: Mutex<VecDeque<Result<HookOutcome, AtmError>>>, pub stop_replies: Mutex<VecDeque<Result<StopReply, AtmError>>>, pub calls: Mutex<Vec<(HookRegistration, HookRequest)>> }   // calls records run and stop requests alike
+#[cfg(any(test, feature = "test-utils"))]
+pub struct DummyHookRunner { pub replies: Mutex<VecDeque<Result<HookOutcome, AtmError>>>, pub stop_replies: Mutex<VecDeque<Result<StopReply, AtmError>>>,
+                             pub doctor_replies: Mutex<VecDeque<Result<HookDoctorReply, AtmError>>>, pub calls: Mutex<Vec<(HookRegistration, HookRequest)>>, pub panic_on_run: AtomicBool }
 
-// crates/atm-core/src/boundary/cron_scheduler.rs  (design.md D-4; Rand 2026-10-18: atm cron in its own crate with a simple trait exposing its features)
+// crates/atm-core/src/boundary/cron_scheduler.rs  (design.md D-4: start, end, list only)
 #[async_trait]
 pub trait CronScheduler: sealed::Sealed + Send + Sync {
-    /// `cron::Schedule::from_str` on the 7-field seconds-first dialect; Err is AtmErrorCode::CronExprInvalid carrying the parser's message.
-    fn validate_expression(&self, cron_expr: &str) -> Result<(), AtmError>;
-    /// validate_expression, then CronScheduleStore::start, then the worker reloads (ADR-069 D2).
-    fn start(&self, schedule: NewCronSchedule) -> Result<CronSchedule, AtmError>;
-    /// CronScheduleStore::end (rows kept, active = false, ended_at set), then the worker reloads; returns the rows ended.
-    fn end(&self, team: &TeamName, phase: &PhaseId, name: Option<&str>) -> Result<Vec<CronSchedule>, AtmError>;
-    fn list(&self, team: Option<&TeamName>, phase: Option<&PhaseId>) -> Result<Vec<CronSchedule>, AtmError>;
-    /// Runs one schedule now exactly as a tick does (stop check first); Ok(outcome string written by record_run or record_stop).
-    async fn run_now(&self, id: CronScheduleId) -> Result<String, AtmError>;
+    async fn start(&self, schedule: NewCronSchedule) -> Result<CronSchedule, AtmError>;
+    async fn end(&self, team: &TeamName, phase: &PhaseId, name: Option<&str>) -> Result<Vec<CronSchedule>, AtmError>;
+    async fn list(&self, team: Option<&TeamName>, phase: Option<&PhaseId>) -> Result<Vec<CronSchedule>, AtmError>;
 }
-pub struct NoopCronScheduler;                                        // router default until the bootstrap injects atm-cron's AtmCron: every method Err(AtmError::validation("no cron scheduler composed"))
-#[cfg(any(test, feature = "test-utils"))] pub struct RecordingCronScheduler { pub rows: Mutex<Vec<CronSchedule>>, pub calls: Mutex<Vec<String>> }   // start/end/list over its own Vec, no parsing; calls records the method names
+#[cfg(any(test, feature = "test-utils"))] pub struct RecordingCronScheduler { pub rows: Mutex<Vec<CronSchedule>>, pub calls: Mutex<Vec<&'static str>> }
 
-// crates/atm-core/src/boundary/hook_action_dispatcher.rs  (design.md §3 step 4, D-6; implemented by StorageAndNudgeRouter in bk-3, called by atm-cron in bk-4)
+// crates/atm-core/src/boundary/hook_action_dispatcher.rs  (implemented by the base router in bk-3, called by bk-3's filter and by atm-cron)
 #[async_trait]
 pub trait HookActionDispatcher: sealed::Sealed + Send + Sync {
-    /// Dispatches `actions` in order with hooks disabled, as `default_as` unless an action names `as`, ingress AuthenticatedIngress::Local;
-    /// stops at the first Err and returns it (ANC-006); Ok(n) is the number of actions that ran.
-    async fn dispatch_actions(&self, hook: &HookName, team: &TeamName, default_as: &AgentName, actions: Vec<HookAction>) -> Result<usize, AtmError>;
+    /// Checks every action first (design §2.2: caller_team == team, `as` on the roster, into_api_request Ok), else HookMalformed and nothing runs.
+    /// Then runs them in order un-hooked as `default_as` unless `as`; `deadline` Some is reused, None gives each action now + SERVER_REQUEST_BUDGET.
+    /// Stops at the first Err with the design §2.2 prefix; Ok holds every response in order.
+    async fn dispatch_actions(&self, hook: &HookName, team: &TeamName, phase: &PhaseId, default_as: &AgentName,
+                              actions: Vec<HookAction>, deadline: Option<RequestDeadline>) -> Result<Vec<(String, ApiResponse)>, AtmError>;
 }
-pub struct NoopHookActionDispatcher;                                 // Err(validation("no hook action dispatcher composed"))
-#[cfg(any(test, feature = "test-utils"))] pub struct RecordingHookActionDispatcher { pub calls: Mutex<Vec<(HookName, TeamName, AgentName, Vec<HookAction>)>>, pub fail_at: Option<usize> }   // Err(validation) when fail_at == Some(index of an action)
+#[cfg(any(test, feature = "test-utils"))] pub struct RecordingHookActionDispatcher { pub calls: Mutex<Vec<(HookName, TeamName, AgentName, Vec<HookAction>)>>, pub fail_at: Option<usize> }
 
-// crates/atm-core/src/boundary/mod.rs additions (the mod.rs:10-36 re-export pattern; atm-http-runtime, atm-cron and atm import only these)
+// crates/atm-core/src/boundary/mod.rs: mod task_commands; mod hook_runner; mod cron_scheduler; mod hook_action_dispatcher; then
 pub use atm_storage::{HookRegistrationStore, HookRegistration, HookName, PhaseId, CronScheduleStore, CronSchedule, NewCronSchedule, CronScheduleId, StopCondition};
-pub use cron_scheduler::{CronScheduler, NoopCronScheduler}; pub use hook_action_dispatcher::{HookActionDispatcher, NoopHookActionDispatcher}; pub use hook_runner::{HookRunner, HookOutcome, NoopHookRunner};
+pub use atm_storage::request_budget::{HOOK_TIMEOUT_MAX_MS, CRON_TIMEOUT_MAX_MS, HOOK_ACTION_RESERVE_MS, SERVER_REQUEST_BUDGET};
+pub use task_commands::*; pub use cron_scheduler::CronScheduler; pub use hook_action_dispatcher::HookActionDispatcher; pub use hook_runner::{HookRunner, HookOutcome};
 #[cfg(any(test, feature = "test-utils"))] pub use {cron_scheduler::RecordingCronScheduler, hook_action_dispatcher::RecordingHookActionDispatcher, hook_runner::DummyHookRunner};
-```
 
-```rust
-// crates/atm-core/src/protocol.rs additions (HTTP API MINOR 1.12.0 -> 1.13.0)
+// crates/atm-core/src/protocol.rs (HTTP API MINOR 1.12.0 -> 1.13.0); request fields are design.md §9.11
 RequestEnvelope::{ HookRegister(HookRegisterRequest), HookDisable(HookDisableRequest), HookList(HookListQuery),
                    CronStart(CronStartRequest), CronEnd(CronEndRequest), CronList(CronListQuery) }
 ResponseEnvelope::{ HookRegister(HookRegistration), HookDisable(Vec<HookRegistration>), HookList(Vec<HookRegistration>),
-                    CronStart(CronSchedule), CronEnd(Vec<CronSchedule>), CronList(Vec<CronSchedule>) }
-pub struct HookRegisterRequest { pub caller_identity: AgentName, pub caller_team: TeamName, pub phase: PhaseId, pub hook: HookName, pub module_path: PathBuf, pub cwd: PathBuf, pub timeout_ms: u32 }
-pub struct CronStartRequest { pub caller_identity: AgentName, pub caller_team: TeamName, pub phase: PhaseId, pub name: String, pub cron_expr: String, pub module_path: PathBuf, pub cwd: PathBuf, pub args: Vec<String>, pub timeout_ms: u32, pub stop: StopCondition }
-// HookDisableRequest { caller_identity, caller_team, phase, hook: Option<HookName> }; HookListQuery { caller_team, phase: Option<PhaseId> }; CronEndRequest / CronListQuery alike.
-// ApiRequest::{HookRegister, HookDisable, HookList, CronStart, CronEnd, CronList} carry the same payloads; From<RequestEnvelope> maps one to one.
-// atm-error: AtmErrorCode::{HookMalformed => "ATM_HOOK_MALFORMED", HookExit => "ATM_HOOK_EXIT", HookTimeout => "ATM_HOOK_TIMEOUT",
-//            HookModuleInvalid => "ATM_HOOK_MODULE_INVALID", HookActive => "ATM_HOOK_ACTIVE", CronExprInvalid => "ATM_CRON_EXPR_INVALID"}
-// Display messages carry the design names: "HOOK.MALFORMED: ...", "HOOK.EXIT: ...", "HOOK.TIMEOUT: ...", "HOOK.ACTIVE: ...".
+                    CronStart(CronSchedule), CronEnd(Vec<CronSchedule>), CronList(Vec<CronSchedule>), HookActions(HookActionsResponse) }
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)] pub struct HookActionsResponse { pub dispatched: usize }   // design D-b
+
+// crates/atm-core/src/doctor/hooks.rs  (design.md §9.10)
+// Rand 2026-10-18: "doctor would need to know team, phase and it would return a dict/array (whatever is consistent w/ what doctor expects)"
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)] #[serde(deny_unknown_fields)]
+pub struct HookDoctorRequest { pub schema_version: String, pub hook: String /* always "doctor" */, pub team: TeamName, pub phase: PhaseId, pub custom: serde_json::Map<String, serde_json::Value> }
+impl HookDoctorRequest { pub fn for_registration(reg: &HookRegistration) -> Self; }
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)] #[serde(deny_unknown_fields)]
+pub struct HookDoctorReply { pub success: bool, pub message: String, #[serde(default)] pub findings: Vec<HookDoctorFinding> }
+impl HookDoctorReply { pub fn parse(stdout: &[u8]) -> Result<Self, AtmError>; }   // any other shape: hook_malformed
+/// The fields of DoctorFinding (report.rs:38); `code` is the module's own string, not an AtmErrorCode.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)] #[serde(deny_unknown_fields)]
+pub struct HookDoctorFinding { pub severity: DoctorSeverity, pub code: String, pub message: String, #[serde(default)] pub remediation: Option<String> }
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HookDoctorEntry { pub module_path: PathBuf, pub cwd: PathBuf, pub team: TeamName, pub phase: PhaseId, pub hooks: Vec<HookName>, pub schedules: Vec<String>, pub timeout_ms: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub success: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub message: Option<String>,
+    #[serde(default)] pub findings: Vec<HookDoctorFinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub error: Option<HookDoctorError> }
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)] pub struct HookDoctorError { pub code: AtmErrorCode, pub message: String }
+// report.rs: DoctorReport gains `#[serde(default)] pub hooks: Vec<HookDoctorEntry>` (no skip_serializing_if)
+
+// crates/atm-core/src/service_runtime.rs, pattern task_store :506/:515
+pub fn with_hook_registration_store(self, store: Arc<dyn HookRegistrationStore>) -> Self;
+pub fn hook_registration_store(&self) -> Result<Arc<dyn HookRegistrationStore>, AtmError>;   // not installed: the task_store error shape naming the store
+pub fn with_cron_schedule_store(self, store: Arc<dyn CronScheduleStore>) -> Self;
+pub fn cron_schedule_store(&self) -> Result<Arc<dyn CronScheduleStore>, AtmError>;
 ```
 
 ## Authoritative deliverables
 
-1. `atm-core::hook`: `HookRequest`, `HookCaller`, `HOOK_SCHEMA_VERSION`,
-   `for_envelope`, `for_cron`, `hook_name_for`, `HookReply`, `HookAction`,
-   `StopReply`, `HookOutcome` as above. `HookRequest` is the one JSON
-   request every hook receives, task hooks and cron hooks alike: the seven
-   keys `schema_version`, `hook`, `team`, `phase`, `caller` (`identity`,
-   `team`, `host` of the caller), `request`, `custom`, and nothing else;
-   there is no second request shape (ANC-003). An action's `request` is
-   the HTTP API body itself (the `RequestEnvelope` JSON the CLI would
-   send); there is no separate action dialect, and `HookAction` has only
-   `command`, `as` and `request` (ANC-007); `HookReply::parse` accepts exactly
-   the three §2.2 shapes and rejects anything else with `HookMalformed`,
-   running no subcommand logic of its own (the exit-code and deadline
-   mapping to `HookExit` and `HookTimeout` is produced by bk-3's runner
-   from the codes this sprint defines); `StopReply::parse` accepts exactly
-   the two D-9 shapes; `HookAction::envelope` refuses a `command` outside
-   the six task hooks and a `request` whose own `hook_name_for` is not
-   `command` (both `HookMalformed`, D-6), then deserializes `request` with
-   `RequestEnvelope` and overrides `caller_identity` with `as` on `Write`,
-   `TaskMove`, `List`. `hook_name_for(&ApiRequest)` maps each of the six
-   task-bearing requests to its own name (ANC-013), and
-   `ApiRequest::task_envelope` gives the router the wire form to embed as
-   `request` (D-6): `Write` with a task id and no `task_op` → `task.assign`,
-   `Write` with `task_op` `Start` → `task.start`, `Close` → `task.close`,
-   `TaskMove` → `task.move`, `List` with `task_ledger` `Tasks` →
-   `task.list`, `Events` → `task.events`; every other envelope → `None`.
-   Fail-closed by construction (REQ-BK-ERRORS): `HookReply::parse` and
-   `StopReply::parse` return `Err(HookMalformed)` for any stdout that is
-   not exactly one of their shapes, so a malformed reply can never be read
-   as pass-through or as `stop == false`; `HookExit` and `HookTimeout` are
-   errors the runner (bk-3) returns for a non-zero exit and a deadline, and
-   no API maps any of the three to a success value.
-2. `atm-core::boundary`: the three sealed traits `HookRunner`,
-   `CronScheduler`, `HookActionDispatcher` with their `Noop` defaults and
-   test doubles (test-utils), and the storage re-exports listed above, so
-   that no crate but `atm-core` and `atm-cron` imports `atm_storage` for
-   hook or cron types (`atm-http-runtime -> atm-storage` is a forbidden
-   edge). One `HookRunner` instance is composed in the daemon and shared by
-   the task router and the cron worker (bk-3, bk-4, bk-5); the `atm` crate
-   depends on the trait's types only and never spawns a hook process
-   (REQ-BK-D3). `LocalServiceRuntime` exposes `hook_registration_store()`
-   and `cron_schedule_store()`.
-3. Protocol: the six request and six response variants, the `ApiRequest`
-   mirror in `api.rs:474` with `From<RequestEnvelope>`, `HTTP_API_VERSION`
-   `"1.13.0"`. `CronStartRequest.stop` is a required `StopCondition`
-   (never `Option`): a `CronStart` body without `stop`, or with a `kind`
-   other than `until` or `hook`, fails to deserialize, so no schedule can
-   be requested without exactly one stop condition (ANC-023, design D-9).
-4. `atm-error`: the six `AtmErrorCode` variants with code strings and
-   `from_str` arms; `docs/atm-error-codes.md` §5.11 entries (code,
-   description, HTTP status `400 Bad Request` for `ATM_HOOK_MODULE_INVALID`,
-   `ATM_HOOK_ACTIVE`, `ATM_CRON_EXPR_INVALID`; `500 Internal Server Error`
-   for `ATM_HOOK_EXIT`, `ATM_HOOK_TIMEOUT`, `ATM_HOOK_MALFORMED`) and §7.1
-   classification rows (`operator_actionable` for the first three,
-   `retryable` for the last three); the ADR-061 D5 record line; both
-   `openapi.yaml` copies and the surface baseline.
-5. Boundary manifests for the three trait-only core boundaries:
-   `hook-runner.toml` lists `allowed_test_double_paths =
-   ["atm_core::boundary::hook_runner::DummyHookRunner"]`,
-   `allowed_dependents = ["atm-http-runtime", "atm-daemon-bootstrap",
-   "atm-cron", "atm"]`; `cron-scheduler.toml` (`allowed_dependents =
-   ["atm-http-runtime", "atm-daemon-bootstrap", "atm-cron"]`, double
-   `RecordingCronScheduler`); `hook-action-dispatcher.toml`
-   (`allowed_dependents = ["atm-http-runtime", "atm-cron",
-   "atm-daemon-bootstrap"]`, double `RecordingHookActionDispatcher`);
-   `atm-runtime-test-support` re-exports the five doubles.
-6. Tests, same unit, `atm-core` and `atm-error`:
-   `hook_request_top_level_keys_and_request_shape_are_pinned` serializes
-   `HookRequest` for all six task hooks, `cron.tick` and `cron.stop` and
-   asserts the seven top-level keys and, per hook, that `request` equals
-   the serde JSON of the envelope (`{"args": [...]}` for the cron hooks)
-   (ANC-003, ADR-068 D8);
-   `hook_action_envelope_refuses_non_task_command_and_mismatched_request`;
-   `HookReply::parse` on the three shapes plus four malformed inputs;
-   `StopReply::parse` on the two shapes plus `{"stop": true}`,
-   `{"stop": false, "reason": "x"}` and `{"stop": "yes"}` (all
-   `HookMalformed`); `HookAction::envelope` with and without `as` (ANC-007,
-   ANC-009); `hook_name_for_maps_each_task_envelope`; protocol round trip
-   of the twelve variants; the six error codes through `as_str`/`from_str`.
+1. `atm-core::hook`: the request, reply, action and stop types above,
+   parsed by the rules of `design.md` §9.4 and mapped by §9.2. A reply
+   that is not exactly one of the four shapes is `ATM_HOOK_MALFORMED`
+   returned to the caller, never pass-through or not-applicable and never the normal
+   command (Rand, 2026-10-18: "manformed hook MUST return hook failed to
+   caller (error)"). `HookRequest` is the one request every hook receives,
+   seven keys and nothing else (ANC-003); an action's `request` is the
+   bare HTTP body itself and `HookAction` has only `command`, `as` and
+   `request` (ANC-007).
+2. `atm-core::boundary`: the four sealed traits with their doubles behind
+   `test-utils`, `TaskCallCtx`, the five newtypes, `TaskCommand` with
+   `classify` by the `design.md` §9.3 table, `hook_name` and
+   `request_body`, and the re-exports, so that no crate but `atm-core`
+   imports `atm_storage` for hook or cron types. There are no `Noop`
+   types.
+3. Protocol and routes: the variants above, `HTTP_API_VERSION` `"1.13.0"`,
+   the six routes and every arm `design.md` §9.11 assigns to bk-2,
+   `HookActions` decoded from `HOOK_ACTIONS_HEADER` before
+   `decode_success_response`. `CronStartRequest.stop` is a required
+   `StopCondition`. `HookRegisterRequest.custom` and
+   `CronStartRequest.custom` are `#[serde(default)]` JSON (absent means
+   `{}`); the route turns them into the stored map with `custom_object`.
+   `CronStartRequest.timeout_ms` is capped by `CRON_TIMEOUT_MAX_MS`, not
+   `HOOK_TIMEOUT_MAX_MS`, in both `openapi.yaml` copies.
+4. Store wiring: the `LocalServiceRuntime` builders and accessors and the
+   `atm-runtime` composition; both store manifests from bk-1 gain
+   `atm-runtime` in `allowed_dependents` only if bk-1 did not list it (it
+   does).
+5. Doctor request, reply and report types and both `openapi.yaml` copies
+   (the `HookDoctorEntry` and `HookDoctorFinding` schemas under
+   `DoctorReport.hooks`) with the surface baseline and the ADR-061 D5 record line.
+6. Boundary manifests: `allowed_test_double_paths` use the `crate::`
+   form (`["crate::boundary::hook_runner::DummyHookRunner"]`, and
+   likewise for the other three); `allowed_dependents` list
+   `atm-http-runtime`, `atm-daemon-bootstrap` and, for `hook-runner.toml`,
+   `atm`; `atm-cron` is added by bk-4 when that edge exists.
+7. Tests, same unit, in the files the criteria name.
 
 ## Authoritative acceptance criteria
 
-- [ ] (ANC-003) `boundary:HookRequest` one test serializes `HookRequest` for all six task hooks, `cron.tick` and `cron.stop` and asserts the identical top-level key set `schema_version, hook, team, phase, caller, request, custom` and that `caller` has exactly `identity`, `team`, `host`; no other request type exists in `atm_core::hook`.
-- [ ] (ANC-022) `boundary:HookRequest` a `custom` value `{"x":[1,{"y":null}]}` round-trips byte-identical through `HookRequest`.
-- [ ] (ANC-013) `boundary:HookRequest` `hook_name_for_maps_each_task_envelope` asserts the six envelope-to-name pairs above and `None` for `Peek`, `Search`, `Doctor`.
-- [ ] (ANC-007, ANC-009) `boundary:HookReply` `HookAction::envelope` on a `task.close` action with `"as": "team-lead"` yields `RequestEnvelope::Write` with `caller_identity == team-lead`; without `as` the original `caller_identity` stands.
-- [ ] (ANC-007) `boundary:HookReply` an action whose `request` is byte-for-byte the JSON body `atm task assign` sends over HTTP deserializes through `HookAction::envelope` into the same `RequestEnvelope` the HTTP handler would build; `HookAction` deserialization with `deny_unknown_fields` refuses any key other than `command`, `as`, `request`.
-- [ ] (D-6) `boundary:HookReply` `HookAction::envelope` with `command = "cron.tick"`, with `command = "hook.register"`, and with `command = "task.close"` over a `task.assign` request each fail with `ATM_HOOK_MALFORMED`; a `request` that is a `HookRegister` or `CronStart` envelope fails the same way.
-- [ ] (ANC-004, ANC-005, ANC-006) `boundary:HookReply` `HookReply::parse` maps `{"success":false,"message":"m"}` to `Refused`, `{"success":true}` to `PassThrough`, `{"success":true,"atm-action":[...]}` to `Actions` preserving order; `{"ok":true}`, empty stdout, two JSON objects and `{"success":"true"}` fail with `ATM_HOOK_MALFORMED`.
-- [ ] (ANC-024) `boundary:HookReply` `StopReply::parse` accepts exactly `{"stop": true, "reason": "r"}` and `{"stop": false}`; `{"stop": true}`, `{"stop": false, "reason": "x"}`, `{"stop": "yes"}` and `{"stop": true, "reason": "r", "extra": 1}` fail with `ATM_HOOK_MALFORMED`.
-- [ ] (REQ-BK-D3) `boundary:HookRunner` `HookRunner`, `CronScheduler` and `HookActionDispatcher` are sealed, their doubles are compiled only under `test-utils`, the three `atm-core` manifests list each as the sole test double; `just lint` boundary check passes with the three manifests.
-- [ ] (REQ-BK-D3) `boundary:HookRunner` `rg -n 'atm_storage::' crates/atm-http-runtime/src crates/atm/src` matches nothing new: every hook and cron type reaches those crates through `atm_core::boundary` or `atm_runtime_test_support`; `cargo tree -p atm -e normal -i tokio` shows no new process-spawning dependency.
-- [ ] (REQ-BK-ERRORS) `boundary:atm-error` the six codes round-trip through `AtmErrorCode::as_str`/`from_str`, and `docs/atm-error-codes.md` lists each of the six in §5.11 and §7.1 (`grep -c` equals 6 for each section).
-- [ ] (REQ-BK-ERRORS) `boundary:HookReply` a table of ten malformed stdouts (empty, whitespace, `null`, `[]`, `{"success":"true"}`, `{"success":true,"atm-action":{}}`, `{"success":false}`, two concatenated objects, truncated JSON, `{"stop":1}`) yields `Err` with code `ATM_HOOK_MALFORMED` from `HookReply::parse` and from `StopReply::parse`; neither function has a path returning `PassThrough` or `stop == false` from invalid input.
-- [ ] (ANC-023) `boundary:atm-protocol` `cargo test -p atm --test openapi_surface` passes with `info.version == "1.13.0"` in both `openapi.yaml` copies and the twelve request/response schemas present; `CronStartRequest.stop` is required with `kind` one of `until`, `hook`; a `CronStart` JSON body without `stop` fails to deserialize into `RequestEnvelope`, and one with `{"kind":"until","at":"2026-11-01T00:00:00Z"}` round-trips to `StopCondition::Until`.
-- [ ] `boundary:atm-protocol` the twelve new envelope variants serialize and deserialize; `HTTP_API_VERSION == "1.13.0"`; `From<RequestEnvelope>` maps each new variant to its `ApiRequest` twin.
+- [ ] (ANC-003) `boundary:BOUNDARY-HookRunner` `crates/atm-core/src/hook/request.rs::tests::hook_request_top_level_keys_and_request_shape_are_pinned` serializes `HookRequest` for all six task commands, `cron.tick` and `cron.stop` and asserts the key set `schema_version, hook, team, phase, caller, request, custom`, `caller` keys `identity, team, host`, and per task command `request == serde_json::from_slice(encode_request_body(..))` for the envelope the CLI sends; `{"args": [...], "created_by": <caller.identity>}` for the cron hooks.
+- [ ] (ANC-022) `boundary:BOUNDARY-HookRunner` `request.rs::tests::custom_round_trips_and_comes_from_the_registration`: `custom` `{"x":[1,{"y":null}]}` round-trips byte-identical; `for_task` and `for_cron` copy `reg.custom` unchanged and never add or drop a key; `for_cron` sets `request.created_by` to `caller.identity`; `::custom_object_refuses_non_object_and_oversize`: `[1]`, `"s"` and an object serializing to 65 537 bytes are `ATM_HOOK_MODULE_INVALID` naming `custom`, and one of 65 536 bytes is accepted.
+- [ ] (ANC-013) `boundary:BOUNDARY-TaskCommands` `crates/atm-core/src/boundary/task_commands.rs::tests::classify_maps_each_task_request` asserts every row of `design.md` §9.3, including legacy `task_complete` → `close`, `acknowledges_message_id` → not a task command, `History` → not a task command, and `hook_name()` of each variant equal to its method's hook name (`Assign` → `task.assign` ... `Events` → `task.events`), and `::normalization_error_surfaces_the_existing_validation_error` (a `Write` whose `task_op_normalized` fails is returned unclassified).
+- [ ] (ANC-007, ANC-009) `boundary:BOUNDARY-HookRunner` `crates/atm-core/src/hook/reply.rs::tests::action_maps_each_command`: one action per row of `design.md` §9.2 yields the named `ApiRequest`; `as: team-lead` sets `caller_identity` on Write, TaskMove and List; without `as` the body's own value stands; a `request` byte-identical to the body `atm task assign` sends gives the request the HTTP handler builds.
+- [ ] (D-6) `boundary:BOUNDARY-HookRunner` `reply.rs::tests::registry_cron_and_internal_commands_are_malformed`: `hook.register`, `cron.start`, `heartbeat`, `task.foo`, and `send` with a `task_id` each fail with `ATM_HOOK_MALFORMED`; a key other than `command`, `as`, `request` is refused by `deny_unknown_fields`.
+- [ ] (ANC-004, ANC-005, ANC-006, REQ-BK-ERRORS) `boundary:BOUNDARY-HookRunner` `reply.rs::tests::reply_parse_case_table` runs every row of `design.md` §9.4: the four valid shapes map to `Handled` (order kept), `PassThrough`, `NotApplicable` and `Refused`, and every listed malformed stdout is `Err` with code `ATM_HOOK_MALFORMED`; no path returns `PassThrough` or `NotApplicable` for invalid input; `unknown_result_value_is_malformed` (`{"result":"skip"}`, `{"result":true}`); `success_key_from_old_schema_is_malformed` (`{"success":true}`, `{"success":false,"message":"m"}`).
+- [ ] (ANC-024) `boundary:BOUNDARY-HookRunner` `reply.rs::tests::stop_reply_shapes`: accepts exactly `{"stop": true, "reason": "r"}` and `{"stop": false}`; `{"stop": true}`, `{"stop": true, "reason": ""}`, `{"stop": false, "reason": "x"}`, `{"stop": "yes"}`, `{"stop":1}` and an extra key fail with `ATM_HOOK_MALFORMED`.
+- [ ] (REQ-BK-ERRORS) `boundary:BOUNDARY-HookRunner` `reply.rs::tests::malformed_is_never_pass_through`: for each malformed row of §9.4 `HookReply::parse` returns `Err` with code `ATM_HOOK_MALFORMED` and never `Ok(PassThrough)` or `Ok(NotApplicable)`; `HookRunner::run`'s doc states its `Err` set is `ATM_HOOK_EXIT`, `ATM_HOOK_TIMEOUT`, `ATM_HOOK_MALFORMED`.
+- [ ] (REQ-BK-D3) `boundary:BOUNDARY-HookRunner` `HookRunner` is the one runner trait: `AtmCronDeps.runner` (bk-4) and `HookedTaskCommands.runner` (bk-3) both take `Arc<dyn HookRunner>`, so one daemon instance serves both; the four traits are sealed with `atm_core::boundary::sealed::Sealed`, their doubles compile only under `test-utils`, each manifest lists its double as the sole test double; `just lint` boundary check passes with the four manifests; `rg -n 'atm_storage::' crates/atm-http-runtime/src crates/atm/src` matches nothing new.
+- [ ] `boundary:BOUNDARY-AtmProtocol` `crates/atm-core/src/api.rs::tests::every_new_route_round_trips_encode_http_request_to_http_route_kind`: each of the six new envelopes encodes to `POST` on its §9.11 path and decodes back to its `HttpRouteKind`; `::hook_actions_header_decodes_to_hook_actions` turns a 200 with `X-ATM-Hook-Actions: 2` into `ResponseEnvelope::HookActions(HookActionsResponse { dispatched: 2 })`.
+- [ ] (ANC-023) `boundary:BOUNDARY-AtmProtocol` `cargo test -p atm --test openapi_surface` passes with `info.version == "1.13.0"` in both copies, the six paths and the new schemas; a `CronStart` body without `stop` fails to deserialize and `{"kind":"until","at":"2026-11-01T00:00:00Z"}` round-trips to `StopCondition::Until`.
+- [ ] `boundary:BOUNDARY-AtmRuntime-Composition` `crates/atm-runtime/src/composition.rs::tests::composition_installs_the_hook_and_cron_stores` (pattern `:347`) and `crates/atm-core/src/service_runtime.rs::tests::hook_and_cron_stores_report_the_not_installed_error` (pattern `:1264`).
+- [ ] (REQ-P-HOOK-004) `boundary:BOUNDARY-DaemonRuntimeDoctorReport` `crates/atm-core/src/doctor/hooks.rs::tests::report_without_hooks_field_decodes_and_empty_hooks_serialize`: a pre-bk JSON report decodes with `hooks == []`, and a report with no entries serializes `"hooks": []`.
+- [ ] (ANC-015, Rand 2026-10-18 doctor) `boundary:BOUNDARY-DaemonRuntimeDoctorReport` `doctor/hooks.rs::tests::doctor_request_and_reply_shapes`: `HookDoctorRequest::for_registration` serializes exactly `schema_version, hook, team, phase, custom` with `hook == "doctor"` and the row's `custom`; `HookDoctorReply::parse` accepts `{"success":true,"message":"ok"}` (`findings == []`) and the design.md §9.10 example; `{"success":true}`, `{"message":"x"}`, an extra key, `"severity":"fatal"`, a finding without `code`, `findings: {}` and `ok` are each `ATM_HOOK_MALFORMED`; `HookDoctorFinding` has the four field names of `DoctorFinding`.
+- [ ] `boundary:BOUNDARY-AtmProtocol` the thirteen new envelope variants round-trip through serde; `HTTP_API_VERSION == "1.13.0"`; `From<RequestEnvelope>` and `into_inner` map each new variant both ways.
 
 ## Authoritative validation
 
 - `cargo build --workspace`
-- `cargo test -p atm-core --features test-utils -p atm-error -p atm --test openapi_surface`
-- `cargo clippy -p atm-core -p atm-error -p atm-runtime-test-support --all-targets -- -D warnings`
+- `cargo test -p atm-core --features test-utils -p atm-runtime -p atm --test openapi_surface`
+- `cargo clippy -p atm-core -p atm-runtime -p atm-runtime-test-support --all-targets -- -D warnings`
 - `just lint` (boundary manifests, `.just/check_line_counts.py`, RULE-003)
 
 ## Non-closure
 
-- No hook process is spawned (bk-3 `DaemonHookRunner`); no router consults
-  a hook (bk-3); no tick or stop check fires (bk-4); no CLI command exists
-  (bk-5); no `TIMEOUT_MS` is read from a module (bk-5); no doctor section
-  (bk-5); no HTTP path serves the six new variants (bk-3 adds the routes
-  and their `openapi.yaml` paths); user documentation (bk-5). ADR-068,
-  ADR-069 and the ADR-061 D6 record landed with the plan PR #1877.
-- `NoopHookRunner`, `NoopCronScheduler` and `NoopHookActionDispatcher` are
-  the composed defaults until bk-3 and bk-5 inject the real ones; with
-  them every hook consult would fail closed, which no route reaches in
-  this sprint.
-- The two store tables and their rusqlite code are bk-1's; this sprint
-  only re-exports bk-1's types.
+- No hook process is spawned (bk-3 `DaemonHookRunner`); no filter or
+  normal implementation of `TaskCommands` exists (bk-3); no tick or stop
+  check fires (bk-4); no CLI command, `TIMEOUT_MS` read, exit-code arm or
+  doctor collection (bk-5). ADR-068, ADR-069 and the ADR-061 D6 record
+  landed with the plan PR #1877.
+- Error codes and constructors are bk-1's; this sprint only uses them.

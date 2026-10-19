@@ -44,13 +44,19 @@ overlap, deadline and shutdown rules are the daemon's anyway.
 
 `cron_schedule` is an additive SQLite table keyed by `id` with
 `UNIQUE (team, phase, name)`, holding the cron expression, module path, cwd,
-`args` (JSON array), `timeout_ms`, `active`, `created_by`, `created_at`,
+`args` (JSON array), `timeout_ms`, `jitter_s`, `custom` (JSON object,
+ADR-068 D1), `active`, `created_by`, `created_at`,
 `last_run_at`, `last_outcome`, `ended_at`, and the stop condition of D4 as
 `until_at` (nullable text) and `stop_hook` (integer 0/1) under a CHECK that
 exactly one is set. `atm cron end --phase <x> [<name>]` sets rows inactive
 and keeps them; every active row, of every team, runs. The expression is
-parsed with `cron::Schedule::from_str` before the row is written, so the
-daemon never loads an invalid one (`ATM_CRON_EXPR_INVALID`). Any roster
+parsed before the row is written, so the daemon never loads an invalid
+one (`ATM_CRON_EXPR_INVALID`). The grammar is the `cron` 0.17 one: 6 or 7
+fields, seconds first, year optional, or one of `@yearly`, `@monthly`,
+`@weekly`, `@daily`, `@hourly`, in UTC. A five-field expression, an
+expression with no future occurrence and an `--until` at or before now are
+refused. Restarting an ended name updates its row in place and keeps the
+id. Any roster
 member of the team may start a schedule; the route checks membership only
 (round 4).
 
@@ -58,31 +64,55 @@ member of the team may start a schedule; the route checks membership only
 
 `atm cron` is its own workspace crate, `atm-cron`, the only implementation
 of the sealed core trait `atm_core::boundary::CronScheduler`
-(`validate_expression`, `start`, `end`, `list`, `run_now`). The crate
-depends on `atm-core`, `atm-storage`, `tokio`, `chrono`, `cron` and
-nothing of `atm-http-runtime`, `atm-daemon-bootstrap` or the CLI; it runs
-hooks through the injected `HookRunner` and dispatches a reply's actions
-through the injected sealed core trait `HookActionDispatcher`, which the
-HTTP router implements. The daemon bootstrap composes the crate's `AtmCron`
-once, hands it to the router (the three cron routes call the trait, so
+(`start`, `end`, `list`); `validate_expression` and `run_now` are
+inherent methods of `AtmCron`. The crate depends on `atm-core` (every
+store and hook type through `atm_core::boundary`), `tokio`, `chrono`,
+`cron`, `async-trait`, `serde_json`, `getrandom` and `tracing`, and on none of
+`atm-storage`, `atm-http-runtime`, `atm-daemon-bootstrap` or the CLI. It
+runs hooks through the injected `HookRunner` and dispatches a reply's
+actions through the injected sealed core trait `HookActionDispatcher`,
+which the base router implements below the task filter (ADR-068 D4), each
+action with a fresh `SERVER_REQUEST_BUDGET`. Store calls run on
+`spawn_blocking`. The daemon bootstrap composes the crate's `AtmCron`
+once, installs it in the router (the three cron routes call the trait, so
 parse-before-write and the reload signal are the crate's) and keeps the
 worker handle in `DaemonWorkers`, started from the active rows at daemon
 start and drained under the replacement-daemon deadline like the other
-workers. Each schedule's next time is `Schedule::after(&now).next()`,
-recomputed after startup, after each run and after a reload (ADR-065: UTC
+workers. Each schedule's next time is `Schedule::after(&now).next()`
+plus the schedule's fixed `jitter_s`, recomputed after startup, after each run and after a reload (ADR-065: UTC
 under the hood); a tick missed through a restart, a sleep or a long run is
 never replayed. A tick that arrives while the schedule's previous run is
-still executing is skipped and logged. A `start` or `end` through the trait
+still executing is skipped and logged. The worker sleeps at most 30 s at a
+time, so a wall-clock jump is seen within one slice; a run that panics is
+caught and recorded, and the worker keeps ticking. Rand (2026-10-18):
+"Random per-job offset so jobs don't all fire on :00 <-- we should do
+this. it should be random over remaining slots." `start` draws `jitter_s`
+once from an injected random source, uniform over the offsets in
+`[0, min(period_s / 2, 1800))` not held by another active schedule with
+the same expression (all of them when every offset is held); it is
+stored, so a restart keeps it, and the `until` and stop checks run at the
+jittered time. This reading of "remaining slots" is the design's, open to
+Rand's correction. A `start` or `end` through the trait
 signals the worker to reload its rows, so no restart is needed.
 
 ### D3. A tick is a hook run
 
 The tick sends ADR-068's request with `hook = "cron.tick"` and
-`request = {"args": [...]}` to the module (`python3 <module> cron.tick`;
-the args travel only in the stdin request, never on argv), under the
-schedule's `timeout_ms`, with the fixed environment. The reply follows
-ADR-068 D2: refused is recorded, pass-through is recorded as ok, actions
-are dispatched un-hooked as the schedule's `created_by` unless an action
+`request = {"args": [...], "created_by": "<agent>"}` and the schedule's
+`custom` to the module (`python3 <module> cron.tick`; the args travel only
+in the stdin request, never on argv), so one module serves many schedules
+that differ in `custom` and `created_by`. It runs under the schedule's
+`timeout_ms`, with the fixed environment. Rand (2026-10-18): "the cron
+timeout would need to be much longer than the hook timeout. 2.5s is fine
+for hook. cron might query gh, query bd, query atm aggregate
+information.... something more like a 30s timeout would be more
+reasonable, although I expect they will generally be much faster". That
+value is the module's `CRON_TIMEOUT_MS`, else `TIMEOUT_MS`, at most
+`CRON_TIMEOUT_MAX_MS` = 30 000, and each dispatched action gets its own
+`SERVER_REQUEST_BUDGET`. The reply follows
+ADR-068 D2: refused is recorded as `refused: <message>` with the schedule kept
+active, pass-through and not-applicable are recorded as ok, and a handled
+reply's actions are dispatched un-hooked as the schedule's `created_by` unless an action
 names `as`, with ingress `Local`. Each run writes `last_run_at` and
 `last_outcome` on the row and one structured entry (ADR-067) with
 `subsystem = "atm_cron"`.
@@ -97,7 +127,7 @@ names `as`, with ingress `Local`. Each run writes `last_run_at` and
   schedule ends (`active = 0`, `ended_at`, `last_outcome = "stopped: until
   reached"`) and nothing runs.
 - `Hook`: the daemon calls `python3 <module> cron.stop` with the same stdin
-  shape (`hook = "cron.stop"`, `request = {"args": [...]}`) under the
+  shape (`hook = "cron.stop"`, the D3 `request` and `custom`) under the
   schedule's `timeout_ms`; the module's `stop(args)` replies
   `{"stop": true, "reason": "<text>"}` (the schedule ends with
   `last_outcome = "stopped: <text>"`, nothing runs) or `{"stop": false}`
@@ -123,7 +153,8 @@ ADR") is amended here, in this one place, to fourteen:
 
 Both are sealed with `atm_storage::contract::sealed::Sealed`, implemented
 only by `atm-storage-rusqlite`, re-exported through `atm_core::boundary`,
-with in-memory doubles in `atm-runtime-test-support` only. Sprint bk-1
+with in-memory doubles in `atm_storage::testing`, re-exported by
+`atm-runtime-test-support`. Sprint bk-1
 updates ADR-036's inventory and `docs/atm-storage/boundaries.md` and owns
 those paths. No fifteenth capability is authorized by this ADR; the
 ADR-063 review check now reads "fourteen".
