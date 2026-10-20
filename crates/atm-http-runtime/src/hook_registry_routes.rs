@@ -235,7 +235,7 @@ mod tests {
 
     use atm_core::api::AuthenticatedIngress;
     use atm_core::boundary::{CronScheduler, HookRegistrationStore, RecordingCronScheduler};
-    use atm_core::error::AtmErrorCode;
+    use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::hook::{
         CronEndRequest, CronListQuery, CronStartRequest, HookDisableRequest, HookListQuery,
         HookRegisterRequest,
@@ -325,6 +325,20 @@ mod tests {
             stop: atm_core::boundary::StopCondition::Hook,
             custom,
         }
+    }
+
+    fn assert_refusal(error: &AtmError, expected_code: AtmErrorCode, expected_message: &str) {
+        assert_eq!(error.code(), expected_code);
+        let expected_message = match expected_code {
+            AtmErrorCode::HookModuleInvalid => format!(
+                "HOOK.MODULE_INVALID: {expected_message}\n  Recovery: Register a task hook module path and name the hook from the supported list, then retry."
+            ),
+            AtmErrorCode::AgentNotFound => format!(
+                "{expected_message}\n  Recovery: Correct the ATM address or team selection and retry."
+            ),
+            _ => expected_message.to_owned(),
+        };
+        assert_eq!(error.message(), expected_message);
     }
 
     #[tokio::test]
@@ -475,7 +489,16 @@ mod tests {
         register(&routes, register_request("sender", "task.assign", "bk"))
             .await
             .expect("register");
-        for name in ["cron.tick", "task.bogus"] {
+        for (name, expected_message) in [
+            (
+                "cron.tick",
+                "cron.tick is not a task hook; expected one of task.assign, task.start, task.close, task.move, task.list, task.events",
+            ),
+            (
+                "task.bogus",
+                "unknown hook name task.bogus; expected one of task.assign, task.start, task.close, task.move, task.list, task.events, cron.tick, cron.stop",
+            ),
+        ] {
             let result = routes
                 .router
                 .hook_disable(
@@ -492,8 +515,7 @@ mod tests {
             let Err(err) = result else {
                 panic!("disable must refuse the non-task hook name {name}");
             };
-            assert_eq!(err.code(), AtmErrorCode::HookModuleInvalid);
-            assert!(err.message().contains(name));
+            assert_refusal(&err, AtmErrorCode::HookModuleInvalid, expected_message);
         }
         let active = routes.hooks.active_all().expect("rows");
         assert_eq!(active.len(), 1, "a refused disable changes no rows");
@@ -505,17 +527,30 @@ mod tests {
         let tick = register(&routes, register_request("sender", "cron.tick", "bk"))
             .await
             .expect_err("cron.tick is not a task hook");
-        assert_eq!(tick.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(tick.message().contains("cron.tick is not a task hook"));
+        assert_refusal(
+            &tick,
+            AtmErrorCode::HookModuleInvalid,
+            "cron.tick is not a task hook; expected one of task.assign, task.start, task.close, task.move, task.list, task.events",
+        );
         let unknown = register(&routes, register_request("sender", "task.bogus", "bk"))
             .await
             .expect_err("unknown task hook");
-        assert_eq!(unknown.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(unknown.message().contains("unknown hook name task.bogus"));
+        assert_refusal(
+            &unknown,
+            AtmErrorCode::HookModuleInvalid,
+            "unknown hook name task.bogus; expected one of task.assign, task.start, task.close, task.move, task.list, task.events, cron.tick, cron.stop",
+        );
         let mut over = register_request("sender", "task.assign", "bk");
         over.timeout_ms = atm_core::boundary::HOOK_TIMEOUT_MAX_MS + 1;
         let capped = register(&routes, over).await.expect_err("over cap timeout");
-        assert!(capped.message().contains("timeout_ms must be 1..="));
+        assert_refusal(
+            &capped,
+            AtmErrorCode::HookModuleInvalid,
+            &format!(
+                "timeout_ms must be 1..={} milliseconds",
+                atm_core::boundary::HOOK_TIMEOUT_MAX_MS
+            ),
+        );
         assert!(routes.hooks.active_all().expect("rows").is_empty());
     }
 
@@ -542,9 +577,10 @@ mod tests {
         let off = register(&routes, register_request("stranger", "task.assign", "bk"))
             .await
             .expect_err("off-roster caller");
-        assert!(
-            off.message().contains("was not found in team"),
-            "off-roster caller is refused: {off}"
+        assert_refusal(
+            &off,
+            AtmErrorCode::AgentNotFound,
+            "agent 'stranger' was not found in team 'test-team'; add it with `atm teams add-member test-team stranger`",
         );
     }
 
@@ -923,10 +959,14 @@ mod tests {
                 )
                 .await
                 .expect_err("timeout outside 1..=30000");
-            assert!(error.message().contains(&format!(
-                "timeout_ms must be 1..={} milliseconds",
-                atm_core::boundary::CRON_TIMEOUT_MAX_MS
-            )));
+            assert_refusal(
+                &error,
+                AtmErrorCode::HookModuleInvalid,
+                &format!(
+                    "timeout_ms must be 1..={} milliseconds",
+                    atm_core::boundary::CRON_TIMEOUT_MAX_MS
+                ),
+            );
         }
         routes
             .router
@@ -951,11 +991,14 @@ mod tests {
         )
         .await
         .expect_err("non-object custom");
-        assert_eq!(non_object.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(
-            non_object
-                .message()
-                .contains("custom must be an object of at most")
+        let custom_message = format!(
+            "custom must be an object of at most {} serialized bytes",
+            atm_core::hook::HOOK_CUSTOM_MAX_BYTES
+        );
+        assert_refusal(
+            &non_object,
+            AtmErrorCode::HookModuleInvalid,
+            &custom_message,
         );
         let oversize = json!({"x": "x".repeat(atm_core::hook::HOOK_CUSTOM_MAX_BYTES)});
         let over = register(
@@ -967,10 +1010,7 @@ mod tests {
         )
         .await
         .expect_err("over 64 KiB custom");
-        assert!(
-            over.message()
-                .contains("custom must be an object of at most")
-        );
+        assert_refusal(&over, AtmErrorCode::HookModuleInvalid, &custom_message);
         let cron = routes
             .router
             .cron_start(
@@ -979,10 +1019,7 @@ mod tests {
             )
             .await
             .expect_err("cron over 64 KiB custom");
-        assert!(
-            cron.message()
-                .contains("custom must be an object of at most")
-        );
+        assert_refusal(&cron, AtmErrorCode::HookModuleInvalid, &custom_message);
         assert!(routes.hooks.active_all().expect("rows").is_empty());
         assert!(routes.cron.calls.lock().expect("calls").is_empty());
     }
@@ -990,10 +1027,7 @@ mod tests {
     #[tokio::test]
     async fn oversize_name_args_and_paths_refused() {
         // Returns the refusal, failing the test if the call was accepted.
-        fn expect_refused<T>(
-            result: Result<T, atm_core::error::AtmError>,
-            what: &str,
-        ) -> atm_core::error::AtmError {
+        fn expect_refused<T>(result: Result<T, AtmError>, what: &str) -> AtmError {
             match result {
                 Ok(_) => panic!("{what} must be refused"),
                 Err(error) => error,
@@ -1013,11 +1047,14 @@ mod tests {
                 .await,
             "a cron name over the cap",
         );
-        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(error.message().contains(&format!(
-            "name must contain 1..={} bytes",
-            atm_core::hook::CRON_NAME_MAX_BYTES
-        )));
+        assert_refusal(
+            &error,
+            AtmErrorCode::HookModuleInvalid,
+            &format!(
+                "name must contain 1..={} bytes",
+                atm_core::hook::CRON_NAME_MAX_BYTES
+            ),
+        );
         let mut many_args = cron_request("sender", 1_000, json!({}));
         many_args.args = vec!["a".to_owned(); atm_core::hook::CRON_ARGS_MAX + 1];
         let error = expect_refused(
@@ -1027,22 +1064,28 @@ mod tests {
                 .await,
             "cron args over the item cap",
         );
-        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(error.message().contains(&format!(
-            "args must contain at most {} items",
-            atm_core::hook::CRON_ARGS_MAX
-        )));
+        assert_refusal(
+            &error,
+            AtmErrorCode::HookModuleInvalid,
+            &format!(
+                "args must contain at most {} items",
+                atm_core::hook::CRON_ARGS_MAX
+            ),
+        );
         let mut long_register = register_request("sender", "task.assign", "bk");
         long_register.module_path = path_over_cap.clone();
         let error = expect_refused(
             register(&routes, long_register).await,
             "a register module_path over the cap",
         );
-        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(error.message().contains(&format!(
-            "module_path must be at most {} bytes",
-            atm_core::hook::HOOK_PATH_MAX_BYTES
-        )));
+        assert_refusal(
+            &error,
+            AtmErrorCode::HookModuleInvalid,
+            &format!(
+                "module_path must be at most {} bytes",
+                atm_core::hook::HOOK_PATH_MAX_BYTES
+            ),
+        );
         let mut long_cron = cron_request("sender", 1_000, json!({}));
         long_cron.module_path = path_over_cap;
         let error = expect_refused(
@@ -1052,11 +1095,14 @@ mod tests {
                 .await,
             "a cron module_path over the cap",
         );
-        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(error.message().contains(&format!(
-            "module_path must be at most {} bytes",
-            atm_core::hook::HOOK_PATH_MAX_BYTES
-        )));
+        assert_refusal(
+            &error,
+            AtmErrorCode::HookModuleInvalid,
+            &format!(
+                "module_path must be at most {} bytes",
+                atm_core::hook::HOOK_PATH_MAX_BYTES
+            ),
+        );
         assert!(routes.hooks.active_all().expect("rows").is_empty());
         assert!(routes.cron.calls.lock().expect("calls").is_empty());
     }
@@ -1162,6 +1208,9 @@ mod tests {
             .await
             .expect_err("no scheduler installed");
         assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
-        assert!(error.message().contains("cron scheduler not installed"));
+        assert_eq!(
+            error.message(),
+            "cron scheduler not installed\n  Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry."
+        );
     }
 }
