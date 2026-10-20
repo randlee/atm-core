@@ -236,19 +236,6 @@ pub(crate) async fn spawn_with_deadline(
 }
 
 #[cfg(test)]
-pub(crate) fn environment_probe_output() -> std::process::Output {
-    std::process::Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "hook_runner::tests::environment_child_probe",
-            "--nocapture",
-        ])
-        .env("ATM_BK3_LEAK_SENTINEL", "1")
-        .output()
-        .unwrap()
-}
-
-#[cfg(test)]
 mod tests {
     use std::fs;
     #[cfg(unix)]

@@ -662,7 +662,7 @@ mod tests {
 
     #[test]
     fn runner_passes_daemon_path_and_home_values() {
-        let output = crate::process_deadline::environment_probe_output();
+        let output = environment_probe_output();
         assert!(
             output.status.success(),
             "{}\n{}",
@@ -672,6 +672,20 @@ mod tests {
         assert!(String::from_utf8_lossy(&output.stdout).contains("BK3_ENVIRONMENT_PROOF_COMPLETE"));
     }
 
+    fn environment_probe_output() -> std::process::Output {
+        std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "hook_runner::tests::environment_child_probe",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env("ATM_BK3_LEAK_SENTINEL", "1")
+            .output()
+            .unwrap()
+    }
+
+    #[ignore = "runs only in the sentinel child process"]
     #[tokio::test]
     async fn environment_child_probe() {
         if ProcessEnvSource.var("ATM_BK3_LEAK_SENTINEL").as_deref() != Some("1") {
