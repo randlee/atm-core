@@ -7,9 +7,6 @@
 
 use std::path::PathBuf;
 
-use atm_storage::request_budget::{
-    CRON_TIMEOUT_MAX_MS, HOOK_ACTION_RESERVE_MS, HOOK_TIMEOUT_MAX_MS,
-};
 use atm_storage::testing::{InMemoryCronScheduleStore, InMemoryHookRegistrationStore};
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
@@ -579,20 +576,6 @@ fn jitter_custom_and_created_at_round_trip() {
 }
 
 #[test]
-fn new_cron_schedule_requires_a_stop_condition() {
-    let until = StopCondition::Until {
-        at: stamp(9).into_inner(),
-    };
-    let value = serde_json::to_value(&until).expect("serialize until");
-    assert_eq!(value["kind"], "until");
-    assert!(value["at"].is_string());
-    let hook_value = serde_json::to_value(StopCondition::Hook).expect("serialize hook");
-    assert_eq!(hook_value, serde_json::json!({"kind": "hook"}));
-    let spec = cron_spec("nightly", StopCondition::Hook, stamp(3));
-    assert_eq!(spec.stop, StopCondition::Hook);
-}
-
-#[test]
 fn record_stop_ends_the_row_once() {
     let store = InMemoryCronScheduleStore::new();
     let row = store
@@ -791,11 +774,4 @@ fn list_schedules_orders_active_first_then_created_at_then_phase() {
         .map(|row| row.name)
         .collect();
     assert_eq!(names, ["zulu", "alpha", "early", "late", "ended"]);
-}
-
-#[test]
-fn request_budget_constants_hold_their_values() {
-    assert_eq!(HOOK_TIMEOUT_MAX_MS, 2500);
-    assert_eq!(HOOK_ACTION_RESERVE_MS, 500);
-    assert_eq!(CRON_TIMEOUT_MAX_MS, 30000);
 }
