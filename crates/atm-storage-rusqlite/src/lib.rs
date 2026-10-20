@@ -1409,7 +1409,7 @@ mod tests {
     fn shared_read_pool_configuration_is_threaded_through_storage_factory_and_validated() {
         let root = tempfile::tempdir().expect("temporary storage root");
         let config = SharedReadPoolConfig {
-            max_connections: std::num::NonZeroUsize::new(9).expect("non-zero maximum connections"),
+            max_connections: std::num::NonZeroUsize::new(17).expect("non-zero maximum connections"),
             ..SharedReadPoolConfig::default()
         };
         let error = SqliteStorageFactory::at_path(root.path().join("mail.db"))
@@ -1417,8 +1417,8 @@ mod tests {
             .open(root.path())
             .expect_err("over-budget shared read-pool configuration must fail startup");
         let message = error.message();
-        assert!(message.contains("read_pool=4"));
-        assert!(message.contains("max_connections=9"));
+        assert!(message.contains("read_pool=8"));
+        assert!(message.contains("max_connections=17"));
     }
 
     #[tokio::test]

@@ -1,6 +1,6 @@
 use std::{
     path::PathBuf,
-    sync::{Arc, Mutex, OnceLock, atomic::Ordering},
+    sync::{Arc, atomic::Ordering},
     time::Duration,
 };
 
@@ -57,19 +57,8 @@ struct World {
     workers: DaemonWorkers,
 }
 
-fn sqlite_composition_startup_guard() -> &'static Mutex<()> {
-    static GUARD: OnceLock<Mutex<()>> = OnceLock::new();
-    GUARD.get_or_init(|| Mutex::new(()))
-}
-
 impl World {
     fn new() -> Self {
-        // Constructing this real SQLite fixture loads the durable hook snapshot
-        // synchronously. Serializing only that startup avoids test-process pool
-        // oversubscription while preserving the production storage path.
-        let _startup = sqlite_composition_startup_guard()
-            .lock()
-            .expect("SQLite composition startup guard is not poisoned");
         let root = tempfile::tempdir().unwrap();
         let assembly = open_isolated_sqlite_boundary(root.path())
             .unwrap()
@@ -210,11 +199,19 @@ impl World {
     }
 
     async fn request(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        self.request_with_deadline(request, deadline()).await
+    }
+
+    async fn request_with_deadline(
+        &self,
+        request: ApiRequest,
+        request_deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
         CanonicalWriteHandler::dispatch(
             self.handler.as_ref(),
             request,
             AuthenticatedIngress::Local,
-            deadline(),
+            request_deadline,
         )
         .await
     }
@@ -387,15 +384,42 @@ async fn filter_and_cron_share_one_runner_and_one_dispatcher() {
 }
 
 #[tokio::test]
-async fn snapshot_load_error_is_deferred_past_daemon_composition() {
+async fn snapshot_load_error_is_deferred_to_the_deadline_aware_request_path() {
     let root = tempfile::tempdir().unwrap();
     let mut assembly = open_isolated_sqlite_boundary(root.path())
         .unwrap()
         .for_daemon();
     let store = Arc::new(InMemoryHookRegistrationStore::default());
     store.fail_active_all.store(true, Ordering::SeqCst);
-    assembly.service_runtime = assembly.service_runtime.with_hook_registration_store(store);
-    assert!(World::assemble(root, assembly).is_ok());
+    assembly.service_runtime = assembly
+        .service_runtime
+        .with_hook_registration_store(store.clone());
+    let world = World::assemble(root, assembly).expect("composition does not load hooks");
+    assert_eq!(
+        store.calls.load(Ordering::SeqCst),
+        0,
+        "composition performs no durable hook read"
+    );
+    let error = world
+        .request_with_deadline(
+            ApiRequest::Write(Box::new(world.write())),
+            RequestDeadline::after_at(std::time::Instant::now(), Duration::ZERO),
+        )
+        .await
+        .expect_err("an expired request deadline admits no snapshot load");
+    assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+    assert_eq!(
+        store.calls.load(Ordering::SeqCst),
+        0,
+        "the request deadline prevents the durable read from starting"
+    );
+    let error = world
+        .request(ApiRequest::Write(Box::new(world.write())))
+        .await
+        .expect_err("the first local task request loads the snapshot");
+    assert_eq!(error.code(), AtmErrorCode::InternalError);
+    assert_eq!(store.calls.load(Ordering::SeqCst), 1);
+    world.shutdown().await;
 }
 
 #[tokio::test]
