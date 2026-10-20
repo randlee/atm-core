@@ -174,9 +174,9 @@ visibility = "private"`, `constructor = "pub(crate)"`, `module =
 ## Store implementation note
 
 `CronScheduleStore::end` and `HookRegistrationStore::disable` keep their
-select-update-patch transactions in their respective store modules. They use
-different selectors and ordering keys, return different row types, and update
-different lifecycle columns. A shared helper in `store_support` would need
-table-specific SQL identifiers and generic row decoding or callbacks, making
-the storage abstraction less clear than the small duplicated transaction
-shape.
+select-update-patch transactions in their respective store modules. They share
+the selector shape (team, phase, active, and an optional name or hook key),
+but differ in table, key column, ordering keys, row type, and lifecycle
+column. A shared helper in `store_support` would need table-specific SQL
+identifiers and generic row decoding or callbacks, making the storage
+abstraction less clear than the small duplicated transaction shape.
