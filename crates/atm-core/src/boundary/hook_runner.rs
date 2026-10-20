@@ -169,12 +169,8 @@ mod tests {
             team: target.team.clone(),
             host: None,
         };
-        let request = HookRequest::for_cron(
-            &target,
-            caller,
-            HookName::parse("cron.tick").unwrap(),
-            &["arg".into()],
-        );
+        let request =
+            HookRequest::for_cron(&target, caller, HookName::cron_tick(), &["arg".into()]);
         (
             target,
             request,

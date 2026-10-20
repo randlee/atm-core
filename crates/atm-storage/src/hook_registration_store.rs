@@ -42,6 +42,16 @@ impl HookName {
     pub const CRON_TICK: &'static str = Self::ALL_HOOKS[6];
     pub const CRON_STOP: &'static str = Self::ALL_HOOKS[7];
 
+    /// Constructs the cron tick hook name without validating a static name.
+    pub fn cron_tick() -> Self {
+        Self(Self::CRON_TICK.to_owned())
+    }
+
+    /// Constructs the cron stop hook name without validating a static name.
+    pub fn cron_stop() -> Self {
+        Self(Self::CRON_STOP.to_owned())
+    }
+
     /// Accepts any of the eight hook names.
     pub fn parse(name: &str) -> Result<Self, AtmError> {
         if Self::ALL_HOOKS.contains(&name) {

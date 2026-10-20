@@ -63,7 +63,7 @@ pub(crate) fn log(
         ""
     };
     tracing::info!(subsystem = "atm_cron", action, outcome = class, team = %schedule.team,
-        phase = %schedule.phase, hook = if action == "stop_check" { "cron.stop" } else { "cron.tick" },
+        phase = %schedule.phase, hook = if action == "stop_check" { HookName::CRON_STOP } else { HookName::CRON_TICK },
         schedule = %schedule.id, elapsed_ms = elapsed_ms.max(0), reason, "cron {action}: {text}");
 }
 
@@ -108,7 +108,7 @@ fn request(
     cron: &AtmCron,
     schedule: &CronSchedule,
     target: &HookTarget,
-    hook: &str,
+    hook: HookName,
 ) -> HookRequest {
     HookRequest::for_cron(
         target,
@@ -117,7 +117,7 @@ fn request(
             team: schedule.team.clone(),
             host: cron.deps.host.clone(),
         },
-        HookName::parse(hook).expect("static cron hook name"),
+        hook,
         &schedule.args,
     )
 }
@@ -146,7 +146,7 @@ async fn reply_outcome(
                 .dispatcher
                 .dispatch_actions(
                     DispatchSpec {
-                        hook: HookName::parse("cron.tick").expect("static cron hook name"),
+                        hook: HookName::cron_tick(),
                         team: schedule.team.clone(),
                         phase: schedule.phase.clone(),
                         default_as: schedule.created_by.clone(),
@@ -179,7 +179,7 @@ pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunO
             .runner
             .stop(
                 &target,
-                &request(cron, schedule, &target, "cron.stop"),
+                &request(cron, schedule, &target, HookName::cron_stop()),
                 deadline(cron, schedule),
             )
             .await;
@@ -205,7 +205,7 @@ pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunO
         .runner
         .run(
             &target,
-            &request(cron, schedule, &target, "cron.tick"),
+            &request(cron, schedule, &target, HookName::cron_tick()),
             run_deadline,
         )
         .await
