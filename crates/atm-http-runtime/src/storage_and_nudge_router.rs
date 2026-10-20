@@ -3170,6 +3170,109 @@ pub(crate) mod tests {
         );
     }
 
+    /// One doctor call through the router, with the given hook rows and runner double.
+    async fn doctor_report_with_hooks(
+        fixture: &Fixture,
+        hooks: Arc<atm_runtime_test_support::InMemoryHookRegistrationStore>,
+        runner: Arc<atm_core::boundary::DummyHookRunner>,
+    ) -> atm_core::doctor::DoctorReport {
+        let assembly =
+            open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let doctor_projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig::default(),
+            assembly
+                .service_runtime
+                .with_hook_registration_store(hooks.clone()),
+            assembly.doctor_ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start doctor projection");
+        let snapshot =
+            crate::hook_filter::ActiveHookSnapshot::load(hooks.clone()).expect("hook snapshot");
+        let mut router = fixture.router.clone();
+        router.service_runtime = router
+            .service_runtime
+            .clone()
+            .with_hook_registration_store(hooks.clone());
+        let router =
+            crate::hook_filter::test_support::install_filter(router, Arc::new(snapshot), runner)
+                .with_doctor_projection(Arc::new(doctor_projection));
+        let response = router
+            .dispatch(
+                ApiRequest::new(atm_core::protocol::RequestEnvelope::Doctor(
+                    atm_core::doctor::DoctorQuery {
+                        all_teams: true,
+                        ..atm_core::doctor::DoctorQuery::default()
+                    },
+                )),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(5)),
+            )
+            .await
+            .expect("doctor response");
+        let ResponseEnvelope::Doctor(report) = response.into_inner() else {
+            panic!("expected a doctor report");
+        };
+        *report
+    }
+
+    /// A failed hook doctor call sets only its entry's error. It appends no finding,
+    /// so the report summary matches a report with no hook rows at all.
+    #[tokio::test]
+    async fn doctor_summary_is_unchanged_by_a_failed_hook_doctor_call() {
+        use crate::hook_filter::test_support::{agent, at, hook, phase, team};
+        use atm_core::boundary::HookRegistrationStore as _;
+
+        let fixture = fixture(true, None, None);
+        let baseline = doctor_report_with_hooks(
+            &fixture,
+            Arc::new(atm_runtime_test_support::InMemoryHookRegistrationStore::default()),
+            Arc::new(atm_core::boundary::DummyHookRunner::default()),
+        )
+        .await;
+
+        let hooks = Arc::new(atm_runtime_test_support::InMemoryHookRegistrationStore::default());
+        hooks
+            .register(atm_core::boundary::HookRegistration {
+                team: team(),
+                phase: phase("bj"),
+                hook: hook("task.assign"),
+                module_path: "/modules/bj.wasm".into(),
+                cwd: "/work".into(),
+                timeout_ms: 1_000,
+                custom: serde_json::Map::new(),
+                active: true,
+                registered_by: agent(atm_core::roles::ROLE_TEAM_LEAD),
+                registered_at: at(1),
+                disabled_at: None,
+            })
+            .expect("register");
+        let runner = Arc::new(atm_core::boundary::DummyHookRunner::default());
+        runner
+            .doctor_replies
+            .lock()
+            .expect("replies")
+            .push_back(Err(AtmError::hook_malformed("doctor reply broken")));
+
+        let report = doctor_report_with_hooks(&fixture, hooks, runner).await;
+
+        let error = report
+            .hooks
+            .iter()
+            .find_map(|entry| entry.error.as_ref())
+            .expect("the failed call sets its entry's error");
+        assert_eq!(error.code, atm_core::error::AtmErrorCode::HookMalformed);
+        assert_eq!(
+            report.findings.len(),
+            baseline.findings.len(),
+            "a failed hook call appends no finding"
+        );
+        assert_eq!(
+            report.summary, baseline.summary,
+            "the summary is unchanged by a failed hook call"
+        );
+    }
+
     #[tokio::test]
     async fn doctor_observability_fields_match_health_projection() {
         let fixture = fixture(true, None, None);
