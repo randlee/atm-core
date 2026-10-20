@@ -2459,9 +2459,22 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn reused_loopback_client_follows_a_replaced_daemon_listener_without_duplicate_delivery()
     {
+        // The clock is paused and held still for the whole test: Tokio does
+        // not auto-advance a paused clock while a `spawn_blocking` task is in
+        // flight. Every bound below (the client's request and connect
+        // budgets, each runtime's shutdown deadline) is then a fixed input
+        // that host load cannot exhaust; the outcome depends only on the
+        // real socket and endpoint-record I/O completing, never on how fast
+        // it completes.
+        let (release_clock, clock_held) = tokio::sync::oneshot::channel::<()>();
+        let clock_hold = tokio::task::spawn_blocking(move || {
+            let _ = clock_held.blocking_recv();
+        });
+        let frozen_at = tokio::time::Instant::now();
+
         // Reproduces the shape of a long-lived embedded host (for example
         // the Python graft binding's `PyGraftSession`) that builds one
         // `DaemonApiClient` and keeps it for the lifetime of the process,
@@ -2557,6 +2570,13 @@ mod tests {
             .finish(tokio::time::Instant::now() + Duration::from_secs(1))
             .await
             .expect("second loopback runtime drains");
+        assert_eq!(
+            tokio::time::Instant::now(),
+            frozen_at,
+            "no bound in this test may elapse; the clock stays held throughout"
+        );
+        drop(release_clock);
+        clock_hold.await.expect("clock hold releases");
     }
 
     #[tokio::test(flavor = "current_thread")]
