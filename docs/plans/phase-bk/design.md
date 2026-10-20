@@ -879,11 +879,15 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
   and the snapshot load, whose error aborts startup. It then builds
   `NormalTaskCommands::new(base.clone())` and `HookedTaskCommands` over
   it with `HookedTaskCommands::new(inner, actions, snapshot, runner)`,
-  `actions = Arc::new(base.unhooked())`, and returns
-  `base.with_task_commands(hooked)`. `build_replacement_handler` (`:204`)
-  returns `(Arc<StorageAndNudgeRouter>, RecoverySweepHandle, Arc<dyn
-  HookRunner>, Arc<UnhookedRouter>)`, the last for the cron crate. bk-5
-  updates all four call sites (`lib.rs:471`, `:1303`, `:1505`,
+  `actions = Arc::new(base.unhooked())`, and installs a clone of that filter
+  with `base.with_hook_filter(filter.clone())`. The composed filter is a
+  field of the named `ReplacementHandler` returned by
+  `build_replacement_handler` (`:204`), alongside the router,
+  `RecoverySweepHandle`, runner and `UnhookedRouter`. Composition tests read
+  that returned field directly; production composition has no test-only
+  thread-local filter record. The runner and dispatcher fields are the same
+  `Arc`s used by the filter and the cron crate. bk-5 updates all four call
+  sites (`lib.rs:471`, `:1303`, `:1505`,
   `telemetry_lifecycle_tests.rs:172`).
 - Router fields: `task_commands: Option<Arc<dyn TaskCommands>>`,
   `hooks: Arc<ActiveHookSnapshot>` (shared with the filter so the register

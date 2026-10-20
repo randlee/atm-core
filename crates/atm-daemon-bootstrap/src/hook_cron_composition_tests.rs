@@ -53,6 +53,7 @@ struct World {
     handler: Arc<StorageAndNudgeRouter>,
     runner: Arc<dyn HookRunner>,
     dispatcher: Arc<UnhookedRouter>,
+    hook_filter: Arc<atm_http_runtime::HookedTaskCommands>,
     workers: DaemonWorkers,
 }
 
@@ -68,7 +69,14 @@ impl World {
     fn assemble(root: tempfile::TempDir, assembly: RuntimeAssembly) -> Result<Self, AtmError> {
         let runtime = assembly.service_runtime.clone();
         let task_telemetry = assembly.task_telemetry.clone();
-        let (handler, recovery_sweep, runner, dispatcher, _) = build_replacement_handler(
+        let crate::replacement_handler::ReplacementHandler {
+            handler,
+            recovery_sweep,
+            runner,
+            dispatcher,
+            hook_filter,
+            ..
+        } = build_replacement_handler(
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
@@ -108,6 +116,7 @@ impl World {
             handler,
             runner,
             dispatcher,
+            hook_filter,
             workers: DaemonWorkers::for_process(
                 task_telemetry,
                 recovery_sweep,
@@ -346,7 +355,7 @@ async fn end_phase_keeps_rows_inactive_with_ended_at() {
 #[tokio::test]
 async fn filter_and_cron_share_one_runner_and_one_dispatcher() {
     let world = World::new();
-    let filter = crate::replacement_handler::composed_hook_filter::take();
+    let filter = &world.hook_filter;
     assert!(Arc::ptr_eq(&world.runner, filter.runner()));
     assert!(Arc::ptr_eq(&world.dispatcher, filter.actions()));
     assert!(Arc::ptr_eq(&world.handler.hook_chains(), filter.chains()));
@@ -725,6 +734,7 @@ async fn daemon_restart_with_schedule_due_while_down_fires_once_at_next_occurren
         workers,
         runner: old_runner,
         dispatcher,
+        ..
     } = world;
     run_shutdown_steps(async { Ok(()) }, &handler, workers, stop_deadline())
         .await
@@ -806,6 +816,7 @@ async fn fixture_cron_receives_args_through_the_composed_scheduler() {
         workers,
         runner,
         dispatcher,
+        ..
     } = world;
     run_shutdown_steps(async { Ok(()) }, &handler, workers, stop_deadline())
         .await

@@ -543,8 +543,14 @@ fn compose_replacement_handler_and_cron(
     ),
     AtmError,
 > {
-    let (handler, recovery_sweep, runner, dispatcher, local_host) =
-        build_replacement_handler(assembly, config)?;
+    let crate::replacement_handler::ReplacementHandler {
+        handler,
+        recovery_sweep,
+        runner,
+        dispatcher,
+        local_host,
+        ..
+    } = build_replacement_handler(assembly, config)?;
     let cron = cron_composition::compose_system(&handler, runtime, runner, dispatcher, local_host)?;
     Ok((handler, recovery_sweep, cron))
 }
@@ -1344,29 +1350,30 @@ mod replacement_runtime_tests {
             })
             .expect("plaintext bootstrap selects no TLS stream adapter");
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
-        let (handler, _recovery_sweep, _, _, _) = build_replacement_handler(
-            assembly,
-            ReplacementHandlerConfig {
-                observability: Arc::new(NullObservability),
-                selector_factory: |_, _, _, _| {
-                    Arc::new(NoReceivedHookSelector)
-                        as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+        let crate::replacement_handler::ReplacementHandler { handler, .. } =
+            build_replacement_handler(
+                assembly,
+                ReplacementHandlerConfig {
+                    observability: Arc::new(NullObservability),
+                    selector_factory: |_, _, _, _| {
+                        Arc::new(NoReceivedHookSelector)
+                            as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+                    },
+                    daemon_launch_identity: DaemonLaunchIdentity::default(),
+                    peer_wire_mode: PeerWireMode::plaintext_test(),
+                    peer_adapter_selection: SelectedPeerAdapterSelection {
+                        adapter: peer_stream_adapter.clone(),
+                        pool_config: PeerPoolConfig::default(),
+                    },
+                    runtime_health: runtime_health.clone(),
+                    diagnostic_counters: None,
+                    bare_cli: Default::default(),
+                    herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
+                    herdr_process: None,
+                    daemon_home: temporary_root.path().join("home"),
                 },
-                daemon_launch_identity: DaemonLaunchIdentity::default(),
-                peer_wire_mode: PeerWireMode::plaintext_test(),
-                peer_adapter_selection: SelectedPeerAdapterSelection {
-                    adapter: peer_stream_adapter.clone(),
-                    pool_config: PeerPoolConfig::default(),
-                },
-                runtime_health: runtime_health.clone(),
-                diagnostic_counters: None,
-                bare_cli: Default::default(),
-                herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
-                herdr_process: None,
-                daemon_home: temporary_root.path().join("home"),
-            },
-        )
-        .expect("compose the replacement daemon handler");
+            )
+            .expect("compose the replacement daemon handler");
         let config = replacement_runtime_config_with_direct_peer(
             LoopbackTcpConfig::new(
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
@@ -1546,28 +1553,29 @@ mod replacement_runtime_tests {
             .expect("plaintext bootstrap selects no TLS stream adapter");
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
         let mut herdr_queue_tick = runtime_health.subscribe_herdr_queue_tick();
-        let (handler, _recovery_sweep, _, _, _) = build_replacement_handler(
-            assembly,
-            ReplacementHandlerConfig {
-                observability: Arc::new(NullObservability),
-                selector_factory: |runtime, herdr_process, health, _| {
-                    active_received_hook_selector_with_health(runtime, herdr_process, health)
+        let crate::replacement_handler::ReplacementHandler { handler, .. } =
+            build_replacement_handler(
+                assembly,
+                ReplacementHandlerConfig {
+                    observability: Arc::new(NullObservability),
+                    selector_factory: |runtime, herdr_process, health, _| {
+                        active_received_hook_selector_with_health(runtime, herdr_process, health)
+                    },
+                    daemon_launch_identity: DaemonLaunchIdentity::default(),
+                    peer_wire_mode: PeerWireMode::plaintext_test(),
+                    peer_adapter_selection: SelectedPeerAdapterSelection {
+                        adapter: peer_stream_adapter.clone(),
+                        pool_config: PeerPoolConfig::default(),
+                    },
+                    runtime_health: runtime_health.clone(),
+                    diagnostic_counters: None,
+                    bare_cli: Default::default(),
+                    herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
+                    herdr_process: Some(fake.clone()),
+                    daemon_home: temporary_root.path().join("home"),
                 },
-                daemon_launch_identity: DaemonLaunchIdentity::default(),
-                peer_wire_mode: PeerWireMode::plaintext_test(),
-                peer_adapter_selection: SelectedPeerAdapterSelection {
-                    adapter: peer_stream_adapter.clone(),
-                    pool_config: PeerPoolConfig::default(),
-                },
-                runtime_health: runtime_health.clone(),
-                diagnostic_counters: None,
-                bare_cli: Default::default(),
-                herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
-                herdr_process: Some(fake.clone()),
-                daemon_home: temporary_root.path().join("home"),
-            },
-        )
-        .expect("compose the replacement daemon handler");
+            )
+            .expect("compose the replacement daemon handler");
         let config = replacement_runtime_config_with_direct_peer(
             LoopbackTcpConfig::new(
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
