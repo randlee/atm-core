@@ -84,6 +84,23 @@ impl AtmCron {
     }
 }
 
+#[cfg(feature = "test-utils")]
+pub trait AtmCronTestAccess {
+    fn hook_runner(&self) -> &Arc<dyn HookRunner>;
+    fn action_dispatcher(&self) -> &Arc<dyn HookActionDispatcher>;
+}
+
+#[cfg(feature = "test-utils")]
+impl AtmCronTestAccess for AtmCron {
+    fn hook_runner(&self) -> &Arc<dyn HookRunner> {
+        &self.deps.runner
+    }
+
+    fn action_dispatcher(&self) -> &Arc<dyn HookActionDispatcher> {
+        &self.deps.dispatcher
+    }
+}
+
 struct Stopped(Arc<AtomicBool>);
 
 impl Drop for Stopped {

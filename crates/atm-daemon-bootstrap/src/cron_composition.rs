@@ -1,7 +1,7 @@
 use std::{future::Future, sync::Arc, time::Duration};
 
 use atm_core::{api::RequestDeadline, error::AtmError};
-use atm_cron::{AtmCron, AtmCronDeps};
+use atm_cron::{AtmCron, AtmCronDeps, Clock, JitterSource};
 use atm_http_runtime::StorageAndNudgeRouter;
 use tokio::time::Instant;
 
@@ -9,11 +9,29 @@ use crate::{DaemonWorkers, shutdown_probe};
 
 pub(super) const CRON_WORKER_SHUTDOWN_GRACE: Duration = Duration::from_secs(1);
 
+pub(crate) fn compose_system(
+    handler: &StorageAndNudgeRouter,
+    runtime: &atm_core::LocalServiceRuntime,
+    runner: Arc<dyn atm_core::boundary::HookRunner>,
+    dispatcher: Arc<atm_http_runtime::UnhookedRouter>,
+) -> Result<Arc<AtmCron>, AtmError> {
+    compose_runtime_cron(
+        handler,
+        runtime,
+        runner,
+        dispatcher,
+        Arc::new(atm_cron::SystemClock),
+        Arc::new(atm_cron::SystemJitter),
+    )
+}
+
 pub(crate) fn compose_runtime_cron(
     handler: &StorageAndNudgeRouter,
     runtime: &atm_core::LocalServiceRuntime,
     runner: Arc<dyn atm_core::boundary::HookRunner>,
     dispatcher: Arc<atm_http_runtime::UnhookedRouter>,
+    clock: Arc<dyn Clock>,
+    jitter: Arc<dyn JitterSource>,
 ) -> Result<Arc<AtmCron>, AtmError> {
     compose_cron(
         handler,
@@ -21,8 +39,8 @@ pub(crate) fn compose_runtime_cron(
             store: runtime.cron_schedule_store()?,
             runner,
             dispatcher,
-            clock: Arc::new(atm_cron::SystemClock),
-            jitter: Arc::new(atm_cron::SystemJitter),
+            clock,
+            jitter,
             host: crate::daemon_atm_config(&atm_core::atm_temp::ProcessEnvSource)
                 .and_then(|config| config.local_host),
         },

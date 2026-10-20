@@ -493,8 +493,7 @@ async fn run_replacement_daemon_with_selector(
             daemon_home: atm_core::home::atm_home()?,
         },
     )?;
-    let cron =
-        cron_composition::compose_runtime_cron(&handler, &runtime, hook_runner, base_dispatcher)?;
+    let cron = cron_composition::compose_system(&handler, &runtime, hook_runner, base_dispatcher)?;
     let config = replacement_runtime_config(
         &scope,
         &owner,

@@ -12,4 +12,4 @@ pub use jitter::{JitterSource, SystemJitter};
 pub use scheduler::{AtmCron, AtmCronDeps, CronWorkerHandle};
 
 #[cfg(feature = "test-utils")]
-pub use {clock::ManualClock, jitter::SeqJitter};
+pub use {clock::ManualClock, jitter::SeqJitter, scheduler::AtmCronTestAccess};

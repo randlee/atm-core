@@ -17,7 +17,7 @@ use atm_core::{
     protocol::ResponseEnvelope,
     test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM},
 };
-use atm_cron::{AtmCron, AtmCronDeps, Clock, ManualClock, SeqJitter};
+use atm_cron::{AtmCron, AtmCronDeps, AtmCronTestAccess, Clock, ManualClock, SeqJitter};
 use atm_http_runtime::{
     CanonicalWriteHandler, PeerPoolConfig, RuntimeHealth, StorageAndNudgeRouter, UnhookedRouter,
 };
@@ -29,7 +29,7 @@ use serde_json::{Value, json};
 
 use crate::{
     AtmTempSweeperRuntime, DaemonLaunchIdentity, DaemonWorkers,
-    cron_composition::{compose_cron, run_shutdown_steps, start_cron_worker},
+    cron_composition::{compose_cron, compose_runtime_cron, run_shutdown_steps, start_cron_worker},
     replacement_handler::{
         ReplacementHandlerConfig, SelectedPeerAdapterSelection, build_replacement_handler,
     },
@@ -350,11 +350,18 @@ async fn filter_and_cron_share_one_runner_and_one_dispatcher() {
     assert!(Arc::ptr_eq(&world.runner, filter.runner()));
     assert!(Arc::ptr_eq(&world.dispatcher, filter.actions()));
     assert!(Arc::ptr_eq(&world.handler.hook_chains(), filter.chains()));
-    let deps = world.deps(Arc::new(ManualClock::new(now())));
-    assert!(Arc::ptr_eq(&deps.runner, filter.runner()));
+    let cron = compose_runtime_cron(
+        &world.handler,
+        &world.runtime,
+        world.runner.clone(),
+        world.dispatcher.clone(),
+        Arc::new(ManualClock::new(now())),
+        Arc::new(SeqJitter::default()),
+    )
+    .unwrap();
+    assert!(Arc::ptr_eq(cron.hook_runner(), filter.runner()));
     let expected: Arc<dyn atm_core::boundary::HookActionDispatcher> = filter.actions().clone();
-    assert!(Arc::ptr_eq(&deps.dispatcher, &expected));
-    compose_cron(&world.handler, deps).unwrap();
+    assert!(Arc::ptr_eq(cron.action_dispatcher(), &expected));
     world.shutdown().await;
 }
 
