@@ -1038,7 +1038,18 @@ async fn three_actions_dispatch_once_in_order_as_created_by() {
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].actions, expected);
     assert_eq!(calls[0].spec.default_as.as_str(), "solar");
-    assert_eq!(calls[0].spec.deadline, None);
+    let run_deadlines: Vec<_> = fixture
+        .runner
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|(_, call, deadline)| matches!(call, HookCall::Run(_)).then_some(*deadline))
+        .collect();
+    assert_eq!(run_deadlines.len(), calls.len());
+    for (dispatch, run_deadline) in calls.iter().zip(run_deadlines) {
+        assert_eq!(dispatch.spec.deadline, Some(run_deadline));
+    }
     assert!(!calls[0].spec.dry_run);
     assert_eq!(fixture.row().last_outcome.as_deref(), Some("actions: 3"));
 }

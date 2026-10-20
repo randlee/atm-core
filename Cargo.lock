@@ -233,6 +233,7 @@ version = "1.6.2"
 dependencies = [
  "agent-team-mail-core",
  "async-trait",
+ "atm-cron",
  "atm-herdr",
  "atm-http-runtime",
  "atm-observability",

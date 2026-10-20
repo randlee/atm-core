@@ -141,6 +141,9 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::TaskNotCounterparty
         | AtmErrorCode::TaskStaleCounterparty
         | AtmErrorCode::TaskMoveInvalid
+        | AtmErrorCode::HookModuleInvalid
+        | AtmErrorCode::CronExprInvalid
+        | AtmErrorCode::HookRefused
         | MessageIdConflict
         | SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
@@ -1032,6 +1035,23 @@ fn resolve_adapter_log_dir(_home_dir: &Path) -> Result<PathBuf, AtmError> {
 
 #[cfg(test)]
 mod adapter_tests {
+    #[test]
+    fn hook_and_cron_codes_map_to_documented_exit_codes() {
+        use atm_core::error::{AtmError, AtmErrorCode};
+        for (code, expected) in [
+            (AtmErrorCode::HookModuleInvalid, 3),
+            (AtmErrorCode::CronExprInvalid, 3),
+            (AtmErrorCode::HookRefused, 3),
+            (AtmErrorCode::HookExit, 1),
+            (AtmErrorCode::HookTimeout, 1),
+            (AtmErrorCode::HookMalformed, 1),
+        ] {
+            assert_eq!(
+                super::exit_code_for_atm_error(&AtmError::new(code, "hook error")),
+                expected
+            );
+        }
+    }
     use anyhow::anyhow;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::{LogMode, ObservabilityPort};

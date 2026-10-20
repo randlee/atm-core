@@ -191,6 +191,12 @@ pub(crate) struct CliComposition<'a> {
     bootstrap_trace: Option<BootstrapTraceReport>,
 }
 
+#[derive(Debug)]
+pub(crate) enum HookableOutcome<T> {
+    Normal(T),
+    Actions(atm_core::hook::HookActionsResponse),
+}
+
 impl fmt::Debug for CliComposition<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CliComposition")
@@ -203,7 +209,7 @@ impl fmt::Debug for CliComposition<'_> {
 
 impl<'a> CliComposition<'a> {
     #[cfg(test)]
-    fn from_fake_transport(
+    pub(crate) fn from_fake_transport(
         transport: Arc<atm_core::transport::testing::FakeClientTransport>,
         observability_port: &'a CliObservability,
     ) -> Self {
@@ -276,6 +282,19 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) async fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
+        match self.send_hookable(request).await? {
+            HookableOutcome::Normal(outcome) => Ok(outcome),
+            HookableOutcome::Actions(response) => Err(unexpected_response(
+                "send",
+                ResponseEnvelope::HookActions(response),
+            )),
+        }
+    }
+
+    pub(crate) async fn send_hookable(
+        &self,
+        request: SendRequest,
+    ) -> Result<HookableOutcome<SendOutcome>, AtmError> {
         let transport =
             atm_http_runtime::selected_write_transport(&request, &self.async_transport)?;
         match transport
@@ -298,8 +317,10 @@ impl<'a> CliComposition<'a> {
                     error_code: None,
                     error_message: None,
                 });
-                Ok(outcome)
+                Ok(HookableOutcome::Normal(outcome))
             }
+            ResponseEnvelope::HookActions(response) => Ok(HookableOutcome::Actions(response)),
+            ResponseEnvelope::Error(error) => Err(error),
             other => Err(unexpected_response("send", other)),
         }
     }
@@ -382,6 +403,19 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) async fn list(&self, query: ListQuery) -> Result<ListOutcome, AtmError> {
+        match self.list_hookable(query).await? {
+            HookableOutcome::Normal(outcome) => Ok(outcome),
+            HookableOutcome::Actions(response) => Err(unexpected_response(
+                "list",
+                ResponseEnvelope::HookActions(response),
+            )),
+        }
+    }
+
+    pub(crate) async fn list_hookable(
+        &self,
+        query: ListQuery,
+    ) -> Result<HookableOutcome<ListOutcome>, AtmError> {
         match self.execute_request(RequestEnvelope::List(query)).await? {
             ResponseEnvelope::List(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
@@ -398,8 +432,9 @@ impl<'a> CliComposition<'a> {
                     error_code: None,
                     error_message: None,
                 });
-                Ok(outcome)
+                Ok(HookableOutcome::Normal(outcome))
             }
+            ResponseEnvelope::HookActions(response) => Ok(HookableOutcome::Actions(response)),
             other => Err(unexpected_response("list", other)),
         }
     }

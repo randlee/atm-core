@@ -20,6 +20,7 @@ required-features = ["benchmark-harness"]
 [dependencies]
 async-trait.workspace = true
 atm-core.workspace = true
+atm-cron.workspace = true
 atm-observability.workspace = true
 atm-herdr.workspace = true
 atm-http-runtime.workspace = true
@@ -44,6 +45,7 @@ ulid.workspace = true
 rustix.workspace = true
 
 [dev-dependencies]
+atm-cron = { workspace = true, features = ["test-utils"] }
 atm-core = { workspace = true, features = ["test-utils"] }
 atm-herdr = { workspace = true, features = ["test-utils"] }
 atm-http-runtime = { workspace = true, features = ["test-support"] }

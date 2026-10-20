@@ -1,7 +1,7 @@
 ---
 title: Tasks
 audience: end-user
-reviewed_for_release: 1.6.0
+reviewed_for_release: 1.6.2
 ---
 
 # Tasks

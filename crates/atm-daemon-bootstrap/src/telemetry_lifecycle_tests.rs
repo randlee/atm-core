@@ -169,7 +169,7 @@ impl Daemon {
         let runtime = assembly.service_runtime.clone();
         let task_telemetry = assembly.task_telemetry.clone();
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
-        let (handler, recovery_sweep) = build_replacement_handler(
+        let (handler, recovery_sweep, _, _) = build_replacement_handler(
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(observability.clone()),
@@ -236,6 +236,7 @@ impl Daemon {
             running,
             handler,
             workers: DaemonWorkers {
+                cron: None,
                 task_telemetry,
                 recovery_sweep,
                 atm_temp_sweeper,
@@ -538,8 +539,10 @@ fn export_health(doctor: &serde_json::Value) -> AtmTelemetryExportHealth {
 }
 
 /// The daemon shutdown steps, in call order, each given the shared deadline.
-const SHUTDOWN_STEPS: [&str; 8] = [
+const SHUTDOWN_STEPS: [&str; 10] = [
     "entry",
+    "cron_worker",
+    "hook_chains",
     "listener",
     "recovery_sweep",
     "peer_connections",

@@ -134,6 +134,7 @@ async fn reply_outcome(
     cron: &AtmCron,
     schedule: &CronSchedule,
     reply: HookReply,
+    run_deadline: RequestDeadline,
 ) -> CronRunOutcome {
     match reply {
         HookReply::Refused { message } => CronRunOutcome::Refused(message),
@@ -149,7 +150,7 @@ async fn reply_outcome(
                         team: schedule.team.clone(),
                         phase: schedule.phase.clone(),
                         default_as: schedule.created_by.clone(),
-                        deadline: None,
+                        deadline: Some(run_deadline),
                         dry_run: false,
                     },
                     actions,
@@ -198,18 +199,19 @@ pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunO
             return check;
         }
     }
+    let run_deadline = deadline(cron, schedule);
     let outcome = match cron
         .deps
         .runner
         .run(
             &target,
             &request(cron, schedule, &target, "cron.tick"),
-            deadline(cron, schedule),
+            run_deadline,
         )
         .await
     {
         Err(error) => runner_error(error),
-        Ok(result) => reply_outcome(cron, schedule, result.reply).await,
+        Ok(result) => reply_outcome(cron, schedule, result.reply, run_deadline).await,
     };
     log(
         schedule,
