@@ -311,9 +311,23 @@ mod tests {
         assert!(
             error
                 .message()
-                .contains("hook chain cancelled: daemon shutting down"),
+                .contains("hook chain was cancelled while the daemon was shutting down"),
             "unexpected error: {}",
             error.message()
+        );
+        assert!(
+            error
+                .message()
+                .contains("Recovery: Retry the task after the daemon is serving again; if cancellation repeats, inspect daemon shutdown logs."),
+            "missing recovery guidance: {}",
+            error.message()
+        );
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("cancelled")),
+            "missing cancellation cause: {:?}",
+            error.cause()
         );
         assert!(held.actions.calls.lock().expect("calls").is_empty());
     }

@@ -26,18 +26,24 @@ const SNAPSHOT_REFRESH_FAILED: &str =
 
 fn require_local(ingress: AuthenticatedIngress) -> Result<(), AtmError> {
     if ingress != AuthenticatedIngress::Local {
-        return Err(AtmError::validation(
-            "hook and cron routes are available only through authenticated local HTTP adapters",
-        ));
+        return Err(AtmError::validation_with_recovery(
+            format!(
+                "hook and cron routes reject {ingress:?} ingress; they require an authenticated local HTTP adapter"
+            ),
+            "Send the request through the authenticated local HTTP adapter.",
+        )
+        .with_cause(format!("request arrived through {ingress:?} ingress")));
     }
     Ok(())
 }
 
 fn check_timeout(timeout_ms: u32, max: u32, name: &str) -> Result<(), AtmError> {
     if timeout_ms == 0 || timeout_ms > max {
-        return Err(AtmError::hook_module_invalid(&format!(
-            "{name} must be 1..={max} milliseconds"
-        )));
+        return Err(AtmError::validation_with_recovery(
+            format!("{name}={timeout_ms} is outside the accepted 1..={max} milliseconds"),
+            format!("Set {name} to a value from 1 through {max} milliseconds and retry."),
+        )
+        .with_cause(format!("{name} timeout bounds validation failed")));
     }
     Ok(())
 }
@@ -69,7 +75,13 @@ impl StorageAndNudgeRouter {
         self.hooks
             .snapshot
             .clone()
-            .ok_or_else(|| AtmError::daemon_unavailable("hook snapshot was not installed"))
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable_with_recovery(
+                    "hook snapshot is unavailable because hook-filter startup wiring was not installed",
+                    "Install the hook filter during daemon startup before serving hook registry routes, then retry.",
+                )
+                .with_cause("StorageAndNudgeRouter::with_hook_filter was not called")
+            })
     }
 
     pub(crate) async fn hook_register(
@@ -249,7 +261,13 @@ impl StorageAndNudgeRouter {
             .cron
             .get()
             .cloned()
-            .ok_or_else(|| AtmError::daemon_unavailable("cron scheduler not installed"))
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable_with_recovery(
+                    "cron scheduler is unavailable because daemon startup did not install it",
+                    "Install the cron scheduler once during daemon startup before serving cron routes, then retry.",
+                )
+                .with_cause("StorageAndNudgeRouter::install_cron_scheduler was not called")
+            })
     }
 }
 
@@ -382,6 +400,53 @@ mod tests {
             _ => expected_message.to_owned(),
         };
         assert_eq!(error.message(), expected_message);
+    }
+
+    fn assert_timeout_validation(error: &AtmError, name: &str, timeout_ms: u32, max: u32) {
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert_eq!(
+            error.message(),
+            format!(
+                "{name}={timeout_ms} is outside the accepted 1..={max} milliseconds\n  Recovery: Set {name} to a value from 1 through {max} milliseconds and retry."
+            )
+        );
+        let expected_cause = format!("{name} timeout bounds validation failed");
+        assert_eq!(error.cause(), Some(expected_cause.as_str()));
+    }
+
+    #[test]
+    fn non_local_routes_report_the_ingress_cause_and_recovery() {
+        let error = super::require_local(AuthenticatedIngress::Peer).expect_err("peer denied");
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains("reject Peer ingress"));
+        assert!(
+            error.message().contains(
+                "Recovery: Send the request through the authenticated local HTTP adapter."
+            )
+        );
+        assert_eq!(error.cause(), Some("request arrived through Peer ingress"));
+    }
+
+    #[test]
+    fn missing_hook_snapshot_reports_startup_cause_and_recovery() {
+        let fixture = fixture(true, None, None);
+        let error = match fixture.router.snapshot() {
+            Ok(_) => panic!("snapshot unexpectedly installed"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert!(
+            error
+                .message()
+                .contains("hook-filter startup wiring was not installed")
+        );
+        assert!(error.message().contains(
+            "Recovery: Install the hook filter during daemon startup before serving hook registry routes, then retry."
+        ));
+        assert_eq!(
+            error.cause(),
+            Some("StorageAndNudgeRouter::with_hook_filter was not called")
+        );
     }
 
     #[tokio::test]
@@ -579,13 +644,11 @@ mod tests {
         let mut over = register_request("sender", "task.assign", "bk");
         over.timeout_ms = atm_core::boundary::HOOK_TIMEOUT_MAX_MS + 1;
         let capped = register(&routes, over).await.expect_err("over cap timeout");
-        assert_refusal(
+        assert_timeout_validation(
             &capped,
-            AtmErrorCode::HookModuleInvalid,
-            &format!(
-                "timeout_ms must be 1..={} milliseconds",
-                atm_core::boundary::HOOK_TIMEOUT_MAX_MS
-            ),
+            "timeout_ms",
+            atm_core::boundary::HOOK_TIMEOUT_MAX_MS + 1,
+            atm_core::boundary::HOOK_TIMEOUT_MAX_MS,
         );
         assert!(routes.hooks.active_all().expect("rows").is_empty());
     }
@@ -989,13 +1052,11 @@ mod tests {
                 )
                 .await
                 .expect_err("timeout outside 1..=30000");
-            assert_refusal(
+            assert_timeout_validation(
                 &error,
-                AtmErrorCode::HookModuleInvalid,
-                &format!(
-                    "timeout_ms must be 1..={} milliseconds",
-                    atm_core::boundary::CRON_TIMEOUT_MAX_MS
-                ),
+                "timeout_ms",
+                timeout,
+                atm_core::boundary::CRON_TIMEOUT_MAX_MS,
             );
         }
         routes
@@ -1294,9 +1355,17 @@ mod tests {
             .await
             .expect_err("no scheduler installed");
         assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert!(
+            error
+                .message()
+                .contains("daemon startup did not install it")
+        );
+        assert!(error.message().contains(
+            "Recovery: Install the cron scheduler once during daemon startup before serving cron routes, then retry."
+        ));
         assert_eq!(
-            error.message(),
-            "cron scheduler not installed\n  Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry."
+            error.cause(),
+            Some("StorageAndNudgeRouter::install_cron_scheduler was not called")
         );
     }
 }

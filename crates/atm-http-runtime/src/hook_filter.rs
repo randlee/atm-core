@@ -233,9 +233,11 @@ impl<D: HookActionDispatcher + 'static> HookedTaskCommands<D> {
             Err(join) if join.is_panic() => Err(AtmError::hook_exit(HookExitCause::Panic(
                 panic_text(join.into_panic()),
             ))),
-            Err(_) => Err(AtmError::daemon_unavailable(
-                "hook chain cancelled: daemon shutting down",
-            )),
+            Err(join) => Err(AtmError::daemon_unavailable_with_recovery(
+                "hook chain was cancelled while the daemon was shutting down",
+                "Retry the task after the daemon is serving again; if cancellation repeats, inspect daemon shutdown logs.",
+            )
+            .with_cause(join)),
             Ok(Err(error)) => Err(error),
             Ok(Ok(Decision::Refused(message))) => Err(AtmError::hook_refused(&message)),
             Ok(Ok(Decision::Done(response))) => Ok(*response),
