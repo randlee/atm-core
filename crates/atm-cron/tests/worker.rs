@@ -226,6 +226,41 @@ async fn atm_cron_public_surface_is_worker_and_scheduler_trait() {
     shutdown(&worker).await;
 }
 
+#[test]
+fn atm_cron_has_no_unapproved_public_inherent_methods() {
+    let source = syn::parse_file(include_str!("../src/scheduler.rs"))
+        .expect("scheduler.rs must remain valid Rust syntax");
+    let implementation = source
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Impl(implementation)
+                if implementation.trait_.is_none()
+                    && matches!(
+                        implementation.self_ty.as_ref(),
+                        syn::Type::Path(path) if path.path.is_ident("AtmCron")
+                    ) =>
+            {
+                Some(implementation)
+            }
+            _ => None,
+        })
+        .expect("scheduler.rs must define the inherent AtmCron implementation");
+    let mut public_methods: Vec<_> = implementation
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::ImplItem::Fn(method) if matches!(method.vis, syn::Visibility::Public(_)) => {
+                Some(method.sig.ident.to_string())
+            }
+            _ => None,
+        })
+        .collect();
+    public_methods.sort();
+
+    assert_eq!(public_methods, ["new", "start_worker"]);
+}
+
 #[tokio::test]
 async fn start_refuses_invalid_expression_before_store_write() {
     let fixture = Fixture::new();
