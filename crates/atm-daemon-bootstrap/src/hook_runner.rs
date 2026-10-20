@@ -213,6 +213,7 @@ impl DaemonHookRunner {
         deadline: RequestDeadline,
         doctor: bool,
     ) -> Result<SpawnedOutput, AtmError> {
+        let started_at = tokio::time::Instant::now();
         let remaining = deadline.remaining().unwrap_or_default();
         let budget = if doctor {
             doctor_budget(target.timeout_ms, remaining)
@@ -220,28 +221,66 @@ impl DaemonHookRunner {
             runner_budget(target.timeout_ms, remaining)
         }
         .ok_or_else(|| {
-            AtmError::hook_timeout(
+            let error = AtmError::hook_timeout(
                 &target.phase,
                 if doctor {
                     "doctor budget exhausted"
                 } else {
                     "request budget exhausted before the hook ran"
                 },
-            )
+            );
+            tracing::warn!(
+                subsystem = "atm_hook",
+                team = %target.team,
+                phase = %target.phase,
+                hook,
+                budget_ms = target.timeout_ms,
+                elapsed_ms = started_at.elapsed().as_millis() as u64,
+                outcome = "budget_exhausted",
+                "hook execution did not receive a budget"
+            );
+            error
         })?;
         let started = tokio::time::Instant::now();
         let _permit = tokio::time::timeout(budget, self.permits.clone().acquire_owned())
             .await
-            .map_err(|_| AtmError::hook_timeout(&target.phase, "hook concurrency limit reached"))?
+            .map_err(|_| {
+                tracing::warn!(
+                    subsystem = "atm_hook", team = %target.team, phase = %target.phase, hook,
+                    budget_ms = budget.as_millis() as u64,
+                    elapsed_ms = started.elapsed().as_millis() as u64,
+                    outcome = "permit_timeout", "hook concurrency limit reached"
+                );
+                AtmError::hook_timeout(&target.phase, "hook concurrency limit reached")
+            })?
             .map_err(|_| missing("hook semaphore closed"))?;
         let spec = self.spec(target, hook)?;
         let remaining = remaining_spawn_budget(&target.phase, budget, started.elapsed())?;
         let output = spawn_with_deadline(spec, &stdin, remaining)
             .await
             .map_err(|failure| {
-                spawn_failure_error(&target.phase, target.timeout_ms, budget, failure)
+                let error = spawn_failure_error(&target.phase, target.timeout_ms, budget, failure);
+                tracing::warn!(
+                    subsystem = "atm_hook", team = %target.team, phase = %target.phase, hook,
+                    budget_ms = budget.as_millis() as u64,
+                    elapsed_ms = started_at.elapsed().as_millis() as u64,
+                    outcome = "failed", %error, "hook execution failed"
+                );
+                error
             })?;
-        check_status(&output)?;
+        check_status(&output).map_err(|error| {
+            tracing::warn!(
+                subsystem = "atm_hook", team = %target.team, phase = %target.phase, hook,
+                budget_ms = budget.as_millis() as u64, elapsed_ms = output.elapsed_ms,
+                outcome = "nonzero_exit", %error, "hook execution exited unsuccessfully"
+            );
+            error
+        })?;
+        tracing::info!(
+            subsystem = "atm_hook", team = %target.team, phase = %target.phase, hook,
+            budget_ms = budget.as_millis() as u64, elapsed_ms = output.elapsed_ms,
+            outcome = "ok", "hook execution completed"
+        );
         Ok(output)
     }
 }

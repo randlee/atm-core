@@ -199,6 +199,12 @@ pub(crate) async fn spawn_until(
         result = collect(&mut child, stdin, &spec) => result,
     };
     if result.is_err() {
+        tracing::warn!(
+            subsystem = "atm_hook",
+            outcome = "killed",
+            elapsed_ms = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+            "killing hook process group after failed or timed-out collection"
+        );
         guard.kill();
         if !matches!(child.try_wait(), Ok(Some(_))) {
             let _ = child.kill().await;
