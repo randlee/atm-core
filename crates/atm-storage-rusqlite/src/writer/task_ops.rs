@@ -730,16 +730,27 @@ fn insert_at_placement(
         MoveTarget::Head => {
             // Head is the first unstarted place: it follows every leading
             // active task, however many the member holds.
-            let mut leading = 0;
-            for id in order.iter() {
-                let active = load_task_row(connection, target, team, id)?
-                    .is_some_and(|row| row.state == TaskState::Active);
-                if !active {
-                    break;
-                }
-                leading += 1;
-            }
-            leading
+            let mut statement = connection
+                .prepare(
+                    "SELECT state FROM tasks
+                     WHERE team=?1 AND assignee=?2 AND task_id<>?3 AND state<>'complete'
+                     ORDER BY position, task_id",
+                )
+                .map_err(|error| {
+                    sqlite_error(target, "failed to prepare task queue states", error)
+                })?;
+            let states = statement
+                .query_map(
+                    params![team.as_str(), assignee.as_str(), task_id.as_str()],
+                    |row| row.get::<_, String>(0),
+                )
+                .map_err(|error| sqlite_error(target, "failed to query task queue states", error))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| sqlite_error(target, "failed to read task queue states", error))?;
+            states
+                .iter()
+                .take_while(|state| state.as_str() == TaskState::Active.as_str())
+                .count()
         }
         MoveTarget::Before { task_id: other } => {
             let valid = load_task_row(connection, target, team, other)?
