@@ -6,6 +6,7 @@
 //! routes pass the scheduler's own results and errors through unchanged.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
 use atm_core::boundary::{CronScheduler, CronStartSpec, HookName, HookRegistration};
@@ -39,6 +40,12 @@ fn check_timeout(timeout_ms: u32, max: u32, name: &str) -> Result<(), AtmError> 
         )));
     }
     Ok(())
+}
+
+fn cron_scheduler_budget(deadline: RequestDeadline, operation: &str) -> Result<Duration, AtmError> {
+    deadline.remaining().ok_or_else(|| {
+        AtmError::daemon_unavailable(format!("request deadline expired before {operation}"))
+    })
 }
 
 /// Refreshes the snapshot after a committed write. A failure keeps the row and
@@ -159,6 +166,7 @@ impl StorageAndNudgeRouter {
         &self,
         request: CronStartRequest,
         ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         require_local(ingress)?;
         check_timeout(
@@ -169,8 +177,9 @@ impl StorageAndNudgeRouter {
         let custom = request.check_limits()?;
         self.check_roster_member(&request.caller_team, &request.caller_identity)?;
         let scheduler = self.cron_scheduler()?;
-        let schedule = scheduler
-            .start(CronStartSpec {
+        let schedule = tokio::time::timeout(
+            cron_scheduler_budget(deadline, "cron schedule start")?,
+            scheduler.start(CronStartSpec {
                 team: request.caller_team,
                 phase: request.phase,
                 name: request.name,
@@ -182,8 +191,12 @@ impl StorageAndNudgeRouter {
                 custom,
                 stop: request.stop,
                 created_by: request.caller_identity,
-            })
-            .await?;
+            }),
+        )
+        .await
+        .map_err(|_| {
+            AtmError::daemon_unavailable("request deadline expired during cron schedule start")
+        })??;
         Ok(ApiResponse::new(ResponseEnvelope::CronStarted(schedule)))
     }
 
@@ -191,17 +204,23 @@ impl StorageAndNudgeRouter {
         &self,
         request: CronEndRequest,
         ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         require_local(ingress)?;
         self.check_roster_member(&request.caller_team, &request.caller_identity)?;
         let scheduler = self.cron_scheduler()?;
-        let rows = scheduler
-            .end(
+        let rows = tokio::time::timeout(
+            cron_scheduler_budget(deadline, "cron schedule end")?,
+            scheduler.end(
                 &request.caller_team,
                 &request.phase,
                 request.name.as_deref(),
-            )
-            .await?;
+            ),
+        )
+        .await
+        .map_err(|_| {
+            AtmError::daemon_unavailable("request deadline expired during cron schedule end")
+        })??;
         Ok(ApiResponse::new(ResponseEnvelope::CronEnded(rows)))
     }
 
@@ -209,13 +228,19 @@ impl StorageAndNudgeRouter {
         &self,
         request: CronListQuery,
         ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         require_local(ingress)?;
         self.check_roster_member(&request.caller_team, &request.caller_identity)?;
         let scheduler = self.cron_scheduler()?;
-        let rows = scheduler
-            .list(Some(&request.caller_team), request.phase.as_ref())
-            .await?;
+        let rows = tokio::time::timeout(
+            cron_scheduler_budget(deadline, "cron schedule list")?,
+            scheduler.list(Some(&request.caller_team), request.phase.as_ref()),
+        )
+        .await
+        .map_err(|_| {
+            AtmError::daemon_unavailable("request deadline expired during cron schedule list")
+        })??;
         Ok(ApiResponse::new(ResponseEnvelope::CronList(rows)))
     }
 
@@ -232,8 +257,9 @@ impl StorageAndNudgeRouter {
 mod tests {
     use std::sync::Arc;
     use std::sync::atomic::Ordering;
+    use std::time::Duration;
 
-    use atm_core::api::AuthenticatedIngress;
+    use atm_core::api::{AuthenticatedIngress, RequestDeadline};
     use atm_core::boundary::{CronScheduler, HookRegistrationStore, RecordingCronScheduler};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::hook::{
@@ -956,6 +982,7 @@ mod tests {
                 .cron_start(
                     cron_request("sender", timeout, json!({})),
                     AuthenticatedIngress::Local,
+                    deadline(),
                 )
                 .await
                 .expect_err("timeout outside 1..=30000");
@@ -973,6 +1000,7 @@ mod tests {
             .cron_start(
                 cron_request("sender", atm_core::boundary::CRON_TIMEOUT_MAX_MS, json!({})),
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect("30 000 ms is accepted");
@@ -1016,6 +1044,7 @@ mod tests {
             .cron_start(
                 cron_request("sender", 1_000, oversize),
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect_err("cron over 64 KiB custom");
@@ -1043,7 +1072,7 @@ mod tests {
         let error = expect_refused(
             routes
                 .router
-                .cron_start(long_name, AuthenticatedIngress::Local)
+                .cron_start(long_name, AuthenticatedIngress::Local, deadline())
                 .await,
             "a cron name over the cap",
         );
@@ -1060,7 +1089,7 @@ mod tests {
         let error = expect_refused(
             routes
                 .router
-                .cron_start(many_args, AuthenticatedIngress::Local)
+                .cron_start(many_args, AuthenticatedIngress::Local, deadline())
                 .await,
             "cron args over the item cap",
         );
@@ -1091,7 +1120,7 @@ mod tests {
         let error = expect_refused(
             routes
                 .router
-                .cron_start(long_cron, AuthenticatedIngress::Local)
+                .cron_start(long_cron, AuthenticatedIngress::Local, deadline())
                 .await,
             "a cron module_path over the cap",
         );
@@ -1128,6 +1157,7 @@ mod tests {
             .cron_start(
                 cron_request("sender", 5_000, custom.clone()),
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect("cron start");
@@ -1152,6 +1182,7 @@ mod tests {
             .cron_start(
                 cron_request("sender", 5_000, custom.clone()),
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect_err("an active schedule refuses a second start");
@@ -1174,6 +1205,7 @@ mod tests {
                     phase: None,
                 },
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect("cron list");
@@ -1187,6 +1219,7 @@ mod tests {
                     name: None,
                 },
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect("cron end");
@@ -1197,6 +1230,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cron_routes_refuse_an_expired_request_deadline_before_scheduler() {
+        let routes = routes();
+        let expired = RequestDeadline::after(Duration::ZERO);
+
+        for error in [
+            routes
+                .router
+                .cron_start(
+                    cron_request("sender", 1_000, json!({})),
+                    AuthenticatedIngress::Local,
+                    expired,
+                )
+                .await
+                .expect_err("expired deadline refuses cron start"),
+            routes
+                .router
+                .cron_list(
+                    CronListQuery {
+                        caller_identity: agent("sender"),
+                        caller_team: team(),
+                        phase: None,
+                    },
+                    AuthenticatedIngress::Local,
+                    expired,
+                )
+                .await
+                .expect_err("expired deadline refuses cron list"),
+            routes
+                .router
+                .cron_end(
+                    CronEndRequest {
+                        caller_identity: agent("sender"),
+                        caller_team: team(),
+                        phase: phase("bk"),
+                        name: None,
+                    },
+                    AuthenticatedIngress::Local,
+                    expired,
+                )
+                .await
+                .expect_err("expired deadline refuses cron end"),
+        ] {
+            assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+            assert!(error.message().contains("request deadline expired"));
+        }
+        assert!(routes.cron.calls.lock().expect("calls").is_empty());
+    }
+
+    #[tokio::test]
     async fn cron_routes_without_scheduler_are_unavailable() {
         let fixture = fixture(true, None, None);
         let error = fixture
@@ -1204,6 +1286,7 @@ mod tests {
             .cron_start(
                 cron_request("sender", 1_000, json!({})),
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect_err("no scheduler installed");

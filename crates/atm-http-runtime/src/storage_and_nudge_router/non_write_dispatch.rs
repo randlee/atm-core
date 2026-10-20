@@ -79,9 +79,9 @@ impl StorageAndNudgeRouter {
             }
             ApiRequest::HookDisable(request) => self.hook_disable(request, ingress, deadline).await,
             ApiRequest::HookList(request) => self.hook_list(request, ingress, deadline).await,
-            ApiRequest::CronStart(request) => self.cron_start(request, ingress).await,
-            ApiRequest::CronEnd(request) => self.cron_end(request, ingress).await,
-            ApiRequest::CronList(request) => self.cron_list(request, ingress).await,
+            ApiRequest::CronStart(request) => self.cron_start(request, ingress, deadline).await,
+            ApiRequest::CronEnd(request) => self.cron_end(request, ingress, deadline).await,
+            ApiRequest::CronList(request) => self.cron_list(request, ingress, deadline).await,
         }
     }
 }
