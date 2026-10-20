@@ -211,6 +211,7 @@ const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::TaskNotCounterparty
         | AtmErrorCode::TaskStaleCounterparty
         | AtmErrorCode::TaskMoveInvalid
+        | AtmErrorCode::TaskMaxActiveReached
         | AtmErrorCode::WorkflowQueryInvalid
         | AtmErrorCode::SearchLocalOnly
         | AtmErrorCode::LocalHttpCapabilityInvalid

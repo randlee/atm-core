@@ -100,6 +100,14 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-10-20 — Phase BK.8 task active limit rejection:** `HTTP_API_VERSION`
+  moves from `1.13.0` to `1.14.0`. The stable error-code surface gains
+  `ATM_TASK_MAX_ACTIVE_REACHED` for a task start rejected at the member's
+  configured active-task limit. A previous consumer that encounters the new
+  code can identify it as unknown through `UnknownAtmErrorCode`; existing
+  response envelopes and known codes are unchanged. This is an additive minor
+  bump.
+
 - **2026-10-19 — Phase BK.7 hook filter and hook/cron routes:** `HTTP_API_VERSION`
   moves from `1.12.0` to `1.13.0`. 1.12.0 → 1.13.0 (phase bk): six routes, seven responses, `DoctorReport.hooks`, six error codes; a 1.12 consumer ignores `hooks`, and its `AtmErrorCode::from_str` returns `UnknownAtmErrorCode` for the six codes. The additive surface is six POST routes
   (`/v1/atm/hooks/register`, `/hooks/disable`, `/hooks/list`, `/cron/start`,

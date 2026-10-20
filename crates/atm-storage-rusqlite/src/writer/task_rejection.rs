@@ -26,6 +26,13 @@ pub(super) fn task_move_invalid(detail: impl std::fmt::Display) -> AtmError {
     AtmError::new(AtmErrorCode::TaskMoveInvalid, detail.to_string())
 }
 
+pub(super) fn task_max_active_reached(
+    detail: impl std::fmt::Display,
+    recovery: impl std::fmt::Display,
+) -> AtmError {
+    AtmError::task_max_active_reached(detail.to_string(), recovery.to_string())
+}
+
 pub(super) fn is_task_rejection(code: AtmErrorCode) -> bool {
     matches!(
         code,
@@ -35,5 +42,6 @@ pub(super) fn is_task_rejection(code: AtmErrorCode) -> bool {
             | AtmErrorCode::TaskNotCounterparty
             | AtmErrorCode::TaskStaleCounterparty
             | AtmErrorCode::TaskMoveInvalid
+            | AtmErrorCode::TaskMaxActiveReached
     )
 }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ATM daemon API
-  version: 1.13.0
+  version: 1.14.0
   description: HTTP contract shared by local UDS and future peer HTTPS adapters.
 servers:
   - url: /v1/atm
@@ -369,7 +369,7 @@ components:
       description: Privacy-safe operator diagnostic.
       properties:
         severity: { type: string }
-        code: { type: string, description: Stable ATM_* code; HTTP API 1.8.0 adds ATM_TASK_ALREADY_ACTIVE. }
+        code: { type: string, description: Stable ATM_* code; HTTP API 1.8.0 adds ATM_TASK_ALREADY_ACTIVE and 1.14.0 adds ATM_TASK_MAX_ACTIVE_REACHED. }
         message: { type: string }
         remediation: { type: string }
     HerdrMemberPresence:

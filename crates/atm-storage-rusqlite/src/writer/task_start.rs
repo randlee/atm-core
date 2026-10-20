@@ -4,7 +4,7 @@ use super::task_ops::{
     TaskEventDraft, append_task_event, load_task_row, queue_order, renumber_queue,
 };
 use super::task_rejection::{
-    task_already_active, task_already_closed, task_move_invalid, task_not_counterparty,
+    task_already_active, task_already_closed, task_max_active_reached, task_not_counterparty,
     task_not_found,
 };
 use crate::shared_db::{SharedDbTarget, sqlite_error};
@@ -133,10 +133,16 @@ fn reject_over_max_tasks(
     let active = u32::try_from(count).unwrap_or(u32::MAX);
     let max = member_max_tasks(record, &row.assignee, connection, target)?;
     if active >= max.get() {
-        return Err(task_move_invalid(format!(
-            "task {task_id}: {} already has {active} active task(s); max_tasks is {max}",
-            row.assignee
-        )));
+        return Err(task_max_active_reached(
+            format!(
+                "task {task_id}: {} already has {active} active task(s); max_tasks is {max}",
+                row.assignee
+            ),
+            format!(
+                "Complete or cancel an active task, or raise the limit with `atm teams update-member {} {} --max-tasks <N>`.",
+                record.team, row.assignee
+            ),
+        ));
     }
     Ok(active)
 }

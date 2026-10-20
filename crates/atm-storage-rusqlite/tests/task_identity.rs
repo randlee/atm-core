@@ -760,9 +760,26 @@ pub(crate) fn start_while_another_task_is_active_is_rejected() {
     h.assign("T2", "alice", "lead", None);
     h.start("T1", "alice").unwrap();
     let error = h.start("T2", "alice").expect_err("active conflict");
-    assert_eq!(error.code(), AtmErrorCode::TaskMoveInvalid);
+    assert_eq!(error.code(), AtmErrorCode::TaskMaxActiveReached);
     assert!(error.message().contains("max_tasks is 1"), "{error}");
+    assert!(
+        error
+            .message()
+            .contains("Complete or cancel an active task"),
+        "{error}"
+    );
+    assert!(
+        error
+            .message()
+            .contains("atm teams update-member ba2 alice --max-tasks <N>"),
+        "{error}"
+    );
     assert_eq!(h.row("T2").state, TaskState::Assigned);
+    assert!(
+        h.events("T2")
+            .iter()
+            .any(|event| event.event == TaskEventKind::Rejected)
+    );
 }
 
 #[test]
@@ -1420,8 +1437,14 @@ pub(crate) fn max_tasks_three_allows_three_active_and_refuses_a_fourth() {
         assert_eq!(h.row(task).state, TaskState::Active);
     }
     let error = h.start("T4", "alice").expect_err("fourth start refused");
-    assert_eq!(error.code(), AtmErrorCode::TaskMoveInvalid);
+    assert_eq!(error.code(), AtmErrorCode::TaskMaxActiveReached);
     assert!(error.message().contains("max_tasks is 3"), "{error}");
+    assert!(
+        error
+            .message()
+            .contains("atm teams update-member ba2 alice --max-tasks <N>"),
+        "{error}"
+    );
     assert_eq!(h.row("T4").state, TaskState::Assigned);
 }
 
@@ -1433,8 +1456,14 @@ pub(crate) fn explicit_max_tasks_one_refuses_a_second_start() {
     h.assign("T2", "alice", "lead", None);
     h.start("T1", "alice").expect("first start");
     let error = h.start("T2", "alice").expect_err("second start refused");
-    assert_eq!(error.code(), AtmErrorCode::TaskMoveInvalid);
+    assert_eq!(error.code(), AtmErrorCode::TaskMaxActiveReached);
     assert!(error.message().contains("max_tasks is 1"), "{error}");
+    assert!(
+        error
+            .message()
+            .contains("atm teams update-member ba2 alice --max-tasks <N>"),
+        "{error}"
+    );
     assert_eq!(h.row("T2").state, TaskState::Assigned);
 }
 
