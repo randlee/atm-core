@@ -201,6 +201,31 @@ async fn wait_for_release(receiver: &mut watch::Receiver<bool>) {
 }
 
 #[tokio::test]
+async fn atm_cron_public_surface_is_worker_and_scheduler_trait() {
+    let fixture = Fixture::new();
+    let worker = fixture.cron.start_worker().await.unwrap();
+
+    // Keep scheduler operations behind the public trait boundary while the
+    // worker lifecycle remains an AtmCron operation.
+    let scheduler: Arc<dyn CronScheduler> = fixture.cron.clone();
+    scheduler.start(fixture.spec("api-surface")).await.unwrap();
+    assert_eq!(scheduler.list(None, None).await.unwrap().len(), 1);
+    scheduler
+        .end(
+            &"test-team".parse().unwrap(),
+            &PhaseId::parse("bk").unwrap(),
+            Some("api-surface"),
+        )
+        .await
+        .unwrap();
+    let rows = scheduler.list(None, None).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert!(!rows[0].active);
+
+    shutdown(&worker).await;
+}
+
+#[tokio::test]
 async fn start_refuses_invalid_expression_before_store_write() {
     let fixture = Fixture::new();
     let mut spec = fixture.spec("invalid");
