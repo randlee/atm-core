@@ -46,4 +46,5 @@ socket_io = ["atm_core::boundary::task_commands"]
 
 [status]
 state = "concrete_landed"
-notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters.", "BK.7 concrete_landed in atm-http-runtime: NormalTaskCommands (pass-through), HookedTaskCommands (hook filter over the dispatcher) and UnhookedRouter (the dispatcher used when no hook is installed)."]
+concrete_landed = ["atm_http_runtime::task_commands::NormalTaskCommands", "atm_http_runtime::hook_filter::HookedTaskCommands"]
+notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters.", "BK.7 concrete_landed in atm-http-runtime: NormalTaskCommands is the un-hooked TaskCommands implementation; HookedTaskCommands filters task commands over it. Production composition installs the filter over NormalTaskCommands, while the router's no-filter task path remains un-hooked."]
