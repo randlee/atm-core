@@ -18,6 +18,8 @@ use atm_runtime_test_support::{
 use chrono::{DateTime, Utc};
 use tokio::sync::watch;
 
+const TEST_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
 thread_local! {
     static LOGS: std::cell::RefCell<Option<Arc<std::sync::Mutex<Vec<String>>>>> = const { std::cell::RefCell::new(None) };
 }
@@ -154,7 +156,7 @@ impl Fixture {
             let entered = entered.clone();
             Box::pin(async move {
                 entered.send_replace(index + 1);
-                receiver.wait_for(|released| *released).await.unwrap();
+                wait_for_release(&mut receiver).await;
             })
         }));
         (release, calls)
@@ -165,6 +167,37 @@ async fn shutdown(handle: &CronWorkerHandle) {
     handle
         .shutdown(tokio::time::Instant::now() + Duration::from_secs(10))
         .await;
+}
+
+async fn wait_for_entered(receiver: &mut watch::Receiver<usize>, expected: usize) {
+    let observed = receiver.clone();
+    match tokio::time::timeout(
+        TEST_WAIT_TIMEOUT,
+        receiver.wait_for(|count| *count == expected),
+    )
+    .await
+    {
+        Ok(result) => {
+            result.expect("hook entry sender alive");
+        }
+        Err(_) => panic!(
+            "hook entry wait timed out: expected count {expected}, observed {}",
+            *observed.borrow()
+        ),
+    }
+}
+
+async fn wait_for_release(receiver: &mut watch::Receiver<bool>) {
+    let observed = receiver.clone();
+    match tokio::time::timeout(TEST_WAIT_TIMEOUT, receiver.wait_for(|released| *released)).await {
+        Ok(result) => {
+            result.expect("hook release sender alive");
+        }
+        Err(_) => panic!(
+            "hook release wait timed out: expected true, observed {}",
+            *observed.borrow()
+        ),
+    }
 }
 
 #[tokio::test]
@@ -343,7 +376,7 @@ async fn tick_while_in_flight_is_skipped_and_logged() {
     let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     fixture.step(60).await;
     fixture.step(60).await;
     release.send_replace(true);
@@ -371,7 +404,7 @@ async fn until_reached_ends_the_schedule_without_a_run() {
     fixture.cron.start(spec).await.unwrap();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     release.send_replace(true);
     fixture.step(30).await;
     fixture.step(30).await;
@@ -534,7 +567,7 @@ async fn cron_tick_uses_cron_timeout_ms_not_timeout_ms() {
     fixture.cron.start(spec).await.unwrap();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     {
         let calls = fixture.runner.calls.lock().unwrap();
         assert_eq!(calls[0].0.timeout_ms, 20000);
@@ -720,7 +753,7 @@ async fn reload_keeps_in_flight_of_an_unchanged_slot() {
     let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     let parks = fixture.clock.parks();
     fixture
         .cron
@@ -775,7 +808,7 @@ async fn stale_run_never_writes_the_restarted_row() {
     fixture.reply(HookReply::PassThrough);
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     fixture
         .store
         .end(
@@ -803,7 +836,7 @@ async fn restart_during_tick_does_not_replay_after_reload() {
     let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     fixture
         .store
         .end(
@@ -831,7 +864,7 @@ async fn record_run_after_end_mid_run_writes_nothing() {
     let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     fixture
         .store
         .end(&spec.team, &spec.phase, None, fixture.clock.now().into())
@@ -948,7 +981,7 @@ async fn shutdown_joins_within_deadline_with_run_in_flight() {
     let (_release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     worker.shutdown(tokio::time::Instant::now()).await;
     assert!(fixture.cron.list(None, None).await.is_err());
     assert_eq!(fixture.row().last_outcome, None);
@@ -977,7 +1010,7 @@ async fn shutdown_waits_for_cancelled_run_cleanup() {
     fixture.cron.start(fixture.spec("cleanup")).await.unwrap();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    received.wait_for(|entered| *entered).await.unwrap();
+    wait_for_release(&mut received).await;
     worker.shutdown(tokio::time::Instant::now()).await;
     assert!(*finished.borrow());
     assert_eq!(fixture.row().last_outcome, None);
@@ -1036,7 +1069,7 @@ async fn panicking_run_records_exit_and_worker_keeps_ticking() {
     let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     let parks = fixture.clock.parks();
     release.send_replace(true);
     fixture.clock.wait_parks_above(parks).await;
@@ -1064,7 +1097,7 @@ async fn cancelled_run_records_nothing() {
     let (_release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     let parks = fixture.clock.parks();
     fixture
         .cron
@@ -1093,7 +1126,7 @@ async fn record_failure_is_logged() {
     let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     fixture.store.fail_writes.store(true, Ordering::SeqCst);
     let parks = fixture.clock.parks();
     release.send_replace(true);
@@ -1130,7 +1163,7 @@ async fn reload_failure_keeps_slots_and_retries() {
         .unwrap();
     fixture.clock.wait_parks_above(parks).await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     fixture.store.fail_active_all.store(false, Ordering::SeqCst);
     let parks = fixture.clock.parks();
     fixture
@@ -1141,7 +1174,7 @@ async fn reload_failure_keeps_slots_and_retries() {
     fixture.clock.wait_parks_above(parks).await;
     fixture.reply(HookReply::PassThrough);
     fixture.step(61).await;
-    entered.wait_for(|count| *count == 2).await.unwrap();
+    wait_for_entered(&mut entered, 2).await;
     release.send_replace(true);
     shutdown(&worker).await;
     assert_eq!(fixture.calls(), 2);
