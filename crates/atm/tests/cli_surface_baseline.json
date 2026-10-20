@@ -4811,6 +4811,17 @@
             },
             {
               "has_default": false,
+              "id": "max_tasks",
+              "long": "max-tasks",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
               "id": "member",
               "long": null,
               "num_args": {

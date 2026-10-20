@@ -1175,6 +1175,7 @@ Usage: atm teams update-member [OPTIONS] <TEAM> <MEMBER>
 | `--clear-alias` | `` | `CLEAR_ALIAS` | no | `false` |  | remove the member's durable roster alias |
 | `--pane-id` | `` | `PANE_ID` | no | `` |  | deprecated compatibility spelling for --backend tmux --target |
 | `--host` | `` | `HOST` | no | `` |  | this member's registered host (ADR-055 decision (e)); used for Send-To same-host/remote routing, never inferred |
+| `--max-tasks` | `` | `MAX_TASKS` | no | `` |  | Most tasks this member may hold active at once (minimum 1; default 1 when never set) |
 | `--json` | `` | `JSON` | no | `false` |  | Emit the result as JSON |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
