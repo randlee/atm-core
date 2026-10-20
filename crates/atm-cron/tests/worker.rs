@@ -975,6 +975,34 @@ async fn loaded_row_without_future_occurrence_is_ended() {
 }
 
 #[tokio::test]
+async fn last_finite_occurrence_ends_the_schedule() {
+    let fixture = Fixture::new();
+    let mut spec = fixture.spec("last");
+    spec.cron_expr = "0 0 0 20 10 * 2026".into();
+    spec.stop = StopCondition::Until {
+        at: fixture.clock.now() + chrono::Duration::days(2),
+    };
+    fixture.cron.start(spec).await.unwrap();
+    fixture.reply(HookReply::PassThrough);
+    let (release, mut entered) = fixture.hold();
+    let worker = fixture.worker().await;
+
+    fixture.step(86_400).await;
+    entered.wait_for(|count| *count == 1).await.unwrap();
+    let parks = fixture.clock.parks();
+    release.send(true).unwrap();
+    fixture.clock.wait_parks_above(parks).await;
+
+    assert_eq!(fixture.calls(), 1);
+    assert!(!fixture.row().active);
+    assert_eq!(
+        fixture.row().last_outcome.as_deref(),
+        Some("stopped: no future occurrence")
+    );
+    shutdown(&worker).await;
+}
+
+#[tokio::test]
 async fn shutdown_joins_within_deadline_with_run_in_flight() {
     let fixture = Fixture::new();
     fixture.cron.start(fixture.spec("held")).await.unwrap();

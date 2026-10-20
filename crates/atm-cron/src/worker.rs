@@ -5,7 +5,10 @@ use std::{
     task::Poll,
 };
 
-use atm_core::boundary::{CronSchedule, CronScheduleId, StopCondition};
+use atm_core::{
+    boundary::{CronSchedule, CronScheduleId, StopCondition},
+    error::AtmError,
+};
 use chrono::{DateTime, Duration, Utc};
 use tokio::{
     sync::{oneshot, watch},
@@ -71,17 +74,23 @@ pub(crate) struct Step {
     pub run: Vec<CronScheduleId>,
     pub skip_in_flight: Vec<CronScheduleId>,
     pub stop_until: Vec<CronScheduleId>,
+    pub invalid_next: Vec<CronScheduleId>,
     pub wake: Option<DateTime<Utc>>,
 }
 
-fn next_time(schedule: &CronSchedule, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+fn next_time(
+    schedule: &CronSchedule,
+    now: DateTime<Utc>,
+) -> Result<Option<DateTime<Utc>>, AtmError> {
     let jitter = Duration::seconds(i64::from(schedule.jitter_s));
-    let base = now.checked_sub_signed(jitter)?;
-    expr::parse(&schedule.cron_expr, base)
-        .ok()?
+    let Some(base) = now.checked_sub_signed(jitter) else {
+        return Ok(None);
+    };
+    let next = expr::parse_syntax(&schedule.cron_expr)?
         .after(&base)
-        .next()?
-        .checked_add_signed(jitter)
+        .next()
+        .and_then(|next| next.checked_add_signed(jitter));
+    Ok(next)
 }
 
 pub(crate) fn plan_step(slots: &[SlotView<'_>], now: DateTime<Utc>) -> Step {
@@ -100,7 +109,13 @@ pub(crate) fn plan_step(slots: &[SlotView<'_>], now: DateTime<Utc>) -> Step {
             }
         }
         let next = if due {
-            next_time(slot.schedule, now)
+            match next_time(slot.schedule, now) {
+                Ok(next) => next,
+                Err(_) => {
+                    step.invalid_next.push(slot.schedule.id);
+                    None
+                }
+            }
         } else {
             slot.next
         };
@@ -113,6 +128,23 @@ pub(crate) fn plan_step(slots: &[SlotView<'_>], now: DateTime<Utc>) -> Step {
         }
     }
     step
+}
+
+async fn stop_exhausted(cron: &AtmCron, schedule: &CronSchedule) {
+    let outcome = CronRunOutcome::Stopped("no future occurrence".into());
+    tick::record(cron, schedule, &outcome).await;
+    tick::log(schedule, "tick", &outcome, 0);
+}
+
+fn log_next_time_error(schedule: &CronSchedule, error: &AtmError) {
+    tracing::error!(
+        subsystem = "atm_cron",
+        action = "schedule_next_failed",
+        schedule = %schedule.id,
+        code = %error.code(),
+        %error,
+        "cron schedule next time failed: {error}"
+    );
 }
 
 fn unchanged(left: &CronSchedule, right: &CronSchedule) -> bool {
@@ -137,23 +169,23 @@ async fn merge(cron: &AtmCron, slots: &mut Vec<Slot>, rows: Vec<CronSchedule>) {
             .position(|slot| unchanged(&slot.schedule, &schedule))
         {
             let mut slot = previous.remove(index);
-            slot.next = next_time(&schedule, cron.deps.clock.now());
-            slots.push(slot);
+            match next_time(&schedule, cron.deps.clock.now()) {
+                Ok(Some(next)) => {
+                    slot.next = Some(next);
+                    slots.push(slot);
+                }
+                Ok(None) => stop_exhausted(cron, &schedule).await,
+                Err(error) => log_next_time_error(&schedule, &error),
+            }
         } else {
-            let next = next_time(&schedule, cron.deps.clock.now());
-            if next.is_none() {
-                tick::record(
-                    cron,
-                    &schedule,
-                    &CronRunOutcome::Stopped("no future occurrence".into()),
-                )
-                .await;
-            } else {
-                slots.push(Slot {
+            match next_time(&schedule, cron.deps.clock.now()) {
+                Ok(Some(next)) => slots.push(Slot {
                     schedule,
-                    next,
+                    next: Some(next),
                     in_flight: None,
-                });
+                }),
+                Ok(None) => stop_exhausted(cron, &schedule).await,
+                Err(error) => log_next_time_error(&schedule, &error),
             }
         }
     }
@@ -234,6 +266,14 @@ async fn reload_slots(cron: &AtmCron, slots: &mut Vec<Slot>) -> bool {
 async fn apply_step(cron: &Arc<AtmCron>, slots: &mut Vec<Slot>, running: &watch::Sender<usize>) {
     let now = cron.deps.clock.now();
     let step = step_for(slots, now);
+    for index in (0..slots.len()).rev() {
+        if step.invalid_next.contains(&slots[index].schedule.id) {
+            let slot = slots.remove(index);
+            if let Err(error) = next_time(&slot.schedule, now) {
+                log_next_time_error(&slot.schedule, &error);
+            }
+        }
+    }
     for id in &step.stop_until {
         if let Some(index) = slots.iter().position(|slot| slot.schedule.id == *id) {
             let mut slot = slots.remove(index);
@@ -249,10 +289,15 @@ async fn apply_step(cron: &Arc<AtmCron>, slots: &mut Vec<Slot>, running: &watch:
             tick::log(&slot.schedule, "tick", &outcome, 0);
         }
     }
-    for slot in slots {
+    let mut exhausted = Vec::new();
+    for (index, slot) in slots.iter_mut().enumerate() {
         if step.skip_in_flight.contains(&slot.schedule.id) {
             tick::log(&slot.schedule, "tick", &CronRunOutcome::SkippedInFlight, 0);
-            slot.next = next_time(&slot.schedule, now);
+            match next_time(&slot.schedule, now) {
+                Ok(Some(next)) => slot.next = Some(next),
+                Ok(None) => exhausted.push(index),
+                Err(error) => log_next_time_error(&slot.schedule, &error),
+            }
         } else if step.run.contains(&slot.schedule.id) {
             let owner = cron.clone();
             let schedule = slot.schedule.clone();
@@ -261,8 +306,16 @@ async fn apply_step(cron: &Arc<AtmCron>, slots: &mut Vec<Slot>, running: &watch:
                 future: Box::pin(async move { tick::run_one(&owner, &schedule).await }),
                 _guard: guard,
             }));
-            slot.next = next_time(&slot.schedule, now);
+            match next_time(&slot.schedule, now) {
+                Ok(Some(next)) => slot.next = Some(next),
+                Ok(None) => slot.next = None,
+                Err(error) => log_next_time_error(&slot.schedule, &error),
+            }
         }
+    }
+    for index in exhausted.into_iter().rev() {
+        let slot = slots.remove(index);
+        stop_exhausted(cron, &slot.schedule).await;
     }
 }
 
@@ -299,7 +352,19 @@ pub(crate) async fn run(
             (index, result) = finished(&mut slots) => {
                 slots[index].in_flight.take();
                 if complete(&cron, &slots[index], result).await { slots.remove(index); }
-                else { slots[index].next = next_time(&slots[index].schedule, cron.deps.clock.now()); }
+                else {
+                    match next_time(&slots[index].schedule, cron.deps.clock.now()) {
+                        Ok(Some(next)) => slots[index].next = Some(next),
+                        Ok(None) => {
+                            let slot = slots.remove(index);
+                            stop_exhausted(&cron, &slot.schedule).await;
+                        }
+                        Err(error) => {
+                            log_next_time_error(&slots[index].schedule, &error);
+                            slots.remove(index);
+                        }
+                    }
+                }
             }
             _ = &mut shutdown => break,
         }
@@ -326,6 +391,16 @@ mod tests {
             "last_run_at":null,"last_outcome":null,"ended_at":null
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn next_time_preserves_invalid_expression_error() {
+        let mut row = row();
+        row.cron_expr = "not a cron expression".into();
+
+        let error = next_time(&row, row.created_at.into_inner()).unwrap_err();
+
+        assert_eq!(error.code().as_str(), "ATM_CRON_EXPR_INVALID");
     }
 
     #[test]
