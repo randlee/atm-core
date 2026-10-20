@@ -4,14 +4,18 @@
 //! touched the store (ANC-014).
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender};
 use std::sync::{Mutex, PoisonError};
+use std::time::Duration;
 
 use crate::contract::sealed;
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::hook_registration_store::{HookName, HookRegistration, HookRegistrationStore, PhaseId};
 use crate::types::{IsoTimestamp, TeamName};
+
+/// Longest a pause handshake may wait before the test fails instead of hanging.
+const PAUSE_DEADLINE: Duration = Duration::from_secs(10);
 
 /// Keeps every registration row in memory, keyed by `(team, phase, hook)`.
 #[derive(Debug, Default)]
@@ -39,10 +43,16 @@ pub struct ActiveAllPause {
 }
 
 impl ActiveAllPause {
-    /// Blocks until a store read has reached the pause.
+    /// Blocks until a store read has reached the pause. Panics if none arrives
+    /// within [`PAUSE_DEADLINE`], so a missed pause fails instead of hanging.
     pub fn wait_entered(&self) {
         let entered = self.entered.lock().unwrap_or_else(PoisonError::into_inner);
-        let _ = entered.recv();
+        match entered.recv_timeout(PAUSE_DEADLINE) {
+            Err(RecvTimeoutError::Timeout) => panic!(
+                "hook registration pause: timed out after {PAUSE_DEADLINE:?} waiting for a paused active_all to reach the pause (entered)"
+            ),
+            Ok(()) | Err(RecvTimeoutError::Disconnected) => {}
+        }
     }
 
     /// Lets the paused read finish with the rows it has read.
@@ -200,7 +210,12 @@ impl HookRegistrationStore for InMemoryHookRegistrationStore {
             .take();
         if let Some(pause) = pause {
             let _ = pause.entered.send(());
-            let _ = pause.release.recv();
+            match pause.release.recv_timeout(PAUSE_DEADLINE) {
+                Err(RecvTimeoutError::Timeout) => panic!(
+                    "hook registration pause: timed out after {PAUSE_DEADLINE:?} waiting for release of the paused active_all (release)"
+                ),
+                Ok(()) | Err(RecvTimeoutError::Disconnected) => {}
+            }
         }
         if self.fail_active_all.load(Ordering::SeqCst) {
             return Err(AtmError::new(
@@ -219,5 +234,28 @@ impl HookRegistrationStore for InMemoryHookRegistrationStore {
                 .then_with(|| a.phase.cmp(&b.phase))
         });
         Ok(selected)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wait_entered_panics_naming_entered_when_no_read_reaches_the_pause() {
+        let store = InMemoryHookRegistrationStore::new();
+        let pause = store.pause_next_active_all();
+
+        let failure =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| pause.wait_entered()))
+                .expect_err("wait_entered must panic when no read reaches the pause");
+        let message = failure
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| failure.downcast_ref::<&str>().copied())
+            .unwrap_or_default();
+
+        assert!(message.contains("(entered)"), "{message}");
+        assert_eq!(store.calls.load(Ordering::SeqCst), 0);
     }
 }

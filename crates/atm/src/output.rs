@@ -1,4 +1,5 @@
 use crate::output_contract::{HelpResult, HelpResultKind};
+mod hooks;
 use anyhow::Result;
 use atm_core::PickerMembersProjection;
 use atm_core::ack::AckOutcome;
@@ -19,6 +20,7 @@ use atm_core::team_admin::{
     SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
 };
 use atm_core::types::HostName;
+pub use hooks::*;
 use std::fmt::Write as _;
 
 /// Print one send result in human-readable or JSON form.
@@ -292,6 +294,9 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     }
 
     print_doctor_summary(report);
+    for line in print_doctor_hooks(&report.hooks) {
+        println!("{line}");
+    }
     print_doctor_observability(report);
     print_doctor_post_send(report);
     print_doctor_graft_receivers(report);
@@ -1109,6 +1114,13 @@ fn render_bootstrap_trace_section(trace: &BootstrapTraceReport) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn hook_actions_response_prints_hook_ran_n_actions() {
+        assert_eq!(
+            super::print_hook_actions(&atm_core::hook::HookActionsResponse { dispatched: 3 }),
+            "hook ran 3 actions"
+        );
+    }
     use atm_core::HerdrSession;
     use atm_core::ack::AckOutcome;
     use atm_core::doctor::{

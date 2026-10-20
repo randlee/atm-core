@@ -15,16 +15,16 @@ visibility = "public"
 constructor = "public"
 
 [composition]
-roots = []
+roots = ["atm_daemon_bootstrap::run_replacement_daemon"]
 
 [ownership]
 io_owns = ["cron_expr_parse", "schedule_next_computation", "stop_condition_check", "cron_tick", "reload_signal", "cron_run_record", "jitter_assignment"]
 io_forbidden = ["sqlite", "process_spawn", "http_server"]
 
 [dependencies]
-allowed_dependents = []
+allowed_dependents = ["atm-daemon-bootstrap"]
 allowed_dependencies = ["async-trait", "atm-core", "chrono", "cron", "getrandom", "serde_json", "tokio", "tracing"]
-allowed_dev_dependencies = ["atm-core", "atm-runtime-test-support", "tokio", "tracing-subscriber"]
+allowed_dev_dependencies = ["atm-core", "atm-runtime-test-support", "syn", "tokio", "tracing-subscriber"]
 forbidden_edges = []
 
 [references]
@@ -47,4 +47,4 @@ io_forbidden_source_modules = { sqlite = ["atm_cron::scheduler", "atm_cron::work
 
 [status]
 state = "active"
-notes = ["Phase bk sprint bk-4: first version."]
+notes = ["Phase bk sprint bk-5: the daemon composes one scheduler and supervises its worker lifecycle."]

@@ -213,6 +213,7 @@ dependencies = [
  "cron",
  "getrandom 0.3.4",
  "serde_json",
+ "syn 2.0.119",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -233,6 +234,7 @@ version = "1.6.2"
 dependencies = [
  "agent-team-mail-core",
  "async-trait",
+ "atm-cron",
  "atm-herdr",
  "atm-http-runtime",
  "atm-observability",

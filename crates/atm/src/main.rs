@@ -107,24 +107,11 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
     if is_warning_or_internal_error(error.code()) {
         return 1;
     }
+    if is_configuration_error(error.code()) {
+        return 2;
+    }
     match error.code() {
         PeerConfigValidationFailed | CertificateOperationFailed | BindPreflightFailed => 3,
-        AtmErrorCode::ConfigHomeUnavailable
-        | AtmErrorCode::AtmHomeUnresolved
-        | AtmErrorCode::ConfigParseFailed
-        | AtmErrorCode::ConfigRetiredHookMembersKey
-        | AtmErrorCode::ConfigRetiredLegacyHookKeys
-        | AtmErrorCode::ConfigTeamParseFailed
-        | AtmErrorCode::ConfigTeamMissing
-        // `atm compose` is a process-level adapter for `sc-compose`. Keep
-        // its source/load/include/render failures in the upstream CLI's
-        // configuration/validation exit category so callers can distinguish
-        // them from ATM request validation (3) and internal failures (1).
-        | AtmErrorCode::TemplateLoadFailed
-        | AtmErrorCode::TemplateRequiredVariableMissing
-        | AtmErrorCode::TemplateVariableResolutionFailed
-        | AtmErrorCode::TemplateRenderVerificationFailed
-        | AtmErrorCode::TemplateIncludeUnresolved => 2,
         AtmErrorCode::IdentityUnavailable
         | AtmErrorCode::IdentityInvalid
         | AtmErrorCode::IdentityConflict
@@ -141,6 +128,9 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::TaskNotCounterparty
         | AtmErrorCode::TaskStaleCounterparty
         | AtmErrorCode::TaskMoveInvalid
+        | AtmErrorCode::HookModuleInvalid
+        | AtmErrorCode::CronExprInvalid
+        | AtmErrorCode::HookRefused
         | MessageIdConflict
         | SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
@@ -181,6 +171,24 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         AtmErrorCode::WaitTimeout => 9,
         _ => 1,
     }
+}
+
+fn is_configuration_error(code: AtmErrorCode) -> bool {
+    matches!(
+        code,
+        AtmErrorCode::ConfigHomeUnavailable
+            | AtmErrorCode::AtmHomeUnresolved
+            | AtmErrorCode::ConfigParseFailed
+            | AtmErrorCode::ConfigRetiredHookMembersKey
+            | AtmErrorCode::ConfigRetiredLegacyHookKeys
+            | AtmErrorCode::ConfigTeamParseFailed
+            | AtmErrorCode::ConfigTeamMissing
+            | AtmErrorCode::TemplateLoadFailed
+            | AtmErrorCode::TemplateRequiredVariableMissing
+            | AtmErrorCode::TemplateVariableResolutionFailed
+            | AtmErrorCode::TemplateRenderVerificationFailed
+            | AtmErrorCode::TemplateIncludeUnresolved
+    )
 }
 
 fn is_warning_or_internal_error(code: AtmErrorCode) -> bool {
@@ -1032,6 +1040,23 @@ fn resolve_adapter_log_dir(_home_dir: &Path) -> Result<PathBuf, AtmError> {
 
 #[cfg(test)]
 mod adapter_tests {
+    #[test]
+    fn hook_and_cron_codes_map_to_documented_exit_codes() {
+        use atm_core::error::{AtmError, AtmErrorCode};
+        for (code, expected) in [
+            (AtmErrorCode::HookModuleInvalid, 3),
+            (AtmErrorCode::CronExprInvalid, 3),
+            (AtmErrorCode::HookRefused, 3),
+            (AtmErrorCode::HookExit, 1),
+            (AtmErrorCode::HookTimeout, 1),
+            (AtmErrorCode::HookMalformed, 1),
+        ] {
+            assert_eq!(
+                super::exit_code_for_atm_error(&AtmError::new(code, "hook error")),
+                expected
+            );
+        }
+    }
     use anyhow::anyhow;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::{LogMode, ObservabilityPort};

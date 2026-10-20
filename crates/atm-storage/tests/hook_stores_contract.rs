@@ -388,6 +388,12 @@ fn hook_name_parse_sets() {
 }
 
 #[test]
+fn cron_hook_names_have_infallible_constructors() {
+    assert_eq!(HookName::cron_tick().as_str(), HookName::CRON_TICK);
+    assert_eq!(HookName::cron_stop().as_str(), HookName::CRON_STOP);
+}
+
+#[test]
 fn hook_name_deserialize_rejects_unknown() {
     let error = serde_json::from_str::<HookName>("\"task.foo\"").expect_err("unknown hook");
     assert!(error.to_string().contains("cron.tick, cron.stop"));

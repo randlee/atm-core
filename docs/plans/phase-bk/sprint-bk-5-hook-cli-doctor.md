@@ -135,9 +135,16 @@ Composition (design §9.9):
 // crates/atm-daemon-bootstrap/src/replacement_handler.rs
 // compose_storage_router: runner = Arc::new(DaemonHookRunner::new(&env)); base router .with_hook_runner(runner.clone()),
 // .with_local_host(daemon_atm_config(&env).and_then(|c| c.local_host)); snapshot = ActiveHookSnapshot::load(store)? (an error aborts startup);
-// hooked = HookedTaskCommands::new(Arc::new(NormalTaskCommands::new(base.clone())), Arc::new(base.unhooked()), snapshot.clone(), runner.clone(),
-// base.hook_chains()); returns base.with_hook_snapshot(snapshot).with_task_commands(Arc::new(hooked)).
-pub(crate) fn build_replacement_handler(..) -> Result<(Arc<StorageAndNudgeRouter>, RecoverySweepHandle, Arc<dyn HookRunner>, Arc<UnhookedRouter>), AtmError>;
+// dispatcher = Arc::new(base.unhooked()); hook_filter = base.compose_hook_filter(snapshot, runner.clone(), dispatcher.clone());
+// handler = base.with_hook_filter(hook_filter.clone()); the named ReplacementHandler returns this same `hook_filter` Arc for composition tests.
+pub(crate) struct ReplacementHandler {
+    pub(crate) handler: Arc<StorageAndNudgeRouter>,
+    pub(crate) recovery_sweep: RecoverySweepHandle,
+    pub(crate) runner: Arc<dyn HookRunner>,
+    pub(crate) dispatcher: Arc<UnhookedRouter>,
+    pub(crate) hook_filter: Arc<HookedTaskCommands>,
+}
+pub(crate) fn build_replacement_handler(..) -> Result<ReplacementHandler, AtmError>;
 
 // crates/atm-daemon-bootstrap/src/cron_composition.rs: called by the daemon path and the in-crate tests; the tests bind no listener
 /// AtmCron::new(deps) then handler.install_cron_scheduler(cron.clone()); the daemon passes SystemClock and SystemJitter, tests ManualClock and SeqJitter.
@@ -251,7 +258,7 @@ start_cron_worker(&cron, &mut workers).await?;
 `crates/atm-daemon-bootstrap/src/hook_cron_composition_tests.rs` (composed handler, `compose_cron`, no listener):
 
 - [ ] (ANC-019, ANC-023, D-5) `req:REQ-P-CRON-001` `start_persists_row_with_args_and_timeout` (row = spec plus `jitter_s`); `list_shows_last_run_and_outcome_after_record_run`; `start_refuses_until_in_the_past_with_daemon_message`; `start_refuses_invalid_expression_with_cron_expr_invalid` (`x y`, five-field `* * * * *`; list empty); `start_refuses_active_duplicate_name`; `end_phase_keeps_rows_inactive_with_ended_at`; `register_second_phase_same_hook_succeeds` (`bj`'s `task.close` active, `bk`'s registers; `HookList` shows both).
-- [ ] (ANC-021, REQ-BK-D3) `req:REQ-P-HOOK-001` `filter_and_cron_share_one_runner_and_one_dispatcher`: the tuple's runner and `UnhookedRouter` are `Arc::ptr_eq` to the filter's `runner()` and `actions()` and to `AtmCronDeps`; `snapshot_load_error_fails_daemon_composition` (`fail_active_all`); `snapshot_load_from_reopened_store_serves_pre_restart_registrations` (`bj`, `bk` on `task.close`, reopened temp-dir store: `[bj, bk]`).
+- [ ] (ANC-021, REQ-BK-D3) `req:REQ-P-HOOK-001` `filter_and_cron_share_one_runner_and_one_dispatcher`: the returned `ReplacementHandler` exposes its composed `hook_filter`; its runner and dispatcher are `Arc::ptr_eq` to the filter's `runner()` and `actions()` and to `AtmCronDeps`; `snapshot_load_error_fails_daemon_composition` (`fail_active_all`); `snapshot_load_from_reopened_store_serves_pre_restart_registrations` (`bj`, `bk` on `task.close`, reopened temp-dir store: `[bj, bk]`).
 - [ ] (ANC-004) `req:REQ-P-HOOK-001` `close_end_to_end_with_refusing_hook_leaves_task_open`: `fixture_hook.py` on `task.close`, `timeout_ms = 30000`, stored before composition; a close gives `ATM_HOOK_REFUSED` with the module's message, task still `active`.
 - [ ] (ANC-008, ANC-021) `req:REQ-P-CRON-002` `cron_tick_action_runs_unhooked`: a schedule runs `fixture_hook.py` in cwd A (lists `cron.tick`; replies one `task.assign` action) while cwd B's is registered for `task.assign`; after one `ManualClock::advance` and `shutdown` (which joins the run) the task exists and B's `fixture_request.json` is never written.
 - [ ] (ADR-069 D2) `req:REQ-P-CRON-002` `cron_scheduler_installed_once_and_cron_routes_reach_it` (a second `install_cron_scheduler` errors); `cron_worker_is_first_shutdown_step`: `run_shutdown_steps` with an `async { Ok(()) }` listener records steps beginning `cron_worker`, `hook_chains`, `listener`; `cron_initial_load_error_aborts_startup`: `start_cron_worker` with `fail_active_all` returns `Err`, `workers.cron` `None`.

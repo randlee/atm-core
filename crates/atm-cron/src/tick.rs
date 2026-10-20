@@ -63,7 +63,7 @@ pub(crate) fn log(
         ""
     };
     tracing::info!(subsystem = "atm_cron", action, outcome = class, team = %schedule.team,
-        phase = %schedule.phase, hook = if action == "stop_check" { "cron.stop" } else { "cron.tick" },
+        phase = %schedule.phase, hook = if action == "stop_check" { HookName::CRON_STOP } else { HookName::CRON_TICK },
         schedule = %schedule.id, elapsed_ms = elapsed_ms.max(0), reason, "cron {action}: {text}");
 }
 
@@ -108,7 +108,7 @@ fn request(
     cron: &AtmCron,
     schedule: &CronSchedule,
     target: &HookTarget,
-    hook: &str,
+    hook: HookName,
 ) -> HookRequest {
     HookRequest::for_cron(
         target,
@@ -117,7 +117,7 @@ fn request(
             team: schedule.team.clone(),
             host: cron.deps.host.clone(),
         },
-        HookName::parse(hook).expect("static cron hook name"),
+        hook,
         &schedule.args,
     )
 }
@@ -134,6 +134,7 @@ async fn reply_outcome(
     cron: &AtmCron,
     schedule: &CronSchedule,
     reply: HookReply,
+    run_deadline: RequestDeadline,
 ) -> CronRunOutcome {
     match reply {
         HookReply::Refused { message } => CronRunOutcome::Refused(message),
@@ -145,11 +146,11 @@ async fn reply_outcome(
                 .dispatcher
                 .dispatch_actions(
                     DispatchSpec {
-                        hook: HookName::parse("cron.tick").expect("static cron hook name"),
+                        hook: HookName::cron_tick(),
                         team: schedule.team.clone(),
                         phase: schedule.phase.clone(),
                         default_as: schedule.created_by.clone(),
-                        deadline: None,
+                        deadline: Some(run_deadline),
                         dry_run: false,
                     },
                     actions,
@@ -178,7 +179,7 @@ pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunO
             .runner
             .stop(
                 &target,
-                &request(cron, schedule, &target, "cron.stop"),
+                &request(cron, schedule, &target, HookName::cron_stop()),
                 deadline(cron, schedule),
             )
             .await;
@@ -198,18 +199,19 @@ pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunO
             return check;
         }
     }
+    let run_deadline = deadline(cron, schedule);
     let outcome = match cron
         .deps
         .runner
         .run(
             &target,
-            &request(cron, schedule, &target, "cron.tick"),
-            deadline(cron, schedule),
+            &request(cron, schedule, &target, HookName::cron_tick()),
+            run_deadline,
         )
         .await
     {
         Err(error) => runner_error(error),
-        Ok(result) => reply_outcome(cron, schedule, result.reply).await,
+        Ok(result) => reply_outcome(cron, schedule, result.reply, run_deadline).await,
     };
     log(
         schedule,
@@ -224,6 +226,8 @@ pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunO
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "test-utils")]
+    use atm_core::test_support::TEST_SENDER;
 
     #[test]
     fn stop_due_is_the_one_until_rule() {
@@ -284,7 +288,7 @@ mod tests {
                     timeout_ms: 1000,
                     custom: Default::default(),
                     stop: StopCondition::Hook,
-                    created_by: "solar".parse().unwrap(),
+                    created_by: TEST_SENDER.parse().unwrap(),
                 })
                 .await
                 .unwrap();

@@ -13,18 +13,23 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use atm_core::api::RequestDeadline;
+use atm_core::atm_temp::ProcessEnvSource;
+use atm_core::boundary::HookRunner;
 use atm_core::doctor::{HerdrEndpointDoctor, HerdrEndpointObservation, HerdrRosterMember};
 use atm_core::error::AtmError;
 use atm_core::observability::ObservabilityPort;
 use atm_core::peer_wire::PeerWireMode;
 use atm_core::team_admin::MembersList;
+use atm_core::types::HostName;
 use atm_herdr::{
     HerdrBreakerState, HerdrClientConfig, HerdrDoctorProbe, HerdrProcessAdapter,
     HerdrProcessInvoker, HerdrSpawnBreaker,
 };
+#[cfg(test)]
+use atm_http_runtime::HookedTaskCommands;
 use atm_http_runtime::{
-    HerdrQueueWakePump, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, RuntimeHealth,
-    StorageAndNudgeRouter, shared_direct_peer_client,
+    ActiveHookSnapshot, HerdrQueueWakePump, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter,
+    RuntimeHealth, StorageAndNudgeRouter, UnhookedRouter, shared_direct_peer_client,
 };
 use atm_runtime::RuntimeAssembly;
 use atm_runtime::{DoctorProjectionConfig, HandoffConfig, StorageDoctorProjection};
@@ -33,6 +38,25 @@ use crate::DaemonLaunchIdentity;
 use crate::bare_cli_runtime::BareCliRuntime;
 use crate::herdr_config::DaemonHerdrConfig;
 use crate::queue_drain;
+
+struct ComposedStorageRouter {
+    handler: StorageAndNudgeRouter,
+    runner: Arc<dyn HookRunner>,
+    dispatcher: Arc<UnhookedRouter>,
+    local_host: Option<HostName>,
+    #[cfg(test)]
+    hook_filter: Arc<HookedTaskCommands>,
+}
+
+pub(crate) struct ReplacementHandler {
+    pub(crate) handler: Arc<StorageAndNudgeRouter>,
+    pub(crate) recovery_sweep: queue_drain::RecoverySweepHandle,
+    pub(crate) runner: Arc<dyn HookRunner>,
+    pub(crate) dispatcher: Arc<UnhookedRouter>,
+    pub(crate) local_host: Option<HostName>,
+    #[cfg(test)]
+    pub(crate) hook_filter: Arc<HookedTaskCommands>,
+}
 
 /// The bootstrap-owned peer transport selection passed as one coherent unit
 /// into replacement-daemon composition. Runtime code receives only the
@@ -211,7 +235,7 @@ pub(crate) fn build_replacement_handler(
             BareCliRuntime,
         ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     >,
-) -> Result<(Arc<StorageAndNudgeRouter>, queue_drain::RecoverySweepHandle), AtmError> {
+) -> Result<ReplacementHandler, AtmError> {
     let ReplacementHandlerConfig {
         observability,
         selector_factory,
@@ -247,7 +271,7 @@ pub(crate) fn build_replacement_handler(
         queue_wake_process,
         daemon_home.clone(),
     )?;
-    let handler = compose_storage_router(
+    let composed = compose_storage_router(
         assembly,
         daemon_home,
         observability,
@@ -261,7 +285,15 @@ pub(crate) fn build_replacement_handler(
         peer_wire_mode,
         peer_adapter_selection,
     )?;
-    Ok((Arc::new(handler), recovery_sweep))
+    Ok(ReplacementHandler {
+        handler: Arc::new(composed.handler),
+        recovery_sweep,
+        runner: composed.runner,
+        dispatcher: composed.dispatcher,
+        local_host: composed.local_host,
+        #[cfg(test)]
+        hook_filter: composed.hook_filter,
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -280,7 +312,12 @@ fn compose_storage_router(
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
     peer_adapter_selection: SelectedPeerAdapterSelection,
-) -> Result<StorageAndNudgeRouter, AtmError> {
+) -> Result<ComposedStorageRouter, AtmError> {
+    let snapshot = Arc::new(ActiveHookSnapshot::deferred(
+        assembly.service_runtime.hook_registration_store()?,
+    ));
+    let runner: Arc<dyn HookRunner> =
+        Arc::new(crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource));
     let async_mailbox_runtime = assembly
         .async_mailbox_runtime
         .clone()
@@ -310,7 +347,22 @@ fn compose_storage_router(
     })
     .with_shared_direct_peer_client(shared_direct_peer_client()?)
     .with_task_telemetry(task_telemetry);
-    Ok(add_peer_connection_pool(handler, peer_adapter_selection))
+    let mut handler = add_peer_connection_pool(handler, peer_adapter_selection);
+    let local_host =
+        crate::daemon_atm_config(&ProcessEnvSource).and_then(|config| config.local_host);
+    if let Some(host) = local_host.clone() {
+        handler = handler.with_local_host(host);
+    }
+    let dispatcher = Arc::new(handler.unhooked());
+    let filter = handler.compose_hook_filter(snapshot, runner.clone(), dispatcher.clone());
+    Ok(ComposedStorageRouter {
+        handler: handler.with_hook_filter(Arc::clone(&filter)),
+        runner,
+        dispatcher,
+        local_host,
+        #[cfg(test)]
+        hook_filter: filter,
+    })
 }
 
 fn build_queue_wake_pump(

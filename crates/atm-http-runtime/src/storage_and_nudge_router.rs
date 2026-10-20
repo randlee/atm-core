@@ -291,9 +291,9 @@ impl StorageAndNudgeRouter {
     /// deliberately did not wait for. Individual request guards remain
     /// non-blocking on drop; only this daemon lifecycle path awaits driver
     /// termination.
-    /// Releases outbound peer drivers, then detached received hooks, both
-    /// within the one caller-owned shutdown `deadline`: the drain gets only
-    /// what the pool left, never a fresh budget.
+    /// Releases outbound peer drivers, detached received hooks, and hook
+    /// chains within the one caller-owned shutdown `deadline`: each drain gets
+    /// only what its predecessors left, never a fresh budget.
     pub async fn shutdown_peer_connections(&self, deadline: tokio::time::Instant) {
         if let Some(pool) = &self.peer_connection_pool {
             pool.shutdown(deadline.saturating_duration_since(tokio::time::Instant::now()))
@@ -301,6 +301,11 @@ impl StorageAndNudgeRouter {
         }
         self.detached_received_hooks
             .drain(deadline.saturating_duration_since(tokio::time::Instant::now()))
+            .await;
+        self.hook_chains()
+            .drain(RequestDeadline::after(
+                deadline.saturating_duration_since(tokio::time::Instant::now()),
+            ))
             .await;
     }
 
@@ -1860,9 +1865,8 @@ pub(crate) mod tests {
         assert_async_committed_rows(&fixture, false).await;
     }
 
-    async fn bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_body(
-        through: bool,
-    ) {
+    #[tokio::test]
+    async fn bd2_template_async_pipeline_retains_success_and_rejected_committed_rows() {
         let fixture = route_task_commands(
             fixture_with_selector_and_template(
                 true,
@@ -1875,12 +1879,10 @@ pub(crate) mod tests {
                     })
                 },
             ),
-            through,
+            false,
         );
         assert_async_committed_rows(&fixture, true).await;
     }
-
-    through_normal_task_commands!(bd2_template_async_pipeline_retains_success_and_rejected_committed_rows, bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_through_normal_task_commands, bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_body);
 
     async fn assert_async_committed_rows(fixture: &Fixture, template: bool) {
         for rejected in [false, true] {
@@ -3167,6 +3169,109 @@ pub(crate) mod tests {
         assert_eq!(
             report.summary.error_count, error_findings,
             "the summary counts the appended finding"
+        );
+    }
+
+    /// One doctor call through the router, with the given hook rows and runner double.
+    async fn doctor_report_with_hooks(
+        fixture: &Fixture,
+        hooks: Arc<atm_runtime_test_support::InMemoryHookRegistrationStore>,
+        runner: Arc<atm_core::boundary::DummyHookRunner>,
+    ) -> atm_core::doctor::DoctorReport {
+        let assembly =
+            open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let doctor_projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig::default(),
+            assembly
+                .service_runtime
+                .with_hook_registration_store(hooks.clone()),
+            assembly.doctor_ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start doctor projection");
+        let snapshot =
+            crate::hook_filter::ActiveHookSnapshot::load(hooks.clone()).expect("hook snapshot");
+        let mut router = fixture.router.clone();
+        router.service_runtime = router
+            .service_runtime
+            .clone()
+            .with_hook_registration_store(hooks.clone());
+        let router =
+            crate::hook_filter::test_support::install_filter(router, Arc::new(snapshot), runner)
+                .with_doctor_projection(Arc::new(doctor_projection));
+        let response = router
+            .dispatch(
+                ApiRequest::new(atm_core::protocol::RequestEnvelope::Doctor(
+                    atm_core::doctor::DoctorQuery {
+                        all_teams: true,
+                        ..atm_core::doctor::DoctorQuery::default()
+                    },
+                )),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(5)),
+            )
+            .await
+            .expect("doctor response");
+        let ResponseEnvelope::Doctor(report) = response.into_inner() else {
+            panic!("expected a doctor report");
+        };
+        *report
+    }
+
+    /// A failed hook doctor call sets only its entry's error. It appends no finding,
+    /// so the report summary matches a report with no hook rows at all.
+    #[tokio::test]
+    async fn doctor_summary_is_unchanged_by_a_failed_hook_doctor_call() {
+        use crate::hook_filter::test_support::{agent, at, hook, phase, team};
+        use atm_core::boundary::HookRegistrationStore as _;
+
+        let fixture = fixture(true, None, None);
+        let baseline = doctor_report_with_hooks(
+            &fixture,
+            Arc::new(atm_runtime_test_support::InMemoryHookRegistrationStore::default()),
+            Arc::new(atm_core::boundary::DummyHookRunner::default()),
+        )
+        .await;
+
+        let hooks = Arc::new(atm_runtime_test_support::InMemoryHookRegistrationStore::default());
+        hooks
+            .register(atm_core::boundary::HookRegistration {
+                team: team(),
+                phase: phase("bj"),
+                hook: hook("task.assign"),
+                module_path: "/modules/bj.wasm".into(),
+                cwd: "/work".into(),
+                timeout_ms: 1_000,
+                custom: serde_json::Map::new(),
+                active: true,
+                registered_by: agent(atm_core::roles::ROLE_TEAM_LEAD),
+                registered_at: at(1),
+                disabled_at: None,
+            })
+            .expect("register");
+        let runner = Arc::new(atm_core::boundary::DummyHookRunner::default());
+        runner
+            .doctor_replies
+            .lock()
+            .expect("replies")
+            .push_back(Err(AtmError::hook_malformed("doctor reply broken")));
+
+        let report = doctor_report_with_hooks(&fixture, hooks, runner).await;
+
+        let error = report
+            .hooks
+            .iter()
+            .find_map(|entry| entry.error.as_ref())
+            .expect("the failed call sets its entry's error");
+        assert_eq!(error.code, atm_core::error::AtmErrorCode::HookMalformed);
+        assert_eq!(
+            report.findings.len(),
+            baseline.findings.len(),
+            "a failed hook call appends no finding"
+        );
+        assert_eq!(
+            report.summary, baseline.summary,
+            "the summary is unchanged by a failed hook call"
         );
     }
 
@@ -6860,11 +6965,11 @@ pub(crate) mod tests {
         }
     }
 
-    /// The pooled-driver drain and the detached-hook drain share the caller's
-    /// one absolute deadline: a stalled driver leaves the hooks only what
-    /// remains, never a fresh budget.
+    /// The pooled-driver, detached-hook, and hook-chain drains share the
+    /// caller's one absolute deadline: a stalled driver leaves later drains
+    /// only what remains, never a fresh budget.
     #[tokio::test]
-    async fn shutdown_peer_connections_spends_one_deadline_across_pool_and_hooks() {
+    async fn shutdown_peer_connections_spends_one_deadline_across_pool_hooks_and_chains() {
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
             .await
             .expect("test peer binds");
@@ -6916,6 +7021,10 @@ pub(crate) mod tests {
             atm_core::protocol::next_request_id(),
             std::future::pending(),
         );
+        let hook_chain = router
+            .hook_chains()
+            .spawn(std::future::pending::<()>())
+            .expect("hook chain starts before shutdown");
         // Real I/O set the stall up; virtual time measures the drain.
         tokio::time::pause();
         let started = tokio::time::Instant::now();
@@ -6929,6 +7038,12 @@ pub(crate) mod tests {
         assert!(
             elapsed >= deadline && elapsed <= deadline + Duration::from_millis(10),
             "{elapsed:?}"
+        );
+        assert!(
+            hook_chain
+                .await
+                .expect_err("shutdown aborts the remaining hook chain")
+                .is_cancelled()
         );
     }
 }

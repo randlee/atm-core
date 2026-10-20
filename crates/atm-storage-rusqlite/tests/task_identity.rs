@@ -293,6 +293,29 @@ impl Harness {
             .collect()
     }
 
+    /// Writes the member's roster `metadata_json` directly; the roster row is
+    /// created when the member has none yet.
+    fn set_roster_metadata(&self, member: &str, metadata_json: &str) {
+        Connection::open(&self.path)
+            .unwrap()
+            .execute(
+                "INSERT INTO team_roster(team_name, agent_name, member_kind, harness, agent_type, model, metadata_json, updated_at)
+                 VALUES (?1, ?2, 'permanent', 'claude-code', '', '', ?3, ?4)
+                 ON CONFLICT(team_name, agent_name) DO UPDATE SET metadata_json = excluded.metadata_json",
+                params![
+                    self.team.as_str(),
+                    member,
+                    metadata_json,
+                    IsoTimestamp::now().to_string()
+                ],
+            )
+            .unwrap();
+    }
+
+    fn reopen(&mut self) {
+        self.backend = SqliteStorageBackend::new(&self.path).expect("reopen backend");
+    }
+
     fn move_task(&self, task: &str, actor: &str, target: MoveTarget) {
         self.backend
             .task_store()
@@ -738,7 +761,7 @@ pub(crate) fn start_while_another_task_is_active_is_rejected() {
     h.start("T1", "alice").unwrap();
     let error = h.start("T2", "alice").expect_err("active conflict");
     assert_eq!(error.code(), AtmErrorCode::TaskMoveInvalid);
-    assert!(error.message().contains("already has an active task"));
+    assert!(error.message().contains("max_tasks is 1"), "{error}");
     assert_eq!(h.row("T2").state, TaskState::Assigned);
 }
 
@@ -1383,4 +1406,158 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
         )
         .expect("record reminder after reset");
     assert_eq!(after_reset.row.reminder_count, 1);
+}
+
+#[test]
+pub(crate) fn max_tasks_three_allows_three_active_and_refuses_a_fourth() {
+    let h = Harness::new();
+    h.set_roster_metadata("alice", r#"{"max_tasks":3}"#);
+    for task in ["T1", "T2", "T3", "T4"] {
+        h.assign(task, "alice", "lead", None);
+    }
+    for task in ["T1", "T2", "T3"] {
+        h.start(task, "alice").expect("start within max_tasks");
+        assert_eq!(h.row(task).state, TaskState::Active);
+    }
+    let error = h.start("T4", "alice").expect_err("fourth start refused");
+    assert_eq!(error.code(), AtmErrorCode::TaskMoveInvalid);
+    assert!(error.message().contains("max_tasks is 3"), "{error}");
+    assert_eq!(h.row("T4").state, TaskState::Assigned);
+}
+
+#[test]
+pub(crate) fn explicit_max_tasks_one_refuses_a_second_start() {
+    let h = Harness::new();
+    h.set_roster_metadata("alice", r#"{"max_tasks":1}"#);
+    h.assign("T1", "alice", "lead", None);
+    h.assign("T2", "alice", "lead", None);
+    h.start("T1", "alice").expect("first start");
+    let error = h.start("T2", "alice").expect_err("second start refused");
+    assert_eq!(error.code(), AtmErrorCode::TaskMoveInvalid);
+    assert!(error.message().contains("max_tasks is 1"), "{error}");
+    assert_eq!(h.row("T2").state, TaskState::Assigned);
+}
+
+#[test]
+pub(crate) fn invalid_stored_max_tasks_refuses_the_start() {
+    for stored in [r#"{"max_tasks":0}"#, r#"{"max_tasks":"3"}"#] {
+        let h = Harness::new();
+        h.set_roster_metadata("alice", stored);
+        h.assign("T1", "alice", "lead", None);
+        let error = h
+            .start("T1", "alice")
+            .expect_err("invalid max_tasks refuses the start");
+        assert_eq!(
+            error.code(),
+            AtmErrorCode::MessageValidationFailed,
+            "{stored}"
+        );
+        assert!(error.message().contains("max_tasks"), "{error}");
+        assert_eq!(h.row("T1").state, TaskState::Assigned, "{stored}");
+    }
+}
+
+#[test]
+pub(crate) fn started_tasks_sort_ahead_in_start_order() {
+    let h = Harness::new();
+    h.set_roster_metadata("alice", r#"{"max_tasks":3}"#);
+    for task in ["T1", "T2", "T3", "T4"] {
+        h.assign(task, "alice", "lead", None);
+    }
+    h.start("T3", "alice").expect("start T3");
+    h.start("T1", "alice").expect("start T1");
+    assert_eq!(
+        h.positions("alice"),
+        BTreeMap::from([
+            ("T3".into(), 1),
+            ("T1".into(), 2),
+            ("T2".into(), 3),
+            ("T4".into(), 4)
+        ])
+    );
+}
+
+#[test]
+pub(crate) fn head_move_skips_every_active_task() {
+    let h = Harness::new();
+    h.set_roster_metadata("alice", r#"{"max_tasks":3}"#);
+    for task in ["T1", "T2", "T3", "T4"] {
+        h.assign(task, "alice", "lead", None);
+    }
+    h.start("T3", "alice").expect("start T3");
+    h.start("T1", "alice").expect("start T1");
+    h.move_task("T4", "lead", MoveTarget::Head);
+    assert_eq!(
+        h.positions("alice"),
+        BTreeMap::from([
+            ("T3".into(), 1),
+            ("T1".into(), 2),
+            ("T4".into(), 3),
+            ("T2".into(), 4)
+        ])
+    );
+}
+
+#[test]
+pub(crate) fn move_of_second_active_task_reports_its_position() {
+    let h = Harness::new();
+    h.set_roster_metadata("alice", r#"{"max_tasks":3}"#);
+    for task in ["T1", "T2", "T3"] {
+        h.assign(task, "alice", "lead", None);
+    }
+    h.start("T3", "alice").expect("start T3");
+    h.start("T1", "alice").expect("start T1");
+    h.move_task("T1", "lead", MoveTarget::End);
+    let event = h.events("T1").pop().expect("moved event");
+    assert_eq!(event.event, TaskEventKind::Moved);
+    assert_eq!(event.detail.as_deref(), Some("2→2"));
+    assert_eq!(
+        h.positions("alice"),
+        BTreeMap::from([("T3".into(), 1), ("T1".into(), 2), ("T2".into(), 3)])
+    );
+}
+
+/// The `TASK_INDEX_DDL` text before bk-8 created `one_active_task_per_agent`.
+const PRE_BK8_ONE_ACTIVE_INDEX: &str = r#"
+CREATE UNIQUE INDEX IF NOT EXISTS one_active_task_per_agent
+    ON tasks(team, assignee) WHERE state = 'active';
+"#;
+
+#[test]
+pub(crate) fn ensure_schema_drops_one_active_task_per_agent() {
+    let mut h = Harness::new();
+    Connection::open(&h.path)
+        .unwrap()
+        .execute_batch(PRE_BK8_ONE_ACTIVE_INDEX)
+        .unwrap();
+    let index_count = |path: &std::path::Path| -> i64 {
+        Connection::open(path)
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'one_active_task_per_agent'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap()
+    };
+    assert_eq!(index_count(&h.path), 1, "the pre-bk-8 index is present");
+
+    h.reopen();
+    assert_eq!(index_count(&h.path), 0, "ensure_schema drops the index");
+
+    h.set_roster_metadata("alice", r#"{"max_tasks":2}"#);
+    h.assign("T1", "alice", "lead", None);
+    h.assign("T2", "alice", "lead", None);
+    h.start("T1", "alice").expect("first start");
+    h.start("T2", "alice")
+        .expect("two active rows for one member insert once the index is gone");
+    assert_eq!(h.row("T2").state, TaskState::Active);
+
+    h.reopen();
+    assert_eq!(
+        index_count(&h.path),
+        0,
+        "a second ensure_schema is idempotent"
+    );
+    assert_eq!(h.row("T2").state, TaskState::Active);
 }

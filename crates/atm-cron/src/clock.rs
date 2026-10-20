@@ -16,6 +16,9 @@ pub struct SystemClock;
 
 pub(crate) const MAX_SLEEP_SLICE: Duration = Duration::from_secs(30);
 
+#[cfg(feature = "test-utils")]
+const TEST_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
 pub(crate) fn system_sleep_step(now: DateTime<Utc>, target: DateTime<Utc>) -> Duration {
     (target - now)
         .to_std()
@@ -79,11 +82,17 @@ impl ManualClock {
     }
 
     pub async fn wait_parks_above(&self, count: u64) {
-        self.parks
-            .subscribe()
-            .wait_for(|value| *value > count)
-            .await
-            .expect("manual clock sender alive");
+        let mut parks = self.parks.subscribe();
+        let settled =
+            tokio::time::timeout(TEST_WAIT_TIMEOUT, parks.wait_for(|value| *value > count))
+                .await
+                .map(|result| result.expect("manual clock sender alive"));
+        if settled.is_err() {
+            panic!(
+                "manual clock park wait timed out: expected count above {count}, observed {}",
+                self.parks()
+            );
+        }
     }
 
     pub async fn advance_settled(&self, duration: chrono::Duration) {

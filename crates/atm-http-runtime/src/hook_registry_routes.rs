@@ -6,6 +6,7 @@
 //! routes pass the scheduler's own results and errors through unchanged.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
 use atm_core::boundary::{CronScheduler, CronStartSpec, HookName, HookRegistration};
@@ -39,6 +40,12 @@ fn check_timeout(timeout_ms: u32, max: u32, name: &str) -> Result<(), AtmError> 
         )));
     }
     Ok(())
+}
+
+fn cron_scheduler_budget(deadline: RequestDeadline, operation: &str) -> Result<Duration, AtmError> {
+    deadline.remaining().ok_or_else(|| {
+        AtmError::daemon_unavailable(format!("request deadline expired before {operation}"))
+    })
 }
 
 /// Refreshes the snapshot after a committed write. A failure keeps the row and
@@ -159,6 +166,7 @@ impl StorageAndNudgeRouter {
         &self,
         request: CronStartRequest,
         ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         require_local(ingress)?;
         check_timeout(
@@ -169,8 +177,9 @@ impl StorageAndNudgeRouter {
         let custom = request.check_limits()?;
         self.check_roster_member(&request.caller_team, &request.caller_identity)?;
         let scheduler = self.cron_scheduler()?;
-        let schedule = scheduler
-            .start(CronStartSpec {
+        let schedule = tokio::time::timeout(
+            cron_scheduler_budget(deadline, "cron schedule start")?,
+            scheduler.start(CronStartSpec {
                 team: request.caller_team,
                 phase: request.phase,
                 name: request.name,
@@ -182,8 +191,12 @@ impl StorageAndNudgeRouter {
                 custom,
                 stop: request.stop,
                 created_by: request.caller_identity,
-            })
-            .await?;
+            }),
+        )
+        .await
+        .map_err(|_| {
+            AtmError::daemon_unavailable("request deadline expired during cron schedule start")
+        })??;
         Ok(ApiResponse::new(ResponseEnvelope::CronStarted(schedule)))
     }
 
@@ -191,17 +204,23 @@ impl StorageAndNudgeRouter {
         &self,
         request: CronEndRequest,
         ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         require_local(ingress)?;
         self.check_roster_member(&request.caller_team, &request.caller_identity)?;
         let scheduler = self.cron_scheduler()?;
-        let rows = scheduler
-            .end(
+        let rows = tokio::time::timeout(
+            cron_scheduler_budget(deadline, "cron schedule end")?,
+            scheduler.end(
                 &request.caller_team,
                 &request.phase,
                 request.name.as_deref(),
-            )
-            .await?;
+            ),
+        )
+        .await
+        .map_err(|_| {
+            AtmError::daemon_unavailable("request deadline expired during cron schedule end")
+        })??;
         Ok(ApiResponse::new(ResponseEnvelope::CronEnded(rows)))
     }
 
@@ -209,13 +228,19 @@ impl StorageAndNudgeRouter {
         &self,
         request: CronListQuery,
         ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         require_local(ingress)?;
         self.check_roster_member(&request.caller_team, &request.caller_identity)?;
         let scheduler = self.cron_scheduler()?;
-        let rows = scheduler
-            .list(Some(&request.caller_team), request.phase.as_ref())
-            .await?;
+        let rows = tokio::time::timeout(
+            cron_scheduler_budget(deadline, "cron schedule list")?,
+            scheduler.list(Some(&request.caller_team), request.phase.as_ref()),
+        )
+        .await
+        .map_err(|_| {
+            AtmError::daemon_unavailable("request deadline expired during cron schedule list")
+        })??;
         Ok(ApiResponse::new(ResponseEnvelope::CronList(rows)))
     }
 
@@ -230,12 +255,16 @@ impl StorageAndNudgeRouter {
 
 #[cfg(test)]
 mod tests {
+    use std::future::Future;
+    use std::pin::Pin;
     use std::sync::Arc;
     use std::sync::atomic::Ordering;
+    use std::task::{Context, Poll, Wake, Waker};
+    use std::time::Duration;
 
-    use atm_core::api::AuthenticatedIngress;
+    use atm_core::api::{AuthenticatedIngress, RequestDeadline};
     use atm_core::boundary::{CronScheduler, HookRegistrationStore, RecordingCronScheduler};
-    use atm_core::error::AtmErrorCode;
+    use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::hook::{
         CronEndRequest, CronListQuery, CronStartRequest, HookDisableRequest, HookListQuery,
         HookRegisterRequest,
@@ -253,6 +282,20 @@ mod tests {
     use crate::storage_and_nudge_router::tests::{Fixture, fixture};
     use crate::task_commands::NormalTaskCommands;
 
+    struct NoopWake;
+
+    impl Wake for NoopWake {
+        fn wake(self: Arc<Self>) {}
+    }
+
+    fn assert_pending_once<F: Future>(future: Pin<&mut F>) {
+        let waker = Waker::from(Arc::new(NoopWake));
+        let mut context = Context::from_waker(&waker);
+        assert!(
+            matches!(future.poll(&mut context), Poll::Pending),
+            "operation should be queued behind the in-flight bridge job"
+        );
+    }
     /// A router with an in-memory hook store, its snapshot, and a recording cron scheduler.
     struct Routes {
         _fixture: Fixture,
@@ -325,6 +368,20 @@ mod tests {
             stop: atm_core::boundary::StopCondition::Hook,
             custom,
         }
+    }
+
+    fn assert_refusal(error: &AtmError, expected_code: AtmErrorCode, expected_message: &str) {
+        assert_eq!(error.code(), expected_code);
+        let expected_message = match expected_code {
+            AtmErrorCode::HookModuleInvalid => format!(
+                "HOOK.MODULE_INVALID: {expected_message}\n  Recovery: Register a task hook module path and name the hook from the supported list, then retry."
+            ),
+            AtmErrorCode::AgentNotFound => format!(
+                "{expected_message}\n  Recovery: Correct the ATM address or team selection and retry."
+            ),
+            _ => expected_message.to_owned(),
+        };
+        assert_eq!(error.message(), expected_message);
     }
 
     #[tokio::test]
@@ -404,23 +461,16 @@ mod tests {
                 .await
                 .expect("doctor reached the store");
         }
-        let write = {
-            let router = routes.router.clone();
-            tokio::spawn(async move {
-                router
-                    .hook_register(
-                        register_request("sender", "task.assign", "bk"),
-                        AuthenticatedIngress::Local,
-                        deadline(),
-                    )
-                    .await
-                    .map(|_| ())
-            })
-        };
+        let mut write = Box::pin(routes.router.hook_register(
+            register_request("sender", "task.assign", "bk"),
+            AuthenticatedIngress::Local,
+            deadline(),
+        ));
+        assert_pending_once(write.as_mut());
         pause.release();
 
         let entries = doctor.await.expect("doctor task");
-        write.await.expect("write task").expect("write");
+        write.await.expect("write");
         assert!(
             entries.is_empty(),
             "the doctor read preceded the write, so it saw no rows"
@@ -475,7 +525,16 @@ mod tests {
         register(&routes, register_request("sender", "task.assign", "bk"))
             .await
             .expect("register");
-        for name in ["cron.tick", "task.bogus"] {
+        for (name, expected_message) in [
+            (
+                "cron.tick",
+                "cron.tick is not a task hook; expected one of task.assign, task.start, task.close, task.move, task.list, task.events",
+            ),
+            (
+                "task.bogus",
+                "unknown hook name task.bogus; expected one of task.assign, task.start, task.close, task.move, task.list, task.events, cron.tick, cron.stop",
+            ),
+        ] {
             let result = routes
                 .router
                 .hook_disable(
@@ -492,8 +551,7 @@ mod tests {
             let Err(err) = result else {
                 panic!("disable must refuse the non-task hook name {name}");
             };
-            assert_eq!(err.code(), AtmErrorCode::HookModuleInvalid);
-            assert!(err.message().contains(name));
+            assert_refusal(&err, AtmErrorCode::HookModuleInvalid, expected_message);
         }
         let active = routes.hooks.active_all().expect("rows");
         assert_eq!(active.len(), 1, "a refused disable changes no rows");
@@ -505,17 +563,30 @@ mod tests {
         let tick = register(&routes, register_request("sender", "cron.tick", "bk"))
             .await
             .expect_err("cron.tick is not a task hook");
-        assert_eq!(tick.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(tick.message().contains("cron.tick is not a task hook"));
+        assert_refusal(
+            &tick,
+            AtmErrorCode::HookModuleInvalid,
+            "cron.tick is not a task hook; expected one of task.assign, task.start, task.close, task.move, task.list, task.events",
+        );
         let unknown = register(&routes, register_request("sender", "task.bogus", "bk"))
             .await
             .expect_err("unknown task hook");
-        assert_eq!(unknown.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(unknown.message().contains("unknown hook name task.bogus"));
+        assert_refusal(
+            &unknown,
+            AtmErrorCode::HookModuleInvalid,
+            "unknown hook name task.bogus; expected one of task.assign, task.start, task.close, task.move, task.list, task.events, cron.tick, cron.stop",
+        );
         let mut over = register_request("sender", "task.assign", "bk");
         over.timeout_ms = atm_core::boundary::HOOK_TIMEOUT_MAX_MS + 1;
         let capped = register(&routes, over).await.expect_err("over cap timeout");
-        assert!(capped.message().contains("timeout_ms must be 1..="));
+        assert_refusal(
+            &capped,
+            AtmErrorCode::HookModuleInvalid,
+            &format!(
+                "timeout_ms must be 1..={} milliseconds",
+                atm_core::boundary::HOOK_TIMEOUT_MAX_MS
+            ),
+        );
         assert!(routes.hooks.active_all().expect("rows").is_empty());
     }
 
@@ -542,9 +613,10 @@ mod tests {
         let off = register(&routes, register_request("stranger", "task.assign", "bk"))
             .await
             .expect_err("off-roster caller");
-        assert!(
-            off.message().contains("was not found in team"),
-            "off-roster caller is refused: {off}"
+        assert_refusal(
+            &off,
+            AtmErrorCode::AgentNotFound,
+            "agent 'stranger' was not found in team 'test-team'; add it with `atm teams add-member test-team stranger`",
         );
     }
 
@@ -708,30 +780,23 @@ mod tests {
                 .await
                 .expect("register reached the store");
         }
-        let disable_task = {
-            let router = routes.router.clone();
-            tokio::spawn(async move {
-                router
-                    .hook_disable(
-                        HookDisableRequest {
-                            caller_identity: agent("sender"),
-                            caller_team: team(),
-                            phase: phase("bj"),
-                            hook: None,
-                        },
-                        AuthenticatedIngress::Local,
-                        deadline(),
-                    )
-                    .await
-                    .map(|_| ())
-            })
-        };
+        let mut disable = Box::pin(routes.router.hook_disable(
+            HookDisableRequest {
+                caller_identity: agent("sender"),
+                caller_team: team(),
+                phase: phase("bj"),
+                hook: None,
+            },
+            AuthenticatedIngress::Local,
+            deadline(),
+        ));
+        assert_pending_once(disable.as_mut());
         pause.release();
         register_task
             .await
             .expect("register task")
             .expect("register");
-        disable_task.await.expect("disable task").expect("disable");
+        disable.await.expect("disable");
 
         let active: Vec<String> = snapshot
             .current(
@@ -761,11 +826,12 @@ mod tests {
     /// gate; nothing retries and nothing sleeps.
     const GATE_WAIT_BOUND: std::time::Duration = std::time::Duration::from_secs(10);
 
-    /// Completes `wait`, or fails the test once the failure bound is exceeded.
-    async fn bounded<F: std::future::Future>(what: &str, wait: F) -> F::Output {
+    /// Completes `wait`, or fails the test once the 10 s failure bound is exceeded.
+    /// `timeout_message` names the wait and the bound, and is the `expect` text.
+    async fn bounded<F: std::future::Future>(timeout_message: &'static str, wait: F) -> F::Output {
         tokio::time::timeout(GATE_WAIT_BOUND, wait)
             .await
-            .unwrap_or_else(|_| panic!("timed out after {GATE_WAIT_BOUND:?} waiting for {what}"))
+            .expect(timeout_message)
     }
 
     /// The in-flight gate: the hook raises `entered`, then waits for `release`.
@@ -784,7 +850,7 @@ mod tests {
                 Box::pin(async move {
                     gate.entered.notify_one();
                     bounded(
-                        "the test to release the in-flight hook",
+                        "timed out after 10 s waiting for the test to release the in-flight hook",
                         gate.release.notified(),
                     )
                     .await;
@@ -794,7 +860,7 @@ mod tests {
 
         async fn wait_entered(&self) {
             bounded(
-                "the in-flight hook to reach the runner",
+                "timed out after 10 s waiting for the in-flight hook to reach the runner",
                 self.entered.notified(),
             )
             .await;
@@ -855,10 +921,13 @@ mod tests {
             .await
             .expect("disable while the hook is in flight");
         gate.release_hook();
-        let response = bounded("the in-flight chain to complete", in_flight)
-            .await
-            .expect("join")
-            .expect("in-flight chain completes");
+        let response = bounded(
+            "timed out after 10 s waiting for the in-flight chain to complete",
+            in_flight,
+        )
+        .await
+        .expect("join")
+        .expect("in-flight chain completes");
         // The chain's last action answers the hooked command; a send response proves
         // the in-flight action still ran after the disable.
         match response.into_inner() {
@@ -916,19 +985,25 @@ mod tests {
                 .cron_start(
                     cron_request("sender", timeout, json!({})),
                     AuthenticatedIngress::Local,
+                    deadline(),
                 )
                 .await
                 .expect_err("timeout outside 1..=30000");
-            assert!(error.message().contains(&format!(
-                "timeout_ms must be 1..={} milliseconds",
-                atm_core::boundary::CRON_TIMEOUT_MAX_MS
-            )));
+            assert_refusal(
+                &error,
+                AtmErrorCode::HookModuleInvalid,
+                &format!(
+                    "timeout_ms must be 1..={} milliseconds",
+                    atm_core::boundary::CRON_TIMEOUT_MAX_MS
+                ),
+            );
         }
         routes
             .router
             .cron_start(
                 cron_request("sender", atm_core::boundary::CRON_TIMEOUT_MAX_MS, json!({})),
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect("30 000 ms is accepted");
@@ -947,11 +1022,14 @@ mod tests {
         )
         .await
         .expect_err("non-object custom");
-        assert_eq!(non_object.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(
-            non_object
-                .message()
-                .contains("custom must be an object of at most")
+        let custom_message = format!(
+            "custom must be an object of at most {} serialized bytes",
+            atm_core::hook::HOOK_CUSTOM_MAX_BYTES
+        );
+        assert_refusal(
+            &non_object,
+            AtmErrorCode::HookModuleInvalid,
+            &custom_message,
         );
         let oversize = json!({"x": "x".repeat(atm_core::hook::HOOK_CUSTOM_MAX_BYTES)});
         let over = register(
@@ -963,22 +1041,17 @@ mod tests {
         )
         .await
         .expect_err("over 64 KiB custom");
-        assert!(
-            over.message()
-                .contains("custom must be an object of at most")
-        );
+        assert_refusal(&over, AtmErrorCode::HookModuleInvalid, &custom_message);
         let cron = routes
             .router
             .cron_start(
                 cron_request("sender", 1_000, oversize),
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect_err("cron over 64 KiB custom");
-        assert!(
-            cron.message()
-                .contains("custom must be an object of at most")
-        );
+        assert_refusal(&cron, AtmErrorCode::HookModuleInvalid, &custom_message);
         assert!(routes.hooks.active_all().expect("rows").is_empty());
         assert!(routes.cron.calls.lock().expect("calls").is_empty());
     }
@@ -986,10 +1059,7 @@ mod tests {
     #[tokio::test]
     async fn oversize_name_args_and_paths_refused() {
         // Returns the refusal, failing the test if the call was accepted.
-        fn expect_refused<T>(
-            result: Result<T, atm_core::error::AtmError>,
-            what: &str,
-        ) -> atm_core::error::AtmError {
+        fn expect_refused<T>(result: Result<T, AtmError>, what: &str) -> AtmError {
             match result {
                 Ok(_) => panic!("{what} must be refused"),
                 Err(error) => error,
@@ -1005,54 +1075,66 @@ mod tests {
         let error = expect_refused(
             routes
                 .router
-                .cron_start(long_name, AuthenticatedIngress::Local)
+                .cron_start(long_name, AuthenticatedIngress::Local, deadline())
                 .await,
             "a cron name over the cap",
         );
-        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(error.message().contains(&format!(
-            "name must contain 1..={} bytes",
-            atm_core::hook::CRON_NAME_MAX_BYTES
-        )));
+        assert_refusal(
+            &error,
+            AtmErrorCode::HookModuleInvalid,
+            &format!(
+                "name must contain 1..={} bytes",
+                atm_core::hook::CRON_NAME_MAX_BYTES
+            ),
+        );
         let mut many_args = cron_request("sender", 1_000, json!({}));
         many_args.args = vec!["a".to_owned(); atm_core::hook::CRON_ARGS_MAX + 1];
         let error = expect_refused(
             routes
                 .router
-                .cron_start(many_args, AuthenticatedIngress::Local)
+                .cron_start(many_args, AuthenticatedIngress::Local, deadline())
                 .await,
             "cron args over the item cap",
         );
-        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(error.message().contains(&format!(
-            "args must contain at most {} items",
-            atm_core::hook::CRON_ARGS_MAX
-        )));
+        assert_refusal(
+            &error,
+            AtmErrorCode::HookModuleInvalid,
+            &format!(
+                "args must contain at most {} items",
+                atm_core::hook::CRON_ARGS_MAX
+            ),
+        );
         let mut long_register = register_request("sender", "task.assign", "bk");
         long_register.module_path = path_over_cap.clone();
         let error = expect_refused(
             register(&routes, long_register).await,
             "a register module_path over the cap",
         );
-        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(error.message().contains(&format!(
-            "module_path must be at most {} bytes",
-            atm_core::hook::HOOK_PATH_MAX_BYTES
-        )));
+        assert_refusal(
+            &error,
+            AtmErrorCode::HookModuleInvalid,
+            &format!(
+                "module_path must be at most {} bytes",
+                atm_core::hook::HOOK_PATH_MAX_BYTES
+            ),
+        );
         let mut long_cron = cron_request("sender", 1_000, json!({}));
         long_cron.module_path = path_over_cap;
         let error = expect_refused(
             routes
                 .router
-                .cron_start(long_cron, AuthenticatedIngress::Local)
+                .cron_start(long_cron, AuthenticatedIngress::Local, deadline())
                 .await,
             "a cron module_path over the cap",
         );
-        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
-        assert!(error.message().contains(&format!(
-            "module_path must be at most {} bytes",
-            atm_core::hook::HOOK_PATH_MAX_BYTES
-        )));
+        assert_refusal(
+            &error,
+            AtmErrorCode::HookModuleInvalid,
+            &format!(
+                "module_path must be at most {} bytes",
+                atm_core::hook::HOOK_PATH_MAX_BYTES
+            ),
+        );
         assert!(routes.hooks.active_all().expect("rows").is_empty());
         assert!(routes.cron.calls.lock().expect("calls").is_empty());
     }
@@ -1078,6 +1160,7 @@ mod tests {
             .cron_start(
                 cron_request("sender", 5_000, custom.clone()),
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect("cron start");
@@ -1102,6 +1185,7 @@ mod tests {
             .cron_start(
                 cron_request("sender", 5_000, custom.clone()),
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect_err("an active schedule refuses a second start");
@@ -1124,6 +1208,7 @@ mod tests {
                     phase: None,
                 },
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect("cron list");
@@ -1137,6 +1222,7 @@ mod tests {
                     name: None,
                 },
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect("cron end");
@@ -1147,6 +1233,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cron_routes_refuse_an_expired_request_deadline_before_scheduler() {
+        let routes = routes();
+        let expired = RequestDeadline::after(Duration::ZERO);
+
+        for error in [
+            routes
+                .router
+                .cron_start(
+                    cron_request("sender", 1_000, json!({})),
+                    AuthenticatedIngress::Local,
+                    expired,
+                )
+                .await
+                .expect_err("expired deadline refuses cron start"),
+            routes
+                .router
+                .cron_list(
+                    CronListQuery {
+                        caller_identity: agent("sender"),
+                        caller_team: team(),
+                        phase: None,
+                    },
+                    AuthenticatedIngress::Local,
+                    expired,
+                )
+                .await
+                .expect_err("expired deadline refuses cron list"),
+            routes
+                .router
+                .cron_end(
+                    CronEndRequest {
+                        caller_identity: agent("sender"),
+                        caller_team: team(),
+                        phase: phase("bk"),
+                        name: None,
+                    },
+                    AuthenticatedIngress::Local,
+                    expired,
+                )
+                .await
+                .expect_err("expired deadline refuses cron end"),
+        ] {
+            assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+            assert!(error.message().contains("request deadline expired"));
+        }
+        assert!(routes.cron.calls.lock().expect("calls").is_empty());
+    }
+
+    #[tokio::test]
     async fn cron_routes_without_scheduler_are_unavailable() {
         let fixture = fixture(true, None, None);
         let error = fixture
@@ -1154,10 +1289,14 @@ mod tests {
             .cron_start(
                 cron_request("sender", 1_000, json!({})),
                 AuthenticatedIngress::Local,
+                deadline(),
             )
             .await
             .expect_err("no scheduler installed");
         assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
-        assert!(error.message().contains("cron scheduler not installed"));
+        assert_eq!(
+            error.message(),
+            "cron scheduler not installed\n  Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry."
+        );
     }
 }

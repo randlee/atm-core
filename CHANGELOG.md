@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- feat(task): an agent may hold up to `max_tasks` active tasks. The limit is
+  the roster `metadata_json` key `max_tasks` (default 1), set with
+  `atm teams update-member <team> <member> --max-tasks <N>` (minimum 1).
+  Started tasks sort ahead of queued ones, and the Herdr task nudge lists every
+  open task of a member in one nudge (BK.8, #1932)
+- Release note: the `one_active_task_per_agent` index is dropped and there is
+  no downgrade path. Before running an older daemon, close each member's extra
+  active tasks with `atm task close`; the older daemon fails while a member has
+  two active tasks
+
 - feat(task): `atm task history` lists the past N tasks for a team, open
   and completed, newest first, with per-task started/closed times, outcome,
   duration, reminders and escalations; `--events` interleaves the selected

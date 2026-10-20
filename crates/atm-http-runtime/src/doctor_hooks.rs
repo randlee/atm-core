@@ -503,7 +503,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn failed_call_sets_error_and_summary_is_unchanged() {
+    async fn failed_call_sets_only_the_entry_error() {
         let setup = setup(true);
         setup
             .hooks

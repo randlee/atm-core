@@ -49,6 +49,22 @@ impl Default for HookWiring {
 }
 
 impl StorageAndNudgeRouter {
+    pub fn compose_hook_filter(
+        &self,
+        snapshot: Arc<ActiveHookSnapshot>,
+        runner: Arc<dyn HookRunner>,
+        actions: Arc<UnhookedRouter>,
+    ) -> Arc<HookedTaskCommands> {
+        Arc::new(HookedTaskCommands::new(
+            Arc::new(crate::task_commands::NormalTaskCommands::new(self.clone())),
+            actions,
+            snapshot,
+            runner,
+            self.hook_chains(),
+            self.control_path_sync_bridge.clone(),
+        ))
+    }
+
     #[must_use]
     pub fn with_task_commands(mut self, commands: Arc<dyn TaskCommands>) -> Self {
         self.hooks.task_commands = Some(commands);

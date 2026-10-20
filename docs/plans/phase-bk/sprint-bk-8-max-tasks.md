@@ -200,7 +200,8 @@ approval, and the CHANGELOG carries the release note. No
 6. One Herdr task-pass nudge per member listing all its open tasks:
    `open_tasks_by_member`, the `open_tasks` placeholder in both default
    bodies, and the new `build_task_reminder_dispatch` argument.
-7. `docs/requirements.md` §15 items 3, 4, 6 and ADR-062 (`:68`, row `:125`,
+7. `docs/requirements.md` §15 items 3, 4, 6 (edited without a REQ id or
+   exception record) and ADR-062 (`:68`, row `:125`,
    a 2026-10-20 amendment quoting the five agreed items) say "at most
    `max_tasks` active tasks per member (roster `metadata_json`, default 1)",
    started-first order, one nudge per member; `CHANGELOG.md` Unreleased gets

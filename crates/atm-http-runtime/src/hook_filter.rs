@@ -46,6 +46,17 @@ pub struct ActiveHookSnapshot {
 }
 
 impl ActiveHookSnapshot {
+    /// Defers the first durable read until a deadline-aware control-path
+    /// request needs hook state. Daemon composition must not synchronously
+    /// consume a shared SQLite reader worker.
+    pub fn deferred(store: Arc<dyn HookRegistrationStore>) -> Self {
+        Self {
+            map: RwLock::new(Arc::new(HashMap::new())),
+            dirty: AtomicBool::new(true),
+            store,
+        }
+    }
+
     pub fn load(store: Arc<dyn HookRegistrationStore>) -> Result<Self, AtmError> {
         let map = build_chains(store.as_ref())?;
         Ok(Self {

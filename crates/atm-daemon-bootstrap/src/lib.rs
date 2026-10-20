@@ -43,9 +43,12 @@ use tokio::net::TcpStream;
 mod atm_temp_config;
 mod atm_temp_sweeper_runtime;
 mod bare_cli_runtime;
+mod cron_composition;
 mod daemon_observability;
 mod diagnostic_timeline;
 mod herdr_config;
+#[cfg(test)]
+mod hook_cron_composition_tests;
 pub mod hook_runner;
 mod owner_gate;
 mod peer_launch_config;
@@ -470,8 +473,10 @@ async fn run_replacement_daemon_with_selector(
     let diagnostic_timeline = Arc::clone(&assembly.diagnostic_timeline);
     let diagnostic_counters = diagnostic_timeline::active_counters();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
-    let (handler, recovery_sweep) = build_replacement_handler(
+    let runtime = assembly.service_runtime.clone();
+    let (handler, recovery_sweep, cron) = compose_replacement_handler_and_cron(
         assembly,
+        &runtime,
         ReplacementHandlerConfig {
             observability: Arc::clone(&observability),
             selector_factory,
@@ -510,14 +515,44 @@ async fn run_replacement_daemon_with_selector(
         diagnostic_counters,
     )
     .await?;
-    run_until_shutdown(
-        running,
+    let mut workers =
+        DaemonWorkers::for_process(telemetry, recovery_sweep, atm_temp_sweeper, obs_owner);
+    if let Err(error) = cron_composition::start_cron_worker(&cron, &mut workers).await {
+        let _ = shutdown_replacement_daemon(running, handler.as_ref(), workers).await;
+        return Err(error);
+    }
+    run_until_shutdown(running, handler, workers, owner, singleton_guards).await
+}
+
+fn compose_replacement_handler_and_cron(
+    assembly: RuntimeAssembly,
+    runtime: &atm_core::LocalServiceRuntime,
+    config: ReplacementHandlerConfig<
+        impl FnOnce(
+            atm_core::LocalServiceRuntime,
+            Arc<dyn HerdrProcessAdapter>,
+            RuntimeHealth,
+            BareCliRuntime,
+        ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    >,
+) -> Result<
+    (
+        Arc<StorageAndNudgeRouter>,
+        queue_drain::RecoverySweepHandle,
+        Arc<atm_cron::AtmCron>,
+    ),
+    AtmError,
+> {
+    let crate::replacement_handler::ReplacementHandler {
         handler,
-        DaemonWorkers::for_process(telemetry, recovery_sweep, atm_temp_sweeper, obs_owner),
-        owner,
-        singleton_guards,
-    )
-    .await
+        recovery_sweep,
+        runner,
+        dispatcher,
+        local_host,
+        ..
+    } = build_replacement_handler(assembly, config)?;
+    let cron = cron_composition::compose_system(&handler, runtime, runner, dispatcher, local_host)?;
+    Ok((handler, recovery_sweep, cron))
 }
 
 /// The daemon's event port: the supplied owner, else the null adapter.
@@ -532,6 +567,7 @@ fn observability_port(
 
 /// The supervised subsystems every terminal daemon path drains exactly once.
 struct DaemonWorkers {
+    cron: Option<atm_cron::CronWorkerHandle>,
     task_telemetry: atm_runtime::TaskTelemetryRuntime,
     recovery_sweep: queue_drain::RecoverySweepHandle,
     atm_temp_sweeper: AtmTempSweeperRuntime,
@@ -550,6 +586,7 @@ impl DaemonWorkers {
         observability: Option<DaemonObservability>,
     ) -> Self {
         Self {
+            cron: None,
             task_telemetry,
             recovery_sweep,
             atm_temp_sweeper,
@@ -796,7 +833,8 @@ fn legacy_literal_ip_policy_from_value(value: Option<String>) -> LegacyLiteralIp
 }
 
 /// Drains every supervised subsystem under one cumulative deadline fixed at
-/// shutdown entry (ADR-055, REQ-DAEMON-RUNTIME-003): listener, recovery sweep,
+/// shutdown entry (ADR-055, REQ-DAEMON-RUNTIME-003): cron worker, hook chains,
+/// listener, recovery sweep,
 /// peer connections, the task telemetry drain, the `$ATM_TEMP` sweeper,
 /// the retained-logger flushes around exporter shutdown and the diagnostic
 /// timeline flush worker each get only the remaining time, never a fresh
@@ -812,14 +850,24 @@ async fn shutdown_replacement_daemon(
     let entered = tokio::time::Instant::now();
     let deadline = entered + REPLACEMENT_DRAIN_DEADLINE;
     shutdown_probe::record("entry", entered, deadline);
+    cron_composition::run_shutdown_steps(
+        async move { running.begin_shutdown().finish(deadline).await.map(|_| ()) },
+        handler,
+        workers,
+        deadline,
+    )
+    .await
+}
+
+async fn shutdown_remaining_steps(
+    listener: impl std::future::Future<Output = Result<(), AtmError>>,
+    handler: &StorageAndNudgeRouter,
+    workers: DaemonWorkers,
+    deadline: tokio::time::Instant,
+) -> Result<(), AtmError> {
     // The runtime bounds its own drain, cancellation and cleanup by
     // `deadline`, so it is awaited to completion rather than dropped.
-    let stopped = shutdown_probe::step(
-        "listener",
-        deadline,
-        running.begin_shutdown().finish(deadline),
-    )
-    .await;
+    let stopped = shutdown_probe::step("listener", deadline, listener).await;
     shutdown_probe::step(
         "recovery_sweep",
         deadline,
@@ -866,7 +914,7 @@ async fn shutdown_replacement_daemon(
         // Last: the timeline worker and the flushes above still log through it.
         observability.shutdown_logger(deadline).await;
     }
-    let _stopped = stopped?;
+    stopped?;
     Ok(())
 }
 
@@ -1302,29 +1350,30 @@ mod replacement_runtime_tests {
             })
             .expect("plaintext bootstrap selects no TLS stream adapter");
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
-        let (handler, _recovery_sweep) = build_replacement_handler(
-            assembly,
-            ReplacementHandlerConfig {
-                observability: Arc::new(NullObservability),
-                selector_factory: |_, _, _, _| {
-                    Arc::new(NoReceivedHookSelector)
-                        as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+        let crate::replacement_handler::ReplacementHandler { handler, .. } =
+            build_replacement_handler(
+                assembly,
+                ReplacementHandlerConfig {
+                    observability: Arc::new(NullObservability),
+                    selector_factory: |_, _, _, _| {
+                        Arc::new(NoReceivedHookSelector)
+                            as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+                    },
+                    daemon_launch_identity: DaemonLaunchIdentity::default(),
+                    peer_wire_mode: PeerWireMode::plaintext_test(),
+                    peer_adapter_selection: SelectedPeerAdapterSelection {
+                        adapter: peer_stream_adapter.clone(),
+                        pool_config: PeerPoolConfig::default(),
+                    },
+                    runtime_health: runtime_health.clone(),
+                    diagnostic_counters: None,
+                    bare_cli: Default::default(),
+                    herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
+                    herdr_process: None,
+                    daemon_home: temporary_root.path().join("home"),
                 },
-                daemon_launch_identity: DaemonLaunchIdentity::default(),
-                peer_wire_mode: PeerWireMode::plaintext_test(),
-                peer_adapter_selection: SelectedPeerAdapterSelection {
-                    adapter: peer_stream_adapter.clone(),
-                    pool_config: PeerPoolConfig::default(),
-                },
-                runtime_health: runtime_health.clone(),
-                diagnostic_counters: None,
-                bare_cli: Default::default(),
-                herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
-                herdr_process: None,
-                daemon_home: temporary_root.path().join("home"),
-            },
-        )
-        .expect("compose the replacement daemon handler");
+            )
+            .expect("compose the replacement daemon handler");
         let config = replacement_runtime_config_with_direct_peer(
             LoopbackTcpConfig::new(
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
@@ -1504,28 +1553,29 @@ mod replacement_runtime_tests {
             .expect("plaintext bootstrap selects no TLS stream adapter");
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
         let mut herdr_queue_tick = runtime_health.subscribe_herdr_queue_tick();
-        let (handler, _recovery_sweep) = build_replacement_handler(
-            assembly,
-            ReplacementHandlerConfig {
-                observability: Arc::new(NullObservability),
-                selector_factory: |runtime, herdr_process, health, _| {
-                    active_received_hook_selector_with_health(runtime, herdr_process, health)
+        let crate::replacement_handler::ReplacementHandler { handler, .. } =
+            build_replacement_handler(
+                assembly,
+                ReplacementHandlerConfig {
+                    observability: Arc::new(NullObservability),
+                    selector_factory: |runtime, herdr_process, health, _| {
+                        active_received_hook_selector_with_health(runtime, herdr_process, health)
+                    },
+                    daemon_launch_identity: DaemonLaunchIdentity::default(),
+                    peer_wire_mode: PeerWireMode::plaintext_test(),
+                    peer_adapter_selection: SelectedPeerAdapterSelection {
+                        adapter: peer_stream_adapter.clone(),
+                        pool_config: PeerPoolConfig::default(),
+                    },
+                    runtime_health: runtime_health.clone(),
+                    diagnostic_counters: None,
+                    bare_cli: Default::default(),
+                    herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
+                    herdr_process: Some(fake.clone()),
+                    daemon_home: temporary_root.path().join("home"),
                 },
-                daemon_launch_identity: DaemonLaunchIdentity::default(),
-                peer_wire_mode: PeerWireMode::plaintext_test(),
-                peer_adapter_selection: SelectedPeerAdapterSelection {
-                    adapter: peer_stream_adapter.clone(),
-                    pool_config: PeerPoolConfig::default(),
-                },
-                runtime_health: runtime_health.clone(),
-                diagnostic_counters: None,
-                bare_cli: Default::default(),
-                herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
-                herdr_process: Some(fake.clone()),
-                daemon_home: temporary_root.path().join("home"),
-            },
-        )
-        .expect("compose the replacement daemon handler");
+            )
+            .expect("compose the replacement daemon handler");
         let config = replacement_runtime_config_with_direct_peer(
             LoopbackTcpConfig::new(
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),

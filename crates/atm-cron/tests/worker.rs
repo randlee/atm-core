@@ -1,4 +1,7 @@
 use std::{
+    collections::BTreeSet,
+    fs,
+    path::{Path, PathBuf},
     sync::{Arc, atomic::Ordering},
     time::Duration,
 };
@@ -8,8 +11,9 @@ use atm_core::{
         CronSchedule, CronScheduleStore, CronScheduler, CronStartSpec, HookCall, HookOutcome,
         PhaseId, StopCondition,
     },
-    error::AtmError,
+    error::{AtmError, AtmErrorCode},
     hook::{HookReply, StopReply},
+    test_support::TEST_SENDER,
 };
 use atm_cron::{AtmCron, AtmCronDeps, Clock, CronWorkerHandle, ManualClock, SeqJitter};
 use atm_runtime_test_support::{
@@ -17,6 +21,8 @@ use atm_runtime_test_support::{
 };
 use chrono::{DateTime, Utc};
 use tokio::sync::watch;
+
+const TEST_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
 
 thread_local! {
     static LOGS: std::cell::RefCell<Option<Arc<std::sync::Mutex<Vec<String>>>>> = const { std::cell::RefCell::new(None) };
@@ -110,7 +116,7 @@ impl Fixture {
             stop: StopCondition::Until {
                 at: self.clock.now() + chrono::Duration::days(1),
             },
-            created_by: "solar".parse().unwrap(),
+            created_by: TEST_SENDER.parse().unwrap(),
         }
     }
 
@@ -154,7 +160,7 @@ impl Fixture {
             let entered = entered.clone();
             Box::pin(async move {
                 entered.send_replace(index + 1);
-                receiver.wait_for(|released| *released).await.unwrap();
+                wait_for_release(&mut receiver).await;
             })
         }));
         (release, calls)
@@ -165,6 +171,153 @@ async fn shutdown(handle: &CronWorkerHandle) {
     handle
         .shutdown(tokio::time::Instant::now() + Duration::from_secs(10))
         .await;
+}
+
+async fn wait_for_entered(receiver: &mut watch::Receiver<usize>, expected: usize) {
+    let observed = receiver.clone();
+    match tokio::time::timeout(
+        TEST_WAIT_TIMEOUT,
+        receiver.wait_for(|count| *count == expected),
+    )
+    .await
+    {
+        Ok(result) => {
+            result.expect("hook entry sender alive");
+        }
+        Err(_) => panic!(
+            "hook entry wait timed out: expected count {expected}, observed {}",
+            *observed.borrow()
+        ),
+    }
+}
+
+async fn wait_for_release(receiver: &mut watch::Receiver<bool>) {
+    let observed = receiver.clone();
+    match tokio::time::timeout(TEST_WAIT_TIMEOUT, receiver.wait_for(|released| *released)).await {
+        Ok(result) => {
+            result.expect("hook release sender alive");
+        }
+        Err(_) => panic!(
+            "hook release wait timed out: expected true, observed {}",
+            *observed.borrow()
+        ),
+    }
+}
+
+#[tokio::test]
+async fn atm_cron_public_surface_is_worker_and_scheduler_trait() {
+    let fixture = Fixture::new();
+    let worker = fixture.cron.start_worker().await.unwrap();
+
+    // Keep scheduler operations behind the public trait boundary while the
+    // worker lifecycle remains an AtmCron operation.
+    let scheduler: Arc<dyn CronScheduler> = fixture.cron.clone();
+    scheduler.start(fixture.spec("api-surface")).await.unwrap();
+    assert_eq!(scheduler.list(None, None).await.unwrap().len(), 1);
+    scheduler
+        .end(
+            &"test-team".parse().unwrap(),
+            &PhaseId::parse("bk").unwrap(),
+            Some("api-surface"),
+        )
+        .await
+        .unwrap();
+    let rows = scheduler.list(None, None).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert!(!rows[0].active);
+
+    shutdown(&worker).await;
+}
+
+fn rust_source_files(directory: &Path, files: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(directory)
+        .unwrap_or_else(|error| panic!("could not read {}: {error}", directory.display()))
+    {
+        let path = entry
+            .unwrap_or_else(|error| {
+                panic!(
+                    "could not read an entry in {}: {error}",
+                    directory.display()
+                )
+            })
+            .path();
+        if path.is_dir() {
+            rust_source_files(&path, files);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            files.push(path);
+        }
+    }
+}
+
+fn collect_atm_cron_public_methods(
+    items: &[syn::Item],
+    inherent_impl_count: &mut usize,
+    public_methods: &mut BTreeSet<String>,
+) {
+    for item in items {
+        match item {
+            syn::Item::Impl(implementation)
+                if implementation.trait_.is_none()
+                    && matches!(
+                        implementation.self_ty.as_ref(),
+                        syn::Type::Path(path)
+                            if path.path.segments.last().is_some_and(|segment| segment.ident == "AtmCron")
+                    ) =>
+            {
+                *inherent_impl_count += 1;
+                public_methods.extend(implementation.items.iter().filter_map(|item| match item {
+                    syn::ImplItem::Fn(method)
+                        if matches!(&method.vis, syn::Visibility::Public(_)) =>
+                    {
+                        Some(method.sig.ident.to_string())
+                    }
+                    _ => None,
+                }));
+            }
+            syn::Item::Mod(module) => {
+                if let Some((_, module_items)) = &module.content {
+                    collect_atm_cron_public_methods(
+                        module_items,
+                        inherent_impl_count,
+                        public_methods,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn atm_cron_has_no_unapproved_public_inherent_methods() {
+    let source_directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut source_files = Vec::new();
+    rust_source_files(&source_directory, &mut source_files);
+    source_files.sort();
+
+    let mut inherent_impl_count = 0;
+    let mut public_methods = BTreeSet::new();
+    for path in source_files {
+        let text = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("could not read {}: {error}", path.display()));
+        let source = syn::parse_file(&text).unwrap_or_else(|error| {
+            panic!("{} must remain valid Rust syntax: {error}", path.display())
+        });
+        collect_atm_cron_public_methods(
+            &source.items,
+            &mut inherent_impl_count,
+            &mut public_methods,
+        );
+    }
+
+    assert!(
+        inherent_impl_count > 0,
+        "src must define an inherent AtmCron implementation"
+    );
+    assert_eq!(
+        public_methods,
+        BTreeSet::from(["new".to_owned(), "start_worker".to_owned()])
+    );
 }
 
 #[tokio::test]
@@ -264,6 +417,10 @@ async fn stopped_worker_refuses_start_end_and_list() {
     let worker = fixture.worker().await;
     shutdown(&worker).await;
     let spec = fixture.spec("stopped");
+    assert_eq!(
+        fixture.cron.list(None, None).await.unwrap_err().code(),
+        AtmErrorCode::DaemonUnavailable
+    );
     assert!(
         fixture
             .cron
@@ -291,6 +448,22 @@ async fn stopped_worker_refuses_start_end_and_list() {
             .message()
             .contains("cron worker stopped")
     );
+}
+
+#[tokio::test]
+async fn starting_worker_twice_returns_lifecycle_error_code() {
+    let fixture = Fixture::new();
+    let worker = fixture.cron.start_worker().await.unwrap();
+    let error = fixture
+        .cron
+        .start_worker()
+        .await
+        .err()
+        .expect("second worker start must be rejected");
+
+    assert_eq!(error.code(), AtmErrorCode::DaemonLifecycleWedge);
+    assert!(error.message().contains("cron worker already started"));
+    shutdown(&worker).await;
 }
 
 #[tokio::test]
@@ -343,7 +516,7 @@ async fn tick_while_in_flight_is_skipped_and_logged() {
     let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     fixture.step(60).await;
     fixture.step(60).await;
     release.send_replace(true);
@@ -371,7 +544,7 @@ async fn until_reached_ends_the_schedule_without_a_run() {
     fixture.cron.start(spec).await.unwrap();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     release.send_replace(true);
     fixture.step(30).await;
     fixture.step(30).await;
@@ -472,7 +645,7 @@ async fn stop_hook_false_runs_the_tick() {
     assert_eq!(request.hook.as_str(), "cron.stop");
     assert_eq!(
         request.request,
-        serde_json::json!({"args":spec.args,"created_by":"solar"})
+        serde_json::json!({"args":spec.args,"created_by":TEST_SENDER})
     );
     assert_eq!(request.caller.identity, spec.created_by);
     assert_eq!(calls[0].0.timeout_ms, 20000);
@@ -505,7 +678,7 @@ async fn tick_request_has_the_seven_keys_and_args_in_request_only() {
     assert_eq!(request.custom, spec.custom);
     assert_eq!(
         request.request,
-        serde_json::json!({"args": spec.args, "created_by": "solar"})
+        serde_json::json!({"args": spec.args, "created_by": TEST_SENDER})
     );
     assert_eq!(request.caller.identity, spec.created_by);
     assert_eq!(request.caller.team, spec.team);
@@ -534,7 +707,7 @@ async fn cron_tick_uses_cron_timeout_ms_not_timeout_ms() {
     fixture.cron.start(spec).await.unwrap();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     {
         let calls = fixture.runner.calls.lock().unwrap();
         assert_eq!(calls[0].0.timeout_ms, 20000);
@@ -720,7 +893,7 @@ async fn reload_keeps_in_flight_of_an_unchanged_slot() {
     let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     let parks = fixture.clock.parks();
     fixture
         .cron
@@ -775,7 +948,7 @@ async fn stale_run_never_writes_the_restarted_row() {
     fixture.reply(HookReply::PassThrough);
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     fixture
         .store
         .end(
@@ -803,7 +976,7 @@ async fn restart_during_tick_does_not_replay_after_reload() {
     let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     fixture
         .store
         .end(
@@ -831,7 +1004,7 @@ async fn record_run_after_end_mid_run_writes_nothing() {
     let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     fixture
         .store
         .end(&spec.team, &spec.phase, None, fixture.clock.now().into())
@@ -942,13 +1115,41 @@ async fn loaded_row_without_future_occurrence_is_ended() {
 }
 
 #[tokio::test]
+async fn last_finite_occurrence_ends_the_schedule() {
+    let fixture = Fixture::new();
+    let mut spec = fixture.spec("last");
+    spec.cron_expr = "0 0 0 20 10 * 2026".into();
+    spec.stop = StopCondition::Until {
+        at: fixture.clock.now() + chrono::Duration::days(2),
+    };
+    fixture.cron.start(spec).await.unwrap();
+    fixture.reply(HookReply::PassThrough);
+    let (release, mut entered) = fixture.hold();
+    let worker = fixture.worker().await;
+
+    fixture.step(86_400).await;
+    wait_for_entered(&mut entered, 1).await;
+    let parks = fixture.clock.parks();
+    release.send(true).unwrap();
+    fixture.clock.wait_parks_above(parks).await;
+
+    assert_eq!(fixture.calls(), 1);
+    assert!(!fixture.row().active);
+    assert_eq!(
+        fixture.row().last_outcome.as_deref(),
+        Some("stopped: no future occurrence")
+    );
+    shutdown(&worker).await;
+}
+
+#[tokio::test]
 async fn shutdown_joins_within_deadline_with_run_in_flight() {
     let fixture = Fixture::new();
     fixture.cron.start(fixture.spec("held")).await.unwrap();
     let (_release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     worker.shutdown(tokio::time::Instant::now()).await;
     assert!(fixture.cron.list(None, None).await.is_err());
     assert_eq!(fixture.row().last_outcome, None);
@@ -977,7 +1178,7 @@ async fn shutdown_waits_for_cancelled_run_cleanup() {
     fixture.cron.start(fixture.spec("cleanup")).await.unwrap();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    received.wait_for(|entered| *entered).await.unwrap();
+    wait_for_release(&mut received).await;
     worker.shutdown(tokio::time::Instant::now()).await;
     assert!(*finished.borrow());
     assert_eq!(fixture.row().last_outcome, None);
@@ -1004,8 +1205,19 @@ async fn three_actions_dispatch_once_in_order_as_created_by() {
     let calls = fixture.dispatcher.calls.lock().unwrap();
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].actions, expected);
-    assert_eq!(calls[0].spec.default_as.as_str(), "solar");
-    assert_eq!(calls[0].spec.deadline, None);
+    assert_eq!(calls[0].spec.default_as.as_str(), TEST_SENDER);
+    let run_deadlines: Vec<_> = fixture
+        .runner
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|(_, call, deadline)| matches!(call, HookCall::Run(_)).then_some(*deadline))
+        .collect();
+    assert_eq!(run_deadlines.len(), calls.len());
+    for (dispatch, run_deadline) in calls.iter().zip(run_deadlines) {
+        assert_eq!(dispatch.spec.deadline, Some(run_deadline));
+    }
     assert!(!calls[0].spec.dry_run);
     assert_eq!(fixture.row().last_outcome.as_deref(), Some("actions: 3"));
 }
@@ -1036,7 +1248,7 @@ async fn panicking_run_records_exit_and_worker_keeps_ticking() {
     let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     let parks = fixture.clock.parks();
     release.send_replace(true);
     fixture.clock.wait_parks_above(parks).await;
@@ -1064,7 +1276,7 @@ async fn cancelled_run_records_nothing() {
     let (_release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     let parks = fixture.clock.parks();
     fixture
         .cron
@@ -1093,7 +1305,7 @@ async fn record_failure_is_logged() {
     let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     fixture.store.fail_writes.store(true, Ordering::SeqCst);
     let parks = fixture.clock.parks();
     release.send_replace(true);
@@ -1130,7 +1342,7 @@ async fn reload_failure_keeps_slots_and_retries() {
         .unwrap();
     fixture.clock.wait_parks_above(parks).await;
     fixture.step(60).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     fixture.store.fail_active_all.store(false, Ordering::SeqCst);
     let parks = fixture.clock.parks();
     fixture
@@ -1141,7 +1353,7 @@ async fn reload_failure_keeps_slots_and_retries() {
     fixture.clock.wait_parks_above(parks).await;
     fixture.reply(HookReply::PassThrough);
     fixture.step(61).await;
-    entered.wait_for(|count| *count == 2).await.unwrap();
+    wait_for_entered(&mut entered, 2).await;
     release.send_replace(true);
     shutdown(&worker).await;
     assert_eq!(fixture.calls(), 2);
@@ -1151,6 +1363,41 @@ async fn reload_failure_keeps_slots_and_retries() {
             .iter()
             .any(|entry| entry.contains("action=\"reload_failed\"") && entry.contains("error="))
     );
+}
+
+fn reload_failures(logs: &Arc<std::sync::Mutex<Vec<String>>>) -> usize {
+    logs.lock()
+        .unwrap()
+        .iter()
+        .filter(|entry| entry.contains("action=\"reload_failed\""))
+        .count()
+}
+
+#[tokio::test]
+async fn failed_reload_retries_on_backoff_before_the_next_occurrence() {
+    let fixture = Fixture::new();
+    let logs = capture_logs();
+    let spec = fixture.spec("reload-backoff");
+    fixture.cron.start(spec.clone()).await.unwrap();
+    let worker = fixture.worker().await;
+    fixture.store.fail_active_all.store(true, Ordering::SeqCst);
+    let parks = fixture.clock.parks();
+    fixture
+        .cron
+        .end(&spec.team, &spec.phase, Some("absent"))
+        .await
+        .unwrap();
+    fixture.clock.wait_parks_above(parks).await;
+    assert_eq!(reload_failures(&logs), 1);
+    // The next occurrence is a minute away, so each retry below comes from
+    // the backoff alone: 1s after the failure, then 2s, then 4s.
+    fixture.step(1).await;
+    assert_eq!(reload_failures(&logs), 2);
+    fixture.step(1).await;
+    assert_eq!(reload_failures(&logs), 2);
+    fixture.step(1).await;
+    assert_eq!(reload_failures(&logs), 3);
+    shutdown(&worker).await;
 }
 
 #[tokio::test]
@@ -1192,4 +1439,40 @@ async fn tick_and_stop_check_log_entries() {
             assert!(events[0].contains(key), "missing {key} in {}", events[0]);
         }
     }
+}
+
+/// Parks a run by blocking its runtime thread until the returned sender fires.
+/// A run that cannot yield is not dropped when the worker is aborted, so its
+/// count stays up until the thread is released.
+fn hold_blocking(fixture: &Fixture) -> (std::sync::mpsc::Sender<()>, watch::Receiver<usize>) {
+    let (release, parked) = std::sync::mpsc::channel::<()>();
+    let parked = Arc::new(std::sync::Mutex::new(parked));
+    let (entered, calls) = watch::channel(0);
+    *fixture.runner.before_reply.lock().unwrap() = Some(Arc::new(move |index| {
+        let parked = parked.clone();
+        let entered = entered.clone();
+        Box::pin(async move {
+            entered.send_replace(index + 1);
+            let _ = parked.lock().unwrap().recv();
+        })
+    }));
+    (release, calls)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shutdown_returns_at_its_deadline_when_a_run_cannot_yield() {
+    let fixture = Fixture::new();
+    fixture.reply(HookReply::PassThrough);
+    fixture.cron.start(fixture.spec("parked")).await.unwrap();
+    let (release, mut entered) = hold_blocking(&fixture);
+    let worker = fixture.worker().await;
+    fixture.step(60).await;
+    wait_for_entered(&mut entered, 1).await;
+    let outcome = tokio::time::timeout(
+        TEST_WAIT_TIMEOUT,
+        worker.shutdown(tokio::time::Instant::now()),
+    )
+    .await;
+    release.send(()).unwrap();
+    outcome.expect("shutdown must return at its deadline, not wait for a run that cannot yield");
 }

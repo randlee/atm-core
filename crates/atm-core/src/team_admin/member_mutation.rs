@@ -1,3 +1,4 @@
+use std::num::NonZeroU32;
 use std::path::PathBuf;
 
 use chrono::Utc;
@@ -157,6 +158,9 @@ pub struct UpdateMemberRequest {
     /// "leave unchanged" (the same convention as `harness`/`agent_type`/
     /// `model`), never "clear". Set via [`UpdateMemberRequest::with_host`].
     pub host: Option<HostName>,
+    /// The most tasks this member may hold active at once; `None` leaves it
+    /// unchanged. Set via [`UpdateMemberRequest::with_max_tasks`].
+    pub max_tasks: Option<NonZeroU32>,
 }
 
 impl UpdateMemberRequest {
@@ -194,6 +198,7 @@ impl UpdateMemberRequest {
             alias: None,
             backend_warning: None,
             host: None,
+            max_tasks: None,
         })
     }
 
@@ -244,6 +249,7 @@ impl UpdateMemberRequest {
             alias,
             backend_warning,
             host: None,
+            max_tasks: None,
         })
     }
 
@@ -255,6 +261,18 @@ impl UpdateMemberRequest {
     /// Returns [`AtmError`] when `host` is not a valid [`HostName`].
     pub fn with_host(mut self, host: Option<&str>) -> Result<Self, AtmError> {
         self.host = host.map(str::parse).transpose()?;
+        Ok(self)
+    }
+
+    /// Sets the active-task limit. `Some(0)` is a validation error; `None`
+    /// leaves the stored limit unchanged.
+    pub fn with_max_tasks(mut self, max_tasks: Option<u32>) -> Result<Self, AtmError> {
+        self.max_tasks = max_tasks
+            .map(|value| {
+                NonZeroU32::new(value)
+                    .ok_or_else(|| AtmError::validation("--max-tasks must be at least 1"))
+            })
+            .transpose()?;
         Ok(self)
     }
 }
@@ -708,6 +726,12 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
                 member.metadata_json.remove("alias");
             }
         }
+    }
+    if let Some(max_tasks) = request.max_tasks {
+        member.metadata_json.insert(
+            atm_storage::task_state::MAX_TASKS_METADATA_KEY.to_string(),
+            json!(max_tasks.get()),
+        );
     }
     update_member_local_backend(member, request);
 }

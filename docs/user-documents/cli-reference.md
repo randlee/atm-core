@@ -106,6 +106,75 @@ Usage: atm compose [OPTIONS] --template <PATH>
 
 Composition is local and never reads or writes the mailbox. Use `atm send <agent> --template <path> --vars <file>` to deliver the same template after previewing it.
 
+### `atm cron`
+
+Start, end, or list cron schedules
+
+**Usage:**
+
+```text
+Usage: atm cron [OPTIONS] <COMMAND>
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+#### `atm cron end`
+
+End active schedules in a phase
+
+**Usage:**
+
+```text
+Usage: atm cron end [OPTIONS] --phase <PHASE> [NAME]
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `--phase` | `` | `PHASE` | yes | `` |  | Phase whose active schedules will be ended |
+| `<name>` | `` | `NAME` | no | `` |  | End only this schedule; otherwise end every schedule in the phase |
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+#### `atm cron list`
+
+List active and inactive schedules
+
+**Usage:**
+
+```text
+Usage: atm cron list [OPTIONS]
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `--phase` | `` | `PHASE` | no | `` |  | Limit schedules to this phase |
+| `--json` | `` | `JSON` | no | `false` |  | Emit full schedules as a bare JSON array |
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+#### `atm cron start`
+
+Start a recurring module schedule with a mandatory stop condition
+
+**Usage:**
+
+```text
+Usage: atm cron start [OPTIONS] --cron <CRON_EXPR> --module <MODULE> --phase <PHASE> <--until <UNTIL>|--until-hook> <NAME>
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `<name>` | `` | `NAME` | yes | `` |  | Schedule name within the phase |
+| `--cron` | `` | `CRON_EXPR` | yes | `` |  | Six-field UTC cron expression, validated by the daemon |
+| `--module` | `` | `MODULE` | yes | `` |  | Python module declaring its timeout |
+| `--phase` | `` | `PHASE` | yes | `` |  | Phase owning the schedule |
+| `--until` | `` | `UNTIL` | no | `` |  | Stop at this RFC 3339 instant |
+| `--until-hook` | `` | `UNTIL_HOOK` | no | `false` |  | Ask the module stop hook before each tick |
+| `--arg` | `` | `ARGS` | no | `` |  | Module argument; repeat for each argument, including flags |
+| `--cwd` | `` | `CWD` | no | `` |  | Working directory; defaults to the module directory |
+| `--custom` | `` | `CUSTOM` | no | `` |  | Custom JSON object passed to the module |
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
 ### `atm doctor`
 
 Run ATM health and configuration diagnostics
@@ -122,6 +191,10 @@ Usage: atm doctor [OPTIONS]
 | `--all-teams` | `` | `ALL_TEAMS` | no | `false` |  | Inspect every team in the canonical roster. |
 | `--json` | `` | `JSON` | no | `false` |  | Emit the result as JSON |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+**Notes:**
+
+Hooks: calls each registered module's doctor once per module/cwd/team/phase for the caller's team, reports findings without changing the overall summary; JSON includes hooks even when empty.
 
 ### `atm escalation`
 
@@ -196,6 +269,71 @@ Usage: atm help [OPTIONS] [TARGET]
 | `<target>` | `` | `TARGET` | no | `` |  | Conceptual-help topic or clap subcommand path to show |
 | `--list` | `` | `LIST` | no | `false` |  | List available conceptual-help topics |
 | `--json` | `` | `JSON` | no | `false` |  | Emit the result as JSON |
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+### `atm hook`
+
+Register, disable, or list task hooks
+
+**Usage:**
+
+```text
+Usage: atm hook [OPTIONS] <COMMAND>
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+#### `atm hook disable`
+
+Disable active registrations in a phase
+
+**Usage:**
+
+```text
+Usage: atm hook disable [OPTIONS] --phase <PHASE> [HOOK]
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `--phase` | `` | `PHASE` | yes | `` |  | Phase whose active registrations will be disabled |
+| `<hook>` | `` | `HOOK` | no | `` |  | Disable only this hook; otherwise disable every hook in the phase |
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+#### `atm hook list`
+
+List active and inactive hook registrations
+
+**Usage:**
+
+```text
+Usage: atm hook list [OPTIONS]
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `--phase` | `` | `PHASE` | no | `` |  | Limit registrations to this phase |
+| `--json` | `` | `JSON` | no | `false` |  | Emit the full registrations as a bare JSON array |
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+#### `atm hook register`
+
+Register a module for one task hook and phase
+
+**Usage:**
+
+```text
+Usage: atm hook register [OPTIONS] --module <MODULE> --phase <PHASE> <HOOK>
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `<hook>` | `` | `HOOK` | yes | `` |  | Task hook name, validated by the daemon |
+| `--module` | `` | `MODULE` | yes | `` |  | Python module declaring TIMEOUT_MS |
+| `--phase` | `` | `PHASE` | yes | `` |  | Phase owning the registration |
+| `--cwd` | `` | `CWD` | no | `` |  | Working directory; defaults to the module directory |
+| `--custom` | `` | `CUSTOM` | no | `` |  | Custom JSON object passed to the module |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
 ### `atm list`
@@ -1037,6 +1175,7 @@ Usage: atm teams update-member [OPTIONS] <TEAM> <MEMBER>
 | `--clear-alias` | `` | `CLEAR_ALIAS` | no | `false` |  | remove the member's durable roster alias |
 | `--pane-id` | `` | `PANE_ID` | no | `` |  | deprecated compatibility spelling for --backend tmux --target |
 | `--host` | `` | `HOST` | no | `` |  | this member's registered host (ADR-055 decision (e)); used for Send-To same-host/remote routing, never inferred |
+| `--max-tasks` | `` | `MAX_TASKS` | no | `` |  | Most tasks this member may hold active at once (minimum 1; default 1 when never set) |
 | `--json` | `` | `JSON` | no | `false` |  | Emit the result as JSON |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 

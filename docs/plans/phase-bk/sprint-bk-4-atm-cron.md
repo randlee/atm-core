@@ -47,8 +47,8 @@ Owned paths (new unless marked edited):
   `crates/atm-cron/Cargo.toml` with `boundary_record_path =
   "boundaries/atm-cron/cron-scheduler.toml"` and `allowed_dependencies =
   ["async-trait", "atm-core", "atm-runtime-test-support", "chrono", "cron",
-  "getrandom", "serde_json", "tokio", "tracing"]` and
-  `tracing-subscriber` in the crate's dev allowlist; the `cron` ownership
+  "getrandom", "serde_json", "syn", "tokio", "tracing"]` and
+  `syn`, `tracing-subscriber` in the crate's dev allowlist; the `cron` ownership
   entry and the `atm-runtime-test-support` section rule are bk-2's);
   `Cargo.lock`. bk-2's core
   manifests already list `atm-cron` as a dependent.
@@ -229,7 +229,7 @@ io_forbidden = ["sqlite", "process_spawn", "http_server"]
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap"]
 allowed_dependencies = ["async-trait", "atm-core", "chrono", "cron", "getrandom", "serde_json", "tokio", "tracing"]
-allowed_dev_dependencies = ["atm-core", "atm-runtime-test-support", "tokio", "tracing-subscriber"]
+allowed_dev_dependencies = ["atm-core", "atm-runtime-test-support", "syn", "tokio", "tracing-subscriber"]
 forbidden_edges = []   # allowed_dependents and allowed_dependencies are the guard (lint_boundaries.py)
 
 [references]
@@ -306,7 +306,7 @@ notes = ["Phase bk sprint bk-4 (2026-10): first version."]
 - [ ] (store errors) `boundary:BOUNDARY-CronScheduler` `reload_failure_keeps_slots_and_retries` (`fail_active_all` on a bump: `reload_failed`, the old slot fires; cleared, the next bump merges); `record_failure_is_logged` (`fail_writes`: `record_failed`, ticking continues); `stopped_worker_refuses_start_end_and_list` (after shutdown: `cron worker stopped`); `record_run_after_end_mid_run_writes_nothing`; `loaded_row_without_future_occurrence_is_ended`.
 - [ ] (ANC-025) `boundary:BOUNDARY-CronScheduler` `until_reached_ends_the_schedule_without_a_run`: `Until { at: now + 90 s }`, every minute: `plan_step` gives `run` at 60 s, `stop_until` at 90 s, nothing at 120 s; driven by `advance_settled` to 60, 90, 120 s, after shutdown one call, `active == false`, `ended_at == now + 90 s`, `stopped: until reached`; `tick.rs::tests::stop_due_is_the_one_until_rule` (`at - 1 s` false, `at` true).
 - [ ] (ANC-024) `boundary:BOUNDARY-CronScheduler` `stop_hook_true_ends_the_schedule_with_its_reason` (`stopped: phase bead closed`, inactive, one `cron.stop`, no `cron.tick`); `stop_hook_false_runs_the_tick`; `stop_hook_failure_skips_the_tick_and_keeps_the_row_active` (each runner `Err`: active, `stop_check_failed: <code>`, no `cron.tick`).
-- [ ] `boundary:BOUNDARY-CronScheduler` `ticks_fire_only_when_the_manual_clock_reaches_them` (no call before occurrence + `jitter_s`, then one; an ended row's occurrence gives none); `shutdown_joins_within_deadline_with_run_in_flight`; `AtmCron` has no public method besides `new`, `start_worker` and the trait's.
+- [ ] `boundary:BOUNDARY-CronScheduler` `ticks_fire_only_when_the_manual_clock_reaches_them` (no call before occurrence + `jitter_s`, then one; an ended row's occurrence gives none); `shutdown_joins_within_deadline_with_run_in_flight`; `AtmCron` has no public method besides `new`, `start_worker` and the trait's; `atm_cron_public_surface_is_worker_and_scheduler_trait` asserts `AtmCron` is usable through `dyn CronScheduler`, with construction and worker lifecycle on `AtmCron`; `atm_cron_has_no_unapproved_public_inherent_methods` guards the inherent API from new public methods.
 - [ ] (REQ-BK-LOG) `boundary:BOUNDARY-CronScheduler` `tick_and_stop_check_log_entries`: one `atm_cron` `tick` entry per tick and one `stop_check` per `Hook` check, each with `team`, `phase`, `hook`, `schedule`, `outcome`, `elapsed_ms`; action entries come from bk-7's dispatcher, not here.
 - [ ] (REQ-BK-D3) `boundary:BOUNDARY-CronScheduler` `rg -n 'process::Command|HookRunner for' crates/atm-cron/src` is empty.
 - [ ] `boundary:BOUNDARY-CronScheduler` `python3 -m unittest .just/tests/test_release_targets_manifest.py` passes with the renumbered entries.

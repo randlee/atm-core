@@ -2,6 +2,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use atm_core::boundary::{CronScheduler, CronStartSpec, PhaseId, StopCondition};
+use atm_core::test_support::TEST_SENDER;
 use atm_cron::{AtmCron, AtmCronDeps, ManualClock, SeqJitter};
 use atm_runtime_test_support::{
     DummyHookRunner, InMemoryCronScheduleStore, RecordingHookActionDispatcher,
@@ -28,7 +29,7 @@ async fn parse(expression: &str) -> Result<(), atm_core::error::AtmError> {
         timeout_ms: 1000,
         custom: Default::default(),
         stop: StopCondition::Hook,
-        created_by: "solar".parse().unwrap(),
+        created_by: TEST_SENDER.parse().unwrap(),
     })
     .await
     .map(|_| ())
