@@ -20,6 +20,7 @@ use atm_core::error::AtmError;
 use atm_core::observability::ObservabilityPort;
 use atm_core::peer_wire::PeerWireMode;
 use atm_core::team_admin::MembersList;
+use atm_core::types::HostName;
 use atm_herdr::{
     HerdrBreakerState, HerdrClientConfig, HerdrDoctorProbe, HerdrProcessAdapter,
     HerdrProcessInvoker, HerdrSpawnBreaker,
@@ -40,12 +41,14 @@ type ComposedStorageRouter = (
     StorageAndNudgeRouter,
     Arc<dyn HookRunner>,
     Arc<UnhookedRouter>,
+    Option<HostName>,
 );
 type ReplacementHandler = (
     Arc<StorageAndNudgeRouter>,
     queue_drain::RecoverySweepHandle,
     Arc<dyn HookRunner>,
     Arc<UnhookedRouter>,
+    Option<HostName>,
 );
 
 /// The bootstrap-owned peer transport selection passed as one coherent unit
@@ -261,7 +264,7 @@ pub(crate) fn build_replacement_handler(
         queue_wake_process,
         daemon_home.clone(),
     )?;
-    let (handler, runner, dispatcher) = compose_storage_router(
+    let (handler, runner, dispatcher, local_host) = compose_storage_router(
         assembly,
         daemon_home,
         observability,
@@ -275,7 +278,13 @@ pub(crate) fn build_replacement_handler(
         peer_wire_mode,
         peer_adapter_selection,
     )?;
-    Ok((Arc::new(handler), recovery_sweep, runner, dispatcher))
+    Ok((
+        Arc::new(handler),
+        recovery_sweep,
+        runner,
+        dispatcher,
+        local_host,
+    ))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -330,16 +339,21 @@ fn compose_storage_router(
     .with_shared_direct_peer_client(shared_direct_peer_client()?)
     .with_task_telemetry(task_telemetry);
     let mut handler = add_peer_connection_pool(handler, peer_adapter_selection);
-    if let Some(host) =
-        crate::daemon_atm_config(&ProcessEnvSource).and_then(|config| config.local_host)
-    {
+    let local_host =
+        crate::daemon_atm_config(&ProcessEnvSource).and_then(|config| config.local_host);
+    if let Some(host) = local_host.clone() {
         handler = handler.with_local_host(host);
     }
     let dispatcher = Arc::new(handler.unhooked());
     let filter = handler.compose_hook_filter(snapshot, runner.clone(), dispatcher.clone());
     #[cfg(test)]
     composed_hook_filter::record(filter.clone());
-    Ok((handler.with_hook_filter(filter), runner, dispatcher))
+    Ok((
+        handler.with_hook_filter(filter),
+        runner,
+        dispatcher,
+        local_host,
+    ))
 }
 
 #[cfg(test)]

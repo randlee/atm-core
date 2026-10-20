@@ -1,5 +1,6 @@
 use std::{future::Future, sync::Arc, time::Duration};
 
+use atm_core::types::HostName;
 use atm_core::{api::RequestDeadline, error::AtmError};
 use atm_cron::{AtmCron, AtmCronDeps, Clock, JitterSource};
 use atm_http_runtime::StorageAndNudgeRouter;
@@ -14,6 +15,7 @@ pub(crate) fn compose_system(
     runtime: &atm_core::LocalServiceRuntime,
     runner: Arc<dyn atm_core::boundary::HookRunner>,
     dispatcher: Arc<atm_http_runtime::UnhookedRouter>,
+    host: Option<HostName>,
 ) -> Result<Arc<AtmCron>, AtmError> {
     compose_runtime_cron(
         handler,
@@ -22,6 +24,7 @@ pub(crate) fn compose_system(
         dispatcher,
         Arc::new(atm_cron::SystemClock),
         Arc::new(atm_cron::SystemJitter),
+        host,
     )
 }
 
@@ -32,6 +35,7 @@ pub(crate) fn compose_runtime_cron(
     dispatcher: Arc<atm_http_runtime::UnhookedRouter>,
     clock: Arc<dyn Clock>,
     jitter: Arc<dyn JitterSource>,
+    host: Option<HostName>,
 ) -> Result<Arc<AtmCron>, AtmError> {
     compose_cron(
         handler,
@@ -41,8 +45,7 @@ pub(crate) fn compose_runtime_cron(
             dispatcher,
             clock,
             jitter,
-            host: crate::daemon_atm_config(&atm_core::atm_temp::ProcessEnvSource)
-                .and_then(|config| config.local_host),
+            host,
         },
     )
 }

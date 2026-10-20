@@ -169,7 +169,7 @@ impl Daemon {
         let runtime = assembly.service_runtime.clone();
         let task_telemetry = assembly.task_telemetry.clone();
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
-        let (handler, recovery_sweep, _, _) = build_replacement_handler(
+        let (handler, recovery_sweep, _, _, _) = build_replacement_handler(
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(observability.clone()),

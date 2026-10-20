@@ -474,8 +474,9 @@ async fn run_replacement_daemon_with_selector(
     let diagnostic_counters = diagnostic_timeline::active_counters();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
     let runtime = assembly.service_runtime.clone();
-    let (handler, recovery_sweep, hook_runner, base_dispatcher) = build_replacement_handler(
+    let (handler, recovery_sweep, cron) = compose_replacement_handler_and_cron(
         assembly,
+        &runtime,
         ReplacementHandlerConfig {
             observability: Arc::clone(&observability),
             selector_factory,
@@ -493,7 +494,6 @@ async fn run_replacement_daemon_with_selector(
             daemon_home: atm_core::home::atm_home()?,
         },
     )?;
-    let cron = cron_composition::compose_system(&handler, &runtime, hook_runner, base_dispatcher)?;
     let config = replacement_runtime_config(
         &scope,
         &owner,
@@ -522,6 +522,31 @@ async fn run_replacement_daemon_with_selector(
         return Err(error);
     }
     run_until_shutdown(running, handler, workers, owner, singleton_guards).await
+}
+
+fn compose_replacement_handler_and_cron(
+    assembly: RuntimeAssembly,
+    runtime: &atm_core::LocalServiceRuntime,
+    config: ReplacementHandlerConfig<
+        impl FnOnce(
+            atm_core::LocalServiceRuntime,
+            Arc<dyn HerdrProcessAdapter>,
+            RuntimeHealth,
+            BareCliRuntime,
+        ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    >,
+) -> Result<
+    (
+        Arc<StorageAndNudgeRouter>,
+        queue_drain::RecoverySweepHandle,
+        Arc<atm_cron::AtmCron>,
+    ),
+    AtmError,
+> {
+    let (handler, recovery_sweep, runner, dispatcher, local_host) =
+        build_replacement_handler(assembly, config)?;
+    let cron = cron_composition::compose_system(&handler, runtime, runner, dispatcher, local_host)?;
+    Ok((handler, recovery_sweep, cron))
 }
 
 /// The daemon's event port: the supplied owner, else the null adapter.
@@ -1319,7 +1344,7 @@ mod replacement_runtime_tests {
             })
             .expect("plaintext bootstrap selects no TLS stream adapter");
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
-        let (handler, _recovery_sweep, _, _) = build_replacement_handler(
+        let (handler, _recovery_sweep, _, _, _) = build_replacement_handler(
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
@@ -1521,7 +1546,7 @@ mod replacement_runtime_tests {
             .expect("plaintext bootstrap selects no TLS stream adapter");
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
         let mut herdr_queue_tick = runtime_health.subscribe_herdr_queue_tick();
-        let (handler, _recovery_sweep, _, _) = build_replacement_handler(
+        let (handler, _recovery_sweep, _, _, _) = build_replacement_handler(
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),

@@ -68,7 +68,7 @@ impl World {
     fn assemble(root: tempfile::TempDir, assembly: RuntimeAssembly) -> Result<Self, AtmError> {
         let runtime = assembly.service_runtime.clone();
         let task_telemetry = assembly.task_telemetry.clone();
-        let (handler, recovery_sweep, runner, dispatcher) = build_replacement_handler(
+        let (handler, recovery_sweep, runner, dispatcher, _) = build_replacement_handler(
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
@@ -357,6 +357,7 @@ async fn filter_and_cron_share_one_runner_and_one_dispatcher() {
         world.dispatcher.clone(),
         Arc::new(ManualClock::new(now())),
         Arc::new(SeqJitter::default()),
+        None,
     )
     .unwrap();
     assert!(Arc::ptr_eq(cron.hook_runner(), filter.runner()));
