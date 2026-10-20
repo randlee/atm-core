@@ -1,4 +1,4 @@
-use std::{future::Future, sync::Arc};
+use std::{future::Future, sync::Arc, time::Duration};
 
 use atm_core::{api::RequestDeadline, error::AtmError};
 use atm_cron::{AtmCron, AtmCronDeps};
@@ -6,6 +6,8 @@ use atm_http_runtime::StorageAndNudgeRouter;
 use tokio::time::Instant;
 
 use crate::{DaemonWorkers, shutdown_probe};
+
+pub(super) const CRON_WORKER_SHUTDOWN_GRACE: Duration = Duration::from_secs(1);
 
 pub(crate) fn compose_runtime_cron(
     handler: &StorageAndNudgeRouter,
@@ -50,9 +52,10 @@ pub(crate) async fn run_shutdown_steps(
     mut workers: DaemonWorkers,
     deadline: Instant,
 ) -> Result<(), AtmError> {
-    shutdown_probe::step("cron_worker", deadline, async {
+    let cron_deadline = deadline.min(Instant::now() + CRON_WORKER_SHUTDOWN_GRACE);
+    shutdown_probe::step("cron_worker", cron_deadline, async {
         if let Some(cron) = workers.cron.take() {
-            cron.shutdown(deadline).await;
+            cron.shutdown(cron_deadline).await;
         }
     })
     .await;

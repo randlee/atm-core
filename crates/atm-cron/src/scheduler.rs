@@ -188,6 +188,7 @@ pub struct CronWorkerHandle {
 }
 
 impl CronWorkerHandle {
+    /// Stops the worker within the supplied daemon shutdown deadline.
     pub async fn shutdown(&self, deadline: tokio::time::Instant) {
         if let Some(sender) = self
             .shutdown

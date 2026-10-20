@@ -8,11 +8,11 @@ use atm_core::{
     LocalServiceRuntime,
     api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline},
     boundary::{
-        CronScheduler, CronStartSpec, DummyHookRunner, HookRegistration, HookRunner, PhaseId,
-        StopCondition,
+        CronScheduler, CronStartSpec, DummyHookRunner, HookOutcome, HookRegistration, HookRunner,
+        PhaseId, StopCondition,
     },
     error::{AtmError, AtmErrorCode},
-    hook::{CronListQuery, CronStartRequest, HookListQuery, HookRegisterRequest},
+    hook::{CronListQuery, CronStartRequest, HookListQuery, HookRegisterRequest, HookReply},
     observability::NullObservability,
     protocol::ResponseEnvelope,
     test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM},
@@ -386,6 +386,97 @@ async fn cron_worker_is_first_shutdown_step() {
             .collect::<Vec<_>>(),
         ["cron_worker", "hook_chains", "listener"]
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn blocked_cron_hook_leaves_budget_for_hook_chains_and_later_shutdown_steps() {
+    let mut world = World::new();
+    let clock = Arc::new(ManualClock::new(now()));
+    let runner = Arc::new(DummyHookRunner::default());
+    runner.replies.lock().unwrap().push_back(Ok(HookOutcome {
+        reply: HookReply::PassThrough,
+        elapsed_ms: 1,
+    }));
+    let (entered, mut entered_rx) = tokio::sync::watch::channel(false);
+    let (_release, release_rx) = tokio::sync::watch::channel(false);
+    let (cancelled, mut cancelled_rx) = tokio::sync::watch::channel(false);
+    *runner.before_reply.lock().unwrap() = Some(Arc::new(move |_| {
+        let entered = entered.clone();
+        let mut release_rx = release_rx.clone();
+        let cancelled = cancelled.clone();
+        Box::pin(async move {
+            struct CancelOnDrop(tokio::sync::watch::Sender<bool>);
+            impl Drop for CancelOnDrop {
+                fn drop(&mut self) {
+                    self.0.send_replace(true);
+                }
+            }
+            let _cancel = CancelOnDrop(cancelled);
+            entered.send_replace(true);
+            let _ = release_rx.wait_for(|released| *released).await;
+        })
+    }));
+    let mut deps = world.deps(clock.clone());
+    deps.runner = runner;
+    let cron = compose_cron(&world.handler, deps).unwrap();
+    let mut spec = world.spec();
+    spec.stop = StopCondition::Until {
+        at: now() + chrono::Duration::hours(1),
+    };
+    cron.start(spec).await.unwrap();
+    start_cron_worker(&cron, &mut world.workers).await.unwrap();
+    clock.wait_parks_above(0).await;
+    clock.advance_settled(chrono::Duration::minutes(1)).await;
+    entered_rx.wait_for(|entered| *entered).await.unwrap();
+
+    let World {
+        handler, workers, ..
+    } = world;
+    let probe = Arc::new(crate::shutdown_probe::Probe::new());
+    let shutdown_probe = probe.clone();
+    let shared_deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let shutdown = tokio::spawn(async move {
+        crate::shutdown_probe::observe(&shutdown_probe, async move {
+            run_shutdown_steps(
+                async {
+                    tokio::time::sleep(Duration::from_secs(3)).await;
+                    Ok(())
+                },
+                &handler,
+                workers,
+                shared_deadline,
+            )
+            .await
+        })
+        .await
+    });
+
+    probe.wait_for_start("cron_worker").await;
+    tokio::time::advance(Duration::from_secs(1)).await;
+    probe.wait_for_start("hook_chains").await;
+    probe.wait_for_start("listener").await;
+    assert!(tokio::time::Instant::now() < shared_deadline);
+    tokio::time::advance(Duration::from_secs(3)).await;
+    shutdown.await.unwrap().unwrap();
+    cancelled_rx.wait_for(|cancelled| *cancelled).await.unwrap();
+
+    let steps = probe.steps();
+    let cron_step = steps
+        .iter()
+        .find(|step| step.step == "cron_worker")
+        .unwrap();
+    let hook_chains = steps
+        .iter()
+        .find(|step| step.step == "hook_chains")
+        .unwrap();
+    let listener = steps.iter().find(|step| step.step == "listener").unwrap();
+    assert!(cron_step.deadline < shared_deadline);
+    assert!(cron_step.returned < shared_deadline);
+    assert_eq!(hook_chains.deadline, shared_deadline);
+    assert_eq!(listener.deadline, shared_deadline);
+    assert!(hook_chains.started < shared_deadline);
+    assert!(listener.started < shared_deadline);
+    assert!(listener.returned < shared_deadline);
 }
 
 #[tokio::test]
