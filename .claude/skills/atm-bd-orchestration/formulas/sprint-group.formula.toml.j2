@@ -11,6 +11,9 @@ required_variables:
   - stack
   - layer
   - difficulty
+  - branch
+  - worktree
+  - pr_target
   - priority
   - edge_option
 ---
@@ -67,6 +70,9 @@ sprint = "{{{ sprint }}}"
 stack = "{{{ stack }}}"
 layer = {{{ layer }}}
 difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
 sprint_bead = "{{{ parent }}}"
 {% if edge_option != "A" %}
 
@@ -82,6 +88,9 @@ labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:dev-sanity"]
 [steps.metadata]
 dev_bead = "{{{ parent }}}.{{{ ref }}}-dev"
 difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
 
 [[steps]]
 id = "qa"
@@ -99,6 +108,9 @@ sprint = "{{{ sprint }}}"
 stack = "{{{ stack }}}"
 round = 1
 difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
 checked_bead = "{{{ parent }}}.{{{ ref }}}-dev"
 sprint_bead = "{{{ parent }}}"
 {% endif %}

@@ -9,5 +9,5 @@
   "findings_count": 1,
   "findings_md": "- crates/example-otlp/src/sync.rs:88 D.4-2 retry policy is `todo!()`",
   "lint_md": "- `make lint`: ok"
-  ,"selection": [{"deliverable": 1, "llm": "undone", "jev": "undone", "selected": "llm", "reason": "", "rerun": null, "checker_defect": false}]
+  ,"selection": [{"deliverable": 1, "llm": "undone", "jev": "undone", "selected": "llm", "reason": "", "rerun": null}]
 }

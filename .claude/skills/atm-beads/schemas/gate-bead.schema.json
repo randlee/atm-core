@@ -1,0 +1,44 @@
+{
+  "$defs": {
+    "Dependency": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "depends_on_id": {
+          "title": "Depends On Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "depends_on_id"
+      ],
+      "title": "Dependency",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "dependencies": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Dependency"
+      },
+      "title": "Dependencies",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "GateBead",
+  "type": "object"
+}

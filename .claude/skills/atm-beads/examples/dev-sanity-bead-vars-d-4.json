@@ -4,5 +4,9 @@
   "dev_bead": "atm-d-4",
   "phase": "d",
   "sprint": "d-4",
-  "stack": "phase-d"
+  "stack": "phase-d",
+  "branch": "fix/d-4-example",
+  "worktree": "../atm-core-worktrees/fix/d-4-example",
+  "pr_target": "integrate/phase-d",
+  "difficulty": "normal"
 }

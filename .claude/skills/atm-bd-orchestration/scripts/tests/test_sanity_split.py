@@ -1,7 +1,12 @@
 """sanity-split renders one assignment per numbered deliverable of a pinned, pushed commit."""
+import contextlib
+import importlib.machinery
+import importlib.util
+import io
 import json
 import os
 from pathlib import Path
+import select
 import shutil
 import signal
 import subprocess
@@ -12,6 +17,7 @@ import unittest
 import unittest.mock
 
 from rendering import render
+from subprocess_helpers import HANG_GUARD_SECONDS
 
 SCRIPTS = Path(__file__).parents[1]
 SCRIPT = SCRIPTS / "sanity-split"
@@ -32,6 +38,9 @@ loader.exec_module(split)
 
 class Recorded(subprocess.Popen):
     def __init__(self, *args, **kwargs):
+        event_fd = int(os.environ.get("SANITY_SPLIT_EVENT_FD", "-1"))
+        if event_fd >= 0:
+            kwargs["pass_fds"] = (event_fd,)
         super().__init__(*args, **kwargs)
         partial = pgid_file.with_name(pgid_file.name + ".tmp")
         partial.write_text(str(self.pid))
@@ -47,18 +56,6 @@ class Recorded(subprocess.Popen):
 split.subprocess.Popen = Recorded
 sys.exit(split.supervise(argv))
 """
-
-
-def wait_for(condition, what, seconds=10, interval=0.05):
-    """Poll `condition` until it returns a truthy value and return that value; fail after a hard deadline."""
-    deadline = time.monotonic() + seconds
-    while True:
-        value = condition()
-        if value:
-            return value
-        if time.monotonic() > deadline:
-            raise AssertionError(f"{what}: not reached within {seconds}s")
-        time.sleep(interval)
 
 
 def alive(pid):
@@ -80,15 +77,45 @@ def kill_group(pgid):
         pass
 
 
-def stop_supervisor(pid):
-    """Test cleanup: SIGTERM a supervisor still running (it stops a lint group the test may never have
-    learned), then SIGKILL its group whatever happened."""
+def wait_process(proc, step):
     try:
-        os.killpg(pid, signal.SIGTERM)
-        wait_for(lambda: not alive(pid), f"supervisor {pid} stopped")
-    except (ProcessLookupError, PermissionError, AssertionError):
-        pass
-    kill_group(pid)
+        return proc.wait(timeout=HANG_GUARD_SECONDS)
+    except subprocess.TimeoutExpired as error:
+        raise AssertionError(f"{step} timed out after {HANG_GUARD_SECONDS}s") from error
+
+
+def read_event(event, step):
+    ready, _, _ = select.select([event], [], [], HANG_GUARD_SECONDS)
+    if not ready:
+        raise AssertionError(f"{step} timed out after {HANG_GUARD_SECONDS}s")
+    return event.read(1)
+
+
+def stop_supervisor(proc):
+    """Stop and reap a supervisor that the test still owns."""
+    if proc.poll() is None:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
+        wait_process(proc, "stop supervisor")
+
+
+class WaitGuardTests(unittest.TestCase):
+    def test_process_timeout_names_step(self):
+        proc = unittest.mock.Mock()
+        proc.wait.side_effect = subprocess.TimeoutExpired("supervisor", HANG_GUARD_SECONDS)
+        with self.assertRaisesRegex(AssertionError, "lint exit .* timed out"):
+            wait_process(proc, "lint exit file")
+        proc.wait.assert_called_once_with(timeout=HANG_GUARD_SECONDS)
+
+    def test_event_timeout_names_step(self):
+        event = unittest.mock.Mock()
+        with unittest.mock.patch.object(select, "select", return_value=([], [], [])) as poll:
+            with self.assertRaisesRegex(AssertionError, "marker lint.pid timed out"):
+                read_event(event, "marker lint.pid")
+        poll.assert_called_once_with([event], [], [], HANG_GUARD_SECONDS)
+        event.read.assert_not_called()
 
 
 DESCRIPTION = """## Goal
@@ -161,26 +188,83 @@ class SanitySplit(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
         self.repo = Repo(self.root)
         self.scratch = self.root / "scratch"
+        self.supervisors = {}
+        self.exit_processes = {}
+        self.event_read = None
+        self.event_write = None
+
+    def marker_event(self):
+        read_fd, write_fd = os.pipe()
+        self.event_read = os.fdopen(read_fd, "rb", buffering=0)
+        self.event_write = write_fd
+        self.addCleanup(self.event_read.close)
+        self.addCleanup(lambda: self.event_write is not None and os.close(self.event_write))
+        return write_fd
+
+    def close_event_writer(self):
+        if self.event_write is not None:
+            os.close(self.event_write)
+            self.event_write = None
 
     def run_split(self, bead_json=None, worktree=None, commit=None, branch="sprint/x", base="develop", *extra,
                   lint=FAKE_LINT):
+        for supervisor in self.supervisors.values():
+            if supervisor.poll() is None:
+                wait_process(supervisor, "previous supervisor before split")
         bead_file = self.root / "bead.json"
         bead_file.write_text(json.dumps(bead_json if bead_json is not None else bead()))
         argv = [str(SCRIPT), "--task", "atm-x-1-sanity", "--bead", "atm-x-1", "--worktree", str(worktree or self.repo.wt),
                 "--branch", branch, "--commit", commit or self.repo.sha, "--base", base, "--lint-command", lint,
                 "--scratch", str(self.scratch), "--bead-json", str(bead_file), *extra]
-        out = subprocess.run(argv, capture_output=True, text=True)
+        driver = self.root / "driver.py"
+        driver.write_text(DRIVER)
+        loader = importlib.machinery.SourceFileLoader("sanity_split_test", str(SCRIPT))
+        split = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+        loader.exec_module(split)
+        original_popen = subprocess.Popen
+        gated = "--lint-timeout-seconds" in extra
+
+        def popen(*args, **kwargs):
+            command = args[0]
+            if len(command) >= 3 and command[1:3] == [str(SCRIPT.resolve()), "lint-supervisor"]:
+                pgid_file = self.root / f"lint-{len(self.supervisors)}.pgid"
+                command = [sys.executable, str(driver), str(SCRIPT), str(pgid_file),
+                           "--gated" if gated else "--clock", *command[3:]]
+                kwargs["stdin"] = subprocess.PIPE if gated else subprocess.DEVNULL
+                if self.event_write is not None:
+                    kwargs["pass_fds"] = (self.event_write,)
+                proc = original_popen(command, **kwargs)
+                self.supervisors[proc.pid] = proc
+                self.addCleanup(stop_supervisor, proc)
+                self.addCleanup(lambda: pgid_file.exists() and kill_group(int(pgid_file.read_text())))
+                return proc
+            return original_popen(*args, **kwargs)
+
+        stdout, stderr = io.StringIO(), io.StringIO()
+        event_env = {"SANITY_SPLIT_EVENT_FD": str(self.event_write)} if self.event_write is not None else {}
+        with (unittest.mock.patch.object(subprocess, "Popen", side_effect=popen),
+              unittest.mock.patch.object(sys, "argv", argv),
+              unittest.mock.patch.dict(os.environ, event_env),
+              contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr)):
+            returncode = split.main()
+        self.close_event_writer()
+        out = subprocess.CompletedProcess(argv, returncode, stdout.getvalue(), stderr.getvalue())
         try:
-            supervisor = json.loads(out.stdout)["lint"]["pid"]
+            lint_info = json.loads(out.stdout)["lint"]
+            supervisor = lint_info["pid"]
         except (ValueError, KeyError, TypeError):
             supervisor = None
         if supervisor:
-            self.addCleanup(stop_supervisor, supervisor)    # the supervisor leads its own session
+            self.exit_processes[lint_info["exit_file"]] = self.supervisors[supervisor]
+            if gated:
+                self.supervisors[supervisor].stdin.write(b"t")
+                self.supervisors[supervisor].stdin.close()
         return out
 
     def wait_lint(self, exit_file):
         exit_file = Path(exit_file)
-        return wait_for(lambda: exit_file.exists() and exit_file.read_text().strip(), f"exit file {exit_file.name}")
+        wait_process(self.exit_processes[str(exit_file)], f"lint exit {exit_file}")
+        return exit_file.read_text().strip()
 
     def merge(self, manifest, results):
         manifest_file = self.root / "manifest.json"
@@ -501,14 +585,25 @@ class SanitySplit(unittest.TestCase):
                 self.assertEqual(out.returncode, 0, out.stderr)
                 self.assertEqual(self.wait_lint(json.loads(out.stdout)["lint"]["exit_file"]), expected)
 
+    def test_marker_event_reports_child_exit_before_readiness(self):
+        self.marker_event()
+        out = self.run_split(lint="exit 3")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(read_event(self.event_read, "child exit before readiness"), b"")
+        self.assertEqual(self.wait_lint(json.loads(out.stdout)["lint"]["exit_file"]), "3")
+
     def owned_group(self, command):
         """Prefix the lint command so its shell, the group leader, publishes its process group id atomically."""
         marker = self.root / "lint.pgid"
-        return f"echo $$ > {marker}.tmp && mv {marker}.tmp {marker} && {command}", marker
+        event_fd = self.marker_event()
+        notify = f"{sys.executable} -c 'import os; os.write({event_fd}, b\"R\")'"
+        return f"echo $$ > {marker}.tmp && mv {marker}.tmp {marker} && {notify} && {command}", marker
 
     def read_marker(self, marker):
         """The first number in an atomically written marker; its last number is the lint process group id."""
-        numbers = wait_for(lambda: marker.exists() and marker.read_text().split(), f"marker {marker.name}")
+        self.assertEqual(read_event(self.event_read, f"marker {marker.name}"), b"R",
+                         f"marker {marker.name} was not published")
+        numbers = marker.read_text().split()
         self.addCleanup(kill_group, int(numbers[-1]))
         return int(numbers[0])
 
@@ -522,23 +617,30 @@ class SanitySplit(unittest.TestCase):
         driver, pgid_file = self.root / "driver.py", self.root / "lint.pgid"
         exit_file = self.root / "lint.exit"
         driver.write_text(DRIVER)
+        env = os.environ.copy()
+        pass_fds = ()
+        if self.event_write is not None:
+            env["SANITY_SPLIT_EVENT_FD"] = str(self.event_write)
+            pass_fds = (self.event_write,)
         proc = subprocess.Popen(
             [sys.executable, str(driver), str(SCRIPT), str(pgid_file), "--gated" if gated else "--clock",
              "--worktree", str(self.repo.wt), "--command", command, "--log", str(self.root / "lint.log"),
              "--exit-file", str(exit_file), "--timeout-seconds", str(timeout_seconds)],
-            stdin=subprocess.PIPE if gated else subprocess.DEVNULL, start_new_session=True)
-        self.addCleanup(proc.wait)
+            stdin=subprocess.PIPE if gated else subprocess.DEVNULL, start_new_session=True,
+            env=env, pass_fds=pass_fds)
+        self.close_event_writer()
+        self.addCleanup(wait_process, proc, "reap supervisor")
         self.addCleanup(lambda: proc.stdin and proc.stdin.close())
         self.addCleanup(kill_group, proc.pid)
         self.addCleanup(lambda: pgid_file.exists() and kill_group(int(pgid_file.read_text())))
         return proc, exit_file, pgid_file
 
     def finished(self, proc):
-        return wait_for(lambda: proc.poll() is not None, f"supervisor {proc.pid} exit") and proc.returncode
+        return wait_process(proc, "supervisor finish")
 
     def test_lint_timeout_reaches_the_merge_as_lint_unavailable(self):
         out = self.run_split(None, None, None, "sprint/x", "develop", "--lint-timeout-seconds", "1",
-                             lint="exec sleep 3017")
+                             lint=f"exec {sys.executable} -c 'import signal; signal.pause()'")
         self.assertEqual(out.returncode, 0, out.stderr)
         manifest = json.loads(out.stdout)
         self.assertEqual(manifest["lint"]["timeout_seconds"], 1)
@@ -549,14 +651,16 @@ class SanitySplit(unittest.TestCase):
         self.assertEqual(json.loads(merged.stdout)["verdict"], "CANNOT_RUN")
 
     def test_lint_supervisor_times_out_and_kills_the_command(self):
-        """Real clock: the group id is recorded at Popen, so it is known even if the command never started."""
-        proc, exit_file, pgid_file = self.supervise("exec sleep 3017", 1)
+        """The gated timeout fires after Popen records the lint process group."""
+        proc, exit_file, pgid_file = self.supervise(f"exec {sys.executable} -c 'import signal; signal.pause()'", 1, gated=True)
+        proc.stdin.write(b"t")
+        proc.stdin.close()
         self.assertEqual(self.finished(proc), 0)
         self.assertEqual(exit_file.read_text().strip(), "timeout")
         self.assert_group_gone(int(pgid_file.read_text()), "the lint command survived its timeout")
 
     def test_lint_supervisor_is_stopped_with_its_process_group(self):
-        lint, group = self.owned_group("exec sleep 3018")
+        lint, group = self.owned_group(f"exec {sys.executable} -c 'import signal; signal.pause()'")
         out = self.run_split(lint=lint)
         self.assertEqual(out.returncode, 0, out.stderr)
         manifest = json.loads(out.stdout)
@@ -568,11 +672,13 @@ class SanitySplit(unittest.TestCase):
     def test_lint_supervisor_cancellation_kills_a_term_resistant_command(self):
         marker = self.root / "resistant.pid"
         script = self.root / "resistant.py"
-        script.write_text("import os, pathlib, signal, time\n"
+        event_fd = self.marker_event()
+        script.write_text("import os, pathlib, signal\n"
                           "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
                           f"pathlib.Path({str(marker)!r} + '.tmp').write_text(str(os.getpid()) + ' ' + str(os.getpgid(0)))\n"
                           f"os.replace({str(marker)!r} + '.tmp', {str(marker)!r})\n"
-                          "time.sleep(3019)\n")
+                          f"os.write({event_fd}, b'R')\n"
+                          "signal.pause()\n")
         out = self.run_split(lint=f"{sys.executable} {script}")
         self.assertEqual(out.returncode, 0, out.stderr)
         manifest = json.loads(out.stdout)
@@ -588,15 +694,17 @@ class SanitySplit(unittest.TestCase):
         """A lint command whose shell backgrounds a SIGTERM-ignoring python and waits on it."""
         marker = self.root / "descendant.pid"
         helper = self.root / "descendant.py"
-        helper.write_text("import os, pathlib, signal, time\n"
+        event_fd = self.marker_event()
+        helper.write_text("import os, pathlib, signal\n"
                           "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
                           f"pathlib.Path({str(marker)!r} + '.tmp').write_text(str(os.getpid()) + ' ' + str(os.getpgid(0)))\n"
                           f"os.replace({str(marker)!r} + '.tmp', {str(marker)!r})\n"
-                          "time.sleep(3020)\n")
+                          f"os.write({event_fd}, b'R')\n"
+                          "signal.pause()\n")
         return f"{sys.executable} {helper} & wait", marker
 
     def wait_gone(self, pid):
-        wait_for(lambda: not alive(pid), f"process {pid} gone")
+        wait_process(self.supervisors[pid], "supervisor exit")
 
     def test_lint_supervisor_cancellation_kills_a_term_resistant_descendant(self):
         lint, marker = self.resistant_descendant()
