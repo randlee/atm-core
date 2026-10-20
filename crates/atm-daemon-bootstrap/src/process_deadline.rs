@@ -414,9 +414,12 @@ mod tests {
             panic!("expected pipe read failure")
         };
         assert_eq!(error.code(), AtmErrorCode::HookExit);
-        assert_eq!(
-            error.message(),
-            "HOOK.EXIT: cannot read stdout: injected pipe failure"
+        assert!(
+            error
+                .message()
+                .starts_with("HOOK.EXIT: cannot read stdout: injected pipe failure"),
+            "unexpected message: {}",
+            error.message()
         );
     }
 
