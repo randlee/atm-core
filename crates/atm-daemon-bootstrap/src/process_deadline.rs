@@ -83,10 +83,6 @@ impl Drop for GroupKillGuard {
     }
 }
 
-fn should_kill_group(result_is_err: bool, leader_reaped: bool) -> bool {
-    result_is_err && !leader_reaped
-}
-
 fn failed(spec: &SpawnSpec, error: io::Error) -> SpawnFailure {
     SpawnFailure::Failed(AtmError::hook_exit(HookExitCause::Spawn {
         path: spec.program.clone(),
@@ -170,11 +166,12 @@ pub(crate) async fn spawn_until(
         _ = cancel => Err(SpawnFailure::TimedOut { after_ms: 0 }),
         result = collect(&mut child, stdin, &spec) => result,
     };
-    let leader_reaped = matches!(child.try_wait(), Ok(Some(_)));
-    if should_kill_group(result.is_err(), leader_reaped) {
+    if result.is_err() {
         guard.kill();
-        let _ = child.kill().await;
-        child.wait().await.map_err(|error| failed(&spec, error))?;
+        if !matches!(child.try_wait(), Ok(Some(_))) {
+            let _ = child.kill().await;
+            child.wait().await.map_err(|error| failed(&spec, error))?;
+        }
     }
     guard.disarm();
     result.map(|(status, stdout, stderr)| SpawnedOutput {
@@ -427,11 +424,36 @@ mod tests {
         );
     }
 
-    #[test]
-    fn cleanup_skips_group_kill_after_leader_is_reaped() {
-        assert!(!should_kill_group(true, true));
-        assert!(should_kill_group(true, false));
-        assert!(!should_kill_group(false, false));
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cancel_kills_descendant_after_leader_exits() {
+        let root = tempfile::tempdir().unwrap();
+        let (path, ready, reader) = pipe(&root);
+        let source = "import os,sys,threading\nwriter=open(sys.argv[1],'wb',buffering=0)\nif os.fork()==0:\n writer.write(b'r')\n threading.Event().wait()\nos._exit(0)\n";
+        let spawn = spec(&root, source, vec![path.into_os_string()]);
+        let (cancel, cancelled) = oneshot::channel();
+        let handle = tokio::spawn(async move {
+            spawn_until(spawn, b"{}", async {
+                cancelled.await.unwrap();
+            })
+            .await
+        });
+        tokio::time::timeout(Duration::from_secs(10), ready)
+            .await
+            .expect("FIFO reader must observe descendant readiness")
+            .unwrap();
+        cancel.send(()).unwrap();
+        assert!(matches!(
+            handle.await.unwrap(),
+            Err(SpawnFailure::TimedOut { .. })
+        ));
+        assert!(
+            tokio::time::timeout(Duration::from_secs(10), reader)
+                .await
+                .expect("FIFO closes when the descendant process group is killed")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[tokio::test]
