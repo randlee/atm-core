@@ -2417,46 +2417,78 @@ mod tests {
         .expect("runtime shuts down after connection-admission test");
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn loopback_shared_client_uses_the_active_record_and_canonical_handler() {
-        let temporary_directory = tempfile::tempdir().expect("temporary directory");
-        let record_path = temporary_directory.path().join("local-http.json");
-        let instance_id = Ulid::new();
-        write_owner_record(&record_path, instance_id);
-        let configured = HttpRuntimeBuilder::new(
-            loopback_runtime_config(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
-                record_path.clone(),
-                instance_id,
-                None,
-                1024,
-            ),
-            Arc::new(CanonicalUdsRouter),
-        )
-        .build()
-        .expect("valid loopback runtime configuration");
-        let running = configured.start().await.expect("loopback runtime starts");
+        let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let cancelled_for_watchdog = Arc::clone(&cancelled);
+        let (expired, watchdog) = tokio::sync::oneshot::channel();
+        let watchdog_task = tokio::task::spawn_blocking(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(30);
+            while !cancelled_for_watchdog.load(Ordering::Acquire)
+                && std::time::Instant::now() < deadline
+            {
+                std::thread::park_timeout(Duration::from_millis(10));
+            }
+            if !cancelled_for_watchdog.load(Ordering::Acquire) {
+                let _ = expired.send(());
+            }
+        });
+        let test = async {
+            let (release_clock, clock_held) = tokio::sync::oneshot::channel::<()>();
+            let clock_hold = tokio::task::spawn_blocking(move || {
+                let _ = clock_held.blocking_recv();
+            });
+            let temporary_directory = tempfile::tempdir().expect("temporary directory");
+            let record_path = temporary_directory.path().join("local-http.json");
+            let instance_id = Ulid::new();
+            write_owner_record(&record_path, instance_id);
+            let configured = HttpRuntimeBuilder::new(
+                loopback_runtime_config(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    record_path.clone(),
+                    instance_id,
+                    None,
+                    1024,
+                ),
+                Arc::new(CanonicalUdsRouter),
+            )
+            .build()
+            .expect("valid loopback runtime configuration");
+            let running = configured.start().await.expect("loopback runtime starts");
 
-        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
-            .expect("shared loopback client");
-        let response = client
-            .execute(ApiRequest::new(write_request()))
-            .await
-            .expect("canonical error remains a typed API response");
-        assert!(matches!(
-            response.into_inner(),
-            ResponseEnvelope::Error(error) if error.message().contains("canonical UDS test handler reached")
-        ));
+            let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+                .expect("shared loopback client");
+            let response = client
+                .execute(ApiRequest::new(write_request()))
+                .await
+                .expect("canonical error remains a typed API response");
+            assert!(matches!(
+                response.into_inner(),
+                ResponseEnvelope::Error(error) if error.message().contains("canonical UDS test handler reached")
+            ));
 
-        running
-            .begin_shutdown()
-            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
-            .await
-            .expect("loopback runtime drains");
-        assert!(
-            !record_path.exists(),
-            "the runtime removes only its own endpoint record after drain"
-        );
+            running
+                .begin_shutdown()
+                .finish(tokio::time::Instant::now() + Duration::from_secs(1))
+                .await
+                .expect("loopback runtime drains");
+            assert!(
+                !record_path.exists(),
+                "the runtime removes only its own endpoint record after drain"
+            );
+            drop(release_clock);
+            clock_hold.await.expect("clock hold releases");
+        };
+        tokio::select! {
+            () = test => {
+                cancelled.store(true, Ordering::Release);
+                watchdog_task.await.expect("watchdog task joins");
+            }
+            result = watchdog => {
+                result.expect("watchdog sender remains alive until it expires");
+                panic!("loopback shared-client test hung for 30 seconds");
+            }
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
