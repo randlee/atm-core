@@ -1069,7 +1069,7 @@ async fn last_finite_occurrence_ends_the_schedule() {
     let worker = fixture.worker().await;
 
     fixture.step(86_400).await;
-    entered.wait_for(|count| *count == 1).await.unwrap();
+    wait_for_entered(&mut entered, 1).await;
     let parks = fixture.clock.parks();
     release.send(true).unwrap();
     fixture.clock.wait_parks_above(parks).await;
