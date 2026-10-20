@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use atm_core::api::AuthenticatedIngress;
-use atm_core::boundary::{DispatchSpec, HookActionDispatcher, sealed};
+use atm_core::boundary::{DispatchSpec, HookActionDispatcher, HookName, sealed};
 use atm_core::error::AtmError;
 use atm_core::hook::HookAction;
 use atm_core::protocol::next_request_id;
@@ -34,7 +34,7 @@ impl HookActionDispatcher for UnhookedRouter {
         &self,
         spec: DispatchSpec,
         actions: Vec<HookAction>,
-    ) -> Result<Vec<(String, atm_core::api::ApiResponse)>, AtmError> {
+    ) -> Result<Vec<(Option<HookName>, atm_core::api::ApiResponse)>, AtmError> {
         let deadline = spec
             .deadline
             .ok_or_else(|| AtmError::hook_malformed("hook action dispatch has no deadline"))?;
@@ -50,14 +50,19 @@ impl HookActionDispatcher for UnhookedRouter {
                         action.command
                     ))
                 })?;
-            requests.push((action.command.clone(), identity.clone(), request));
+            requests.push((
+                HookName::parse_task_hook(&action.command).ok(),
+                action.command.clone(),
+                identity.clone(),
+                request,
+            ));
         }
         if spec.dry_run {
             return Ok(Vec::new());
         }
         let total = requests.len();
         let mut done = Vec::with_capacity(total);
-        for (index, (command, run_as, request)) in requests.into_iter().enumerate() {
+        for (index, (hook_name, command, run_as, request)) in requests.into_iter().enumerate() {
             let started = Instant::now();
             let result = self
                 .0
@@ -75,7 +80,7 @@ impl HookActionDispatcher for UnhookedRouter {
                     index + 1
                 ))
             })?;
-            done.push((command, response));
+            done.push((hook_name, response));
         }
         Ok(done)
     }
@@ -108,7 +113,8 @@ mod tests {
 
     use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
-        DispatchSpec, HookActionDispatcher, TaskAssign, TaskCallCtx, TaskClose, TaskCommands,
+        DispatchSpec, HookActionDispatcher, HookName, TaskAssign, TaskCallCtx, TaskClose,
+        TaskCommands,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::hook::{HookAction, HookActionsResponse, HookReply};
@@ -213,6 +219,7 @@ mod tests {
             .await
             .expect("send action");
         assert_eq!(done.len(), 1);
+        assert_eq!(done[0].0, None);
         assert!(matches!(
             done[0].1.clone().into_inner(),
             ResponseEnvelope::Send(_)
@@ -245,8 +252,15 @@ mod tests {
             .dispatch_actions(spec(deadline(), false), actions)
             .await
             .expect("assign actions");
-        let commands: Vec<&str> = done.iter().map(|(command, _)| command.as_str()).collect();
-        assert_eq!(commands, vec!["task.assign", "task.assign"]);
+        let commands: Vec<Option<HookName>> =
+            done.iter().map(|(command, _)| command.clone()).collect();
+        assert_eq!(
+            commands,
+            vec![
+                Some(HookName::parse("task.assign").expect("task hook")),
+                Some(HookName::parse("task.assign").expect("task hook")),
+            ]
+        );
         for task in ["T-ORDER-A", "T-ORDER-B"] {
             let row = fixture
                 .task_store

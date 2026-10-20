@@ -22,7 +22,7 @@ pub trait HookActionDispatcher: sealed::Sealed + Send + Sync {
         &self,
         spec: DispatchSpec,
         actions: Vec<HookAction>,
-    ) -> Result<Vec<(String, ApiResponse)>, AtmError>;
+    ) -> Result<Vec<(Option<HookName>, ApiResponse)>, AtmError>;
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -50,7 +50,7 @@ impl HookActionDispatcher for RecordingHookActionDispatcher {
         &self,
         spec: DispatchSpec,
         actions: Vec<HookAction>,
-    ) -> Result<Vec<(String, ApiResponse)>, AtmError> {
+    ) -> Result<Vec<(Option<HookName>, ApiResponse)>, AtmError> {
         self.calls
             .lock()
             .expect("dispatch calls mutex poisoned")
@@ -82,7 +82,7 @@ impl HookActionDispatcher for RecordingHookActionDispatcher {
                 )));
             }
             responses.push((
-                action.command,
+                HookName::parse_task_hook(&action.command).ok(),
                 ApiResponse::new(crate::protocol::ResponseEnvelope::RuntimeViewReloaded),
             ));
         }
@@ -151,7 +151,8 @@ mod tests {
         let results =
             ready(dispatcher.dispatch_actions(expected_spec.clone(), actions.clone())).unwrap();
         assert_eq!(results.len(), 2);
-        assert!(results.iter().all(|(name, response)| name == "task.move"
+        let task_move = Some(HookName::parse("task.move").unwrap());
+        assert!(results.iter().all(|(name, response)| name == &task_move
             && matches!(
                 response.clone().into_inner(),
                 crate::protocol::ResponseEnvelope::RuntimeViewReloaded

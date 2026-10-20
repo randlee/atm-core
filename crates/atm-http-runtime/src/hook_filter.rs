@@ -319,7 +319,7 @@ async fn dispatch_handled<D: HookActionDispatcher>(
     let last = done
         .into_iter()
         .rev()
-        .find(|(command, _)| command.as_str() == run.hook.as_str())
+        .find(|(command, _)| command.as_ref() == Some(&run.hook))
         .map(|(_, response)| response);
     Ok(Decision::Done(Box::new(if run.dry_run {
         hook_actions(0)
