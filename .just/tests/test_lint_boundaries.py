@@ -52,6 +52,16 @@ class DependencyImportPatternsTests(unittest.TestCase):
             with self.subTest(source=source):
                 self.assertTrue(any(pattern.search(source) for pattern in patterns))
 
+    def test_qualified_forbidden_crate_paths_remain_flagged(self) -> None:
+        cases = (
+            ("rusqlite", "some_crate::rusqlite::Connection"),
+            ("sc-observability", "x::sc_observability::Y"),
+        )
+        for dependency, source in cases:
+            with self.subTest(dependency=dependency, source=source):
+                patterns = dependency_import_patterns(dependency)
+                self.assertTrue(any(pattern.search(source) for pattern in patterns))
+
 
 ROOT_MANIFEST = """\
 [workspace]
