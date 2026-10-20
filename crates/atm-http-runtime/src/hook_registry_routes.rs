@@ -255,8 +255,11 @@ impl StorageAndNudgeRouter {
 
 #[cfg(test)]
 mod tests {
+    use std::future::Future;
+    use std::pin::Pin;
     use std::sync::Arc;
     use std::sync::atomic::Ordering;
+    use std::task::{Context, Poll, Wake, Waker};
     use std::time::Duration;
 
     use atm_core::api::{AuthenticatedIngress, RequestDeadline};
@@ -279,6 +282,20 @@ mod tests {
     use crate::storage_and_nudge_router::tests::{Fixture, fixture};
     use crate::task_commands::NormalTaskCommands;
 
+    struct NoopWake;
+
+    impl Wake for NoopWake {
+        fn wake(self: Arc<Self>) {}
+    }
+
+    fn assert_pending_once<F: Future>(future: Pin<&mut F>) {
+        let waker = Waker::from(Arc::new(NoopWake));
+        let mut context = Context::from_waker(&waker);
+        assert!(
+            matches!(future.poll(&mut context), Poll::Pending),
+            "operation should be queued behind the in-flight bridge job"
+        );
+    }
     /// A router with an in-memory hook store, its snapshot, and a recording cron scheduler.
     struct Routes {
         _fixture: Fixture,
@@ -444,23 +461,16 @@ mod tests {
                 .await
                 .expect("doctor reached the store");
         }
-        let write = {
-            let router = routes.router.clone();
-            tokio::spawn(async move {
-                router
-                    .hook_register(
-                        register_request("sender", "task.assign", "bk"),
-                        AuthenticatedIngress::Local,
-                        deadline(),
-                    )
-                    .await
-                    .map(|_| ())
-            })
-        };
+        let mut write = Box::pin(routes.router.hook_register(
+            register_request("sender", "task.assign", "bk"),
+            AuthenticatedIngress::Local,
+            deadline(),
+        ));
+        assert_pending_once(write.as_mut());
         pause.release();
 
         let entries = doctor.await.expect("doctor task");
-        write.await.expect("write task").expect("write");
+        write.await.expect("write");
         assert!(
             entries.is_empty(),
             "the doctor read preceded the write, so it saw no rows"
@@ -770,30 +780,23 @@ mod tests {
                 .await
                 .expect("register reached the store");
         }
-        let disable_task = {
-            let router = routes.router.clone();
-            tokio::spawn(async move {
-                router
-                    .hook_disable(
-                        HookDisableRequest {
-                            caller_identity: agent("sender"),
-                            caller_team: team(),
-                            phase: phase("bj"),
-                            hook: None,
-                        },
-                        AuthenticatedIngress::Local,
-                        deadline(),
-                    )
-                    .await
-                    .map(|_| ())
-            })
-        };
+        let mut disable = Box::pin(routes.router.hook_disable(
+            HookDisableRequest {
+                caller_identity: agent("sender"),
+                caller_team: team(),
+                phase: phase("bj"),
+                hook: None,
+            },
+            AuthenticatedIngress::Local,
+            deadline(),
+        ));
+        assert_pending_once(disable.as_mut());
         pause.release();
         register_task
             .await
             .expect("register task")
             .expect("register");
-        disable_task.await.expect("disable task").expect("disable");
+        disable.await.expect("disable");
 
         let active: Vec<String> = snapshot
             .current(
