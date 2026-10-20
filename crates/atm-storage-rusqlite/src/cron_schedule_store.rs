@@ -16,7 +16,7 @@ use atm_storage::{
     StopCondition,
 };
 use rusqlite::types::Value;
-use rusqlite::{Connection, OptionalExtension, Row, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Row, Transaction, params, params_from_iter};
 
 use crate::shared_db::SharedDb;
 use crate::store_support::{
@@ -39,6 +39,37 @@ const TABLE: &str = "cron_schedule";
 const SELECT_COLUMNS: &str = "id, generation, team, phase, name, cron_expr, module_path, cwd,
     args, timeout_ms, jitter_s, custom, active, until_at, stop_hook, created_by, created_at,
     last_run_at, last_outcome, ended_at";
+
+/// The schedule fields written by both INSERT and restart. Keep their SQL
+/// order and value order in one place so adding a stored field cannot make the
+/// two statements drift apart.
+type ScheduleColumnValue = fn(&ScheduleColumns) -> Value;
+
+const SCHEDULE_COLUMNS: &[(&str, ScheduleColumnValue)] = &[
+    ("team", |columns| text(&columns.team)),
+    ("phase", |columns| text(&columns.phase)),
+    ("name", |columns| text(&columns.name)),
+    ("cron_expr", |columns| text(&columns.cron_expr)),
+    ("module_path", |columns| text(&columns.module_path)),
+    ("cwd", |columns| text(&columns.cwd)),
+    ("args", |columns| text(&columns.args)),
+    ("timeout_ms", |columns| Value::Integer(columns.timeout_ms)),
+    ("jitter_s", |columns| Value::Integer(columns.jitter_s)),
+    ("custom", |columns| text(&columns.custom)),
+    ("until_at", |columns| {
+        columns.until_at.as_deref().map_or(Value::Null, text)
+    }),
+    ("stop_hook", |columns| Value::Integer(columns.stop_hook)),
+    ("created_by", |columns| text(&columns.created_by)),
+    ("created_at", |columns| text(&columns.created_at)),
+];
+
+fn numbered_placeholders(first: usize, count: usize) -> String {
+    (first..first + count)
+        .map(|index| format!("?{index}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 /// One `cron_schedule` row as stored, before the typed fields are parsed.
 struct RawCron {
@@ -210,33 +241,28 @@ impl ScheduleColumns {
         })
     }
 
+    fn values(&self) -> Vec<Value> {
+        SCHEDULE_COLUMNS
+            .iter()
+            .map(|(_, value)| value(self))
+            .collect()
+    }
+
     /// Inserts a new row at generation 1 and returns its id.
     fn insert(&self, transaction: &Transaction<'_>, db: &SharedDb) -> Result<i64, AtmError> {
+        let columns = SCHEDULE_COLUMNS
+            .iter()
+            .map(|(column, _)| *column)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let placeholders = numbered_placeholders(1, SCHEDULE_COLUMNS.len());
+        let sql = format!(
+            "INSERT INTO cron_schedule (generation, {columns}, active)
+             VALUES (1, {placeholders}, 1);"
+        );
+        let values = self.values();
         transaction
-            .execute(
-                "INSERT INTO cron_schedule
-                    (generation, team, phase, name, cron_expr, module_path, cwd,
-                     args, timeout_ms, jitter_s, custom, active, until_at,
-                     stop_hook, created_by, created_at)
-                 VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, ?11,
-                     ?12, ?13, ?14);",
-                params![
-                    self.team,
-                    self.phase,
-                    self.name,
-                    self.cron_expr,
-                    self.module_path,
-                    self.cwd,
-                    self.args,
-                    self.timeout_ms,
-                    self.jitter_s,
-                    self.custom,
-                    self.until_at,
-                    self.stop_hook,
-                    self.created_by,
-                    self.created_at
-                ],
-            )
+            .execute(&sql, params_from_iter(values.iter()))
             .map_err(|error| write_error(db, TABLE, error))?;
         Ok(transaction.last_insert_rowid())
     }
@@ -248,31 +274,25 @@ impl ScheduleColumns {
         db: &SharedDb,
         id: i64,
     ) -> Result<(), AtmError> {
+        let assignments = SCHEDULE_COLUMNS
+            .iter()
+            .enumerate()
+            .map(|(index, (column, _))| format!("{column} = ?{}", index + 1))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let id_placeholder = SCHEDULE_COLUMNS.len() + 1;
+        let sql = format!(
+            "UPDATE cron_schedule SET
+                generation = generation + 1,
+                {assignments},
+                active = 1,
+                last_run_at = NULL, last_outcome = NULL, ended_at = NULL
+             WHERE id = ?{id_placeholder};"
+        );
+        let mut values = self.values();
+        values.push(Value::Integer(id));
         transaction
-            .execute(
-                "UPDATE cron_schedule SET
-                    generation = generation + 1,
-                    cron_expr = ?1, module_path = ?2, cwd = ?3, args = ?4,
-                    timeout_ms = ?5, jitter_s = ?6, custom = ?7,
-                    active = 1, until_at = ?8, stop_hook = ?9,
-                    created_by = ?10, created_at = ?11,
-                    last_run_at = NULL, last_outcome = NULL, ended_at = NULL
-                 WHERE id = ?12;",
-                params![
-                    self.cron_expr,
-                    self.module_path,
-                    self.cwd,
-                    self.args,
-                    self.timeout_ms,
-                    self.jitter_s,
-                    self.custom,
-                    self.until_at,
-                    self.stop_hook,
-                    self.created_by,
-                    self.created_at,
-                    id
-                ],
-            )
+            .execute(&sql, params_from_iter(values.iter()))
             .map_err(|error| write_error(db, TABLE, error))?;
         Ok(())
     }
