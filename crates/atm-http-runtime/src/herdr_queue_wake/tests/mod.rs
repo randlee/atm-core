@@ -2070,22 +2070,19 @@ async fn ac13_herdr_wake_pending_ephemeral_state_tracks_the_in_flight_claim() {
     );
 
     let prompt_gate = fake.block_next_prompt();
+    let prompt_started = pump.install_prompt_started_test_gate();
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(30), async {
-        loop {
-            if runtime
-                .roster_ephemeral_state(key.team(), key.agent())
-                .expect("member present in RAM roster")
-                .herdr_wake_pending
-            {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("wake-pending ephemeral state must be set while a claim is in flight");
+    tokio::time::timeout(GATE_WAIT_LIMIT, prompt_started.notified())
+        .await
+        .expect("prompt-started gate never fired");
+    assert!(
+        runtime
+            .roster_ephemeral_state(key.team(), key.agent())
+            .expect("member present in RAM roster")
+            .herdr_wake_pending,
+        "wake-pending ephemeral state must be set while a claim is in flight"
+    );
 
     drop(prompt_gate);
     shutdown_tx.send(()).expect("shutdown notification");
