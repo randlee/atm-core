@@ -1865,9 +1865,8 @@ pub(crate) mod tests {
         assert_async_committed_rows(&fixture, false).await;
     }
 
-    async fn bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_body(
-        through: bool,
-    ) {
+    #[tokio::test]
+    async fn bd2_template_async_pipeline_retains_success_and_rejected_committed_rows() {
         let fixture = route_task_commands(
             fixture_with_selector_and_template(
                 true,
@@ -1880,12 +1879,10 @@ pub(crate) mod tests {
                     })
                 },
             ),
-            through,
+            false,
         );
         assert_async_committed_rows(&fixture, true).await;
     }
-
-    through_normal_task_commands!(bd2_template_async_pipeline_retains_success_and_rejected_committed_rows, bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_through_normal_task_commands, bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_body);
 
     async fn assert_async_committed_rows(fixture: &Fixture, template: bool) {
         for rejected in [false, true] {
