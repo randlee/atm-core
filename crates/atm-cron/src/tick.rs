@@ -226,6 +226,8 @@ pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunO
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "test-utils")]
+    use atm_core::test_support::TEST_SENDER;
 
     #[test]
     fn stop_due_is_the_one_until_rule() {
@@ -286,7 +288,7 @@ mod tests {
                     timeout_ms: 1000,
                     custom: Default::default(),
                     stop: StopCondition::Hook,
-                    created_by: "solar".parse().unwrap(),
+                    created_by: TEST_SENDER.parse().unwrap(),
                 })
                 .await
                 .unwrap();

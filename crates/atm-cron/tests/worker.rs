@@ -10,6 +10,7 @@ use atm_core::{
     },
     error::AtmError,
     hook::{HookReply, StopReply},
+    test_support::TEST_SENDER,
 };
 use atm_cron::{AtmCron, AtmCronDeps, Clock, CronWorkerHandle, ManualClock, SeqJitter};
 use atm_runtime_test_support::{
@@ -112,7 +113,7 @@ impl Fixture {
             stop: StopCondition::Until {
                 at: self.clock.now() + chrono::Duration::days(1),
             },
-            created_by: "solar".parse().unwrap(),
+            created_by: TEST_SENDER.parse().unwrap(),
         }
     }
 
@@ -530,7 +531,7 @@ async fn stop_hook_false_runs_the_tick() {
     assert_eq!(request.hook.as_str(), "cron.stop");
     assert_eq!(
         request.request,
-        serde_json::json!({"args":spec.args,"created_by":"solar"})
+        serde_json::json!({"args":spec.args,"created_by":TEST_SENDER})
     );
     assert_eq!(request.caller.identity, spec.created_by);
     assert_eq!(calls[0].0.timeout_ms, 20000);
@@ -563,7 +564,7 @@ async fn tick_request_has_the_seven_keys_and_args_in_request_only() {
     assert_eq!(request.custom, spec.custom);
     assert_eq!(
         request.request,
-        serde_json::json!({"args": spec.args, "created_by": "solar"})
+        serde_json::json!({"args": spec.args, "created_by": TEST_SENDER})
     );
     assert_eq!(request.caller.identity, spec.created_by);
     assert_eq!(request.caller.team, spec.team);
@@ -1090,7 +1091,7 @@ async fn three_actions_dispatch_once_in_order_as_created_by() {
     let calls = fixture.dispatcher.calls.lock().unwrap();
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].actions, expected);
-    assert_eq!(calls[0].spec.default_as.as_str(), "solar");
+    assert_eq!(calls[0].spec.default_as.as_str(), TEST_SENDER);
     let run_deadlines: Vec<_> = fixture
         .runner
         .calls

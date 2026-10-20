@@ -381,13 +381,14 @@ pub(crate) async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use atm_core::test_support::TEST_SENDER;
 
     fn row() -> CronSchedule {
         serde_json::from_value(serde_json::json!({
             "id":1,"generation":1,"team":"test-team","phase":"bk","name":"test",
             "cron_expr":"@hourly","module_path":"/module.py","cwd":"/work","args":[],
             "timeout_ms":1000,"jitter_s":600,"custom":{},"stop":{"kind":"hook"},
-            "active":true,"created_by":"solar","created_at":"2026-10-19T00:00:00Z",
+            "active":true,"created_by":TEST_SENDER,"created_at":"2026-10-19T00:00:00Z",
             "last_run_at":null,"last_outcome":null,"ended_at":null
         }))
         .unwrap()
