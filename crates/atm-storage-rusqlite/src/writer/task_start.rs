@@ -12,7 +12,7 @@ use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::task_state::{
     DEFAULT_MAX_TASKS, MAX_TASKS_METADATA_KEY, TaskEvent, TaskEventKind, TaskRow, TaskState,
-    Transition, transition,
+    Transition, parse_max_tasks, transition,
 };
 use atm_storage::types::{AgentName, TaskId};
 use rusqlite::types::Value;
@@ -169,10 +169,9 @@ fn member_max_tasks(
         .map_err(|error| sqlite_error(target, "failed to read max_tasks", error))?;
     match stored {
         None | Some(Value::Null) => Ok(DEFAULT_MAX_TASKS),
-        Some(Value::Integer(value)) => u32::try_from(value)
-            .ok()
-            .and_then(NonZeroU32::new)
-            .ok_or_else(|| invalid_max_tasks(record, assignee)),
+        Some(Value::Integer(value)) => {
+            parse_max_tasks(value).ok_or_else(|| invalid_max_tasks(record, assignee))
+        }
         Some(_) => Err(invalid_max_tasks(record, assignee)),
     }
 }
