@@ -3061,9 +3061,11 @@ Task lifecycle (Phase BA):
    unset; a stored value that is not an integer of at least 1 refuses the start.
    Set it with `atm teams update-member <team> <member> --max-tasks <N>` (minimum
    1). The limit is checked when a task **starts** (the implicit
-   `assigned → active` move; rejected as `TaskMoveInvalid`), never at
-   `atm task assign` admission — any number of `assigned` rows may queue
-   behind the active ones.
+   `assigned → active` move; rejected as `TaskMaxActiveReached`
+   (`ATM_TASK_MAX_ACTIVE_REACHED`)). Recovery is to complete or cancel an
+   active task, or raise the limit with `atm teams update-member <team>
+   <member> --max-tasks <N>`. The limit is never checked at `atm task assign`
+   admission — any number of `assigned` rows may queue behind the active ones.
 4. Starting a task MUST be `atm task start <id>` by the assignee; it MUST move
    the task from `assigned` to `active`, MUST place it at the end of the started
    group at the head of the queue (behind the agent's other active tasks), and

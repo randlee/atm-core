@@ -141,7 +141,10 @@ fn reject_over_max_tasks(record: &Message, task_id: &TaskId, row: &TaskRow,
 //          WHERE team_name=?1 AND agent_name=?2   -- no row or NULL -> DEFAULT_MAX_TASKS
 //          an integer >= 1 -> that value; anything else -> AtmError::validation naming the
 //          member and `max_tasks`, recovery "set it with `atm teams update-member <team> <member> --max-tasks <N>`"
-// active >= max -> task_move_invalid("task {task_id}: {assignee} already has {active} active task(s); max_tasks is {max}")
+// active >= max -> task_max_active_reached(
+//     "task {task_id}: {assignee} already has {active} active task(s); max_tasks is {max}",
+//     "Complete or cancel an active task, or raise the limit with `atm teams update-member <team> <member> --max-tasks <N>`."
+// )
 ```
 
 Order (simplified scope item 3): the started group occupies the leading
@@ -217,12 +220,14 @@ approval, and the CHANGELOG carries the release note. No
 
 - [ ] (item 5, default 1) `start_while_another_task_is_active_is_rejected`
   keeps its setup with no `max_tasks` in the roster: the second start fails
-  `TaskMoveInvalid` with "max_tasks is 1" in the message, and T2 stays
+  `TaskMaxActiveReached` (`ATM_TASK_MAX_ACTIVE_REACHED`) with "max_tasks is 1"
+  in the message, and T2 stays
   `Assigned`. Only the message assertion changes.
 - [ ] (item 1) `max_tasks_three_allows_three_active_and_refuses_a_fourth`:
   the member's roster `metadata_json` is `{"max_tasks":3}`. T1..T3 start, and
   all three rows are `Active`. Planted negative: T4's start fails
-  `TaskMoveInvalid` with "max_tasks is 3", and T4 stays `Assigned`.
+  `TaskMaxActiveReached` (`ATM_TASK_MAX_ACTIVE_REACHED`) with "max_tasks is 3",
+  and T4 stays `Assigned`.
 - [ ] (item 1) `explicit_max_tasks_one_refuses_a_second_start`:
   `{"max_tasks":1}` behaves exactly as the default.
 - [ ] (item 1) `invalid_stored_max_tasks_refuses_the_start`: `{"max_tasks":0}`
