@@ -197,6 +197,8 @@ impl ScheduleColumns {
             cron_expr: schedule.cron_expr,
             module_path: schedule.module_path.to_string_lossy().into_owned(),
             cwd: schedule.cwd.to_string_lossy().into_owned(),
+            // `Vec<String>` is always serializable, and `to_string` writes to an
+            // infallible `String`; this mapping is unreachable for this concrete type.
             args: serde_json::to_string(&schedule.args).map_err(|error| internal(TABLE, error))?,
             timeout_ms: i64::from(schedule.timeout_ms),
             jitter_s: i64::from(schedule.jitter_s),
