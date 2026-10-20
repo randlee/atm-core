@@ -188,8 +188,7 @@ where
     let Some(template_body) = template.body.as_deref() else {
         return Ok(None);
     };
-    nudge_template::render_built_in_nudge_with_open_tasks(event, template_body, open_tasks)
-        .map(Some)
+    nudge_template::render_built_in_nudge(event, template_body, open_tasks).map(Some)
 }
 
 pub(crate) fn post_send_event_from_message(

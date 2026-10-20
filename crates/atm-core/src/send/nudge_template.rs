@@ -34,7 +34,7 @@ pub fn render_resolved_built_in_nudge(
 
 /// Renders a task nudge that lists every open task of the recipient, so one
 /// nudge covers all of a member's tasks rather than one nudge per task.
-pub(crate) fn render_built_in_nudge_with_open_tasks(
+pub(crate) fn render_built_in_nudge(
     event: &PostSendHookEvent,
     template_body: &str,
     open_tasks: &[TaskId],
@@ -198,8 +198,8 @@ fn render_template(
 #[cfg(test)]
 mod tests {
     use super::{
-        default_template, qualified_sender_identity, render_built_in_nudge_with_open_tasks,
-        resolve_template, validate_built_in_nudge_template_body,
+        default_template, qualified_sender_identity, render_built_in_nudge, resolve_template,
+        validate_built_in_nudge_template_body,
     };
     use crate::boundary::{
         BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
@@ -265,7 +265,7 @@ mod tests {
             format!("{TEST_LEAD}@{TEST_TEAM}.rand-m4.local")
         );
         assert!(
-            render_built_in_nudge_with_open_tasks(
+            render_built_in_nudge(
                 &event,
                 default_template(BuiltInNudgeTemplateKind::Delivery),
                 &[]
@@ -291,7 +291,7 @@ mod tests {
         let mut event = base_event();
         event.task_id = Some("task-9".parse().expect("task id"));
         event.task_transition = Some(TaskTransition::Ready);
-        let rendered = render_built_in_nudge_with_open_tasks(
+        let rendered = render_built_in_nudge(
             &event,
             default_template(BuiltInNudgeTemplateKind::TaskReady),
             &[],
@@ -314,9 +314,8 @@ mod tests {
             BuiltInNudgeTemplateKind::TaskReminder,
             BuiltInNudgeTemplateKind::TaskReady,
         ] {
-            let rendered =
-                render_built_in_nudge_with_open_tasks(&event, default_template(kind), &open)
-                    .expect("default task body renders");
+            let rendered = render_built_in_nudge(&event, default_template(kind), &open)
+                .expect("default task body renders");
             assert!(
                 rendered.contains("open=\"task-1 task-2 task-3\""),
                 "{kind:?} body must list every open task: {rendered}"
@@ -331,8 +330,8 @@ mod tests {
         let mut event = base_event();
         event.task_transition = Some(TaskTransition::Reminder { attempt: 1 });
         let open: Vec<TaskId> = vec!["task-1".parse().expect("task id")];
-        let rendered = render_built_in_nudge_with_open_tasks(&event, override_body, &open)
-            .expect("override renders");
+        let rendered =
+            render_built_in_nudge(&event, override_body, &open).expect("override renders");
         assert_eq!(rendered, "<atm open=\"task-1\"/>");
     }
 
@@ -401,8 +400,7 @@ mod tests {
                 has_read_action,
                 "read delivery contract for {kind}"
             );
-            render_built_in_nudge_with_open_tasks(&event, body, &[])
-                .expect("default template renders");
+            render_built_in_nudge(&event, body, &[]).expect("default template renders");
         }
     }
 
@@ -430,7 +428,7 @@ mod tests {
 
     #[test]
     fn unknown_placeholder_is_a_validation_error() {
-        let error = render_built_in_nudge_with_open_tasks(&base_event(), "{{unknown}}", &[])
+        let error = render_built_in_nudge(&base_event(), "{{unknown}}", &[])
             .expect_err("unknown placeholder");
         assert!(
             error

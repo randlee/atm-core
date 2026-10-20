@@ -222,33 +222,12 @@ impl HerdrQueueWakePump {
             .await;
             return;
         }
-        let (refusal_count, refusal_started_at) =
-            match self.refusal_run(reader, &candidate.member).await {
-                Ok(run) => run,
-                Err(error) => {
-                    tracing::warn!(
-                        subsystem = "herdr_queue_wake",
-                        action = "refusal_history_read",
-                        outcome = "failed",
-                        member = %candidate.member,
-                        error = %error,
-                        "Task disposition held because refusal history is unavailable"
-                    );
-                    return;
-                }
-            };
-        if refusal_count >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD
-            && let Some(since) = refusal_started_at
-        {
-            crate::herdr_queue_wake_escalation::escalate_refusals(
-                self,
-                task_store,
-                &candidate.member,
-                since,
-                stats,
-            )
-            .await;
-        }
+        let Some(refusal_count) = self
+            .refusal_check(reader, task_store, &candidate.member, stats)
+            .await
+        else {
+            return;
+        };
         let disposition = dispose(
             mail_pending,
             candidate.state,
@@ -332,6 +311,40 @@ impl HerdrQueueWakePump {
             .await
             .map(|run| (run.count, run.started_at))
             .map_err(Into::into)
+    }
+
+    /// Reads the member's refusal run and escalates it once it reaches the
+    /// threshold. `None` holds the disposition because the history is unreadable.
+    async fn refusal_check(
+        &self,
+        reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
+        task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+        member: &MemberKey,
+        stats: &mut HerdrQueueWakeStats,
+    ) -> Option<u32> {
+        let (refusal_count, refusal_started_at) = match self.refusal_run(reader, member).await {
+            Ok(run) => run,
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "herdr_queue_wake",
+                    action = "refusal_history_read",
+                    outcome = "failed",
+                    member = %member,
+                    error = %error,
+                    "Task disposition held because refusal history is unavailable"
+                );
+                return None;
+            }
+        };
+        if refusal_count >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD
+            && let Some(since) = refusal_started_at
+        {
+            crate::herdr_queue_wake_escalation::escalate_refusals(
+                self, task_store, member, since, stats,
+            )
+            .await;
+        }
+        Some(refusal_count)
     }
 
     async fn open_tasks_by_member(
