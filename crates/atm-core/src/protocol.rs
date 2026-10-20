@@ -604,7 +604,7 @@ mod tests {
         AgentName, CommandAction, IsoTimestamp, ReadSelection, SessionId, TeamName,
     };
     use atm_storage::{AtmMessageId, LocalCapability, MoveTarget, OwnerGeneration, QueuePosition};
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -1041,6 +1041,74 @@ mod tests {
         .expect("pre-1.13 doctor report fixture is JSON")
     }
 
+    /// Frozen HTTP API 1.12 doctor wire shape. Keep this independent of the
+    /// current `DoctorReport` so additive fields cannot silently join the old
+    /// consumer.
+    #[derive(Debug, Serialize, Deserialize)]
+    struct DoctorReport12 {
+        summary: crate::doctor::DoctorSummary,
+        findings: Vec<crate::doctor::DoctorFinding>,
+        recommendations: Vec<String>,
+        environment: crate::doctor::DoctorEnvironmentVisibility,
+        #[serde(default)]
+        client_context: crate::doctor::DoctorExecutionContext,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        daemon_context: Option<crate::doctor::DoctorExecutionContext>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reader_lanes: Option<crate::doctor::ReaderPoolDoctorReport>,
+        #[serde(default)]
+        team_scope: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        member_roster: Option<crate::team_admin::MembersList>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        team_rosters: Vec<crate::team_admin::MembersList>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        alias_mismatches: Vec<crate::doctor::DoctorAliasMismatch>,
+        #[serde(default)]
+        graft_receivers: crate::doctor::GraftReceiversDoctorReport,
+        observability: crate::observability::AtmObservabilityHealth,
+        #[serde(default)]
+        herdr_breaker: crate::doctor::HerdrBreakerDoctorReport,
+        #[serde(default)]
+        herdr_queue_pump: crate::doctor::HerdrQueuePumpDoctorReport,
+        #[serde(default)]
+        herdr: crate::doctor::HerdrDoctorReport,
+        #[serde(default)]
+        post_send: crate::doctor::PostSendDoctorReport,
+        #[serde(default)]
+        escalation_recipients: crate::doctor::EscalationRecipientsDoctorReport,
+        config: crate::boundary::ConfigDoctorReport,
+        mail_store: crate::boundary::MailStoreDoctorReport,
+        roster_store: crate::boundary::RosterStoreDoctorReport,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        daemon_runtime: Option<crate::doctor::DaemonRuntimeDoctorReport>,
+        #[serde(default)]
+        drift_findings: Vec<crate::doctor::DoctorFinding>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        runtime_status: Option<RuntimeStatusSnapshot>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        bootstrap_trace: Option<crate::doctor::BootstrapTraceReport>,
+    }
+
+    fn assert_1_12_doctor_report_preserves_fields(wire: serde_json::Value) -> DoctorReport12 {
+        let current: crate::doctor::DoctorReport =
+            serde_json::from_value(wire.clone()).expect("current reader decodes doctor report");
+        let frozen: DoctorReport12 =
+            serde_json::from_value(wire).expect("1.12 reader decodes doctor report");
+
+        let mut expected = serde_json::to_value(current).expect("encode current doctor report");
+        expected
+            .as_object_mut()
+            .expect("doctor report encodes as object")
+            .remove("hooks");
+        assert_eq!(
+            serde_json::to_value(&frozen).expect("encode frozen 1.12 doctor report"),
+            expected,
+            "every frozen 1.12 doctor field retains its value"
+        );
+        frozen
+    }
+
     /// One value per 1.12 request variant.
     fn request_samples_12() -> Vec<RequestEnvelope> {
         let team = TeamName::from_validated(TEST_TEAM);
@@ -1441,16 +1509,15 @@ mod tests {
             );
         }
 
-        // DoctorReport: the pre-1.13 wire decodes, a 1.13 report with `hooks` decodes,
-        // and a 1.12 reader that mirrors only `recommendations` ignores `hooks`.
-        #[derive(Debug, Deserialize)]
-        struct DoctorReport12 {
-            recommendations: Vec<String>,
-        }
+        // A frozen 1.12 DoctorReport decodes both the pre-1.13 fixture and a
+        // 1.13 report, preserving every 1.12 field while ignoring `hooks`.
         let pre_13 = doctor_report_pre_1_13();
         assert!(pre_13.get("hooks").is_none());
-        let from_pre_13: DoctorReport12 =
-            serde_json::from_value(pre_13).expect("1.12 reader decodes the pre-1.13 report");
+        let from_pre_13 = assert_1_12_doctor_report_preserves_fields(pre_13);
+        assert_eq!(
+            from_pre_13.summary.status,
+            crate::doctor::DoctorStatus::Healthy
+        );
         assert!(from_pre_13.recommendations.is_empty());
 
         let entry = crate::doctor::hooks::HookDoctorEntry {
@@ -1474,8 +1541,11 @@ mod tests {
         assert_eq!(report.hooks.len(), 1);
         let encoded = serde_json::to_value(&report).expect("encode 1.13 report");
         assert!(encoded["hooks"].is_array());
-        let from_1_13: DoctorReport12 =
-            serde_json::from_value(with_hooks).expect("a 1.12 reader ignores hooks");
+        let from_1_13 = assert_1_12_doctor_report_preserves_fields(with_hooks);
+        assert_eq!(
+            from_1_13.summary.status,
+            crate::doctor::DoctorStatus::Healthy
+        );
         assert!(from_1_13.recommendations.is_empty());
     }
 
