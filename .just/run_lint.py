@@ -33,7 +33,6 @@ PYTHON_LINT_ORDER = (
     "template-frontmatter",
     "site-links",
     "site-generated",
-    "unix-gating",
     "same-host-portability",
     "runtime-waits",
     "manifests",
@@ -146,9 +145,6 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "site-generated": LintTask(
             "site-generated", [*python_command, str(repo_root / ".just/check_site_generated.py")]
-        ),
-        "unix-gating": LintTask(
-            "unix-gating", [*python_command, str(repo_root / ".just/lint_unix_gating.py")]
         ),
         "same-host-portability": LintTask(
             "same-host-portability",

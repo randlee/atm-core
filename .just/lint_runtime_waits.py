@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
+"""Run the temporary runtime-waits gap check for randlee/sc-lint#373."""
+
 from __future__ import annotations
+
 
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +18,7 @@ from lint_common import print_report
 from lint_common import workspace_crate_section_lines
 
 
+# delete when randlee/sc-lint#373 ships
 RULE_IDS = {"SCB-RUNTIME-001", "SCB-RUNTIME-002"}
 
 
@@ -49,7 +53,6 @@ def run(repo_root: Path) -> int:
         check=False,
     )
     duration_seconds = time.perf_counter() - start_time
-
     transcript = [
         *workspace_crate_section_lines(repo_root),
         f"command: {' '.join(cmd)}",
@@ -61,7 +64,6 @@ def run(repo_root: Path) -> int:
         "stderr:",
         result.stderr.rstrip(),
     ]
-
     if result.returncode != 0:
         report = build_report(
             lint_name="runtime-waits",
@@ -75,7 +77,6 @@ def run(repo_root: Path) -> int:
         )
         print_report(report, repo_root=repo_root, preview_limit=3, direct_threshold=3)
         return 1
-
     payload = json.loads(result.stdout)
     findings = [
         finding["message"]
@@ -97,7 +98,7 @@ def run(repo_root: Path) -> int:
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description="Run the runtime-waits subset of sc-lint boundary checks.")
+    parser = argparse.ArgumentParser(description="Run the runtime-waits gap check pending randlee/sc-lint#373.")
     parser.add_argument("--root", help="Repo root to inspect.")
     args = parser.parse_args(argv[1:])
     repo_root = discover_repo_root(args.root)

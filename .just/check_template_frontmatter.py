@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import re
 import subprocess
@@ -18,12 +19,30 @@ SC_COMPOSE_784_TOKENS = frozenset({"autoescape", "endautoescape", "is", "defined
 UNDECLARED = re.compile(r"ERR_VAL_UNDECLARED_TOKEN: undeclared referenced token: (\S+)")
 MISSING_FRONTMATTER = "ERR_VAL_MISSING_FRONTMATTER"
 
+# Files the sc-lint kit installs are kit-owned, so their templates are fixed
+# upstream, not here: `plugins/sc-lint/templates/*.j2` are substituted by the
+# kit's own `install.py` (a front-matter block would be copied into the rendered
+# Justfile, workflow and sc-lint.toml), and the installed `adopt.xml.j2` copies
+# are digest-checked managed files the installer refuses to overwrite once
+# edited locally ("modified outside sc-lint", exit 2). Drop this skip when
+# randlee/sc-lint#604 ships.
+KIT_MANIFEST = Path(".sc-lint/installed.json")
+
+
+def kit_managed_paths(repo_root: Path) -> frozenset[str]:
+    manifest = repo_root / KIT_MANIFEST
+    if not manifest.is_file():
+        return frozenset()
+    managed = json.loads(manifest.read_text(encoding="utf-8")).get("managed", {})
+    return frozenset(managed)
+
 
 def tracked_templates(repo_root: Path) -> list[str]:
     listed = subprocess.run(
         ["git", "-C", str(repo_root), "ls-files", "*.j2"], capture_output=True, text=True, check=True
     ).stdout.splitlines()
-    return listed
+    kit_managed = kit_managed_paths(repo_root)
+    return [template for template in listed if template not in kit_managed]
 
 
 def template_violations(repo_root: Path, template: str) -> list[str]:
@@ -77,7 +96,7 @@ def main(argv: list[str]) -> int:
         print("template front matter violations:")
         print("\n".join(f"- {violation}" for violation in violations))
         return 1
-    print("template front matter: every tracked *.j2 declares the variables it uses")
+    print("template front matter: every repo-owned tracked *.j2 declares the variables it uses")
     return 0
 
 

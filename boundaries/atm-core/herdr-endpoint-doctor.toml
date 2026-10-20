@@ -76,12 +76,6 @@ review_gates = [
   "no_herdr_io_at_construction",
 ]
 
-[enforcement.io_forbidden_source_modules]
-process_spawn = ["atm_daemon_bootstrap::replacement_handler"]
-socket_io = ["atm_daemon_bootstrap::replacement_handler"]
-sqlite = ["atm_daemon_bootstrap::replacement_handler"]
-tmux_send_keys = ["atm_daemon_bootstrap::replacement_handler"]
-
 [status]
 state = "active"
 notes = [
@@ -91,3 +85,9 @@ notes = [
   "atm-core stays Tokio-free and gains no atm-core -> atm-herdr edge (AY.3 A6): the atm-herdr edge is a declared forbidden edge here, and the Tokio ban is enforced by the atm-core manifest dependency allowlist in .just/lint-config.toml, which lists no tokio entry. A `tokio` forbidden_edges entry is deliberately omitted because boundary_toml_forbidden_edges_match_rust_guard_catalog admits workspace-crate edges only.",
   "HerdrPresenceDoctor and ClosedHerdrPresenceDoctor are deleted by AY.3 D5; no compatibility shim is retained.",
 ]
+
+[extensions.atm.io_forbidden_source_modules]
+process_spawn = ["atm_daemon_bootstrap::replacement_handler"]
+socket_io = ["atm_daemon_bootstrap::replacement_handler"]
+sqlite = ["atm_daemon_bootstrap::replacement_handler"]
+tmux_send_keys = ["atm_daemon_bootstrap::replacement_handler"]

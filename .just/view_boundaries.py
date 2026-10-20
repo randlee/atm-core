@@ -17,11 +17,13 @@ from view_common import write_text
 
 
 def boundary_doc_rows(repo_root: Path, records) -> list[dict[str, str]]:
-    counts: dict[str, dict[str, int]] = defaultdict(lambda: {"records": 0, "active": 0, "planned": 0, "retired": 0})
+    counts: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"records": 0, "active": 0, "planned": 0, "deferred": 0, "retired": 0}
+    )
     for record in records:
         doc = record.source_path.as_posix()
         counts[doc]["records"] += 1
-        if record.status_state == "unix_implemented_windows_pending":
+        if record.is_active:
             counts[doc]["active"] += 1
         else:
             counts[doc][record.status_state] += 1
@@ -35,6 +37,7 @@ def boundary_doc_rows(repo_root: Path, records) -> list[dict[str, str]]:
                 "records": str(summary["records"]),
                 "active": str(summary["active"]),
                 "planned": str(summary["planned"]),
+                "deferred": str(summary["deferred"]),
                 "retired": str(summary["retired"]),
             }
         )
@@ -58,6 +61,7 @@ def render_summary_text(repo_root: Path, rows: list[dict[str, str]], violation_c
                 ("records", "records"),
                 ("active", "active"),
                 ("planned", "planned"),
+                ("deferred", "deferred"),
                 ("retired", "retired"),
             ],
         )

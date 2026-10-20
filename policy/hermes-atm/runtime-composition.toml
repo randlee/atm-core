@@ -1,3 +1,6 @@
+# This Python-only policy stays outside boundaries/: sc-boundary inventories
+# Rust workspace owners exclusively. `.just/lint_hermes_atm_boundary.py`
+# enforces this record against the hermes-atm package.
 boundary_id = "BOUNDARY-HermesAtmRuntime"
 owner_package = "hermes-atm"
 owner_crate_path = "hermes_atm"

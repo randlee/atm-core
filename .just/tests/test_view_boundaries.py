@@ -92,9 +92,69 @@ class ViewBoundariesTests(unittest.TestCase):
                     "records": "2",
                     "active": "1",
                     "planned": "1",
+                    "deferred": "0",
                     "retired": "0",
                 }
             ],
+        )
+
+    def test_boundary_doc_rows_counts_landed_states_as_active(self) -> None:
+        # `just view boundaries` raised KeyError on stub_landed and
+        # concrete_landed records, which boundaries/ uses.
+        base = self._record("planned")
+        records = [
+            self._record(state)
+            for state in ("stub_landed", "concrete_landed", "unix_implemented_windows_pending", "deferred", "retired")
+        ] + [base]
+
+        rows = boundary_doc_rows(Path("/tmp/repo"), records)
+
+        self.assertEqual(
+            rows,
+            [
+                {
+                    "doc": "boundaries/atm-core/a.toml",
+                    "records": "6",
+                    "active": "3",
+                    "planned": "1",
+                    "deferred": "1",
+                    "retired": "1",
+                }
+            ],
+        )
+
+    @staticmethod
+    def _record(state: str) -> BoundaryRecord:
+        return BoundaryRecord(
+            boundary_id=f"BOUNDARY-{state}",
+            owner_package="atm-core",
+            owner_crate_path="atm_core",
+            name=state,
+            public_trait="MailStore",
+            public_facade=None,
+            implementation_type=None,
+            implementation_module=None,
+            implementation_visibility="trait_only",
+            implementation_constructor="none",
+            composition_roots=(),
+            io_owns=(),
+            io_forbidden=(),
+            allowed_dependents=(),
+            allowed_dependencies=(),
+            allowed_dev_dependencies=(),
+            forbidden_edges=(),
+            references_scope="outside_owner_crate",
+            forbidden_references=(),
+            allowed_test_double_paths=(),
+            forbidden_test_bypasses=(),
+            io_forbidden_source_modules=(),
+            no_in_repo_implementation=False,
+            lint_rules=("LINT_A",),
+            review_gates=("no_public_impl",),
+            status_state=state,
+            source_path=Path("boundaries/atm-core/a.toml"),
+            start_line=1,
+            raw={},
         )
 
     def test_render_summary_text_includes_counts(self) -> None:
