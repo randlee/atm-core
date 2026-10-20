@@ -962,7 +962,11 @@ mod tests {
             CronEndRequest, CronListQuery, CronStartRequest, HookActionsResponse,
             HookDisableRequest, HookListQuery, HookRegisterRequest,
         };
-        use crate::protocol::ResponseEnvelope;
+        use crate::list::ListQuery;
+        use crate::protocol::{ResponseEnvelope, TaskMoveRequest};
+        use crate::types::ReadSelection;
+        use atm_storage::MoveTarget;
+        use std::path::PathBuf;
 
         let caller: AgentName = "sender".parse().expect("agent");
         let team: TeamName = "test-team".parse().expect("team");
@@ -997,6 +1001,35 @@ mod tests {
                     phase: None,
                 }),
                 "/v1/atm/hooks/list",
+            ),
+            (
+                RequestEnvelope::TaskMove(TaskMoveRequest {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    task_id: "T1".parse().expect("task id"),
+                    target: MoveTarget::Head,
+                }),
+                "/v1/atm/tasks/move",
+            ),
+            (
+                RequestEnvelope::List(
+                    ListQuery::new(
+                        PathBuf::from("/home"),
+                        PathBuf::from("/work"),
+                        caller.clone(),
+                        None,
+                        team.clone(),
+                        ReadSelection::All,
+                        false,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                    .expect("list query"),
+                ),
+                "/v1/atm/messages",
             ),
             (
                 RequestEnvelope::CronStart(CronStartRequest {
@@ -1034,31 +1067,42 @@ mod tests {
         ];
         for (request, path) in &routes {
             let http = encode_http_request(request, &[]).expect("encode hook route");
-            assert_eq!(http.method, "POST");
+            let expected_method = if matches!(request, RequestEnvelope::List(_)) {
+                "GET"
+            } else {
+                "POST"
+            };
+            assert_eq!(http.method, expected_method);
             assert_eq!(http.path, *path);
             let body: serde_json::Value = serde_json::from_slice(&http.body).expect("json body");
             assert!(body.is_object(), "{path} sends a JSON object");
         }
 
-        let register = &routes[0].0;
         let actions =
             serde_json::to_vec(&HookActionsResponse { dispatched: 2 }).expect("actions body");
         let with_header = vec![format!("{HOOK_ACTIONS_HEADER}: 2")];
-        match decode_http_response(register, 200, &with_header, &actions) {
-            Ok(ResponseEnvelope::HookActions(HookActionsResponse { dispatched })) => {
-                assert_eq!(dispatched, 2);
-            }
-            other => panic!("expected HookActions with the header, got {other:?}"),
-        }
-        assert!(
-            decode_http_response(register, 200, &[], &actions).is_err(),
-            "HookActions without the header is refused"
-        );
+        let without_header = [];
         let mismatch = vec![format!("{HOOK_ACTIONS_HEADER}: 3")];
-        assert!(
-            decode_http_response(register, 200, &mismatch, &actions).is_err(),
-            "the header and body counts must agree"
-        );
+        for request in [
+            &routes[0].0, // HookRegister
+            &routes[3].0, // TaskMove
+            &routes[4].0, // List
+        ] {
+            match decode_http_response(request, 200, &with_header, &actions) {
+                Ok(ResponseEnvelope::HookActions(HookActionsResponse { dispatched })) => {
+                    assert_eq!(dispatched, 2);
+                }
+                other => panic!("expected HookActions with the header, got {other:?}"),
+            }
+            assert!(
+                decode_http_response(request, 200, &without_header, &actions).is_err(),
+                "HookActions without the header is refused for {request:?}"
+            );
+            assert!(
+                decode_http_response(request, 200, &mismatch, &actions).is_err(),
+                "the header and body counts must agree for {request:?}"
+            );
+        }
     }
 }
 
