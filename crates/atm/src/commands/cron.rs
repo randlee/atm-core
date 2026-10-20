@@ -22,6 +22,7 @@ use crate::observability::CliObservability;
 mod tests {
     use super::super::hook::tests::{caller, fixture, transport};
     use super::*;
+    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
 
     fn start(module: &str) -> CronCommand {
         CronCommand::try_parse_from([
@@ -31,7 +32,7 @@ mod tests {
             "--cron",
             "0 */5 * * * *",
             "--phase",
-            "bk",
+            TEST_TEAM,
             "--module",
             fixture(module).to_str().unwrap(),
             "--until-hook",
@@ -44,13 +45,10 @@ mod tests {
     }
 
     fn row() -> atm_core::boundary::CronSchedule {
-        serde_json::from_value(serde_json::json!({
-            "id":1,"generation":1,"team":"bk","phase":"bk","name":"goal","cron_expr":"0 */5 * * * *",
-            "module_path":"hook.py","cwd":"/repo","args":["status","--json"],"timeout_ms":2500,"jitter_s":7,
-            "custom":{"goal":"ship"},"stop":{"kind":"until","at":"2026-11-01T02:00:00+02:00"},
-            "active":true,"created_by":"solar","created_at":"2026-10-19T00:00:00Z",
-            "last_run_at":null,"last_outcome":null,"ended_at":null
-        })).unwrap()
+        serde_json::from_str(&format!(
+            r#"{{"id":1,"generation":1,"team":"{TEST_TEAM}","phase":"{TEST_TEAM}","name":"goal","cron_expr":"0 */5 * * * *","module_path":"hook.py","cwd":"/repo","args":["status","--json"],"timeout_ms":2500,"jitter_s":7,"custom":{{"goal":"ship"}},"stop":{{"kind":"until","at":"2026-11-01T02:00:00+02:00"}},"active":true,"created_by":"{TEST_SENDER}","created_at":"2026-10-19T00:00:00Z","last_run_at":null,"last_outcome":null,"ended_at":null}}"#
+        ))
+        .unwrap()
     }
 
     async fn execute(
@@ -120,13 +118,16 @@ mod tests {
 
     #[tokio::test]
     async fn cron_end_with_nothing_active_prints_none_and_exits_zero() {
-        let command = CronCommand::try_parse_from(["cron", "end", "--phase", "bk"]).unwrap();
+        let command = CronCommand::try_parse_from(["cron", "end", "--phase", TEST_TEAM]).unwrap();
         let (result, requests) = execute(command, ResponseEnvelope::CronEnded(vec![])).await;
-        assert_eq!(result.unwrap(), "no active schedules for phase bk\n");
+        assert_eq!(
+            result.unwrap(),
+            format!("no active schedules for phase {TEST_TEAM}\n")
+        );
         let [RequestEnvelope::CronEnd(request)] = requests.as_slice() else {
             panic!("{requests:?}")
         };
-        assert_eq!(request.phase.as_str(), "bk");
+        assert_eq!(request.phase.as_str(), TEST_TEAM);
         assert_eq!(request.name, None);
     }
 
@@ -190,7 +191,7 @@ mod tests {
             "register",
             "task.close",
             "--phase",
-            "bk",
+            TEST_TEAM,
             "--module",
             fixture("valid_hook.py").to_str().unwrap(),
             "--custom",
@@ -212,7 +213,7 @@ mod tests {
             "start",
             "goal",
             "--phase",
-            "bk",
+            TEST_TEAM,
             "--module",
             fixture("valid_hook.py").to_str().unwrap(),
             "--cron",
@@ -246,7 +247,7 @@ mod tests {
                 "start",
                 "goal",
                 "--phase",
-                "bk",
+                TEST_TEAM,
                 "--module",
                 "hook.py",
                 "--cron",
@@ -262,7 +263,7 @@ mod tests {
                 "register",
                 "task.close",
                 "--phase",
-                "bk",
+                TEST_TEAM,
                 "--module",
                 "hook.py",
                 "--custom",
@@ -281,7 +282,7 @@ mod tests {
                 "start",
                 "goal",
                 "--phase",
-                "bk",
+                TEST_TEAM,
                 "--module",
                 "hook.py",
                 "--cron",
@@ -299,7 +300,7 @@ mod tests {
                 "start",
                 "goal",
                 "--phase",
-                "bk",
+                TEST_TEAM,
                 "--module",
                 "hook.py",
                 "--cron",
@@ -320,7 +321,7 @@ mod tests {
                 "start",
                 "goal",
                 "--phase",
-                "bk",
+                TEST_TEAM,
                 "--module",
                 "hook.py",
                 "--cron",

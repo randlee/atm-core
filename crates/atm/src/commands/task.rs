@@ -973,6 +973,7 @@ mod tests;
 #[cfg(test)]
 mod hook_action_tests {
     use super::*;
+    use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
 
     #[tokio::test]
     async fn task_write_keeps_hook_actions_distinct_from_send_outcomes() {
@@ -985,9 +986,9 @@ mod hook_action_tests {
         let request = atm_core::send::SendRequest::new(
             directory.path().into(),
             directory.path().into(),
-            "solar".parse().unwrap(),
-            "other@bk",
-            "bk".parse().unwrap(),
+            TEST_SENDER.parse().unwrap(),
+            &format!("{TEST_RECIPIENT}@{TEST_TEAM}"),
+            TEST_TEAM.parse().unwrap(),
             atm_core::send::SendMessageSource::Inline("assigned".into()),
             None,
             false,

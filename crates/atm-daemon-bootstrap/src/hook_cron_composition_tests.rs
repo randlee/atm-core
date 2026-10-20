@@ -15,6 +15,7 @@ use atm_core::{
     hook::{CronListQuery, CronStartRequest, HookListQuery, HookRegisterRequest},
     observability::NullObservability,
     protocol::ResponseEnvelope,
+    test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM},
 };
 use atm_cron::{AtmCron, AtmCronDeps, Clock, ManualClock, SeqJitter};
 use atm_http_runtime::{
@@ -33,6 +34,8 @@ use crate::{
         ReplacementHandlerConfig, SelectedPeerAdapterSelection, build_replacement_handler,
     },
 };
+
+const TEST_OTHER_PHASE: &str = "test-phase";
 
 fn deadline() -> RequestDeadline {
     RequestDeadline::after(Duration::from_secs(60))
@@ -131,8 +134,8 @@ impl World {
 
     fn spec(&self) -> CronStartSpec {
         CronStartSpec {
-            team: "bk".parse().unwrap(),
-            phase: PhaseId::parse("bk").unwrap(),
+            team: TEST_TEAM.parse().unwrap(),
+            phase: PhaseId::parse(TEST_TEAM).unwrap(),
             name: "test".into(),
             cron_expr: "0 * * * * *".into(),
             module_path: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -142,17 +145,17 @@ impl World {
             timeout_ms: 30000,
             custom: serde_json::Map::new(),
             stop: StopCondition::Hook,
-            created_by: "solar".parse().unwrap(),
+            created_by: TEST_SENDER.parse().unwrap(),
         }
     }
 
     fn seed_roster(&self) {
-        let team = "bk".parse::<atm_core::types::TeamName>().unwrap();
+        let team = TEST_TEAM.parse::<atm_core::types::TeamName>().unwrap();
         self.runtime
             .shared_roster_store_arc()
             .save_roster(&atm_storage::RosterSnapshot {
                 team_name: team.clone(),
-                members: ["solar", "dev"]
+                members: [TEST_SENDER, TEST_RECIPIENT]
                     .into_iter()
                     .map(|name| atm_core::boundary::RosterEntry {
                         team_name: team.clone(),
@@ -174,13 +177,13 @@ impl World {
         atm_core::send::WriteRequest::new(
             self.root.path().into(),
             self.root.path().into(),
-            "solar".parse().unwrap(),
-            "dev@bk",
-            "bk".parse().unwrap(),
+            TEST_SENDER.parse().unwrap(),
+            &format!("{TEST_RECIPIENT}@{TEST_TEAM}"),
+            TEST_TEAM.parse().unwrap(),
             atm_core::send::SendMessageSource::Inline("work".into()),
             None,
             false,
-            Some("bk-5-test".parse().unwrap()),
+            Some(format!("{TEST_TEAM}-5-test").parse().unwrap()),
             false,
         )
         .unwrap()
@@ -210,7 +213,7 @@ impl World {
 
 fn registration(root: &std::path::Path, phase: &str, hook: &str) -> HookRegistration {
     HookRegistration {
-        team: "bk".parse().unwrap(),
+        team: TEST_TEAM.parse().unwrap(),
         phase: PhaseId::parse(phase).unwrap(),
         hook: atm_core::boundary::HookName::parse_task_hook(hook).unwrap(),
         module_path: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -219,10 +222,14 @@ fn registration(root: &std::path::Path, phase: &str, hook: &str) -> HookRegistra
         timeout_ms: 30000,
         custom: serde_json::Map::new(),
         active: true,
-        registered_by: "solar".parse().unwrap(),
+        registered_by: TEST_SENDER.parse().unwrap(),
         registered_at: format!(
             "2026-10-19T00:00:{}Z",
-            if phase == "bj" { "00" } else { "01" }
+            if phase == TEST_OTHER_PHASE {
+                "00"
+            } else {
+                "01"
+            }
         )
         .parse()
         .unwrap(),
@@ -398,11 +405,11 @@ async fn cron_initial_load_error_aborts_startup() {
 async fn register_second_phase_same_hook_succeeds() {
     let world = World::new();
     world.seed_roster();
-    for phase in ["bj", "bk"] {
+    for phase in [TEST_OTHER_PHASE, TEST_TEAM] {
         world
             .request(ApiRequest::HookRegister(HookRegisterRequest {
-                caller_identity: "solar".parse().unwrap(),
-                caller_team: "bk".parse().unwrap(),
+                caller_identity: TEST_SENDER.parse().unwrap(),
+                caller_team: TEST_TEAM.parse().unwrap(),
                 phase: PhaseId::parse(phase).unwrap(),
                 hook: "task.close".into(),
                 module_path: registration(world.root.path(), phase, "task.close").module_path,
@@ -415,8 +422,8 @@ async fn register_second_phase_same_hook_succeeds() {
     }
     let ResponseEnvelope::HookList(rows) = world
         .request(ApiRequest::HookList(HookListQuery {
-            caller_identity: "solar".parse().unwrap(),
-            caller_team: "bk".parse().unwrap(),
+            caller_identity: TEST_SENDER.parse().unwrap(),
+            caller_team: TEST_TEAM.parse().unwrap(),
             phase: None,
         }))
         .await
@@ -429,7 +436,7 @@ async fn register_second_phase_same_hook_succeeds() {
         rows.iter()
             .map(|row| row.phase.as_str())
             .collect::<Vec<_>>(),
-        ["bj", "bk"]
+        [TEST_OTHER_PHASE, TEST_TEAM]
     );
     assert!(rows.iter().all(|row| row.active));
     world.shutdown().await;
@@ -461,8 +468,8 @@ async fn cron_scheduler_installed_once_and_cron_routes_reach_it() {
         .unwrap();
     let ResponseEnvelope::CronList(rows) = world
         .request(ApiRequest::CronList(CronListQuery {
-            caller_identity: "solar".parse().unwrap(),
-            caller_team: "bk".parse().unwrap(),
+            caller_identity: TEST_SENDER.parse().unwrap(),
+            caller_team: TEST_TEAM.parse().unwrap(),
             phase: None,
         }))
         .await
@@ -484,7 +491,7 @@ async fn snapshot_load_from_reopened_store_serves_pre_restart_registrations() {
             .unwrap()
             .for_daemon();
         let store = assembly.service_runtime.hook_registration_store().unwrap();
-        for phase in ["bj", "bk"] {
+        for phase in [TEST_OTHER_PHASE, TEST_TEAM] {
             let cwd = root.path().join(phase);
             std::fs::create_dir(&cwd).unwrap();
             std::fs::write(
@@ -510,7 +517,7 @@ async fn snapshot_load_from_reopened_store_serves_pre_restart_registrations() {
         rows.iter()
             .map(|row| row.phase.as_str())
             .collect::<Vec<_>>(),
-        ["bj", "bk"]
+        [TEST_OTHER_PHASE, TEST_TEAM]
     );
     let world = World::assemble(root, assembly).unwrap();
     world.seed_roster();
@@ -525,9 +532,23 @@ async fn snapshot_load_from_reopened_store_serves_pre_restart_registrations() {
         .err()
         .unwrap();
     assert_eq!(error.code(), AtmErrorCode::HookRefused);
-    assert!(error.message().contains("bj"));
-    assert!(world.root.path().join("bj/fixture_request.json").exists());
-    assert!(!world.root.path().join("bk/fixture_request.json").exists());
+    assert!(error.message().contains(TEST_OTHER_PHASE));
+    assert!(
+        world
+            .root
+            .path()
+            .join(TEST_OTHER_PHASE)
+            .join("fixture_request.json")
+            .exists()
+    );
+    assert!(
+        !world
+            .root
+            .path()
+            .join(TEST_TEAM)
+            .join("fixture_request.json")
+            .exists()
+    );
     world.shutdown().await;
 }
 
@@ -546,7 +567,7 @@ async fn close_end_to_end_with_refusing_hook_leaves_task_open() {
         .service_runtime
         .hook_registration_store()
         .unwrap()
-        .register(registration(root.path(), "bk", "task.close"))
+        .register(registration(root.path(), TEST_TEAM, "task.close"))
         .unwrap();
     let world = World::assemble(root, assembly).unwrap();
     world.seed_roster();
@@ -556,7 +577,7 @@ async fn close_end_to_end_with_refusing_hook_leaves_task_open() {
         .await
         .unwrap();
     request.task_op = Some(atm_core::boundary::TaskOp::Start);
-    request.caller_identity = "dev".parse().unwrap();
+    request.caller_identity = TEST_RECIPIENT.parse().unwrap();
     world
         .request(ApiRequest::Write(Box::new(request.clone())))
         .await
@@ -576,7 +597,10 @@ async fn close_end_to_end_with_refusing_hook_leaves_task_open() {
         .runtime
         .task_store()
         .unwrap()
-        .load_task(&"bk".parse().unwrap(), &"bk-5-test".parse().unwrap())
+        .load_task(
+            &TEST_TEAM.parse().unwrap(),
+            &format!("{TEST_TEAM}-5-test").parse().unwrap(),
+        )
         .unwrap()
         .unwrap();
     assert_eq!(row.state, atm_storage::TaskState::Active);
@@ -739,7 +763,7 @@ async fn doctor_runs_the_registered_module_doctor_for_its_team() {
     let assembly = open_isolated_sqlite_boundary(root.path())
         .unwrap()
         .for_daemon();
-    let mut row = registration(root.path(), "bk", "task.close");
+    let mut row = registration(root.path(), TEST_TEAM, "task.close");
     row.custom = serde_json::from_value(json!({"goal":"ship"})).unwrap();
     assembly
         .service_runtime
@@ -756,17 +780,18 @@ async fn doctor_runs_the_registered_module_doctor_for_its_team() {
             team_override: Some(team.parse().unwrap()),
             all_teams: false,
             caller_team: Some(team.parse().unwrap()),
-            caller_identity: Some("solar".parse().unwrap()),
+            caller_identity: Some(TEST_SENDER.parse().unwrap()),
         })
     };
-    let ResponseEnvelope::Doctor(report) = world.request(query("bk")).await.unwrap().into_inner()
+    let ResponseEnvelope::Doctor(report) =
+        world.request(query(TEST_TEAM)).await.unwrap().into_inner()
     else {
         panic!("doctor")
     };
     assert_eq!(report.hooks.len(), 1);
     let entry = &report.hooks[0];
-    assert_eq!(entry.team.as_str(), "bk");
-    assert_eq!(entry.phase.as_str(), "bk");
+    assert_eq!(entry.team.as_str(), TEST_TEAM);
+    assert_eq!(entry.phase.as_str(), TEST_TEAM);
     assert_eq!(entry.message.as_deref(), Some("ok"));
     assert_eq!(entry.findings.len(), 1);
     assert_eq!(entry.findings[0].code, "goal-pending");
@@ -777,12 +802,15 @@ async fn doctor_runs_the_registered_module_doctor_for_its_team() {
     assert_eq!(entry.findings[0].message, "not shipped");
     let request_file = world.root.path().join("fixture_request.json");
     let request: Value = serde_json::from_slice(&std::fs::read(&request_file).unwrap()).unwrap();
-    assert_eq!(request["team"], "bk");
-    assert_eq!(request["phase"], "bk");
+    assert_eq!(request["team"], TEST_TEAM);
+    assert_eq!(request["phase"], TEST_TEAM);
     assert_eq!(request["custom"], json!({"goal":"ship"}));
     std::fs::remove_file(&request_file).unwrap();
-    let ResponseEnvelope::Doctor(report) =
-        world.request(query("other")).await.unwrap().into_inner()
+    let ResponseEnvelope::Doctor(report) = world
+        .request(query(&format!("{TEST_TEAM}-foreign")))
+        .await
+        .unwrap()
+        .into_inner()
     else {
         panic!("doctor")
     };
@@ -811,7 +839,7 @@ async fn cron_tick_action_runs_unhooked() {
         .service_runtime
         .hook_registration_store()
         .unwrap()
-        .register(registration(&cwd_b, "bk", "task.assign"))
+        .register(registration(&cwd_b, TEST_TEAM, "task.assign"))
         .unwrap();
     let mut world = World::assemble(root, assembly).unwrap();
     world.seed_roster();
@@ -827,7 +855,7 @@ async fn cron_tick_action_runs_unhooked() {
     let cron = world.cron(clock.clone());
     let mut spec = world.spec();
     spec.cwd = cwd_a;
-    spec.module_path = registration(&cwd_b, "bk", "task.assign").module_path;
+    spec.module_path = registration(&cwd_b, TEST_TEAM, "task.assign").module_path;
     spec.stop = StopCondition::Until {
         at: now() + chrono::Duration::hours(1),
     };
@@ -854,7 +882,10 @@ async fn cron_tick_action_runs_unhooked() {
             .runtime
             .task_store()
             .unwrap()
-            .load_task(&"bk".parse().unwrap(), &"bk-5-test".parse().unwrap())
+            .load_task(
+                &TEST_TEAM.parse().unwrap(),
+                &format!("{TEST_TEAM}-5-test").parse().unwrap(),
+            )
             .unwrap()
             .is_some()
     );

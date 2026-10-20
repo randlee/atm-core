@@ -26,14 +26,15 @@ pub struct HookCommand {
 pub(super) mod tests {
     use super::*;
     use atm_core::protocol::{CLI_SCHEMA_VERSION, CompatibilityVerdict, ReleaseVersion};
+    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
     use atm_core::transport::testing::FakeClientTransport;
     use std::sync::{Arc, Mutex};
 
     pub(crate) fn caller() -> CallerContext {
         CallerContext {
-            caller_identity: "solar".parse().unwrap(),
+            caller_identity: TEST_SENDER.parse().unwrap(),
             caller_chat_id: None,
-            caller_team: "bk".parse().unwrap(),
+            caller_team: TEST_TEAM.parse().unwrap(),
             activity_observation: None,
         }
     }
@@ -66,11 +67,9 @@ pub(super) mod tests {
     }
 
     pub(crate) fn row() -> atm_core::boundary::HookRegistration {
-        serde_json::from_value(serde_json::json!({
-            "team":"bk", "phase":"bk", "hook":"task.close", "module_path":"hook.py", "cwd":"/repo",
-            "timeout_ms":2500,"custom":{"goal":"ship"},"active":false,"registered_by":"solar",
-            "registered_at":"2026-10-19T00:00:00Z","disabled_at":"2026-10-19T01:00:00Z"
-        }))
+        serde_json::from_str(&format!(
+            r#"{{"team":"{TEST_TEAM}","phase":"{TEST_TEAM}","hook":"task.close","module_path":"hook.py","cwd":"/repo","timeout_ms":2500,"custom":{{"goal":"ship"}},"active":false,"registered_by":"{TEST_SENDER}","registered_at":"2026-10-19T00:00:00Z","disabled_at":"2026-10-19T01:00:00Z"}}"#
+        ))
         .unwrap()
     }
 
@@ -79,7 +78,7 @@ pub(super) mod tests {
             command: HookSubcommand::Register(HookRegisterArgs {
                 hook: name.into(),
                 module: fixture(module),
-                phase: "bk".into(),
+                phase: TEST_TEAM.into(),
                 cwd: None,
                 custom: None,
             }),
@@ -111,7 +110,7 @@ pub(super) mod tests {
             .await;
             assert_eq!(
                 result.unwrap(),
-                "registered task.close for bk/bk (timeout 2500 ms)\n"
+                format!("registered task.close for {TEST_TEAM}/{TEST_TEAM} (timeout 2500 ms)\n")
             );
             let [RequestEnvelope::HookRegister(request)] = requests.as_slice() else {
                 panic!("{requests:?}")
@@ -209,7 +208,7 @@ pub(super) mod tests {
     #[tokio::test]
     async fn disable_sends_phase_and_hook_and_prints_one_line_per_row() {
         let command =
-            HookCommand::try_parse_from(["hook", "disable", "--phase", "bk", "task.close"])
+            HookCommand::try_parse_from(["hook", "disable", "--phase", TEST_TEAM, "task.close"])
                 .unwrap();
         let (result, requests) =
             execute(command, ResponseEnvelope::HookDisabled(vec![row(), row()])).await;
@@ -217,19 +216,20 @@ pub(super) mod tests {
         let [RequestEnvelope::HookDisable(request)] = requests.as_slice() else {
             panic!("{requests:?}")
         };
-        assert_eq!(request.phase.as_str(), "bk");
+        assert_eq!(request.phase.as_str(), TEST_TEAM);
         assert_eq!(request.hook.as_deref(), Some("task.close"));
     }
 
     #[tokio::test]
     async fn disable_with_no_active_hooks_prints_none_and_exits_zero() {
-        let command = HookCommand::try_parse_from(["hook", "disable", "--phase", "bk"]).unwrap();
+        let command =
+            HookCommand::try_parse_from(["hook", "disable", "--phase", TEST_TEAM]).unwrap();
         assert_eq!(
             execute(command, ResponseEnvelope::HookDisabled(vec![]))
                 .await
                 .0
                 .unwrap(),
-            "no active hooks for phase bk\n"
+            format!("no active hooks for phase {TEST_TEAM}\n")
         );
     }
 
