@@ -303,13 +303,22 @@ mod tests {
             })
             .await
         });
-        ready.await.unwrap();
+        tokio::time::timeout(Duration::from_secs(10), ready)
+            .await
+            .expect("FIFO reader must observe the child readiness byte")
+            .unwrap();
         cancel.send(()).unwrap();
         assert!(matches!(
             handle.await.unwrap(),
             Err(SpawnFailure::TimedOut { .. })
         ));
-        assert!(reader.await.unwrap().is_empty());
+        assert!(
+            tokio::time::timeout(Duration::from_secs(10), reader)
+                .await
+                .expect("FIFO reader must finish after child cancellation")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[cfg(unix)]
@@ -320,10 +329,19 @@ mod tests {
         let spawn = spec(&root, GROUP_SOURCE, vec![path.into_os_string()]);
         let handle =
             tokio::spawn(async move { spawn_until(spawn, b"{}", std::future::pending()).await });
-        ready.await.unwrap();
+        tokio::time::timeout(Duration::from_secs(10), ready)
+            .await
+            .expect("FIFO reader must observe the child readiness byte")
+            .unwrap();
         handle.abort();
         assert!(handle.await.unwrap_err().is_cancelled());
-        assert!(reader.await.unwrap().is_empty());
+        assert!(
+            tokio::time::timeout(Duration::from_secs(10), reader)
+                .await
+                .expect("FIFO reader must finish after process-group abort")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[cfg(unix)]
@@ -335,12 +353,21 @@ mod tests {
         let spawn = spec(&root, source, vec![path.into_os_string()]);
         let handle =
             tokio::spawn(async move { spawn_until(spawn, b"{}", std::future::pending()).await });
-        ready.await.unwrap();
+        tokio::time::timeout(Duration::from_secs(10), ready)
+            .await
+            .expect("FIFO reader must observe the child readiness byte")
+            .unwrap();
         let Err(SpawnFailure::Failed(error)) = handle.await.unwrap() else {
             panic!("expected cap error")
         };
         assert_eq!(error.code(), AtmErrorCode::HookMalformed);
-        assert!(reader.await.unwrap().is_empty());
+        assert!(
+            tokio::time::timeout(Duration::from_secs(10), reader)
+                .await
+                .expect("FIFO reader must finish after output overflow")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[tokio::test]
