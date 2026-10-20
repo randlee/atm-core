@@ -101,8 +101,9 @@ impl HookRunner for DummyHookRunner {
             .expect("hook replies mutex poisoned")
             .pop_front()
             .unwrap_or_else(|| {
-                Err(AtmError::hook_malformed(
+                Err(AtmError::validation_with_recovery(
                     "DummyHookRunner run reply queue is empty",
+                    "push an `Ok(HookOutcome)` into `DummyHookRunner.replies` before calling `run`",
                 ))
             })
     }
@@ -118,8 +119,9 @@ impl HookRunner for DummyHookRunner {
             .expect("doctor replies mutex poisoned")
             .pop_front()
             .unwrap_or_else(|| {
-                Err(AtmError::hook_malformed(
+                Err(AtmError::validation_with_recovery(
                     "DummyHookRunner doctor reply queue is empty",
+                    "push an `Ok(HookDoctorReply)` into `DummyHookRunner.doctor_replies` before calling `doctor`",
                 ))
             })
     }
@@ -137,8 +139,9 @@ impl HookRunner for DummyHookRunner {
             .expect("stop replies mutex poisoned")
             .pop_front()
             .unwrap_or_else(|| {
-                Err(AtmError::hook_malformed(
+                Err(AtmError::validation_with_recovery(
                     "DummyHookRunner stop reply queue is empty",
+                    "push an `Ok(StopReply)` into `DummyHookRunner.stop_replies` before calling `stop`",
                 ))
             })
     }
@@ -263,6 +266,56 @@ mod tests {
                 |(recorded_target, _, recorded_deadline)| recorded_target == &target
                     && *recorded_deadline == deadline
             )
+        );
+    }
+
+    #[test]
+    fn empty_reply_queues_report_actionable_validation_errors() {
+        let runner = DummyHookRunner::default();
+        let (target, request, deadline) = inputs();
+
+        let run_error = ready(runner.run(&target, &request, deadline)).unwrap_err();
+        assert_eq!(
+            run_error.code(),
+            crate::error_codes::AtmErrorCode::MessageValidationFailed
+        );
+        assert!(
+            run_error
+                .message()
+                .contains("DummyHookRunner run reply queue is empty")
+        );
+        assert!(run_error.message().contains("DummyHookRunner.replies"));
+
+        let doctor_error = ready(runner.doctor(&target, deadline)).unwrap_err();
+        assert_eq!(
+            doctor_error.code(),
+            crate::error_codes::AtmErrorCode::MessageValidationFailed
+        );
+        assert!(
+            doctor_error
+                .message()
+                .contains("DummyHookRunner doctor reply queue is empty")
+        );
+        assert!(
+            doctor_error
+                .message()
+                .contains("DummyHookRunner.doctor_replies")
+        );
+
+        let stop_error = ready(runner.stop(&target, &request, deadline)).unwrap_err();
+        assert_eq!(
+            stop_error.code(),
+            crate::error_codes::AtmErrorCode::MessageValidationFailed
+        );
+        assert!(
+            stop_error
+                .message()
+                .contains("DummyHookRunner stop reply queue is empty")
+        );
+        assert!(
+            stop_error
+                .message()
+                .contains("DummyHookRunner.stop_replies")
         );
     }
 
