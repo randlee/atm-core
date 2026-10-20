@@ -65,7 +65,7 @@ BA.3): the reminder cycle runs regardless of delivery backend; a task reminder
 is emitted only when the assignee is Idle with no pending mail, at most once
 per `TASK_REMINDER_INTERVAL_MS`;
 the assignee's runtime state selects one of three dispositions (BA.3 `dispose`):
-`Idle` → nudge the head task; `Active` →
+`Idle` → one nudge per member listing every open task (BK.8); `Active` →
 hold, no reminder; `Blocked`/`Offline` → escalate once per episode to the lead
 and every configured recipient with
 zero task reminders and no reminder outcome recorded. Escalation for a stalled
@@ -122,7 +122,7 @@ event, is never gated on task state, and never transitions a task.
 | Rule | Form |
 | --- | --- |
 | One row per task | `PRIMARY KEY (team, task_id)`; `assignee` is a column, not identity |
-| At most one active task per agent | `CREATE UNIQUE INDEX one_active_task_per_agent ON tasks(team, assignee) WHERE state = 'active'`; any number of `assigned` rows per agent |
+| At most `max_tasks` active tasks per agent | roster `metadata_json` `max_tasks` (default 1), checked by the writer at start; no unique index (BK.8, see the 2026-10-20 amendment); any number of `assigned` rows per agent |
 | Queue order | `ORDER BY position, assigned_at, task_id`; `position` is a separate column, default end of queue; `assigned_at` records the current assignment and is reset by reassign/reopen, never by move |
 | Close outcome | typed `completed \| refused \| cancelled`; free text is a human-facing reason only |
 | Reassignment | `assign` on an existing open id updates assignee/state/placement in place and appends `reassigned`; a closed id is reopened in place with `reopened` |
@@ -185,6 +185,29 @@ ADR-054 capability. `task_events.reminded` remains the task-side counter;
 Task selection for an idle member: the active task, else the first `assigned`
 task in queue order. A `reminded` event is recorded only against the task the
 prompt was rendered for.
+
+## Task limit and per-member nudge (2026-10-20 amendment, BK.8, normative)
+
+Issue #1932, with Rand's agreed scope (2026-10-20):
+
+1. `max_tasks` lives only in roster member `metadata_json`; no typed HTTP API
+   field (no `HTTP_API_VERSION` bump), no doctor change.
+2. Nudge, reminder and stall/escalation state are per member: one nudge lists
+   all of the member's open tasks.
+3. Ordering: started tasks sort ahead of all unstarted tasks; each group keeps
+   its order. Starting a task moves it into the started group. No other
+   placement rules.
+4. Rollback: drop `one_active_task_per_agent`; no downgrade compatibility.
+   Release note: before running an older daemon, close each member's extra
+   active tasks.
+5. `atm teams update-member --max-tasks <N>` (optional). Default 1 when unset;
+   `0` is rejected with a validation error (minimum 1).
+
+ADR-061 classification: dropping the unique index leaves every older statement
+valid against the new database. The previous release binary re-creates
+`one_active_task_per_agent` on open and fails while a member has two active
+tasks; Rand approved this with no downgrade compatibility (item 4). No
+`STORAGE_SCHEMA_VERSION` is added, for the reason in ADR-061 D6 Phase BB.1.
 
 ## History view (2026-09-26 amendment, issue #1599)
 

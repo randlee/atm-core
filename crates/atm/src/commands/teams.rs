@@ -166,6 +166,10 @@ struct UpdateMemberCommand {
     )]
     host: Option<String>,
 
+    /// Most tasks this member may hold active at once (minimum 1; default 1 when never set).
+    #[arg(long = "max-tasks")]
+    max_tasks: Option<u32>,
+
     /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
@@ -534,6 +538,7 @@ impl UpdateMemberCommand {
 
     fn build_request(self, caller_context: CallerContext) -> Result<UpdateMemberRequest> {
         let host = self.host.clone();
+        let max_tasks = self.max_tasks;
         let request = if self.backend.is_some()
             || self.target.is_some()
             || self.session.is_some()
@@ -577,7 +582,10 @@ impl UpdateMemberCommand {
                 self.pane_id,
             )
         }?;
-        request.with_host(host.as_deref()).map_err(Into::into)
+        request
+            .with_host(host.as_deref())?
+            .with_max_tasks(max_tasks)
+            .map_err(Into::into)
     }
 }
 
@@ -697,6 +705,7 @@ mod tests {
                 clear_alias: false,
                 pane_id: Some("%19".to_string()),
                 host: None,
+                max_tasks: None,
                 json,
             })),
             json: false,
@@ -1141,6 +1150,7 @@ mod tests {
             clear_alias: false,
             pane_id: Some("17".to_string()),
             host: None,
+            max_tasks: None,
             json: true,
         };
 
@@ -1181,6 +1191,7 @@ mod tests {
             clear_alias: false,
             pane_id: None,
             host: Some("fastpc4.local".to_string()),
+            max_tasks: None,
             json: false,
         };
 
@@ -1216,6 +1227,7 @@ mod tests {
             clear_alias: false,
             pane_id: None,
             host: Some("has a space".to_string()),
+            max_tasks: None,
             json: false,
         };
 
@@ -1227,6 +1239,60 @@ mod tests {
                 activity_observation: None,
             })
             .expect_err("invalid host must be rejected before mutation");
+    }
+
+    fn update_member_max_tasks_command(max_tasks: Option<u32>) -> UpdateMemberCommand {
+        UpdateMemberCommand {
+            team: TEST_TEAM.to_string(),
+            member: TEST_SENDER.to_string(),
+            home_dir: None,
+            workspace_root: None,
+            harness: None,
+            agent_type: None,
+            model: None,
+            backend: None,
+            target: None,
+            session: None,
+            alias: None,
+            clear_alias: false,
+            pane_id: None,
+            host: None,
+            max_tasks,
+            json: false,
+        }
+    }
+
+    fn update_member_caller() -> CallerContext {
+        CallerContext {
+            caller_identity: TEST_SENDER.parse().expect("caller"),
+            caller_chat_id: None,
+            caller_team: TEST_TEAM.parse().expect("team"),
+            activity_observation: None,
+        }
+    }
+
+    #[test]
+    fn update_member_build_request_carries_max_tasks() {
+        let request = update_member_max_tasks_command(Some(3))
+            .build_request(update_member_caller())
+            .expect("request");
+        assert_eq!(request.max_tasks.map(std::num::NonZeroU32::get), Some(3));
+
+        let request = update_member_max_tasks_command(None)
+            .build_request(update_member_caller())
+            .expect("request");
+        assert_eq!(request.max_tasks, None);
+    }
+
+    #[test]
+    fn update_member_build_request_rejects_zero_max_tasks_before_mutation() {
+        let error = update_member_max_tasks_command(Some(0))
+            .build_request(update_member_caller())
+            .expect_err("--max-tasks 0 must be rejected before mutation");
+        let atm_error = error
+            .downcast_ref::<AtmError>()
+            .expect("an AtmError validation failure");
+        assert_eq!(atm_error.code(), AtmErrorCode::MessageValidationFailed);
     }
 
     #[test]
@@ -1426,6 +1492,7 @@ mod tests {
             model: Some("gpt-5".to_string()),
             pane_id: Some("%19".to_string()),
             host: None,
+            max_tasks: None,
             backend: None,
             target: None,
             session: None,

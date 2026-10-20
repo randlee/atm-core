@@ -100,6 +100,13 @@ impl TaskCloseOutcome {
 /// The reserved sender identity used by daemon-originated task events.
 pub const DAEMON_ACTOR_NAME: &str = "atm-daemon";
 
+/// Key in a roster member's `metadata_json` that sets how many tasks the
+/// member may hold active at once.
+pub const MAX_TASKS_METADATA_KEY: &str = "max_tasks";
+
+/// Active-task limit for a member whose roster row has no `max_tasks` key.
+pub const DEFAULT_MAX_TASKS: NonZeroU32 = NonZeroU32::MIN;
+
 /// Open state and a terminal outcome are unrepresentable together. JSON goes
 /// through `TaskRowWire` / `TaskEventRowWire` (scalar `state` + `close_outcome`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

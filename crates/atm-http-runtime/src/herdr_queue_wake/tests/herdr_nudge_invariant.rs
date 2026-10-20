@@ -2105,11 +2105,13 @@ async fn member_without_dispatchable_backend_holds_and_logs_once() {
             .state,
         RuntimeMemberState::Idle
     );
+    let head = store.row(&key, &"AX5-TASK-00".parse().expect("task"));
     assert!(
         atm_core::nudge_dispatch::build_task_reminder_dispatch(
             &runtime,
             &key,
-            &store.row(&key, &"AX5-TASK-00".parse().expect("task")),
+            &head,
+            std::slice::from_ref(&head.task_id),
         )
         .expect("dispatch classification")
         .is_none(),
@@ -2266,5 +2268,190 @@ async fn sustained_active_resets_reminders_and_a_short_burst_does_not() {
     assert!(
         prompt_texts(&fake).len() == 3,
         "the Active member is never nudged while the reset condition is evaluated"
+    );
+}
+
+/// A member and its open tasks as `(task id, state, reminder_count)`, in
+/// queue order.
+type OpenTasksMember<'a> = (&'a str, Vec<(&'a str, TaskState, u32)>);
+
+type OpenTasksFixture = (
+    tempfile::TempDir,
+    LocalServiceRuntime,
+    Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+    HerdrQueueWakePump,
+    Arc<atm_storage::DummyTaskStore>,
+    Vec<atm_storage::MemberKey>,
+    Arc<Mutex<IsoTimestamp>>,
+);
+
+/// Builds an in-memory Herdr pump whose members hold the given open tasks.
+fn build_open_tasks_pump(members: Vec<OpenTasksMember<'_>>) -> OpenTasksFixture {
+    let root = tempfile::tempdir().expect("temporary root");
+    let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
+    let team: TeamName = "ax8-open-tasks".parse().expect("team");
+    let agents: Vec<String> = members
+        .iter()
+        .map(|(agent, _)| (*agent).to_owned())
+        .collect();
+    assembly
+        .service_runtime
+        .shared_roster_store_arc()
+        .save_roster(&RosterSnapshot {
+            team_name: team.clone(),
+            members: agents
+                .iter()
+                .map(|agent| herdr_member(&team, agent))
+                .collect(),
+            refreshed_at: None,
+        })
+        .expect("roster");
+    let assigned_at = IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("timestamp");
+    let rows: Vec<TaskRow> = members
+        .iter()
+        .flat_map(|(agent, tasks)| {
+            tasks
+                .iter()
+                .map(|(task_id, state, reminder_count)| TaskRow {
+                    position: None,
+                    team: team.clone(),
+                    task_id: task_id.parse().expect("task id"),
+                    assignee: agent.parse().expect("agent"),
+                    assigner: "sender".parse().expect("assigner"),
+                    state: *state,
+                    assignment_message_id: AtmMessageId::new(),
+                    description: format!("open task {task_id}"),
+                    assigned_at,
+                    updated_at: assigned_at,
+                    last_reminded_at: None,
+                    reminder_count: *reminder_count,
+                    lead_notified_count: 0,
+                })
+        })
+        .collect();
+    let task_store = Arc::new(atm_storage::DummyTaskStore::with_rows(rows.clone(), false));
+    let reader = task_only_reader(rows, &task_store, None);
+    let runtime = assembly
+        .service_runtime
+        .with_task_store(task_store.clone())
+        .with_async_task_ledger_reader(reader);
+    let keys: Vec<atm_storage::MemberKey> = agents
+        .iter()
+        .map(|agent| atm_storage::MemberKey::new(team.clone(), agent.parse().expect("agent")))
+        .collect();
+    let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+    let now = Arc::new(Mutex::new(assigned_at));
+    let pump = pump_with_clock(
+        runtime.clone(),
+        fake.clone(),
+        RuntimeHealth::default(),
+        Arc::clone(&now),
+    )
+    .with_daemon_home(root.path().join("home"));
+    (root, runtime, fake, pump, task_store, keys, now)
+}
+
+#[tokio::test]
+async fn one_nudge_lists_every_open_task_of_an_idle_member() {
+    let (_root, _runtime, fake, pump, task_store, keys, _now) = build_open_tasks_pump(vec![(
+        "ax8-agent-00",
+        vec![
+            ("AX8-A1", TaskState::Active, 0),
+            ("AX8-A2", TaskState::Active, 0),
+            ("AX8-B1", TaskState::Assigned, 0),
+        ],
+    )]);
+    let team = keys[0].team().clone();
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+    pump.tick_once().await;
+
+    let prompts = prompt_texts(&fake);
+    assert_eq!(prompts.len(), 1, "one nudge covers the member's open tasks");
+    for task in ["AX8-A1", "AX8-A2", "AX8-B1"] {
+        assert!(prompts[0].contains(task), "{}", prompts[0]);
+    }
+    let reminder_count = |task: &str| {
+        task_store
+            .load_task(&team, &task.parse().expect("task"))
+            .expect("load")
+            .expect("row")
+            .reminder_count
+    };
+    assert_eq!(
+        reminder_count("AX8-A1"),
+        1,
+        "the reminder is recorded on the head row"
+    );
+    assert_eq!(reminder_count("AX8-A2"), 0);
+    assert_eq!(reminder_count("AX8-B1"), 0);
+}
+
+#[tokio::test]
+async fn stall_escalates_once_per_member() {
+    let stalled = atm_storage::TASK_STALLED_REMINDER_THRESHOLD;
+    let (_root, runtime, fake, pump, task_store, keys, _now) = build_open_tasks_pump(vec![(
+        "ax8-agent-00",
+        vec![
+            ("AX8-A1", TaskState::Active, stalled),
+            ("AX8-A2", TaskState::Active, stalled),
+            ("AX8-B1", TaskState::Assigned, stalled),
+        ],
+    )]);
+    let team = keys[0].team().clone();
+    install_escalation_targets(&runtime, &task_store, &keys, &[]);
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+    pump.tick_once().await;
+
+    assert_eq!(
+        daemon_mail_for(&runtime, &team, atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .len(),
+        1,
+        "one stalled escalation for the member, not one per open task"
+    );
+    assert!(
+        prompt_texts(&fake).is_empty(),
+        "an escalating pass sends no nudge"
+    );
+}
+
+#[tokio::test]
+async fn members_are_nudged_independently() {
+    let (_root, _runtime, fake, pump, _store, keys, _now) = build_open_tasks_pump(vec![
+        (
+            "ax8-alpha",
+            vec![
+                ("AX8-ALPHA-1", TaskState::Active, 0),
+                ("AX8-ALPHA-2", TaskState::Assigned, 0),
+            ],
+        ),
+        (
+            "ax8-beta",
+            vec![
+                ("AX8-BETA-1", TaskState::Active, 0),
+                ("AX8-BETA-2", TaskState::Assigned, 0),
+            ],
+        ),
+    ]);
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+    pump.tick_once().await;
+
+    let prompts = prompt_texts(&fake);
+    assert_eq!(prompts.len(), 2, "each idle member gets one nudge");
+    let alpha = prompts
+        .iter()
+        .find(|prompt| prompt.contains("AX8-ALPHA-1"))
+        .expect("alpha nudge");
+    let beta = prompts
+        .iter()
+        .find(|prompt| prompt.contains("AX8-BETA-1"))
+        .expect("beta nudge");
+    assert!(
+        alpha.contains("AX8-ALPHA-2") && !alpha.contains("AX8-BETA"),
+        "{alpha}"
+    );
+    assert!(
+        beta.contains("AX8-BETA-2") && !beta.contains("AX8-ALPHA"),
+        "{beta}"
     );
 }

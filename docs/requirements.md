@@ -3056,21 +3056,26 @@ Required rules:
 Task lifecycle (Phase BA):
 1. A task MUST exist as exactly one row per `(team, task_id)`.
 2. Task state MUST be `assigned` (queued), `active` (working), or closed.
-3. An agent MUST hold at most one `active` task; the database MUST enforce
-   this with a unique index on `(team, assignee)` restricted to
-   `state = 'active'`. The index fires when a task **starts** (the implicit
-   `assigned → active` move; rejected as `ActiveElsewhere`), never at
+3. An agent MUST hold at most `max_tasks` `active` tasks. `max_tasks` is the
+   roster `metadata_json` key `max_tasks` for that member, defaulting to 1 when
+   unset; a stored value that is not an integer of at least 1 refuses the start.
+   Set it with `atm teams update-member <team> <member> --max-tasks <N>` (minimum
+   1). The limit is checked when a task **starts** (the implicit
+   `assigned → active` move; rejected as `TaskMoveInvalid`), never at
    `atm task assign` admission — any number of `assigned` rows may queue
-   behind the active one.
+   behind the active ones.
 4. Starting a task MUST be `atm task start <id>` by the assignee; it MUST move
-   the task from `assigned` to `active`, MUST move it to the head of the queue,
-   and MUST send the assigner a start message. The daemon MUST NOT start a task.
+   the task from `assigned` to `active`, MUST place it at the end of the started
+   group at the head of the queue (behind the agent's other active tasks), and
+   MUST send the assigner a start message. The daemon MUST NOT start a task.
 5. An agent's queue MUST be ordered by `(position, assigned_at, task_id)`;
    `assigned_at` MUST be the time of the current assignment; it is reset only by reassignment or reopen and never by a queue move; a new task's default position MUST be the
    end of the queue.
 6. `atm task move <id> --before <other> | --head | --end` MUST reposition an
-   `assigned` task only; `--head` MUST place it next up behind the active
-   task, and the active task MUST never be repositioned or preempted.
+   `assigned` task only; `--head` MUST place it next up behind the agent's
+   active tasks, and an active task MUST never be repositioned or preempted.
+   Started (`active`) tasks always sort ahead of `assigned` tasks; each group
+   keeps its order.
 7. Closing a task MUST record one typed outcome from
    `completed | refused | cancelled` with optional reason text,
    MUST remove the task from the queue, and MUST append a timestamped event.

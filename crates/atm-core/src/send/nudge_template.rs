@@ -5,6 +5,7 @@ use crate::boundary::{
     TaskTransition, TeamNudgeTemplateOverrideRow,
 };
 use crate::error::AtmError;
+use crate::types::TaskId;
 
 pub fn resolve_template(
     override_row: Option<TeamNudgeTemplateOverrideRow>,
@@ -28,21 +29,17 @@ pub fn render_resolved_built_in_nudge(
     let Some(template_body) = template.body.as_deref() else {
         return Ok(None);
     };
-    render_template(template_body, &render_values(event)).map(Some)
+    render_template(template_body, &render_values(event, &[])).map(Some)
 }
 
-pub fn render_template_body(
+/// Renders a task nudge that lists every open task of the recipient, so one
+/// nudge covers all of a member's tasks rather than one nudge per task.
+pub(crate) fn render_built_in_nudge_with_open_tasks(
     event: &PostSendHookEvent,
     template_body: &str,
+    open_tasks: &[TaskId],
 ) -> Result<String, AtmError> {
-    render_template(template_body, &render_values(event))
-}
-
-pub fn render_built_in_nudge(
-    event: &PostSendHookEvent,
-    template_body: &str,
-) -> Result<String, AtmError> {
-    render_template_body(event, template_body)
+    render_template(template_body, &render_values(event, open_tasks))
 }
 
 pub(crate) fn validate_built_in_nudge_template_body(template_body: &str) -> Result<(), AtmError> {
@@ -54,6 +51,7 @@ pub(crate) fn validate_built_in_nudge_template_body(template_body: &str) -> Resu
             ("message_id", String::new()),
             ("description", String::new()),
             ("task_id", String::new()),
+            ("open_tasks", String::new()),
             ("position", String::new()),
             ("attempt", String::new()),
             ("assignee", String::new()),
@@ -64,7 +62,10 @@ pub(crate) fn validate_built_in_nudge_template_body(template_body: &str) -> Resu
     .map(|_| ())
 }
 
-fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
+fn render_values(
+    event: &PostSendHookEvent,
+    open_tasks: &[TaskId],
+) -> BTreeMap<&'static str, String> {
     let (position, attempt, outcome) = match event.task_transition {
         Some(TaskTransition::Queued { position }) => {
             (position.to_string(), String::new(), String::new())
@@ -107,6 +108,14 @@ fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
                 .map(ToString::to_string)
                 .unwrap_or_default(),
         ),
+        (
+            "open_tasks",
+            open_tasks
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" "),
+        ),
         ("position", position),
         ("attempt", attempt),
         ("assignee", assignee),
@@ -136,10 +145,10 @@ pub fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
             "<atm task=\"{{task_id}}\" queued=\"{{position}}\" message=\"{{message_id}}\" from=\"{{from}}\"/>"
         }
         BuiltInNudgeTemplateKind::TaskReady => {
-            "<atm task=\"{{task_id}}\" ready message=\"{{message_id}}\" from=\"{{from}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>atm task start {{task_id}}</action>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            "<atm task=\"{{task_id}}\" open=\"{{open_tasks}}\" ready message=\"{{message_id}}\" from=\"{{from}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>atm task start {{task_id}}</action>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
         BuiltInNudgeTemplateKind::TaskReminder => {
-            "<atm task=\"{{task_id}}\" reminder=\"{{attempt}}\" message=\"{{message_id}}\" from=\"{{from}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>atm task start {{task_id}}</action>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            "<atm task=\"{{task_id}}\" open=\"{{open_tasks}}\" reminder=\"{{attempt}}\" message=\"{{message_id}}\" from=\"{{from}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>atm task start {{task_id}}</action>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
         BuiltInNudgeTemplateKind::TaskStarted => {
             "<atm task=\"{{task_id}}\" started agent=\"{{assignee}}\" message=\"{{message_id}}\"/>"
@@ -189,7 +198,8 @@ fn render_template(
 #[cfg(test)]
 mod tests {
     use super::{
-        default_template, qualified_sender_identity, render_built_in_nudge, resolve_template,
+        default_template, qualified_sender_identity, render_built_in_nudge_with_open_tasks,
+        resolve_template, validate_built_in_nudge_template_body,
     };
     use crate::boundary::{
         BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
@@ -197,6 +207,7 @@ mod tests {
         TeamNudgeTemplateOverrideRow,
     };
     use crate::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
+    use crate::types::TaskId;
     use crate::types::{AgentName, ChatId, IsoTimestamp, PaneId, TeamName};
 
     fn base_event() -> PostSendHookEvent {
@@ -254,9 +265,13 @@ mod tests {
             format!("{TEST_LEAD}@{TEST_TEAM}.rand-m4.local")
         );
         assert!(
-            render_built_in_nudge(&event, default_template(BuiltInNudgeTemplateKind::Delivery))
-                .expect("render nudge")
-                .contains(&format!("from=\"{TEST_LEAD}@{TEST_TEAM}.rand-m4.local\""))
+            render_built_in_nudge_with_open_tasks(
+                &event,
+                default_template(BuiltInNudgeTemplateKind::Delivery),
+                &[]
+            )
+            .expect("render nudge")
+            .contains(&format!("from=\"{TEST_LEAD}@{TEST_TEAM}.rand-m4.local\""))
         );
     }
 
@@ -276,13 +291,49 @@ mod tests {
         let mut event = base_event();
         event.task_id = Some("task-9".parse().expect("task id"));
         event.task_transition = Some(TaskTransition::Ready);
-        let rendered = render_built_in_nudge(
+        let rendered = render_built_in_nudge_with_open_tasks(
             &event,
             default_template(BuiltInNudgeTemplateKind::TaskReady),
+            &[],
         )
         .expect("rendered template");
         assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}")));
         assert!(rendered.contains("01KX1TEST00000000000000000"));
+    }
+
+    #[test]
+    fn task_reminder_body_lists_open_tasks() {
+        let mut event = base_event();
+        event.task_id = Some("task-1".parse().expect("task id"));
+        event.task_transition = Some(TaskTransition::Reminder { attempt: 1 });
+        let open: Vec<TaskId> = ["task-1", "task-2", "task-3"]
+            .iter()
+            .map(|id| id.parse().expect("task id"))
+            .collect();
+        for kind in [
+            BuiltInNudgeTemplateKind::TaskReminder,
+            BuiltInNudgeTemplateKind::TaskReady,
+        ] {
+            let rendered =
+                render_built_in_nudge_with_open_tasks(&event, default_template(kind), &open)
+                    .expect("default task body renders");
+            assert!(
+                rendered.contains("open=\"task-1 task-2 task-3\""),
+                "{kind:?} body must list every open task: {rendered}"
+            );
+        }
+    }
+
+    #[test]
+    fn open_tasks_placeholder_is_valid_in_team_override() {
+        let override_body = "<atm open=\"{{open_tasks}}\"/>";
+        validate_built_in_nudge_template_body(override_body).expect("override validates");
+        let mut event = base_event();
+        event.task_transition = Some(TaskTransition::Reminder { attempt: 1 });
+        let open: Vec<TaskId> = vec!["task-1".parse().expect("task id")];
+        let rendered = render_built_in_nudge_with_open_tasks(&event, override_body, &open)
+            .expect("override renders");
+        assert_eq!(rendered, "<atm open=\"task-1\"/>");
     }
 
     #[test]
@@ -350,7 +401,8 @@ mod tests {
                 has_read_action,
                 "read delivery contract for {kind}"
             );
-            render_built_in_nudge(&event, body).expect("default template renders");
+            render_built_in_nudge_with_open_tasks(&event, body, &[])
+                .expect("default template renders");
         }
     }
 
@@ -378,8 +430,8 @@ mod tests {
 
     #[test]
     fn unknown_placeholder_is_a_validation_error() {
-        let error =
-            render_built_in_nudge(&base_event(), "{{unknown}}").expect_err("unknown placeholder");
+        let error = render_built_in_nudge_with_open_tasks(&base_event(), "{{unknown}}", &[])
+            .expect_err("unknown placeholder");
         assert!(
             error
                 .message()
