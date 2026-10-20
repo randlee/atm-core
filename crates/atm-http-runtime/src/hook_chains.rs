@@ -16,6 +16,12 @@ use tokio::task::{AbortHandle, JoinHandle};
 
 struct Shared {
     live: watch::Sender<usize>,
+    /// Serializes admission/registration with `ChainGuard::drop` removing one
+    /// handle and `drain` taking all remaining handles. All lock scopes are
+    /// synchronous and end before `drain` awaits. If a panic poisons this lock,
+    /// callers recover the inner map so shutdown can still abort handles that
+    /// remain in it; this is best-effort cleanup, not a guarantee that a
+    /// panicking critical section left the map complete.
     aborts: Mutex<HashMap<u64, AbortHandle>>,
 }
 
@@ -27,6 +33,8 @@ pub struct ChainTracker {
     /// Set under the `aborts` lock when `drain` takes the handles; a chain that
     /// registers after that point is aborted by its own registration.
     collected: AtomicBool,
+    /// Unique map keys only; `admit` increments this while holding `aborts`,
+    /// so the counter publishes no state and needs only relaxed ordering.
     next: AtomicU64,
 }
 
