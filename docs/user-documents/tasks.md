@@ -93,4 +93,16 @@ seq at event from→to actor detail
 `atm task move` reorders only the caller's open queue; select exactly one of
 `--head`, `--before <other-task-id>`, or `--end`.
 
+## Task hooks
+
+The daemon may consult registered hooks before `assign`, `start`, `close`,
+`move`, `list`, or `events`; `history` is not hooked. A hook may handle
+the request with actions, pass it through, decline it for another phase, or
+refuse it before any task change. Runtime failures fail the command closed.
+When a handled reply returns no action for the original command, the CLI
+prints `hook ran N actions`. Returned actions do not invoke hooks again.
+
+Manage registrations with `atm hook`; see [Hooks](./hooks.md) for the module
+contract, timeouts, error codes, doctor checks, and `atm cron` schedules.
+
 Return to the [ATM User Guide](./README.md).
