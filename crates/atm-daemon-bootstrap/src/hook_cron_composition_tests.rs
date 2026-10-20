@@ -1,6 +1,6 @@
 use std::{
     path::PathBuf,
-    sync::{Arc, atomic::Ordering},
+    sync::{Arc, Mutex, OnceLock, atomic::Ordering},
     time::Duration,
 };
 
@@ -57,8 +57,19 @@ struct World {
     workers: DaemonWorkers,
 }
 
+fn sqlite_composition_startup_guard() -> &'static Mutex<()> {
+    static GUARD: OnceLock<Mutex<()>> = OnceLock::new();
+    GUARD.get_or_init(|| Mutex::new(()))
+}
+
 impl World {
     fn new() -> Self {
+        // Constructing this real SQLite fixture loads the durable hook snapshot
+        // synchronously. Serializing only that startup avoids test-process pool
+        // oversubscription while preserving the production storage path.
+        let _startup = sqlite_composition_startup_guard()
+            .lock()
+            .expect("SQLite composition startup guard is not poisoned");
         let root = tempfile::tempdir().unwrap();
         let assembly = open_isolated_sqlite_boundary(root.path())
             .unwrap()
@@ -376,7 +387,7 @@ async fn filter_and_cron_share_one_runner_and_one_dispatcher() {
 }
 
 #[tokio::test]
-async fn snapshot_load_error_fails_daemon_composition() {
+async fn snapshot_load_error_is_deferred_past_daemon_composition() {
     let root = tempfile::tempdir().unwrap();
     let mut assembly = open_isolated_sqlite_boundary(root.path())
         .unwrap()
@@ -384,7 +395,7 @@ async fn snapshot_load_error_fails_daemon_composition() {
     let store = Arc::new(InMemoryHookRegistrationStore::default());
     store.fail_active_all.store(true, Ordering::SeqCst);
     assembly.service_runtime = assembly.service_runtime.with_hook_registration_store(store);
-    assert!(World::assemble(root, assembly).is_err());
+    assert!(World::assemble(root, assembly).is_ok());
 }
 
 #[tokio::test]

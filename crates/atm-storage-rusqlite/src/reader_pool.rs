@@ -259,13 +259,13 @@ pub(crate) struct ReaderPoolConfig {
 impl ReaderPoolConfig {
     pub(crate) const fn shared_defaults() -> Self {
         Self {
-            pool_size: NonZeroUsize::new(8).expect("non-zero shared read pool size"),
+            pool_size: NonZeroUsize::new(4).expect("non-zero shared read pool size"),
             queue_depth: NonZeroUsize::new(32).expect("non-zero shared read queue depth"),
             interrupt_grace: Duration::from_millis(250),
             request_deadline: Duration::from_secs(10),
             shutdown_join_deadline: Duration::from_secs(5),
-            max_quarantined: NonZeroUsize::new(8).expect("non-zero shared read quarantine budget"),
-            tool_class_max_in_flight: 6,
+            max_quarantined: NonZeroUsize::new(4).expect("non-zero shared read quarantine budget"),
+            tool_class_max_in_flight: 3,
         }
     }
 }
@@ -1318,13 +1318,13 @@ mod tests {
     fn connection_budget_fails_closed_and_names_each_contributor() {
         let error = validate_connection_budget(
             ReaderPoolConfig::shared_defaults(),
-            NonZeroUsize::new(17).expect("non-zero maximum connections"),
+            NonZeroUsize::new(9).expect("non-zero maximum connections"),
         )
-        .expect_err("18 shared-read connections must not fit under a cap of 17");
+        .expect_err("10 shared-read connections must not fit under a cap of 9");
         let message = error.message();
-        assert!(message.contains("read_pool=8"));
-        assert!(message.contains("tool_class_max_in_flight=6"));
-        assert!(message.contains("max_connections=17"));
+        assert!(message.contains("read_pool=4"));
+        assert!(message.contains("tool_class_max_in_flight=3"));
+        assert!(message.contains("max_connections=9"));
     }
 
     #[test]

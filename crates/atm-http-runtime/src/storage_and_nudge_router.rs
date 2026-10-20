@@ -3379,7 +3379,7 @@ pub(crate) mod tests {
         let reader_lanes = assembly
             .reader_lanes
             .expect("SQLite assembly exposes its effective reader pool");
-        assert_eq!(reader_lanes.pool_size, 8);
+        assert_eq!(reader_lanes.pool_size, 4);
         assert_eq!(reader_lanes.queue_depth, 32);
         let projection = StorageDoctorProjection::start(
             DoctorProjectionConfig {
@@ -3400,7 +3400,7 @@ pub(crate) mod tests {
             .await
             .expect("doctor report");
         let json = serde_json::to_value(&report).expect("doctor report serializes");
-        assert_eq!(json["reader_lanes"]["pool_size"], 8);
+        assert_eq!(json["reader_lanes"]["pool_size"], 4);
         assert_eq!(json["reader_lanes"]["queue_depth"], 32);
     }
 

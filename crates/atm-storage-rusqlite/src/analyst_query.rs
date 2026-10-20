@@ -488,7 +488,7 @@ mod tests {
         let _analyst = open_defensive_connection(&path).expect("analyst read connection");
 
         let opened = opened_connection_count(&target);
-        assert_eq!(opened, 10, "writer + shared read pool + analyst");
+        assert_eq!(opened, 6, "writer + shared read pool + analyst");
         assert!(
             opened <= 18,
             "opened connections must fit the worst-case cap"
