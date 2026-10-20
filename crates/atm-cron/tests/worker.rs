@@ -1251,6 +1251,41 @@ async fn reload_failure_keeps_slots_and_retries() {
     );
 }
 
+fn reload_failures(logs: &Arc<std::sync::Mutex<Vec<String>>>) -> usize {
+    logs.lock()
+        .unwrap()
+        .iter()
+        .filter(|entry| entry.contains("action=\"reload_failed\""))
+        .count()
+}
+
+#[tokio::test]
+async fn failed_reload_retries_on_backoff_before_the_next_occurrence() {
+    let fixture = Fixture::new();
+    let logs = capture_logs();
+    let spec = fixture.spec("reload-backoff");
+    fixture.cron.start(spec.clone()).await.unwrap();
+    let worker = fixture.worker().await;
+    fixture.store.fail_active_all.store(true, Ordering::SeqCst);
+    let parks = fixture.clock.parks();
+    fixture
+        .cron
+        .end(&spec.team, &spec.phase, Some("absent"))
+        .await
+        .unwrap();
+    fixture.clock.wait_parks_above(parks).await;
+    assert_eq!(reload_failures(&logs), 1);
+    // The next occurrence is a minute away, so each retry below comes from
+    // the backoff alone: 1s after the failure, then 2s, then 4s.
+    fixture.step(1).await;
+    assert_eq!(reload_failures(&logs), 2);
+    fixture.step(1).await;
+    assert_eq!(reload_failures(&logs), 2);
+    fixture.step(1).await;
+    assert_eq!(reload_failures(&logs), 3);
+    shutdown(&worker).await;
+}
+
 #[tokio::test]
 async fn tick_and_stop_check_log_entries() {
     let fixture = Fixture::new();

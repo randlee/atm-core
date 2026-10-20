@@ -250,15 +250,49 @@ fn step_for(slots: &[Slot], now: DateTime<Utc>) -> Step {
     plan_step(&views, now)
 }
 
-async fn reload_slots(cron: &AtmCron, slots: &mut Vec<Slot>) -> bool {
+/// Backoff for a failed schedule reload: 1s, 2s, 4s, ... doubling per failed
+/// attempt and capped at one minute, so an outage is retried long before the
+/// next occurrence of a schedule.
+const RELOAD_RETRY_MAX_SECS: i64 = 60;
+
+#[derive(Default)]
+struct ReloadRetry {
+    failures: u32,
+    due: Option<DateTime<Utc>>,
+}
+
+impl ReloadRetry {
+    fn delay(failures: u32) -> Duration {
+        let secs = 1i64
+            .checked_shl(failures)
+            .unwrap_or(RELOAD_RETRY_MAX_SECS)
+            .min(RELOAD_RETRY_MAX_SECS);
+        Duration::seconds(secs)
+    }
+
+    fn failed(&mut self, now: DateTime<Utc>) {
+        self.due = Some(now + Self::delay(self.failures));
+        self.failures = self.failures.saturating_add(1);
+    }
+
+    fn succeeded(&mut self) {
+        *self = Self::default();
+    }
+
+    fn is_due(&self, now: DateTime<Utc>) -> bool {
+        self.due.is_some_and(|due| due <= now)
+    }
+}
+
+async fn reload_slots(cron: &AtmCron, slots: &mut Vec<Slot>, retry: &mut ReloadRetry) {
     match store_call(cron.deps.store.clone(), |store| store.active_all()).await {
         Ok(rows) => {
             merge(cron, slots, rows).await;
-            false
+            retry.succeeded();
         }
         Err(error) => {
             tracing::error!(subsystem = "atm_cron", action = "reload_failed", %error, "cron reload failed: {error}");
-            true
+            retry.failed(cron.deps.clock.now());
         }
     }
 }
@@ -328,7 +362,7 @@ pub(crate) async fn run(
 ) {
     let mut slots = Vec::new();
     merge(&cron, &mut slots, rows).await;
-    let mut retry_reload = false;
+    let mut reload_retry = ReloadRetry::default();
     loop {
         let now = cron.deps.clock.now();
         let step = step_for(&slots, now);
@@ -339,14 +373,17 @@ pub(crate) async fn run(
         } else {
             step.wake.unwrap_or(DateTime::<Utc>::MAX_UTC)
         };
+        let wake = reload_retry.due.map_or(wake, |retry| wake.min(retry));
         tokio::select! {
             biased;
             result = reload.changed() => {
                 if result.is_err() { break; }
-                retry_reload = reload_slots(&cron, &mut slots).await;
+                reload_slots(&cron, &mut slots, &mut reload_retry).await;
             }
             () = cron.deps.clock.sleep_until(wake) => {
-                if retry_reload { retry_reload = reload_slots(&cron, &mut slots).await; }
+                if reload_retry.is_due(cron.deps.clock.now()) {
+                    reload_slots(&cron, &mut slots, &mut reload_retry).await;
+                }
                 apply_step(&cron, &mut slots, &running).await;
             }
             (index, result) = finished(&mut slots) => {
@@ -382,6 +419,32 @@ pub(crate) async fn run(
 mod tests {
     use super::*;
     use atm_core::test_support::TEST_SENDER;
+
+    #[test]
+    fn reload_retry_doubles_per_failure_then_caps_at_one_minute() {
+        let now = DateTime::<Utc>::UNIX_EPOCH;
+        let mut retry = ReloadRetry::default();
+        let mut delays = Vec::new();
+        for _ in 0..9 {
+            retry.failed(now);
+            delays.push((retry.due.expect("failure sets a due time") - now).num_seconds());
+        }
+        assert_eq!(delays, [1, 2, 4, 8, 16, 32, 60, 60, 60]);
+        assert!(!retry.is_due(now));
+        assert!(retry.is_due(now + Duration::seconds(60)));
+    }
+
+    #[test]
+    fn reload_retry_success_clears_the_backoff() {
+        let now = DateTime::<Utc>::UNIX_EPOCH;
+        let mut retry = ReloadRetry::default();
+        retry.failed(now);
+        retry.failed(now);
+        retry.succeeded();
+        assert!(retry.due.is_none());
+        retry.failed(now);
+        assert_eq!(retry.due, Some(now + Duration::seconds(1)));
+    }
 
     fn row() -> CronSchedule {
         serde_json::from_value(serde_json::json!({
