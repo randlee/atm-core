@@ -15,6 +15,7 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from lint_boundaries import collect_boundary_violations
+from lint_boundaries import dependency_import_patterns
 from lint_boundaries import collect_io_forbidden_source_violations
 from lint_boundaries import collect_scb_observability_otel_violations
 from lint_boundaries import collect_scb_observability_rule_violations
@@ -24,6 +25,32 @@ from lint_boundaries import parse_boundary_records
 from lint_boundaries import parse_simple_yaml_document
 from lint_boundaries import run
 from run_lint import build_tasks
+
+
+class DependencyImportPatternsTests(unittest.TestCase):
+    def test_local_qualified_cron_paths_are_not_external_imports(self) -> None:
+        patterns = dependency_import_patterns("cron")
+        for source in (
+            "Cron(self::cron::CronCommand),",
+            "use self::cron::CronCommand;",
+            "use super::cron::CronCommand;",
+            "use crate::cron::CronCommand;",
+        ):
+            with self.subTest(source=source):
+                self.assertFalse(any(pattern.search(source) for pattern in patterns))
+
+    def test_real_cron_imports_remain_forbidden(self) -> None:
+        patterns = dependency_import_patterns("cron")
+        for source in (
+            "use cron::Schedule;",
+            "use ::cron::Schedule;",
+            "cron::Schedule::from_str(value)",
+            "let schedule: ::cron::Schedule;",
+            "use cron as external_cron;",
+            "extern crate cron;",
+        ):
+            with self.subTest(source=source):
+                self.assertTrue(any(pattern.search(source) for pattern in patterns))
 
 
 ROOT_MANIFEST = """\
@@ -1262,6 +1289,25 @@ rusqlite = "0.37"
             self.assertNotIn(f"{owned}:1: {message}", rendered)
             self.assertIn(f"{sibling}:1: {message}", rendered)
             self.assertIn(f"{outside}:1: {message}", rendered)
+
+    def test_cron_local_module_path_does_not_hide_planted_external_import(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_doc(repo_root, "atm-storage-rusqlite")
+            (repo_root / ".just/lint-config.toml").write_text(
+                LINT_CONFIG.replace("rusqlite", "cron"), encoding="utf-8"
+            )
+            source = repo_root / "crates/atm/src/lib.rs"
+            source.write_text(
+                "mod cron;\nuse self::cron::CronCommand;\nuse cron::Schedule;\n",
+                encoding="utf-8",
+            )
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            message = "only crates/atm-storage-cron source may import cron directly"
+            self.assertNotIn(f"crates/atm/src/lib.rs:2: {message}", rendered)
+            self.assertIn(f"crates/atm/src/lib.rs:3: {message}", rendered)
 
     def test_collect_boundary_violations_flags_non_dev_atm_core_edge(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

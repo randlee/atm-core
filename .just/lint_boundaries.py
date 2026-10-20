@@ -567,7 +567,7 @@ def dependency_import_patterns(dependency: str) -> tuple[re.Pattern[str], ...]:
     crate_path = dependency.replace("-", "_")
     escaped = re.escape(crate_path)
     return (
-        re.compile(rf"\b{escaped}::"),
+        re.compile(rf"(?<![\w:])(?:::)?{escaped}::"),
         re.compile(rf"\buse\s+{escaped}\b"),
         re.compile(rf"\bextern\s+crate\s+{escaped}\b"),
     )
