@@ -1,4 +1,7 @@
 use std::{
+    collections::BTreeSet,
+    fs,
+    path::{Path, PathBuf},
     sync::{Arc, atomic::Ordering},
     time::Duration,
 };
@@ -226,39 +229,95 @@ async fn atm_cron_public_surface_is_worker_and_scheduler_trait() {
     shutdown(&worker).await;
 }
 
-#[test]
-fn atm_cron_has_no_unapproved_public_inherent_methods() {
-    let source = syn::parse_file(include_str!("../src/scheduler.rs"))
-        .expect("scheduler.rs must remain valid Rust syntax");
-    let implementation = source
-        .items
-        .iter()
-        .find_map(|item| match item {
+fn rust_source_files(directory: &Path, files: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(directory)
+        .unwrap_or_else(|error| panic!("could not read {}: {error}", directory.display()))
+    {
+        let path = entry
+            .unwrap_or_else(|error| {
+                panic!(
+                    "could not read an entry in {}: {error}",
+                    directory.display()
+                )
+            })
+            .path();
+        if path.is_dir() {
+            rust_source_files(&path, files);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            files.push(path);
+        }
+    }
+}
+
+fn collect_atm_cron_public_methods(
+    items: &[syn::Item],
+    inherent_impl_count: &mut usize,
+    public_methods: &mut BTreeSet<String>,
+) {
+    for item in items {
+        match item {
             syn::Item::Impl(implementation)
                 if implementation.trait_.is_none()
                     && matches!(
                         implementation.self_ty.as_ref(),
-                        syn::Type::Path(path) if path.path.is_ident("AtmCron")
+                        syn::Type::Path(path)
+                            if path.path.segments.last().is_some_and(|segment| segment.ident == "AtmCron")
                     ) =>
             {
-                Some(implementation)
+                *inherent_impl_count += 1;
+                public_methods.extend(implementation.items.iter().filter_map(|item| match item {
+                    syn::ImplItem::Fn(method)
+                        if matches!(&method.vis, syn::Visibility::Public(_)) =>
+                    {
+                        Some(method.sig.ident.to_string())
+                    }
+                    _ => None,
+                }));
             }
-            _ => None,
-        })
-        .expect("scheduler.rs must define the inherent AtmCron implementation");
-    let mut public_methods: Vec<_> = implementation
-        .items
-        .iter()
-        .filter_map(|item| match item {
-            syn::ImplItem::Fn(method) if matches!(method.vis, syn::Visibility::Public(_)) => {
-                Some(method.sig.ident.to_string())
+            syn::Item::Mod(module) => {
+                if let Some((_, module_items)) = &module.content {
+                    collect_atm_cron_public_methods(
+                        module_items,
+                        inherent_impl_count,
+                        public_methods,
+                    );
+                }
             }
-            _ => None,
-        })
-        .collect();
-    public_methods.sort();
+            _ => {}
+        }
+    }
+}
 
-    assert_eq!(public_methods, ["new", "start_worker"]);
+#[test]
+fn atm_cron_has_no_unapproved_public_inherent_methods() {
+    let source_directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut source_files = Vec::new();
+    rust_source_files(&source_directory, &mut source_files);
+    source_files.sort();
+
+    let mut inherent_impl_count = 0;
+    let mut public_methods = BTreeSet::new();
+    for path in source_files {
+        let text = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("could not read {}: {error}", path.display()));
+        let source = syn::parse_file(&text).unwrap_or_else(|error| {
+            panic!("{} must remain valid Rust syntax: {error}", path.display())
+        });
+        collect_atm_cron_public_methods(
+            &source.items,
+            &mut inherent_impl_count,
+            &mut public_methods,
+        );
+    }
+
+    assert!(
+        inherent_impl_count > 0,
+        "src must define an inherent AtmCron implementation"
+    );
+    assert_eq!(
+        public_methods,
+        BTreeSet::from(["new".to_owned(), "start_worker".to_owned()])
+    );
 }
 
 #[tokio::test]
