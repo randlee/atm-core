@@ -220,10 +220,11 @@ migration functions directly.
   `(team, phase, hook)`) and `cron_schedule` (`id` plus
   `UNIQUE (team, phase, name)`) are additive SQLite MINOR schema objects:
   created idempotently from `ensure_schema`, no foreign key, ignored by a
-  pre-bk binary. The D3 previous-consumer proof is sprint bk-1's test that
-  the frozen pre-bk `DB_MIGRATIONS` statements still read and write after
-  both tables exist (pattern
-  `pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created`). No
+  pre-bk binary. The D3 previous-consumer proof is sprint bk-6's
+  `crates/atm-storage-rusqlite/tests/hook_schema.rs::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created`
+  test: the frozen pre-bk `DB_MIGRATIONS` statements still read and write
+  after both tables exist. Sprint bk-1 owns the store traits, not this
+  SQLite schema proof. No
   `STORAGE_SCHEMA_VERSION` is added, for the reason given under Phase BB.1.
 - **2026-09-12 — Phase BB.6 (approved):** Fenix, as Phase BB lead, approved
   this additive schema change through ATM on team `atm-dev`. `prompt_handoffs`
