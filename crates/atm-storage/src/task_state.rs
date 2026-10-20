@@ -11,7 +11,7 @@ use crate::{BuiltInNudgeTemplateKind, MessageKey};
 
 use crate::task_store::ReminderOutcome;
 
-/// 1-based queue place; the active task, when one exists, holds 1.
+/// 1-based queue position, with 1 at the head of the member's queue.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
 pub struct QueuePosition(NonZeroU32);
