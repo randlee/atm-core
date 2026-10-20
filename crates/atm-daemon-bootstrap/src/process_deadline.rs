@@ -114,6 +114,38 @@ async fn read_capped(
     Ok(bytes)
 }
 
+async fn read_tail(
+    mut reader: impl AsyncRead + Unpin,
+    cap: u64,
+    name: &str,
+) -> Result<Vec<u8>, SpawnFailure> {
+    let cap = usize::try_from(cap).expect("stream cap must fit usize");
+    let mut tail = Vec::with_capacity(cap);
+    let mut buffer = [0_u8; 8192];
+    loop {
+        let read = reader.read(&mut buffer).await.map_err(|error| {
+            SpawnFailure::Failed(AtmError::hook_exit(HookExitCause::Read {
+                stream: name.into(),
+                cause: error.to_string(),
+            }))
+        })?;
+        if read == 0 {
+            return Ok(tail);
+        }
+        if read >= cap {
+            tail.clear();
+            tail.extend_from_slice(&buffer[read - cap..read]);
+            continue;
+        }
+        let overflow = tail.len().saturating_add(read).saturating_sub(cap);
+        if overflow > 0 {
+            tail.copy_within(overflow.., 0);
+            tail.truncate(tail.len() - overflow);
+        }
+        tail.extend_from_slice(&buffer[..read]);
+    }
+}
+
 async fn collect(
     child: &mut Child,
     stdin: &[u8],
@@ -136,7 +168,7 @@ async fn collect(
         write,
         wait,
         read_capped(stdout, STDOUT_CAP, "stdout"),
-        read_capped(stderr, STDERR_CAP, "stderr")
+        read_tail(stderr, STDERR_CAP, "stderr")
     )?;
     Ok((status, stdout, stderr))
 }
@@ -393,20 +425,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stderr_over_cap_is_bounded_and_malformed() {
+    async fn stderr_over_cap_is_bounded_and_preserves_exit_status() {
         let root = tempfile::tempdir().unwrap();
         let spawn = spec(
             &root,
-            "import sys,threading\nsys.stderr.write('x'*((64<<10)+1))\nsys.stderr.flush()\nthreading.Event().wait()\n",
+            "import sys\nsys.stderr.write('x'*((64<<10)+1) + 'TAIL')\nsys.stderr.flush()\nsys.exit(3)\n",
             Vec::new(),
         );
-        let Err(SpawnFailure::Failed(error)) =
-            spawn_until(spawn, b"{}", std::future::pending()).await
-        else {
-            panic!("expected cap error")
-        };
-        assert_eq!(error.code(), AtmErrorCode::HookMalformed);
-        assert!(error.message().contains("stderr exceeds"));
+        let output = spawn_until(spawn, b"{}", std::future::pending())
+            .await
+            .expect("stderr cap must retain the tail rather than fail the run");
+        assert_eq!(output.status.code(), Some(3));
+        assert_eq!(output.stderr.len(), STDERR_CAP as usize);
+        assert!(output.stderr.ends_with(b"TAIL"));
     }
 
     #[tokio::test]
