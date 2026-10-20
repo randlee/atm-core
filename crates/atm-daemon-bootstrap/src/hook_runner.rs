@@ -1,3 +1,9 @@
+//! Daemon-owned execution of task-hook modules.
+//!
+//! Hook children from task chains, cron runs, and doctor requests share one
+//! bounded permit pool so a misbehaving registration cannot exhaust daemon
+//! process capacity.
+
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -21,8 +27,15 @@ use tokio::sync::Semaphore;
 
 use crate::process_deadline::{SpawnFailure, SpawnSpec, SpawnedOutput, spawn_with_deadline};
 
+/// Maximum concurrently running hook children for one daemon.
+///
+/// Sixteen permits leave room for normal daemon work while supporting several
+/// independent task chains, cron runs, and doctor requests at once.
 pub const HOOK_CONCURRENCY_MAX: usize = 16;
 
+/// Runs registered hook modules in the daemon's constrained subprocess
+/// environment.
+#[derive(Debug)]
 pub struct DaemonHookRunner {
     base_env: Result<Vec<(OsString, OsString)>, AtmError>,
     python: Result<PathBuf, AtmError>,
@@ -142,6 +155,8 @@ fn resolve_python(base: &[(OsString, OsString)], env: &dyn EnvSource) -> Result<
 }
 
 impl DaemonHookRunner {
+    /// Captures the daemon environment and configures the production permit
+    /// limit for hook children.
     pub fn new(env: &dyn EnvSource) -> Self {
         Self::with_limit(env, HOOK_CONCURRENCY_MAX)
     }
@@ -462,6 +477,12 @@ mod tests {
                 )
                 .await
         }
+    }
+
+    #[test]
+    fn runner_debug_reports_its_type() {
+        let fixture = Fixture::new();
+        assert!(format!("{:?}", fixture.runner()).starts_with("DaemonHookRunner"));
     }
 
     #[test]

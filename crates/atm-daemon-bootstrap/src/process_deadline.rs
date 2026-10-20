@@ -31,7 +31,11 @@ pub(crate) enum SpawnFailure {
     Failed(AtmError),
 }
 
+/// Maximum hook stdout retained for parsing: one MiB accommodates a complete
+/// action reply while bounding daemon memory for an untrusted child.
 pub(crate) const STDOUT_CAP: u64 = 1 << 20;
+/// Maximum hook stderr retained for diagnostics: 64 KiB preserves a useful
+/// traceback tail without allowing diagnostic output to dominate memory.
 pub(crate) const STDERR_CAP: u64 = 64 << 10;
 
 struct GroupKillGuard {
