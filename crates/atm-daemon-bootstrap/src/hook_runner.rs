@@ -224,7 +224,7 @@ impl DaemonHookRunner {
             .checked_sub(started.elapsed())
             .filter(|remaining| !remaining.is_zero())
             .ok_or_else(|| {
-                AtmError::hook_timeout(&target.phase, "hook concurrency limit reached")
+                AtmError::hook_timeout(&target.phase, "budget exhausted before spawn")
             })?;
         let output = spawn_with_deadline(spec, &stdin, remaining)
             .await
