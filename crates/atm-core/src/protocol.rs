@@ -608,6 +608,50 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
+    // Frozen copies of the 1.12 envelope declarations from git b2726d423^.
+    // Keep these independent of the current envelope enums so wire changes
+    // that a 1.12 consumer cannot decode are caught by the compatibility test.
+    #[derive(Debug, Serialize, Deserialize)]
+    enum RequestEnvelope12 {
+        Write(Box<super::WriteRequest>),
+        TaskMove(super::TaskMoveRequest),
+        CompatibilityPreflight(super::CompatibilityPreflight),
+        Heartbeat(super::TeamMemberHeartbeatRequest),
+        QueueGetNext(super::QueueGetNextRequest),
+        GraftReceiverRegister(super::GraftReceiverRegistration),
+        GraftReceiverRefresh(super::GraftReceiverRefreshRequest),
+        GraftReceiverUnregister(super::GraftReceiverUnregistration),
+        GraftReceiverLookup { team: TeamName, agent: AgentName },
+        List(super::ListQuery),
+        Peek(super::PeekQuery),
+        Receive(super::ReadQuery),
+        Clear(super::ClearQuery),
+        Doctor(super::DoctorQuery),
+        Search(Box<super::SearchRequest>),
+        ReloadRuntimeView,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    enum ResponseEnvelope12 {
+        Send(super::SendResponseEnvelope),
+        TaskMove(super::TaskMoveOutcome),
+        CompatibilityVerdict(super::CompatibilityVerdict),
+        Heartbeat(super::TeamMemberHeartbeatResponse),
+        QueueGetNext(super::QueueGetNextResponse),
+        GraftReceiverRegister,
+        GraftReceiverRefresh,
+        GraftReceiverUnregister,
+        GraftReceiverLookup(Option<super::GraftReceiverLease>),
+        List(super::ListOutcome),
+        Peek(Box<super::ReadOutcome>),
+        Receive(Box<super::ReadOutcome>),
+        Clear(super::ClearOutcome),
+        Doctor(Box<super::DoctorReport>),
+        Search(Box<super::SearchResponse>),
+        RuntimeViewReloaded,
+        Error(super::AtmError),
+    }
+
     #[test]
     fn heartbeat_request_envelope_round_trips() {
         let observed_at = IsoTimestamp::now();
@@ -1453,14 +1497,24 @@ mod tests {
         for request in request_samples_12() {
             let tag = request_tag(&request);
             let bytes = serde_json::to_vec(&request).expect("encode 1.12 request");
+            let encoded_value: serde_json::Value =
+                serde_json::from_slice(&bytes).expect("encoded request is JSON");
             assert_eq!(wire_tag(&bytes), tag);
             assert!(
                 REQUEST_VARIANTS_12.contains(&tag),
                 "{tag} is not a 1.12 request"
             );
-            let decoded: RequestEnvelope =
+            let decoded_12: RequestEnvelope12 = serde_json::from_slice(&bytes)
+                .unwrap_or_else(|error| panic!("1.12 reader rejects {tag}: {error}"));
+            let consumed_value = serde_json::to_value(decoded_12)
+                .unwrap_or_else(|error| panic!("1.12 reader cannot re-encode {tag}: {error}"));
+            assert_eq!(
+                consumed_value, encoded_value,
+                "the frozen 1.12 reader must preserve the full {tag} payload"
+            );
+            let decoded_current: RequestEnvelope =
                 serde_json::from_slice(&bytes).expect("1.13 decodes the 1.12 request");
-            assert_eq!(request_tag(&decoded), tag);
+            assert_eq!(request_tag(&decoded_current), tag);
             request_tags.push(tag);
         }
         let mut pinned_requests = REQUEST_VARIANTS_12.to_vec();
@@ -1476,14 +1530,24 @@ mod tests {
         for response in response_samples_12() {
             let tag = response_tag(&response);
             let bytes = serde_json::to_vec(&response).expect("encode 1.12 response");
+            let encoded_value: serde_json::Value =
+                serde_json::from_slice(&bytes).expect("encoded response is JSON");
             assert_eq!(wire_tag(&bytes), tag);
             assert!(
                 RESPONSE_VARIANTS_12.contains(&tag),
                 "{tag} is not a 1.12 response"
             );
-            let decoded: ResponseEnvelope =
+            let decoded_12: ResponseEnvelope12 = serde_json::from_slice(&bytes)
+                .unwrap_or_else(|error| panic!("1.12 reader rejects {tag}: {error}"));
+            let consumed_value = serde_json::to_value(decoded_12)
+                .unwrap_or_else(|error| panic!("1.12 reader cannot re-encode {tag}: {error}"));
+            assert_eq!(
+                consumed_value, encoded_value,
+                "the frozen 1.12 reader must preserve the full {tag} payload"
+            );
+            let decoded_current: ResponseEnvelope =
                 serde_json::from_slice(&bytes).expect("1.13 decodes the 1.12 response");
-            assert_eq!(response_tag(&decoded), tag);
+            assert_eq!(response_tag(&decoded_current), tag);
             response_tags.push(tag);
         }
         let mut pinned_responses = RESPONSE_VARIANTS_12.to_vec();
@@ -1493,6 +1557,35 @@ mod tests {
             response_tags, pinned_responses,
             "every pinned 1.12 response is sampled"
         );
+
+        // Literal bytes pinned from the 1.12 externally tagged wire format.
+        // Decode these with the current enums so the test covers actual old
+        // consumer bytes as well as bytes emitted by today's types.
+        const LITERAL_REQUESTS_12: &[&[u8]] = &[
+            br#"{"QueueGetNext":{"team":"test-team","member":"test-agent"}}"#,
+            br#""ReloadRuntimeView""#,
+        ];
+        for fixture in LITERAL_REQUESTS_12 {
+            let expected: serde_json::Value =
+                serde_json::from_slice(fixture).expect("pinned request fixture is JSON");
+            let decoded: RequestEnvelope = serde_json::from_slice(fixture)
+                .expect("current request enum decodes pinned 1.12 bytes");
+            let reencoded = serde_json::to_value(decoded).expect("re-encode pinned request");
+            assert_eq!(reencoded, expected, "pinned request payload changed");
+        }
+
+        const LITERAL_RESPONSES_12: &[&[u8]] = &[
+            br#"{"Search":{"hits":[],"aggregate":null,"next_cursor":null,"lifecycle":null}}"#,
+            br#""RuntimeViewReloaded""#,
+        ];
+        for fixture in LITERAL_RESPONSES_12 {
+            let expected: serde_json::Value =
+                serde_json::from_slice(fixture).expect("pinned response fixture is JSON");
+            let decoded: ResponseEnvelope = serde_json::from_slice(fixture)
+                .expect("current response enum decodes pinned 1.12 bytes");
+            let reencoded = serde_json::to_value(decoded).expect("re-encode pinned response");
+            assert_eq!(reencoded, expected, "pinned response payload changed");
+        }
 
         // A 1.13-only route is not a 1.12 request.
         let hook_list = RequestEnvelope::HookList(crate::hook::HookListQuery {
