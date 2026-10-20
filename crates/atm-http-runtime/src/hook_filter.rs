@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, PoisonError, RwLock};
+use std::sync::{Arc, LazyLock, PoisonError, RwLock};
 use std::time::Instant;
 
 use async_trait::async_trait;
@@ -31,7 +31,10 @@ use crate::hook_actions::UnhookedRouter;
 use crate::hook_chains::ChainTracker;
 use crate::router_support::ControlPathSyncBridge;
 
-type Chains = HashMap<(TeamName, HookName), Arc<[Arc<HookRegistration>]>>;
+type HookChains = HashMap<HookName, Arc<[Arc<HookRegistration>]>>;
+type Chains = HashMap<TeamName, HookChains>;
+
+static EMPTY_CHAIN: LazyLock<Arc<[Arc<HookRegistration>]>> = LazyLock::new(|| Arc::from([]));
 
 /// The active registrations, grouped by `(team, hook)` in store order.
 ///
@@ -104,23 +107,33 @@ impl ActiveHookSnapshot {
     fn chain(&self, team: &TeamName, hook: &HookName) -> Arc<[Arc<HookRegistration>]> {
         let chains = Arc::clone(&self.map.read().unwrap_or_else(PoisonError::into_inner));
         chains
-            .get(&(team.clone(), hook.clone()))
+            .get(team)
+            .and_then(|hooks| hooks.get(hook))
             .cloned()
-            .unwrap_or_else(|| Arc::from(Vec::new()))
+            .unwrap_or_else(|| Arc::clone(&EMPTY_CHAIN))
     }
 }
 
 fn build_chains(store: &dyn HookRegistrationStore) -> Result<Chains, AtmError> {
-    let mut grouped: HashMap<(TeamName, HookName), Vec<Arc<HookRegistration>>> = HashMap::new();
+    let mut grouped: HashMap<TeamName, HashMap<HookName, Vec<Arc<HookRegistration>>>> =
+        HashMap::new();
     for row in store.active_all()? {
         grouped
-            .entry((row.team.clone(), row.hook.clone()))
+            .entry(row.team.clone())
+            .or_default()
+            .entry(row.hook.clone())
             .or_default()
             .push(Arc::new(row));
     }
     Ok(grouped
         .into_iter()
-        .map(|(key, rows)| (key, Arc::from(rows)))
+        .map(|(team, hooks)| {
+            let hooks = hooks
+                .into_iter()
+                .map(|(hook, rows)| (hook, Arc::from(rows)))
+                .collect();
+            (team, hooks)
+        })
         .collect())
 }
 
@@ -1423,6 +1436,18 @@ mod tests {
             .expect("reloaded active");
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[1].phase, phase("bk"));
+    }
+
+    #[test]
+    fn missing_chain_uses_shared_empty_slice() {
+        let store = Arc::new(InMemoryHookRegistrationStore::new());
+        let snapshot = ActiveHookSnapshot::load(store).expect("snapshot");
+
+        let first = snapshot.chain(&team(), &hook("task.assign"));
+        let second = snapshot.chain(&team(), &hook("task.assign"));
+
+        assert!(first.is_empty());
+        assert!(Arc::ptr_eq(&first, &second));
     }
 
     #[tokio::test]
