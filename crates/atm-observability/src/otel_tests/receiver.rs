@@ -87,6 +87,8 @@ impl Capture {
         tokio::time::timeout(Duration::from_secs(30), async {
             loop {
                 let changed = self.changed.notified();
+                tokio::pin!(changed);
+                changed.as_mut().enable();
                 if condition() {
                     return;
                 }
