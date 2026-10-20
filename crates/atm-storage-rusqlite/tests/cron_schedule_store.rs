@@ -316,6 +316,19 @@ fn start_refuses_active_duplicate() {
 }
 
 #[test]
+fn zero_timeout_fails_the_check() {
+    let h = Harness::new();
+    let mut zero = cron_spec("nightly", StopCondition::Hook, stamp(3));
+    zero.timeout_ms = 0;
+
+    let error = h.store().start(zero).expect_err("zero timeout is refused");
+
+    assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+    assert!(error.message().contains("cron_schedule"));
+    assert!(error.message().contains("timeout_ms"));
+}
+
+#[test]
 fn record_with_stale_generation_changes_nothing() {
     let h = Harness::new();
     let store = h.store();
