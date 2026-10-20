@@ -9,7 +9,7 @@ use atm_core::boundary::{
     HookRunner, NewCronSchedule, PhaseId,
 };
 use atm_core::{
-    error::AtmError,
+    error::{AtmError, AtmErrorCode},
     types::{HostName, TeamName},
 };
 use tokio::{
@@ -57,7 +57,9 @@ impl AtmCron {
         let _lock = self.start_lock.lock().await;
         self.check_running()?;
         if self.reload.receiver_count() != 0 {
-            return Err(AtmError::daemon_unavailable("cron worker already started"));
+            return Err(AtmError::daemon_lifecycle_wedge(
+                "cron worker already started",
+            ));
         }
         let reload = self.reload.subscribe();
         let rows = store_call(self.deps.store.clone(), |store| store.active_all()).await?;
@@ -96,7 +98,9 @@ pub(crate) async fn store_call<T: Send + 'static>(
 ) -> Result<T, AtmError> {
     tokio::task::spawn_blocking(move || operation(store.as_ref()))
         .await
-        .map_err(|error| AtmError::daemon_unavailable(format!("cron store task failed: {error}")))?
+        .map_err(|source| {
+            AtmError::new(AtmErrorCode::InternalError, "cron store task failed").with_cause(source)
+        })?
 }
 
 impl atm_core::boundary::sealed::Sealed for AtmCron {}
@@ -233,5 +237,36 @@ impl Drop for CronWorkerHandle {
         {
             let _ = sender.send(());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use atm_core::{
+        boundary::CronScheduleStore,
+        error::{AtmError, AtmErrorCode},
+    };
+    use atm_runtime_test_support::InMemoryCronScheduleStore;
+
+    use super::store_call;
+
+    #[tokio::test]
+    async fn store_task_join_error_keeps_its_source_and_specific_code() {
+        let store: Arc<dyn CronScheduleStore> = Arc::new(InMemoryCronScheduleStore::new());
+        let error = store_call(store, |_store| -> Result<(), AtmError> {
+            panic!("injected cron store task panic")
+        })
+        .await
+        .expect_err("panicking store task must fail");
+
+        assert_eq!(error.code(), AtmErrorCode::InternalError);
+        assert!(
+            error
+                .cause()
+                .expect("JoinError source is retained")
+                .contains("injected cron store task panic")
+        );
     }
 }

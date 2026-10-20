@@ -8,7 +8,7 @@ use atm_core::{
         CronSchedule, CronScheduleStore, CronScheduler, CronStartSpec, HookCall, HookOutcome,
         PhaseId, StopCondition,
     },
-    error::AtmError,
+    error::{AtmError, AtmErrorCode},
     hook::{HookReply, StopReply},
     test_support::TEST_SENDER,
 };
@@ -323,6 +323,10 @@ async fn stopped_worker_refuses_start_end_and_list() {
     let worker = fixture.worker().await;
     shutdown(&worker).await;
     let spec = fixture.spec("stopped");
+    assert_eq!(
+        fixture.cron.list(None, None).await.unwrap_err().code(),
+        AtmErrorCode::DaemonUnavailable
+    );
     assert!(
         fixture
             .cron
@@ -350,6 +354,22 @@ async fn stopped_worker_refuses_start_end_and_list() {
             .message()
             .contains("cron worker stopped")
     );
+}
+
+#[tokio::test]
+async fn starting_worker_twice_returns_lifecycle_error_code() {
+    let fixture = Fixture::new();
+    let worker = fixture.cron.start_worker().await.unwrap();
+    let error = fixture
+        .cron
+        .start_worker()
+        .await
+        .err()
+        .expect("second worker start must be rejected");
+
+    assert_eq!(error.code(), AtmErrorCode::DaemonLifecycleWedge);
+    assert!(error.message().contains("cron worker already started"));
+    shutdown(&worker).await;
 }
 
 #[tokio::test]
