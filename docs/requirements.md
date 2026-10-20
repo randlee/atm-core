@@ -3106,22 +3106,25 @@ Nudge invariant (Phase BA):
     from the ephemeral roster record; it MUST NOT consume
     `PickerMemberStatus`, a `RuntimeHealth` projection, raw Herdr output, or
     heartbeat DTOs.
-15. `Idle` with an open task MUST be nudged, no more than once per 60 seconds
-    per task. The first prompt is `task_ready`; later prompts are
-    `task_reminder` with a rising attempt. Every assignment produces one
-    `task_queued` line at write time.
+15. `Idle` with one or more open tasks MUST be nudged, no more than once per
+    60 seconds per member. Each nudge MUST list every open task of that
+    member. Reminder and stall/escalation state MUST be tracked once per
+    member on the head task row only. The first prompt is `task_ready`; later
+    prompts are `task_reminder` with a rising attempt. Every assignment
+    produces one `task_queued` line at write time.
 16. `Active` MUST never be nudged or diverted to another task.
 17. `Blocked` or `Offline` MUST escalate once per episode and MUST receive
     zero nudges.
 18. Escalation MUST be one ordinary message to the roster lead (when exactly
     one) and to every configured escalation recipient, resolved
-    independently; a task's reminder count MUST escalate again every time it
-    reaches a `TASK_STALLED_REMINDER_THRESHOLD` (10) budget boundary (10, 20,
-    30, ...), and nudging to the assignee MUST continue in between
-    escalations, with no cap and no terminal hold. Only sustained assignee
-    activity — `Active` observed continuously for at least one
-    `TASK_REMINDER_INTERVAL_MS` — resets the reminder and lead-notification
-    counters; a shorter burst of activity does not.
+    independently; the head task row's reminder count (the member's single
+    reminder count) MUST escalate again every time it reaches a
+    `TASK_STALLED_REMINDER_THRESHOLD` (10) budget boundary (10, 20, 30, ...),
+    and nudging to the assignee MUST continue in between escalations, with no
+    cap and no terminal hold. Only sustained assignee activity — `Active`
+    observed continuously for at least one `TASK_REMINDER_INTERVAL_MS` —
+    resets the member's reminder and lead-notification counters on the head
+    task row; a shorter burst of activity does not.
 
 Task-history amendment (2026-09-26, issue #1599): rule 9's closed subcommand
 set additionally admits `history`, a read-only view over the past N tasks for
