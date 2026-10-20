@@ -1,7 +1,7 @@
 use anyhow::Result;
+use atm_core::boundary::{CronSchedule, HookRegistration, StopCondition};
 use atm_core::doctor::hooks::HookDoctorEntry;
 use atm_core::hook::HookActionsResponse;
-use atm_storage::{CronSchedule, HookRegistration, StopCondition};
 use std::fmt::Write as _;
 
 /// Print registrations as a human table or a bare JSON array.

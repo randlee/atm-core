@@ -65,7 +65,7 @@ pub(super) mod tests {
         (transport, recorded)
     }
 
-    pub(crate) fn row() -> atm_storage::HookRegistration {
+    pub(crate) fn row() -> atm_core::boundary::HookRegistration {
         serde_json::from_value(serde_json::json!({
             "team":"bk", "phase":"bk", "hook":"task.close", "module_path":"hook.py", "cwd":"/repo",
             "timeout_ms":2500,"custom":{"goal":"ship"},"active":false,"registered_by":"solar",

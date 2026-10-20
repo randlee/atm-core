@@ -43,7 +43,7 @@ mod tests {
         .unwrap()
     }
 
-    fn row() -> atm_storage::CronSchedule {
+    fn row() -> atm_core::boundary::CronSchedule {
         serde_json::from_value(serde_json::json!({
             "id":1,"generation":1,"team":"bk","phase":"bk","name":"goal","cron_expr":"0 */5 * * * *",
             "module_path":"hook.py","cwd":"/repo","args":["status","--json"],"timeout_ms":2500,"jitter_s":7,
