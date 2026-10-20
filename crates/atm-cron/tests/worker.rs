@@ -1291,3 +1291,39 @@ async fn tick_and_stop_check_log_entries() {
         }
     }
 }
+
+/// Parks a run by blocking its runtime thread until the returned sender fires.
+/// A run that cannot yield is not dropped when the worker is aborted, so its
+/// count stays up until the thread is released.
+fn hold_blocking(fixture: &Fixture) -> (std::sync::mpsc::Sender<()>, watch::Receiver<usize>) {
+    let (release, parked) = std::sync::mpsc::channel::<()>();
+    let parked = Arc::new(std::sync::Mutex::new(parked));
+    let (entered, calls) = watch::channel(0);
+    *fixture.runner.before_reply.lock().unwrap() = Some(Arc::new(move |index| {
+        let parked = parked.clone();
+        let entered = entered.clone();
+        Box::pin(async move {
+            entered.send_replace(index + 1);
+            let _ = parked.lock().unwrap().recv();
+        })
+    }));
+    (release, calls)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shutdown_returns_at_its_deadline_when_a_run_cannot_yield() {
+    let fixture = Fixture::new();
+    fixture.reply(HookReply::PassThrough);
+    fixture.cron.start(fixture.spec("parked")).await.unwrap();
+    let (release, mut entered) = hold_blocking(&fixture);
+    let worker = fixture.worker().await;
+    fixture.step(60).await;
+    wait_for_entered(&mut entered, 1).await;
+    let outcome = tokio::time::timeout(
+        TEST_WAIT_TIMEOUT,
+        worker.shutdown(tokio::time::Instant::now()),
+    )
+    .await;
+    release.send(()).unwrap();
+    outcome.expect("shutdown must return at its deadline, not wait for a run that cannot yield");
+}

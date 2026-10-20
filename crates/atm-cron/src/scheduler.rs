@@ -207,7 +207,19 @@ impl CronWorkerHandle {
             let _ = worker.await;
         }
         let mut settled = self.settled.clone();
-        let _ = settled.wait_for(|running| *running == 0).await;
+        if tokio::time::timeout_at(deadline, settled.wait_for(|running| *running == 0))
+            .await
+            .is_err()
+        {
+            let running = *self.settled.borrow();
+            tracing::error!(
+                subsystem = "atm_cron",
+                action = "shutdown_deadline",
+                outcome = "failed",
+                running,
+                "cron shutdown deadline passed with {running} run(s) still in flight"
+            );
+        }
     }
 }
 
