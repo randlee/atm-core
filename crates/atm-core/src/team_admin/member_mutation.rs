@@ -1,4 +1,3 @@
-use std::num::NonZeroU32;
 use std::path::PathBuf;
 
 use chrono::Utc;
@@ -13,6 +12,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY};
 use crate::types::{AgentName, HostName, ModelName, PaneId, TeamName};
+use atm_storage::task_state::{MAX_TASKS_METADATA_KEY, MaxTasks};
 
 use super::{filesystem, projection};
 
@@ -160,7 +160,7 @@ pub struct UpdateMemberRequest {
     pub host: Option<HostName>,
     /// The most tasks this member may hold active at once; `None` leaves it
     /// unchanged. Set via [`UpdateMemberRequest::with_max_tasks`].
-    pub max_tasks: Option<NonZeroU32>,
+    pub max_tasks: Option<MaxTasks>,
 }
 
 impl UpdateMemberRequest {
@@ -269,7 +269,7 @@ impl UpdateMemberRequest {
     pub fn with_max_tasks(mut self, max_tasks: Option<u32>) -> Result<Self, AtmError> {
         self.max_tasks = max_tasks
             .map(|value| {
-                NonZeroU32::new(value)
+                MaxTasks::new(value)
                     .ok_or_else(|| AtmError::validation("--max-tasks must be at least 1"))
             })
             .transpose()?;
@@ -729,8 +729,8 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
     }
     if let Some(max_tasks) = request.max_tasks {
         member.metadata_json.insert(
-            atm_storage::task_state::MAX_TASKS_METADATA_KEY.to_string(),
-            json!(max_tasks.get()),
+            MAX_TASKS_METADATA_KEY.to_string(),
+            max_tasks.to_metadata_value(),
         );
     }
     update_member_local_backend(member, request);

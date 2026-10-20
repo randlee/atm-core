@@ -1276,7 +1276,7 @@ mod tests {
         let request = update_member_max_tasks_command(Some(3))
             .build_request(update_member_caller())
             .expect("request");
-        assert_eq!(request.max_tasks.map(std::num::NonZeroU32::get), Some(3));
+        assert_eq!(request.max_tasks.map(|max_tasks| max_tasks.get()), Some(3));
 
         let request = update_member_max_tasks_command(None)
             .build_request(update_member_caller())

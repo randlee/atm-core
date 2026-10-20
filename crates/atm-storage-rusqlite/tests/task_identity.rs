@@ -1474,7 +1474,11 @@ pub(crate) fn explicit_max_tasks_one_refuses_a_second_start() {
 
 #[test]
 pub(crate) fn invalid_stored_max_tasks_refuses_the_start() {
-    for stored in [r#"{"max_tasks":0}"#, r#"{"max_tasks":"3"}"#] {
+    for stored in [
+        r#"{"max_tasks":0}"#,
+        r#"{"max_tasks":"3"}"#,
+        r#"{"max_tasks":true}"#,
+    ] {
         let h = Harness::new();
         h.set_roster_metadata("alice", stored);
         h.assign("T1", "alice", "lead", None);

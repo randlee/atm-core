@@ -11,13 +11,11 @@ use crate::shared_db::{SharedDbTarget, sqlite_error};
 use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::task_state::{
-    DEFAULT_MAX_TASKS, MAX_TASKS_METADATA_KEY, TaskEvent, TaskEventKind, TaskRow, TaskState,
-    Transition, parse_max_tasks, transition,
+    MAX_TASKS_METADATA_KEY, MaxTasks, TaskEvent, TaskEventKind, TaskRow, TaskState, Transition,
+    transition,
 };
 use atm_storage::types::{AgentName, TaskId};
-use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension, params};
-use std::num::NonZeroU32;
 
 pub(super) fn apply_task_start(
     record: &Message,
@@ -135,8 +133,9 @@ fn reject_over_max_tasks(
     if active >= max.get() {
         return Err(task_max_active_reached(
             format!(
-                "task {task_id}: {} already has {active} active task(s); max_tasks is {max}",
-                row.assignee
+                "task {task_id}: {} already has {active} active task(s); max_tasks is {}",
+                row.assignee,
+                max.get()
             ),
             format!(
                 "Complete or cancel an active task, or raise the limit with `atm teams update-member {} {} --max-tasks <N>`.",
@@ -155,25 +154,25 @@ fn member_max_tasks(
     assignee: &AgentName,
     connection: &Connection,
     target: &SharedDbTarget,
-) -> Result<NonZeroU32, AtmError> {
-    let stored: Option<Value> = connection
+) -> Result<MaxTasks, AtmError> {
+    let stored: Option<String> = connection
         .query_row(
-            &format!(
-                "SELECT json_extract(metadata_json, '$.{MAX_TASKS_METADATA_KEY}')
-                 FROM team_roster WHERE team_name=?1 AND agent_name=?2"
-            ),
+            "SELECT metadata_json
+             FROM team_roster WHERE team_name=?1 AND agent_name=?2",
             params![record.team.as_str(), assignee.as_str()],
             |raw| raw.get(0),
         )
         .optional()
         .map_err(|error| sqlite_error(target, "failed to read max_tasks", error))?;
-    match stored {
-        None | Some(Value::Null) => Ok(DEFAULT_MAX_TASKS),
-        Some(Value::Integer(value)) => {
-            parse_max_tasks(value).ok_or_else(|| invalid_max_tasks(record, assignee))
-        }
-        Some(_) => Err(invalid_max_tasks(record, assignee)),
-    }
+    let stored_value = stored
+        .map(|value| serde_json::from_str::<serde_json::Value>(&value))
+        .transpose()
+        .map_err(|_| invalid_max_tasks(record, assignee))?;
+    let max_tasks_value = stored_value
+        .as_ref()
+        .and_then(|metadata| metadata.get(MAX_TASKS_METADATA_KEY));
+    MaxTasks::from_metadata_value(max_tasks_value)
+        .ok_or_else(|| invalid_max_tasks(record, assignee))
 }
 
 fn invalid_max_tasks(record: &Message, assignee: &AgentName) -> AtmError {
