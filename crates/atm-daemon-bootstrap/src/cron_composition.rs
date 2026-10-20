@@ -7,6 +7,26 @@ use tokio::time::Instant;
 
 use crate::{DaemonWorkers, shutdown_probe};
 
+pub(crate) fn compose_runtime_cron(
+    handler: &StorageAndNudgeRouter,
+    runtime: &atm_core::LocalServiceRuntime,
+    runner: Arc<dyn atm_core::boundary::HookRunner>,
+    dispatcher: Arc<atm_http_runtime::UnhookedRouter>,
+) -> Result<Arc<AtmCron>, AtmError> {
+    compose_cron(
+        handler,
+        AtmCronDeps {
+            store: runtime.cron_schedule_store()?,
+            runner,
+            dispatcher,
+            clock: Arc::new(atm_cron::SystemClock),
+            jitter: Arc::new(atm_cron::SystemJitter),
+            host: crate::daemon_atm_config(&atm_core::atm_temp::ProcessEnvSource)
+                .and_then(|config| config.local_host),
+        },
+    )
+}
+
 pub(crate) fn compose_cron(
     handler: &StorageAndNudgeRouter,
     deps: AtmCronDeps,

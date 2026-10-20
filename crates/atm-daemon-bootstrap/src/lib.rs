@@ -493,17 +493,8 @@ async fn run_replacement_daemon_with_selector(
             daemon_home: atm_core::home::atm_home()?,
         },
     )?;
-    let cron = cron_composition::compose_cron(
-        &handler,
-        atm_cron::AtmCronDeps {
-            store: runtime.cron_schedule_store()?,
-            runner: hook_runner,
-            dispatcher: base_dispatcher,
-            clock: Arc::new(atm_cron::SystemClock),
-            jitter: Arc::new(atm_cron::SystemJitter),
-            host: daemon_atm_config(&ProcessEnvSource).and_then(|config| config.local_host),
-        },
-    )?;
+    let cron =
+        cron_composition::compose_runtime_cron(&handler, &runtime, hook_runner, base_dispatcher)?;
     let config = replacement_runtime_config(
         &scope,
         &owner,

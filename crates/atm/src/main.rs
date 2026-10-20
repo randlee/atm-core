@@ -107,24 +107,11 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
     if is_warning_or_internal_error(error.code()) {
         return 1;
     }
+    if is_configuration_error(error.code()) {
+        return 2;
+    }
     match error.code() {
         PeerConfigValidationFailed | CertificateOperationFailed | BindPreflightFailed => 3,
-        AtmErrorCode::ConfigHomeUnavailable
-        | AtmErrorCode::AtmHomeUnresolved
-        | AtmErrorCode::ConfigParseFailed
-        | AtmErrorCode::ConfigRetiredHookMembersKey
-        | AtmErrorCode::ConfigRetiredLegacyHookKeys
-        | AtmErrorCode::ConfigTeamParseFailed
-        | AtmErrorCode::ConfigTeamMissing
-        // `atm compose` is a process-level adapter for `sc-compose`. Keep
-        // its source/load/include/render failures in the upstream CLI's
-        // configuration/validation exit category so callers can distinguish
-        // them from ATM request validation (3) and internal failures (1).
-        | AtmErrorCode::TemplateLoadFailed
-        | AtmErrorCode::TemplateRequiredVariableMissing
-        | AtmErrorCode::TemplateVariableResolutionFailed
-        | AtmErrorCode::TemplateRenderVerificationFailed
-        | AtmErrorCode::TemplateIncludeUnresolved => 2,
         AtmErrorCode::IdentityUnavailable
         | AtmErrorCode::IdentityInvalid
         | AtmErrorCode::IdentityConflict
@@ -184,6 +171,24 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         AtmErrorCode::WaitTimeout => 9,
         _ => 1,
     }
+}
+
+fn is_configuration_error(code: AtmErrorCode) -> bool {
+    matches!(
+        code,
+        AtmErrorCode::ConfigHomeUnavailable
+            | AtmErrorCode::AtmHomeUnresolved
+            | AtmErrorCode::ConfigParseFailed
+            | AtmErrorCode::ConfigRetiredHookMembersKey
+            | AtmErrorCode::ConfigRetiredLegacyHookKeys
+            | AtmErrorCode::ConfigTeamParseFailed
+            | AtmErrorCode::ConfigTeamMissing
+            | AtmErrorCode::TemplateLoadFailed
+            | AtmErrorCode::TemplateRequiredVariableMissing
+            | AtmErrorCode::TemplateVariableResolutionFailed
+            | AtmErrorCode::TemplateRenderVerificationFailed
+            | AtmErrorCode::TemplateIncludeUnresolved
+    )
 }
 
 fn is_warning_or_internal_error(code: AtmErrorCode) -> bool {

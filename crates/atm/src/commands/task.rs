@@ -500,17 +500,25 @@ impl TaskCloseCommand {
                 ));
             }
         };
-        if self.json {
-            Ok(format!("{}\n", serde_json::to_string_pretty(&result)?))
-        } else if let Some(closed) = result.already_closed {
-            Ok(format!(
-                "task {} was already closed ({}); report delivered",
-                self.task_id,
-                closed.as_str()
-            ) + "\n")
-        } else {
-            Ok(format!("closed {} ({})\n", self.task_id, outcome.as_str()))
-        }
+        render_task_close_result(self.json, &self.task_id, outcome, result)
+    }
+}
+
+fn render_task_close_result(
+    json: bool,
+    task_id: &str,
+    outcome: TaskCloseOutcome,
+    result: atm_core::send::SendOutcome,
+) -> Result<String> {
+    if json {
+        Ok(format!("{}\n", serde_json::to_string_pretty(&result)?))
+    } else if let Some(closed) = result.already_closed {
+        Ok(format!(
+            "task {task_id} was already closed ({}); report delivered\n",
+            closed.as_str()
+        ))
+    } else {
+        Ok(format!("closed {task_id} ({})\n", outcome.as_str()))
     }
 }
 
