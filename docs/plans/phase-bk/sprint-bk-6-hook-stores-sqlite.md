@@ -170,3 +170,13 @@ visibility = "private"`, `constructor = "pub(crate)"`, `module =
 
 - No `LocalServiceRuntime` install of the stores (bk-5 composition); no
   core type, route, runner, scheduler or CLI.
+
+## Store implementation note
+
+`CronScheduleStore::end` and `HookRegistrationStore::disable` keep their
+select-update-patch transactions in their respective store modules. They use
+different selectors and ordering keys, return different row types, and update
+different lifecycle columns. A shared helper in `store_support` would need
+table-specific SQL identifiers and generic row decoding or callbacks, making
+the storage abstraction less clear than the small duplicated transaction
+shape.

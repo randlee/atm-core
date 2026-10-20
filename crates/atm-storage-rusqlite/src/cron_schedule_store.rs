@@ -136,6 +136,25 @@ fn read_rows(
     raws.into_iter().map(decode).collect()
 }
 
+fn list_query(
+    team: Option<&TeamName>,
+    phase: Option<&PhaseId>,
+    active_only: bool,
+) -> (String, [Value; 3]) {
+    let values = [
+        team.map_or(Value::Null, |team| text(team.as_str())),
+        phase.map_or(Value::Null, |phase| text(phase.as_str())),
+        Value::Integer(if active_only { 1 } else { 0 }),
+    ];
+    let sql = format!(
+        "SELECT {SELECT_COLUMNS} FROM cron_schedule
+         WHERE (?1 IS NULL OR team = ?1) AND (?2 IS NULL OR phase = ?2)
+           AND (?3 = 0 OR active = 1)
+         ORDER BY active DESC, created_at, phase, name;"
+    );
+    (sql, values)
+}
+
 /// `(until_at, stop_hook)` for the stored stop columns: exactly one is set.
 fn stop_columns(stop: &StopCondition) -> (Option<String>, i64) {
     match stop {
@@ -348,39 +367,17 @@ impl CronScheduleStore for SqliteCronScheduleStore {
         team: Option<&TeamName>,
         phase: Option<&PhaseId>,
     ) -> Result<Vec<CronSchedule>, AtmError> {
-        let values = [
-            team.map_or(Value::Null, |team| text(team.as_str())),
-            phase.map_or(Value::Null, |phase| text(phase.as_str())),
-        ];
+        let (sql, values) = list_query(team, phase, false);
         let db = Arc::clone(&self.db);
-        self.db.read(move |connection| {
-            read_rows(
-                &db,
-                connection,
-                &format!(
-                    "SELECT {SELECT_COLUMNS} FROM cron_schedule
-                     WHERE (?1 IS NULL OR team = ?1) AND (?2 IS NULL OR phase = ?2)
-                     ORDER BY active DESC, created_at, phase, name;"
-                ),
-                &values,
-            )
-        })
+        self.db
+            .read(move |connection| read_rows(&db, connection, &sql, &values))
     }
 
     fn active_all(&self) -> Result<Vec<CronSchedule>, AtmError> {
+        let (sql, values) = list_query(None, None, true);
         let db = Arc::clone(&self.db);
-        self.db.read(move |connection| {
-            read_rows(
-                &db,
-                connection,
-                &format!(
-                    "SELECT {SELECT_COLUMNS} FROM cron_schedule
-                     WHERE active = 1
-                     ORDER BY active DESC, created_at, phase, name;"
-                ),
-                &[],
-            )
-        })
+        self.db
+            .read(move |connection| read_rows(&db, connection, &sql, &values))
     }
 
     fn record_run(

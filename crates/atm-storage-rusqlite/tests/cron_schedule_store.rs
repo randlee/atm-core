@@ -172,6 +172,37 @@ fn active_all_survives_reopen() {
 }
 
 #[test]
+fn active_all_matches_active_rows_from_list() {
+    let h = Harness::new();
+    let store = h.store();
+    store
+        .start(cron_spec("later", StopCondition::Hook, stamp(5)))
+        .expect("later active schedule");
+    store
+        .start(cron_spec("ended", StopCondition::Hook, stamp(2)))
+        .expect("schedule to end");
+    store
+        .end(&team(), &phase(), Some("ended"), stamp(6))
+        .expect("end schedule");
+    store
+        .start(cron_spec("earlier", StopCondition::Hook, stamp(3)))
+        .expect("earlier active schedule");
+
+    let listed = store.list(None, None).expect("list all schedules");
+    let active_from_list: Vec<_> = listed.into_iter().filter(|row| row.active).collect();
+    let active_all = store.active_all().expect("active_all");
+
+    assert_eq!(active_all, active_from_list);
+    assert_eq!(
+        active_all
+            .iter()
+            .map(|row| row.name.as_str())
+            .collect::<Vec<_>>(),
+        ["earlier", "later"]
+    );
+}
+
+#[test]
 fn stop_condition_check_and_round_trip() {
     let h = Harness::new();
     let until_text = stamp_text(9);
