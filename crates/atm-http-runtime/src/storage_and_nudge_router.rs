@@ -291,9 +291,9 @@ impl StorageAndNudgeRouter {
     /// deliberately did not wait for. Individual request guards remain
     /// non-blocking on drop; only this daemon lifecycle path awaits driver
     /// termination.
-    /// Releases outbound peer drivers, then detached received hooks, both
-    /// within the one caller-owned shutdown `deadline`: the drain gets only
-    /// what the pool left, never a fresh budget.
+    /// Releases outbound peer drivers, detached received hooks, and hook
+    /// chains within the one caller-owned shutdown `deadline`: each drain gets
+    /// only what its predecessors left, never a fresh budget.
     pub async fn shutdown_peer_connections(&self, deadline: tokio::time::Instant) {
         if let Some(pool) = &self.peer_connection_pool {
             pool.shutdown(deadline.saturating_duration_since(tokio::time::Instant::now()))
@@ -301,6 +301,11 @@ impl StorageAndNudgeRouter {
         }
         self.detached_received_hooks
             .drain(deadline.saturating_duration_since(tokio::time::Instant::now()))
+            .await;
+        self.hook_chains()
+            .drain(RequestDeadline::after(
+                deadline.saturating_duration_since(tokio::time::Instant::now()),
+            ))
             .await;
     }
 
@@ -6963,11 +6968,11 @@ pub(crate) mod tests {
         }
     }
 
-    /// The pooled-driver drain and the detached-hook drain share the caller's
-    /// one absolute deadline: a stalled driver leaves the hooks only what
-    /// remains, never a fresh budget.
+    /// The pooled-driver, detached-hook, and hook-chain drains share the
+    /// caller's one absolute deadline: a stalled driver leaves later drains
+    /// only what remains, never a fresh budget.
     #[tokio::test]
-    async fn shutdown_peer_connections_spends_one_deadline_across_pool_and_hooks() {
+    async fn shutdown_peer_connections_spends_one_deadline_across_pool_hooks_and_chains() {
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
             .await
             .expect("test peer binds");
@@ -7019,6 +7024,10 @@ pub(crate) mod tests {
             atm_core::protocol::next_request_id(),
             std::future::pending(),
         );
+        let hook_chain = router
+            .hook_chains()
+            .spawn(std::future::pending::<()>())
+            .expect("hook chain starts before shutdown");
         // Real I/O set the stall up; virtual time measures the drain.
         tokio::time::pause();
         let started = tokio::time::Instant::now();
@@ -7032,6 +7041,12 @@ pub(crate) mod tests {
         assert!(
             elapsed >= deadline && elapsed <= deadline + Duration::from_millis(10),
             "{elapsed:?}"
+        );
+        assert!(
+            hook_chain
+                .await
+                .expect_err("shutdown aborts the remaining hook chain")
+                .is_cancelled()
         );
     }
 }
