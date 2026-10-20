@@ -761,11 +761,12 @@ mod tests {
     /// gate; nothing retries and nothing sleeps.
     const GATE_WAIT_BOUND: std::time::Duration = std::time::Duration::from_secs(10);
 
-    /// Completes `wait`, or fails the test once the failure bound is exceeded.
-    async fn bounded<F: std::future::Future>(what: &str, wait: F) -> F::Output {
+    /// Completes `wait`, or fails the test once the 10 s failure bound is exceeded.
+    /// `timeout_message` names the wait and the bound, and is the `expect` text.
+    async fn bounded<F: std::future::Future>(timeout_message: &'static str, wait: F) -> F::Output {
         tokio::time::timeout(GATE_WAIT_BOUND, wait)
             .await
-            .unwrap_or_else(|_| panic!("timed out after {GATE_WAIT_BOUND:?} waiting for {what}"))
+            .expect(timeout_message)
     }
 
     /// The in-flight gate: the hook raises `entered`, then waits for `release`.
@@ -784,7 +785,7 @@ mod tests {
                 Box::pin(async move {
                     gate.entered.notify_one();
                     bounded(
-                        "the test to release the in-flight hook",
+                        "timed out after 10 s waiting for the test to release the in-flight hook",
                         gate.release.notified(),
                     )
                     .await;
@@ -794,7 +795,7 @@ mod tests {
 
         async fn wait_entered(&self) {
             bounded(
-                "the in-flight hook to reach the runner",
+                "timed out after 10 s waiting for the in-flight hook to reach the runner",
                 self.entered.notified(),
             )
             .await;
@@ -855,10 +856,13 @@ mod tests {
             .await
             .expect("disable while the hook is in flight");
         gate.release_hook();
-        let response = bounded("the in-flight chain to complete", in_flight)
-            .await
-            .expect("join")
-            .expect("in-flight chain completes");
+        let response = bounded(
+            "timed out after 10 s waiting for the in-flight chain to complete",
+            in_flight,
+        )
+        .await
+        .expect("join")
+        .expect("in-flight chain completes");
         // The chain's last action answers the hooked command; a send response proves
         // the in-flight action still ran after the disable.
         match response.into_inner() {
