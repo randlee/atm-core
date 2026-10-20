@@ -47,8 +47,8 @@ Owned paths (new unless marked edited):
   `crates/atm-cron/Cargo.toml` with `boundary_record_path =
   "boundaries/atm-cron/cron-scheduler.toml"` and `allowed_dependencies =
   ["async-trait", "atm-core", "atm-runtime-test-support", "chrono", "cron",
-  "getrandom", "serde_json", "tokio", "tracing"]` and
-  `tracing-subscriber` in the crate's dev allowlist; the `cron` ownership
+  "getrandom", "serde_json", "syn", "tokio", "tracing"]` and
+  `syn`, `tracing-subscriber` in the crate's dev allowlist; the `cron` ownership
   entry and the `atm-runtime-test-support` section rule are bk-2's);
   `Cargo.lock`. bk-2's core
   manifests already list `atm-cron` as a dependent.
@@ -229,7 +229,7 @@ io_forbidden = ["sqlite", "process_spawn", "http_server"]
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap"]
 allowed_dependencies = ["async-trait", "atm-core", "chrono", "cron", "getrandom", "serde_json", "tokio", "tracing"]
-allowed_dev_dependencies = ["atm-core", "atm-runtime-test-support", "tokio", "tracing-subscriber"]
+allowed_dev_dependencies = ["atm-core", "atm-runtime-test-support", "syn", "tokio", "tracing-subscriber"]
 forbidden_edges = []   # allowed_dependents and allowed_dependencies are the guard (lint_boundaries.py)
 
 [references]
