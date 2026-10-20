@@ -79,6 +79,10 @@ impl Drop for GroupKillGuard {
     }
 }
 
+fn should_kill_group(result_is_err: bool, leader_reaped: bool) -> bool {
+    result_is_err && !leader_reaped
+}
+
 fn failed(spec: &SpawnSpec, error: io::Error) -> SpawnFailure {
     SpawnFailure::Failed(AtmError::hook_exit(HookExitCause::Spawn {
         path: spec.program.clone(),
@@ -97,9 +101,10 @@ async fn read_capped(
         .read_to_end(&mut bytes)
         .await
         .map_err(|error| {
-            SpawnFailure::Failed(AtmError::hook_exit(HookExitCause::Missing(format!(
-                "cannot read {name}: {error}"
-            ))))
+            SpawnFailure::Failed(AtmError::hook_exit(HookExitCause::Read {
+                stream: name.into(),
+                cause: error.to_string(),
+            }))
         })?;
     if bytes.len() as u64 > cap {
         return Err(SpawnFailure::Failed(AtmError::hook_malformed(&format!(
@@ -161,7 +166,8 @@ pub(crate) async fn spawn_until(
         _ = cancel => Err(SpawnFailure::TimedOut { after_ms: 0 }),
         result = collect(&mut child, stdin, &spec) => result,
     };
-    if result.is_err() {
+    let leader_reaped = matches!(child.try_wait(), Ok(Some(_)));
+    if should_kill_group(result.is_err(), leader_reaped) {
         guard.kill();
         let _ = child.kill().await;
         child.wait().await.map_err(|error| failed(&spec, error))?;
@@ -208,14 +214,29 @@ mod tests {
     use std::fs;
     #[cfg(unix)]
     use std::io::Read;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
 
     use atm_core::atm_temp::{EnvSource, ProcessEnvSource};
     use atm_core::error::AtmErrorCode;
     use tempfile::TempDir;
+    use tokio::io::ReadBuf;
     #[cfg(unix)]
     use tokio::sync::oneshot;
 
     use super::*;
+
+    struct FailingReader;
+
+    impl AsyncRead for FailingReader {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _context: &mut Context<'_>,
+            _buffer: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            Poll::Ready(Err(io::Error::other("injected pipe failure")))
+        }
+    }
 
     fn python() -> PathBuf {
         let path = ProcessEnvSource.var("PATH").expect("test PATH");
@@ -385,6 +406,25 @@ mod tests {
         };
         assert_eq!(error.code(), AtmErrorCode::HookMalformed);
         assert!(error.message().contains("stderr exceeds"));
+    }
+
+    #[tokio::test]
+    async fn pipe_read_error_names_the_stream() {
+        let Err(SpawnFailure::Failed(error)) = read_capped(FailingReader, 1, "stdout").await else {
+            panic!("expected pipe read failure")
+        };
+        assert_eq!(error.code(), AtmErrorCode::HookExit);
+        assert_eq!(
+            error.message(),
+            "HOOK.EXIT: cannot read stdout: injected pipe failure"
+        );
+    }
+
+    #[test]
+    fn cleanup_skips_group_kill_after_leader_is_reaped() {
+        assert!(!should_kill_group(true, true));
+        assert!(should_kill_group(true, false));
+        assert!(!should_kill_group(false, false));
     }
 
     #[tokio::test]

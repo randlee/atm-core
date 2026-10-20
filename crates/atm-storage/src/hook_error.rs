@@ -19,6 +19,8 @@ pub enum HookExitCause {
     Signal(i32),
     /// The hook could not be started at `path`.
     Spawn { path: PathBuf, cause: String },
+    /// The runner could not read the hook's `stdout` or `stderr` pipe.
+    Read { stream: String, cause: String },
     /// The hook runner panicked; `payload` is the panic message.
     Panic(String),
     /// A required interpreter or environment entry is missing.
@@ -33,6 +35,7 @@ impl AtmError {
             HookExitCause::Spawn { path, cause } => {
                 format!("cannot run {}: {cause}", path.display())
             }
+            HookExitCause::Read { stream, cause } => format!("cannot read {stream}: {cause}"),
             HookExitCause::Panic(payload) => format!("hook runner panicked: {payload}"),
             HookExitCause::Missing(what) => what,
         };
@@ -100,6 +103,13 @@ mod tests {
                     cause: "denied".into(),
                 },
                 "cannot run /h.py: denied",
+            ),
+            (
+                HookExitCause::Read {
+                    stream: "stderr".into(),
+                    cause: "connection reset".into(),
+                },
+                "cannot read stderr: connection reset",
             ),
             (
                 HookExitCause::Panic("oops".into()),
