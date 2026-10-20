@@ -100,6 +100,24 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-10-19 — Phase BK.7 hook filter and hook/cron routes:** `HTTP_API_VERSION`
+  moves from `1.12.0` to `1.13.0`. 1.12.0 → 1.13.0 (phase bk): six routes, seven responses, `DoctorReport.hooks`, six error codes; a 1.12 consumer ignores `hooks`, and its `AtmErrorCode::from_str` returns `UnknownAtmErrorCode` for the six codes. The additive surface is six POST routes
+  (`/v1/atm/hooks/register`, `/hooks/disable`, `/hooks/list`, `/cron/start`,
+  `/cron/end`, `/cron/list`), their request and response schemas, the
+  `X-ATM-Hook-Actions` response header on a task-command write that a task hook
+  answered through its actions, the `hooks` array on `DoctorReport`, and six
+  error codes (`ATM_HOOK_MODULE_INVALID`, `ATM_CRON_EXPR_INVALID`,
+  `ATM_HOOK_REFUSED`, `ATM_HOOK_EXIT`, `ATM_HOOK_TIMEOUT`,
+  `ATM_HOOK_MALFORMED`). The version check does not fence a pre-1.13 caller
+  off: the compatibility preflight compares only the HTTP API major, which is
+  unchanged, so a 1.12 CLI connects to a 1.13 daemon. Its codec rejects the new
+  routes' request variants, but a task write that a registered task hook
+  answers can return the `HookActions` body `{"dispatched": n}`, which the
+  write decoder rejects with `MessageValidationFailed`, or `ATM_HOOK_REFUSED`,
+  which `from_str` maps to `UnknownAtmErrorCode`. The first is pinned by
+  `pre_1_13_write_decode_fails_typed_on_a_hook_actions_body`
+  (`crates/atm-core/src/api.rs`). This is a minor, backward-compatible bump;
+  the OpenAPI baseline records it as one reviewed `openapi/version` change.
 - **2026-10-13 — Phase E4E template variable resolution:** `HTTP_API_VERSION`
   moves from `1.11.0` to `1.12.0`. The new additive
   `TEMPLATE_VARIABLE_RESOLUTION_FAILED` code identifies template-variable

@@ -173,6 +173,20 @@ pub enum AtmErrorCode {
     PostSendAdvisoryDeliveryFailed,
     TestFakeTransportInjectionFailed,
     HelpTopicNotFound,
+    /// A hook module path or registration key is not an accepted hook module.
+    HookModuleInvalid,
+    /// A cron expression or until-time is not a valid schedule.
+    CronExprInvalid,
+    /// A hook refused the request; its message is returned verbatim.
+    HookRefused,
+    /// A hook process could not run or exited without a usable reply.
+    HookExit,
+    /// A hook did not reply within its deadline.
+    HookTimeout,
+    /// A hook reply did not match the reply contract.
+    HookMalformed,
+    /// A runtime store query failed; `ATM_STORE_QUERY_FAILED` in the error-code doc.
+    StoreQueryFailed,
 }
 
 impl AtmErrorCode {
@@ -362,6 +376,13 @@ impl AtmErrorCode {
             Self::PostSendAdvisoryDeliveryFailed => "ATM_POST_SEND_ADVISORY_DELIVERY_FAILED",
             Self::TestFakeTransportInjectionFailed => "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED",
             Self::HelpTopicNotFound => "ATM_HELP_TOPIC_NOT_FOUND",
+            Self::HookModuleInvalid => "ATM_HOOK_MODULE_INVALID",
+            Self::CronExprInvalid => "ATM_CRON_EXPR_INVALID",
+            Self::HookRefused => "ATM_HOOK_REFUSED",
+            Self::HookExit => "ATM_HOOK_EXIT",
+            Self::HookTimeout => "ATM_HOOK_TIMEOUT",
+            Self::HookMalformed => "ATM_HOOK_MALFORMED",
+            Self::StoreQueryFailed => "ATM_STORE_QUERY_FAILED",
             _ => unreachable!("all AtmErrorCode variants must be covered by as_str helpers"),
         }
     }
@@ -567,6 +588,13 @@ fn parse_post_send_or_misc_code(value: &str) -> Option<AtmErrorCode> {
             AtmErrorCode::TestFakeTransportInjectionFailed
         }
         "ATM_HELP_TOPIC_NOT_FOUND" => AtmErrorCode::HelpTopicNotFound,
+        "ATM_HOOK_MODULE_INVALID" => AtmErrorCode::HookModuleInvalid,
+        "ATM_CRON_EXPR_INVALID" => AtmErrorCode::CronExprInvalid,
+        "ATM_HOOK_REFUSED" => AtmErrorCode::HookRefused,
+        "ATM_HOOK_EXIT" => AtmErrorCode::HookExit,
+        "ATM_HOOK_TIMEOUT" => AtmErrorCode::HookTimeout,
+        "ATM_HOOK_MALFORMED" => AtmErrorCode::HookMalformed,
+        "ATM_STORE_QUERY_FAILED" => AtmErrorCode::StoreQueryFailed,
         _ => return None,
     })
 }

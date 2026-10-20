@@ -22,6 +22,7 @@ members = [
     "crates/sc-lint-directives",
     "crates/atm-daemon",
     "crates/atm-storage-rusqlite",
+    "crates/atm-cron",
     "crates/atm-template-sc-compose",
 ]
 resolver = "2"
@@ -65,9 +66,11 @@ sha2 = "0.10"
 ulid = { version = "1.2.1", features = ["serde"] }
 base64 = "0.22"
 getrandom = "0.3"
+cron = "0.17"
 syn = { version = "2", features = ["full", "parsing", "visit"] }
 semver = { version = "1", features = ["serde"] }
 async-trait = "0.1"
+rustix = { version = "1.1", features = ["process"] }
 atm-core = { package = "agent-team-mail-core", path = "crates/atm-core", version = "1.6.2" }
 atm-observability = { path = "crates/atm-observability", version = "1.6.2" }
 atm-daemon-bootstrap = { path = "crates/atm-daemon-bootstrap", version = "1.6.2" }

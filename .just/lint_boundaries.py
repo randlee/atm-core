@@ -2966,7 +2966,11 @@ def collect_special_case_violations(repo_root: Path) -> list[BoundaryViolation]:
             for rule in ownership_rules:
                 if not any(pattern.search(line) for pattern in dependency_import_patterns(rule.dependency)):
                     continue
-                if any((repo_root / allowed_root).resolve() in source_path.resolve().parents for allowed_root in rule.allowed_source_roots):
+                if any(
+                    (repo_root / allowed_root).resolve() == source_path.resolve()
+                    or (repo_root / allowed_root).resolve() in source_path.resolve().parents
+                    for allowed_root in rule.allowed_source_roots
+                ):
                     continue
                 violations.append(
                     BoundaryViolation(

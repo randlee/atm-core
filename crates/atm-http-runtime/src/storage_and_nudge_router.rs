@@ -43,6 +43,8 @@ use crate::router_support::{
     write_response,
 };
 
+pub(crate) mod hook_wiring;
+mod non_write_dispatch;
 mod roster_ingress;
 
 /// The replacement implementation of the canonical write operation.
@@ -52,10 +54,10 @@ mod roster_ingress;
 /// type has no concrete SQLite, tmux, graft, or legacy-daemon dependency.
 #[derive(Clone)]
 pub struct StorageAndNudgeRouter {
-    service_runtime: LocalServiceRuntime,
+    pub(crate) service_runtime: LocalServiceRuntime,
     observability: Arc<dyn ObservabilityPort + Send + Sync>,
     received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
-    control_path_sync_bridge: ControlPathSyncBridge,
+    pub(crate) control_path_sync_bridge: ControlPathSyncBridge,
     write_source_preflight_bridge: WriteSourcePreflightBridge,
     async_mailbox_runtime: Option<Arc<dyn AsyncMailboxRuntime>>,
     doctor_projection: Option<Arc<dyn DoctorProjection>>,
@@ -73,6 +75,7 @@ pub struct StorageAndNudgeRouter {
     member_state_transition_sink: Option<Arc<dyn crate::MemberStateTransitionSink>>,
     detached_received_hooks: DetachedReceivedHooks,
     task_telemetry: atm_runtime::TaskTelemetryRuntime,
+    pub(crate) hooks: hook_wiring::HookWiring,
 }
 
 impl StorageAndNudgeRouter {
@@ -90,7 +93,7 @@ impl StorageAndNudgeRouter {
         )
     }
 
-    pub(super) async fn list_messages(
+    pub(crate) async fn list_messages(
         &self,
         query: ListQuery,
         deadline: RequestDeadline,
@@ -147,6 +150,7 @@ impl StorageAndNudgeRouter {
             member_state_transition_sink: None,
             detached_received_hooks: DetachedReceivedHooks::default(),
             task_telemetry: atm_runtime::TaskTelemetryRuntime::disabled(),
+            hooks: hook_wiring::HookWiring::default(),
         }
     }
 
@@ -529,61 +533,6 @@ impl StorageAndNudgeRouter {
         warnings
     }
 
-    async fn dispatch_non_write(
-        &self,
-        request: ApiRequest,
-        ingress: AuthenticatedIngress,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        if deadline.expired() {
-            return Err(AtmError::daemon_unavailable(
-                "request deadline expired before replacement route dispatch",
-            ));
-        }
-        match request {
-            ApiRequest::Write(_) => unreachable!("writes use the canonical write path"),
-            ApiRequest::Messages(request) => match *request {
-                atm_core::api::MessageCollectionRequest::List(query) => {
-                    self.list_messages(query, deadline).await
-                }
-                atm_core::api::MessageCollectionRequest::Peek(query) => {
-                    self.peek_messages(query, deadline).await
-                }
-                atm_core::api::MessageCollectionRequest::Receive(query) => {
-                    self.receive_messages(query, deadline).await
-                }
-            },
-            ApiRequest::Clear(query) => self.clear_messages(query, deadline).await,
-            ApiRequest::Doctor(query) => self.doctor(query, deadline).await,
-            ApiRequest::Search(request) => self.search(*request, ingress, deadline).await,
-            ApiRequest::CompatibilityPreflight(preflight) => Ok(ApiResponse::new(
-                ResponseEnvelope::CompatibilityVerdict(compatibility_verdict(preflight)),
-            )),
-            ApiRequest::Heartbeat(request) => self.heartbeat(request, ingress, deadline).await,
-            ApiRequest::QueueGetNext(request) => {
-                self.queue_get_next(request, ingress, deadline).await
-            }
-            ApiRequest::TaskMove(request) => self.task_move(request, ingress, deadline).await,
-            ApiRequest::GraftReceiverRegister(request) => {
-                self.graft_receiver_register(request, ingress, deadline)
-                    .await
-            }
-            ApiRequest::GraftReceiverRefresh(request) => {
-                self.graft_receiver_refresh(request, ingress, deadline)
-                    .await
-            }
-            ApiRequest::GraftReceiverUnregister(request) => {
-                self.graft_receiver_unregister(request, ingress, deadline)
-                    .await
-            }
-            ApiRequest::GraftReceiverLookup { team, agent } => {
-                self.graft_receiver_lookup(team, agent, ingress, deadline)
-                    .await
-            }
-            ApiRequest::ReloadRuntimeView => self.reload_runtime_view(ingress),
-        }
-    }
-
     async fn clear_messages(
         &self,
         query: ClearQuery,
@@ -605,7 +554,7 @@ impl StorageAndNudgeRouter {
             .await
     }
 
-    async fn task_move(
+    pub(crate) async fn task_move(
         &self,
         request: atm_core::protocol::TaskMoveRequest,
         ingress: AuthenticatedIngress,
@@ -670,6 +619,9 @@ impl StorageAndNudgeRouter {
         let mut initial_runtime_status = runtime_health.snapshot();
         initial_runtime_status.bare_cli_queue_full_drops_total =
             bare_cli_queue_full_drops.load(std::sync::atomic::Ordering::Relaxed);
+        let caller_team = query.caller_team.clone();
+        let team_override = query.team_override.clone();
+        let all_teams = query.all_teams;
         let mut report = doctor_projection
             .project(
                 query.with_daemon_paths(self.daemon_home.clone()),
@@ -701,6 +653,20 @@ impl StorageAndNudgeRouter {
         report.herdr_queue_pump.breaker = report.herdr_breaker.clone();
         project_counter_health(&mut report.observability, diagnostic_counters);
         append_counter_finding(&mut report.findings, diagnostic_counters);
+        let hook_team = crate::doctor_hooks::hook_team(
+            all_teams,
+            report
+                .member_roster
+                .as_ref()
+                .map(|roster| roster.team.clone()),
+            team_override,
+            caller_team,
+        );
+        let hooks = crate::doctor_hooks::collect(self, hook_team.as_ref(), deadline).await;
+        report.hooks = hooks.entries;
+        if !hooks.findings.is_empty() {
+            atm_core::doctor::append_doctor_findings(&mut report, hooks.findings);
+        }
         Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(report))))
     }
 
@@ -972,6 +938,67 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
 
     fn write_with_request_id(
         &self,
+        request: atm_core::send::WriteRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        Box::pin(async move {
+            let Some(commands) = self.hooks.task_commands.clone() else {
+                return self
+                    .write_unhooked(request, ingress, deadline, request_id)
+                    .await;
+            };
+            match atm_core::boundary::TaskCommand::classify(ApiRequest::Write(Box::new(request))) {
+                Ok(command) => {
+                    self.call_task_command(&*commands, command, ingress, deadline, request_id)
+                        .await
+                }
+                Err(ApiRequest::Write(request)) => {
+                    self.write_unhooked(*request, ingress, deadline, request_id)
+                        .await
+                }
+                Err(_) => unreachable!("classify returns a write request unchanged"),
+            }
+        })
+    }
+
+    fn dispatch(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        StorageAndNudgeRouter::dispatch(self, request, ingress, deadline)
+    }
+
+    fn dispatch_with_request_id(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        Box::pin(async move {
+            match request {
+                ApiRequest::Write(request) => {
+                    self.write_with_request_id(*request, ingress, deadline, request_id)
+                        .await
+                }
+                request => {
+                    self.dispatch_non_write(request, ingress, deadline, request_id)
+                        .await
+                }
+            }
+        })
+    }
+}
+
+impl StorageAndNudgeRouter {
+    /// The un-hooked write body: the single owner of the write path that
+    /// `NormalTaskCommands` and an un-hooked router both call.
+    pub(crate) fn write_unhooked(
+        &self,
         mut request: atm_core::send::WriteRequest,
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
@@ -1045,33 +1072,6 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
                 return Err(error);
             }
             Ok(ApiResponse::new(write_response(committed.outcome)))
-        })
-    }
-
-    fn dispatch(
-        &self,
-        request: ApiRequest,
-        ingress: AuthenticatedIngress,
-        deadline: RequestDeadline,
-    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        StorageAndNudgeRouter::dispatch(self, request, ingress, deadline)
-    }
-
-    fn dispatch_with_request_id(
-        &self,
-        request: ApiRequest,
-        ingress: AuthenticatedIngress,
-        deadline: RequestDeadline,
-        request_id: RequestId,
-    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        Box::pin(async move {
-            match request {
-                ApiRequest::Write(request) => {
-                    self.write_with_request_id(*request, ingress, deadline, request_id)
-                        .await
-                }
-                request => self.dispatch_non_write(request, ingress, deadline).await,
-            }
         })
     }
 }
@@ -1555,18 +1555,19 @@ pub(crate) mod tests {
         }
     }
 
-    struct Fixture {
-        _temporary_root: TempDir,
-        router: StorageAndNudgeRouter,
-        message_store: Arc<dyn MessageStore + Send + Sync>,
-        pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
-        task_store: Arc<dyn TaskStore + Send + Sync>,
-        async_task_ledger_reader: Arc<atm_runtime_test_support::InMemoryTaskLedgerReader>,
+    pub(crate) struct Fixture {
+        pub(crate) _temporary_root: TempDir,
+        pub(crate) router: StorageAndNudgeRouter,
+        pub(crate) message_store: Arc<dyn MessageStore + Send + Sync>,
+        pub(crate) pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
+        pub(crate) task_store: Arc<dyn TaskStore + Send + Sync>,
+        pub(crate) async_task_ledger_reader:
+            Arc<atm_runtime_test_support::InMemoryTaskLedgerReader>,
         received_hook: Arc<RecordingReceivedHook>,
-        runtime_health: RuntimeHealth,
-        database_path: PathBuf,
-        home_dir: PathBuf,
-        current_dir: PathBuf,
+        pub(crate) runtime_health: RuntimeHealth,
+        pub(crate) database_path: PathBuf,
+        pub(crate) home_dir: PathBuf,
+        pub(crate) current_dir: PathBuf,
     }
 
     /// Test-only opaque adapter: it preserves the selected authenticated-peer
@@ -1600,7 +1601,7 @@ pub(crate) mod tests {
         }
     }
 
-    fn fixture(
+    pub(crate) fn fixture(
         with_recipient: bool,
         hook_failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
@@ -1618,9 +1619,72 @@ pub(crate) mod tests {
         )
     }
 
+    /// The router's `with_local_host` value is the caller host every hook request
+    /// the filter sees carries, so the request's `caller.host` is the router's host.
     #[tokio::test]
-    async fn router_peer_ingress_rejects_task_move() {
+    async fn local_host_is_stamped_into_the_hook_caller_host() {
         let fixture = fixture(true, None, None);
+        let store = Arc::new(atm_runtime_test_support::InMemoryHookRegistrationStore::new());
+        crate::hook_filter::test_support::register(&store, "task.assign", "bk", 1);
+        let runner = Arc::new(atm_core::boundary::DummyHookRunner::default());
+        crate::hook_filter::test_support::reply(&runner, atm_core::hook::HookReply::PassThrough);
+        let host: atm_core::types::HostName = "router-host".parse().expect("host");
+        let snapshot = Arc::new(
+            crate::hook_filter::ActiveHookSnapshot::load(store.clone()).expect("snapshot"),
+        );
+        let router = crate::hook_filter::test_support::install_filter(
+            fixture.router.clone().with_local_host(host.clone()),
+            snapshot,
+            runner.clone(),
+        );
+        router
+            .write_with_request_id(
+                task_write_request(&fixture, "T-HOST"),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(5)),
+                atm_core::protocol::next_request_id(),
+            )
+            .await
+            .expect("write through the filter");
+        let calls = runner.calls.lock().expect("calls");
+        match &calls[0].1 {
+            atm_core::boundary::HookCall::Run(request) => {
+                assert_eq!(request.caller.host, Some(host));
+            }
+            other => panic!("unexpected hook call {other:?}"),
+        }
+    }
+
+    /// Installs `NormalTaskCommands` over this fixture's router when `through` is
+    /// set, so the same task test exercises the hook task-command route.
+    fn route_task_commands(mut fixture: Fixture, through: bool) -> Fixture {
+        if through {
+            let base = fixture.router.clone();
+            fixture.router = base.clone().with_task_commands(Arc::new(
+                crate::task_commands::NormalTaskCommands::new(base),
+            ));
+        }
+        fixture
+    }
+
+    /// Emits the plain task test and its twin that runs the same body through
+    /// `NormalTaskCommands`.
+    macro_rules! through_normal_task_commands {
+        ($plain:ident, $through:ident, $body:ident) => {
+            #[tokio::test]
+            async fn $plain() {
+                $body(false).await;
+            }
+
+            #[tokio::test]
+            async fn $through() {
+                $body(true).await;
+            }
+        };
+    }
+
+    async fn router_peer_ingress_rejects_task_move_body(through: bool) {
+        let fixture = route_task_commands(fixture(true, None, None), through);
         let team: TeamName = "test-team".parse().expect("team");
         let task_id = "T1".parse().expect("task id");
         let before = fixture
@@ -1649,6 +1713,12 @@ pub(crate) mod tests {
             .expect("events after");
         assert_eq!(after, before, "rejection must occur before the writer lane");
     }
+
+    through_normal_task_commands!(
+        router_peer_ingress_rejects_task_move,
+        router_peer_ingress_rejects_task_move_through_normal_task_commands,
+        router_peer_ingress_rejects_task_move_body
+    );
 
     fn fixture_with_selector<F>(
         with_recipient: bool,
@@ -1790,21 +1860,27 @@ pub(crate) mod tests {
         assert_async_committed_rows(&fixture, false).await;
     }
 
-    #[tokio::test]
-    async fn bd2_template_async_pipeline_retains_success_and_rejected_committed_rows() {
-        let fixture = fixture_with_selector_and_template(
-            true,
-            None,
-            None,
-            Some(template_composer_for("template body")),
-            |received_hook| {
-                Arc::new(FixedReceivedHookSelector {
-                    emitter: received_hook,
-                })
-            },
+    async fn bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_body(
+        through: bool,
+    ) {
+        let fixture = route_task_commands(
+            fixture_with_selector_and_template(
+                true,
+                None,
+                None,
+                Some(template_composer_for("template body")),
+                |received_hook| {
+                    Arc::new(FixedReceivedHookSelector {
+                        emitter: received_hook,
+                    })
+                },
+            ),
+            through,
         );
         assert_async_committed_rows(&fixture, true).await;
     }
+
+    through_normal_task_commands!(bd2_template_async_pipeline_retains_success_and_rejected_committed_rows, bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_through_normal_task_commands, bd2_template_async_pipeline_retains_success_and_rejected_committed_rows_body);
 
     async fn assert_async_committed_rows(fixture: &Fixture, template: bool) {
         for rejected in [false, true] {
@@ -1920,7 +1996,7 @@ pub(crate) mod tests {
         service_runtime.with_graft_receiver_endpoint_store(store)
     }
 
-    fn write_request(home_dir: PathBuf, current_dir: PathBuf) -> WriteRequest {
+    pub(crate) fn write_request(home_dir: PathBuf, current_dir: PathBuf) -> WriteRequest {
         WriteRequest::new(
             home_dir,
             current_dir,
@@ -1936,7 +2012,7 @@ pub(crate) mod tests {
         .expect("write request")
     }
 
-    fn task_write_request(fixture: &Fixture, task_id: &str) -> WriteRequest {
+    pub(crate) fn task_write_request(fixture: &Fixture, task_id: &str) -> WriteRequest {
         let mut request = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
         request.task_id = Some(task_id.parse().expect("task id"));
         request.requires_ack = true;
@@ -2175,9 +2251,10 @@ pub(crate) mod tests {
         .expect("serialize mailbox")
     }
 
-    #[tokio::test]
-    async fn non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon() {
-        let fixture = fixture(true, None, None);
+    async fn non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_body(
+        through: bool,
+    ) {
+        let fixture = route_task_commands(fixture(true, None, None), through);
         let (running, client) = start_task_lifecycle_daemon(&fixture).await;
         let assigned = daemon_request(
             &client,
@@ -2226,9 +2303,10 @@ pub(crate) mod tests {
             .expect("task lifecycle daemon shuts down");
     }
 
-    #[tokio::test]
-    async fn recorded_assigner_reassign_still_succeeds_through_daemon() {
-        let fixture = fixture(true, None, None);
+    through_normal_task_commands!(non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon, non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_through_normal_task_commands, non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_body);
+
+    async fn recorded_assigner_reassign_still_succeeds_through_daemon_body(through: bool) {
+        let fixture = route_task_commands(fixture(true, None, None), through);
         let (running, client) = start_task_lifecycle_daemon(&fixture).await;
         for recipient in ["recipient", "third"] {
             let response = daemon_request(
@@ -2260,6 +2338,12 @@ pub(crate) mod tests {
             .await
             .expect("task lifecycle daemon shuts down");
     }
+
+    through_normal_task_commands!(
+        recorded_assigner_reassign_still_succeeds_through_daemon,
+        recorded_assigner_reassign_still_succeeds_through_daemon_through_normal_task_commands,
+        recorded_assigner_reassign_still_succeeds_through_daemon_body
+    );
 
     /// Hang detector for two-runtime router tests that dispatch a canonical
     /// write or ACK over a real reqwest client to a real, in-process peer
@@ -3031,6 +3115,62 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
+    async fn doctor_reports_a_hook_store_read_failure_as_an_error_finding() {
+        let fixture = fixture(true, None, None);
+        // The double fails its next active read, so the failure is deterministic.
+        let hooks = Arc::new(atm_runtime_test_support::InMemoryHookRegistrationStore::default());
+        hooks
+            .fail_active_all
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let assembly =
+            open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let doctor_projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig::default(),
+            assembly
+                .service_runtime
+                .with_hook_registration_store(hooks.clone()),
+            assembly.doctor_ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start doctor projection");
+        let mut router = fixture.router.clone();
+        router.service_runtime = router
+            .service_runtime
+            .clone()
+            .with_hook_registration_store(hooks.clone());
+        let response = router
+            .with_doctor_projection(Arc::new(doctor_projection))
+            .dispatch(
+                ApiRequest::new(atm_core::protocol::RequestEnvelope::Doctor(
+                    atm_core::doctor::DoctorQuery::default(),
+                )),
+                atm_core::AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("doctor response");
+        let ResponseEnvelope::Doctor(report) = response.into_inner() else {
+            panic!("expected a doctor report");
+        };
+        assert!(report.hooks.is_empty(), "the hook section stays empty");
+        let finding = report
+            .findings
+            .iter()
+            .find(|finding| finding.code == atm_core::error::AtmErrorCode::StoreQueryFailed)
+            .expect("a store read error finding");
+        assert_eq!(finding.severity, atm_core::doctor::DoctorSeverity::Error);
+        let error_findings = report
+            .findings
+            .iter()
+            .filter(|finding| finding.severity == atm_core::doctor::DoctorSeverity::Error)
+            .count();
+        assert_eq!(
+            report.summary.error_count, error_findings,
+            "the summary counts the appended finding"
+        );
+    }
+
+    #[tokio::test]
     async fn doctor_observability_fields_match_health_projection() {
         let fixture = fixture(true, None, None);
         fixture.runtime_health.record_write_source_preflight_stall();
@@ -3301,9 +3441,10 @@ pub(crate) mod tests {
         assert!(tasks.is_empty());
     }
 
-    #[tokio::test]
-    async fn task_ledger_list_uses_the_installed_async_reader_without_mailbox_runtime() {
-        let fixture = fixture(true, None, None);
+    async fn task_ledger_list_uses_the_installed_async_reader_without_mailbox_runtime_body(
+        through: bool,
+    ) {
+        let fixture = route_task_commands(fixture(true, None, None), through);
         let mut write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
         write.task_id = Some("t-42".parse().expect("task id"));
         write.requires_ack = true;
@@ -3361,6 +3502,12 @@ pub(crate) mod tests {
                 && outcome.task_rows[0].task_id.as_str() == "t-42"
                 && outcome.task_rows[0].state == atm_storage::TaskState::Assigned));
     }
+
+    through_normal_task_commands!(
+        task_ledger_list_uses_the_installed_async_reader_without_mailbox_runtime,
+        task_ledger_list_uses_the_installed_async_reader_without_mailbox_runtime_through_normal_task_commands,
+        task_ledger_list_uses_the_installed_async_reader_without_mailbox_runtime_body
+    );
 
     #[tokio::test]
     async fn mailbox_handlers_use_the_async_runtime_for_list_peek_and_read() {
@@ -4558,9 +4705,8 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn steer_emit_records_handoff_with_trigger_steer() {
-        let fixture = fixture(true, None, None);
+    async fn steer_emit_records_handoff_with_trigger_steer_body(through: bool) {
+        let fixture = route_task_commands(fixture(true, None, None), through);
         let write = task_write_request(&fixture, "BB6-STEER");
 
         let response = post_write(router(&fixture, AuthenticatedConnector::local()), &write).await;
@@ -4572,6 +4718,12 @@ pub(crate) mod tests {
         assert_eq!(handoffs[0].attempt, 0);
         assert_eq!(handoffs[0].kind.as_str(), "task_queued");
     }
+
+    through_normal_task_commands!(
+        steer_emit_records_handoff_with_trigger_steer,
+        steer_emit_records_handoff_with_trigger_steer_through_normal_task_commands,
+        steer_emit_records_handoff_with_trigger_steer_body
+    );
 
     #[tokio::test]
     async fn steer_of_non_task_message_records_no_handoff() {
@@ -6444,14 +6596,16 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn failed_steer_sink_records_no_handoff() {
-        let fixture = fixture(
-            true,
-            Some(AtmError::daemon_unavailable(
-                "intentional steer sink failure",
-            )),
-            None,
+    async fn failed_steer_sink_records_no_handoff_body(through: bool) {
+        let fixture = route_task_commands(
+            fixture(
+                true,
+                Some(AtmError::daemon_unavailable(
+                    "intentional steer sink failure",
+                )),
+                None,
+            ),
+            through,
         );
         let write = task_write_request(&fixture, "BB6-FAILED-STEER");
 
@@ -6465,6 +6619,12 @@ pub(crate) mod tests {
             "a failed steer sink writes no handoff"
         );
     }
+
+    through_normal_task_commands!(
+        failed_steer_sink_records_no_handoff,
+        failed_steer_sink_records_no_handoff_through_normal_task_commands,
+        failed_steer_sink_records_no_handoff_body
+    );
 
     #[tokio::test]
     async fn axum_route_without_a_selected_receiver_hook_keeps_durable_success() {

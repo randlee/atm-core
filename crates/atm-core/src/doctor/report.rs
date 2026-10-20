@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::address::AgentAddress;
 use crate::boundary::{ConfigDoctorReport, MailStoreDoctorReport, RosterStoreDoctorReport};
+use crate::doctor::hooks::HookDoctorEntry;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::AtmObservabilityHealth;
 use crate::peer_wire::PeerWireSecurity;
@@ -514,6 +515,8 @@ pub struct DoctorReport {
     pub runtime_status: Option<RuntimeStatusSnapshot>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bootstrap_trace: Option<BootstrapTraceReport>,
+    #[serde(default)]
+    pub hooks: Vec<HookDoctorEntry>,
 }
 
 impl DoctorReport {

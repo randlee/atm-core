@@ -37,6 +37,10 @@ name = "escalation_cli"
 path = "tests/escalation_cli.rs"
 
 [[test]]
+name = "http_api_doc_version"
+path = "tests/http_api_doc_version.rs"
+
+[[test]]
 name = "openapi_surface"
 path = "tests/openapi_surface.rs"
 

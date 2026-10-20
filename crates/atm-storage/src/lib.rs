@@ -4,11 +4,14 @@
 pub mod address;
 pub mod analyst_query;
 pub mod contract;
+pub mod cron_schedule_store;
 pub mod diagnostics;
 pub mod error;
 mod error_catalog;
 pub mod error_codes;
 pub mod factory;
+pub mod hook_error;
+pub mod hook_registration_store;
 pub mod peer_catalog_audit;
 mod peer_contract;
 mod read_lane_error;
@@ -56,6 +59,9 @@ pub use contract::{
     derive_ack_requirement, roster_unique_name_collision_error, roster_unique_name_collisions,
     roster_write_delta, team_scoped_roster_unique_name_collisions,
 };
+pub use cron_schedule_store::{
+    CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule, StopCondition,
+};
 pub use diagnostics::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
     DiagnosticQuery, DiagnosticRecordError, DiagnosticTimelineStore,
@@ -66,6 +72,8 @@ pub use factory::{
     EffectiveReaderPool, EffectiveReaderPoolMetrics, StorageFactory, StorageHandleParts,
     StorageHandles, WriteThroughRosterStore,
 };
+pub use hook_error::HookExitCause;
+pub use hook_registration_store::{HookName, HookRegistration, HookRegistrationStore, PhaseId};
 pub use peer_catalog_audit::TrustedPeerCatalogAudit;
 pub use read_lane_error::ReadLaneError;
 pub use roles::ROLE_WORKER;

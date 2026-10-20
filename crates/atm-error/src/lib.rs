@@ -59,6 +59,21 @@ mod tests {
     }
 
     #[test]
+    fn hook_and_cron_error_codes_keep_their_stable_wire_spellings() {
+        for (code, wire) in [
+            (AtmErrorCode::HookModuleInvalid, "ATM_HOOK_MODULE_INVALID"),
+            (AtmErrorCode::CronExprInvalid, "ATM_CRON_EXPR_INVALID"),
+            (AtmErrorCode::HookRefused, "ATM_HOOK_REFUSED"),
+            (AtmErrorCode::HookExit, "ATM_HOOK_EXIT"),
+            (AtmErrorCode::HookTimeout, "ATM_HOOK_TIMEOUT"),
+            (AtmErrorCode::HookMalformed, "ATM_HOOK_MALFORMED"),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
+    }
+
+    #[test]
     fn blocking_bridge_deadline_codes_keep_distinct_stable_wire_spellings() {
         for (code, wire) in [
             (

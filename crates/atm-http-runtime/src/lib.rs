@@ -53,6 +53,7 @@ use tokio::task::JoinHandle;
 mod bare_cli_fifo;
 mod client;
 mod diagnostics_route;
+mod doctor_hooks;
 mod doctor_observability;
 mod health_route;
 mod herdr_escalation;
@@ -61,6 +62,10 @@ mod herdr_queue_wake_escalation;
 #[cfg(test)]
 mod herdr_queue_wake_test_gates;
 mod herdr_task_disposition;
+mod hook_actions;
+mod hook_chains;
+mod hook_filter;
+mod hook_registry_routes;
 mod http1_server;
 mod loopback_read;
 mod loopback_tcp;
@@ -76,6 +81,7 @@ mod runtime_listener;
 mod runtime_maintenance;
 mod runtime_setup;
 mod storage_and_nudge_router;
+mod task_commands;
 mod task_telemetry;
 #[cfg(unix)]
 mod unix_socket;
@@ -111,6 +117,9 @@ pub use herdr_queue_wake::{
     HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
     HerdrQueueWakePump,
 };
+pub use hook_actions::UnhookedRouter;
+pub use hook_chains::ChainTracker;
+pub use hook_filter::{ActiveHookSnapshot, HookedTaskCommands};
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
     AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router, canonical_message_router,
@@ -125,6 +134,7 @@ pub use runtime_health::{MemberStateTransitionSink, RuntimeHealth};
 use runtime_maintenance::{ABORT_JOIN_GRACE, ENDPOINT_CLEANUP_RESERVE, join_aborted};
 pub use runtime_maintenance::{Draining, Running, RuntimeMaintenance, Stopped};
 pub use storage_and_nudge_router::StorageAndNudgeRouter;
+pub use task_commands::NormalTaskCommands;
 
 /// Validated configuration for the maintained Tokio HTTP runtime.
 ///

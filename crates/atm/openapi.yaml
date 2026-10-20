@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ATM daemon API
-  version: 1.12.0
+  version: 1.13.0
   description: HTTP contract shared by local UDS and future peer HTTPS adapters.
 servers:
   - url: /v1/atm
@@ -27,12 +27,25 @@ paths:
         - $ref: '#/components/parameters/Agent'
         - $ref: '#/components/parameters/ChatId'
       responses:
-        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/ListOutcome' } } } }
+        '200':
+          description: Messages. A task-ledger list or events query answers HookActions instead when a task hook handled the command; the body then counts the actions and X-ATM-Hook-Actions carries the same count.
+          headers:
+            X-ATM-Hook-Actions:
+              description: Decimal count of hook actions dispatched; present only when the body is HookActions.
+              schema: { type: string }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ListOutcome' } } }
         default: { $ref: '#/components/responses/AtmError' }
     post:
       operationId: writeMessage
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WriteRequest' } } } }
       responses:
+        '200':
+          description: A task hook handled the command and its actions ran in order; the body counts them. Added in HTTP API 1.13.0.
+          headers:
+            X-ATM-Hook-Actions:
+              description: Decimal count of hook actions dispatched; equals HookActions.dispatched.
+              schema: { type: string }
+          content: { application/json: { schema: { $ref: '#/components/schemas/HookActions' } } }
         '201': { description: Created message, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
         default: { $ref: '#/components/responses/AtmError' }
     delete:
@@ -94,7 +107,13 @@ paths:
       description: Local-ingress-only reorder of an open task in its assignee's queue.
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TaskMoveRequest' } } } }
       responses:
-        '200': { description: Task move result, content: { application/json: { schema: { $ref: '#/components/schemas/TaskMoveOutcome' } } } }
+        '200':
+          description: Task move result. When a task hook handled the move, the body is HookActions instead; it counts the actions and X-ATM-Hook-Actions carries the same count.
+          headers:
+            X-ATM-Hook-Actions:
+              description: Decimal count of hook actions dispatched; present only when the body is HookActions.
+              schema: { type: string }
+          content: { application/json: { schema: { $ref: '#/components/schemas/TaskMoveOutcome' } } }
         default: { $ref: '#/components/responses/AtmError' }
   /graft/receiver/register:
     post:
@@ -134,6 +153,54 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { type: 'null' } } } }
       responses:
         '200': { description: Runtime view reloaded, content: { application/json: { schema: { type: 'null' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /hooks/register:
+    post:
+      operationId: registerHook
+      description: Local-ingress-only registration of one task hook for a phase. Peer callers are refused. Added in HTTP API 1.13.0.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/HookRegisterRequest' } } } }
+      responses:
+        '200': { description: The stored registration, content: { application/json: { schema: { $ref: '#/components/schemas/HookRegistration' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /hooks/disable:
+    post:
+      operationId: disableHooks
+      description: Local-ingress-only disable of a phase's hooks, one named hook or all of them. Rows are kept. Added in HTTP API 1.13.0.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/HookDisableRequest' } } } }
+      responses:
+        '200': { description: The disabled rows, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/HookRegistration' } } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /hooks/list:
+    post:
+      operationId: listHooks
+      description: Local-ingress-only list of hook registrations, active and disabled. Added in HTTP API 1.13.0.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/HookListQuery' } } } }
+      responses:
+        '200': { description: Hook registrations, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/HookRegistration' } } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /cron/start:
+    post:
+      operationId: startCron
+      description: Local-ingress-only start of one cron schedule. Peer callers are refused. Added in HTTP API 1.13.0.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CronStartRequest' } } } }
+      responses:
+        '200': { description: The stored schedule, content: { application/json: { schema: { $ref: '#/components/schemas/CronSchedule' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /cron/end:
+    post:
+      operationId: endCron
+      description: Local-ingress-only end of a phase's cron schedules, one named schedule or all of them. Added in HTTP API 1.13.0.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CronEndRequest' } } } }
+      responses:
+        '200': { description: The ended schedules, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CronSchedule' } } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /cron/list:
+    post:
+      operationId: listCron
+      description: Local-ingress-only list of cron schedules. Added in HTTP API 1.13.0.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CronListQuery' } } } }
+      responses:
+        '200': { description: Cron schedules, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CronSchedule' } } } } }
         default: { $ref: '#/components/responses/AtmError' }
 components:
   parameters:
@@ -189,6 +256,10 @@ components:
           description: Optional projection of the daemon's canonical ephemeral master-roster state; added in HTTP API 1.4.0.
         observability:
           $ref: '#/components/schemas/AtmObservabilityHealth'
+        hooks:
+          type: array
+          description: Hook and cron rows grouped by module, cwd, team and phase; added in HTTP API 1.13.0. Absent means the reporting daemon predates hooks.
+          items: { $ref: '#/components/schemas/HookDoctorEntry' }
     AtmObservabilityHealth:
       type: object
       description: Retained observability health. Only the fields added since HTTP API 1.11.0 are listed here.
@@ -588,6 +659,120 @@ components:
         attempt: { type: integer, format: uint32 }
         trigger: { type: string, enum: [steer, task_pass] }
         at: { type: string, format: date-time }
+    HookRegisterRequest:
+      type: object
+      required: [caller_identity, caller_team, phase, hook, module_path, cwd, timeout_ms]
+      properties:
+        caller_identity: { type: string }
+        caller_team: { type: string }
+        phase: { type: string }
+        hook: { type: string, description: A task hook name such as task.assign; cron.tick is refused. }
+        module_path: { type: string }
+        cwd: { type: string }
+        timeout_ms: { type: integer, format: uint32, minimum: 1, maximum: 2500 }
+        custom: { type: object, description: Optional JSON object of at most 64 KiB; an absent value is an empty object. }
+    HookDisableRequest:
+      type: object
+      required: [caller_identity, caller_team, phase]
+      properties:
+        caller_identity: { type: string }
+        caller_team: { type: string }
+        phase: { type: string }
+        hook: { type: string, description: One named hook; absent disables every hook of the phase. }
+    HookListQuery:
+      type: object
+      required: [caller_identity, caller_team]
+      properties:
+        caller_identity: { type: string }
+        caller_team: { type: string }
+        phase: { type: string }
+    HookRegistration:
+      type: object
+      required: [team, phase, hook, module_path, cwd, timeout_ms, custom, active, registered_by, registered_at]
+      properties:
+        team: { type: string }
+        phase: { type: string }
+        hook: { type: string }
+        module_path: { type: string }
+        cwd: { type: string }
+        timeout_ms: { type: integer, format: uint32 }
+        custom: { type: object }
+        active: { type: boolean }
+        registered_by: { type: string }
+        registered_at: { type: string, format: date-time }
+        disabled_at: { type: string, format: date-time }
+    HookActions:
+      type: object
+      required: [dispatched]
+      properties:
+        dispatched: { type: integer, format: uint, description: Count of hook actions dispatched; equals the X-ATM-Hook-Actions header. }
+    HookDoctorEntry:
+      type: object
+      required: [module_path, cwd, team, phase, hooks, schedules, timeout_ms]
+      properties:
+        module_path: { type: string }
+        cwd: { type: string }
+        team: { type: string }
+        phase: { type: string }
+        hooks: { type: array, items: { type: string } }
+        schedules: { type: array, items: { type: string } }
+        timeout_ms: { type: integer, format: uint32 }
+        success: { type: boolean }
+        message: { type: string }
+        findings: { type: array, items: { type: object } }
+        error: { type: object, description: The failed call's code and message; the rest of the doctor report is unchanged. }
+    CronStartRequest:
+      type: object
+      required: [caller_identity, caller_team, phase, name, cron_expr, module_path, cwd, args, timeout_ms, stop]
+      properties:
+        caller_identity: { type: string }
+        caller_team: { type: string }
+        phase: { type: string }
+        name: { type: string }
+        cron_expr: { type: string }
+        module_path: { type: string }
+        cwd: { type: string }
+        args: { type: array, items: { type: string } }
+        timeout_ms: { type: integer, format: uint32, minimum: 1, maximum: 30000 }
+        stop: { type: object, description: A StopCondition, either the Hook check or an Until time. }
+        custom: { type: object }
+    CronEndRequest:
+      type: object
+      required: [caller_identity, caller_team, phase]
+      properties:
+        caller_identity: { type: string }
+        caller_team: { type: string }
+        phase: { type: string }
+        name: { type: string }
+    CronListQuery:
+      type: object
+      required: [caller_identity, caller_team]
+      properties:
+        caller_identity: { type: string }
+        caller_team: { type: string }
+        phase: { type: string }
+    CronSchedule:
+      type: object
+      required: [id, generation, team, phase, name, cron_expr, module_path, cwd, args, timeout_ms, jitter_s, custom, stop, active, created_by, created_at]
+      properties:
+        id: { description: Schedule identifier assigned by the daemon store. }
+        generation: { type: integer, format: uint32 }
+        team: { type: string }
+        phase: { type: string }
+        name: { type: string }
+        cron_expr: { type: string }
+        module_path: { type: string }
+        cwd: { type: string }
+        args: { type: array, items: { type: string } }
+        timeout_ms: { type: integer, format: uint32 }
+        jitter_s: { type: integer, format: uint32 }
+        custom: { type: object }
+        stop: { type: object }
+        active: { type: boolean }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        last_run_at: { type: string, format: date-time }
+        last_outcome: { type: string }
     AtmError:
       type: object
       required: [code, message]

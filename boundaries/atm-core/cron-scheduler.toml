@@ -1,0 +1,49 @@
+boundary_id = "BOUNDARY-CronSchedulerTrait"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "CronScheduler"
+
+[public]
+trait = "CronScheduler"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = []
+io_forbidden = ["sqlite", "process_spawn", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap","atm-http-runtime","atm-runtime-test-support","atm-cron"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["CronStartSpec","TeamName","PhaseId"]
+response_types = ["CronSchedule"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["crate::boundary::cron_scheduler::RecordingCronScheduler"]
+forbidden_test_bypasses = ["std::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CRON-SCHEDULER-REFERENCES"]
+review_gates = ["sealed_trait", "typed_contract", "deterministic_test_doubles"]
+
+[enforcement.io_forbidden_source_modules]
+sqlite = ["atm_core::boundary::cron_scheduler"]
+process_spawn = ["atm_core::boundary::cron_scheduler"]
+socket_io = ["atm_core::boundary::cron_scheduler"]
+
+[status]
+state = "active"
+notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters."]

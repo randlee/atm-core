@@ -1,0 +1,50 @@
+boundary_id = "BOUNDARY-CronScheduler"
+owner_package = "atm-cron"
+owner_crate_path = "atm_cron"
+name = "CronScheduler"
+
+[public]
+trait = "CronScheduler"
+facade = "AtmCron"
+notes = "The only CronScheduler implementation (ADR-069)."
+
+[implementation]
+type = "AtmCron"
+module = "atm_cron::scheduler"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["cron_expr_parse", "schedule_next_computation", "stop_condition_check", "cron_tick", "reload_signal", "cron_run_record", "jitter_assignment"]
+io_forbidden = ["sqlite", "process_spawn", "http_server"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["async-trait", "atm-core", "chrono", "cron", "getrandom", "serde_json", "tokio", "tracing"]
+allowed_dev_dependencies = ["atm-core", "atm-runtime-test-support", "tokio", "tracing-subscriber"]
+forbidden_edges = []
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["CronStartSpec", "CronScheduleId", "TeamName", "PhaseId", "HookRequest", "HookCaller", "HookAction", "StopReply"]
+response_types = ["CronSchedule", "Vec<CronSchedule>"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["tokio::process::Command", "rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CRON-SCHEDULER"]
+review_gates = ["no_runtime_or_bootstrap_edge", "parse_before_write", "stop_check_before_every_run", "missed_tick_replay", "concurrent_runs_of_one_schedule"]
+io_forbidden_source_modules = { sqlite = ["atm_cron::scheduler", "atm_cron::worker", "atm_cron::tick", "atm_cron::clock", "atm_cron::jitter", "atm_cron::expr"], process_spawn = ["atm_cron::scheduler", "atm_cron::worker", "atm_cron::tick", "atm_cron::clock", "atm_cron::jitter", "atm_cron::expr"], http_server = ["atm_cron::scheduler", "atm_cron::worker", "atm_cron::tick", "atm_cron::clock", "atm_cron::jitter", "atm_cron::expr"] }
+
+[status]
+state = "active"
+notes = ["Phase bk sprint bk-4: first version."]

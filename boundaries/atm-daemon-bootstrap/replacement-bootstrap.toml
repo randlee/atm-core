@@ -17,12 +17,12 @@ constructor = "public"
 roots = ["atm_daemon_bootstrap::run_replacement_daemon"]
 
 [ownership]
-io_owns = ["singleton_owner_lock", "concrete_backend_selection", "receiver_hook_harness_selection", "shutdown_signal_wait", "daemon_launch_peer_wire_mode_selection"]
-io_forbidden = ["http_server", "raw_http_framing", "direct_rusqlite_calls", "graft_crate_dependency", "replay_or_resend", "tls_adapter"]
+io_owns = ["singleton_owner_lock", "concrete_backend_selection", "receiver_hook_harness_selection", "shutdown_signal_wait", "daemon_launch_peer_wire_mode_selection", "hook_process_spawn"]
+io_forbidden = ["http_server", "raw_http_framing", "direct_rusqlite_calls", "graft_crate_dependency", "replay_or_resend", "tls_adapter", "process_spawn"]
 
 [dependencies]
 allowed_dependents = ["atm", "atm-daemon"]
-allowed_dependencies = ["atm-core", "atm-observability", "atm-herdr", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "atm-http-runtime", "chrono", "opentelemetry", "opentelemetry_sdk", "opentelemetry-proto", "peer-tls", "sc-observability-log", "serial_test", "serde", "tokio", "tokio-stream", "tonic", "fs4", "serde_json", "tempfile", "toml", "tracing", "tracing-subscriber", "ulid"]
+allowed_dependencies = ["async-trait", "rustix", "atm-core", "atm-observability", "atm-herdr", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "atm-http-runtime", "chrono", "opentelemetry", "opentelemetry_sdk", "opentelemetry-proto", "peer-tls", "sc-observability-log", "serial_test", "serde", "tokio", "tokio-stream", "tonic", "fs4", "serde_json", "tempfile", "toml", "tracing", "tracing-subscriber", "ulid"]
 forbidden_edges = ["atm-daemon -> atm-storage-rusqlite", "atm-daemon -> atm-runtime", "atm-http-runtime -> atm-daemon-bootstrap", "atm-daemon-bootstrap -> atm-graft"]
 
 [references]
@@ -33,7 +33,7 @@ forbidden = []
 request_types = ["core RuntimeAssembly inputs", "core sealed MessageReceivedHookSelector"]
 response_types = ["typed runtime lifecycle outcome"]
 error_types = ["AtmError"]
-notes = ["The concrete storage factory is legal only at this composition boundary; atm-daemon and atm-http-runtime remain backend-neutral.", "AO2.3 parses the one explicit daemon launch argument into the core PeerWireMode; environment, durable settings, and TLS availability never select it.", "The bootstrap may compose peer-tls only in the explicit mTLS arm and passes only its opaque stream seam to atm-http-runtime."]
+notes = ["The concrete storage factory is legal only at this composition boundary; atm-daemon and atm-http-runtime remain backend-neutral.", "AO2.3 parses the one explicit daemon launch argument into the core PeerWireMode; environment, durable settings, and TLS availability never select it.", "The bootstrap may compose peer-tls only in the explicit mTLS arm and passes only its opaque stream seam to atm-http-runtime.", "The process_spawn prohibition is source-module scoped to the atm_daemon_bootstrap facade and atm_daemon_bootstrap::hook_runner named in enforcement.io_forbidden_source_modules; it is not a crate-wide prohibition.", "atm_daemon_bootstrap::process_deadline is the sole owner of hook_process_spawn; hook_runner delegates all hook subprocess creation to that helper.", "atm_daemon_bootstrap::received_hook_selector is an explicit separate process_spawn exception for the pre-existing receiver-hook selection subprocess, not an owner of hook_process_spawn."]
 
 [testing]
 allowed_test_double_paths = []
@@ -42,6 +42,9 @@ forbidden_test_bypasses = ["legacy_daemon_server", "legacy_dispatcher", "raw_htt
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-REPLACEMENT-DAEMON-COMPOSITION"]
 review_gates = ["owner_before_bind", "one_runtime_root", "framework_adapters_only", "no_legacy_fallback"]
+
+[enforcement.io_forbidden_source_modules]
+process_spawn = ["atm_daemon_bootstrap", "atm_daemon_bootstrap::hook_runner"]
 
 [status]
 state = "active"

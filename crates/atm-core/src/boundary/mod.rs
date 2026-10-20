@@ -78,12 +78,35 @@ pub mod sealed {
     pub trait Sealed {}
 }
 
+mod cron_scheduler;
 mod herdr_breaker;
 mod herdr_endpoint;
+mod hook_action_dispatcher;
+mod hook_runner;
 mod mail;
 mod message_received_hook_emitter;
 mod store;
+mod task_commands;
 mod template_composer;
+
+pub use crate::hook::HookTarget;
+pub use atm_storage::request_budget::{
+    CRON_TIMEOUT_MAX_MS, HOOK_ACTION_RESERVE_MS, HOOK_TIMEOUT_MAX_MS, SERVER_REQUEST_BUDGET,
+};
+pub use atm_storage::{
+    CronSchedule, CronScheduleId, CronScheduleStore, HookExitCause, HookName, HookRegistration,
+    HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition,
+};
+pub use cron_scheduler::{CronScheduler, CronStartSpec};
+pub use hook_action_dispatcher::{DispatchSpec, HookActionDispatcher};
+pub use hook_runner::{HookOutcome, HookRunner};
+pub use task_commands::*;
+#[cfg(any(test, feature = "test-utils"))]
+pub use {
+    cron_scheduler::RecordingCronScheduler,
+    hook_action_dispatcher::{DispatchCall, RecordingHookActionDispatcher},
+    hook_runner::{BeforeReply, DummyHookRunner, HookCall},
+};
 
 // Intentional re-export façade: the boundary module is the stable public import
 // surface for Phase R/AA contracts, so callers should not need to know whether

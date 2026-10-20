@@ -22,7 +22,11 @@ use atm_storage_rusqlite::SqliteStorageFactory;
 
 pub mod task_telemetry;
 
+pub use atm_core::boundary::{
+    DummyHookRunner, RecordingCronScheduler, RecordingHookActionDispatcher, RecordingTaskCommands,
+};
 pub use atm_storage::testing::InMemoryTaskLedgerReader;
+pub use atm_storage::testing::{InMemoryCronScheduleStore, InMemoryHookRegistrationStore};
 pub use atm_storage_rusqlite::{TemplateAdmissionMessage, TemplateAdmissionSnapshot};
 pub use task_telemetry::{RecordingTaskTelemetrySink, StallRelease, StalledTaskTelemetrySink};
 

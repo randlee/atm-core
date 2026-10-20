@@ -1,0 +1,51 @@
+boundary_id = "BOUNDARY-CronScheduleStore-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteCronScheduleStore"
+
+[public]
+trait = "CronScheduleStore"
+
+[implementation]
+type = "SqliteCronScheduleStore"
+module = "atm_storage_rusqlite::cron_schedule_store"
+visibility = "private"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["sqlite"]
+io_forbidden = ["message_delivery", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime", "atm-daemon -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqliteCronScheduleStore", "rusqlite::Connection"]
+
+[contracts]
+request_types = ["NewCronSchedule", "CronScheduleId", "TeamName", "PhaseId", "IsoTimestamp"]
+response_types = ["CronSchedule", "Vec<CronSchedule>", "bool"]
+error_types = ["AtmError"]
+notes = [
+  "start on an ended row is one UPDATE in the writer transaction: id kept, generation + 1; an active duplicate is refused before any write",
+  "StopCondition::Until is stored as until_at with stop_hook = 0; StopCondition::Hook as until_at NULL with stop_hook = 1",
+  "record_run and record_stop are guarded by id, generation and active = 1, so a stale run never writes a restarted row",
+  "args is a JSON string array and custom a JSON object; a stored value of the wrong shape is an internal error naming the row",
+]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CRON-SCHEDULE-STORE-SQLITE"]
+review_gates = ["private_sqlite_impl", "stale_generation_writes_nothing"]
+
+[status]
+state = "concrete_landed"
