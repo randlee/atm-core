@@ -220,12 +220,7 @@ impl DaemonHookRunner {
             .map_err(|_| AtmError::hook_timeout(&target.phase, "hook concurrency limit reached"))?
             .map_err(|_| missing("hook semaphore closed"))?;
         let spec = self.spec(target, hook)?;
-        let remaining = budget
-            .checked_sub(started.elapsed())
-            .filter(|remaining| !remaining.is_zero())
-            .ok_or_else(|| {
-                AtmError::hook_timeout(&target.phase, "budget exhausted before spawn")
-            })?;
+        let remaining = remaining_spawn_budget(&target.phase, budget, started.elapsed())?;
         let output = spawn_with_deadline(spec, &stdin, remaining)
             .await
             .map_err(|failure| {
@@ -334,6 +329,17 @@ pub(crate) fn runner_budget(timeout_ms: u32, remaining: Duration) -> Option<Dura
 pub(crate) fn doctor_budget(timeout_ms: u32, remaining: Duration) -> Option<Duration> {
     let budget = remaining.min(Duration::from_millis(timeout_ms.into()));
     (!budget.is_zero()).then_some(budget)
+}
+
+fn remaining_spawn_budget(
+    phase: &PhaseId,
+    budget: Duration,
+    elapsed: Duration,
+) -> Result<Duration, AtmError> {
+    budget
+        .checked_sub(elapsed)
+        .filter(|remaining| !remaining.is_zero())
+        .ok_or_else(|| AtmError::hook_timeout(phase, "budget exhausted before spawn"))
 }
 
 #[cfg(test)]
@@ -486,6 +492,18 @@ mod tests {
                 expected.map(Duration::from_millis)
             );
         }
+    }
+
+    #[test]
+    fn exhausted_post_permit_budget_reports_before_spawn() {
+        let phase = PhaseId::parse("bk").unwrap();
+        let error =
+            remaining_spawn_budget(&phase, Duration::from_millis(1), Duration::from_millis(1))
+                .unwrap_err();
+        assert_eq!(
+            error.message(),
+            AtmError::hook_timeout(&phase, "budget exhausted before spawn").message()
+        );
     }
 
     #[test]
