@@ -316,7 +316,12 @@ impl Harness {
         self.backend = SqliteStorageBackend::new(&self.path).expect("reopen backend");
     }
 
-    fn move_task(&self, task: &str, actor: &str, target: MoveTarget) {
+    fn move_task(
+        &self,
+        task: &str,
+        actor: &str,
+        target: MoveTarget,
+    ) -> atm_storage::TaskMoveRecord {
         self.backend
             .task_store()
             .move_task(
@@ -328,7 +333,7 @@ impl Harness {
             )
             .expect("move commit")
             .operation
-            .expect("move task");
+            .expect("move task")
     }
 }
 
@@ -1536,7 +1541,9 @@ pub(crate) fn move_of_second_active_task_reports_its_position() {
     }
     h.start("T3", "alice").expect("start T3");
     h.start("T1", "alice").expect("start T1");
-    h.move_task("T1", "lead", MoveTarget::End);
+    let moved = h.move_task("T1", "lead", MoveTarget::End);
+    assert_eq!(moved.from.get(), 2);
+    assert_eq!(moved.to.get(), 2);
     let event = h.events("T1").pop().expect("moved event");
     assert_eq!(event.event, TaskEventKind::Moved);
     assert_eq!(event.detail.as_deref(), Some("2→2"));
@@ -1546,10 +1553,16 @@ pub(crate) fn move_of_second_active_task_reports_its_position() {
     );
 }
 
-/// The `TASK_INDEX_DDL` text before bk-8 created `one_active_task_per_agent`.
-const PRE_BK8_ONE_ACTIVE_INDEX: &str = r#"
+/// The full pre-bk-8 `TASK_INDEX_DDL`, before that unique index was dropped.
+const PRE_BK8_TASK_INDEX_DDL: &str = r#"
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_task_per_agent
     ON tasks(team, assignee) WHERE state = 'active';
+
+CREATE UNIQUE INDEX IF NOT EXISTS tasks_position_per_member
+    ON tasks(team, assignee, position) WHERE state <> 'complete';
+
+CREATE INDEX IF NOT EXISTS tasks_open_by_member
+    ON tasks(team, assignee, assigned_at) WHERE state <> 'complete';
 "#;
 
 #[test]
@@ -1557,7 +1570,7 @@ pub(crate) fn ensure_schema_drops_one_active_task_per_agent() {
     let mut h = Harness::new();
     Connection::open(&h.path)
         .unwrap()
-        .execute_batch(PRE_BK8_ONE_ACTIVE_INDEX)
+        .execute_batch(PRE_BK8_TASK_INDEX_DDL)
         .unwrap();
     let index_count = |path: &std::path::Path| -> i64 {
         Connection::open(path)
