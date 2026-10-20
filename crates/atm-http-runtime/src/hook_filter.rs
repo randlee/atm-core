@@ -65,6 +65,7 @@ impl ActiveHookSnapshot {
             }
             Err(error) => {
                 self.dirty.store(true, Ordering::SeqCst);
+                tracing::error!(error = %error, "hook snapshot reload failed");
                 Err(error)
             }
         }
@@ -666,6 +667,7 @@ pub(crate) mod test_support {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::sync::Mutex;
     use std::sync::atomic::Ordering;
 
     use atm_core::boundary::{
@@ -675,6 +677,7 @@ mod tests {
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::hook::HookReply;
     use atm_runtime_test_support::InMemoryHookRegistrationStore;
+    use tracing_subscriber::prelude::*;
 
     use super::ActiveHookSnapshot;
     use super::HookedTaskCommands;
@@ -687,6 +690,43 @@ mod tests {
     use crate::storage_and_nudge_router::StorageAndNudgeRouter;
     use crate::storage_and_nudge_router::tests::{fixture, task_write_request};
     use crate::task_commands::NormalTaskCommands;
+
+    type CapturedEventFields = Vec<(String, String)>;
+    type CapturedEventsInner = Vec<CapturedEventFields>;
+
+    #[derive(Clone, Default)]
+    struct CapturedEvents(Arc<Mutex<CapturedEventsInner>>);
+
+    #[derive(Default)]
+    struct EventFields(Vec<(String, String)>);
+
+    impl tracing::field::Visit for EventFields {
+        fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+            self.0.push((field.name().to_owned(), value.to_owned()));
+        }
+
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            self.0.push((field.name().to_owned(), format!("{value:?}")));
+        }
+    }
+
+    struct EventCapture(CapturedEvents);
+
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for EventCapture {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _context: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            let mut fields = EventFields::default();
+            event.record(&mut fields);
+            self.0
+                .0
+                .lock()
+                .expect("captured hook snapshot events")
+                .push(fields.0);
+        }
+    }
 
     fn list_query() -> atm_core::list::ListQuery {
         atm_core::list::ListQuery {
@@ -1351,7 +1391,31 @@ mod tests {
             .register(registration("task.assign", "bk", 2))
             .expect("register");
         store.fail_active_all.store(true, Ordering::SeqCst);
-        assert!(snapshot.refresh().is_err());
+        let events = CapturedEvents::default();
+        let subscriber = tracing_subscriber::registry().with(EventCapture(events.clone()));
+        let result = tracing::subscriber::with_default(subscriber, || snapshot.refresh());
+        let error = result.expect_err("injected refresh failure");
+        let captured = {
+            events
+                .0
+                .lock()
+                .expect("captured hook snapshot events")
+                .clone()
+        };
+        assert_eq!(captured.len(), 1);
+        assert!(
+            captured[0].iter().any(|(name, value)| {
+                name == "message" && value == "hook snapshot reload failed"
+            })
+        );
+        assert!(captured[0].iter().any(|(name, value)| {
+            name == "error" && value.contains("injected hook registration active_all failure")
+        }));
+        assert!(
+            error
+                .message()
+                .contains("injected hook registration active_all failure")
+        );
         store.fail_active_all.store(false, Ordering::SeqCst);
         let rows = snapshot
             .current(&bridge(), deadline(), &team(), &hook("task.assign"))
