@@ -4,12 +4,6 @@ use atm_core::doctor::hooks::HookDoctorEntry;
 use atm_core::hook::HookActionsResponse;
 use std::fmt::Write as _;
 
-/// Print registrations as a human table or a bare JSON array.
-pub fn print_hook_list(rows: &[HookRegistration], json: bool) -> Result<()> {
-    print!("{}", render_hook_list(rows, json)?);
-    Ok(())
-}
-
 pub(crate) fn render_hook_list(rows: &[HookRegistration], json: bool) -> Result<String> {
     if json {
         return Ok(format!("{}\n", serde_json::to_string(rows)?));
@@ -37,12 +31,6 @@ pub(crate) fn render_hook_list(rows: &[HookRegistration], json: bool) -> Result<
         )?;
     }
     Ok(output)
-}
-
-/// Print schedules, including their stop conditions and persisted outcomes.
-pub fn print_cron_list(rows: &[CronSchedule], json: bool) -> Result<()> {
-    print!("{}", render_cron_list(rows, json)?);
-    Ok(())
 }
 
 pub(crate) fn render_cron_list(rows: &[CronSchedule], json: bool) -> Result<String> {

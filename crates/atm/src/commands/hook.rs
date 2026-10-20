@@ -311,15 +311,7 @@ impl HookCommand {
             InvocationDir::new(&current),
             AtmHomePath::new(&home),
         )?;
-        if let HookSubcommand::List(args) = &self.command {
-            preflight_daemon_api(&composition, HttpApiVersion::parse("1.13.0")?, "hook").await?;
-            return match composition.execute_request(request).await? {
-                ResponseEnvelope::HookList(rows) => {
-                    crate::output::print_hook_list(&rows, args.json)
-                }
-                other => Err(atm_daemon_client::unexpected_response("hook list", other).into()),
-            };
-        }
+        preflight_daemon_api(&composition, HttpApiVersion::parse("1.13.0")?, "hook").await?;
         print!("{}", self.execute_request(&composition, request).await?);
         Ok(())
     }
@@ -361,7 +353,6 @@ impl HookCommand {
         composition: &CliComposition<'_>,
         request: RequestEnvelope,
     ) -> Result<String> {
-        preflight_daemon_api(composition, HttpApiVersion::parse("1.13.0")?, "hook").await?;
         match composition.execute_request(request).await? {
             ResponseEnvelope::HookRegistered(row) => Ok(format!(
                 "registered {} for {}/{} (timeout {} ms)\n",

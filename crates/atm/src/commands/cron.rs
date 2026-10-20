@@ -419,15 +419,7 @@ impl CronCommand {
             InvocationDir::new(&current),
             AtmHomePath::new(&home),
         )?;
-        if let CronSubcommand::List(args) = &self.command {
-            preflight_daemon_api(&composition, HttpApiVersion::parse("1.13.0")?, "cron").await?;
-            return match composition.execute_request(request).await? {
-                ResponseEnvelope::CronList(rows) => {
-                    crate::output::print_cron_list(&rows, args.json)
-                }
-                other => Err(atm_daemon_client::unexpected_response("cron list", other).into()),
-            };
-        }
+        preflight_daemon_api(&composition, HttpApiVersion::parse("1.13.0")?, "cron").await?;
         print!("{}", self.execute_request(&composition, request).await?);
         Ok(())
     }
@@ -482,7 +474,6 @@ impl CronCommand {
         composition: &CliComposition<'_>,
         request: RequestEnvelope,
     ) -> Result<String> {
-        preflight_daemon_api(composition, HttpApiVersion::parse("1.13.0")?, "cron").await?;
         match composition.execute_request(request).await? {
             ResponseEnvelope::CronStarted(row) => Ok(format!(
                 "started {} for {}/{} (timeout {} ms)\n",
