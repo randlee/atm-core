@@ -281,12 +281,48 @@ fn start_after_end_updates_in_place_and_bumps_generation() {
             .len(),
         1
     );
-    let restarted = store
-        .start(cron_spec("nightly", StopCondition::Hook, stamp(6)))
-        .expect("restart");
+    let mut replacement = cron_spec(
+        "nightly",
+        StopCondition::Until {
+            at: stamp(10).into_inner(),
+        },
+        stamp(6),
+    );
+    replacement.cron_expr = "0 15 * * * *".to_owned();
+    replacement.module_path = PathBuf::from("/hooks/replacement.py");
+    replacement.cwd = PathBuf::from("/replacement");
+    replacement.args = vec!["--replacement".to_owned(), "value".to_owned()];
+    replacement.timeout_ms = 12000;
+    replacement.jitter_s = 31;
+    replacement.custom = serde_json::json!({"replacement": true})
+        .as_object()
+        .expect("object literal")
+        .clone();
+    replacement.created_by = AgentName::from_validated("replacement-agent");
+    let restarted = store.start(replacement).expect("restart");
     assert_eq!(restarted.id, first.id);
     assert_eq!(restarted.generation, 2);
     assert!(restarted.active);
+    assert_eq!(restarted.team, team());
+    assert_eq!(restarted.phase, phase());
+    assert_eq!(restarted.name, "nightly");
+    assert_eq!(restarted.cron_expr, "0 15 * * * *");
+    assert_eq!(
+        restarted.module_path,
+        PathBuf::from("/hooks/replacement.py")
+    );
+    assert_eq!(restarted.cwd, PathBuf::from("/replacement"));
+    assert_eq!(restarted.args, vec!["--replacement", "value"]);
+    assert_eq!(restarted.timeout_ms, 12000);
+    assert_eq!(restarted.jitter_s, 31);
+    assert_eq!(restarted.custom["replacement"], true);
+    assert_eq!(
+        restarted.stop,
+        StopCondition::Until {
+            at: stamp(10).into_inner()
+        }
+    );
+    assert_eq!(restarted.created_by.as_str(), "replacement-agent");
     assert_eq!(restarted.created_at, stamp(6));
     assert_eq!(restarted.ended_at, None);
     assert_eq!(restarted.last_run_at, None);

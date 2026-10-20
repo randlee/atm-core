@@ -252,16 +252,13 @@ impl ScheduleColumns {
             .execute(
                 "UPDATE cron_schedule SET
                     generation = generation + 1,
-                    cron_expr = ?4, module_path = ?5, cwd = ?6, args = ?7,
-                    timeout_ms = ?8, jitter_s = ?9, custom = ?10,
-                    active = 1, until_at = ?11, stop_hook = ?12,
-                    created_by = ?13, created_at = ?14,
+                    cron_expr = ?1, module_path = ?2, cwd = ?3, args = ?4,
+                    timeout_ms = ?5, jitter_s = ?6, custom = ?7,
+                    active = 1, until_at = ?8, stop_hook = ?9,
+                    created_by = ?10, created_at = ?11,
                     last_run_at = NULL, last_outcome = NULL, ended_at = NULL
-                 WHERE id = ?15;",
+                 WHERE id = ?12;",
                 params![
-                    self.team,
-                    self.phase,
-                    self.name,
                     self.cron_expr,
                     self.module_path,
                     self.cwd,
