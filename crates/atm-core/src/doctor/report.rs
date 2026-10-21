@@ -149,6 +149,9 @@ pub struct DaemonRuntimeDoctorReport {
 pub struct PeerConfigDoctorReport {
     pub configured_interface_count: usize,
     pub enabled_interface_count: usize,
+    /// Durable direct-peer listener port selected for this account.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claimed_direct_peer_port: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub certificate_fingerprint: Option<String>,
     pub trusted_peer_count: usize,

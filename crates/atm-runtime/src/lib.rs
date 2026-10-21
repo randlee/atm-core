@@ -9,6 +9,7 @@ mod composition;
 pub mod doctor_projection;
 mod legacy_storage_adapters;
 pub mod mailbox_runtime;
+mod peer_port;
 pub mod task_telemetry;
 
 pub use atm_storage::{
@@ -27,6 +28,7 @@ pub use mailbox_runtime::{
     AsyncMailboxRuntime, HandoffConfig, StateHandoffDiagnostics, StateHandoffSupervisor,
     SupervisorState, read_deadline,
 };
+pub use peer_port::PeerPortResolver;
 pub use task_telemetry::{
     TASK_TELEMETRY_QUEUE_CAPACITY, TaskTelemetryDiagnostics, TaskTelemetryDiagnosticsSnapshot,
     TaskTelemetryRuntime, TaskTelemetrySetup,

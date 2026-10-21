@@ -107,10 +107,11 @@ pub use bare_cli_fifo::{
 };
 #[cfg(unix)]
 pub use client::unix_socket_client;
+#[cfg(test)]
+pub use client::{DIRECT_PEER_TCP_PORT, direct_peer_port};
 pub use client::{
-    DIRECT_PEER_TCP_PORT, SAME_HOST_REQUEST_DEADLINE, diagnostics_query, direct_peer_port,
-    direct_peer_tcp_client, loopback_tcp_client, preferred_local_client, selected_write_transport,
-    shared_direct_peer_client,
+    SAME_HOST_REQUEST_DEADLINE, diagnostics_query, direct_peer_tcp_client, loopback_tcp_client,
+    preferred_local_client, selected_write_transport, shared_direct_peer_client,
 };
 pub use diagnostics_route::{DEFAULT_DIAGNOSTICS_LIMIT, MAX_DIAGNOSTICS_LIMIT};
 pub use herdr_queue_wake::{
@@ -192,8 +193,8 @@ impl HttpRuntimeConfig {
 
     /// Enables the plain-TCP peer adapter.
     ///
-    /// The production daemon receives a validated port from its immutable
-    /// launch arguments, defaulting to [`DIRECT_PEER_TCP_PORT`]. It has no
+    /// The production daemon receives a validated port from its persisted
+    /// account peer interface. It has no
     /// operator-provided local address or peer identity: the accepted socket supplies peer
     /// provenance before the request reaches the canonical router.
     #[must_use]
@@ -222,7 +223,7 @@ impl HttpRuntimeConfig {
 
 /// Validated plain-TCP peer listener configuration for the non-TLS MVP.
 ///
-/// The production constructor fixes the protocol port.  It intentionally has
+/// The production constructor uses the persisted account port. It intentionally has
 /// no local address or peer-host field: Tokio binds every active IPv4
 /// interface, and accepted connections supply their own source address to the
 /// peer adapter.
@@ -233,16 +234,7 @@ pub struct DirectPeerTcpConfig {
 }
 
 impl DirectPeerTcpConfig {
-    #[must_use]
-    pub fn standard() -> Self {
-        Self::new(DIRECT_PEER_TCP_PORT)
-    }
-
-    /// Uses an explicit non-zero direct-peer port selected at daemon launch.
-    ///
-    /// The omitted launch argument defaults to the protocol port. An explicit
-    /// port lets an isolated physical benchmark daemon avoid contending with a
-    /// live daemon owned by another OS account on the same host.
+    /// Uses the non-zero port selected from the account's peer interface.
     #[must_use]
     pub fn configured(port: NonZeroU16) -> Self {
         Self::new(port.get())
