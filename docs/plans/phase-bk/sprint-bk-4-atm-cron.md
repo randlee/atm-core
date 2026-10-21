@@ -125,7 +125,11 @@ impl atm_core::boundary::sealed::Sealed for AtmCron {}
     async fn list(&self, team: Option<&TeamName>, phase: Option<&PhaseId>) -> Result<Vec<CronSchedule>, AtmError>;
 }
 pub struct CronWorkerHandle { shutdown: Mutex<Option<oneshot::Sender<()>>>, worker: Mutex<Option<JoinHandle<()>>> }
-impl CronWorkerHandle { pub async fn shutdown(&self, deadline: tokio::time::Instant); }   // stop scheduling, await in-flight runs until deadline, abort after
+impl CronWorkerHandle {
+    #[cfg(feature = "test-utils")]
+    pub fn with_settled_for_test(settled: watch::Receiver<usize>) -> Self; // builds a handle with a chosen settled watch so shutdown tests can observe the settlement wait
+    pub async fn shutdown(&self, deadline: tokio::time::Instant);
+} // stop scheduling, await in-flight runs until deadline, abort after
 
 // crates/atm-cron/src/worker.rs  (pub(crate))
 struct Slot { schedule: CronSchedule, next: Option<DateTime<Utc>>, in_flight: Option<JoinHandle<CronRunOutcome>> }
