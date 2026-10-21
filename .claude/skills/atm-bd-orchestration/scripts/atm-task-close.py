@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Close orchestration beads and hand off work without closing a dev task early."""
+"""Close orchestration beads, hand off work, and close the dev task at dev complete.
+
+Every bd, git and gh command is bounded by `ATM_BD_GATE_TIMEOUT_S` seconds (default 180, shared with
+assignment-gates.py); a timeout is `COMMAND.FAILED` whose fix says to retry once or raise the variable.
+"""
 from __future__ import annotations
 
 import argparse
@@ -12,6 +16,7 @@ import sys
 import tempfile
 import time
 import tomllib
+from datetime import datetime, timezone
 
 import yaml
 
@@ -19,19 +24,36 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import repo_config
 import sc_render
+from command_timeout import TIMEOUT_ENV, command_timeout, import_timeout
 from stack_top import select_stack_top
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
 ROLES = ("dev", "fix", "sanity", "qa")
-COMMAND_TIMEOUT = 30
+COMMAND_TIMEOUT = import_timeout()
 ASSIGNMENT_EVENTS = frozenset(("assigned", "reassigned", "reopened"))
 TERMINAL_STATES = frozenset(("complete",))
 COMPLETED = "completed"
 REFUSED = "refused"
+# Dolt drops connections under host load (load 40-55 with parallel cargo builds): a dropped bd call is retried.
+# Worst case for one bd call that keeps dropping = (DOLT_RETRIES + 1) * COMMAND_TIMEOUT + DOLT_RETRIES * DOLT_RETRY_SLEEP_S;
+# a call that times out is not retried and fails after COMMAND_TIMEOUT. See docs/requirements/task-close-hook.md.
+DOLT_DROP = re.compile(r"invalid connection|i/o timeout", re.IGNORECASE)
+DOLT_RETRIES = 3
+DOLT_RETRY_SLEEP_S = 10
 
 
 def is_terminal(events):
     return bool(events) and events[-1].get("to_state") in TERMINAL_STATES
+
+
+def load_sample():
+    """Portable host load: os.getloadavg plus load1 as a percentage of CPU count (no new dependencies)."""
+    try:
+        one, five, fifteen = os.getloadavg()
+    except (AttributeError, OSError):
+        return {"load_avg": None, "cpu_pct": None}
+    return {"load_avg": [round(one, 2), round(five, 2), round(fifteen, 2)],
+            "cpu_pct": round(100 * one / (os.cpu_count() or 1), 1)}
 
 
 class CloseError(RuntimeError):
@@ -66,11 +88,35 @@ def read_vars(path):
     return values
 
 
+def merge_result(values, result, role):
+    """Join the fixer's result file to the lead's dispatch vars; each field lives in exactly one of them."""
+    fields = set(header(TEMPLATES / "task-close-vars.j2")["result_variables_by_role"][role])
+    unknown = result.keys() - fields
+    if unknown:
+        raise CloseError("VARS.UNKNOWN", ", ".join(sorted(unknown)), f"Remove fields that are not {role} result fields from --result.")
+    overlap = values.keys() & result.keys()
+    if overlap:
+        raise CloseError("VARS.INVALID", ", ".join(sorted(overlap)),
+                         "Pass each completion field once: remove it from the lead's dispatch file or from --result.")
+    return {**values, **result}
+
+
 def validate_shared_vars(values, role):
     """Strictly render the shared dispatch contract before inspecting live state."""
     validate(values, role)
+    contract = header(TEMPLATES / "task-close-vars.j2")
+    fields = contract["render_variables_by_role"][role]
+    if role == "fix" and values["outcome"] == "not_reproducible":
+        fields = [name for name in fields if name not in ("branch", "stack_bead")]
+    if role == "sanity" and values["outcome"] == "not_reproducible":
+        fields = [name for name in fields if name != "stack_bead"]
+    render_values = {name: values[name] for name in fields if name in values}
+    contract.update(required_variables=fields, defaults={})
     try:
-        sc_render.render(TEMPLATES / "task-close-vars.j2", values)
+        with tempfile.TemporaryDirectory(prefix="atm-task-close-contract-") as directory:
+            template = Path(directory) / "task-close-vars.j2"
+            template.write_text("---\n" + yaml.safe_dump(contract) + "---\n{{ '' }}\n", encoding="utf-8")
+            sc_render.render(template, render_values)
     except sc_render.RenderError as error:
         raise CloseError("VARS.INVALID", str(error),
                          "Supply every field required by the shared task-close vars contract.") from error
@@ -196,27 +242,32 @@ def validate(values, role):
     role_required = contract.get("required_variables_by_role")
     if not isinstance(role_required, dict) or role not in role_required:
         raise CloseError("VARS.INVALID", "task-close-vars must declare requirements by role", "Repair the role-specific required_variables mapping.")
-    required = set(role_required[role])
+    required = set(role_required[role]) | set(contract.get("result_variables_by_role", {}).get(role, []))
     declared = set(contract["required_variables"])
     missing = required - values.keys()
     if role == "fix" and values.get("outcome") == "not_reproducible":
-        missing -= {"branch", "commit", "pr_number"}
+        missing -= {"branch", "commit", "pr_number", "stack_bead"}
+    if role == "sanity" and values.get("outcome") == "not_reproducible":
+        missing -= {"stack_bead"}
     unknown = values.keys() - declared - contract.get("defaults", {}).keys()
     if missing:
         raise CloseError("VARS.MISSING", ", ".join(sorted(missing)), "Supply every shared template variable in the lead's vars file.")
     if unknown:
         raise CloseError("VARS.UNKNOWN", ", ".join(sorted(unknown)), "Remove variables no shared template declares.")
     names = ["phase", "sprint", "primary_checkout", "worktree_path", "checked_bead", "dev_task_id", "sanity_task_id", "qa_task_id"]
-    if role in ("dev", "fix", "sanity"):
+    stack_required = values["outcome"] != "not_reproducible"
+    if role in ("dev", "fix", "sanity") and stack_required:
         names.append("stack_bead")
+    if role == "fix" and values["outcome"] == "not_reproducible" and not values.get("stack_bead"):
+        names.append("pr_target")
     if values["outcome"] != "not_reproducible":
-        names += ["branch", "commit", "pr_number"]
+        names += ["branch"] if role in ("dev", "fix") else ["branch", "commit", "pr_number"]
     elif not re.search(r"\S+:\d+", str(values["evidence"])):
         raise CloseError("VARS.INVALID", "not_reproducible requires evidence file:line", "Supply the authoritative absence location.")
     for name in names:
         if not str(values[name] or "").strip():
             raise CloseError("VARS.EMPTY", name, f"Populate {name} in the shared vars file.")
-    for name in ("primary_checkout", "worktree_path", "phase", *(["stack_bead"] if role in ("dev", "fix", "sanity") else [])):
+    for name in ("primary_checkout", "worktree_path", "phase", *(["stack_bead"] if role in ("dev", "fix", "sanity") and stack_required else [])):
         if not isinstance(values[name], str):
             raise CloseError("VARS.INVALID", f"{name} must be a string, got {type(values[name]).__name__}",
                              f"Set {name} to a non-empty string in the lead's shared vars file.")
@@ -226,11 +277,12 @@ def validate(values, role):
         raise CloseError("VARS.INVALID", "round must be a positive integer", "Supply the current sanity assignment round.")
     if role == "qa" and values["verdict"] == "CANNOT_RUN":
         raise CloseError("VARS.INVALID", "QA CANNOT_RUN is not a completed review", "Use the QA refusal workflow.")
-    if not isinstance(values["undone"], list) or any(
+    undone = values.get("undone", []) if role in ("dev", "fix") else values["undone"]
+    if not isinstance(undone, list) or any(
         not isinstance(item, dict) or isinstance(item.get("number"), bool)
         or not isinstance(item.get("number"), int) or item["number"] < 1
         or not isinstance(item.get("reason"), str) or not item["reason"].strip()
-        for item in values["undone"]
+        for item in undone
     ):
         raise CloseError("VARS.INVALID", "undone must contain numbered deliverables and verbatim reasons", "Supply the selected undone deliverables.")
     if role == "sanity" and values["verdict"] == "FAIL" and not values["undone"]:
@@ -240,15 +292,15 @@ def validate(values, role):
 
 
 class Hook:
-    def __init__(self, role, values, path, runner, clock):
+    def __init__(self, role, values, path, runner, clock, sleep=time.sleep, sample=load_sample):
         self.role, self.values, self.path = role, values, Path(path).resolve()
-        self.runner, self.clock = runner, clock
+        self.runner, self.clock, self.sleep, self.sample = runner, clock, sleep, sample
         self.root = Path(values["primary_checkout"]).resolve()
         self.worktree = Path(values["worktree_path"]).resolve()
         self.identity = os.environ.get("ATM_IDENTITY", "")
         if not self.identity:
             raise CloseError("VARS.INVALID", "ATM_IDENTITY is not set", "Run as the assigned ATM member.")
-        config = read_config(self.root, role, values["verdict"])
+        config = read_config(self.root, role, values.get("verdict", ""))
         self.config = config
         self.lead = read_toml_setting(self.root / ".atm-bd" / f"phase-{values['phase']}.toml", ("lead",))
         team = read_toml_setting(self.root / ".atm.toml", ("atm", "default_team"))
@@ -258,23 +310,53 @@ class Hook:
         self.github_error = ""
         self.closed, self.assigned = [], []
         self.task = values[{"dev": "dev_task_id", "fix": "dev_task_id", "sanity": "sanity_task_id", "qa": "qa_task_id"}[role]]
-        self.key = [self.task, values["verdict"], values.get("commit", "")]
+        self.key = [self.task, values.get("verdict", ""), values.get("commit", "")]
         self.records, self.task_history = {}, {}
+        self.attempts = []
 
     def run(self, argv, *, lead=False, git=False, check=True):
-        try:
-            result = self.runner(list(argv), cwd=self.worktree if git else self.root,
-                                 env=self.lead_env if lead else self.env, capture_output=True, text=True,
-                                 timeout=COMMAND_TIMEOUT)
-        except subprocess.TimeoutExpired as error:
-            raise CloseError("COMMAND.FAILED", f"{list(argv)!r} timed out after {COMMAND_TIMEOUT}s",
-                             f"Repair {argv[0]} and rerun with the same vars file.") from error
-        except (OSError, subprocess.SubprocessError) as error:
-            raise CloseError("COMMAND.FAILED", str(error), f"Repair {argv[0]} and rerun with the same vars file.") from error
+        started = self.clock()
+        for attempt in range(DOLT_RETRIES + 1):
+            began = self.clock()
+            result, error = None, None
+            try:
+                result = self._run_once(argv, lead=lead, git=git)
+            except CloseError as failure:
+                error = failure
+            retry = (error is None and argv[0] == "bd" and bool(result.returncode) and attempt < DOLT_RETRIES
+                     and bool(DOLT_DROP.search((result.stderr or "") + (result.stdout or ""))))
+            outcome = ("timeout" if error is not None and "timed out" in str(error) else "error" if error is not None
+                       else "dolt_drop_retry" if retry else "failed" if result.returncode else "ok")
+            if outcome != "ok" or attempt:
+                self._log_attempt(argv, attempt + 1, began, outcome, started)
+            if error is not None:
+                raise error
+            if not retry:
+                break
+            self.sleep(DOLT_RETRY_SLEEP_S)
         if check and result.returncode:
             raise CloseError("COMMAND.FAILED", result.stderr.strip() or result.stdout.strip(),
                              f"Repair {' '.join(argv[:3])} and rerun with the same vars file.")
         return result
+
+    def _log_attempt(self, argv, attempt, began, outcome, started):
+        """Record every non-clean attempt (and a success after a retry); main() prints them under "attempts"."""
+        record = {"close_attempt": {"command": " ".join(argv[:3]), "attempt": attempt, "timeout_s": COMMAND_TIMEOUT,
+                                    "elapsed_s": round(max(0, self.clock() - began), 3), "outcome": outcome,
+                                    "retries_until_now": attempt - 1,
+                                    "total_elapsed_s": round(max(0, self.clock() - started), 3), **self.sample()}}
+        self.attempts.append(record["close_attempt"])
+
+    def _run_once(self, argv, *, lead=False, git=False):
+        try:
+            return self.runner(list(argv), cwd=self.worktree if git else self.root,
+                               env=self.lead_env if lead else self.env, capture_output=True, text=True,
+                               timeout=COMMAND_TIMEOUT)
+        except subprocess.TimeoutExpired as error:
+            raise CloseError("COMMAND.FAILED", f"{list(argv)!r} timed out after {COMMAND_TIMEOUT}s",
+                             f"Retry once, or raise {TIMEOUT_ENV} if the host is loaded, then rerun with the same vars file.") from error
+        except (OSError, subprocess.SubprocessError) as error:
+            raise CloseError("COMMAND.FAILED", str(error), f"Repair {argv[0]} and rerun with the same vars file.") from error
 
     def record_github_failure(self, argv, detail):
         # Each failed attempt overwrites this, so the result names the last one.
@@ -302,20 +384,32 @@ class Hook:
     def events(self, task):
         return self.json(["atm", "task", "events", task, "--all", "--json"])["events"]
 
+    def beads_directory(self):
+        configured = self.env.get("BEADS_DIR")
+        if configured:
+            return configured
+        location = self.json(["bd", "where", "--json"])
+        path = location.get("path") if isinstance(location, dict) else None
+        if not isinstance(path, str) or not Path(path).is_absolute():
+            raise CloseError("BEADS_DIR.INVALID", repr(path), "Set BEADS_DIR or repair `bd where --json` to return an absolute beads path.")
+        return path
+
     def snapshot(self, *, include_stack=False):
         values = self.values
         beads = {self.task}
         tasks = {self.task}
         if self.role in ("dev", "fix"):
             beads.add(values["sanity_bead"])
-            if include_stack:
+            if include_stack and values.get("stack_bead"):
                 beads.add(values["stack_bead"])
             tasks.add(values["sanity_task_id"])
         elif self.role == "sanity":
             beads.add(values["checked_bead"])
             if values["verdict"] == "PASS":
                 beads.add(values["qa_bead"])
-                tasks.update((values["dev_task_id"], values["qa_task_id"]))
+                if values.get("outcome") != "not_reproducible":
+                    beads.add(values["stack_bead"])
+                tasks.add(values["qa_task_id"])
         self.records = {bead: self.read_bead(bead) for bead in sorted(beads)}
         self.task_history = {task: self.events(task) for task in sorted(tasks)}
         events = self.task_history[self.task]
@@ -375,6 +469,14 @@ class Hook:
         return assignment_id == self.assignment_id
 
     def stack_top(self):
+        if not self.values.get("stack_bead"):
+            branch = self.values.get("pr_target") or self.values.get("base")
+            if not branch:
+                raise CloseError("VARS.EMPTY", "pr_target", "Set pr_target to the checked layer's lower-bound branch.")
+            head = self.run(["git", "rev-parse", f"origin/{branch}"], git=True).stdout.strip()
+            if not head:
+                raise CloseError("STACK.TOP", branch, f"Fetch and verify origin/{branch} before retrying.")
+            return branch, head
         self.last_json_argv = ["bd", "show", self.values["stack_bead"], "--json"]
         return select_stack_top(
             self.bead(self.values["stack_bead"]), self.values["pr_target"],
@@ -383,9 +485,7 @@ class Hook:
 
     def checks(self):
         values = self.values
-        head = self.run(["git", "rev-parse", "HEAD"], git=True).stdout.strip()
-        if head != values["commit"]:
-            raise CloseError("HEAD.NOT_PUSHED", "HEAD differs from commit", "Push the checked commit and supply its full sha.")
+        head = values["commit"]
         dirty = self.run(["git", "status", "--porcelain"], git=True).stdout.strip()
         if dirty:
             raise CloseError("HEAD.DIRTY", dirty, "Commit or remove worktree changes before retrying.")
@@ -419,7 +519,8 @@ class Hook:
             if tracking != head:
                 raise CloseError("HEAD.NOT_PUSHED", "cached origin head differs from HEAD",
                                  "Push this branch and refresh origin before retrying.")
-        top, _head = self.stack_top()
+        top, top_head = self.stack_top()
+        values["rebased_onto"] = top_head
         ancestor = self.run(["git", "merge-base", "--is-ancestor", f"origin/{top}", head], git=True, check=False)
         if ancestor.returncode == 1:
             raise CloseError("BASE.NOT_ANCESTOR", top, f"Rebase onto origin/{top}, push, then rerun the hook.")
@@ -431,6 +532,7 @@ class Hook:
             raise CloseError("COMMAND.INVALID", "origin does not name owner/repository", "Configure the repository origin.")
         owner, repo = match.groups()
         if self.github == "unavailable":
+            self.keep_recorded_pr()
             return
         for _attempt in range(3):
             try:
@@ -440,10 +542,23 @@ class Hook:
                     raise
                 self.record_github_failure(self.last_json_argv, error)
                 continue
-            if not any(str(pr["number"]) == str(values["pr_number"]) and pr["head"]["sha"] == head for pr in prs):
-                raise CloseError("PR.NOT_FOUND", "no open PR for this branch at HEAD", "Open the PR at the pushed head and supply its number.")
+            matches = [pr for pr in prs if pr["head"]["sha"] == head]
+            if not matches:
+                raise CloseError("PR.NOT_FOUND", "no open PR for this branch at HEAD", "Open the PR at the pushed head, then rerun the hook.")
+            if len(matches) != 1:
+                raise CloseError("PR.AMBIGUOUS", "several open PRs match this branch at HEAD",
+                                 "Close the duplicate PRs so exactly one open PR names this branch and pushed head, then rerun the hook.")
+            values["pr_number"] = str(matches[0]["number"] or "")
+            values["pr_url"] = f"https://github.com/{owner}/{repo}/pull/{values['pr_number']}" if values["pr_number"] else ""
             return
         self.github = "unavailable"
+        self.keep_recorded_pr()
+
+    def keep_recorded_pr(self):
+        # Without GitHub the PR identity is the one the bead already records.
+        metadata = self.bead(self.task).get("metadata") or {}
+        self.values["pr_number"] = str(metadata.get("pr_number") or "")
+        self.values["pr_url"] = str(metadata.get("pr_url") or "")
 
     def render(self, template, values=None):
         try:
@@ -459,16 +574,30 @@ class Hook:
         if due is None:
             due = not events or (is_terminal(events) and self.bead(bead).get("status") == "open")
         if due:
-            self.run(["atm", "task", "assign", member, "--task-id", bead, "--template", str(TEMPLATES / template),
-                      "--vars", str(path or self.path)], lead=True)
+            if template == "dev-sanity-template.xml.j2":
+                context = read_vars(Path(path or self.path))
+                with tempfile.TemporaryDirectory(prefix="sanity-dispatch-") as directory:
+                    dispatch = Path(directory) / "completion-vars.json"
+                    close_context = {**context, "phase_lead": self.lead,
+                                     "budget": context.get("budget", "full")}
+                    dispatch.write_text(json.dumps({**context, "close_context": close_context,
+                                                    "beads_dir": self.beads_directory()}))
+                    self.render(template, read_vars(dispatch))
+                    self.run(["atm", "task", "assign", member, "--task-id", bead, "--template", str(TEMPLATES / template),
+                              "--vars", str(dispatch)], lead=True)
+            else:
+                self.run(["atm", "task", "assign", member, "--task-id", bead, "--template", str(TEMPLATES / template),
+                          "--vars", str(path or self.path)], lead=True)
         self.assigned.append(bead)
 
-    def close_task(self, task, template=None, *, outcome=COMPLETED, lead=False):
+    def close_task(self, task, template=None, *, outcome=COMPLETED, lead=False, reason=None):
         events = self.task_history[task]
         if not is_terminal(events):
             argv = ["atm", "task", "close", task, outcome]
             if template:
                 argv += ["--template", str(TEMPLATES / template), "--vars", str(self.path)]
+            if reason:
+                argv.append(reason)
             self.run(argv, lead=lead)
 
     def close_bead(self, bead, reason):
@@ -481,12 +610,45 @@ class Hook:
         self.closed.append(bead)
         return wrote
 
+    def derive_local(self):
+        # The completion fields the fixer used to type come from the worktree and the open PR instead.
+        head = self.run(["git", "rev-parse", "HEAD"], git=True).stdout.strip()
+        self.values.update(commit=head, generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                           pr_number="", pr_url="", rebased_onto="")
+        self.require_completion_identity(("commit",))
+        self.key = [self.task, self.values.get("verdict", ""), head]
+
+    def verify_not_reproducible_evidence(self):
+        evidence = str(self.values.get("evidence", ""))
+        match = re.fullmatch(r"(.+):([1-9][0-9]*)", evidence)
+        if not match:
+            raise CloseError("EVIDENCE.INVALID", evidence, "Supply a repo-relative file:line citation.")
+        relative, line = match.group(1), int(match.group(2))
+        path = Path(relative)
+        target = (self.worktree / path).resolve()
+        if path.is_absolute() or ".." in path.parts or not target.is_relative_to(self.worktree):
+            raise CloseError("EVIDENCE.INVALID", evidence, "Cite a file inside the assigned worktree.")
+        try:
+            lines = target.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as error:
+            raise CloseError("EVIDENCE.INVALID", evidence, f"Restore the cited file in {self.worktree}: {error}") from error
+        if line > len(lines):
+            raise CloseError("EVIDENCE.INVALID", evidence, f"Cited line {line} does not exist in {relative} ({len(lines)} lines).")
+
+    def require_completion_identity(self, fields=("commit", "pr_number", "pr_url")):
+        if self.values["outcome"] == "not_reproducible":
+            return
+        for name in fields:
+            if not str(self.values.get(name) or "").strip():
+                raise CloseError("VARS.EMPTY", f"derived {name} is empty",
+                                 "Push a non-empty HEAD and open exactly one PR; when GitHub is unavailable or checks are skipped, record its pr_number and pr_url on the checked bead before retrying.")
+
     def dev(self, skip):
         values = self.values
-        if self.snapshot(include_stack=not skip or values["outcome"] == "not_reproducible"):
+        self.derive_local()
+        if self.snapshot(include_stack=not skip or (values["outcome"] == "not_reproducible" and bool(values.get("stack_bead")))):
             return
         template = "fix-complete.md.j2" if self.role == "fix" else "dev-complete.md.j2"
-        self.render(template)
         record = self.bead(values["checked_bead"])
         sanity = (record.get("metadata") or {}).get("sanity_bead")
         if not sanity:
@@ -495,22 +657,35 @@ class Hook:
             sanity = matches[0] if len(matches) == 1 else None
         if sanity != values["sanity_bead"]:
             raise CloseError("BEAD.NO_SANITY", "no matching group sanity bead", f"Ask {self.lead} to create or correct the group sanity bead.")
-        if values["outcome"] == "not_reproducible":
-            branch, commit = self.stack_top()
-            assignment = {**values, "branch": branch, "commit": commit}
-            self.render("dev-sanity-template.xml.j2", assignment)
-            with tempfile.TemporaryDirectory(prefix="atm-task-close-") as directory:
-                path = Path(directory) / "sanity-vars.json"
-                path.write_text(json.dumps(assignment), encoding="utf-8")
-                self.finish_dev(sanity, template, path=path)
-            return
-        self.render("dev-sanity-template.xml.j2")
-        if not skip:
-            self.checks()
-        self.finish_dev(sanity, template)
+        with tempfile.TemporaryDirectory(prefix="atm-task-close-") as directory:
+            completion = Path(directory) / "completion-vars.json"
+            if values["outcome"] == "not_reproducible":
+                branch, commit = self.stack_top()
+                assignment = {**values, "branch": branch, "commit": commit,
+                              "close_context": {**values, "phase_lead": self.lead},
+                              "beads_dir": self.beads_directory()}
+                self.render("dev-sanity-template.xml.j2", assignment)
+                assignment_path = Path(directory) / "sanity-vars.json"
+                assignment_path.write_text(json.dumps(assignment), encoding="utf-8")
+                self.render(template)
+                completion.write_text(json.dumps(values), encoding="utf-8")
+                self.path = completion
+                self.finish_dev(sanity, template, path=assignment_path)
+                return
+            if not skip:
+                self.checks()
+            else:
+                self.keep_recorded_pr()
+                values["rebased_onto"] = self.run(["git", "rev-parse", f"origin/{values['pr_target']}"], git=True).stdout.strip()
+            self.require_completion_identity()
+            self.render(template)
+            completion.write_text(json.dumps(values), encoding="utf-8")
+            self.path = completion
+            self.finish_dev(sanity, template)
 
     def finish_dev(self, sanity, template, *, path=None):
         values = self.values
+        self.require_completion_identity()
         assignment_values = json.loads(Path(path).read_text()) if path else values
         sanity_events = self.task_history[sanity]
         terminal = is_terminal(sanity_events)
@@ -527,6 +702,9 @@ class Hook:
         if assign and not open_assignment:
             self.send(self.lead, template)
         self.assign(self.config["dev_sanity_member"], sanity, "dev-sanity-template.xml.j2", path=path, due=assign)
+        # The dev's work is finished: free the dev for its next queued task and stop reminders.
+        # Sanity state lives on the sanity task; a FAIL re-assigns this task through the lead.
+        self.close_task(self.task, reason=reason)
 
     def sanity(self):
         values = self.values
@@ -545,15 +723,12 @@ class Hook:
         if verdict == "PASS":
             checked = self.bead(values["checked_bead"])
             is_fix = (checked.get("metadata") or {}).get("role") == "fix" or "stage:fix" in checked.get("labels", [])
-            if not (is_fix and values["outcome"] == "not_reproducible") and (not isinstance(values["stacked"], dict) or values["stacked"].get("result") != "stacked"):
-                raise CloseError("SANITY.NOT_STACKED", "PASS has no stacked result", "Link the checked layer through sanity-stack before closing PASS.")
             self.render("qa-template.xml.j2")
             if is_fix and values.get("carry_forward", "") != values["checked_bead"]:
                 raise CloseError("VARS.INVALID", "fix QA requires carry_forward", "Supply the checked fix bead as carry_forward.")
             if values.get("carry_forward") and values["carry_forward"] != values["checked_bead"]:
                 raise CloseError("VARS.INVALID", "carry_forward differs from fix bead", "Supply the checked fix bead as carry_forward.")
             self.close_bead(bead, f"PASS at {values['commit']}")
-            self.close_task(values["dev_task_id"], lead=True)
             self.close_task(bead, "dev-sanity-complete.md.j2")
             self.assign(self.config["qa_member"], values["qa_bead"], "qa-template.xml.j2")
             return
@@ -598,17 +773,29 @@ class Hook:
         self.close_task(values["qa_bead"], "qa-complete.md.j2")
 
 
-def main(argv=None, runner=subprocess.run, clock=time.monotonic):
+def main(argv=None, runner=subprocess.run, clock=time.monotonic, sleep=time.sleep, sample=load_sample):
     parser = Parser(description=__doc__)
     parser.add_argument("--role", required=True, choices=ROLES)
     parser.add_argument("--vars", required=True, type=Path)
+    parser.add_argument("--result", type=Path, help="the fixer's result file; required for dev and fix")
     parser.add_argument("--skip-checks", action="store_true", help="skips the PR and stack checks. Do NOT use without permission from the phase lead.")
     hook = None
     try:
         args = parser.parse_args(argv)
+        try:
+            command_timeout()
+        except ValueError as error:
+            raise CloseError("CONFIG.INVALID", str(error), f"Unset {TIMEOUT_ENV} or set it to a positive integer number of seconds, e.g. {TIMEOUT_ENV}=180.") from error
         values = read_vars(args.vars)
+        if args.role in ("dev", "fix"):
+            if args.result is None:
+                raise CloseError("ARGS.INVALID", "--result is required for dev and fix",
+                                 "Pass the fixer's result file with --result <result-file>.")
+            values = merge_result(values, read_vars(args.result), args.role)
         validate_shared_vars(values, args.role)
-        hook = Hook(args.role, values, args.vars, runner, clock)
+        hook = Hook(args.role, values, args.vars, runner, clock, sleep, sample)
+        if args.role == "fix" and values.get("outcome") == "not_reproducible":
+            hook.verify_not_reproducible_evidence()
         started = clock()
         escalated = hook.dev(args.skip_checks) if args.role in ("dev", "fix") else hook.sanity() if args.role == "sanity" else hook.qa()
         result = {"role": args.role, "bead": hook.task, "commit": values.get("commit", ""), "pr_number": values.get("pr_number", ""),
@@ -633,6 +820,8 @@ def main(argv=None, runner=subprocess.run, clock=time.monotonic):
         producer = " ".join(hook.last_json_argv) if hook is not None else str(args.vars)
         output = {"err": {"code": "COMMAND.INVALID", "message": f"{producer}: {type(error).__name__}: {error}",
                           "fix": f"Repair the invalid value reported by {type(error).__name__} in `{producer}`: {error}."}}
+    if hook is not None and hook.attempts:
+        output["attempts"] = hook.attempts
     print(json.dumps(output))
     print(json.dumps(output), file=sys.stderr)
     return 1 if "err" in output else 0

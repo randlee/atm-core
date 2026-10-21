@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import select
+import shlex
 import shutil
 import signal
 import subprocess
@@ -308,7 +309,7 @@ class SanitySplit(unittest.TestCase):
         noted = self.run_split([{**bead()[0], "notes": "Ran the retry tests: 12 passed."}], None, self.repo.sha)
         self.assertEqual(noted.returncode, 0, noted.stderr)
         self.assertEqual(json.loads(noted.stdout)["assignments"][0]["assignment"]["external_evidence"],
-                         [{"kind": "bead_notes", "bead": "atm-x-1"}])
+                         [{"kind": "bead_notes", "bead": "atm-x-1", "text": "Ran the retry tests: 12 passed."}])
         self.assertNotIn("acceptance_criteria", first)
         self.assertNotIn("design", first)
         self.assertEqual(first["commit"], self.repo.sha)
@@ -592,12 +593,20 @@ class SanitySplit(unittest.TestCase):
         self.assertEqual(read_event(self.event_read, "child exit before readiness"), b"")
         self.assertEqual(self.wait_lint(json.loads(out.stdout)["lint"]["exit_file"]), "3")
 
-    def owned_group(self, command):
-        """Prefix the lint command so its shell, the group leader, publishes its process group id atomically."""
+    def owned_group(self):
+        """The lint group leader publishes its marker and waits, so SIGTERM cannot orphan a marker helper."""
         marker = self.root / "lint.pgid"
         event_fd = self.marker_event()
-        notify = f"{sys.executable} -c 'import os; os.write({event_fd}, b\"R\")'"
-        return f"echo $$ > {marker}.tmp && mv {marker}.tmp {marker} && {notify} && {command}", marker
+        script = self.root / "owned_lint.py"
+        script.write_text(
+            "import os, pathlib, signal\n"
+            f"marker = pathlib.Path({str(marker)!r})\n"
+            "partial = marker.with_name(marker.name + '.tmp')\n"
+            "partial.write_text(f'{os.getpid()} {os.getpgid(0)}')\n"
+            "os.replace(partial, marker)\n"
+            f"os.write({event_fd}, b'R')\n"
+            "signal.pause()\n")
+        return f"exec {shlex.quote(sys.executable)} {shlex.quote(str(script))}", marker
 
     def read_marker(self, marker):
         """The first number in an atomically written marker; its last number is the lint process group id."""
@@ -660,7 +669,7 @@ class SanitySplit(unittest.TestCase):
         self.assert_group_gone(int(pgid_file.read_text()), "the lint command survived its timeout")
 
     def test_lint_supervisor_is_stopped_with_its_process_group(self):
-        lint, group = self.owned_group(f"exec {sys.executable} -c 'import signal; signal.pause()'")
+        lint, group = self.owned_group()
         out = self.run_split(lint=lint)
         self.assertEqual(out.returncode, 0, out.stderr)
         manifest = json.loads(out.stdout)
@@ -679,7 +688,7 @@ class SanitySplit(unittest.TestCase):
                           f"os.replace({str(marker)!r} + '.tmp', {str(marker)!r})\n"
                           f"os.write({event_fd}, b'R')\n"
                           "signal.pause()\n")
-        out = self.run_split(lint=f"{sys.executable} {script}")
+        out = self.run_split(lint=f"exec {shlex.quote(sys.executable)} {shlex.quote(str(script))}")
         self.assertEqual(out.returncode, 0, out.stderr)
         manifest = json.loads(out.stdout)
         child_pid = self.read_marker(marker)
@@ -690,24 +699,29 @@ class SanitySplit(unittest.TestCase):
         self.assertFalse(alive(child_pid), "the TERM-resistant lint command survived the cancellation")
         self.assert_group_gone(pgid, "a member of the lint process group survived the cancellation")
 
-    def resistant_descendant(self):
-        """A lint command whose shell backgrounds a SIGTERM-ignoring python and waits on it."""
+    def descendant_command(self):
+        """A process-group leader waits for a child and reaps it after group cancellation."""
         marker = self.root / "descendant.pid"
         helper = self.root / "descendant.py"
+        launcher = self.root / "launcher.py"
         event_fd = self.marker_event()
         helper.write_text("import os, pathlib, signal\n"
-                          "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
                           f"pathlib.Path({str(marker)!r} + '.tmp').write_text(str(os.getpid()) + ' ' + str(os.getpgid(0)))\n"
                           f"os.replace({str(marker)!r} + '.tmp', {str(marker)!r})\n"
                           f"os.write({event_fd}, b'R')\n"
                           "signal.pause()\n")
-        return f"{sys.executable} {helper} & wait", marker
+        launcher.write_text(
+            "import signal, subprocess, sys\n"
+            "signal.signal(signal.SIGTERM, lambda *_: None)\n"
+            f"child = subprocess.Popen([sys.executable, {str(helper)!r}], pass_fds=({event_fd},))\n"
+            "child.wait()\n")
+        return f"exec {shlex.quote(sys.executable)} {shlex.quote(str(launcher))}", marker
 
     def wait_gone(self, pid):
         wait_process(self.supervisors[pid], "supervisor exit")
 
-    def test_lint_supervisor_cancellation_kills_a_term_resistant_descendant(self):
-        lint, marker = self.resistant_descendant()
+    def test_lint_supervisor_cancellation_reaps_a_descendant(self):
+        lint, marker = self.descendant_command()
         out = self.run_split(lint=lint)
         self.assertEqual(out.returncode, 0, out.stderr)
         manifest = json.loads(out.stdout)
@@ -719,9 +733,9 @@ class SanitySplit(unittest.TestCase):
         self.assertFalse(alive(descendant), "the TERM-ignoring descendant survived the cancellation")
         self.assert_group_gone(pgid, "a member of the lint process group survived the cancellation")
 
-    def test_lint_supervisor_timeout_kills_a_term_resistant_descendant(self):
-        """Gated clock: the timeout expires only once the descendant exists, however slow its startup."""
-        lint, marker = self.resistant_descendant()
+    def test_lint_supervisor_timeout_reaps_a_descendant(self):
+        """Gated clock: timeout begins only once the descendant exists, however slow its startup."""
+        lint, marker = self.descendant_command()
         proc, exit_file, pgid_file = self.supervise(lint, 1800, gated=True)
         descendant = self.read_marker(marker)
         proc.stdin.write(b"t")

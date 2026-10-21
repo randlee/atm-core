@@ -1,6 +1,6 @@
 ---
 name: task-close-vars
-version: 2.0.0
+version: 2.1.0
 format: text
 required_variables:
   - base # owner: dev-sanity-template.xml.j2
@@ -57,50 +57,40 @@ required_variables_by_role:
     - branch
     - checked_bead
     - checked_title
-    - commit
-    - deliverables_complete
-    - deliverables_md
-    - deliverables_total
     - dev_task_id
-    - evidence
-    - findings_blocking
-    - findings_ceremony
-    - findings_count
-    - findings_important
-    - findings_md
-    - findings_minor
-    - generated_at
-    - layer
     - lint_command
-    - lint_md
     - max_sanity_rounds
-    - outcome
     - phase
-    - phase_feature
-    - policy_path
-    - pr_number
     - pr_target
-    - pr_url
     - primary_checkout
     - qa_bead
     - qa_task_id
-    - rebased_onto
-    - reviewers_md
-    - reviewers_round1
-    - round
     - sanity_bead
     - sanity_task_id
     - sprint
-    - stack
     - stack_bead
-    - stack_view
-    - stacked
     - task_id
-    - undone
-    - validation_md
-    - verdict
     - worktree_path
   fix:
+    - base
+    - branch
+    - checked_bead
+    - checked_title
+    - dev_task_id
+    - lint_command
+    - max_sanity_rounds
+    - phase
+    - pr_target
+    - primary_checkout
+    - qa_bead
+    - qa_task_id
+    - sanity_bead
+    - sanity_task_id
+    - sprint
+    - stack_bead
+    - task_id
+    - worktree_path
+  sanity:
     - base
     - branch
     - checked_bead
@@ -119,7 +109,6 @@ required_variables_by_role:
     - findings_minor
     - generated_at
     - layer
-    - lint_command
     - lint_md
     - max_sanity_rounds
     - outcome
@@ -127,13 +116,10 @@ required_variables_by_role:
     - phase_feature
     - policy_path
     - pr_number
-    - pr_target
     - pr_url
     - primary_checkout
     - qa_bead
     - qa_task_id
-    - rebased_onto
-    - resolution_md
     - reviewers_md
     - reviewers_round1
     - round
@@ -142,12 +128,118 @@ required_variables_by_role:
     - sprint
     - stack
     - stack_bead
-    - stack_view
     - stacked
     - task_id
     - undone
-    - validation_md
     - verdict
+    - worktree_path
+  qa:
+    - branch
+    - checked_bead
+    - commit
+    - deliverables_complete
+    - deliverables_total
+    - dev_task_id
+    - evidence
+    - findings_blocking
+    - findings_ceremony
+    - findings_important
+    - findings_md
+    - findings_minor
+    - generated_at
+    - outcome
+    - phase
+    - pr_number
+    - primary_checkout
+    - qa_bead
+    - qa_task_id
+    - reviewers_md
+    - round
+    - sanity_bead
+    - sanity_task_id
+    - sprint
+    - task_id
+    - undone
+    - verdict
+    - worktree_path
+# The hook derives these for dev and fix at close; the lead's dispatch file never carries them.
+derived_variables:
+  - commit
+  - generated_at
+  - pr_number
+  - pr_url
+  - rebased_onto
+result_variables_by_role:
+  dev:
+    - deliverables_complete
+    - deliverables_md
+    - deliverables_total
+    - evidence
+    - outcome
+    - stack_view
+    - validation_md
+  fix:
+    - deliverables_complete
+    - deliverables_md
+    - deliverables_total
+    - evidence
+    - outcome
+    - resolution_md
+    - stack_view
+    - validation_md
+render_variables_by_role:
+  dev:
+    - base
+    - branch
+    - checked_bead
+    - checked_title
+    - deliverables_complete
+    - deliverables_md
+    - deliverables_total
+    - dev_task_id
+    - evidence
+    - lint_command
+    - max_sanity_rounds
+    - outcome
+    - phase
+    - pr_target
+    - primary_checkout
+    - qa_bead
+    - qa_task_id
+    - sanity_bead
+    - sanity_task_id
+    - sprint
+    - stack_bead
+    - stack_view
+    - task_id
+    - validation_md
+    - worktree_path
+  fix:
+    - base
+    - branch
+    - checked_bead
+    - checked_title
+    - deliverables_complete
+    - deliverables_md
+    - deliverables_total
+    - dev_task_id
+    - evidence
+    - lint_command
+    - max_sanity_rounds
+    - outcome
+    - phase
+    - pr_target
+    - primary_checkout
+    - qa_bead
+    - qa_task_id
+    - resolution_md
+    - sanity_bead
+    - sanity_task_id
+    - sprint
+    - stack_bead
+    - stack_view
+    - task_id
+    - validation_md
     - worktree_path
   sanity:
     - base

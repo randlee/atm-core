@@ -65,15 +65,6 @@ def reviewer_elapsed(value):
     return max(times) if times else None
 
 
-def bead_data(bead):
-    try:
-        result = subprocess.run(["bd", "show", bead, "--json"], check=True, capture_output=True, text=True)
-        issues = json.loads(result.stdout)
-        return issues[0] if isinstance(issues, list) and issues and isinstance(issues[0], dict) else {}
-    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError, AttributeError):
-        return {}
-
-
 def checked_dev(bead):
     assignee = bead.get("assignee") if isinstance(bead, dict) else None
     return assignee if isinstance(assignee, str) and assignee else None
@@ -179,7 +170,9 @@ def main() -> None:
     vars = read_vars(args.vars)
     completed = utc_timestamp(vars["completed_at"])
     elapsed = max(0, round(completed.timestamp() - utc_timestamp(vars["started_at"]).timestamp()))
-    checked = bead_data(args.bead)
+    checked = vars.get("checked_bead_data")
+    if not isinstance(checked, dict):
+        checked = {}
     phase = phase_from_bead(checked, vars["sprint"])
     record = {
         "run_id": vars["run_id"], "reviewer": vars["reviewer"], "commit": vars["commit"],
@@ -187,7 +180,7 @@ def main() -> None:
         "error": vars.get("error"),
         "dev": checked_dev(checked),
         "jev_elapsed_s": reviewer_elapsed(vars),
-        "llm_elapsed_s": vars.get("llm_elapsed_s") if vars["reviewer"] == "sanity-llm" else None,
+        "llm_elapsed_s": elapsed if vars["reviewer"] == "sanity-llm" else None,
         "kind": result_kind(vars),
         "errors": slot_errors(vars),
         "jev_receipts": jev_receipts(vars),

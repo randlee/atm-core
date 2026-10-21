@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from contextlib import redirect_stderr, redirect_stdout
 import copy
-from datetime import datetime, timezone
 import importlib.machinery
 import importlib.util
 import io
@@ -29,10 +28,6 @@ class Clock:
     def __call__(self):
         return self.now
 
-    def sleep(self, seconds):
-        self.now += seconds
-
-
 class World:
     def __init__(self, tmp_path, monkeypatch):
         monkeypatch.setenv("ATM_IDENTITY", "sanity")
@@ -47,12 +42,11 @@ class World:
         self.git("push", "origin", "trunk")
         self.clock = Clock()
         self.bead = {"id": "phase.stack", "assignee": "", "metadata": {"trunk": "trunk", "stack_number": None, "layers": []}}
-        self.other = {"id": "other-bead", "assignee": "other", "started_at": "2027-01-01T00:00:00Z",
-                      "lease_expires_at": datetime.fromtimestamp(self.clock() - 1801, timezone.utc).isoformat()}
-        self.beads = {self.bead["id"]: self.bead, self.other["id"]: self.other}
+        self.beads = {self.bead["id"]: self.bead}
         self.pulls = []
         self.stacks = []
         self.calls = []
+        self.cwds = []
         self.unavailable = False
         self.quota_failure = None
         self.fail_link = False
@@ -60,7 +54,6 @@ class World:
         self.fail_verification = False
         self.release_failure = None
         self.advance_on_pulls = 0
-        self.task_list_failure = None
         self.hook = None
 
     def git(self, *args):
@@ -73,10 +66,11 @@ class World:
         self.git("push", "origin", name)
         self.pulls.append({"number": number, "base": base, "head": name, "sha": sha, "draft": False})
         return {"checked_bead": "dev", "branch": name, "pr_number": number, "commit": sha,
-                "stack_bead": "phase.stack", "budget": "full", "timeout_s": 10}
+                "stack_bead": "phase.stack", "budget": "full"}
 
     def __call__(self, argv, **kwargs):
         self.calls.append(list(argv))
+        self.cwds.append((argv[0], kwargs.get("cwd")))
         if self.hook is not None:
             return self.hook(argv, **kwargs)
         output, error, status = "", "", 0
@@ -84,10 +78,6 @@ class World:
             output = json.dumps([self.beads[argv[2]]])
         elif argv[:2] == ["bd", "heartbeat"]:
             assert self.bead["assignee"] == "sanity"
-        elif argv[:2] == ["bd", "reclaim"]:
-            assert "--id" in argv and argv[argv.index("--id") + 1] == self.bead["id"]
-            assert "--older-than" in argv and argv[argv.index("--older-than") + 1] == "1800s"
-            self.beads[argv[argv.index("--id") + 1]]["assignee"] = ""
         elif argv[:2] == ["bd", "update"]:
             if "--claim" in argv:
                 if self.bead["assignee"]:
@@ -106,19 +96,6 @@ class World:
                 raise OSError("injected release transport failure")
             else:
                 self.bead["assignee"] = ""
-        elif argv[:3] == ["atm", "task", "list"]:
-            if self.task_list_failure == "nonzero":
-                status, error = 1, "task list failed"
-            elif self.task_list_failure == "invalid-json":
-                output = "not JSON"
-            elif self.task_list_failure == "invalid-schema":
-                output = json.dumps({"tasks": None})
-            elif self.task_list_failure == "timeout":
-                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
-            elif self.task_list_failure == "oserror":
-                raise OSError("ATM unavailable")
-            else:
-                output = json.dumps([{"assignee": self.bead["assignee"], "state": "active", "task_id": "holder-task"}])
         elif argv[:3] == ["gh", "api", "rate_limit"]:
             if self.quota_failure == "timeout":
                 raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
@@ -148,7 +125,7 @@ class World:
                 stack = next(item for item in self.stacks if item["number"] == int(argv[3]))
                 stack["prs"].append(int(argv[4]))
         elif argv[0] == "git":
-            return subprocess.run(argv, cwd=self.root, **kwargs)
+            return subprocess.run(argv, **{"cwd": self.root, **kwargs})
         else:
             raise AssertionError(argv)
         return subprocess.CompletedProcess(argv, status, output, error)
@@ -158,7 +135,7 @@ class World:
         path.write_text(json.dumps(values))
         output = io.StringIO()
         with redirect_stdout(output):
-            status = LINK.main(["--input", str(path)], runner=self, clock=self.clock, sleep=self.clock.sleep)
+            status = LINK.main(["--input", str(path)], runner=self, clock=self.clock)
         result = json.loads(output.getvalue())
         assert status == (result["result"] == "stack_failed")
         return result
@@ -167,6 +144,60 @@ class World:
 @pytest.fixture
 def world(tmp_path, monkeypatch):
     return World(tmp_path, monkeypatch)
+
+
+def test_already_linked_lower_layer_at_pinned_commit_is_stacked(world):
+    first = world.branch('first', 'trunk', 1)
+    second = world.branch('second', 'first', 2)
+    assert world.link(first)['result'] == 'stacked'
+    assert world.link(second)['result'] == 'stacked'
+    before = copy.deepcopy(world.bead['metadata'])
+    world.calls.clear()
+    replay = world.link(first)
+    assert replay['result'] == 'stacked'
+    assert replay['top']['branch'] == 'second'
+    assert world.bead['metadata'] == before
+    assert not any(call[:3] == ['gh', 'stack', 'link'] for call in world.calls)
+
+
+def test_unlinked_recorded_layer_is_not_reported_as_already_stacked(world):
+    values = world.branch('first', 'trunk', 1)
+    world.bead['metadata']['layers'].append({
+        'branch': values['branch'], 'pr': values['pr_number'], 'head': values['commit'],
+        'base': 'trunk', 'linked': False,
+    })
+
+    result = world.link(values)
+
+    assert result['result'] == 'stacked'
+    assert world.bead['metadata']['layers'][-1]['linked'] is True
+    assert [call for call in world.calls if call[:3] == ['gh', 'stack', 'link']] == [
+        ['gh', 'stack', 'link', '--base', 'trunk', '1'],
+    ]
+
+
+def test_failed_post_close_handoff_notifies_lead_without_task_writes(world):
+    values = world.branch('first', 'trunk', 1)
+    values['lead'] = 'phase-lead'
+    world.pulls.clear()
+    notices = []
+
+    def run(argv, **kwargs):
+        if argv[:2] == ['atm', 'send']:
+            notices.append(argv)
+            return subprocess.CompletedProcess(argv, 0, '', '')
+        return world(argv, **kwargs)
+
+    path = world.root / 'post-close.json'
+    path.write_text(json.dumps(values))
+    output = io.StringIO()
+    with redirect_stdout(output):
+        status = LINK.main(['--input', str(path)], runner=run, clock=world.clock)
+    assert status == 1
+    assert json.loads(output.getvalue())['result'] == 'stack_failed'
+    assert len(notices) == 1 and notices[0][2] == 'phase-lead'
+    assert 'already closed' in notices[0][3]
+    assert not any(call[:2] == ['atm', 'task'] for call in world.calls)
 
 
 def test_stack_top_selector_drives_empty_and_populated_ledgers(world, monkeypatch):
@@ -356,34 +387,16 @@ def test_lean_uses_only_rest_and_defers_link(world, budget, unavailable):
         ["gh", "stack", "link", "7", "4"]]
 
 
-def test_timeout_and_scoped_reclaim(world):
+def test_lock_timeout_returns_after_one_claim_attempt(world):
     values = world.branch("first", "trunk", 1)
-    world.bead.update(assignee="other", started_at="2027-01-01T00:00:00Z",
-                      lease_expires_at=datetime.fromtimestamp(world.clock() + 100, timezone.utc).isoformat())
+    world.bead.update(assignee="other", started_at="2027-01-01T00:00:00Z")
     start = world.clock()
     result = world.link(values)
-    assert result == {"result": "lock_timeout", "holder": "other", "claimed_at": "2027-01-01T00:00:00Z", "holder_task": "holder-task"}
-    assert world.clock() - start == 10
-    world.bead["lease_expires_at"] = datetime.fromtimestamp(world.clock() - 1801, timezone.utc).isoformat()
-    result = world.link(values)
-    assert result["reclaimed"] == {"holder": "other", "claimed_at": "2027-01-01T00:00:00Z"}
-    assert world.beads["other-bead"]["assignee"] == "other"
-
-
-@pytest.mark.parametrize("failure", ["nonzero", "invalid-json", "invalid-schema", "timeout", "oserror"])
-def test_timeout_holder_task_lookup_is_best_effort(world, failure):
-    values = world.branch("first", "trunk", 1)
-    world.bead.update(assignee="other", started_at="2027-01-01T00:00:00Z",
-                      lease_expires_at=datetime.fromtimestamp(world.clock() + 100, timezone.utc).isoformat())
-    before = copy.deepcopy(world.bead)
-    world.task_list_failure = failure
-    start = world.clock()
-
-    assert world.link(values) == {"result": "lock_timeout", "holder": "other",
-                                  "claimed_at": "2027-01-01T00:00:00Z", "holder_task": None}
-    assert world.clock() - start == 10
-    assert world.bead == before
-    assert not any("--metadata" in call or "--if-assignee" in call for call in world.calls)
+    assert result == {"result": "lock_timeout", "holder": "other", "claimed_at": "2027-01-01T00:00:00Z"}
+    assert world.clock() == start
+    claim_calls = [call for call in world.calls if call[:2] == ["bd", "update"] and "--claim" in call]
+    assert len(claim_calls) == 1
+    assert not any(call[:2] == ["bd", "reclaim"] for call in world.calls)
 
 
 def test_heartbeat_uses_controlled_clock(world):
@@ -405,7 +418,7 @@ def test_release_failure_after_write_keeps_stacked_result(world, failure):
     assert world.bead["assignee"] == "sanity"
 
 
-def test_release_failure_on_idempotent_stacked_retry_is_warning(world):
+def test_release_failure_after_recorded_unlinked_layer_is_retried(world):
     values = world.branch("first", "trunk", 1)
     assert world.link(values)["result"] == "stacked"
     before = copy.deepcopy(world.bead["metadata"])
@@ -414,8 +427,10 @@ def test_release_failure_on_idempotent_stacked_retry_is_warning(world):
     result = world.link(values)
     assert result["result"] == "stacked"
     assert "injected release failure" in result["release_warning"]
-    assert world.bead["metadata"] == before
-    assert not any("--metadata" in call for call in world.calls)
+    assert world.bead["metadata"] != before
+    assert world.bead["metadata"]["layers"][0]["linked"] is True
+    assert world.bead["metadata"]["stack_number"] == 7
+    assert any("--metadata" in call for call in world.calls)
 
 
 def test_precommit_failure_with_release_failure_preserves_both_errors(world):
@@ -532,7 +547,56 @@ def test_rebase_then_real_sanity_hook_preserves_round_and_hands_off(world, tmp_p
     sanity = hook.beads[hook.values["sanity_bead"]]
     assert sanity["close_reason"] == "PASS at " + rival["commit"]
     assert sanity["metadata"]["sanity_round"] == 2
-    assert any(command[:4] == ["atm", "task", "close", hook.values["dev_task_id"]] and actor == "phase-lead"
-               for command, actor in hook.writes)
+    assert not any(command[:4] == ["atm", "task", "close", hook.values["dev_task_id"]] for command, _actor in hook.writes)
     qa = next(message for message in hook.messages if message["type"] == "qa-task")
     assert (qa["sender"], qa["recipient"], qa["values"]["base"]) == ("phase-lead", "quality", "first")
+
+
+def test_git_and_gh_run_in_the_checked_layers_worktree_and_bd_does_not(world, tmp_path):
+    values = world.branch("layer", "trunk", 11)
+    values["worktree_path"] = str(tmp_path / "other-repo-worktree")
+    seen = {"git": set(), "gh": set(), "bd": set()}
+
+    def runner(argv, **kwargs):
+        seen[argv[0]].add(kwargs.get("cwd"))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    linker = LINK.Linker(values, runner, world.clock, "sanity")
+    for argv in (["git", "fetch", "origin"], ["gh", "api", "rate_limit"], ["bd", "show", "x"]):
+        linker.command(argv)
+    assert seen == {"git": {values["worktree_path"]}, "gh": {values["worktree_path"]}, "bd": {None}}
+
+
+def test_without_worktree_path_commands_keep_the_callers_cwd(world):
+    values = world.branch("layer", "trunk", 11)
+    linker = LINK.Linker(values, lambda argv, **kw: subprocess.CompletedProcess(argv, 0, "", "") if "cwd" not in kw
+                         else (_ for _ in ()).throw(AssertionError("cwd passed")), world.clock, "sanity")
+    linker.command(["git", "fetch", "origin"])
+    linker.command(["gh", "api", "rate_limit"])
+
+
+def test_full_flow_passes_the_worktree_cwd_to_every_git_and_gh_call(world):
+    values = world.branch("layer", "trunk", 11)
+    values["worktree_path"] = str(world.root)
+    result = world.link(values)
+    assert result["result"] == "stacked"
+    git_gh = [cwd for kind, cwd in world.cwds if kind in ("git", "gh")]
+    assert git_gh and set(git_gh) == {str(world.root)}
+    assert {cwd for kind, cwd in world.cwds if kind == "bd"} == {None}
+
+
+def test_invalid_worktree_path_is_stack_failed(world):
+    values = world.branch("layer", "trunk", 11)
+    values["worktree_path"] = 5
+    assert world.link(values)["result"] == "stack_failed"
+
+
+def test_missing_input_key_is_stack_failed_and_releases(world, monkeypatch):
+    values = world.branch("layer", "trunk", 11)
+
+    def boom(self):
+        return self.values["absent_key"]
+
+    monkeypatch.setattr(LINK.Linker, "execute", boom)
+    result = world.link(values)
+    assert result["result"] == "stack_failed" and "absent_key" in result["evidence"]

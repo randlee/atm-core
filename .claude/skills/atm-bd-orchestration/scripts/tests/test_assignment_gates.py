@@ -4,6 +4,7 @@ from contextlib import redirect_stderr, redirect_stdout
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 from types import SimpleNamespace
@@ -44,6 +45,7 @@ def dumped(value): return json.dumps(value)
 
 def dev_runner(overrides=None):
     data = {
+        ("bd", "show", gates.stack_bead_id("atm-phase-d"), "--json"): (0, dumped([{"metadata": {}}])),
         (gates.VALIDATE_PLAN, "--root", "atm-phase-d"): (0, ""),
         ("bd", "ready", "-n", "0", "--json"): (0, dumped([{"id": "bead"}])),
         ("bd", "show", "bead", "--json"): (0, dumped([{"status": "open", "assignee": "", "metadata": {"difficulty": "normal", "pr_target": "target"}}])),
@@ -63,6 +65,7 @@ HISTORY_PASSED = [{"CommitHash": "c4", "Issue": {"id": "bead", "status": "open"}
 
 def sanity_runner(overrides=None):
     data = {
+        ("bd", "ready", "-n", "0", "--json"): (0, dumped([{"id": "bead"}])),
         ("git", "rev-parse", "HEAD"): (0, "head"),
         ("bd", "history", "bead", "--json"): (0, dumped(HISTORY_NEVER_PASSED)),
     }; data.update(overrides or {}); return FakeRunner(data)
@@ -99,13 +102,27 @@ class AssignmentGateTests(unittest.TestCase):
                     return delegate(argv, **kwargs)
 
                 stderr, stdout = io.StringIO(), io.StringIO()
-                with patch.object(gates, "COMMAND_TIMEOUT", 7), redirect_stderr(stderr), redirect_stdout(stdout):
+                with patch.object(gates, "COMMAND_TIMEOUT", 7), patch.object(gates, "VALIDATE_PLAN_TIMEOUT", 7), redirect_stderr(stderr), redirect_stdout(stdout):
                     exit_code = gates.main(["dev", "--root", "atm-phase-d", "--bead", "bead",
                                             "--pr-target", "target", "--identity", "terra"], runner)
                 self.assertEqual((exit_code, stdout.getvalue().strip()), (2, "GATE_CANNOT_RUN"))
                 self.assertIn(timed_out[0], stderr.getvalue())
                 self.assertIn("7s", stderr.getvalue())
+                self.assertIn("retry once, or raise ATM_BD_GATE_TIMEOUT_S", stderr.getvalue())
                 self.assertTrue(seen and all(timeout == 7 for timeout in seen))
+
+    def test_invalid_timeout_env_is_gate_cannot_run_not_a_traceback(self):
+        for bad in ("abc", "0", "-3"):
+            with self.subTest(bad=bad):
+                runner = FakeRunner({})
+                stderr, stdout = io.StringIO(), io.StringIO()
+                with patch.dict(os.environ, {"ATM_BD_GATE_TIMEOUT_S": bad}), redirect_stderr(stderr), redirect_stdout(stdout):
+                    exit_code = gates.main(["dev", "--root", "r", "--bead", "b", "--pr-target", "t"], runner)
+                self.assertEqual((exit_code, stdout.getvalue().strip()), (2, "GATE_CANNOT_RUN"))
+                self.assertIn(f"ATM_BD_GATE_TIMEOUT_S={bad!r}", stderr.getvalue())
+                self.assertIn("ATM_BD_GATE_TIMEOUT_S=180", stderr.getvalue())
+                self.assertNotIn("Traceback", stderr.getvalue())
+                self.assertEqual(runner.calls, [])
 
     def test_stack_top_timeout_is_typed(self):
         def timeout(argv, **kwargs):
@@ -190,6 +207,7 @@ class AssignmentGateTests(unittest.TestCase):
         runner = sanity_runner({("git", "-C", "/wt", "rev-parse", "HEAD"): (0, "head")})
         self.assertEqual(gates.evaluate(ns("sanity", worktree="/wt", base="elsewhere", pr_number=""), runner), "READY")
         self.assertEqual(runner.calls, [
+            (None, ("bd", "ready", "-n", "0", "--json")),
             (None, ("bd", "history", "bead", "--json")),
             (None, ("git", "-C", "/wt", "rev-parse", "HEAD")),
         ])
@@ -209,7 +227,8 @@ class AssignmentGateTests(unittest.TestCase):
             ("git", "rev-parse", "HEAD"): (0, "moved"),
         })
         self.assertEqual(gates.evaluate(ns("sanity"), runner), "SANITY_FROZEN")
-        self.assertEqual(runner.calls, [(None, ("bd", "history", "bead", "--json"))])
+        self.assertEqual(runner.calls, [(None, ("bd", "ready", "-n", "0", "--json")),
+                                        (None, ("bd", "history", "bead", "--json"))])
 
     def test_sanity_history_that_is_not_snapshots_cannot_run(self):
         for output in (dumped({"verdict": "PASS"}), dumped([{"description": "lint passes"}]), dumped([{"Issue": "closed"}]),
@@ -221,6 +240,52 @@ class AssignmentGateTests(unittest.TestCase):
                 self.assertEqual(code, "GATE_CANNOT_RUN")
                 self.assertIn(output, err.getvalue())
         self.assertEqual(gates.evaluate(ns("sanity"), sanity_runner({("bd", "history", "bead", "--json"): (0, "[]")})), "READY")
+
+    def test_sanity_not_ready_is_a_gate_result(self):
+        show = ("bd", "show", "bead", "--json")
+        for bead in ({"status": "open", "assignee": ""}, {"status": "in_progress", "assignee": "someone-else"},
+                     {"status": "closed", "assignee": "terra"}):
+            with self.subTest(bead=bead):
+                runner = sanity_runner({("bd", "ready", "-n", "0", "--json"): (0, "[]"), show: (0, dumped([bead]))})
+                self.assertEqual(gates.evaluate(ns("sanity"), runner), "NOT_READY")
+                self.assertEqual(runner.calls, [(None, ("bd", "ready", "-n", "0", "--json")), (None, show)])
+
+    def test_sanity_replay_of_a_bead_the_caller_already_claimed_is_ready(self):
+        runner = sanity_runner({("bd", "ready", "-n", "0", "--json"): (0, "[]"),
+                                ("bd", "show", "bead", "--json"): (0, dumped([{"status": "in_progress", "assignee": "terra"}]))})
+        self.assertEqual(gates.evaluate(ns("sanity"), runner), "READY")
+
+    def test_validate_plan_alone_gets_the_longer_timeout(self):
+        runner = dev_runner()
+        seen = {}
+        original = runner.__call__
+        def spy(args, **kwargs):
+            seen[args[0]] = kwargs["timeout"]
+            return original(args, **kwargs)
+        with patch.object(gates, "COMMAND_TIMEOUT", 7), patch.object(gates, "VALIDATE_PLAN_TIMEOUT", 99):
+            self.assertEqual(gates.evaluate(ns("dev"), spy), "READY")
+        self.assertEqual(seen.pop(gates.VALIDATE_PLAN), 99)
+        self.assertTrue(seen and set(seen.values()) == {7})
+        self.assertEqual((gates.DEFAULT_COMMAND_TIMEOUT, gates.MIN_VALIDATE_PLAN_TIMEOUT), (180, 300))
+
+    def test_command_timeout_defaults_to_180_and_env_overrides_it(self):
+        self.assertEqual(gates.command_timeout({}), 180)
+        self.assertEqual(gates.command_timeout({"ATM_BD_GATE_TIMEOUT_S": ""}), 180)
+        self.assertEqual(gates.command_timeout({"ATM_BD_GATE_TIMEOUT_S": "45"}), 45)
+        for bad in ("0", "-5", "ninety", "1.5"):
+            with self.subTest(value=bad), self.assertRaises(ValueError) as caught:
+                gates.command_timeout({"ATM_BD_GATE_TIMEOUT_S": bad})
+            self.assertIn("ATM_BD_GATE_TIMEOUT_S=180", str(caught.exception))
+
+    def test_module_timeouts_follow_the_env_at_import(self):
+        for env, expected in (({}, (180, 300)), ({"ATM_BD_GATE_TIMEOUT_S": "45"}, (45, 300)),
+                              ({"ATM_BD_GATE_TIMEOUT_S": "600"}, (600, 600))):
+            with self.subTest(env=env), patch.dict(os.environ, env, clear=False):
+                if not env:
+                    os.environ.pop("ATM_BD_GATE_TIMEOUT_S", None)
+                fresh = importlib.util.module_from_spec(SPEC)
+                SPEC.loader.exec_module(fresh)
+                self.assertEqual((fresh.COMMAND_TIMEOUT, fresh.VALIDATE_PLAN_TIMEOUT), expected)
 
     def test_sanity_history_command_failure_cannot_run(self):
         runner = sanity_runner({("bd", "history", "bead", "--json"): (1, "", "database unavailable")})
@@ -239,6 +304,7 @@ class AssignmentGateTests(unittest.TestCase):
         })
         self.assertEqual(gates.evaluate(ns("sanity", pr_target="unlinked-target"), runner), "READY")
         self.assertEqual([argv for _, argv in runner.calls], [
+            ("bd", "ready", "-n", "0", "--json"),
             ("bd", "history", "bead", "--json"), ("git", "rev-parse", "HEAD"),
         ])
 

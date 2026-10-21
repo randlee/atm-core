@@ -1,0 +1,10 @@
+{
+  "deliverables_complete": 13,
+  "deliverables_md": "All numbered deliverables implemented.",
+  "deliverables_total": 13,
+  "evidence": "scripts/example.py:1",
+  "outcome": "fixed",
+  "resolution_md": "Implemented and verified.",
+  "stack_view": "Not linked until sanity PASS.",
+  "validation_md": "Deterministic tests pass."
+}
