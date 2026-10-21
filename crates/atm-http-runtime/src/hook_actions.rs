@@ -660,7 +660,9 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    /// The runner error is injected; a current-thread runtime keeps the spawned
+    /// hook chain in the test subscriber's deterministic capture context.
+    #[tokio::test(flavor = "current_thread")]
     async fn runner_timeout_logs_a_timeout_run_and_no_action_entries() {
         let captured = Captured::default();
         let _guard =
