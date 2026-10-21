@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish or install a manifest-declared GitHub prerelease archive pair."""
+"""Publish or install manifest-declared GitHub prerelease binary assets."""
 from __future__ import annotations
 
 import argparse
@@ -15,6 +15,7 @@ import tarfile
 import tempfile
 import time
 import tomllib
+from urllib.request import urlopen
 import zipfile
 from typing import Any, Sequence
 
@@ -101,7 +102,26 @@ def archive_name(manifest: dict[str, Any], version: str, target: dict[str, str])
 
 
 def expected_assets(manifest: dict[str, Any], version: str) -> set[str]:
-    return {"checksums.txt", *(archive_name(manifest, version, target) for target in release_targets(manifest))}
+    assets = {"checksums.txt", *(archive_name(manifest, version, target) for target in release_targets(manifest))}
+    distributions = manifest.get("python_distributions", [])
+    if not isinstance(distributions, list):
+        raise SystemExit("python_distributions must be an array")
+    # Wheel filenames include ABI/platform tags, so their exact names are
+    # discovered from the prerelease asset list.  The manifest still requires
+    # at least one wheel for every declared distribution.
+    return assets
+
+
+def required_wheel_prefixes(manifest: dict[str, Any]) -> set[str]:
+    distributions = manifest.get("python_distributions", [])
+    if not isinstance(distributions, list):
+        raise SystemExit("python_distributions must be an array")
+    prefixes: set[str] = set()
+    for distribution in distributions:
+        if not isinstance(distribution, dict) or not isinstance(distribution.get("name"), str):
+            raise SystemExit("python_distributions entries require name")
+        prefixes.add(distribution["name"].replace("-", "_") + "-")
+    return prefixes
 
 
 def host_target(manifest: dict[str, Any]) -> dict[str, str]:
@@ -147,6 +167,28 @@ def verify_checksum(path: Path, expected: str) -> None:
         raise SystemExit(f"sha256 mismatch for {path.name}")
 
 
+def host_wheel_names(digests: dict[str, str], manifest: dict[str, Any]) -> list[str]:
+    """Select one universal or host-platform wheel per declared distribution."""
+    system = platform.system()
+    machine = platform.machine().lower().replace("amd64", "x86_64").replace("aarch64", "arm64")
+    hints = {"Linux": ("linux", machine), "Darwin": ("macosx", machine), "Windows": ("win", "amd64")}
+    if system not in hints:
+        raise SystemExit(f"unsupported prerelease wheel host: {system} {machine}")
+    os_hint, arch_hint = hints[system]
+    selected: list[str] = []
+    for prefix in sorted(required_wheel_prefixes(manifest)):
+        candidates = sorted(name for name in digests if name.startswith(prefix) and name.endswith(".whl"))
+        universal = [name for name in candidates if name.endswith("-py3-none-any.whl")]
+        compatible = [name for name in candidates if os_hint in name and arch_hint in name]
+        if len(universal) == 1:
+            selected.append(universal[0])
+        elif len(compatible) == 1:
+            selected.append(compatible[0])
+        else:
+            raise SystemExit(f"GitHub prerelease has no unique host wheel for {prefix.rstrip('-')}")
+    return selected
+
+
 def gh_json(args: Sequence[str]) -> Any:
     result = command(["gh", *args], capture=True)
     try:
@@ -187,30 +229,39 @@ def release_asset_names(release: dict[str, Any]) -> set[str]:
 
 
 def require_release_assets(release: dict[str, Any], manifest: dict[str, Any], version: str) -> None:
-    missing = expected_assets(manifest, version) - release_asset_names(release)
+    names = release_asset_names(release)
+    missing = expected_assets(manifest, version) - names
     if missing:
         raise SystemExit(f"GitHub prerelease is missing required assets: {', '.join(sorted(missing))}")
+    missing_wheels = [prefix for prefix in required_wheel_prefixes(manifest) if not any(name.startswith(prefix) and name.endswith(".whl") for name in names)]
+    if missing_wheels:
+        raise SystemExit(f"GitHub prerelease is missing required wheel assets: {', '.join(sorted(missing_wheels))}")
 
 
-def download_asset(tag: str, name: str, destination: Path) -> Path:
+def download_asset(tag: str, name: str, destination: Path, *, public_url: str | None = None) -> Path:
     destination.mkdir(parents=True, exist_ok=True)
-    command(["gh", "release", "download", tag, "--pattern", name, "--dir", str(destination)])
     path = destination / name
+    if public_url is not None:
+        with urlopen(f"{public_url}/{name}", timeout=30) as response:  # noqa: S310 - manifest-declared GitHub release URL
+            path.write_bytes(response.read())
+    else:
+        command(["gh", "release", "download", tag, "--pattern", name, "--dir", str(destination)])
     if not path.is_file():
         raise SystemExit(f"GitHub prerelease did not download {name}")
     return path
 
 
-def download_checked_archive(tag: str, version: str, manifest: dict[str, Any], destination: Path) -> Path:
-    release = release_for_tag(tag)
-    require_release_assets(release, manifest, version)
-    checksum_file = download_asset(tag, "checksums.txt", destination)
+def download_checked_archive(tag: str, version: str, manifest: dict[str, Any], destination: Path, *, public_url: str | None = None) -> Path:
+    if public_url is None:
+        release = release_for_tag(tag)
+        require_release_assets(release, manifest, version)
+    checksum_file = download_asset(tag, "checksums.txt", destination, public_url=public_url)
     target = host_target(manifest)
     name = archive_name(manifest, version, target)
     expected = checksums(checksum_file.read_text(encoding="utf-8")).get(name)
     if expected is None:
         raise SystemExit(f"checksums.txt has no sha256 for {name}")
-    archive = download_asset(tag, name, destination)
+    archive = download_asset(tag, name, destination, public_url=public_url)
     verify_checksum(archive, expected)
     return archive
 
@@ -265,6 +316,19 @@ def stage_archive(archive: Path, stage: Path, config: dict[str, Any]) -> list[Pa
     return staged_pair(stage, config)
 
 
+def stage_wheels(tag: str, manifest: dict[str, Any], stage: Path, destination: Path, *, public_url: str | None) -> None:
+    if not required_wheel_prefixes(manifest):
+        return
+    checksum_file = download_asset(tag, "checksums.txt", destination, public_url=public_url)
+    digests = checksums(checksum_file.read_text(encoding="utf-8"))
+    wheel_dir = stage / "wheels"
+    wheel_dir.mkdir(parents=True, exist_ok=True)
+    for name in host_wheel_names(digests, manifest):
+        wheel = download_asset(tag, name, destination, public_url=public_url)
+        verify_checksum(wheel, digests[name])
+        shutil.copy2(wheel, wheel_dir / name)
+
+
 def selector_directory(config: dict[str, Any]) -> Path:
     selectors = config.get("selector_dir")
     if not isinstance(selectors, dict):
@@ -306,7 +370,16 @@ def verify_install(config: dict[str, Any], version: str, stage: Path) -> None:
 def install(manifest: dict[str, Any], requested: str) -> tuple[str, Path]:
     config = manifest["prerelease"]
     assert isinstance(config, dict)
-    version, _release = select_release(config, requested)
+    if requested == "latest":
+        version, _release = select_release(config, requested)
+        public_url = None
+    else:
+        version = parse_version(requested)
+        project = manifest.get("project")
+        homepage = project.get("homepage") if isinstance(project, dict) else None
+        if not isinstance(homepage, str) or not homepage.startswith("https://github.com/"):
+            raise SystemExit("[project].homepage must be a GitHub repository URL for unauthenticated prerelease install")
+        public_url = f"{homepage.rstrip('/')}/releases/download/{required_string(config, 'tag_prefix')}{version}"
     root = Path(os.path.expandvars(required_string(config, "install_root"))).expanduser()
     stage = root / f"v{version}"
     if stage.is_dir():
@@ -314,8 +387,9 @@ def install(manifest: dict[str, Any], requested: str) -> tuple[str, Path]:
     else:
         tag = f"{required_string(config, 'tag_prefix')}{version}"
         with tempfile.TemporaryDirectory(prefix="prerelease-") as directory:
-            archive = download_checked_archive(tag, version, manifest, Path(directory))
+            archive = download_checked_archive(tag, version, manifest, Path(directory), public_url=public_url)
             paths = stage_archive(archive, stage, config)
+            stage_wheels(tag, manifest, stage, Path(directory), public_url=public_url)
     repoint_selector(paths, config)
     verify_install(config, version, stage)
     return version, stage

@@ -329,8 +329,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertIn('for bundled_path in binary.get("bundled_paths", []):', workflow)
         self.assertIn("uses: actions/upload-artifact@v4", workflow)
         self.assertIn("name: ${{ matrix.target }}", workflow)
-        self.assertIn('shasum -a 256 "${archives[@]}" > checksums.txt', workflow)
-        self.assertIn('"${archives[@]}" checksums.txt', workflow)
+        self.assertIn('shasum -a 256 "${assets_to_publish[@]}" > checksums.txt', workflow)
+        self.assertIn('"${assets_to_publish[@]}" checksums.txt', workflow)
+        self.assertIn("uses: ./.github/workflows/ci.yml", workflow)
+        self.assertIn("build_release_artifacts: true", workflow)
         self.assertIn('gh release create "$tag" --prerelease', workflow)
         self.assertIn('cmp checksums.txt existing-release/checksums.txt', workflow)
         self.assertIn("concurrent run converged", workflow)
@@ -344,10 +346,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         )[1]
         release_job = workflow.split("  release:\n", 1)[1]
         self.assertIn("- uses: actions/checkout@v4", release_job)
-        self.assertIn('shasum -a 256 "${archives[@]}" > checksums.txt', release_step)
+        self.assertIn('shasum -a 256 "${assets_to_publish[@]}" > checksums.txt', release_step)
         self.assertIn(
             'gh release create "$tag" --prerelease --title "$tag" --generate-notes '
-            '"${archives[@]}" checksums.txt',
+            '"${assets_to_publish[@]}" checksums.txt',
             release_step,
         )
         self.assertNotIn("provenance.json", workflow)
