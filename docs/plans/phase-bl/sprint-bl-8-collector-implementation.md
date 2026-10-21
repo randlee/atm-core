@@ -28,6 +28,8 @@ Own `refresh.py`, `state.py`, `adapters/{bd,atm,github}.py`, `cli.py`, `command.
 - [ ] `test_build_snapshot_content_at_carried_reason_and_never_read`
 - [ ] `test_d1_deadline_is_required_before_command_dispatch`
 - [ ] `test_atomic_record_and_snapshot_persistence`
+- [ ] `test_atomic_record_replacement_returns_last_good_snapshot`
+- [ ] `test_refresh_lock_returns_persisted_in_progress_record`
 
 Tests inject clocks, storage, source responses, locks, and the derivation function; no test uses sleep, scheduling, load, or a live source.
 

@@ -18,3 +18,5 @@ Own `runs.py`, `icons.py`, and their tests. It presents persisted Quality/Jev da
 - [ ] `test_jev_api_failure_uses_nf_fa_ban_u_f05e`
 - [ ] `test_reviewer_selection_filters_findings`
 - [ ] `test_finding_lists_contributing_reviewers_filing_marked`
+- [ ] `test_quality_no_vertical_bars`
+- [ ] `test_jev_detail_shows_typed_error_and_retry_count`

@@ -50,6 +50,7 @@ class CollectorRequest(Protocol):
 - [ ] `test_plugin_fixture_decodes_without_console_implementation_import`
 - [ ] `test_contract_registry_exports_collector_request_double`
 - [ ] `test_contract_windows_and_source_error_kinds_are_stable`
+- [ ] `test_public_types_construct_without_delivery_import`
 
 Run frozen ruff, pyright, and pytest with fixtures and controlled values only. No sleep, timing, race, or live-service test is permitted.
 

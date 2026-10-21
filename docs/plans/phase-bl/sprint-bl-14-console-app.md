@@ -17,5 +17,8 @@ Own `app.py` and `test_app.py`. Implement the console-instance lock, persisted-s
 - [ ] `test_pr_tab_activation_requests_github_only`
 - [ ] `test_diagnostics_rich_text_colour_is_preserved`
 - [ ] `test_console_app_calls_no_send_seam`
+- [ ] `test_console_never_sends_atm_message`
+- [ ] `test_diagnostics_agent_icons_coloured`
+- [ ] `test_r_forces_all_sources_pr_tab_forces_github`
 
 No UI test uses sleeps, real time, threads, or delivery.
