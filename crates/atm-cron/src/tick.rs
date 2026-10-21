@@ -284,7 +284,7 @@ mod tests {
                 .start(CronStartSpec {
                     team: "test-team".parse().unwrap(),
                     phase: PhaseId::parse("bk").unwrap(),
-                    name: format!("job-{index}"),
+                    name: atm_core::boundary::CronName::parse(&format!("job-{index}")).unwrap(),
                     cron_expr: "@hourly".into(),
                     module_path: "/module.py".into(),
                     cwd: "/work".into(),

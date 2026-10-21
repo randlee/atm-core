@@ -8,8 +8,8 @@ use std::{
 
 use atm_core::{
     boundary::{
-        CronSchedule, CronScheduleStore, CronScheduler, CronStartSpec, HookCall, HookOutcome,
-        PhaseId, StopCondition,
+        CronName, CronSchedule, CronScheduleStore, CronScheduler, CronStartSpec, HookCall,
+        HookOutcome, PhaseId, StopCondition,
     },
     error::{AtmError, AtmErrorCode},
     hook::{HookReply, StopReply},
@@ -106,7 +106,7 @@ impl Fixture {
         CronStartSpec {
             team: "test-team".parse().unwrap(),
             phase: PhaseId::parse("bk").unwrap(),
-            name: name.into(),
+            name: CronName::parse(name).unwrap(),
             cron_expr: "0 * * * * *".into(),
             module_path: "/module.py".into(),
             cwd: "/work".into(),
@@ -218,7 +218,7 @@ async fn atm_cron_public_surface_is_worker_and_scheduler_trait() {
         .end(
             &"test-team".parse().unwrap(),
             &PhaseId::parse("bk").unwrap(),
-            Some("api-surface"),
+            Some(&CronName::parse("api-surface").unwrap()),
         )
         .await
         .unwrap();
@@ -731,7 +731,11 @@ async fn worker_schedules_only_active_rows() {
     let spec = fixture.spec("ended");
     fixture
         .cron
-        .end(&spec.team, &spec.phase, Some("ended"))
+        .end(
+            &spec.team,
+            &spec.phase,
+            Some(&CronName::parse("ended").unwrap()),
+        )
         .await
         .unwrap();
     let worker = fixture.worker().await;
@@ -891,7 +895,11 @@ async fn reload_keeps_in_flight_of_an_unchanged_slot() {
     let parks = fixture.clock.parks();
     fixture
         .cron
-        .end(&spec.team, &spec.phase, Some("absent"))
+        .end(
+            &spec.team,
+            &spec.phase,
+            Some(&CronName::parse("absent").unwrap()),
+        )
         .await
         .unwrap();
     fixture.clock.wait_parks_above(parks).await;
@@ -913,7 +921,7 @@ async fn end_then_start_before_reload_applies_new_expression_and_jitter() {
         .end(
             &spec.team,
             &spec.phase,
-            Some(&spec.name),
+            Some(spec.name.as_str()),
             fixture.clock.now().into(),
         )
         .unwrap();
@@ -948,7 +956,7 @@ async fn stale_run_never_writes_the_restarted_row() {
         .end(
             &spec.team,
             &spec.phase,
-            Some(&spec.name),
+            Some(spec.name.as_str()),
             fixture.clock.now().into(),
         )
         .unwrap();
@@ -976,7 +984,7 @@ async fn restart_during_tick_does_not_replay_after_reload() {
         .end(
             &spec.team,
             &spec.phase,
-            Some(&spec.name),
+            Some(spec.name.as_str()),
             fixture.clock.now().into(),
         )
         .unwrap();
@@ -1331,7 +1339,11 @@ async fn reload_failure_keeps_slots_and_retries() {
     let parks = fixture.clock.parks();
     fixture
         .cron
-        .end(&spec.team, &spec.phase, Some("absent"))
+        .end(
+            &spec.team,
+            &spec.phase,
+            Some(&CronName::parse("absent").unwrap()),
+        )
         .await
         .unwrap();
     fixture.clock.wait_parks_above(parks).await;
@@ -1378,7 +1390,11 @@ async fn failed_reload_retries_on_backoff_before_the_next_occurrence() {
     let parks = fixture.clock.parks();
     fixture
         .cron
-        .end(&spec.team, &spec.phase, Some("absent"))
+        .end(
+            &spec.team,
+            &spec.phase,
+            Some(&CronName::parse("absent").unwrap()),
+        )
         .await
         .unwrap();
     fixture.clock.wait_parks_above(parks).await;

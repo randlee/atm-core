@@ -76,7 +76,7 @@ pub use factory::{
 };
 pub use hook_error::HookExitCause;
 pub use hook_registration_store::{HookRegistration, HookRegistrationStore};
-pub use hook_types::{HookName, PhaseId};
+pub use hook_types::{CRON_NAME_MAX_BYTES, CronName, HookName, PhaseId};
 pub use peer_catalog_audit::TrustedPeerCatalogAudit;
 pub use read_lane_error::ReadLaneError;
 pub use roles::ROLE_WORKER;

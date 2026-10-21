@@ -145,7 +145,7 @@ impl World {
         CronStartSpec {
             team: TEST_TEAM.parse().unwrap(),
             phase: PhaseId::parse(TEST_TEAM).unwrap(),
-            name: "test".into(),
+            name: atm_core::boundary::CronName::parse("test").unwrap(),
             cron_expr: "0 * * * * *".into(),
             module_path: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("tests/cron_fixture/fixture_cron.py"),
@@ -263,7 +263,7 @@ async fn start_persists_row_with_args_and_timeout() {
     let row = cron.start(spec.clone()).await.unwrap();
     assert_eq!(row.team, spec.team);
     assert_eq!(row.phase, spec.phase);
-    assert_eq!(row.name, spec.name);
+    assert_eq!(row.name, spec.name.as_str());
     assert_eq!(row.cron_expr, spec.cron_expr);
     assert_eq!(row.custom, spec.custom);
     assert_eq!(row.created_by, spec.created_by);
@@ -598,7 +598,7 @@ async fn cron_scheduler_installed_once_and_cron_routes_reach_it() {
             caller_identity: spec.created_by,
             caller_team: spec.team,
             phase: spec.phase,
-            name: spec.name,
+            name: spec.name.into(),
             cron_expr: spec.cron_expr,
             module_path: spec.module_path,
             cwd: spec.cwd,

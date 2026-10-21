@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use async_trait::async_trait;
 
-use super::{CronSchedule, PhaseId, StopCondition, sealed};
+use super::{CronName, CronSchedule, PhaseId, StopCondition, sealed};
 use crate::error::AtmError;
 use crate::types::{AgentName, TeamName};
 
@@ -13,7 +13,7 @@ pub trait CronScheduler: sealed::Sealed + Send + Sync {
         &self,
         team: &TeamName,
         phase: &PhaseId,
-        name: Option<&str>,
+        name: Option<&CronName>,
     ) -> Result<Vec<CronSchedule>, AtmError>;
     async fn list(
         &self,
@@ -26,7 +26,7 @@ pub trait CronScheduler: sealed::Sealed + Send + Sync {
 pub struct CronStartSpec {
     pub team: TeamName,
     pub phase: PhaseId,
-    pub name: String,
+    pub name: CronName,
     pub cron_expr: String,
     pub module_path: PathBuf,
     pub cwd: PathBuf,
@@ -57,7 +57,7 @@ impl CronScheduler for RecordingCronScheduler {
             .push("start");
         let mut rows = self.rows.lock().expect("cron rows mutex poisoned");
         let existing = rows.iter().position(|row| {
-            row.team == spec.team && row.phase == spec.phase && row.name == spec.name
+            row.team == spec.team && row.phase == spec.phase && row.name == spec.name.as_str()
         });
         if existing.is_some_and(|index| rows[index].active) {
             return Err(AtmError::validation_with_recovery(
@@ -79,7 +79,7 @@ impl CronScheduler for RecordingCronScheduler {
             generation,
             team: spec.team,
             phase: spec.phase,
-            name: spec.name,
+            name: spec.name.into(),
             cron_expr: spec.cron_expr,
             module_path: spec.module_path,
             cwd: spec.cwd,
@@ -109,7 +109,7 @@ impl CronScheduler for RecordingCronScheduler {
         &self,
         team: &TeamName,
         phase: &PhaseId,
-        name: Option<&str>,
+        name: Option<&CronName>,
     ) -> Result<Vec<CronSchedule>, AtmError> {
         self.calls
             .lock()
@@ -120,7 +120,7 @@ impl CronScheduler for RecordingCronScheduler {
         for row in rows.iter_mut().filter(|row| {
             &row.team == team
                 && &row.phase == phase
-                && name.is_none_or(|name| row.name == name)
+                && name.is_none_or(|name| row.name == name.as_str())
                 && row.active
         }) {
             row.active = false;
@@ -179,7 +179,7 @@ mod tests {
         CronStartSpec {
             team: team.parse().unwrap(),
             phase: PhaseId::parse(phase).unwrap(),
-            name: name.into(),
+            name: CronName::parse(name).unwrap(),
             cron_expr: "0 * * * * *".into(),
             module_path: "/module.py".into(),
             cwd: "/work".into(),
@@ -215,8 +215,12 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
-        let ended =
-            ready(scheduler.end(&first_spec.team, &first_spec.phase, Some("first"))).unwrap();
+        let ended = ready(scheduler.end(
+            &first_spec.team,
+            &first_spec.phase,
+            Some(&CronName::parse("first").unwrap()),
+        ))
+        .unwrap();
         assert_eq!(ended.len(), 1);
         assert!(!ended[0].active);
         assert!(ended[0].ended_at.is_some());

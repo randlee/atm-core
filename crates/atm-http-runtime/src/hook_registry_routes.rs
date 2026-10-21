@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
-use atm_core::boundary::{CronScheduler, CronStartSpec, HookName, HookRegistration};
+use atm_core::boundary::{CronName, CronScheduler, HookName, HookRegistration};
 use atm_core::error::AtmError;
 use atm_core::hook::{
     CronEndRequest, CronListQuery, CronStartRequest, HookDisableRequest, HookListQuery,
@@ -186,24 +186,12 @@ impl StorageAndNudgeRouter {
             atm_core::boundary::CRON_TIMEOUT_MAX_MS,
             "timeout_ms",
         )?;
-        let custom = request.check_limits()?;
-        self.check_roster_member(&request.caller_team, &request.caller_identity)?;
+        let spec = request.into_spec()?;
+        self.check_roster_member(&spec.team, &spec.created_by)?;
         let scheduler = self.cron_scheduler()?;
         let schedule = tokio::time::timeout(
             cron_scheduler_budget(deadline, "cron schedule start")?,
-            scheduler.start(CronStartSpec {
-                team: request.caller_team,
-                phase: request.phase,
-                name: request.name,
-                cron_expr: request.cron_expr,
-                module_path: request.module_path,
-                cwd: request.cwd,
-                args: request.args,
-                timeout_ms: request.timeout_ms,
-                custom,
-                stop: request.stop,
-                created_by: request.caller_identity,
-            }),
+            scheduler.start(spec),
         )
         .await
         .map_err(|_| {
@@ -219,15 +207,12 @@ impl StorageAndNudgeRouter {
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         require_local(ingress)?;
+        let name = request.name.as_deref().map(CronName::parse).transpose()?;
         self.check_roster_member(&request.caller_team, &request.caller_identity)?;
         let scheduler = self.cron_scheduler()?;
         let rows = tokio::time::timeout(
             cron_scheduler_budget(deadline, "cron schedule end")?,
-            scheduler.end(
-                &request.caller_team,
-                &request.phase,
-                request.name.as_deref(),
-            ),
+            scheduler.end(&request.caller_team, &request.phase, name.as_ref()),
         )
         .await
         .map_err(|_| {
@@ -1222,6 +1207,36 @@ mod tests {
             ),
         );
         assert!(routes.hooks.active_all().expect("rows").is_empty());
+        assert!(routes.cron.calls.lock().expect("calls").is_empty());
+    }
+
+    #[tokio::test]
+    async fn cron_end_refuses_invalid_name_before_scheduler() {
+        let routes = routes();
+        for name in [
+            String::new(),
+            "n".repeat(atm_core::hook::CRON_NAME_MAX_BYTES + 1),
+        ] {
+            let error = routes
+                .router
+                .cron_end(
+                    CronEndRequest {
+                        caller_identity: agent("sender"),
+                        caller_team: team(),
+                        phase: phase("bk"),
+                        name: Some(name),
+                    },
+                    AuthenticatedIngress::Local,
+                    deadline(),
+                )
+                .await
+                .expect_err("invalid cron name is refused");
+            assert_refusal(
+                &error,
+                AtmErrorCode::HookModuleInvalid,
+                "name must contain 1..=64 bytes",
+            );
+        }
         assert!(routes.cron.calls.lock().expect("calls").is_empty());
     }
 

@@ -5,7 +5,7 @@ use std::sync::{
 
 use async_trait::async_trait;
 use atm_core::boundary::{
-    CronSchedule, CronScheduleStore, CronScheduler, CronStartSpec, HookActionDispatcher,
+    CronName, CronSchedule, CronScheduleStore, CronScheduler, CronStartSpec, HookActionDispatcher,
     HookRunner, NewCronSchedule, PhaseId,
 };
 use atm_core::{
@@ -143,7 +143,9 @@ impl CronScheduler for AtmCron {
             .iter()
             .filter(|row| {
                 row.cron_expr == spec.cron_expr
-                    && !(row.team == spec.team && row.phase == spec.phase && row.name == spec.name)
+                    && !(row.team == spec.team
+                        && row.phase == spec.phase
+                        && row.name == spec.name.as_str())
             })
             .map(|row| row.jitter_s)
             .collect();
@@ -151,7 +153,7 @@ impl CronScheduler for AtmCron {
         let schedule = NewCronSchedule {
             team: spec.team,
             phase: spec.phase,
-            name: spec.name,
+            name: spec.name.into(),
             cron_expr: spec.cron_expr,
             module_path: spec.module_path,
             cwd: spec.cwd,
@@ -172,17 +174,22 @@ impl CronScheduler for AtmCron {
         &self,
         team: &TeamName,
         phase: &PhaseId,
-        name: Option<&str>,
+        name: Option<&CronName>,
     ) -> Result<Vec<CronSchedule>, AtmError> {
         self.check_running()?;
         let (team, phase, name, now) = (
             team.clone(),
             phase.clone(),
-            name.map(str::to_owned),
+            name.cloned(),
             self.deps.clock.now(),
         );
         let rows = store_call(self.deps.store.clone(), move |store| {
-            store.end(&team, &phase, name.as_deref(), now.into())
+            store.end(
+                &team,
+                &phase,
+                name.as_ref().map(CronName::as_str),
+                now.into(),
+            )
         })
         .await?;
         self.bump();

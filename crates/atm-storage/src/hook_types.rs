@@ -4,6 +4,76 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::AtmError;
 
+pub const CRON_NAME_MAX_BYTES: usize = 64;
+
+/// A cron schedule name validated at the boundary before it reaches a scheduler.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct CronName(String);
+
+impl CronName {
+    pub fn parse(value: &str) -> Result<Self, AtmError> {
+        if value.is_empty() || value.len() > CRON_NAME_MAX_BYTES {
+            return Err(AtmError::hook_module_invalid(
+                "name must contain 1..=64 bytes",
+            ));
+        }
+        Ok(Self(value.to_owned()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for CronName {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
+    }
+}
+
+impl From<CronName> for String {
+    fn from(value: CronName) -> Self {
+        value.0
+    }
+}
+
+impl std::fmt::Display for CronName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[cfg(test)]
+mod cron_name_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn cron_name_parse_bounds() {
+        assert_eq!(
+            CronName::parse("").unwrap_err().code(),
+            crate::error::AtmErrorCode::HookModuleInvalid
+        );
+        assert_eq!(
+            CronName::parse(&"n".repeat(CRON_NAME_MAX_BYTES))
+                .unwrap()
+                .as_str()
+                .len(),
+            CRON_NAME_MAX_BYTES
+        );
+        assert_eq!(
+            CronName::parse(&"n".repeat(CRON_NAME_MAX_BYTES + 1))
+                .unwrap_err()
+                .code(),
+            crate::error::AtmErrorCode::HookModuleInvalid
+        );
+        assert!(serde_json::from_value::<CronName>(json!("")).is_err());
+    }
+}
+
 /// A hook name the hook surface accepts: the six task hooks and the two cron
 /// hooks (ADR-068 D3, design §2.1).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]

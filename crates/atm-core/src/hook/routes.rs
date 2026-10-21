@@ -3,12 +3,12 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::boundary::{PhaseId, StopCondition};
+use crate::boundary::{CronName, CronStartSpec, PhaseId, StopCondition};
 use crate::error::AtmError;
 use crate::types::{AgentName, TeamName};
 
 use super::request::{CRON_ARGS_MAX_BYTES, custom_object};
-use super::{CRON_ARGS_MAX, CRON_NAME_MAX_BYTES, HOOK_PATH_MAX_BYTES};
+use super::{CRON_ARGS_MAX, HOOK_PATH_MAX_BYTES};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HookRegisterRequest {
@@ -108,15 +108,11 @@ impl HookRegisterRequest {
 }
 
 impl CronStartRequest {
-    pub fn check_limits(&self) -> Result<Map<String, Value>, AtmError> {
+    pub fn into_spec(self) -> Result<CronStartSpec, AtmError> {
         let custom = custom_object(custom_or_empty(&self.custom))?;
         path_limit(&self.module_path, "module_path")?;
         path_limit(&self.cwd, "cwd")?;
-        if self.name.is_empty() || self.name.len() > CRON_NAME_MAX_BYTES {
-            return Err(AtmError::hook_module_invalid(&format!(
-                "name must contain 1..={CRON_NAME_MAX_BYTES} bytes"
-            )));
-        }
+        let name = CronName::parse(&self.name)?;
         if self.args.len() > CRON_ARGS_MAX {
             return Err(AtmError::hook_module_invalid(&format!(
                 "args must contain at most {CRON_ARGS_MAX} items"
@@ -127,7 +123,19 @@ impl CronStartRequest {
                 "args must contain at most {CRON_ARGS_MAX_BYTES} total bytes"
             )));
         }
-        Ok(custom)
+        Ok(CronStartSpec {
+            team: self.caller_team,
+            phase: self.phase,
+            name,
+            cron_expr: self.cron_expr,
+            module_path: self.module_path,
+            cwd: self.cwd,
+            args: self.args,
+            timeout_ms: self.timeout_ms,
+            custom,
+            stop: self.stop,
+            created_by: self.caller_identity,
+        })
     }
 }
 
@@ -222,22 +230,29 @@ mod tests {
     }
 
     #[test]
-    fn check_limits_refuses_each_oversize_field() {
-        for name in [String::new(), "x".repeat(CRON_NAME_MAX_BYTES + 1)] {
+    fn into_spec_refuses_each_oversize_field() {
+        for name in [
+            String::new(),
+            "x".repeat(atm_storage::CRON_NAME_MAX_BYTES + 1),
+        ] {
             let mut request = cron();
             request.name = name;
             assert_invalid(
-                request.check_limits().unwrap_err(),
+                request.clone().into_spec().unwrap_err(),
                 "name",
-                CRON_NAME_MAX_BYTES,
+                atm_storage::CRON_NAME_MAX_BYTES,
             );
         }
         let mut request = cron();
         request.args = vec![String::new(); CRON_ARGS_MAX + 1];
-        assert_invalid(request.check_limits().unwrap_err(), "args", CRON_ARGS_MAX);
+        assert_invalid(
+            request.clone().into_spec().unwrap_err(),
+            "args",
+            CRON_ARGS_MAX,
+        );
         request.args = vec!["x".repeat(CRON_ARGS_MAX_BYTES + 1)];
         assert_invalid(
-            request.check_limits().unwrap_err(),
+            request.clone().into_spec().unwrap_err(),
             "args",
             CRON_ARGS_MAX_BYTES,
         );
@@ -250,7 +265,7 @@ mod tests {
                 request.cwd = path;
             }
             assert_invalid(
-                request.check_limits().unwrap_err(),
+                request.clone().into_spec().unwrap_err(),
                 field,
                 HOOK_PATH_MAX_BYTES,
             );
@@ -271,12 +286,14 @@ mod tests {
             );
         }
         let mut request = cron();
-        request.name = "x".repeat(CRON_NAME_MAX_BYTES);
+        request.name = "x".repeat(atm_storage::CRON_NAME_MAX_BYTES);
         request.args = vec!["x".repeat(CRON_ARGS_MAX_BYTES)];
         request.args.extend(vec![String::new(); CRON_ARGS_MAX - 1]);
         request.module_path = "x".repeat(HOOK_PATH_MAX_BYTES).into();
         request.cwd = "x".repeat(HOOK_PATH_MAX_BYTES).into();
-        assert_eq!(request.check_limits().unwrap(), Map::new());
+        let spec = request.clone().into_spec().unwrap();
+        assert_eq!(spec.name.as_str().len(), atm_storage::CRON_NAME_MAX_BYTES);
+        assert_eq!(spec.custom, Map::new());
         let registration = HookRegisterRequest {
             caller_identity: request.caller_identity,
             caller_team: request.caller_team,
@@ -291,7 +308,7 @@ mod tests {
         let mut request = cron();
         request.custom = json!([1]);
         assert_invalid(
-            request.check_limits().unwrap_err(),
+            request.into_spec().unwrap_err(),
             "custom",
             super::super::HOOK_CUSTOM_MAX_BYTES,
         );
