@@ -7,15 +7,18 @@ import importlib.util
 import inspect
 import io
 import json
+import os
 from pathlib import Path
 import re
 import shlex
+import subprocess
 import xml.etree.ElementTree as ET
 
 import pytest
+from unittest.mock import patch
 
 
-from task_close_world import EXAMPLES, SCRIPTS, World, hook
+from task_close_world import DERIVED, EXAMPLES, SCRIPTS, World, example_values, hook
 
 @pytest.fixture
 def world(tmp_path, monkeypatch):
@@ -83,21 +86,28 @@ def test_template_rebase_and_hook_ancestry_use_the_same_stack_top(world, templat
                for argv, _kwargs in world.calls)
 
 
-def test_dev_handoff_is_immediate_and_does_not_close_task(world, monkeypatch):
+def test_dev_handoff_is_immediate_and_closes_the_dev_task_as_the_dev(world, monkeypatch):
     before = dict(hook.os.environ)
     assert "ok" in world.run()
     assert dict(hook.os.environ) == before
     calls = [argv for argv, _kwargs in world.calls]
     close_index = next(index for index, argv in enumerate(calls) if argv[:2] == ["bd", "close"])
     assert calls[close_index + 1][:2] == ["atm", "send"]
-    assert calls[close_index + 2][:3] == ["atm", "task", "assign"]
-    assert world.tasks[world.values["dev_task_id"]][-1]["to_state"] == "assigned"
+    assert calls[close_index + 2] == ["bd", "where", "--json"]
+    assert calls[close_index + 3][:3] == ["atm", "task", "assign"]
+    # The dev is free for its next queued task once the hook returns; sanity runs on its own task.
+    dev_task = world.tasks[world.values["dev_task_id"]]
+    assert dev_task[-1]["to_state"] == "complete" and dev_task[-1]["close_outcome"] == "completed"
+    assert world.tasks[world.values["sanity_task_id"]][-1]["to_state"] == "assigned"
+    assert calls[close_index + 4] == ["atm", "task", "close", world.values["dev_task_id"], "completed",
+                                      f"dev complete at {world.values['commit']}"]
     for argv, sender in world.writes:
         assert sender == ("phase-lead" if argv[:3] == ["atm", "task", "assign"] else "caller")
         if argv[0] == "bd":
             assert argv[-2:] == ["--actor", "caller"]
         if "--vars" in argv:
-            assert argv[argv.index("--vars") + 1] == str(world.path)
+            # The hook sends the completion file it wrote, never the lead's dispatch file.
+            assert Path(argv[argv.index("--vars") + 1]).name == "completion-vars.json"
     for argv, kwargs in world.calls:
         if argv[:3] == ["atm", "task", "assign"]:
             assert kwargs["env"]["ATM_TEAM"] == "test-team"
@@ -105,7 +115,21 @@ def test_dev_handoff_is_immediate_and_does_not_close_task(world, monkeypatch):
             assert kwargs["env"].get("ATM_TEAM") == before.get("ATM_TEAM")
 
 
-def test_preview_and_native_send_use_identical_unmodified_vars(world, monkeypatch):
+def test_dev_rerun_after_the_task_is_closed_does_not_close_it_again(world):
+    assert "ok" in world.run()
+    assert "ok" in world.run()
+    closes = [argv for argv, _sender in world.writes if argv[:4] == ["atm", "task", "close", world.values["dev_task_id"]]]
+    assert len(closes) == 1
+
+
+def test_not_reproducible_fix_closes_its_task_with_the_evidence_reason(world):
+    world.beads[world.values["checked_bead"]]["metadata"]["role"] = "fix"
+    assert "ok" in world.run("fix", outcome="not_reproducible")
+    close = next(argv for argv, _sender in world.writes if argv[:4] == ["atm", "task", "close", world.values["dev_task_id"]])
+    assert close[4:] == ["completed", f"not reproducible: {world.values['evidence']}"]
+
+
+def test_preview_and_native_send_use_identical_completion_vars(world, monkeypatch):
     world.values.pop("carry_forward")
     original_render = hook.sc_render.render
     inputs = []
@@ -116,8 +140,8 @@ def test_preview_and_native_send_use_identical_unmodified_vars(world, monkeypatc
 
     monkeypatch.setattr(hook.sc_render, "render", render)
     assert "ok" in world.run()
-    assert inputs and all(values == world.values for values in inputs)
-    assert all(message["values"] == world.values for message in world.messages)
+    assert inputs and world.messages
+    assert all(any(message["values"] == rendered for rendered in inputs) for message in world.messages)
 
 
 @pytest.mark.parametrize("change,code", [({"commit": ""}, "VARS.EMPTY"), ({"extra": 1}, "VARS.UNKNOWN"),
@@ -167,11 +191,13 @@ def test_argument_errors_use_typed_json(argv):
 
 @pytest.mark.parametrize("role", ["dev", "fix", "sanity", "qa"])
 def test_every_role_required_field_is_validated_before_commands(world, role):
-    original = json.loads((EXAMPLES / f"task-close-vars-{role}.json").read_text())
+    original = example_values(role)
     original.update(primary_checkout=str(world.root), worktree_path=str(world.root))
-    required = hook.header(hook.TEMPLATES / "task-close-vars.j2")["required_variables_by_role"][role]
-    assert set(original) == set(required)
-    for field in original:
+    contract = hook.header(hook.TEMPLATES / "task-close-vars.j2")
+    required = contract["required_variables_by_role"][role]
+    results = contract.get("result_variables_by_role", {}).get(role, [])
+    assert set(original) == set(required) | set(results)
+    for field in [*required, *results]:
         world.values = dict(original)
         del world.values[field]
         assert world.run(role)["err"]["code"] == "VARS.MISSING", (role, field)
@@ -209,7 +235,8 @@ def test_deadline_injection_convention_matches_assignment_gates(world, monkeypat
     spec = importlib.util.spec_from_file_location("assignment_gates_deadline_contract", SCRIPTS / "assignment-gates.py")
     gates = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gates)
-    assert hook.COMMAND_TIMEOUT == gates.COMMAND_TIMEOUT == 30
+    assert hook.COMMAND_TIMEOUT == gates.COMMAND_TIMEOUT == hook.command_timeout(os.environ)
+    assert gates.DEFAULT_COMMAND_TIMEOUT == 180
     for entry_point in (hook.main, hook.Hook.__init__, gates.main):
         assert "command_timeout" not in inspect.signature(entry_point).parameters
     instance = hook.Hook("dev", world.values, world.path, world, lambda: 42)
@@ -229,6 +256,18 @@ def test_local_timeout_is_typed_and_names_command_and_deadline(world, monkeypatc
     error = world.run()["err"]
     assert error["code"] == "COMMAND.FAILED"
     assert "git" in error["message"] and "rev-parse" in error["message"] and "7s" in error["message"]
+    assert error["fix"].startswith("Retry once, or raise ATM_BD_GATE_TIMEOUT_S")
+
+
+@pytest.mark.parametrize("bad", ["abc", "0", "-3"])
+def test_invalid_timeout_env_is_a_typed_config_error_not_a_traceback(world, bad):
+    with patch.dict(os.environ, {"ATM_BD_GATE_TIMEOUT_S": bad}):
+        result = world.run()
+    error = result["err"]
+    assert error["code"] == "CONFIG.INVALID"
+    assert f"ATM_BD_GATE_TIMEOUT_S={bad!r}" in error["message"]
+    assert "ATM_BD_GATE_TIMEOUT_S=180" in error["fix"]
+    assert world.calls == []
 
 
 @pytest.mark.parametrize("failed_command", ["ls-remote", "fetch"])
@@ -343,27 +382,56 @@ def test_not_reproducible_assigns_runtime_top_without_rewriting_input(world):
         del world.values[field]
     result = world.run("fix", outcome="not_reproducible")
     assert "ok" in result, result
-    assert json.loads(world.path.read_text()) == world.values
+    contract = hook.header(hook.TEMPLATES / "task-close-vars.j2")
+    results = set(contract["result_variables_by_role"]["fix"])
+    assert json.loads(world.path.read_text()) == {name: value for name, value in world.values.items()
+                                                 if name not in results and name not in DERIVED}
     assignment = next(message for message in world.messages if message["type"] == "dev-sanity-task")
     assert assignment["values"]["branch"] == "integrate/phase-bj"
     assert assignment["values"]["commit"] == "b" * 40
-    assert set(assignment["values"]) == set(world.values) | {"branch", "commit"}
+    assert assignment["values"]["beads_dir"] == str(world.root / ".beads")
+    assert any(argv == ["bd", "where", "--json"] for argv, _kwargs in world.calls)
+    assert set(assignment["values"]) == set(world.values) | {"branch", "commit", *contract["derived_variables"],
+                                                          "close_context", "beads_dir"}
     assert not any(argv[0] == "gh" for argv, _kwargs in world.calls)
 
 
-def test_sanity_pass_closes_dev_as_lead_then_assigns_qa(world):
+def test_not_reproducible_fix_without_stack_bead_uses_pr_target(world):
+    world.values.pop("stack_bead")
+    for field in ("branch", "commit", "pr_number"):
+        world.values.pop(field, None)
+    result = world.run("fix", outcome="not_reproducible")
+    assert "ok" in result, result
+    assert any(argv == ["git", "rev-parse", "origin/integrate/phase-bj"] for argv, _kwargs in world.calls)
+    assert not any(argv[:2] == ["bd", "show"] and argv[2] == "atm-phase-bj.stack" for argv, _kwargs in world.calls)
+    assignment = next(message for message in world.messages if message["type"] == "dev-sanity-task")
+    assert "stack_bead" not in assignment["values"]
+
+
+def test_not_reproducible_hook_verifies_the_cited_file_and_line(world):
+    result = world.run("fix", outcome="not_reproducible", evidence="missing.py:1")
+    assert result["err"]["code"] == "EVIDENCE.INVALID"
+    assert "missing.py:1" in result["err"]["message"]
+    assert world.writes == []
+
+
+def test_sanity_pass_leaves_the_already_closed_dev_task_alone_then_assigns_qa(world):
+    world.tasks[world.values["dev_task_id"]].append(dict(event="completed", to_state="complete", close_outcome="completed"))
     assert "ok" in world.run("sanity")
     assert world.beads[world.values["sanity_bead"]]["status"] == "closed"
-    dev_close = next((argv, sender) for argv, sender in world.writes if argv[:4] == ["atm", "task", "close", world.values["dev_task_id"]])
-    assert dev_close[1] == "phase-lead"
+    assert not any(argv[:4] == ["atm", "task", "close", world.values["dev_task_id"]] for argv, _sender in world.writes)
+    assert world.tasks[world.values["sanity_bead"]][-1]["close_outcome"] == "completed"
     assert world.messages[-1]["recipient"] == "quality"
 
 
-def test_sanity_requires_stack_except_not_reproducible_fix(world):
-    assert world.run("sanity", stacked=None)["err"]["code"] == "SANITY.NOT_STACKED"
-    assert world.writes == []
-    world.beads[world.values["checked_bead"]]["metadata"]["role"] = "fix"
-    assert "ok" in world.run("sanity", outcome="not_reproducible", carry_forward=world.values["checked_bead"])
+def test_sanity_pass_closes_without_waiting_for_stack(world):
+    assert "ok" in world.run("sanity", stacked=None)
+    assert world.beads[world.values["sanity_bead"]]["status"] == "closed"
+    calls = [argv for argv, _kwargs in world.calls]
+    close = next(index for index, argv in enumerate(calls) if argv[:3] == ["bd", "close", world.values["sanity_bead"]])
+    assert not any(argv[:3] == ["bd", "update", world.values["stack_bead"]] for argv in calls)
+    assert close < next(index for index, argv in enumerate(calls)
+                        if argv[:4] == ["atm", "task", "close", world.values["sanity_task_id"]])
 
 
 @pytest.mark.parametrize("configured_cap", [None, 2])
@@ -707,11 +775,17 @@ def test_not_reproducible_retry_uses_current_stack_top(world, boundary):
 def test_shared_contract_covers_all_role_templates_and_ids(world):
     contract = hook.header(hook.TEMPLATES / "task-close-vars.j2")
     declared = set(contract["required_variables"])
+    assert declared == set(contract["derived_variables"]).union(
+        *map(set, contract["required_variables_by_role"].values()),
+        *map(set, contract["result_variables_by_role"].values()))
     names = ("dev-complete.md.j2", "fix-complete.md.j2", "dev-sanity-template.xml.j2", "sanity-fail.xml.j2",
              "dev-sanity-complete.md.j2", "qa-template.xml.j2", "qa-complete.md.j2")
     for name in names:
-        assert set(hook.header(hook.TEMPLATES / name)["required_variables"]) <= declared, name
-        body = hook.sc_render.render(hook.TEMPLATES / name, world.values)
+        dispatch_only = {"beads_dir", "close_context"} if name == "dev-sanity-template.xml.j2" else set()
+        assert set(hook.header(hook.TEMPLATES / name)["required_variables"]) <= declared | dispatch_only, name
+        values = {**world.values, "beads_dir": str(world.root / ".beads"),
+                  "close_context": {**world.values, "phase_lead": "phase-lead"}}
+        body = hook.sc_render.render(hook.TEMPLATES / name, values)
         role_id = "sanity_task_id" if name.startswith("dev-sanity") else "qa_task_id" if name.startswith("qa-") else "dev_task_id"
         if name != "sanity-fail.xml.j2":
             assert world.values[role_id] in body
@@ -725,9 +799,13 @@ def test_shared_contract_covers_all_role_templates_and_ids(world):
 
 
 @pytest.mark.parametrize("role", ["dev", "fix", "sanity", "qa"])
-def test_each_role_example_renders_every_shared_template(role):
-    values = json.loads((EXAMPLES / f"task-close-vars-{role}.json").read_text())
+def test_each_role_example_renders_every_shared_template(world, role):
+    values = example_values(role)
     hook.validate(values, role)
+    if role in ("dev", "fix"):
+        values = {**world.values, **values}
+    values.update(beads_dir=str(world.root / ".beads"),
+                  close_context={**values, "phase_lead": "phase-lead"})
     common = ("dev-sanity-complete.md.j2", "sanity-fail.xml.j2", "qa-template.xml.j2", "qa-complete.md.j2")
     names = {
         "dev": ("dev-complete.md.j2", "dev-sanity-template.xml.j2", *common, "rebase-required.xml.j2"),
@@ -741,15 +819,15 @@ def test_each_role_example_renders_every_shared_template(role):
 
 @pytest.mark.parametrize("role", ["dev", "fix", "sanity", "qa"])
 def test_each_role_example_executes_its_close_path(world, role):
-    world.values = json.loads((EXAMPLES / f"task-close-vars-{role}.json").read_text())
+    world.values = example_values(role)
     world.values.update(primary_checkout=str(world.root), worktree_path=str(world.root))
     assert "ok" in world.run(role)
 
 
 @pytest.mark.parametrize("role, expected_writes", [
-    ("dev", [["bd", "update"], ["bd", "close"], ["atm", "send"], ["atm", "task", "assign"]]),
-    ("fix", [["bd", "update"], ["bd", "close"], ["atm", "send"], ["atm", "task", "assign"]]),
-    ("sanity", [["bd", "close"], ["atm", "task", "close"], ["atm", "task", "close"], ["atm", "task", "assign"]]),
+    ("dev", [["bd", "update"], ["bd", "close"], ["atm", "send"], ["atm", "task", "assign"], ["atm", "task", "close"]]),
+    ("fix", [["bd", "update"], ["bd", "close"], ["atm", "send"], ["atm", "task", "assign"], ["atm", "task", "close"]]),
+    ("sanity", [["bd", "close"], ["atm", "task", "close"], ["atm", "task", "assign"]]),
     ("qa", [["bd", "close"], ["atm", "send"], ["atm", "task", "close"]]),
 ])
 def test_each_role_command_order_and_identity(world, role, expected_writes):
@@ -758,10 +836,10 @@ def test_each_role_command_order_and_identity(world, role, expected_writes):
     assert "ok" in world.run(role)
     assert [[argv[0], *argv[1:2]] for argv, _sender in world.writes] == [item[:2] for item in expected_writes]
     for argv, sender in world.writes:
-        expected_sender = "phase-lead" if argv[:3] == ["atm", "task", "assign"] or argv[:4] == ["atm", "task", "close", world.values["dev_task_id"]] else "caller"
+        expected_sender = "phase-lead" if argv[:3] == ["atm", "task", "assign"] else "caller"
         assert sender == expected_sender, argv
     for argv, kwargs in world.calls:
-        expected_identity = "phase-lead" if argv[:3] == ["atm", "task", "assign"] or argv[:4] == ["atm", "task", "close", world.values["dev_task_id"]] else "caller"
+        expected_identity = "phase-lead" if argv[:3] == ["atm", "task", "assign"] else "caller"
         assert kwargs["env"]["ATM_IDENTITY"] == expected_identity, argv
 
 
@@ -906,3 +984,244 @@ def test_d1_malformed_atm_events_name_producer_and_field(world, payload, field):
     assert producer in error["message"] and field in error["message"]
     assert producer in error["fix"] and field in error["fix"]
     assert world.writes == []
+
+
+def close_from_files(world, role, dispatch, result=None):
+    """Run the hook exactly as the lead and fixer do: the dispatch file, then the optional result file."""
+    world.path.write_text(json.dumps(dispatch))
+    argv = ["--role", role, "--vars", str(world.path)]
+    if result is not None:
+        world.result_path.write_text(json.dumps(result))
+        argv += ["--result", str(world.result_path)]
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        status = hook.main(argv, runner=world, clock=lambda: 42)
+    output = json.loads(stdout.getvalue())
+    assert status == int("err" in output)
+    return output
+
+
+@pytest.mark.parametrize("role", ["dev", "fix"])
+def test_close_from_documented_dispatch_and_result_files_derives_handoff(world, role):
+    dispatch = json.loads((EXAMPLES / f"task-close-vars-{role}.json").read_text())
+    dispatch.update(primary_checkout=str(world.root), worktree_path=str(world.root))
+    result = json.loads((EXAMPLES / f"task-close-result-{role}.json").read_text())
+    metadata = world.beads[dispatch["checked_bead"]]["metadata"]
+    metadata.pop("pr_number")
+    metadata.pop("pr_url")
+    output = close_from_files(world, role, dispatch, result)
+    assert "ok" in output, output
+    assert output["ok"]["commit"] == world.head
+    assert output["ok"]["pr_number"] == str(world.pr_number)
+    assignment = next(message for message in world.messages if message["type"] == "dev-sanity-task")
+    derived = {"commit": world.head, "pr_number": str(world.pr_number),
+               "pr_url": f"https://github.com/example/repo/pull/{world.pr_number}",
+               "rebased_onto": "b" * 40}
+    assert set(assignment["values"]) == set(dispatch) | set(result) | set(DERIVED) | {"close_context", "beads_dir"}
+    assert {name: assignment["values"][name] for name in derived} == derived
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", assignment["values"]["generated_at"])
+    update = next(argv for argv, _ in world.writes if argv[:3] == ["bd", "update", dispatch["checked_bead"]])
+    written = dict(update[index + 1].split("=", 1) for index, flag in enumerate(update) if flag == "--set-metadata")
+    assert written == {"branch": dispatch["branch"], **{name: derived[name] for name in ("commit", "pr_number", "pr_url")}}
+    assert json.loads(world.path.read_text()) == dispatch
+    assert json.loads(world.result_path.read_text()) == result
+
+
+@pytest.mark.parametrize("role", ["dev", "fix"])
+def test_fixer_fields_in_the_dispatch_file_are_refused_before_commands(world, role):
+    contract = hook.header(hook.TEMPLATES / "task-close-vars.j2")
+    example = example_values(role)
+    example.update(primary_checkout=str(world.root), worktree_path=str(world.root))
+    dispatch = {name: example[name] for name in contract["required_variables_by_role"][role]}
+    dispatch.update(primary_checkout=str(world.root), worktree_path=str(world.root), outcome="fixed")
+    result = {name: example[name] for name in contract["result_variables_by_role"][role]}
+    output = close_from_files(world, role, dispatch, result)
+    assert output["err"]["code"] == "VARS.INVALID" and "outcome" in output["err"]["message"]
+    assert world.calls == []
+
+
+def test_result_file_rejects_fields_that_are_not_its_role_fields(world):
+    contract = hook.header(hook.TEMPLATES / "task-close-vars.j2")
+    example = example_values("dev")
+    example.update(primary_checkout=str(world.root), worktree_path=str(world.root))
+    dispatch = {name: example[name] for name in contract["required_variables_by_role"]["dev"]}
+    dispatch.update(primary_checkout=str(world.root), worktree_path=str(world.root))
+    result = {name: example[name] for name in contract["result_variables_by_role"]["dev"]}
+    result["resolution_md"] = "fix-only field"
+    output = close_from_files(world, "dev", dispatch, result)
+    assert output["err"]["code"] == "VARS.UNKNOWN" and "resolution_md" in output["err"]["message"]
+    assert world.calls == []
+
+
+def test_dev_and_fix_close_require_a_result_file(world):
+    example = json.loads((EXAMPLES / "task-close-vars-fix.json").read_text())
+    example.update(primary_checkout=str(world.root), worktree_path=str(world.root))
+    output = close_from_files(world, "fix", example, None)
+    assert output["err"]["code"] == "ARGS.INVALID"
+    assert world.calls == []
+
+
+@pytest.mark.parametrize("role", ["dev", "fix"])
+@pytest.mark.parametrize("skip", [False, True])
+def test_empty_derived_commit_never_writes_even_when_checks_are_skipped(world, role, skip):
+    world.overrides[("git", "rev-parse", "HEAD")] = (0, "")
+    output = world.run(role, skip_checks=skip)
+    assert output["err"]["code"] == "VARS.EMPTY"
+    assert "commit" in output["err"]["message"]
+    assert world.writes == []
+
+
+@pytest.mark.parametrize("role", ["dev", "fix"])
+@pytest.mark.parametrize("skip", [False, True])
+@pytest.mark.parametrize("missing", ["pr_number", "pr_url"])
+def test_offline_or_skipped_checks_require_recorded_pr_identity(world, role, skip, missing):
+    world.github_failure = True
+    world.beads[world.values["checked_bead"]]["metadata"][missing] = None
+    output = world.run(role, skip_checks=skip)
+    assert output["err"]["code"] == "VARS.EMPTY"
+    assert missing in output["err"]["message"]
+    assert "record" in output["err"]["fix"]
+    assert world.writes == []
+
+
+@pytest.mark.parametrize("role", ["dev", "fix"])
+def test_skipped_checks_preserve_recorded_pr_identity(world, role):
+    output = world.run(role, skip_checks=True)
+    assert "ok" in output, output
+    assert output["ok"]["pr_number"] == str(world.pr_number)
+    assert not any(argv[0] == "gh" for argv, _ in world.calls)
+    assignment = next(message for message in world.messages if message["type"] == "dev-sanity-task")
+    assert assignment["values"]["pr_url"] == world.values["pr_url"]
+    assert assignment["values"]["rebased_onto"] == "b" * 40
+
+
+def test_multiple_open_prs_at_head_are_refused_before_writes(world):
+    prs = [{"number": number, "head": {"sha": world.head}} for number in (351, 352)]
+    command = ("gh", "api", f"repos/example/repo/pulls?head=example:{world.values['branch']}&state=open")
+    world.overrides[command] = (0, json.dumps(prs))
+    output = world.run()
+    assert output["err"]["code"] == "PR.AMBIGUOUS"
+    assert "duplicate" in output["err"]["fix"]
+    assert world.writes == []
+
+
+@pytest.mark.parametrize("number", [None, "", 0])
+def test_empty_discovered_pr_identity_is_refused_before_writes(world, number):
+    command = ("gh", "api", f"repos/example/repo/pulls?head=example:{world.values['branch']}&state=open")
+    world.overrides[command] = (0, json.dumps([{"number": number, "head": {"sha": world.head}}]))
+    output = world.run()
+    assert output["err"]["code"] == "VARS.EMPTY"
+    assert "pr_number" in output["err"]["message"]
+    assert world.writes == []
+
+
+@pytest.mark.parametrize("role", ["dev", "fix", "sanity", "qa"])
+def test_shared_render_uses_exact_role_fields_without_union_placeholders(world, monkeypatch, role):
+    contract = hook.header(hook.TEMPLATES / "task-close-vars.j2")
+    expected = set(contract["required_variables_by_role"][role]) | set(contract["result_variables_by_role"].get(role, []))
+    assert set(contract["render_variables_by_role"][role]) == expected
+    original = hook.sc_render.render
+    rendered = []
+
+    def render(template, values):
+        if Path(template).name == "task-close-vars.j2":
+            assert set(hook.header(Path(template))["required_variables"]) == expected
+            assert set(values) == expected
+            assert values == {name: world.values[name] for name in expected}
+            rendered.append(True)
+        return original(template, values)
+
+    monkeypatch.setattr(hook.sc_render, "render", render)
+    assert "ok" in world.run(role)
+    assert rendered == [True]
+
+
+@pytest.mark.parametrize("role", ["dev", "fix"])
+def test_assignment_consumes_completion_vars_before_the_temporary_file_is_removed(world, role):
+    assert "ok" in world.run(role)
+    command = next(argv for argv, _ in world.calls if argv[:3] == ["atm", "task", "assign"])
+    consumed = Path(command[command.index("--vars") + 1])
+    assert consumed.name == "completion-vars.json"
+    assert not consumed.exists()
+    assignment = next(message for message in world.messages if message["type"] == "dev-sanity-task")
+    assert assignment["values"]["commit"] == world.head
+    assert world.values["checked_bead"] in assignment["body"]
+    assert json.loads(world.path.read_text())
+
+
+class ScriptedRunner:
+    """Fake runner: the first `drops` calls fail like a dropped Dolt connection, or time out, then succeed."""
+
+    def __init__(self, drops, *, timeouts=False):
+        self.drops, self.timeouts, self.calls = drops, timeouts, 0
+
+    def __call__(self, argv, **kwargs):
+        self.calls += 1
+        if self.calls <= self.drops:
+            if self.timeouts:
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            return subprocess.CompletedProcess(argv, 1, "", "driver: invalid connection")
+        return subprocess.CompletedProcess(argv, 0, "[]", "")
+
+
+def retry_hook(world, runner):
+    ticks, sleeps = iter(range(0, 10_000, 5)), []
+    loads = iter(range(1, 100))
+    sample = lambda: {"load_avg": [float(next(loads))] * 3, "cpu_pct": 50.0}
+    return hook.Hook("dev", world.values, world.path, runner, lambda: next(ticks), sleeps.append, sample), sleeps
+
+
+@pytest.mark.parametrize("drops", [0, 1, 3])
+def test_dropped_bd_calls_are_retried_with_logged_attempts(world, drops):
+    runner = ScriptedRunner(drops)
+    instance, sleeps = retry_hook(world, runner)
+    assert instance.run(["bd", "show", "x", "--json"]).returncode == 0
+    assert runner.calls == drops + 1
+    assert sleeps == [hook.DOLT_RETRY_SLEEP_S] * drops
+    assert [a["outcome"] for a in instance.attempts] == ["dolt_drop_retry"] * drops + (["ok"] if drops else [])
+    assert [a["attempt"] for a in instance.attempts] == list(range(1, len(instance.attempts) + 1))
+    for record in instance.attempts:
+        assert record["timeout_s"] == hook.COMMAND_TIMEOUT and record["elapsed_s"] == 5
+        assert record["cpu_pct"] == 50.0 and len(record["load_avg"]) == 3
+    if drops:
+        assert instance.attempts[-1]["retries_until_now"] == drops
+
+
+def test_bd_drop_beyond_the_retry_budget_fails_after_four_attempts(world):
+    runner = ScriptedRunner(99)
+    instance, sleeps = retry_hook(world, runner)
+    with pytest.raises(hook.CloseError) as error:
+        instance.run(["bd", "show", "x", "--json"])
+    assert error.value.code == "COMMAND.FAILED" and "invalid connection" in str(error.value)
+    assert runner.calls == hook.DOLT_RETRIES + 1 and len(sleeps) == hook.DOLT_RETRIES
+    assert [a["outcome"] for a in instance.attempts] == ["dolt_drop_retry"] * hook.DOLT_RETRIES + ["failed"]
+
+
+def test_timeouts_and_non_bd_failures_are_not_retried_but_are_logged(world):
+    runner = ScriptedRunner(1, timeouts=True)
+    instance, sleeps = retry_hook(world, runner)
+    with pytest.raises(hook.CloseError, match="timed out"):
+        instance.run(["bd", "show", "x", "--json"])
+    assert runner.calls == 1 and sleeps == []
+    assert [a["outcome"] for a in instance.attempts] == ["timeout"]
+    runner = ScriptedRunner(99)
+    instance, sleeps = retry_hook(world, runner)
+    with pytest.raises(hook.CloseError):
+        instance.run(["git", "status"])
+    assert runner.calls == 1 and sleeps == []
+
+
+def test_attempts_reach_the_hook_output(world):
+    world.timeout_command = ["git", "rev-parse"]
+    output = world.run()
+    assert output["attempts"][0]["outcome"] == "timeout" and output["attempts"][0]["attempt"] == 1
+
+
+def test_load_sample_is_portable(monkeypatch):
+    monkeypatch.setattr(hook.os, "getloadavg", lambda: (4.0, 2.0, 1.0))
+    monkeypatch.setattr(hook.os, "cpu_count", lambda: 8)
+    assert hook.load_sample() == {"load_avg": [4.0, 2.0, 1.0], "cpu_pct": 50.0}
+    def unavailable():
+        raise OSError
+    monkeypatch.setattr(hook.os, "getloadavg", unavailable)
+    assert hook.load_sample() == {"load_avg": None, "cpu_pct": None}

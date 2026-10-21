@@ -1,7 +1,7 @@
 ---
 name: dev-complete
 version: 2.2.0
-description: Body of the hook's atm send --template report; the dev task stays open until sanity PASS.
+description: Body of the hook's atm send --template report; the hook closes the dev task at dev complete.
 format: markdown
 required_variables:
   - generated_at
@@ -47,7 +47,7 @@ Rebased onto: `{{ rebased_onto }}`
 PR: [#{{ pr_number }}]({{ pr_url }})
 Deliverables: {{ deliverables_complete }}/{{ deliverables_total }}
 
-Sanity is assigned by the close hook; the dev task remains open until sanity PASS.
+Sanity is assigned by the close hook; the hook has closed the dev task; sanity runs on its own task and QA follows sanity PASS.
 
 ## Machine Status (JSON)
 ```json

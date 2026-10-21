@@ -324,6 +324,8 @@ def selected_results(args, manifest, sanity_bead, dev_bead):
     """Choose whole validated replies; selection metadata is never a reply edit."""
     llm, llm_sha256 = load_reviewer_vars(args.llm_vars, "sanity-llm", manifest)
     jev, jev_sha256 = load_reviewer_vars(args.jev_vars, "sanity-jev", manifest)
+    args.fallback_errors = [reply["error"] for reply in (*llm, *jev)
+                            if isinstance(reply, dict) and reply.get("success") is False and isinstance(reply.get("error"), dict)]
     try:
         selection = json.loads(Path(args.selection).read_text())
     except (OSError, ValueError) as exc:
@@ -399,6 +401,18 @@ def selected_results(args, manifest, sanity_bead, dev_bead):
     if missing:
         raise Reject(f"deliverable {missing[0]}: missing selection")
     return selected, selection, sources
+
+
+def unique_errors(items):
+    """Keep first-seen error envelopes once when selected and original replies overlap."""
+    seen = set()
+    unique = []
+    for item in items:
+        key = json.dumps(item, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    return unique
 
 
 class TaskFailure(Exception):
@@ -500,6 +514,11 @@ def main(argv):
                 "started_at": datetime.fromtimestamp(args.started_at, timezone.utc).isoformat().replace("+00:00", "Z"),
                 "completed_at": completed.isoformat().replace("+00:00", "Z"),
                 "duration_seconds": round(args.completed_at - args.started_at),
+                "llm_elapsed_s": args.completed_at - args.started_at if args.reviewer == "sanity-llm" else None,
+                "fallbacks": unique_errors([result["error"] for result in results
+                              if isinstance(result, dict) and result.get("success") is False and isinstance(result.get("error"), dict)]
+                + getattr(args, "fallback_errors", [])),
+                "checked_bead_data": manifest.get("checked_bead_data"),
                 "reviewer_results": results,
                 "reviewer_results_sha256": canonical_sha256(results),
                 "rejected_results": rejected,

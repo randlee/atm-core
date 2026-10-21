@@ -2,6 +2,8 @@
 import copy
 from functools import partial
 import hashlib
+import importlib.machinery
+import importlib.util
 import json
 from pathlib import Path
 import shutil
@@ -19,10 +21,19 @@ TEMPLATES = ROOT / "templates"
 TASK, DEV, SPRINT, BRANCH = "atm-d-4-sanity", "atm-d-4", "d-4", "sprint/d-4-x"
 FINDING = {"kind": "skipped", "file": "crates/x/src/lib.rs", "line": 3, "issue": "no 503 test"}
 run_bounded = partial(run_command, timeout=HANG_GUARD_SECONDS)
+MERGE_LOADER = importlib.machinery.SourceFileLoader("sanity_merge_test_module", str(SCRIPT))
+MERGE_SPEC = importlib.util.spec_from_loader(MERGE_LOADER.name, MERGE_LOADER)
+MERGE_MODULE = importlib.util.module_from_spec(MERGE_SPEC)
+MERGE_LOADER.exec_module(MERGE_MODULE)
 
 
 def without(envelope, key):
     return {k: v for k, v in envelope.items() if k != key}
+
+
+def test_selected_fallback_errors_are_not_counted_twice():
+    error = {"code": "SANITY.LLM_API_FAILURE", "message": "unavailable"}
+    assert MERGE_MODULE.unique_errors([error, error]) == [error]
 
 
 def git(cwd, *argv):
@@ -108,6 +119,7 @@ class SanityMerge(unittest.TestCase):
         self.assertEqual([r["verdict"] for r in reports], ["PASS", "FAIL"])
         self.assertNotEqual(reports[0]["completed_at"], reports[1]["completed_at"])
         self.assertEqual([r["duration_seconds"] for r in reports], [3, 21])
+        self.assertEqual([r["llm_elapsed_s"] for r in reports], [3, None])
 
     def test_jev_envelopes_accept_optional_elapsed_and_preserve_it(self):
         self.write_manifest(run_id="elapsed-run", reviewers=["sanity-jev"], operational_reviewer="sanity-jev")

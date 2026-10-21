@@ -79,23 +79,36 @@ class SanityHistory(unittest.TestCase):
         args = ["sanity-run-history", "--vars", str(vars_path), "--task", "task", "--bead", "bead",
                 "--pr-number", "1", "--iteration", "1", "--final-verdict", "PASS"]
         for error in (OSError("git unavailable"), subprocess.CalledProcessError(128, ["git"])):
-            with self.subTest(error=error), patch.object(sys, "argv", args), patch.object(HISTORY, "bead_data", return_value={}), \
+            with self.subTest(error=error), patch.object(sys, "argv", args), \
                     patch.object(HISTORY, "primary_root", side_effect=error), self.assertRaises(SystemExit) as raised:
                 HISTORY.main()
             self.assertIn("sanity-run-history: cannot locate sanity ledger", str(raised.exception))
 
-    def test_shared_elapsed_validator_and_single_bead_read(self):
+    def test_shared_elapsed_validator_and_embedded_bead_data(self):
         for value in (0, 1.25):
             self.assertTrue(HISTORY.valid_elapsed_s(value))
         for value in (True, -1, float("nan"), float("inf"), "1"):
             self.assertFalse(HISTORY.valid_elapsed_s(value))
-        with patch.object(HISTORY.subprocess, "run", return_value=type("Completed", (), {
-            "stdout": '[{"assignee":"dev-one","metadata":{"phase":"phase-bj"}}]'
-        })()) as run:
-            bead = HISTORY.bead_data("dev-bj-4")
-            self.assertEqual(HISTORY.checked_dev(bead), "dev-one")
-            self.assertEqual(HISTORY.phase_from_bead(bead, "bj-4"), "bj")
-            self.assertEqual(run.call_count, 1)
+        bead = {"assignee": "dev-one", "metadata": {"phase": "phase-bj"}}
+        self.assertEqual(HISTORY.checked_dev(bead), "dev-one")
+        self.assertEqual(HISTORY.phase_from_bead(bead, "bj-4"), "bj")
+
+    def test_llm_elapsed_is_derived_and_manifest_bead_avoids_lookup(self):
+        values = {"sprint": "bj-4", "run_id": "x", "reviewer": "sanity-llm", "commit": "a" * 40,
+                  "started_at": "2026-10-02T00:00:00Z", "completed_at": "2026-10-02T00:01:05Z",
+                  "verdict": "PASS", "findings_count": 0, "llm_elapsed_s": 999,
+                  "checked_bead_data": {"assignee": "dev-one", "metadata": {"phase": "bj"}}}
+        vars_path = self.root / "elapsed-vars.json"
+        vars_path.write_text(json.dumps(values))
+        args = ["sanity-run-history", "--vars", str(vars_path), "--task", "task", "--bead", "bead",
+                "--pr-number", "1", "--iteration", "1", "--final-verdict", "PASS"]
+        with patch.object(sys, "argv", args), \
+                patch.object(HISTORY, "primary_root", return_value=self.root), \
+                patch.object(HISTORY, "append_record") as append:
+            HISTORY.main()
+        row = append.call_args.args[1]
+        self.assertEqual(row["llm_elapsed_s"], 65)
+        self.assertEqual(row["dev"], "dev-one")
 
     def test_jev_elapsed_uses_maximum_and_missing_is_null(self):
         self.assertEqual(HISTORY.reviewer_elapsed({"reviewer": "sanity-jev", "reviewer_results": [

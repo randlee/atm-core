@@ -202,8 +202,13 @@ class Run:
             raise TargetError("BEAD_GROUPS_FINDINGS_INVALID", f"{path}: found_at_commit must be a commit sha")
         container = self.show(sprint)
         meta = container.get("metadata") or {}
+        phase_end = bool(re.fullmatch(r".+-phase-[a-z0-9]+", sprint)) and not any(meta.get(k) for k in ("sprint", "stack"))
+        if phase_end:
+            # A phase-end finding traces to the phase epic, which carries phase metadata but no sprint/stack facts: the epic is the "sprint",
+            # the phase comes from its id (it wins over the epic's own phase key), the stack is the phase's stack ledger, and difficulty must come per finding.
+            meta = {**meta, "phase": sprint_index_common.phase_of_root(sprint), "sprint": sprint, "stack": "stack"}
         missing = [k for k in ("phase", "sprint", "stack", "difficulty") if meta.get(k) in (None, "")]
-        if missing:
+        if missing and not (phase_end and missing == ["difficulty"]):
             raise TargetError("BEAD_GROUPS_TARGET_INVALID", f"{sprint} lacks {', '.join(missing)}")
         qa_closed = self.show(filed_by).get("status") == "closed"
         sidecar = self.sidecar("finding-group")
@@ -224,8 +229,16 @@ class Run:
                 if not REF.fullmatch(slug):
                     raise TargetError("BEAD_GROUPS_FINDINGS_INVALID", f"finding ref {ref!r} must normalize to letters, digits and single hyphens")
                 lacking = [k for k in FINDING_FIELDS if finding.get(k) in (None, "")]
+                if phase_end and finding.get("difficulty") in (None, ""):
+                    lacking.append("difficulty (a phase-end finding has no sprint to take it from)")
                 if lacking:
                     raise TargetError("BEAD_GROUPS_FINDINGS_INVALID", f"finding {ref} lacks {', '.join(lacking)}")
+                # Deleted when a released sc-compose pours a string layer (preview-attach passes).
+                layer = finding.get("found_on_layer")
+                if layer not in (None, "") and (not isinstance(layer, int) or isinstance(layer, bool)):
+                    raise TargetError("BEAD_GROUPS_FOUND_ON_LAYER_NOT_INTEGER",
+                                      f"finding {ref}: found_on_layer {layer!r} is not an integer; pass the integer stack layer, "
+                                      "or omit found_on_layer and put free text in the finding description")
                 branch = f"fix/{meta['sprint']}-{slug}"
                 # Layer records carry no difficulty, so the cut takes it from the finding or the sprint and the fix group carries all four keys together.
                 cut = {"branch": branch, "worktree": str(Path(self.config["worktree_base"]) / branch), "pr_target": pr_target,

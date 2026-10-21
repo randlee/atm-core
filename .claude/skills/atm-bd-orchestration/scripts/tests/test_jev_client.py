@@ -681,7 +681,8 @@ class JevClientTests(unittest.TestCase):
             self.assertIn("split into smaller numbered deliverables", action)
             self.assertNotIn("unchanged", action)
 
-    REFS = [{"kind": "bead_notes", "bead": "lint-k7"}, {"kind": "pr_body", "repo": "o/r", "pr": 460},
+    REFS = [{"kind": "bead_notes", "bead": "lint-k7", "text": "Ran `just test`: 412 passed at abc123."},
+            {"kind": "pr_body", "repo": "o/r", "pr": 460},
             {"kind": "pr_comment", "repo": "o/r", "comment_id": 77}]
 
     def fetched(self, failing=()):
@@ -707,12 +708,12 @@ class JevClientTests(unittest.TestCase):
                       "commit": "c" * 40, "base_sha": "b" * 40, "changed_files": [], "context": [], "external_evidence": self.REFS}
         with self.fetched() as run:
             (request,) = client.assignment_requests(assignment)
-        self.assertEqual([c.args[0][:2] for c in run.call_args_list], [["bd", "show"], ["gh", "api"], ["gh", "api"]])
+        self.assertEqual([c.args[0][:2] for c in run.call_args_list], [["gh", "api"], ["gh", "api"]])
         self.assertTrue(all(c.kwargs["cwd"] == "/nonexistent" for c in run.call_args_list))
         client.validate_request(request)
         self.assertEqual(request["state"]["evidence"], "")
         self.assertEqual(request["state"]["external_evidence"], [
-            {"kind": "bead_notes", "ref": "lint-k7", "url": None, "updated_at": "2026-10-13T01:00:00Z", "author": None,
+            {"kind": "bead_notes", "ref": "lint-k7", "url": None, "updated_at": None, "author": None,
              "text": "Ran `just test`: 412 passed at abc123."},
             {"kind": "pr_body", "ref": "o/r#460", "url": "https://github.com/o/r/pull/460", "updated_at": "2026-10-13T02:00:00Z",
              "author": "dev", "text": "Evidence: smoke log attached."},
@@ -735,7 +736,7 @@ class JevClientTests(unittest.TestCase):
         self.assertIn("gh auth status", error["suggested_action"])
         for bad in ([{"kind": "pr_body", "repo": "o/r"}], [{"kind": "pr_body", "repo": "o/r", "pr": "460"}],
                     [{"kind": "issue", "repo": "o/r", "pr": 1}], [{"kind": "bead_notes", "bead": "--all"}],
-                    [{"kind": "bead_notes", "bead": "x", "text": "agent-written"}], {"kind": "bead_notes", "bead": "x"}):
+                    [{"kind": "bead_notes", "bead": "x", "text": 3}], {"kind": "bead_notes", "bead": "x"}):
             with self.subTest(bad=bad), self.fetched() as run, self.assertRaises(client.JevError) as raised:
                 client.assignment_requests({**assignment, "external_evidence": bad})
             run.assert_not_called()
@@ -773,7 +774,7 @@ class JevClientTests(unittest.TestCase):
     def test_external_evidence_over_the_cap_splits_without_dropping_text(self):
         assignment = {"deliverable": {"number": 1, "text": "d"}, "worktree_path": "/nonexistent", "commit": "c" * 40,
                       "base_sha": "b" * 40, "changed_files": [], "context": [],
-                      "external_evidence": [{"kind": "bead_notes", "bead": "lint-k7"}]}
+                      "external_evidence": [{"kind": "bead_notes", "bead": "lint-k7", "text": "n" * client.MAX_REQUEST_BYTES}]}
         real = client.subprocess.run
         huge = MagicMock(returncode=0, stdout=json.dumps({"id": "lint-k7", "notes": "n" * client.MAX_REQUEST_BYTES}))
         with patch.object(client.subprocess, "run", return_value=huge):
