@@ -1359,12 +1359,16 @@ mod tests {
     #[serial(team_config_write_env)]
     fn update_member_max_tasks_writes_roster_metadata() {
         let roster_store = RecordingRosterStore::default();
+        let mut member = roster_member(TEST_TEAM, TEST_SENDER);
+        member
+            .metadata_json
+            .insert("alias".into(), serde_json::json!("arch"));
+        member
+            .metadata_json
+            .insert("backendType".into(), serde_json::json!("local"));
         roster_store.seed_team(
             TEST_TEAM,
-            vec![
-                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
-                roster_member(TEST_TEAM, TEST_SENDER),
-            ],
+            vec![roster_member(TEST_TEAM, ROLE_TEAM_LEAD), member],
         );
         let host_request = UpdateMemberRequest::new(
             ROLE_TEAM_LEAD.parse().expect("caller"),
@@ -1407,6 +1411,11 @@ mod tests {
             Some(&serde_json::json!("fastpc4.local")),
             "setting max_tasks leaves the host unchanged"
         );
+        assert_eq!(metadata.get("alias"), Some(&serde_json::json!("arch")));
+        assert_eq!(
+            metadata.get("backendType"),
+            Some(&serde_json::json!("local"))
+        );
 
         let untouched_request = UpdateMemberRequest::new(
             ROLE_TEAM_LEAD.parse().expect("caller"),
@@ -1441,6 +1450,7 @@ mod tests {
                 roster_member(TEST_TEAM, TEST_SENDER),
             ],
         );
+        let before = stored_member_metadata(&roster_store, TEST_TEAM, TEST_SENDER);
         let Err(error) = UpdateMemberRequest::new(
             ROLE_TEAM_LEAD.parse().expect("caller"),
             TEST_TEAM.parse().expect("caller team"),
@@ -1459,11 +1469,10 @@ mod tests {
         };
         assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
         assert!(error.message().contains("at least 1"), "{error}");
-        assert!(
-            stored_member_metadata(&roster_store, TEST_TEAM, TEST_SENDER)
-                .get("max_tasks")
-                .is_none(),
-            "a refused request never reaches the roster"
+        assert_eq!(
+            stored_member_metadata(&roster_store, TEST_TEAM, TEST_SENDER),
+            before,
+            "a refused request never changes roster metadata"
         );
     }
 
