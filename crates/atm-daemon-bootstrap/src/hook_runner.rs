@@ -1014,11 +1014,28 @@ mod tests {
     #[tokio::test]
     async fn runner_timeout_returns_hook_timeout() {
         let mut fixture = Fixture::new();
-        fixture.target.timeout_ms = 200;
+        // Leave about 1.1 s of runner budget after the 500 ms action reserve.
+        // This is deliberately smaller than the configured timeout so the
+        // real process failure proves execute passed its effective budget
+        // through, with enough startup headroom for the child process.
+        fixture.target.timeout_ms = 5_000;
         fixture.script("import threading\nthreading.Event().wait()\n");
-        let error = fixture.run().await.unwrap_err();
+        let error = fixture
+            .runner()
+            .run(
+                &fixture.target,
+                &fixture.request("task.close"),
+                RequestDeadline::after(Duration::from_millis(1_600)),
+            )
+            .await
+            .unwrap_err();
         assert_eq!(error.code(), AtmErrorCode::HookTimeout);
         assert!(error.message().starts_with("HOOK.TIMEOUT: phase bk: "));
+        assert!(
+            error.message().contains("(limited by request deadline)"),
+            "expected the effective request budget to limit the process timeout, got: {}",
+            error.message()
+        );
     }
 
     #[test]
