@@ -831,10 +831,11 @@ result. On unix the child gets `process_group(0)` and a
 timeout kills the group with `if let Some(pid) =
 child.id().and_then(|id| Pid::from_raw(id as i32)) {
 rustix::process::kill_process_group(pid, Signal::KILL) }` (workspace `rustix` 1.1 with `process`, already in
-`Cargo.lock`, used only in `process_deadline.rs`). On Windows only the
-hook process is killed and its children are not; this is a known
-limitation (ADR-068 D4), there is no Windows job-object code, and
-`hooks.md` documents it. On elapsed the helper then
+`Cargo.lock`, used only in `process_deadline.rs`). Windows has no job-object
+implementation here, so `kill_on_drop` and the explicit child kill terminate
+only the direct hook process; its descendants can outlive the hook invocation.
+This is a known limitation (ADR-068 D4), and `hooks.md` documents it. On
+elapsed the helper then
 calls `kill().await` and returns a phase-less `SpawnFailure::TimedOut {
 after_ms }`, which `DaemonHookRunner` converts to `hook_timeout(phase, "no
 reply within <n> ms")`. `hook_runner.rs` spawns only through this helper;
@@ -843,8 +844,8 @@ reply within <n> ms")`. `hook_runner.rs` spawns only through this helper;
 read unbounded output, which a hook cannot use. The helper is
 `spawn_until(spec, stdin, cancel)` with `spawn_with_deadline` passing
 `sleep(remaining)` as `cancel`, so a test cancels on a signal instead of a
-timer. A `GroupKillGuard` held until the child is reaped kills the group
-on drop, so an aborted or dropped call orphans no grandchild.
+timer. On Unix, a `GroupKillGuard` held until the child is reaped kills the
+group on drop, so an aborted or dropped call orphans no grandchild.
 `DaemonHookRunner` holds a semaphore of `HOOK_CONCURRENCY_MAX` = 16 live
 hook children shared by task chains, cron runs and doctor; a permit not
 acquired within the call's budget is `hook_timeout(phase, "hook
