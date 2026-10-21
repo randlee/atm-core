@@ -65,12 +65,12 @@ Owned paths (new unless marked edited):
 #![forbid(unsafe_code)]
 mod clock; mod expr; mod jitter; mod scheduler; mod tick; mod worker;
 pub use clock::{Clock, SystemClock}; pub use jitter::{JitterSource, SystemJitter};
-#[cfg(feature = "test-utils")] pub use {clock::ManualClock, jitter::SeqJitter};
+#[cfg(feature = "test-utils")] pub use {clock::ManualClock, jitter::SeqJitter, scheduler::AtmCronTestAccess}; // test access exposes controlled worker state without widening production API
 pub use scheduler::{AtmCron, AtmCronDeps, CronWorkerHandle};
 
 // crates/atm-cron/src/clock.rs
 #[async_trait]
-pub trait Clock: Send + Sync { fn now(&self) -> DateTime<Utc>; async fn sleep_until(&self, t: DateTime<Utc>); }   // returns once now() >= t
+pub trait Clock: Send + Sync { fn now(&self) -> DateTime<Utc>; fn monotonic_now(&self) -> Instant; async fn sleep_until(&self, t: DateTime<Utc>); }   // monotonic_now bounds elapsed work independently of wall-clock jumps; sleep returns once now() >= t
 pub struct SystemClock;   // Utc::now(); sleep_until loops tokio::time::sleep(system_sleep_step(Utc::now(), t)), so a wall-clock jump is seen within a slice
 pub(crate) const MAX_SLEEP_SLICE: Duration = Duration::from_secs(30);
 pub(crate) fn system_sleep_step(now: DateTime<Utc>, t: DateTime<Utc>) -> Duration;   // min(MAX_SLEEP_SLICE, t - now), zero when t <= now
@@ -135,21 +135,22 @@ struct Slot { schedule: CronSchedule, next: Option<DateTime<Utc>>, in_flight: Op
 // module_path, cwd, args, timeout_ms, custom; else the slot is dropped, its in_flight aborted and a new slot built. A stale run that
 // outlives the abort (its record in spawn_blocking) writes nothing: record_run/record_stop carry the run's generation (bk-1 WHERE clause).
 // biased order: a reload committed before a clock step is merged first; a due run starts before a shutdown sent after the step.
-// Errors: active_all on reload fails -> log reload_failed, keep the slots, retry at the next wake or bump; record_* fails -> log
+// Errors: active_all on reload fails -> log reload_failed, keep the slots, retry with 1s, 2s, 4s, ... backoff capped at 60s or on a bump; record_* fails -> log
 // record_failed. A finished in_flight: Ok(Stopped) drops the slot; JoinError is_panic -> record_run(id, generation, now, "exit: hook
 // runner panicked: <payload>") and the worker keeps running (Rand panic ruling); is_cancelled -> log cancelled, record nothing.
 // A loaded row with no future occurrence: record_stop(id, generation, now, "no future occurrence").
-pub(crate) struct Step { pub run: Vec<CronScheduleId>, pub skip_in_flight: Vec<CronScheduleId>, pub stop_until: Vec<CronScheduleId>, pub wake: Option<DateTime<Utc>> }
+pub(crate) struct Step { pub run: Vec<CronScheduleId>, pub skip_in_flight: Vec<CronScheduleId>, pub stop_until: Vec<CronScheduleId>, pub invalid_next: Vec<CronScheduleId>, pub wake: Option<DateTime<Utc>> } // invalid_next removes rows whose expression no longer has a future occurrence
 /// Pure: due = next <= now; a due slot with in_flight is skip_in_flight (next recomputed); stop_due(Until) is stop_until; wake = min over
 /// slots of next and until_at. The worker applies a Step and does nothing else on a clock wake.
 pub(crate) fn plan_step(slots: &[SlotView], now: DateTime<Utc>) -> Step;
 
 // crates/atm-cron/src/tick.rs  (pub(crate))
-enum CronRunOutcome { Ok, Refused(String), Actions(usize), SkippedInFlight, Exit(String), Timeout, Malformed, ActionErr(AtmErrorCode), Stopped(String), StopCheckFailed(AtmErrorCode) }
+enum CronRunOutcome { Ok, Refused(String), Actions(usize), SkippedInFlight, Exit(String), Timeout, Malformed, ActionErr(AtmErrorCode), Stopped(String), StopCheckFailed(AtmErrorCode) } // Exit retains a runner failure or panic detail for observability
 // as_str: "ok" | "refused: <msg>" | "actions: <n>" | "skipped_in_flight" | "exit" | "timeout" | "malformed" | "action_err: <code>" | "stopped: <reason>" | "stop_check_failed: <code>"
 pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunOutcome;
 /// The one Until decision, used by start, plan_step and run_one: Until { at } with now >= at.
 pub(crate) fn stop_due(stop: &StopCondition, now: DateTime<Utc>) -> bool;
+// Reaching Until aborts an in-flight run before recording `stopped: until reached`, preventing work beyond the schedule stop boundary.
 ```
 
 `run_one` runs these steps in order.
