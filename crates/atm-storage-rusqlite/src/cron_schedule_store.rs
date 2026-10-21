@@ -13,7 +13,7 @@ use atm_storage::contract::sealed;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
     AtmError, CronGeneration, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule,
-    PhaseId, StopCondition,
+    PhaseId, StopCondition, stopped_outcome,
 };
 use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, params, params_from_iter};
@@ -439,7 +439,7 @@ impl CronScheduleStore for SqliteCronScheduleStore {
             return Ok(false);
         };
         let at_text = stamp(at);
-        let outcome = format!("stopped: {reason}");
+        let outcome = stopped_outcome(reason);
         self.db.with_transaction(|transaction| {
             let changed = transaction
                 .execute(

@@ -11,6 +11,7 @@ use std::sync::{Mutex, MutexGuard};
 use crate::contract::sealed;
 use crate::cron_schedule_store::{
     CronGeneration, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule,
+    stopped_outcome,
 };
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
@@ -245,7 +246,7 @@ impl CronScheduleStore for InMemoryCronScheduleStore {
             Some(row) => {
                 row.active = false;
                 row.ended_at = Some(at);
-                row.last_outcome = Some(format!("stopped: {reason}"));
+                row.last_outcome = Some(stopped_outcome(reason));
                 true
             }
             None => false,

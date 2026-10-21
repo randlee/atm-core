@@ -11,7 +11,7 @@ use atm_storage::testing::{InMemoryCronScheduleStore, InMemoryHookRegistrationSt
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
     AtmErrorCode, CronGeneration, CronSchedule, CronScheduleStore, HookName, HookRegistration,
-    HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition,
+    HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition, stopped_outcome,
 };
 use chrono::{TimeZone, Utc};
 
@@ -593,15 +593,24 @@ fn record_stop_ends_the_row_once() {
     let ended = store.list(None, None).expect("list");
     assert!(!ended[0].active);
     assert_eq!(ended[0].ended_at, Some(stamp(4)));
+    let expected_outcome = stopped_outcome("phase bead closed");
     assert_eq!(
         ended[0].last_outcome.as_deref(),
-        Some("stopped: phase bead closed")
+        Some(expected_outcome.as_str())
     );
     assert!(store.active_all().expect("active").is_empty());
     assert!(
         !store
             .record_stop(row.id, generation(1), stamp(5), "again")
             .expect("second stop")
+    );
+}
+
+#[test]
+fn stopped_outcome_has_the_contract_format() {
+    assert_eq!(
+        stopped_outcome("phase bead closed"),
+        "stopped: phase bead closed"
     );
 }
 

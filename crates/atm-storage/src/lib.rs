@@ -61,7 +61,8 @@ pub use contract::{
     roster_write_delta, team_scoped_roster_unique_name_collisions,
 };
 pub use cron_schedule_store::{
-    CronGeneration, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule, StopCondition,
+    CronGeneration, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule,
+    StopCondition, stopped_outcome,
 };
 pub use diagnostics::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,

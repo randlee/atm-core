@@ -16,6 +16,11 @@ use crate::error::AtmError;
 use crate::hook_types::PhaseId;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
+/// Builds the canonical outcome persisted when a cron schedule stops.
+pub fn stopped_outcome(reason: &str) -> String {
+    format!("stopped: {reason}")
+}
+
 /// Stable row id of one cron schedule. Display prints the integer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -182,7 +187,7 @@ pub trait CronScheduleStore: sealed::Sealed + Send + Sync {
     ) -> Result<bool, AtmError>;
 
     /// The stop condition fired (ADR-069 D4): `active = 0`, `ended_at = at`,
-    /// `last_outcome = "stopped: <reason>"`, under the same `WHERE` clause as
+    /// `last_outcome = stopped_outcome(reason)`, under the same `WHERE` clause as
     /// [`CronScheduleStore::record_run`].
     fn record_stop(
         &self,
