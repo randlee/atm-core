@@ -2079,6 +2079,21 @@ class HerdrRestartTests(unittest.TestCase):
             },
         )
 
+    def test_ordinary_restart_proceeds_when_pre_start_doctor_is_unreachable(self) -> None:
+        args = argparse.Namespace(yes=True)
+        daemon = Path("/selected/atm-daemon")
+        with (
+            mock.patch.object(DAEMON_SWITCH, "selected_links", return_value=(self.cli, daemon)),
+            mock.patch.object(DAEMON_SWITCH, "require_executable", side_effect=[self.cli, daemon]),
+            mock.patch.object(DAEMON_SWITCH, "require_macos_development_signatures"),
+            mock.patch.object(DAEMON_SWITCH, "doctor", return_value={"error": "daemon socket is unavailable"}),
+            mock.patch.object(DAEMON_SWITCH, "run_service") as service,
+            mock.patch.object(DAEMON_SWITCH, "require_stopped_daemon"),
+            mock.patch.object(DAEMON_SWITCH, "live_pair_matches", return_value=(True, "matched")),
+        ):
+            DAEMON_SWITCH.restart(args)
+        self.assertEqual(service.call_args_list, [mock.call(args, "stop", allow_absent=True), mock.call(args, "start")])
+
     def test_restart_refusal_envelope_has_only_safe_endpoint_identifiers(self) -> None:
         with mock.patch.object(DAEMON_SWITCH, "doctor", return_value=self.doctor_payload(self.endpoint(), self.endpoint("blue"))):
             with self.assertRaises(DAEMON_SWITCH.HerdrEntryError) as captured:
