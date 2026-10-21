@@ -1,0 +1,19 @@
+@prefix triage: <urn:atm:triage:> .
+
+triage:PhaseBL a triage:Phase .
+
+# Declaration order only. The authoritative three-wave relation table is
+# docs/plans/phase-bl/phase-bl-plan.md; independent wave-1 branches target
+# integrate/phase-bl and are not an append-only stack.
+triage:BL1 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 1 ; triage:branch "sprint/bl-1-refresh-core" ; triage:criteria "docs/plans/phase-bl/sprint-bl-1-refresh-core.md" .
+triage:BL2 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 2 ; triage:branch "sprint/bl-2-jev-client" ; triage:criteria "docs/plans/phase-bl/sprint-bl-2-jev-client.md" .
+triage:BL3 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 3 ; triage:branch "sprint/bl-3-dispatch-alerts" ; triage:criteria "docs/plans/phase-bl/sprint-bl-3-dispatch-alerts.md" .
+triage:BL4 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 4 ; triage:branch "sprint/bl-4-qa-reviewer-data" ; triage:criteria "docs/plans/phase-bl/sprint-bl-4-qa-reviewer-data.md" .
+triage:BL5 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 5 ; triage:branch "sprint/bl-5-sanity-flow" ; triage:criteria "docs/plans/phase-bl/sprint-bl-5-sanity-flow.md" .
+triage:BL6 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 6 ; triage:branch "sprint/bl-6-dashboard-render" ; triage:criteria "docs/plans/phase-bl/sprint-bl-6-dashboard-render.md" .
+triage:BL7 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 7 ; triage:branch "sprint/bl-7-console-tabs" ; triage:criteria "docs/plans/phase-bl/sprint-bl-7-console-tabs.md" .
+triage:BL8 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 8 ; triage:branch "sprint/bl-8-ruled-console-fixes" ; triage:criteria "docs/plans/phase-bl/sprint-bl-8-ruled-console-fixes.md" .
+triage:BL9 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 9 ; triage:branch "sprint/bl-9-refresh-integration" ; triage:criteria "docs/plans/phase-bl/sprint-bl-9-refresh-integration.md" .
+triage:BL10 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 10 ; triage:branch "sprint/bl-10-problem-sources" ; triage:criteria "docs/plans/phase-bl/sprint-bl-10-problem-sources.md" .
+triage:BL11 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 11 ; triage:branch "sprint/bl-11-sanity-mechanics" ; triage:criteria "docs/plans/phase-bl/sprint-bl-11-sanity-mechanics.md" .
+triage:BL12 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 12 ; triage:branch "sprint/bl-12-uniform-integrations" ; triage:criteria "docs/plans/phase-bl/sprint-bl-12-uniform-integrations.md" .
