@@ -496,11 +496,18 @@ async fn ticks_fire_only_when_the_manual_clock_reaches_them() {
 async fn missed_ticks_are_not_replayed_after_a_pause() {
     let fixture = Fixture::new();
     fixture.reply(HookReply::PassThrough);
+    fixture.reply(HookReply::PassThrough);
     fixture.cron.start(fixture.spec("missed")).await.unwrap();
+    let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(180 * 60).await;
+    wait_for_entered(&mut entered, 1).await;
     assert_eq!(fixture.calls(), 1);
+    let parks = fixture.clock.parks();
+    release.send_replace(true);
+    fixture.clock.wait_parks_above(parks).await;
     fixture.step(60).await;
+    wait_for_entered(&mut entered, 2).await;
     assert_eq!(fixture.calls(), 2);
     shutdown(&worker).await;
 }
