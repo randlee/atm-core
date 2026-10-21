@@ -181,6 +181,8 @@ terminated; no surrounding array):
 
 ## Authoritative acceptance criteria (per issue, deterministic)
 
+- [ ] `test_jev_request_array_and_closed_error_enum`: a controlled request array yields one JSONL row per input and every closed error enum variant is exhaustively matched.
+
 gh-365
 - [ ] `test_every_error_kind_has_stable_tag_and_fields`: iterates `JevErrorKind`; every emitted error has its enum value in `error.kind` and only kind-specific machine fields; a member without a `case` hits `assert_never` and fails.
 - [ ] `test_busy_status_retried_and_counted`: fake connection returns 529, 529, 200; that entry is `success`, `retries == 2`; the injected `sleep` saw two calls.
