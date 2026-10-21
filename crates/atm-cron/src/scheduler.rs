@@ -47,6 +47,8 @@ impl AtmCron {
 
     fn check_running(&self) -> Result<(), AtmError> {
         if self.stopped.load(Ordering::SeqCst) {
+            // The worker is part of daemon serving state; after it exits only
+            // daemon recovery can recreate it, so preserve the daemon code.
             Err(AtmError::daemon_unavailable("cron worker stopped"))
         } else {
             Ok(())
@@ -57,6 +59,9 @@ impl AtmCron {
         let _lock = self.start_lock.lock().await;
         self.check_running()?;
         if self.reload.receiver_count() != 0 {
+            // This method is daemon wiring and must run once. A duplicate
+            // bootstrap is a daemon lifecycle invariant failure, not a
+            // duplicate `atm cron start` request.
             return Err(AtmError::daemon_lifecycle_wedge(
                 "cron worker already started",
             ));
