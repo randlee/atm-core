@@ -217,11 +217,13 @@ mod tests {
     use crate::send::SendMessageSource;
     use crate::types::ReadSelection;
 
+    const TEST_SENDER: &str = "test-sender";
+
     fn write() -> WriteRequest {
         WriteRequest::new(
             "/home".into(),
             "/work".into(),
-            "solar".parse().unwrap(),
+            TEST_SENDER.parse().unwrap(),
             "dev@test-team",
             "test-team".parse().unwrap(),
             SendMessageSource::Inline("body".into()),
@@ -237,7 +239,7 @@ mod tests {
         ListQuery {
             home_dir: "/home".into(),
             current_dir: "/work".into(),
-            caller_identity: "solar".parse().unwrap(),
+            caller_identity: TEST_SENDER.parse().unwrap(),
             caller_team: "test-team".parse().unwrap(),
             target_address: None,
             selection_mode: ReadSelection::All,
@@ -264,7 +266,7 @@ mod tests {
         let mut legacy = assign.clone();
         legacy.task_complete = legacy.task_id.clone();
         let move_request = TaskMoveRequest {
-            caller_identity: "solar".parse().unwrap(),
+            caller_identity: TEST_SENDER.parse().unwrap(),
             caller_team: "test-team".parse().unwrap(),
             task_id: "bk-2".parse().unwrap(),
             target: atm_storage::MoveTarget::End,
@@ -352,7 +354,7 @@ mod tests {
         let cases = [
             (
                 TaskCommand::Assign(TaskAssign(Box::new(assign))),
-                "solar",
+                TEST_SENDER,
                 "test-team",
                 false,
             ),
@@ -383,7 +385,7 @@ mod tests {
                 TaskCommand::List(TaskList(query(Some(TaskLedgerQuery::Tasks {
                     member: None,
                 })))),
-                "solar",
+                TEST_SENDER,
                 "test-team",
                 false,
             ),
@@ -392,7 +394,7 @@ mod tests {
                     task_id: "bk-2".parse().unwrap(),
                     member: None,
                 })))),
-                "solar",
+                TEST_SENDER,
                 "test-team",
                 false,
             ),
@@ -434,7 +436,7 @@ mod tests {
             TaskCommand::Start(TaskStart(Box::new(write()))),
             TaskCommand::Close(TaskClose(Box::new(write()))),
             TaskCommand::Move(TaskMoveRequest {
-                caller_identity: "solar".parse().unwrap(),
+                caller_identity: TEST_SENDER.parse().unwrap(),
                 caller_team: "test-team".parse().unwrap(),
                 task_id: "bk-2".parse().unwrap(),
                 target: atm_storage::MoveTarget::Head,
@@ -452,7 +454,7 @@ mod tests {
             .map(|command| (command.hook_name(), command.request_body()))
             .collect();
         let ctx = TaskCallCtx {
-            caller_identity: "solar".parse().unwrap(),
+            caller_identity: TEST_SENDER.parse().unwrap(),
             caller_team: "test-team".parse().unwrap(),
             host: None,
             ingress: AuthenticatedIngress::Local,

@@ -138,9 +138,11 @@ mod tests {
     use serde::de::DeserializeOwned;
     use serde_json::json;
 
+    const TEST_SENDER: &str = "test-sender";
+
     fn cron() -> CronStartRequest {
         serde_json::from_value(json!({
-            "caller_identity": "solar", "caller_team": "test-team", "phase": "bk",
+            "caller_identity": TEST_SENDER, "caller_team": "test-team", "phase": "bk",
             "name": "goal", "cron_expr": "* * * * *", "module_path": "/hooks/goal.py",
             "cwd": "/repo", "args": [], "timeout_ms": 1000, "stop": {"kind": "hook"},
             "custom": {}
