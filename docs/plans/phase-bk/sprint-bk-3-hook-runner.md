@@ -119,10 +119,10 @@ unchanged and hooks get `spawn_until`.
    recorded set: tokio — `atm-daemon-bootstrap/src/process_deadline.rs`,
    `atm-daemon-bootstrap/src/received_hook_selector.rs`,
    `atm-herdr/src/transport_cli.rs`, `atm/src/commands/send_to.rs`; std —
-   `atm-daemon-client/src/lib.rs`, `atm/src/commands/internal_nudge.rs`,
-   `sc-lint-boundary/src/graph.rs`. REQ-BK-D3's locked check names this
-   file; `io_forbidden_source_modules` covers one crate's modules, this
-   covers the workspace.
+   `atm-daemon-client/src/lib.rs`, `atm/src/commands/internal_nudge.rs`.
+   REQ-BK-D3's locked check names these files;
+   `io_forbidden_source_modules` covers one crate's modules, this covers the
+   workspace.
 3. `fixture_hook.py` (§9.8 `__main__` block): prints `fixture_reply.json`
    from its cwd, writes stdin to `fixture_request.json` and `os.environ`
    to `fixture_env.json`; implements `task.close` unless
@@ -150,7 +150,7 @@ unchanged and hooks get `spawn_until`.
 - [ ] (ANC-003, ANC-022) `boundary:BOUNDARY-HookRunner` `stdin_is_the_request_and_custom_is_byte_identical`: `fixture_request.json` equals `serde_json::to_vec(&request)` and its `custom` equals `serde_json::to_string(&target.custom)` for `{"goal":"ship","n":[1,{"y":null}]}`; argv[1] is `request.hook`.
 - [ ] (REQ-BK-D1) `boundary:BOUNDARY-HookRunner` `runner_passes_daemon_path_and_home_values`: `fixture_env.json` keys are exactly `{ATM_TEAM, ATM_PHASE, PATH, HOME}` on unix with the values given to `new`, and `os.getcwd()` is the target cwd; `hook_env_rules` (pure, both `windows` values): unix without `HOME` or `PATH` is `hook_exit(Missing)`; windows without `HOME` succeeds, without `SystemRoot` or `USERPROFILE` fails, and `Path` is found as `PATH`; `#[cfg(windows)] windows_runner_works_without_home_and_with_mixed_case_path`.
 - [ ] (ADR-068 D3, ADR-069 D4, ANC-024) `boundary:BOUNDARY-HookRunner` `doctor_sends_team_phase_custom_and_returns_findings` (argv[1] `doctor` for a registration and a schedule target, stdin `HookDoctorRequest::for_target`; the §9.10 example gives one finding; `{"ok":1}` is `ATM_HOOK_MALFORMED`); `stop_parses_both_shapes_and_refuses_missing_reason` (argv[1] and stdin `hook` are `cron.stop`).
-- [ ] (REQ-BK-D3) `boundary:BOUNDARY-HookRunner` `process_spawn_sites.rs::process_spawn_sites_are_the_recorded_files` (the seven files of deliverable 2, paths relative to `crates/`, split by `tokio`/`std`); `received_hook_selector.rs` is unchanged; `just lint` passes with `process_spawn` forbidden in `hook_runner` and `hook-runner.toml` `concrete_landed`.
+- [ ] (REQ-BK-D3) `boundary:BOUNDARY-HookRunner` `process_spawn_sites.rs::process_spawn_sites_are_the_recorded_files` (the six files of deliverable 2, paths relative to `crates/`, split by `tokio`/`std`); `received_hook_selector.rs` is unchanged; `just lint` passes with `process_spawn` forbidden in `hook_runner` and `hook-runner.toml` `concrete_landed`.
 - [ ] (ANC-010) `boundary:BOUNDARY-HookRunner` `rg -n '"bd"|\.beads' crates/atm-daemon-bootstrap/src` matches nothing.
 
 ## Authoritative validation
