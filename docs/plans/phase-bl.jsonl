@@ -1,0 +1,9 @@
+{"sprint": "bl-1"}
+{"sprint": "bl-2"}
+{"sprint": "bl-3"}
+{"sprint": "bl-4"}
+{"sprint": "bl-5", "depends_on": ["bl-2"]}
+{"sprint": "bl-6", "depends_on": ["bl-1", "bl-3"]}
+{"sprint": "bl-7", "depends_on": ["bl-1", "bl-4"]}
+{"sprint": "bl-8", "depends_on": ["bl-1"]}
+{"sprint": "bl-9", "depends_on": ["bl-6", "bl-7"]}
