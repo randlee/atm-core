@@ -7,8 +7,10 @@
 use std::time::Instant;
 
 use async_trait::async_trait;
-use atm_core::api::AuthenticatedIngress;
-use atm_core::boundary::{DispatchSpec, DispatchedAction, HookActionDispatcher, sealed};
+use atm_core::api::{AuthenticatedIngress, RequestDeadline};
+use atm_core::boundary::{
+    DispatchSpec, DispatchedAction, HookActionDispatcher, SERVER_REQUEST_BUDGET, sealed,
+};
 use atm_core::error::AtmError;
 use atm_core::hook::{HookAction, HookActionCommand};
 use atm_core::protocol::next_request_id;
@@ -35,9 +37,6 @@ impl HookActionDispatcher for UnhookedRouter {
         spec: DispatchSpec,
         actions: Vec<HookAction>,
     ) -> Result<Vec<DispatchedAction>, AtmError> {
-        let deadline = spec
-            .deadline
-            .ok_or_else(|| AtmError::hook_malformed("hook action dispatch has no deadline"))?;
         let mut requests = Vec::with_capacity(actions.len());
         for action in &actions {
             let request = action.into_api_request(&spec.team, &spec.default_as)?;
@@ -58,6 +57,9 @@ impl HookActionDispatcher for UnhookedRouter {
         let total = requests.len();
         let mut done = Vec::with_capacity(total);
         for (index, (command, run_as, request)) in requests.into_iter().enumerate() {
+            let deadline = spec
+                .deadline
+                .unwrap_or_else(|| RequestDeadline::after(SERVER_REQUEST_BUDGET));
             let started = Instant::now();
             let result = self
                 .0
@@ -141,6 +143,12 @@ mod tests {
             deadline: Some(deadline),
             dry_run,
         }
+    }
+
+    fn no_deadline_spec(dry_run: bool) -> DispatchSpec {
+        let mut spec = spec(deadline(), dry_run);
+        spec.deadline = None;
+        spec
     }
 
     /// The hooked caller is a roster member, as the filter's `default_as` requires.
@@ -260,6 +268,22 @@ mod tests {
                 .expect("load task");
             assert!(row.is_some(), "{task} was not committed");
         }
+    }
+
+    #[tokio::test]
+    async fn no_deadline_dispatches_each_action_with_its_own_server_budget() {
+        let fixture = fixture(true, None, None);
+        let actions = vec![
+            assign_action(&fixture, "T-NONE-DEADLINE-A", None),
+            assign_action(&fixture, "T-NONE-DEADLINE-B", None),
+        ];
+        let done = fixture
+            .router
+            .unhooked()
+            .dispatch_actions(no_deadline_spec(false), actions)
+            .await
+            .expect("each action receives a server-budget deadline");
+        assert_eq!(done.len(), 2);
     }
 
     #[tokio::test]

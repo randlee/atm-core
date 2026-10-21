@@ -685,7 +685,7 @@ async fn tick_request_has_the_seven_keys_and_args_in_request_only() {
 #[tokio::test]
 async fn cron_tick_uses_cron_timeout_ms_not_timeout_ms() {
     let fixture = Fixture::new();
-    fixture.reply(HookReply::PassThrough);
+    fixture.reply(HookReply::Handled(actions()));
     let mut spec = fixture.spec("timeout");
     spec.stop = StopCondition::Hook;
     fixture
@@ -713,6 +713,9 @@ async fn cron_tick_uses_cron_timeout_ms_not_timeout_ms() {
     release.send_replace(true);
     shutdown(&worker).await;
     assert_eq!(fixture.calls(), 2);
+    let dispatches = fixture.dispatcher.calls.lock().unwrap();
+    assert_eq!(dispatches.len(), 1);
+    assert_eq!(dispatches[0].spec.deadline, None);
     for (_, _, deadline) in fixture.runner.calls.lock().unwrap().iter() {
         assert_eq!(
             deadline.remaining_ms_at(fixture.clock.monotonic_now()),
@@ -1234,8 +1237,8 @@ async fn three_actions_dispatch_once_in_order_as_created_by() {
         .filter_map(|(_, call, deadline)| matches!(call, HookCall::Run(_)).then_some(*deadline))
         .collect();
     assert_eq!(run_deadlines.len(), calls.len());
-    for (dispatch, run_deadline) in calls.iter().zip(run_deadlines) {
-        assert_eq!(dispatch.spec.deadline, Some(run_deadline));
+    for dispatch in calls.iter() {
+        assert_eq!(dispatch.spec.deadline, None);
     }
     assert!(!calls[0].spec.dry_run);
     assert_eq!(fixture.row().last_outcome.as_deref(), Some("actions: 3"));
