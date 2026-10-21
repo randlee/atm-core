@@ -174,20 +174,26 @@ impl DaemonHookRunner {
         }
     }
 
-    fn spec(&self, target: &HookTarget, hook: &str) -> Result<SpawnSpec, AtmError> {
+    async fn spec(&self, target: &HookTarget, hook: &str) -> Result<SpawnSpec, AtmError> {
         for (path, directory) in [
             (target.cwd.clone(), true),
             (target.cwd.join(&target.module_path), false),
         ] {
-            let valid = if directory {
-                path.is_dir()
-            } else {
-                path.is_file()
-            };
-            if !valid {
+            let metadata = tokio::fs::metadata(&path).await.map_err(|error| {
+                AtmError::hook_exit(HookExitCause::Spawn {
+                    path: path.clone(),
+                    cause: error.to_string(),
+                })
+            })?;
+            if (directory && !metadata.is_dir()) || (!directory && !metadata.is_file()) {
                 return Err(AtmError::hook_exit(HookExitCause::Spawn {
                     path,
-                    cause: "path does not exist or has the wrong type".into(),
+                    cause: if directory {
+                        "not a directory"
+                    } else {
+                        "not a regular file"
+                    }
+                    .into(),
                 }));
             }
         }
@@ -254,7 +260,7 @@ impl DaemonHookRunner {
                 AtmError::hook_timeout(&target.phase, "hook concurrency limit reached")
             })?
             .map_err(|_| missing("hook semaphore closed"))?;
-        let spec = self.spec(target, hook)?;
+        let spec = self.spec(target, hook).await?;
         let remaining = remaining_spawn_budget(&target.phase, budget, started.elapsed())?;
         let output = spawn_with_deadline(spec, &stdin, remaining)
             .await
@@ -613,12 +619,13 @@ mod tests {
         }
     }
 
-    #[test]
-    fn configured_environment_has_only_explicit_contract_keys() {
+    #[tokio::test]
+    async fn configured_environment_has_only_explicit_contract_keys() {
         let fixture = Fixture::new();
         let spec = fixture
             .runner()
             .spec(&fixture.target, "task.close")
+            .await
             .unwrap();
         let actual: BTreeMap<_, _> = spec.env.into_iter().collect();
         let mut expected = BTreeMap::from([
