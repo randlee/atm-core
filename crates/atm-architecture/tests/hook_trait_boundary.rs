@@ -181,6 +181,11 @@ fn bk_hook_and_cron_types_reach_runtime_crates_only_through_atm_core_boundary() 
         "CRON_TIMEOUT_MAX_MS",
         "HOOK_ACTION_RESERVE_MS",
         "SERVER_REQUEST_BUDGET",
+        "CronName",
+        "CronGeneration",
+        "TaskHook",
+        "stopped_outcome",
+        "CRON_NAME_MAX_BYTES",
     ];
     for package in [
         "atm-http-runtime",
