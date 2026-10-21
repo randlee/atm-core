@@ -20,11 +20,62 @@ use crate::hook_filter::elapsed_ms;
 use crate::storage_and_nudge_router::StorageAndNudgeRouter;
 
 /// A router clone with no task filter; built only by `StorageAndNudgeRouter::unhooked`.
-pub struct UnhookedRouter(StorageAndNudgeRouter);
+pub struct UnhookedRouter {
+    router: StorageAndNudgeRouter,
+    #[cfg(test)]
+    deadline_probe: Option<DeadlineProbe>,
+}
+
+#[cfg(test)]
+struct DeadlineProbe {
+    now: std::sync::Arc<dyn Fn() -> Instant + Send + Sync>,
+    deadlines: std::sync::Arc<std::sync::Mutex<Vec<RequestDeadline>>>,
+}
 
 impl UnhookedRouter {
     pub(crate) fn new(router: StorageAndNudgeRouter) -> Self {
-        Self(router)
+        Self {
+            router,
+            #[cfg(test)]
+            deadline_probe: None,
+        }
+    }
+
+    #[cfg(test)]
+    fn with_deadline_probe(
+        router: StorageAndNudgeRouter,
+        now: std::sync::Arc<dyn Fn() -> Instant + Send + Sync>,
+        deadlines: std::sync::Arc<std::sync::Mutex<Vec<RequestDeadline>>>,
+    ) -> Self {
+        Self {
+            router,
+            deadline_probe: Some(DeadlineProbe { now, deadlines }),
+        }
+    }
+
+    fn action_deadline(&self, spec: &DispatchSpec) -> RequestDeadline {
+        let Some(deadline) = spec.deadline else {
+            #[cfg(test)]
+            let now = self
+                .deadline_probe
+                .as_ref()
+                .map_or_else(Instant::now, |probe| (probe.now)());
+            #[cfg(not(test))]
+            let now = Instant::now();
+            return RequestDeadline::after_at(now, SERVER_REQUEST_BUDGET);
+        };
+        deadline
+    }
+
+    #[cfg(test)]
+    fn record_deadline(&self, deadline: RequestDeadline) {
+        if let Some(probe) = &self.deadline_probe {
+            probe
+                .deadlines
+                .lock()
+                .expect("deadline probe mutex poisoned")
+                .push(deadline);
+        }
     }
 }
 
@@ -41,7 +92,7 @@ impl HookActionDispatcher for UnhookedRouter {
         for action in &actions {
             let request = action.into_api_request(&spec.team, &spec.default_as)?;
             let identity = action.run_as.as_ref().unwrap_or(&spec.default_as);
-            self.0
+            self.router
                 .check_roster_member(&spec.team, identity)
                 .map_err(|_| {
                     AtmError::hook_malformed(&format!(
@@ -57,12 +108,12 @@ impl HookActionDispatcher for UnhookedRouter {
         let total = requests.len();
         let mut done = Vec::with_capacity(total);
         for (index, (command, run_as, request)) in requests.into_iter().enumerate() {
-            let deadline = spec
-                .deadline
-                .unwrap_or_else(|| RequestDeadline::after(SERVER_REQUEST_BUDGET));
+            let deadline = self.action_deadline(&spec);
+            #[cfg(test)]
+            self.record_deadline(deadline);
             let started = Instant::now();
             let result = self
-                .0
+                .router
                 .dispatch_with_request_id(
                     request,
                     AuthenticatedIngress::Local,
@@ -109,6 +160,7 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex, Once, OnceLock};
     use std::thread::ThreadId;
+    use std::time::Instant;
 
     use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
@@ -273,17 +325,41 @@ mod tests {
     #[tokio::test]
     async fn no_deadline_dispatches_each_action_with_its_own_server_budget() {
         let fixture = fixture(true, None, None);
+        let start = Instant::now();
+        let call = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let now = {
+            let call = Arc::clone(&call);
+            Arc::new(move || {
+                let offset = call.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                start + std::time::Duration::from_secs(offset as u64)
+            })
+        };
+        let deadlines = Arc::new(Mutex::new(Vec::new()));
+        let router = super::UnhookedRouter::with_deadline_probe(
+            fixture.router.clone(),
+            now,
+            Arc::clone(&deadlines),
+        );
         let actions = vec![
             assign_action(&fixture, "T-NONE-DEADLINE-A", None),
             assign_action(&fixture, "T-NONE-DEADLINE-B", None),
         ];
-        let done = fixture
-            .router
-            .unhooked()
+        let done = router
             .dispatch_actions(no_deadline_spec(false), actions)
             .await
             .expect("each action receives a server-budget deadline");
+
         assert_eq!(done.len(), 2);
+        let deadlines = deadlines.lock().expect("deadline probe mutex poisoned");
+        assert_eq!(deadlines.len(), 2);
+        assert_eq!(
+            deadlines[0].remaining_ms_at(start),
+            atm_core::boundary::SERVER_REQUEST_BUDGET.as_millis() as u64
+        );
+        assert_eq!(
+            deadlines[1].remaining_ms_at(start),
+            atm_core::boundary::SERVER_REQUEST_BUDGET.as_millis() as u64 + 1_000
+        );
     }
 
     #[tokio::test]
