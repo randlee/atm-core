@@ -1,0 +1,50 @@
+boundary_id = "BOUNDARY-HookActionDispatcher"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "HookActionDispatcher"
+
+[public]
+trait = "HookActionDispatcher"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = []
+io_forbidden = ["sqlite", "process_spawn", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap","atm-http-runtime","atm-runtime-test-support","atm-cron"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["DispatchSpec","HookAction","HookActionCommand"]
+response_types = ["Vec<DispatchedAction>"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["crate::boundary::hook_action_dispatcher::RecordingHookActionDispatcher"]
+forbidden_test_bypasses = ["std::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-HOOK-ACTION-DISPATCHER-REFERENCES"]
+review_gates = ["sealed_trait", "typed_contract", "deterministic_test_doubles"]
+
+[enforcement.io_forbidden_source_modules]
+sqlite = ["atm_core::boundary::hook_action_dispatcher"]
+process_spawn = ["atm_core::boundary::hook_action_dispatcher"]
+socket_io = ["atm_core::boundary::hook_action_dispatcher"]
+
+[status]
+state = "concrete_landed"
+concrete_landed = ["atm_http_runtime::hook_actions::UnhookedRouter"]
+notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters.", "BK.7 concrete_landed in atm-http-runtime: UnhookedRouter is the sole production HookActionDispatcher, built from a StorageAndNudgeRouter clone with no task filter so dispatched actions cannot re-enter the originating hook chain. Each committed action emits one ADR-067 atm_hook action entry."]

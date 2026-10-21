@@ -8,9 +8,12 @@
 //! message and roster contracts.
 
 mod analyst_query;
+mod cron_schedule_store;
 mod diagnostic_timeline;
 mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
+mod hook_registration_store;
+mod hook_schema;
 mod mail_messages_schema;
 #[cfg(test)]
 mod mailbox_metadata;
@@ -33,6 +36,7 @@ mod shared_db_diagnostics;
 mod shared_db_reader_lanes;
 mod shared_db_support;
 mod sql_filters;
+mod store_support;
 mod task_ledger_reader;
 mod task_migration;
 mod task_sql;
@@ -68,16 +72,21 @@ use atm_storage::contract::{
 };
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AsyncMessageSearchStore, MessageSearchStore, TaskStore, TemplateCatalogStore};
+use atm_storage::{
+    AsyncMessageSearchStore, CronScheduleStore, HookRegistrationStore, MessageSearchStore,
+    TaskStore, TemplateCatalogStore,
+};
 use atm_storage::{
     AtmError, EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
     StorageHandleParts, StorageHandles,
 };
+use cron_schedule_store::cron_schedule_store;
 pub use diagnostic_timeline::{
     DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS,
     DIAGNOSTIC_PRUNE_BATCH, DIAGNOSTIC_PRUNE_CHECK_EVERY, SqliteDiagnosticTimeline,
 };
 use graft_receiver_endpoint_store::SqliteGraftReceiverEndpointStore;
+use hook_registration_store::hook_registration_store;
 use rusqlite::{Connection, OptionalExtension, params};
 use search_schema::delete_message_projection;
 use search_store::{async_search_store, search_store};
@@ -662,6 +671,8 @@ pub struct SqliteStorageBackend {
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     pending_nudge_store: Arc<SqlitePendingNudgeStore>,
     task_store: Arc<SqliteTaskStore>,
+    hook_registration_store: Arc<dyn HookRegistrationStore + Send + Sync>,
+    cron_schedule_store: Arc<dyn CronScheduleStore + Send + Sync>,
     graft_receiver_endpoint_store: Arc<SqliteGraftReceiverEndpointStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
@@ -825,6 +836,8 @@ impl StorageFactory for SqliteStorageFactory {
             nudge_template_override_store: backend.nudge_template_override_store(),
             pending_nudge_store: backend.pending_nudge_store(),
             task_store: backend.task_store(),
+            hook_registration_store: backend.hook_registration_store(),
+            cron_schedule_store: backend.cron_schedule_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),
             peer_config_store: backend.peer_config_store(),
             template_catalog_store: backend.template_catalog_store(),
@@ -874,6 +887,8 @@ impl SqliteStorageBackend {
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
             task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
+            hook_registration_store: hook_registration_store(Arc::clone(&db)),
+            cron_schedule_store: cron_schedule_store(Arc::clone(&db)),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -900,6 +915,8 @@ impl SqliteStorageBackend {
             )),
             pending_nudge_store: Arc::new(SqlitePendingNudgeStore::new(Arc::clone(&db))),
             task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
+            hook_registration_store: hook_registration_store(Arc::clone(&db)),
+            cron_schedule_store: cron_schedule_store(Arc::clone(&db)),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -964,6 +981,14 @@ impl SqliteStorageBackend {
 
     pub fn task_store(&self) -> Arc<dyn TaskStore + Send + Sync> {
         self.task_store.clone()
+    }
+
+    pub fn hook_registration_store(&self) -> Arc<dyn HookRegistrationStore + Send + Sync> {
+        self.hook_registration_store.clone()
+    }
+
+    pub fn cron_schedule_store(&self) -> Arc<dyn CronScheduleStore + Send + Sync> {
+        self.cron_schedule_store.clone()
     }
 
     pub fn graft_receiver_endpoint_store(

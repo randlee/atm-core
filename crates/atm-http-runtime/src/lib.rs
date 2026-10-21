@@ -53,6 +53,7 @@ use tokio::task::JoinHandle;
 mod bare_cli_fifo;
 mod client;
 mod diagnostics_route;
+mod doctor_hooks;
 mod doctor_observability;
 mod health_route;
 mod herdr_escalation;
@@ -61,6 +62,10 @@ mod herdr_queue_wake_escalation;
 #[cfg(test)]
 mod herdr_queue_wake_test_gates;
 mod herdr_task_disposition;
+mod hook_actions;
+mod hook_chains;
+mod hook_filter;
+mod hook_registry_routes;
 mod http1_server;
 mod loopback_read;
 mod loopback_tcp;
@@ -76,6 +81,7 @@ mod runtime_listener;
 mod runtime_maintenance;
 mod runtime_setup;
 mod storage_and_nudge_router;
+mod task_commands;
 mod task_telemetry;
 #[cfg(unix)]
 mod unix_socket;
@@ -111,6 +117,9 @@ pub use herdr_queue_wake::{
     HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
     HerdrQueueWakePump,
 };
+pub use hook_actions::UnhookedRouter;
+pub use hook_chains::ChainTracker;
+pub use hook_filter::{ActiveHookSnapshot, HookedTaskCommands};
 pub use loopback_tcp::LoopbackTcpConfig;
 pub use message_handler::{
     AuthenticatedConnector, CanonicalWriteHandler, canonical_api_router, canonical_message_router,
@@ -125,6 +134,7 @@ pub use runtime_health::{MemberStateTransitionSink, RuntimeHealth};
 use runtime_maintenance::{ABORT_JOIN_GRACE, ENDPOINT_CLEANUP_RESERVE, join_aborted};
 pub use runtime_maintenance::{Draining, Running, RuntimeMaintenance, Stopped};
 pub use storage_and_nudge_router::StorageAndNudgeRouter;
+pub use task_commands::NormalTaskCommands;
 
 /// Validated configuration for the maintained Tokio HTTP runtime.
 ///
@@ -2407,146 +2417,225 @@ mod tests {
         .expect("runtime shuts down after connection-admission test");
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn loopback_shared_client_uses_the_active_record_and_canonical_handler() {
-        let temporary_directory = tempfile::tempdir().expect("temporary directory");
-        let record_path = temporary_directory.path().join("local-http.json");
-        let instance_id = Ulid::new();
-        write_owner_record(&record_path, instance_id);
-        let configured = HttpRuntimeBuilder::new(
-            loopback_runtime_config(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
-                record_path.clone(),
-                instance_id,
-                None,
-                1024,
-            ),
-            Arc::new(CanonicalUdsRouter),
-        )
-        .build()
-        .expect("valid loopback runtime configuration");
-        let running = configured.start().await.expect("loopback runtime starts");
+        let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let cancelled_for_watchdog = Arc::clone(&cancelled);
+        let (expired, watchdog) = tokio::sync::oneshot::channel();
+        let watchdog_task = tokio::task::spawn_blocking(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(30);
+            while !cancelled_for_watchdog.load(Ordering::Acquire)
+                && std::time::Instant::now() < deadline
+            {
+                std::thread::park_timeout(Duration::from_millis(10));
+            }
+            if !cancelled_for_watchdog.load(Ordering::Acquire) {
+                let _ = expired.send(());
+            }
+        });
+        let test = async {
+            let (release_clock, clock_held) = tokio::sync::oneshot::channel::<()>();
+            let clock_hold = tokio::task::spawn_blocking(move || {
+                let _ = clock_held.blocking_recv();
+            });
+            let temporary_directory = tempfile::tempdir().expect("temporary directory");
+            let record_path = temporary_directory.path().join("local-http.json");
+            let instance_id = Ulid::new();
+            write_owner_record(&record_path, instance_id);
+            let configured = HttpRuntimeBuilder::new(
+                loopback_runtime_config(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    record_path.clone(),
+                    instance_id,
+                    None,
+                    1024,
+                ),
+                Arc::new(CanonicalUdsRouter),
+            )
+            .build()
+            .expect("valid loopback runtime configuration");
+            let running = configured.start().await.expect("loopback runtime starts");
 
-        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
-            .expect("shared loopback client");
-        let response = client
-            .execute(ApiRequest::new(write_request()))
-            .await
-            .expect("canonical error remains a typed API response");
-        assert!(matches!(
-            response.into_inner(),
-            ResponseEnvelope::Error(error) if error.message().contains("canonical UDS test handler reached")
-        ));
+            let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+                .expect("shared loopback client");
+            let response = client
+                .execute(ApiRequest::new(write_request()))
+                .await
+                .expect("canonical error remains a typed API response");
+            assert!(matches!(
+                response.into_inner(),
+                ResponseEnvelope::Error(error) if error.message().contains("canonical UDS test handler reached")
+            ));
 
-        running
-            .begin_shutdown()
-            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
-            .await
-            .expect("loopback runtime drains");
-        assert!(
-            !record_path.exists(),
-            "the runtime removes only its own endpoint record after drain"
-        );
+            running
+                .begin_shutdown()
+                .finish(tokio::time::Instant::now() + Duration::from_secs(1))
+                .await
+                .expect("loopback runtime drains");
+            assert!(
+                !record_path.exists(),
+                "the runtime removes only its own endpoint record after drain"
+            );
+            drop(release_clock);
+            clock_hold.await.expect("clock hold releases");
+        };
+        tokio::select! {
+            () = test => {
+                cancelled.store(true, Ordering::Release);
+                watchdog_task.await.expect("watchdog task joins");
+            }
+            result = watchdog => {
+                result.expect("watchdog sender remains alive until it expires");
+                panic!("loopback shared-client test hung for 30 seconds");
+            }
+        }
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn reused_loopback_client_follows_a_replaced_daemon_listener_without_duplicate_delivery()
     {
-        // Reproduces the shape of a long-lived embedded host (for example
-        // the Python graft binding's `PyGraftSession`) that builds one
-        // `DaemonApiClient` and keeps it for the lifetime of the process,
-        // across a managed daemon restart it never explicitly reconnects
-        // for. The client must transparently follow the daemon to its new
-        // listener, and the retired daemon generation must never receive a
-        // duplicate of the request the reused client sends after the
-        // replacement.
-        let temporary_directory = tempfile::tempdir().expect("temporary directory");
-        let record_path = temporary_directory.path().join("local-http.json");
+        let watchdog_cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let watchdog_cancelled_for_task = Arc::clone(&watchdog_cancelled);
+        let (watchdog_expired, watchdog) = tokio::sync::oneshot::channel();
+        let watchdog_task = tokio::task::spawn_blocking(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(30);
+            while !watchdog_cancelled_for_task.load(Ordering::Acquire)
+                && std::time::Instant::now() < deadline
+            {
+                std::thread::park_timeout(Duration::from_millis(10));
+            }
+            if !watchdog_cancelled_for_task.load(Ordering::Acquire) {
+                let _ = watchdog_expired.send(());
+            }
+        });
+        let test = async {
+            // The clock is paused and held still for the whole test: Tokio does
+            // not auto-advance a paused clock while a `spawn_blocking` task is in
+            // flight. Every bound below (the client's request and connect
+            // budgets, each runtime's shutdown deadline) is then a fixed input
+            // that host load cannot exhaust; the outcome depends only on the
+            // real socket and endpoint-record I/O completing, never on how fast
+            // it completes.
+            let (release_clock, clock_held) = tokio::sync::oneshot::channel::<()>();
+            let clock_hold = tokio::task::spawn_blocking(move || {
+                let _ = clock_held.blocking_recv();
+            });
+            let frozen_at = tokio::time::Instant::now();
 
-        let first_instance_id = Ulid::new();
-        write_owner_record(&record_path, first_instance_id);
-        let first_handler = Arc::new(ImmediateCountingLoopbackRouter::new());
-        let first_runtime = HttpRuntimeBuilder::new(
-            loopback_runtime_config(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
-                record_path.clone(),
-                first_instance_id,
-                None,
-                1024,
-            ),
-            first_handler.clone(),
-        )
-        .build()
-        .expect("valid loopback runtime configuration")
-        .start()
-        .await
-        .expect("first loopback runtime starts");
+            // Reproduces the shape of a long-lived embedded host (for example
+            // the Python graft binding's `PyGraftSession`) that builds one
+            // `DaemonApiClient` and keeps it for the lifetime of the process,
+            // across a managed daemon restart it never explicitly reconnects
+            // for. The client must transparently follow the daemon to its new
+            // listener, and the retired daemon generation must never receive a
+            // duplicate of the request the reused client sends after the
+            // replacement.
+            let temporary_directory = tempfile::tempdir().expect("temporary directory");
+            let record_path = temporary_directory.path().join("local-http.json");
 
-        // One client, built once and reused across the replacement below.
-        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
-            .expect("shared loopback client");
-
-        client
-            .execute(ApiRequest::new(write_request()))
+            let first_instance_id = Ulid::new();
+            write_owner_record(&record_path, first_instance_id);
+            let first_handler = Arc::new(ImmediateCountingLoopbackRouter::new());
+            let first_runtime = HttpRuntimeBuilder::new(
+                loopback_runtime_config(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    record_path.clone(),
+                    first_instance_id,
+                    None,
+                    1024,
+                ),
+                first_handler.clone(),
+            )
+            .build()
+            .expect("valid loopback runtime configuration")
+            .start()
             .await
-            .expect("first request reaches the first daemon generation");
-        assert_eq!(first_handler.calls.load(Ordering::SeqCst), 1);
+            .expect("first loopback runtime starts");
 
-        // Replace the daemon: drain and remove the first runtime's listener
-        // and endpoint record, then start a second runtime -- a different
-        // daemon generation -- at a fresh ephemeral port under the same
-        // record path, exactly as a managed `atm daemon restart` does.
-        first_runtime
-            .begin_shutdown()
-            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
+            // One client, built once and reused across the replacement below.
+            let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
+                .expect("shared loopback client");
+
+            client
+                .execute(ApiRequest::new(write_request()))
+                .await
+                .expect("first request reaches the first daemon generation");
+            assert_eq!(first_handler.calls.load(Ordering::SeqCst), 1);
+
+            // Replace the daemon: drain and remove the first runtime's listener
+            // and endpoint record, then start a second runtime -- a different
+            // daemon generation -- at a fresh ephemeral port under the same
+            // record path, exactly as a managed `atm daemon restart` does.
+            first_runtime
+                .begin_shutdown()
+                .finish(tokio::time::Instant::now() + Duration::from_secs(1))
+                .await
+                .expect("first loopback runtime drains");
+
+            let second_instance_id = Ulid::new();
+            write_owner_record(&record_path, second_instance_id);
+            let second_handler = Arc::new(ImmediateCountingLoopbackRouter::new());
+            let second_runtime = HttpRuntimeBuilder::new(
+                loopback_runtime_config(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                    record_path.clone(),
+                    second_instance_id,
+                    None,
+                    1024,
+                ),
+                second_handler.clone(),
+            )
+            .build()
+            .expect("valid loopback runtime configuration")
+            .start()
             .await
-            .expect("first loopback runtime drains");
+            .expect("second loopback runtime starts");
 
-        let second_instance_id = Ulid::new();
-        write_owner_record(&record_path, second_instance_id);
-        let second_handler = Arc::new(ImmediateCountingLoopbackRouter::new());
-        let second_runtime = HttpRuntimeBuilder::new(
-            loopback_runtime_config(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
-                record_path.clone(),
-                second_instance_id,
-                None,
-                1024,
-            ),
-            second_handler.clone(),
-        )
-        .build()
-        .expect("valid loopback runtime configuration")
-        .start()
-        .await
-        .expect("second loopback runtime starts");
-
-        // The same, never-rebuilt client must transparently follow the
-        // replacement: its next request must reach the new daemon
-        // generation exactly once, without an explicit reconnect and
-        // without a duplicate delivery to either generation.
-        client
+            // The same, never-rebuilt client must transparently follow the
+            // replacement: its next request must reach the new daemon
+            // generation exactly once, without an explicit reconnect and
+            // without a duplicate delivery to either generation.
+            client
             .execute(ApiRequest::new(write_request()))
             .await
             .expect(
                 "second request reaches the second daemon generation without an explicit reconnect",
             );
-        assert_eq!(
-            second_handler.calls.load(Ordering::SeqCst),
-            1,
-            "the replaced daemon must receive the reused client's next request exactly once"
-        );
-        assert_eq!(
-            first_handler.calls.load(Ordering::SeqCst),
-            1,
-            "the retired daemon generation must not receive a duplicate of the second request"
-        );
+            assert_eq!(
+                second_handler.calls.load(Ordering::SeqCst),
+                1,
+                "the replaced daemon must receive the reused client's next request exactly once"
+            );
+            assert_eq!(
+                first_handler.calls.load(Ordering::SeqCst),
+                1,
+                "the retired daemon generation must not receive a duplicate of the second request"
+            );
 
-        second_runtime
-            .begin_shutdown()
-            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
-            .await
-            .expect("second loopback runtime drains");
+            second_runtime
+                .begin_shutdown()
+                .finish(tokio::time::Instant::now() + Duration::from_secs(1))
+                .await
+                .expect("second loopback runtime drains");
+            assert_eq!(
+                tokio::time::Instant::now(),
+                frozen_at,
+                "no bound in this test may elapse; the clock stays held throughout"
+            );
+            drop(release_clock);
+            clock_hold.await.expect("clock hold releases");
+        };
+
+        tokio::select! {
+            () = test => {
+                watchdog_cancelled.store(true, Ordering::Release);
+                watchdog_task.await.expect("watchdog task joins");
+            }
+            result = watchdog => {
+                result.expect("watchdog sender remains alive until it expires");
+                panic!("reused loopback client replacement test hung for 30 seconds");
+            }
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]

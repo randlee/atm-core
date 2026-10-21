@@ -570,13 +570,15 @@ pub(super) fn apply_task_move(
     )
     .map_err(|error| error.into_atm_error())?;
     if row.state == TaskState::Active {
+        let order = queue_order(connection, target, team, &row.assignee)?;
+        let position = queue_position_of(&order, task_id)?;
         let event = append_active_task_move(
-            team, task_id, actor, &at, &row, next_state, connection, target,
+            team, task_id, actor, &at, &row, next_state, position, connection, target,
         )?;
         return Ok(atm_storage::TaskMoveRecord {
             assignee: row.assignee,
-            from: QueuePosition::HEAD,
-            to: QueuePosition::HEAD,
+            from: position,
+            to: position,
             event,
         });
     }
@@ -612,13 +614,7 @@ fn apply_queued_task_move(
         &row.assignee,
     )?;
     renumber_queue(team, &row.assignee, &order, connection, target)?;
-    let to = order
-        .iter()
-        .position(|id| id == task_id)
-        .map(|index| index + 1)
-        .and_then(|value| u32::try_from(value).ok())
-        .and_then(QueuePosition::new)
-        .ok_or_else(|| task_move_invalid("task move produced no queue position"))?;
+    let to = queue_position_of(&order, task_id)?;
     let detail = format!("{}→{}", from.get(), to.get());
     let event = append_task_event(
         connection,
@@ -647,6 +643,17 @@ fn apply_queued_task_move(
     })
 }
 
+/// The 1-based queue position of `task_id` in `order`.
+fn queue_position_of(order: &[TaskId], task_id: &TaskId) -> Result<QueuePosition, AtmError> {
+    order
+        .iter()
+        .position(|id| id == task_id)
+        .map(|index| index + 1)
+        .and_then(|value| u32::try_from(value).ok())
+        .and_then(QueuePosition::new)
+        .ok_or_else(|| task_move_invalid("task move produced no queue position"))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn append_active_task_move(
     team: &TeamName,
@@ -655,9 +662,11 @@ fn append_active_task_move(
     at: &IsoTimestamp,
     row: &TaskRow,
     next_state: TaskState,
+    position: QueuePosition,
     connection: &Connection,
     target: &SharedDbTarget,
 ) -> Result<atm_storage::TaskEventRow, AtmError> {
+    let detail = format!("{0}→{0}", position.get());
     append_task_event(
         connection,
         target,
@@ -674,7 +683,7 @@ fn append_active_task_move(
             message_id: None,
             outcome: None,
             marker: None,
-            detail: Some("1→1"),
+            detail: Some(&detail),
         },
     )
 }
@@ -718,14 +727,29 @@ fn insert_at_placement(
     let index = match placement {
         MoveTarget::End => order.len(),
         MoveTarget::Head => {
-            let active = order
-                .first()
-                .map(|id| load_task_row(connection, target, team, id))
-                .transpose()?
-                .flatten();
-            active
-                .filter(|row| row.state == TaskState::Active)
-                .map_or(0, |_| 1)
+            // Head is the first unstarted place: it follows every leading
+            // active task, however many the member holds.
+            let mut statement = connection
+                .prepare(
+                    "SELECT state FROM tasks
+                     WHERE team=?1 AND assignee=?2 AND task_id<>?3 AND state<>'complete'
+                     ORDER BY position, task_id",
+                )
+                .map_err(|error| {
+                    sqlite_error(target, "failed to prepare task queue states", error)
+                })?;
+            let states = statement
+                .query_map(
+                    params![team.as_str(), assignee.as_str(), task_id.as_str()],
+                    |row| row.get::<_, String>(0),
+                )
+                .map_err(|error| sqlite_error(target, "failed to query task queue states", error))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| sqlite_error(target, "failed to read task queue states", error))?;
+            states
+                .iter()
+                .take_while(|state| state.as_str() == TaskState::Active.as_str())
+                .count()
         }
         MoveTarget::Before { task_id: other } => {
             let valid = load_task_row(connection, target, team, other)?

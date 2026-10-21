@@ -9,6 +9,7 @@
 > and no supersession. The ADR-061 D6 approval recorded here was withdrawn with
 > the phase. The body is retained as history only and is not authority for new
 > work.
+> **Capability-count amendment:** ADR-069 D5 amends the cap from twelve to fourteen.
 
 | Field | Value |
 | --- | --- |

@@ -60,9 +60,14 @@ fn reminder_dispatch_renders_from_a_task_row_without_assignment_mail() {
     let row = task_row(&team);
     let key = MemberKey::new(team, row.assignee.clone());
 
-    let dispatch = build_task_reminder_dispatch(&assembly.service_runtime, &key, &row)
-        .expect("missing assignment mail is tolerated")
-        .expect("Herdr dispatch");
+    let dispatch = build_task_reminder_dispatch(
+        &assembly.service_runtime,
+        &key,
+        &row,
+        std::slice::from_ref(&row.task_id),
+    )
+    .expect("missing assignment mail is tolerated")
+    .expect("Herdr dispatch");
     assert!(dispatch.event.sender_host.is_none());
     assert_eq!(dispatch.event.task_id, Some(row.task_id));
     assert_eq!(
@@ -99,9 +104,14 @@ fn reminder_dispatch_uses_durable_reminder_count() {
     row.reminder_count = 3;
     let key = MemberKey::new(team, row.assignee.clone());
 
-    let dispatch = build_task_reminder_dispatch(&assembly.service_runtime, &key, &row)
-        .expect("build reminder")
-        .expect("Herdr dispatch");
+    let dispatch = build_task_reminder_dispatch(
+        &assembly.service_runtime,
+        &key,
+        &row,
+        std::slice::from_ref(&row.task_id),
+    )
+    .expect("build reminder")
+    .expect("Herdr dispatch");
     assert_eq!(
         dispatch.event.task_transition,
         Some(atm_core::boundary::TaskTransition::Reminder { attempt: 3 })
@@ -131,9 +141,14 @@ fn reminder_dispatch_uses_the_configured_non_herdr_assignee_backend() {
     let key = MemberKey::new(team, row.assignee.clone());
 
     assert!(
-        build_task_reminder_dispatch(&assembly.service_runtime, &key, &row)
-            .expect("recipient lookup")
-            .is_some()
+        build_task_reminder_dispatch(
+            &assembly.service_runtime,
+            &key,
+            &row,
+            std::slice::from_ref(&row.task_id)
+        )
+        .expect("recipient lookup")
+        .is_some()
     );
 }
 
@@ -158,5 +173,52 @@ fn reminder_dispatch_propagates_a_broken_task_override() {
         .expect("override");
     let row = task_row(&team);
     let key = MemberKey::new(team, row.assignee.clone());
-    assert!(build_task_reminder_dispatch(&assembly.service_runtime, &key, &row).is_err());
+    assert!(
+        build_task_reminder_dispatch(
+            &assembly.service_runtime,
+            &key,
+            &row,
+            std::slice::from_ref(&row.task_id)
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn reminder_dispatch_names_every_open_task_in_one_body() {
+    let root = tempfile::tempdir().expect("temporary runtime root");
+    let assembly =
+        atm_runtime_test_support::open_isolated_sqlite_boundary(root.path()).expect("runtime");
+    let team: TeamName = "ax5-dispatch".parse().expect("team");
+    assembly
+        .service_runtime
+        .shared_roster_store_arc()
+        .save_roster(&RosterSnapshot {
+            team_name: team.clone(),
+            members: vec![member(&team, "herdr")],
+            refreshed_at: None,
+        })
+        .expect("roster");
+    let row = task_row(&team);
+    let key = MemberKey::new(team, row.assignee.clone());
+    let second: TaskId = "AX5-DISPATCH-2".parse().expect("task id");
+    let open = [row.task_id.clone(), second.clone()];
+
+    let dispatch = build_task_reminder_dispatch(&assembly.service_runtime, &key, &row, &open)
+        .expect("build reminder")
+        .expect("Herdr dispatch");
+    let body = match &dispatch.target {
+        atm_core::boundary::PostSendBuiltInTarget::LocalSteer(
+            atm_core::boundary::LocalSteerTarget::Herdr(target),
+        ) => target.rendered_nudge.clone(),
+        _ => panic!("expected one Herdr nudge"),
+    };
+    assert!(
+        body.contains(&format!("task=\"{}\"", row.task_id)),
+        "{body}"
+    );
+    assert!(
+        body.contains(&format!("open=\"{} {second}\"", row.task_id)),
+        "one body names both open tasks: {body}"
+    );
 }

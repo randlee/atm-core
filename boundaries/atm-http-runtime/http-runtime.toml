@@ -22,7 +22,7 @@ roots = [
 ]
 
 [ownership]
-io_owns = ["tokio_axum_listener_lifecycle", "capability_authenticated_loopback", "unix_uds_adapter", "explicit_direct_peer_adapter", "typed_http_translation", "bounded_blocking_storage_admission", "peer_dial_seam"]
+io_owns = ["tokio_axum_listener_lifecycle", "capability_authenticated_loopback", "unix_uds_adapter", "explicit_direct_peer_adapter", "typed_http_translation", "bounded_blocking_storage_admission", "peer_dial_seam", "hook_filter", "hook_action_dispatch"]
 io_forbidden = ["direct_sqlite_io", "daemon_request_dispatch", "raw_http_framing", "peer_specific_dto_or_route", "replay_or_resend", "tls_adapter", "reverse_dns"]
 
 [dependencies]

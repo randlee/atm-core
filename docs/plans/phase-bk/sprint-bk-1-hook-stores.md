@@ -69,7 +69,7 @@ impl HookName {
     pub const TASK_HOOKS: [&'static str; 6] = ["task.assign", "task.start", "task.close", "task.move", "task.list", "task.events"];
     pub const CRON_TICK: &'static str = "cron.tick";
     pub const CRON_STOP: &'static str = "cron.stop";
-    pub fn parse(name: &str) -> Result<Self, AtmError>;            // any of the eight, else AtmError::hook_malformed("unknown hook name <n>")
+    pub fn parse(name: &str) -> Result<Self, AtmError>;            // any of the eight, else AtmError::hook_module_invalid("unknown hook name <n>; expected one of ...")
     pub fn parse_task_hook(name: &str) -> Result<Self, AtmError>;  // exactly TASK_HOOKS, else hook_module_invalid (the register route's only validator, ADR-068 D3)
     pub fn as_str(&self) -> &str;
 }
@@ -113,10 +113,12 @@ pub struct InMemoryHookRegistrationStore { rows: Mutex<Vec<HookRegistration>>, p
 // crates/atm-storage/src/cron_schedule_store.rs
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct CronScheduleId(pub u64);   // Display prints the integer
+pub struct CronScheduleId(u64);   // constructed with new(u64), read with get(); Display prints the integer
+impl CronScheduleId { pub fn new(value: u64) -> Self; pub fn get(self) -> u64; }
+pub struct CronGeneration(NonZeroU32); // FIRST, new(u32), get(), next(); never zero
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CronSchedule {
-    pub id: CronScheduleId, pub generation: u32, pub team: TeamName, pub phase: PhaseId, pub name: String,
+    pub id: CronScheduleId, pub generation: CronGeneration, pub team: TeamName, pub phase: PhaseId, pub name: String,
     pub cron_expr: String, pub module_path: PathBuf, pub cwd: PathBuf, pub args: Vec<String>,
     pub timeout_ms: u32, pub jitter_s: u32, pub custom: serde_json::Map<String, serde_json::Value>, pub stop: StopCondition,
     pub active: bool, pub created_by: AgentName, pub created_at: IsoTimestamp,
@@ -125,7 +127,7 @@ pub struct CronSchedule {
 /// design.md D-9, ADR-069 D4: exactly one per schedule; `Until { at }` maps to `until_at`, `Hook` to `stop_hook = 1`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum StopCondition { Until { at: chrono::DateTime<chrono::Utc> }, Hook }
+pub enum StopCondition { Until { at: IsoTimestamp }, Hook }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewCronSchedule { pub team: TeamName, pub phase: PhaseId, pub name: String, pub cron_expr: String, pub module_path: PathBuf,
     pub cwd: PathBuf, pub args: Vec<String>, pub timeout_ms: u32, pub jitter_s: u32, pub custom: serde_json::Map<String, serde_json::Value>,
@@ -142,25 +144,25 @@ pub trait CronScheduleStore: crate::contract::sealed::Sealed + Send + Sync {
     fn active_all(&self) -> Result<Vec<CronSchedule>, AtmError>;   // daemon start (ANC-020)
     /// UPDATE .. WHERE id = ? AND generation = ? AND active = 1; Ok(false) when the row was ended or restarted since the run began,
     /// so a run that outlives its slot never writes the restarted row (the guarantee is this WHERE clause, not task abort).
-    fn record_run(&self, id: CronScheduleId, generation: u32, at: IsoTimestamp, outcome: &str) -> Result<bool, AtmError>;
+fn record_run(&self, id: CronScheduleId, generation: CronGeneration, at: IsoTimestamp, outcome: &str) -> Result<bool, AtmError>;
     /// The stop condition fired (ADR-069 D4): active = 0, ended_at = at, last_outcome = "stopped: <reason>", same WHERE clause.
-    fn record_stop(&self, id: CronScheduleId, generation: u32, at: IsoTimestamp, reason: &str) -> Result<bool, AtmError>;
+fn record_stop(&self, id: CronScheduleId, generation: CronGeneration, at: IsoTimestamp, reason: &str) -> Result<bool, AtmError>;
 }
 // crates/atm-storage/src/testing/cron_schedule_store.rs (feature test-utils)
 pub struct InMemoryCronScheduleStore { rows: Mutex<Vec<CronSchedule>>, pub calls: AtomicUsize, pub writes: AtomicUsize,
     pub fail_active_all: AtomicBool, pub fail_writes: AtomicBool }
-// calls: every trait call; writes: start, end, record_run, record_stop only; fail_active_all / fail_writes: those calls return
+// calls: every trait call; writes: only row-changing start, end, record_run, record_stop calls; fail_active_all / fail_writes: those calls return
 // AtmError::internal (the bk-4 store-error and bk-5 initial-load tests)
 
 // crates/atm-storage/src/request_budget.rs
-pub const HOOK_ACTION_RESERVE_MS: u64 = 500;
+pub const HOOK_ACTION_RESERVE_MS: u32 = 500;
 pub const HOOK_TIMEOUT_MAX_MS: u32 = 2500;   // task hooks: SERVER_REQUEST_BUDGET (3 s) minus the reserve
 pub const CRON_TIMEOUT_MAX_MS: u32 = 30000;  // cron.tick / cron.stop (Rand 2026-10-18, design.md §9.8)
 const _: () = assert!(HOOK_TIMEOUT_MAX_MS as u128 + HOOK_ACTION_RESERVE_MS as u128 == SERVER_REQUEST_BUDGET.as_millis());
 
 // crates/atm-storage/src/hook_error.rs
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum HookExitCause { Exit { code: i32, stderr_tail: String }, Signal(i32), Spawn { path: PathBuf, cause: String }, Panic(String), Missing(String) }
+pub enum HookExitCause { Exit { code: i32, stderr_tail: String }, Signal(i32), Spawn { path: PathBuf, cause: String }, Read { stream: String, cause: String }, Panic(String), Missing(String) }
 impl AtmError {
     pub fn hook_exit(cause: HookExitCause) -> Self;  pub fn hook_timeout(phase: &PhaseId, detail: &str) -> Self;
     pub fn hook_malformed(detail: &str) -> Self;     pub fn hook_module_invalid(detail: &str) -> Self;
@@ -222,7 +224,7 @@ All in `crates/atm-storage/tests/hook_stores_contract.rs` unless stated, against
 - [ ] (D-5) `boundary:BOUNDARY-HookRegistrationStore` `register_second_phase_same_hook_succeeds`: `task.close` for `bk` (stamp t2) while `bj`'s (stamp t1) is active: both active, `active(team, task.close) == [bj, bk]`; `disable(bj)` leaves `[bk]`; `reregister_active_key_keeps_chain_position`: re-registering `bj` at t3 with a new `module_path` keeps `registered_at == t1`; re-registering a disabled key at t4 stores `registered_at == t4`, clears `disabled_at` and lists last; `disable_single_hook_leaves_other_hooks_of_phase_active`.
 - [ ] (REQ-P-HOOK-003 §23.1) `boundary:BOUNDARY-HookRegistrationStore` `list_orders_active_first_then_registered_at_then_phase`: disabled `bj` (t1), active `bl` (t2), `bk` (t3) list as `[bl, bk, bj]`; two active rows with one stamp list by phase; `list_schedules_orders_active_first_then_created_at_then_phase` does the same for schedules.
 - [ ] `boundary:BOUNDARY-HookRegistrationStore` `disable_twice_keeps_first_disabled_at` (second call returns `[]`, `disabled_at` unchanged) and `disable_phase_with_no_rows_returns_empty`.
-- [ ] (ADR-068 D3) `boundary:BOUNDARY-HookRegistrationStore` `hook_name_parse_sets`: `parse_task_hook` accepts exactly the six task names and refuses `cron.tick`, `cron.stop`, `task.foo` with `ATM_HOOK_MODULE_INVALID`; `parse` accepts all eight and refuses `task.foo` with `ATM_HOOK_MALFORMED`; `hook_name_deserialize_rejects_unknown` (`"\"task.foo\""` is `Err`).
+- [ ] (ADR-068 D3) `boundary:BOUNDARY-HookRegistrationStore` `hook_name_parse_sets`: `parse_task_hook` accepts exactly the six task names and refuses `cron.tick`, `cron.stop`, `task.foo` with `ATM_HOOK_MODULE_INVALID`; `parse` accepts all eight and refuses `task.foo` with `ATM_HOOK_MODULE_INVALID`; `hook_name_deserialize_rejects_unknown` (`"\"task.foo\""` is `Err`). The unknown-name code follows `atm-bk-1.group-qa-f3` and `REQ-P-HOOK-001` §23.1.
 - [ ] `boundary:BOUNDARY-HookRegistrationStore` `phase_id_rejects_empty_uppercase_space_and_newline`: accepts `bk`, `bk-2`, a 32-character id; refuses `""`, `Bk`, `b k`, `bk\n`, `2bk`, a 33-character id, each with code `ATM_MESSAGE_VALIDATION_FAILED`, the grammar in the message and the recovery line.
 - [ ] (D-8) `boundary:BOUNDARY-HookRegistrationStore` `active_all_spans_teams_and_counts_calls`: two teams' active rows, disabled rows omitted, `calls` counts the call; `active_all_order_equals_active_order_for_every_key`.
 - [ ] (ANC-018, ANC-020) `boundary:BOUNDARY-CronScheduleStore` `active_all_returns_started_rows_with_cron_expr_byte_identical` and `jitter_custom_and_created_at_round_trip` (`jitter_s = 1799`, `custom = {"goal":"x","n":[1,{"y":null}]}`, `created_at` equal to the `NewCronSchedule` value).

@@ -567,7 +567,7 @@ def dependency_import_patterns(dependency: str) -> tuple[re.Pattern[str], ...]:
     crate_path = dependency.replace("-", "_")
     escaped = re.escape(crate_path)
     return (
-        re.compile(rf"\b{escaped}::"),
+        re.compile(rf"(?<!\w)(?<!\bself::)(?<!\bsuper::)(?<!\bcrate::){escaped}::"),
         re.compile(rf"\buse\s+{escaped}\b"),
         re.compile(rf"\bextern\s+crate\s+{escaped}\b"),
     )
@@ -2966,7 +2966,11 @@ def collect_special_case_violations(repo_root: Path) -> list[BoundaryViolation]:
             for rule in ownership_rules:
                 if not any(pattern.search(line) for pattern in dependency_import_patterns(rule.dependency)):
                     continue
-                if any((repo_root / allowed_root).resolve() in source_path.resolve().parents for allowed_root in rule.allowed_source_roots):
+                if any(
+                    (repo_root / allowed_root).resolve() == source_path.resolve()
+                    or (repo_root / allowed_root).resolve() in source_path.resolve().parents
+                    for allowed_root in rule.allowed_source_roots
+                ):
                     continue
                 violations.append(
                     BoundaryViolation(

@@ -164,6 +164,11 @@ test."
   a hook. There is no nesting variable or header.
 - The daemon runs the hook module, through one runner behind a sealed core
   trait, in a fixed, cleared environment and the registered cwd.
+- On Unix the production runner kills the hook's process group on timeout,
+  cancellation, output overflow, or drop. Windows has no job-object
+  implementation here, so `kill_on_drop` and the explicit child kill
+  terminate only the direct hook process; its descendants can outlive the hook
+  invocation.
 
 The trait methods, types, environment, budget arithmetic and platform
 notes are in `docs/plans/phase-bk/design.md` §9.5 and §9.7.

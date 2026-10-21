@@ -117,7 +117,8 @@ async fn pump_never_claims_a_bb_assignment_and_loses_no_prompt() {
     );
     let prompts = prompt_texts(&fake);
     assert_eq!(prompts.len(), 1);
-    assert!(prompts[0].contains(&format!("task=\"{}\" ready", tasks[0])));
+    assert!(prompts[0].contains(&format!("task=\"{}\" open=\"", tasks[0])));
+    assert!(prompts[0].contains(" ready "));
     assert!(!prompts[0].contains("queued="));
 }
 

@@ -344,9 +344,18 @@ impl TaskStartCommand {
         .build_task_start_request(home_dir, current_dir, self.task_id.clone())?;
         atm_core::send::validate_task_request(&mut request)?;
         let result = composition
-            .send(request)
+            .send_hookable(request)
             .await
             .map_err(anyhow::Error::from)?;
+        let result = match result {
+            crate::composition::HookableOutcome::Normal(result) => result,
+            crate::composition::HookableOutcome::Actions(response) => {
+                return Ok(format!(
+                    "{}\n",
+                    crate::output::print_hook_actions(&response)
+                ));
+            }
+        };
         if self.json {
             Ok(format!("{}\n", serde_json::to_string_pretty(&result)?))
         } else {
@@ -390,7 +399,14 @@ impl TaskAssignCommand {
         )?;
         request.placement = placement;
         preflight_daemon_api(composition, HttpApiVersion::parse("1.5.0")?, "task assign").await?;
-        composition.send(request).await?;
+        if let crate::composition::HookableOutcome::Actions(response) =
+            composition.send_hookable(request).await?
+        {
+            return Ok(format!(
+                "{}\n",
+                crate::output::print_hook_actions(&response)
+            ));
+        }
         if json {
             Ok(format!("{}\n", serde_json::json!({ "task_id": task_id })))
         } else {
@@ -472,20 +488,37 @@ impl TaskCloseCommand {
         )?;
         atm_core::send::validate_task_request(&mut request)?;
         let result = composition
-            .send(request)
+            .send_hookable(request)
             .await
             .map_err(anyhow::Error::from)?;
-        if self.json {
-            Ok(format!("{}\n", serde_json::to_string_pretty(&result)?))
-        } else if let Some(closed) = result.already_closed {
-            Ok(format!(
-                "task {} was already closed ({}); report delivered",
-                self.task_id,
-                closed.as_str()
-            ) + "\n")
-        } else {
-            Ok(format!("closed {} ({})\n", self.task_id, outcome.as_str()))
-        }
+        let result = match result {
+            crate::composition::HookableOutcome::Normal(result) => result,
+            crate::composition::HookableOutcome::Actions(response) => {
+                return Ok(format!(
+                    "{}\n",
+                    crate::output::print_hook_actions(&response)
+                ));
+            }
+        };
+        render_task_close_result(self.json, &self.task_id, outcome, result)
+    }
+}
+
+fn render_task_close_result(
+    json: bool,
+    task_id: &str,
+    outcome: TaskCloseOutcome,
+    result: atm_core::send::SendOutcome,
+) -> Result<String> {
+    if json {
+        Ok(format!("{}\n", serde_json::to_string_pretty(&result)?))
+    } else if let Some(closed) = result.already_closed {
+        Ok(format!(
+            "task {task_id} was already closed ({}); report delivered\n",
+            closed.as_str()
+        ))
+    } else {
+        Ok(format!("closed {task_id} ({})\n", outcome.as_str()))
     }
 }
 
@@ -525,7 +558,7 @@ impl TaskListCommand {
         };
         preflight_daemon_api(composition, HttpApiVersion::parse("1.5.0")?, "task list").await?;
         let outcome = composition
-            .list(task_list_request(
+            .list_hookable(task_list_request(
                 home_dir.clone(),
                 current_dir.clone(),
                 caller.caller_identity.clone(),
@@ -534,6 +567,15 @@ impl TaskListCommand {
                 None,
             )?)
             .await?;
+        let outcome = match outcome {
+            crate::composition::HookableOutcome::Normal(outcome) => outcome,
+            crate::composition::HookableOutcome::Actions(response) => {
+                return Ok(format!(
+                    "{}\n",
+                    crate::output::print_hook_actions(&response)
+                ));
+            }
+        };
         let selected = select_task_rows(outcome.task_rows, &contract);
         let runtime = if self.all {
             composition
@@ -612,7 +654,15 @@ impl TaskEventsCommand {
             None,
         )?
         .with_task_ledger(ledger.clone());
-        let outcome = composition.list(query).await?;
+        let outcome = match composition.list_hookable(query).await? {
+            crate::composition::HookableOutcome::Normal(outcome) => outcome,
+            crate::composition::HookableOutcome::Actions(response) => {
+                return Ok(format!(
+                    "{}\n",
+                    crate::output::print_hook_actions(&response)
+                ));
+            }
+        };
         let selected = select_task_events(outcome.task_event_rows, &contract);
         let output = render_task_events(&selected.rows, &outcome.handoffs, self.json)?;
         print_omitted_rows(selected.omitted);
@@ -662,6 +712,10 @@ impl TaskMoveCommand {
             }))
             .await?;
         match response {
+            ResponseEnvelope::HookActions(response) => Ok(format!(
+                "{}\n",
+                crate::output::print_hook_actions(&response)
+            )),
             ResponseEnvelope::TaskMove(outcome) if self.json => {
                 Ok(format!("{}\n", serde_json::to_string_pretty(&outcome)?))
             }
@@ -915,3 +969,125 @@ mod history;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod hook_action_tests {
+    use super::*;
+    use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
+
+    #[tokio::test]
+    async fn task_write_keeps_hook_actions_distinct_from_send_outcomes() {
+        let directory = tempfile::tempdir().unwrap();
+        let observability = CliObservability::fallback();
+        let (transport, recorded) = crate::commands::hook::tests::transport(
+            ResponseEnvelope::HookActions(atm_core::hook::HookActionsResponse { dispatched: 3 }),
+        );
+        let composition = CliComposition::from_fake_transport(transport, &observability);
+        let request = atm_core::send::SendRequest::new(
+            directory.path().into(),
+            directory.path().into(),
+            TEST_SENDER.parse().unwrap(),
+            &format!("{TEST_RECIPIENT}@{TEST_TEAM}"),
+            TEST_TEAM.parse().unwrap(),
+            atm_core::send::SendMessageSource::Inline("assigned".into()),
+            None,
+            false,
+            Some("hooked-task".parse().unwrap()),
+            false,
+        )
+        .unwrap();
+        let result = composition.send_hookable(request).await.unwrap();
+        let crate::composition::HookableOutcome::Actions(response) = result else {
+            panic!("hook actions were lost")
+        };
+        assert_eq!(response.dispatched, 3);
+        assert!(matches!(
+            recorded.lock().unwrap().as_slice(),
+            [RequestEnvelope::Write(_)]
+        ));
+    }
+
+    #[tokio::test]
+    async fn task_queries_print_hook_actions_without_normal_ledger_results() {
+        let directory = tempfile::tempdir().unwrap();
+        let observability = CliObservability::fallback();
+        let (transport, recorded) = crate::commands::hook::tests::transport(
+            ResponseEnvelope::HookActions(atm_core::hook::HookActionsResponse { dispatched: 4 }),
+        );
+        let composition = CliComposition::from_fake_transport(transport, &observability);
+        let list = TaskListCommand {
+            all: false,
+            limit: None,
+            json: false,
+            caller: CallerArgs {
+                actor: None,
+                team: None,
+            },
+        };
+        assert_eq!(
+            list.execute(
+                &composition,
+                crate::commands::hook::tests::caller(),
+                directory.path().into(),
+                directory.path().into()
+            )
+            .await
+            .unwrap(),
+            "hook ran 4 actions\n"
+        );
+        let events = TaskEventsCommand {
+            task_id: "hooked-task".parse().unwrap(),
+            all: false,
+            limit: None,
+            json: true,
+            caller: CallerArgs {
+                actor: None,
+                team: None,
+            },
+        };
+        assert_eq!(
+            events
+                .execute(
+                    &composition,
+                    crate::commands::hook::tests::caller(),
+                    directory.path().into(),
+                    directory.path().into()
+                )
+                .await
+                .unwrap(),
+            "hook ran 4 actions\n"
+        );
+        assert_eq!(recorded.lock().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn task_move_prints_hook_actions_without_a_normal_move_outcome() {
+        let observability = CliObservability::fallback();
+        let response =
+            ResponseEnvelope::HookActions(atm_core::hook::HookActionsResponse { dispatched: 2 });
+        let (transport, recorded) = crate::commands::hook::tests::transport(response);
+        let composition = CliComposition::from_fake_transport(transport, &observability);
+        let command = TaskMoveCommand {
+            task_id: "move-task".parse().unwrap(),
+            head: true,
+            end: false,
+            before: None,
+            json: false,
+            caller: CallerArgs {
+                actor: None,
+                team: None,
+            },
+        };
+        assert_eq!(
+            command
+                .execute(&composition, crate::commands::hook::tests::caller())
+                .await
+                .unwrap(),
+            "hook ran 2 actions\n"
+        );
+        assert!(matches!(
+            recorded.lock().unwrap().as_slice(),
+            [RequestEnvelope::TaskMove(_)]
+        ));
+    }
+}

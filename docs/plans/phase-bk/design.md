@@ -270,18 +270,30 @@ Flow for a hooked task command:
 6. One structured log entry per hook call (hook, team, phase, caller,
    duration, outcome, action count) and one per action (ADR-067).
 
-**D-8 Active hooks are an in-memory snapshot.** The router field `hooks:
-Arc<ActiveHookSnapshot>` is loaded once in `compose_storage_router`
-(`active_all()`); a load error aborts daemon startup. Each committed `atm
-hook register` or `disable` runs its store call and the snapshot refresh
-in the same `control_path_sync_bridge.run` closure. A refresh failure after
-the commit returns an internal error "registration committed; snapshot
-refresh failed; restart the daemon". An in-flight hook call keeps its
-cloned registration, so a disable does not cancel its actions. The task
-request path never reads `hook_registration`, so a daemon with no
-registrations takes exactly today's path (ANC-014). Registration and cron
-routes are accepted from `Local` ingress only, from any roster member of
-the team (ADR-068 D5, Rand's round-4 ruling); no lead check.
+**D-8 Active hooks are an in-memory snapshot.** The router's `HookWiring`
+field `snapshot: Option<Arc<ActiveHookSnapshot>>` is `None` until
+`with_hook_filter` installs a filter and its snapshot. The snapshot is loaded
+once in `compose_storage_router` (`active_all()`); a load error aborts daemon
+startup. Each committed `atm hook register` or `disable` runs its store call
+and the snapshot refresh in the same `control_path_sync_bridge.run` closure.
+A refresh failure after the commit returns daemon-unavailable "registration
+committed; snapshot refresh failed; the next hooked call reloads it". An
+in-flight hook call keeps its cloned registration, so a disable does not
+cancel its actions. The task request path never reads `hook_registration`, so
+a daemon with no registrations takes exactly today's path (ANC-014).
+Registration and cron routes are accepted from `Local` ingress only, from any
+roster member of the team (ADR-068 D5, Rand's round-4 ruling); no lead check.
+
+`HookWiring` represents the construction boundary: its snapshot and runner
+are both `Option` values until `with_hook_filter` installs the filter that
+owns them. This permits an un-hooked router to run ordinary task bodies in
+tests and composition steps. A hook-registry route on that incomplete router
+fails closed with daemon-unavailable: "hook snapshot is unavailable because
+hook-filter startup wiring was not installed" and recovery "Install the hook
+filter during daemon startup before serving hook registry routes, then retry."
+Daemon startup composes and installs the filter before it serves requests.
+`with_local_host` configures the optional `local_host`; it is stamped into
+`caller.host` when configured and is JSON `null` otherwise.
 
 **D-m Budget.** `HOOK_TIMEOUT_MAX_MS = 2500` is `SERVER_REQUEST_BUDGET`
 (3 s, `crates/atm-storage/src/request_budget.rs:44`) minus a 500 ms action
@@ -622,7 +634,7 @@ is appended. The CLI exit arms are bk-5's
 | Constructor | Message |
 | --- | --- |
 | `hook_exit(cause: HookExitCause)` | `Exit { code, stderr_tail }`: `HOOK.EXIT: exit <code>: <tail>`; `Signal(n)`: `HOOK.EXIT: terminated by signal <n>`; `Spawn { path, cause }`: `HOOK.EXIT: cannot run <path>: <cause>`; `Panic(payload)`: `HOOK.EXIT: hook runner panicked: <payload>`; `Missing(what)`: `HOOK.EXIT: <what>` (e.g. `python3 not found on PATH`) |
-| `hook_timeout(phase: &PhaseId, detail: &str)` | `HOOK.TIMEOUT: phase <p>: <detail>`; detail is `no reply within <n> ms`, `request budget exhausted before the hook ran` or `doctor budget exhausted` |
+| `hook_timeout(phase: &PhaseId, detail: &str)` | `HOOK.TIMEOUT: phase <p>: <detail>`; detail is `no reply within <n> ms (limited by configured timeout|request deadline)`, `request budget exhausted before the hook ran`, `budget exhausted before spawn` or `doctor budget exhausted` |
 | `hook_malformed(detail: &str)` | `HOOK.MALFORMED: <detail>` |
 | `hook_module_invalid(detail: &str)` | `HOOK.MODULE_INVALID: <detail>` |
 | `hook_refused(message: &str)` | `<message>` |
@@ -630,8 +642,10 @@ is appended. The CLI exit arms are bk-5's
 
 ### 9.2 Action commands
 
-`HookAction { command: String, run_as: Option<AgentName> (serde "as"),
-request: serde_json::Value }`, with `deny_unknown_fields`.
+`HookAction { command: HookActionCommand, run_as: Option<AgentName> (serde
+"as"), request: serde_json::Value }`, with `deny_unknown_fields`. The closed
+enum (846c6a094) rejects unknown commands while preserving the JSON command
+strings at the contract boundary.
 `HookAction::into_api_request(&self, team: &TeamName, default_as: &AgentName)
 -> Result<ApiRequest, AtmError>` deserializes `request` as the type in this
 table, checks the condition and the team field, and sets the identity field
@@ -741,7 +755,9 @@ impl TaskCommand {
   besides the test double; it runs each action's `ApiRequest` through
   that entry, so no action reaches a filter. `dispatch_actions(spec:
   DispatchSpec { hook, team, phase, default_as, deadline, dry_run },
-  actions)`; with `dry_run` it validates every action and dispatches none.
+  actions) -> Result<Vec<DispatchedAction>, AtmError>` returns one recorded
+  command/response pair per dispatched action; with `dry_run` it validates
+  every action and dispatches none.
   A reply carries at most `HOOK_ACTIONS_MAX` = 32 actions (a longer list
   is `ATM_HOOK_MALFORMED`), which bounds one task or cron run. The three
   `HookRunner` methods stay separate: they differ in argv, stdin and the
@@ -768,14 +784,25 @@ Constants in `atm_storage::request_budget` (bk-1): `HOOK_TIMEOUT_MAX_MS =
   with the pure `runner_budget(timeout_ms, remaining) ->
   Option<Duration>`: `min(timeout_ms, remaining - HOOK_ACTION_RESERVE_MS)`,
   `None` at or below zero, which returns `ATM_HOOK_TIMEOUT` without
-  spawning. The filter passes `ctx.deadline` unchanged and has no check
-  of its own (D-5). `doctor` uses `doctor_budget`: `min(timeout_ms,
+  spawning. After the permit is acquired and `spec()` validates the target,
+  the runner subtracts elapsed time from that budget; an exhausted remainder
+  returns `ATM_HOOK_TIMEOUT` "budget exhausted before spawn" without spawning.
+  The filter passes `ctx.deadline` unchanged and has no check of its own (D-5).
+  `doctor` uses `doctor_budget`: `min(timeout_ms,
   remaining)` with no reserve, `None` giving `ATM_HOOK_TIMEOUT` "doctor
   budget exhausted" without spawning.
+- A timed-out child reports the remaining child budget that was actually
+  enforced: `no reply within <n> ms (limited by configured timeout)` when
+  `timeout_ms` binds, or `no reply within <n> ms (limited by request
+  deadline)` when the request deadline binds. This message contract records
+  the enforced-budget behavior from finding `atm-bk-3.group-qa-f2`,
+  introduced by commit `071991330`.
 - `RequestDeadline` (bk-2) derives `PartialEq, Eq` and gains
-  `remaining_ms()` (0 when expired) and `minus(Duration)`. Tests compare a
-  recorded deadline by equality to the one passed, or bound it, never
-  assert a time exactly.
+  `remaining_ms()` (0 when expired) and `minus(Duration)`. `minus` uses
+  `checked_sub` and falls back to `Instant::now()` when subtraction is not
+  representable, keeping an impossible earlier deadline expired rather than
+  preserving the original deadline. Tests compare a recorded deadline by
+  equality to the one passed, or bound it, never assert a time exactly.
 - Task-hook actions reuse the request's remaining deadline. A cron tick or
   stop check passes `RequestDeadline::after(timeout_ms +
   HOOK_ACTION_RESERVE_MS)`, so the runner's budget is the row's
@@ -797,16 +824,18 @@ itself and spawns it. One `timeout(remaining)` joins the stdin write and
 close, the wait and both pipe reads, so a module that never reads stdin
 cannot block the daemon. A `BrokenPipe` write error is ignored: a module
 that exits without reading stdin is judged by its exit status and
-stdout. stdout is capped at 1 MiB and stderr at 64 KiB through
-bounded `take()` reads; overflow kills the child and is
-`ATM_HOOK_MALFORMED`. On unix the child gets `process_group(0)` and a
+stdout. stdout is capped at 1 MiB through a bounded `take()` read;
+overflow kills the child and is `ATM_HOOK_MALFORMED`. stderr keeps only
+its last 64 KiB; overflow is not an error, and the exit status decides the
+result. On unix the child gets `process_group(0)` and a
 timeout kills the group with `if let Some(pid) =
 child.id().and_then(|id| Pid::from_raw(id as i32)) {
 rustix::process::kill_process_group(pid, Signal::KILL) }` (workspace `rustix` 1.1 with `process`, already in
-`Cargo.lock`, used only in `process_deadline.rs`). On Windows only the
-hook process is killed and its children are not; this is a known
-limitation (ADR-068 D4), there is no Windows job-object code, and
-`hooks.md` documents it. On elapsed the helper then
+`Cargo.lock`, used only in `process_deadline.rs`). Windows has no job-object
+implementation here, so `kill_on_drop` and the explicit child kill terminate
+only the direct hook process; its descendants can outlive the hook invocation.
+This is a known limitation (ADR-068 D4), and `hooks.md` documents it. On
+elapsed the helper then
 calls `kill().await` and returns a phase-less `SpawnFailure::TimedOut {
 after_ms }`, which `DaemonHookRunner` converts to `hook_timeout(phase, "no
 reply within <n> ms")`. `hook_runner.rs` spawns only through this helper;
@@ -815,8 +844,8 @@ reply within <n> ms")`. `hook_runner.rs` spawns only through this helper;
 read unbounded output, which a hook cannot use. The helper is
 `spawn_until(spec, stdin, cancel)` with `spawn_with_deadline` passing
 `sleep(remaining)` as `cancel`, so a test cancels on a signal instead of a
-timer. A `GroupKillGuard` held until the child is reaped kills the group
-on drop, so an aborted or dropped call orphans no grandchild.
+timer. On Unix, a `GroupKillGuard` held until the child is reaped kills the
+group on drop, so an aborted or dropped call orphans no grandchild.
 `DaemonHookRunner` holds a semaphore of `HOOK_CONCURRENCY_MAX` = 16 live
 hook children shared by task chains, cron runs and doctor; a permit not
 acquired within the call's budget is `hook_timeout(phase, "hook
@@ -838,7 +867,7 @@ concurrency limit reached")` with no spawn.
 the chain decision and the action dispatch inside one task spawned through
 the router's `ChainTracker` over cloned `Arc`s; shutdown refuses new
 chains, waits for live ones up to its deadline, then aborts them
-(`daemon_unavailable` "hook chain cancelled: daemon shutting down"). The
+(`daemon_unavailable` "hook chain was cancelled while the daemon was shutting down"). The
 snapshot holds `Arc<HookRegistration>` rows and each `HookRequest` is built
 only when its hook runs. The task returns `Result<Decision, AtmError>`, with `enum
 Decision { Inner, Refused(String), Done(ApiResponse) }`. The filter maps
@@ -874,23 +903,28 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
 ### 9.9 Composition
 
 - `compose_storage_router` (`crates/atm-daemon-bootstrap/src/replacement_handler.rs:268`,
-  bk-5) builds the base router with `.with_hook_runner(runner.clone())`,
+  bk-5) builds the base router with
   `.with_local_host(daemon_atm_config(&env).and_then(|c| c.local_host))`
   and the snapshot load, whose error aborts startup. It then builds
   `NormalTaskCommands::new(base.clone())` and `HookedTaskCommands` over
   it with `HookedTaskCommands::new(inner, actions, snapshot, runner)`,
-  `actions = Arc::new(base.unhooked())`, and returns
-  `base.with_task_commands(hooked)`. `build_replacement_handler` (`:204`)
-  returns `(Arc<StorageAndNudgeRouter>, RecoverySweepHandle, Arc<dyn
-  HookRunner>, Arc<UnhookedRouter>)`, the last for the cron crate. bk-5
-  updates all four call sites (`lib.rs:471`, `:1303`, `:1505`,
+  `actions = Arc::new(base.unhooked())`, and installs a clone of that filter
+  with `base.with_hook_filter(filter.clone())`. The composed filter is a
+  field of the named `ReplacementHandler` returned by
+  `build_replacement_handler` (`:204`), alongside the router,
+  `RecoverySweepHandle`, runner and `UnhookedRouter`. Composition tests read
+  that returned field directly; production composition has no test-only
+  thread-local filter record. The runner and dispatcher fields are the same
+  `Arc`s used by the filter and the cron crate. bk-5 updates all four call
+  sites (`lib.rs:471`, `:1303`, `:1505`,
   `telemetry_lifecycle_tests.rs:172`).
-- Router fields: `task_commands: Option<Arc<dyn TaskCommands>>`,
-  `hooks: Arc<ActiveHookSnapshot>` (shared with the filter so the register
-  and disable routes refresh what the filter reads), `hook_runner:
-  Option<Arc<dyn HookRunner>>` (doctor only), and `cron:
-  Arc<OnceLock<Arc<dyn CronScheduler>>>`, shared by clones. Unset, the
-  cron routes return `daemon_unavailable("cron scheduler not installed")`.
+- Router field `hooks: HookWiring`: `task_commands: Option<Arc<dyn
+  TaskCommands>>`, `snapshot: Option<Arc<ActiveHookSnapshot>>` (set only by
+  `with_hook_filter`, shared with the filter so register and disable refresh
+  what it reads), `runner: Option<Arc<dyn HookRunner>>` (doctor only),
+  `local_host: Option<HostName>`, and `cron:
+  Arc<OnceLock<Arc<dyn CronScheduler>>>`, shared by clones. Unset, the cron
+  routes return `daemon_unavailable("cron scheduler is unavailable because daemon startup did not install it")`.
   `install_cron_scheduler(&self, Arc<dyn CronScheduler>) -> Result<(),
   AtmError>` errors on a second call. There are no `Noop` types.
 - bk-5, in `run_replacement_daemon_with_selector`
@@ -907,8 +941,11 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
   the listener's finish as a future; its steps are `cron_worker`, then
   `hook_chains` (begin shutdown, drain to the deadline), then `listener`.
   The three functions live in `cron_composition.rs`. The three functions are extracted so the in-crate
-  tests call them with no listener. `CronWorkerHandle::shutdown` stops scheduling,
-  awaits in-flight runs until the deadline, then aborts them.
+  tests call them with no listener. The `cron_worker` step uses
+  `min(deadline, Instant::now() + 1 s)` as its deadline: a stuck cron run
+  cannot consume the replacement daemon's full drain budget needed by the
+  following hook-chain and listener steps. `CronWorkerHandle::shutdown` stops
+  scheduling, awaits in-flight runs until that deadline, then aborts them.
 
 ### 9.10 Doctor collection
 

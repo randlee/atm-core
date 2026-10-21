@@ -23,7 +23,7 @@ impl AtmError {
         }
     }
 
-    fn with_recovery(
+    pub(crate) fn with_recovery(
         code: AtmErrorCode,
         detail: impl Into<String>,
         recovery: impl Into<String>,
@@ -109,9 +109,13 @@ impl AtmError {
                 | AtmErrorCode::TaskNotCounterparty
                 | AtmErrorCode::TaskStaleCounterparty
                 | AtmErrorCode::TaskMoveInvalid
+                | AtmErrorCode::TaskMaxActiveReached
                 | AtmErrorCode::PeerWireModeInvalid
                 | AtmErrorCode::PeerWireModeSourceForbidden
                 | AtmErrorCode::PeerWirePlaintextAuthenticationRequired
+                | AtmErrorCode::HookModuleInvalid
+                | AtmErrorCode::CronExprInvalid
+                | AtmErrorCode::HookRefused
         )
     }
 
@@ -393,6 +397,14 @@ impl AtmError {
         recovery: impl Into<String>,
     ) -> Self {
         Self::with_recovery(AtmErrorCode::MessageValidationFailed, message, recovery)
+    }
+
+    /// Rejects starting a task when the member has reached their active-task limit.
+    pub fn task_max_active_reached(
+        message: impl Into<String>,
+        recovery: impl Into<String>,
+    ) -> Self {
+        Self::with_recovery(AtmErrorCode::TaskMaxActiveReached, message, recovery)
     }
 
     pub fn local_http_capability_invalid(message: impl Into<String>) -> Self {

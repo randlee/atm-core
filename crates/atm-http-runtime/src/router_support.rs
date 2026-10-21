@@ -117,6 +117,11 @@ impl BoundedBlockingBridge {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn available_permits(&self) -> usize {
+        self.permits.available_permits()
+    }
+
     /// Runs synchronous work without allowing either permit admission or the
     /// caller's response wait to outlive the supplied absolute deadline.
     ///

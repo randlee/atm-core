@@ -1755,7 +1755,9 @@ atomic terminal handoffs and queue cleanup, and one fair idle attention
 selector over independent ephemeral-message and persistent-task lanes.
 `Blocked -> Assigned` is explicit and never auto-starts. Existing tasks migrate
 at normal priority; one current assignee per task and one active task per
-`(team, agent)` are transactionally enforced.
+`(team, agent)` are transactionally enforced. This is historical Phase AZ
+design text, retired unmerged and superseded by Phase BA and BK.8's configured
+`max_tasks` limit.
 
 Issue #1378 is a pre-AZ.4 prerequisite. It makes the RAM master roster the sole
 ephemeral agent-state owner, routes both Herdr polls and authenticated

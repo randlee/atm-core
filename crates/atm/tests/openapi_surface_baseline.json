@@ -16,6 +16,54 @@
         }
       }
     },
+    "/cron/end": {
+      "post": {
+        "operation_id": "endCron",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/cron/list": {
+      "post": {
+        "operation_id": "listCron",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/cron/start": {
+      "post": {
+        "operation_id": "startCron",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/CronSchedule"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
     "/doctor": {
       "get": {
         "operation_id": "doctor",
@@ -112,6 +160,54 @@
         }
       }
     },
+    "/hooks/disable": {
+      "post": {
+        "operation_id": "disableHooks",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/hooks/list": {
+      "post": {
+        "operation_id": "listHooks",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/hooks/register": {
+      "post": {
+        "operation_id": "registerHook",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/HookRegistration"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
     "/messages": {
       "delete": {
         "operation_id": "clearMessages",
@@ -145,6 +241,10 @@
         "operation_id": "writeMessage",
         "request_required": true,
         "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/HookActions"
+          },
           "201": {
             "error": false,
             "schema": "#/components/schemas/Message"
@@ -362,6 +462,97 @@
       "properties": [],
       "required": []
     },
+    "CronEndRequest": {
+      "properties": [
+        "caller_identity",
+        "caller_team",
+        "name",
+        "phase"
+      ],
+      "required": [
+        "caller_identity",
+        "caller_team",
+        "phase"
+      ]
+    },
+    "CronListQuery": {
+      "properties": [
+        "caller_identity",
+        "caller_team",
+        "phase"
+      ],
+      "required": [
+        "caller_identity",
+        "caller_team"
+      ]
+    },
+    "CronSchedule": {
+      "properties": [
+        "active",
+        "args",
+        "created_at",
+        "created_by",
+        "cron_expr",
+        "custom",
+        "cwd",
+        "generation",
+        "id",
+        "jitter_s",
+        "last_outcome",
+        "last_run_at",
+        "module_path",
+        "name",
+        "phase",
+        "stop",
+        "team",
+        "timeout_ms"
+      ],
+      "required": [
+        "active",
+        "args",
+        "created_at",
+        "created_by",
+        "cron_expr",
+        "custom",
+        "cwd",
+        "generation",
+        "id",
+        "jitter_s",
+        "module_path",
+        "name",
+        "phase",
+        "stop",
+        "team",
+        "timeout_ms"
+      ]
+    },
+    "CronStartRequest": {
+      "properties": [
+        "args",
+        "caller_identity",
+        "caller_team",
+        "cron_expr",
+        "custom",
+        "cwd",
+        "module_path",
+        "name",
+        "phase",
+        "stop",
+        "timeout_ms"
+      ],
+      "required": [
+        "args",
+        "caller_identity",
+        "caller_team",
+        "cron_expr",
+        "cwd",
+        "module_path",
+        "name",
+        "phase",
+        "stop",
+        "timeout_ms"
+      ]
+    },
     "DoctorFinding": {
       "properties": [
         "code",
@@ -374,6 +565,7 @@
     "DoctorResponse": {
       "properties": [
         "herdr",
+        "hooks",
         "observability",
         "runtime_status"
       ],
@@ -488,6 +680,110 @@
       "required": [
         "name",
         "outcome"
+      ]
+    },
+    "HookActions": {
+      "properties": [
+        "dispatched"
+      ],
+      "required": [
+        "dispatched"
+      ]
+    },
+    "HookDisableRequest": {
+      "properties": [
+        "caller_identity",
+        "caller_team",
+        "hook",
+        "phase"
+      ],
+      "required": [
+        "caller_identity",
+        "caller_team",
+        "phase"
+      ]
+    },
+    "HookDoctorEntry": {
+      "properties": [
+        "cwd",
+        "error",
+        "findings",
+        "hooks",
+        "message",
+        "module_path",
+        "phase",
+        "schedules",
+        "success",
+        "team",
+        "timeout_ms"
+      ],
+      "required": [
+        "cwd",
+        "hooks",
+        "module_path",
+        "phase",
+        "schedules",
+        "team",
+        "timeout_ms"
+      ]
+    },
+    "HookListQuery": {
+      "properties": [
+        "caller_identity",
+        "caller_team",
+        "phase"
+      ],
+      "required": [
+        "caller_identity",
+        "caller_team"
+      ]
+    },
+    "HookRegisterRequest": {
+      "properties": [
+        "caller_identity",
+        "caller_team",
+        "custom",
+        "cwd",
+        "hook",
+        "module_path",
+        "phase",
+        "timeout_ms"
+      ],
+      "required": [
+        "caller_identity",
+        "caller_team",
+        "cwd",
+        "hook",
+        "module_path",
+        "phase",
+        "timeout_ms"
+      ]
+    },
+    "HookRegistration": {
+      "properties": [
+        "active",
+        "custom",
+        "cwd",
+        "disabled_at",
+        "hook",
+        "module_path",
+        "phase",
+        "registered_at",
+        "registered_by",
+        "team",
+        "timeout_ms"
+      ],
+      "required": [
+        "active",
+        "custom",
+        "cwd",
+        "hook",
+        "module_path",
+        "phase",
+        "registered_at",
+        "registered_by",
+        "team",
+        "timeout_ms"
       ]
     },
     "ListOutcome": {
@@ -883,5 +1179,5 @@
       ]
     }
   },
-  "version": "1.12.0"
+  "version": "1.14.0"
 }

@@ -15,6 +15,7 @@ use tokio::time::Instant;
 /// Awaits one shutdown step that was given `deadline`, recording it as
 /// `name` for an observing test.
 pub(crate) async fn step<F: Future>(name: &'static str, deadline: Instant, step: F) -> F::Output {
+    started(name);
     #[cfg(test)]
     let started = Instant::now();
     let output = step.await;
@@ -23,6 +24,15 @@ pub(crate) async fn step<F: Future>(name: &'static str, deadline: Instant, step:
     #[cfg(not(test))]
     let _ = (name, deadline);
     output
+}
+
+fn started(name: &'static str) {
+    #[cfg(test)]
+    if let Some(probe) = test_probe::current() {
+        probe.push_start(name);
+    }
+    #[cfg(not(test))]
+    let _ = name;
 }
 
 /// Records a step that started at `started` with `deadline` and returned now.
@@ -73,7 +83,7 @@ mod test_probe {
     use std::future::Future;
     use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
-    use tokio::sync::oneshot;
+    use tokio::sync::{Notify, oneshot};
     use tokio::time::Instant;
 
     tokio::task_local! {
@@ -96,6 +106,8 @@ mod test_probe {
     #[derive(Default)]
     pub(crate) struct Probe {
         steps: Mutex<Vec<ShutdownStep>>,
+        starts: Mutex<Vec<&'static str>>,
+        started: Notify,
         flush_stall: OnceLock<Stall>,
         export_gate: Mutex<Option<oneshot::Receiver<()>>>,
     }
@@ -111,6 +123,21 @@ mod test_probe {
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .clone()
+        }
+
+        pub(crate) async fn wait_for_start(&self, name: &'static str) {
+            loop {
+                let notified = self.started.notified();
+                if self
+                    .starts
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .contains(&name)
+                {
+                    return;
+                }
+                notified.await;
+            }
         }
 
         /// Runs `stall` on the blocking pool before every observed logger
@@ -140,6 +167,14 @@ mod test_probe {
                     deadline,
                     returned: Instant::now(),
                 });
+        }
+
+        pub(super) fn push_start(&self, step: &'static str) {
+            self.starts
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(step);
+            self.started.notify_one();
         }
 
         pub(super) fn flush_stall(&self) -> Option<Stall> {

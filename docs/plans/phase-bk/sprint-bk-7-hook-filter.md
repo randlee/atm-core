@@ -65,14 +65,16 @@ rules):
 // crates/atm-http-runtime/src/storage_and_nudge_router/hook_wiring.rs   (design.md §9.9)
 pub(crate) struct HookWiring {
     pub task_commands: Option<Arc<dyn TaskCommands>>,         // None: the un-hooked body
-    pub snapshot: Arc<ActiveHookSnapshot>,                     // shared with the filter
+    pub snapshot: Option<Arc<ActiveHookSnapshot>>,             // set by with_hook_filter; None makes registry routes unavailable
     pub runner: Option<Arc<dyn HookRunner>>,                   // doctor only
-    pub cron: Arc<OnceLock<Arc<dyn CronScheduler>>>,           // shared by clones; unset: daemon_unavailable("cron scheduler not installed")
+    pub cron: Arc<OnceLock<Arc<dyn CronScheduler>>>,           // shared by clones; unset: daemon_unavailable("cron scheduler is unavailable because daemon startup did not install it")
     pub chains: Arc<ChainTracker>,
+    pub local_host: Option<HostName>,                           // stamped into filtered requests' caller.host
 }
 impl StorageAndNudgeRouter {
-    pub fn with_task_commands(self, c: Arc<dyn TaskCommands>) -> Self;  pub fn with_hook_runner(self, r: Arc<dyn HookRunner>) -> Self;
-    pub fn with_hook_snapshot(self, s: Arc<ActiveHookSnapshot>) -> Self; pub fn hook_chains(&self) -> Arc<ChainTracker>;
+    pub fn with_task_commands(self, c: Arc<dyn TaskCommands>) -> Self;
+    pub fn with_hook_filter<D: HookActionDispatcher + 'static>(self, filter: Arc<HookedTaskCommands<D>>) -> Self;
+    pub fn with_local_host(self, host: HostName) -> Self;       pub fn hook_chains(&self) -> Arc<ChainTracker>;
     pub fn install_cron_scheduler(&self, s: Arc<dyn CronScheduler>) -> Result<(), AtmError>;   // a second call errors
     pub fn unhooked(&self) -> UnhookedRouter;                           // a clone with task_commands = None
 }
@@ -155,7 +157,7 @@ async fn filter(&self, cmd: TaskCommand, ctx: &TaskCallCtx) -> Result<ApiRespons
     })?;
     match chain.await {
         Err(join) if join.is_panic() => Err(AtmError::hook_exit(HookExitCause::Panic(panic_text(join.into_panic())))),
-        Err(_) => Err(AtmError::daemon_unavailable("hook chain cancelled: daemon shutting down")),
+        Err(_) => Err(AtmError::daemon_unavailable("hook chain was cancelled while the daemon was shutting down")),
         Ok(Err(error)) => Err(error),
         Ok(Ok(Decision::Refused(message))) => Err(AtmError::hook_refused(&message)),
         Ok(Ok(Decision::Done(response))) => Ok(response),
@@ -253,8 +255,8 @@ Log entries (ADR-067, `tracing::info!`): `subsystem = "atm_hook"`, `action`
 - [ ] (D-c, D-d) `boundary:BOUNDARY-HookActionDispatcher` `second_action_failure_keeps_first_action_committed` (`hook action 2/2 (task.assign) failed after 1 committed: `), `action_{for_another_team,as_off_roster}_is_malformed_and_runs_nothing`, `hook_register_action_is_malformed`.
 - [ ] (ANC-008) `boundary:BOUNDARY-HookActionDispatcher` `action_of_the_hooked_command_does_not_reenter_the_filter`.
 - [ ] (Rand panic ruling) `boundary:BOUNDARY-TaskCommands` `runner_task_panic_returns_hook_exit_and_daemon_keeps_serving` (`panic_on_run`: `HOOK.EXIT: hook runner panicked: `, then `task.list` succeeds); `panic_in_action_dispatch_returns_hook_exit` (`panic_at = Some(0)`).
-- [ ] (shutdown) `boundary:BOUNDARY-TaskCommands` `hook_chains.rs::tests::drain_waits_for_a_held_chain_then_returns_zero` (reply held by `before_reply`, released, `drain(after 10 s) == 0`, the actions committed); `::drain_aborts_at_the_deadline` (`start_paused`, never released: `drain == 1`, the caller gets `hook chain cancelled: daemon shutting down`); `::new_chain_after_begin_shutdown_is_unavailable`.
-- [ ] (D-8) `boundary:BOUNDARY-TaskCommands` `register_and_disable_each_refresh_the_snapshot_once`; `concurrent_register_and_disable_leave_snapshot_equal_to_store`; `snapshot_order_equals_store_order`; `disable_during_in_flight_hook_does_not_cancel_its_actions`; `refresh_failure_marks_dirty_and_the_next_call_reloads` (`fail_active_all` for one call: the route returns `registration committed; snapshot refresh failed`, the next hooked call sees the row).
+- [ ] (shutdown) `boundary:BOUNDARY-TaskCommands` `hook_chains.rs::tests::drain_waits_for_a_held_chain_then_returns_zero` (reply held by `before_reply`, released, `drain(after 10 s) == 0`, the actions committed); `::drain_aborts_at_the_deadline` (`start_paused`, never released: `drain == 1`, the caller gets `hook chain was cancelled while the daemon was shutting down`); `::new_chain_after_begin_shutdown_is_unavailable`.
+- [ ] (D-8) `boundary:BOUNDARY-TaskCommands` `register_and_disable_each_refresh_the_snapshot_once`; `concurrent_register_and_disable_leave_snapshot_equal_to_store`; `snapshot_order_equals_store_order`; `disable_during_in_flight_hook_does_not_cancel_its_actions`; `refresh_failure_marks_dirty_and_the_next_call_reloads` (`fail_active_all` fails every call while set: the route returns `registration committed; snapshot refresh failed`, the next hooked call sees the row).
 - [ ] (REQ-BK-LOG) `boundary:BOUNDARY-TaskCommands` `two_action_run_logs_one_run_and_two_action_entries`; `two_phase_chain_logs_not_applicable_then_actions`.
 - [ ] (ANC-003, ANC-022) `boundary:BOUNDARY-TaskCommands` `runner_receives_request_body_and_the_registration_custom` (seven keys; `caller` with the router's `local_host`; `request` the CLI's bare body; `custom` the registration's).
 - [ ] (ANC-002, ADR-068 D3, D5) `boundary:BOUNDARY-TaskCommands` `hook_registry_routes.rs::tests::disable_keeps_rows_and_list_returns_them`; `register_refuses_cron_tick_unknown_name_and_over_cap_timeout`; `register_same_hook_in_a_second_phase_adds_a_chain_row`; `register_from_non_lead_member_succeeds_and_off_roster_fails`; `reregister_active_key_keeps_chain_position`.
