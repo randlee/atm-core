@@ -109,7 +109,9 @@ fn log_action(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex, Once, OnceLock};
+    use std::thread::ThreadId;
 
     use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
@@ -486,9 +488,68 @@ mod tests {
 
     type CapturedEvents = Arc<std::sync::Mutex<Vec<Vec<(String, String)>>>>;
 
-    /// Captures every tracing event as its field pairs, for the ADR-067 entries.
-    #[derive(Clone, Default)]
+    /// The event sinks registered by the tracing-capture tests, keyed by their
+    /// test thread. The process-global layer consults this registry for every
+    /// event and records only into the matching test's sink.
+    static CAPTURE_SINKS: OnceLock<Mutex<HashMap<ThreadId, CapturedEvents>>> = OnceLock::new();
+    static CAPTURE_SUBSCRIBER: Once = Once::new();
+
+    /// Captures the ADR-067 entries produced by one registered test thread.
+    #[derive(Clone)]
     struct Captured(CapturedEvents);
+
+    struct CaptureRegistration {
+        captured: Captured,
+        thread: ThreadId,
+    }
+
+    impl CaptureRegistration {
+        fn new() -> Self {
+            install_capture_subscriber();
+            let captured = Captured(Arc::new(Mutex::new(Vec::new())));
+            let thread = std::thread::current().id();
+            assert!(
+                capture_sinks()
+                    .lock()
+                    .expect("capture sinks")
+                    .insert(thread, captured.0.clone())
+                    .is_none(),
+                "test thread already has a capture sink"
+            );
+            Self { captured, thread }
+        }
+
+        fn captured(&self) -> &Captured {
+            &self.captured
+        }
+    }
+
+    impl Drop for CaptureRegistration {
+        fn drop(&mut self) {
+            let removed = capture_sinks()
+                .lock()
+                .expect("capture sinks")
+                .remove(&self.thread)
+                .expect("test capture sink");
+            assert!(Arc::ptr_eq(&removed, &self.captured.0));
+        }
+    }
+
+    fn capture_sinks() -> &'static Mutex<HashMap<ThreadId, CapturedEvents>> {
+        CAPTURE_SINKS.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    fn install_capture_subscriber() {
+        CAPTURE_SUBSCRIBER.call_once(|| {
+            tracing::subscriber::set_global_default(
+                tracing_subscriber::layer::SubscriberExt::with(
+                    tracing_subscriber::Registry::default(),
+                    Capture,
+                ),
+            )
+            .expect("install process-global capture subscriber");
+        });
+    }
 
     #[derive(Default)]
     struct FieldPairs(Vec<(String, String)>);
@@ -505,17 +566,32 @@ mod tests {
         }
     }
 
-    struct Capture(Captured);
+    struct Capture;
 
     impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
+        fn register_callsite(
+            &self,
+            _metadata: &'static tracing::Metadata<'static>,
+        ) -> tracing::subscriber::Interest {
+            tracing::subscriber::Interest::always()
+        }
+
         fn on_event(
             &self,
             event: &tracing::Event<'_>,
             _context: tracing_subscriber::layer::Context<'_, S>,
         ) {
+            let Some(sink) = capture_sinks()
+                .lock()
+                .expect("capture sinks")
+                .get(&std::thread::current().id())
+                .cloned()
+            else {
+                return;
+            };
             let mut fields = FieldPairs::default();
             event.record(&mut fields);
-            self.0.0.lock().expect("captured log").push(fields.0);
+            sink.lock().expect("captured log").push(fields.0);
         }
     }
 
@@ -581,12 +657,7 @@ mod tests {
 
     #[tokio::test]
     async fn two_action_run_logs_one_run_and_two_action_entries() {
-        let captured = Captured::default();
-        let _guard =
-            tracing::subscriber::set_default(tracing_subscriber::layer::SubscriberExt::with(
-                tracing_subscriber::Registry::default(),
-                Capture(captured.clone()),
-            ));
+        let capture = CaptureRegistration::new();
         let fixture = fixture(true, None, None);
         let store = Arc::new(InMemoryHookRegistrationStore::default());
         crate::hook_filter::test_support::register(&store, "task.assign", "bk", 1);
@@ -609,7 +680,7 @@ mod tests {
             .expect("hooked assign");
 
         assert_eq!(
-            hook_entries(&captured),
+            hook_entries(capture.captured()),
             vec![
                 run_entry("bk", "2", "actions"),
                 action_entry("action_ok"),
@@ -620,12 +691,7 @@ mod tests {
 
     #[tokio::test]
     async fn two_phase_chain_logs_not_applicable_then_actions() {
-        let captured = Captured::default();
-        let _guard =
-            tracing::subscriber::set_default(tracing_subscriber::layer::SubscriberExt::with(
-                tracing_subscriber::Registry::default(),
-                Capture(captured.clone()),
-            ));
+        let capture = CaptureRegistration::new();
         let fixture = fixture(true, None, None);
         let store = Arc::new(InMemoryHookRegistrationStore::default());
         crate::hook_filter::test_support::register(&store, "task.assign", "bj", 1);
@@ -650,7 +716,7 @@ mod tests {
             .expect("hooked assign");
 
         assert_eq!(
-            hook_entries(&captured),
+            hook_entries(capture.captured()),
             vec![
                 run_entry("bj", "0", "not_applicable"),
                 run_entry("bk", "2", "actions"),
@@ -660,16 +726,9 @@ mod tests {
         );
     }
 
-    /// The runner error is injected; a current-thread runtime keeps the spawned
-    /// hook chain in the test subscriber's deterministic capture context.
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test]
     async fn runner_timeout_logs_a_timeout_run_and_no_action_entries() {
-        let captured = Captured::default();
-        let _guard =
-            tracing::subscriber::set_default(tracing_subscriber::layer::SubscriberExt::with(
-                tracing_subscriber::Registry::default(),
-                Capture(captured.clone()),
-            ));
+        let capture = CaptureRegistration::new();
         let fixture = fixture(true, None, None);
         let store = Arc::new(InMemoryHookRegistrationStore::default());
         crate::hook_filter::test_support::register(&store, "task.assign", "bk", 1);
@@ -696,7 +755,7 @@ mod tests {
 
         assert_eq!(error.code(), AtmErrorCode::HookTimeout);
         assert_eq!(
-            hook_entries(&captured),
+            hook_entries(capture.captured()),
             vec![run_entry("bk", "0", "timeout")]
         );
     }
