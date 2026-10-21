@@ -659,18 +659,18 @@ mod tests {
     fn task_query_action_must_match_classified_command_or_history() {
         let ledgers = [
             (
-                HookActionCommand::TaskList,
+                Some(HookActionCommand::TaskList),
                 json!({"Tasks":{"member":null}}),
             ),
             (
-                HookActionCommand::TaskEvents,
+                Some(HookActionCommand::TaskEvents),
                 json!({"Events":{"task_id":"work-1", "member":null}}),
             ),
             (
-                HookActionCommand::TaskHistory,
+                Some(HookActionCommand::TaskHistory),
                 json!({"History":{"member":null, "limit":10}}),
             ),
-            (HookActionCommand::TaskList, Value::Null),
+            (None, Value::Null),
         ];
         for command in [
             HookActionCommand::TaskList,
@@ -680,7 +680,7 @@ mod tests {
             for (expected, ledger) in &ledgers {
                 let candidate = action(command, list_body(ledger.clone()));
                 let result = candidate.into_api_request(&team(), &identity());
-                if command == *expected {
+                if Some(command) == *expected {
                     let (variant, body) = mapped_body(result.unwrap());
                     assert_eq!(variant, "list");
                     assert_eq!(body["caller_identity"], "caller");
