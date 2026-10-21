@@ -60,9 +60,14 @@ struct World {
 impl World {
     fn new() -> Self {
         let root = tempfile::tempdir().unwrap();
-        let assembly = open_isolated_sqlite_boundary(root.path())
+        let mut assembly = open_isolated_sqlite_boundary(root.path())
             .unwrap()
             .for_daemon();
+        // Default cases have no hook rows; keep their startup load independent
+        // of SQLite worker scheduling. Reopen tests below use the durable store.
+        assembly.service_runtime = assembly
+            .service_runtime
+            .with_hook_registration_store(Arc::new(InMemoryHookRegistrationStore::default()));
         Self::assemble(root, assembly).unwrap()
     }
 
@@ -384,7 +389,7 @@ async fn filter_and_cron_share_one_runner_and_one_dispatcher() {
 }
 
 #[tokio::test]
-async fn snapshot_load_error_is_deferred_to_the_deadline_aware_request_path() {
+async fn snapshot_load_error_fails_daemon_composition() {
     let root = tempfile::tempdir().unwrap();
     let mut assembly = open_isolated_sqlite_boundary(root.path())
         .unwrap()
@@ -394,32 +399,11 @@ async fn snapshot_load_error_is_deferred_to_the_deadline_aware_request_path() {
     assembly.service_runtime = assembly
         .service_runtime
         .with_hook_registration_store(store.clone());
-    let world = World::assemble(root, assembly).expect("composition does not load hooks");
-    assert_eq!(
-        store.calls.load(Ordering::SeqCst),
-        0,
-        "composition performs no durable hook read"
-    );
-    let error = world
-        .request_with_deadline(
-            ApiRequest::Write(Box::new(world.write())),
-            RequestDeadline::after_at(std::time::Instant::now(), Duration::ZERO),
-        )
-        .await
-        .expect_err("an expired request deadline admits no snapshot load");
-    assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
-    assert_eq!(
-        store.calls.load(Ordering::SeqCst),
-        0,
-        "the request deadline prevents the durable read from starting"
-    );
-    let error = world
-        .request(ApiRequest::Write(Box::new(world.write())))
-        .await
-        .expect_err("the first local task request loads the snapshot");
+    let error = World::assemble(root, assembly)
+        .err()
+        .expect("snapshot load failure aborts daemon composition");
     assert_eq!(error.code(), AtmErrorCode::InternalError);
     assert_eq!(store.calls.load(Ordering::SeqCst), 1);
-    world.shutdown().await;
 }
 
 #[tokio::test]

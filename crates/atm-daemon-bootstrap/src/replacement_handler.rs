@@ -313,9 +313,9 @@ fn compose_storage_router(
     peer_wire_mode: PeerWireMode,
     peer_adapter_selection: SelectedPeerAdapterSelection,
 ) -> Result<ComposedStorageRouter, AtmError> {
-    let snapshot = Arc::new(ActiveHookSnapshot::deferred(
+    let snapshot = Arc::new(ActiveHookSnapshot::load(
         assembly.service_runtime.hook_registration_store()?,
-    ));
+    )?);
     let runner: Arc<dyn HookRunner> =
         Arc::new(crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource));
     let async_mailbox_runtime = assembly
