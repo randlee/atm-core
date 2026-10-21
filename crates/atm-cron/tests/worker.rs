@@ -506,6 +506,11 @@ async fn missed_ticks_are_not_replayed_after_a_pause() {
     let parks = fixture.clock.parks();
     release.send_replace(true);
     fixture.clock.wait_parks_above(parks).await;
+    assert_eq!(fixture.calls(), 1);
+    assert_eq!(*entered.borrow(), 1);
+    fixture.step(0).await;
+    assert_eq!(fixture.calls(), 1);
+    assert_eq!(*entered.borrow(), 1);
     fixture.step(60).await;
     wait_for_entered(&mut entered, 2).await;
     assert_eq!(fixture.calls(), 2);
