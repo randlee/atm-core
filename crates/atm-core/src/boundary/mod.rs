@@ -100,7 +100,11 @@ pub use atm_storage::{
 pub use cron_scheduler::{CronScheduler, CronStartSpec};
 pub use hook_action_dispatcher::{DispatchSpec, HookActionDispatcher};
 pub use hook_runner::{HookOutcome, HookRunner};
-pub use task_commands::*;
+#[cfg(any(test, feature = "test-utils"))]
+pub use task_commands::RecordingTaskCommands;
+pub use task_commands::{
+    TaskAssign, TaskCallCtx, TaskClose, TaskCommand, TaskCommands, TaskEvents, TaskList, TaskStart,
+};
 #[cfg(any(test, feature = "test-utils"))]
 pub use {
     cron_scheduler::RecordingCronScheduler,
