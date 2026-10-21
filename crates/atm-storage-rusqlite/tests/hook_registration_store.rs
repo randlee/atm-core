@@ -137,6 +137,44 @@ fn disable_keeps_rows_inactive() {
 }
 
 #[test]
+fn disable_single_hook_leaves_other_hooks_of_phase_active() {
+    let h = Harness::new();
+    let store = h.store();
+    store
+        .register(registration("bj", "task.close", "/a.py", stamp(1)))
+        .expect("close");
+    store
+        .register(registration("bj", "task.start", "/b.py", stamp(1)))
+        .expect("start");
+    store
+        .disable(&team(), &phase("bj"), Some(&hook("task.close")), stamp(2))
+        .expect("disable");
+    assert!(
+        store
+            .active(&team(), &hook("task.close"))
+            .expect("close")
+            .is_empty()
+    );
+    assert_eq!(
+        store
+            .active(&team(), &hook("task.start"))
+            .expect("start")
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn disable_phase_with_no_rows_returns_empty() {
+    let h = Harness::new();
+    let changed = h
+        .store()
+        .disable(&team(), &phase("bz"), None, stamp(2))
+        .expect("disable");
+    assert!(changed.is_empty());
+}
+
+#[test]
 fn register_second_phase_same_hook_succeeds() {
     let h = Harness::new();
     let store = h.store();
@@ -353,6 +391,59 @@ fn active_all_order_equals_active_order_for_every_key() {
             assert_eq!(filtered, per_key);
         }
     }
+}
+
+#[test]
+fn active_all_spans_teams() {
+    let h = Harness::new();
+    let store = h.store();
+    store
+        .register(registration_for_team(
+            "test-team",
+            "bj",
+            "task.close",
+            "/a.py",
+            stamp(1),
+        ))
+        .expect("a");
+    store
+        .register(registration_for_team(
+            "test-team-z",
+            "bj",
+            "task.close",
+            "/b.py",
+            stamp(1),
+        ))
+        .expect("b");
+    store
+        .register(registration_for_team(
+            "test-team-z",
+            "bk",
+            "task.start",
+            "/c.py",
+            stamp(2),
+        ))
+        .expect("c");
+    store
+        .disable(
+            &TeamName::from_validated("test-team-z"),
+            &phase("bk"),
+            None,
+            stamp(3),
+        )
+        .expect("disable");
+    let rows = store.active_all().expect("active_all");
+    let keys: Vec<(String, String)> = rows
+        .iter()
+        .map(|row| (row.team.as_str().to_owned(), row.hook.as_str().to_owned()))
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            ("test-team".to_owned(), "task.close".to_owned()),
+            ("test-team-z".to_owned(), "task.close".to_owned())
+        ]
+    );
 }
 
 #[test]
