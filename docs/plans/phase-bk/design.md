@@ -934,8 +934,11 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
   the listener's finish as a future; its steps are `cron_worker`, then
   `hook_chains` (begin shutdown, drain to the deadline), then `listener`.
   The three functions live in `cron_composition.rs`. The three functions are extracted so the in-crate
-  tests call them with no listener. `CronWorkerHandle::shutdown` stops scheduling,
-  awaits in-flight runs until the deadline, then aborts them.
+  tests call them with no listener. The `cron_worker` step uses
+  `min(deadline, Instant::now() + 1 s)` as its deadline: a stuck cron run
+  cannot consume the replacement daemon's full drain budget needed by the
+  following hook-chain and listener steps. `CronWorkerHandle::shutdown` stops
+  scheduling, awaits in-flight runs until that deadline, then aborts them.
 
 ### 9.10 Doctor collection
 

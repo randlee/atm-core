@@ -27,7 +27,7 @@ production line counts):
   `crates/atm/src/commands/hook_module.rs`, `crates/atm/src/commands/mod.rs`
   (edited: `Hook(HookCommand)`, `Cron(CronCommand)` in `enum Command` at
   `:118` and their arms; 130), `crates/atm/src/output/hooks.rs`
-  (`print_hook_list`, `print_cron_list`, `print_doctor_hooks`,
+  (`render_hook_list`, `render_cron_list`, `print_doctor_hooks`,
   `print_hook_actions`), `crates/atm/src/output.rs` (edited: `mod hooks;
   pub use hooks::*;` and one `print_doctor_hooks` call in
   `print_doctor_result` `:288`; 991 → 994), `crates/atm/src/composition.rs`
@@ -100,8 +100,8 @@ pub fn parse_custom_object(raw: &str) -> Result<serde_json::Map<String, serde_js
 pub fn parse_rfc3339_utc(raw: &str) -> Result<DateTime<Utc>, String>;   // clap value_parser for --until; "--until must be RFC 3339: <chrono error>"
 
 // crates/atm/src/output/hooks.rs
-pub fn print_hook_list(rows: &[HookRegistration], json: bool) -> Result<()>;   // PHASE HOOK ACTIVE MODULE CWD TIMEOUT_MS CUSTOM REGISTERED_BY REGISTERED_AT DISABLED_AT
-pub fn print_cron_list(rows: &[CronSchedule], json: bool) -> Result<()>;       // PHASE NAME ACTIVE CRON JITTER_S MODULE ARGS TIMEOUT_MS CUSTOM STOP LAST_RUN_AT LAST_OUTCOME
+pub(crate) fn render_hook_list(rows: &[HookRegistration], json: bool) -> Result<String>;   // PHASE HOOK ACTIVE MODULE CWD TIMEOUT_MS CUSTOM REGISTERED_BY REGISTERED_AT DISABLED_AT
+pub(crate) fn render_cron_list(rows: &[CronSchedule], json: bool) -> Result<String>;       // PHASE NAME ACTIVE CRON JITTER_S MODULE ARGS TIMEOUT_MS CUSTOM STOP LAST_RUN_AT LAST_OUTCOME
 // CUSTOM prints `<n> keys`; --json carries the full custom object and jitter_s
 pub fn print_doctor_hooks(entries: &[HookDoctorEntry]) -> Vec<String>;   // `Hooks:` + one line per entry + indented findings, or `Hooks: none`
 pub fn print_hook_actions(response: &HookActionsResponse) -> String;     // `hook ran <n> actions` (D-b)
