@@ -96,6 +96,7 @@ pub use atm_storage::request_budget::{
 pub use atm_storage::{
     CronGeneration, CronName, CronSchedule, CronScheduleId, CronScheduleStore, HookExitCause,
     HookName, HookRegistration, HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition,
+    stopped_outcome,
 };
 pub use cron_scheduler::{CronScheduler, CronStartSpec};
 pub use hook_action_dispatcher::{DispatchSpec, DispatchedAction, HookActionDispatcher};

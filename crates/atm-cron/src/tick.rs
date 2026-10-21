@@ -39,7 +39,7 @@ impl CronRunOutcome {
             Self::Timeout => "timeout".into(),
             Self::Malformed => "malformed".into(),
             Self::ActionErr(code) => format!("action_err: {code}"),
-            Self::Stopped(reason) => format!("stopped: {reason}"),
+            Self::Stopped(reason) => atm_core::boundary::stopped_outcome(reason),
             Self::StopCheckFailed(code) => format!("stop_check_failed: {code}"),
         }
     }
@@ -68,21 +68,15 @@ pub(crate) fn log(
 }
 
 pub(crate) async fn record(cron: &AtmCron, schedule: &CronSchedule, outcome: &CronRunOutcome) {
-    let (id, generation, at, text) = (
-        schedule.id,
-        schedule.generation,
-        cron.deps.clock.now(),
-        outcome.as_str(),
-    );
-    let stop = matches!(outcome, CronRunOutcome::Stopped(_));
+    let (id, generation, at) = (schedule.id, schedule.generation, cron.deps.clock.now());
+    let stopped_reason = match outcome {
+        CronRunOutcome::Stopped(reason) => Some(reason.clone()),
+        _ => None,
+    };
+    let text = outcome.as_str();
     let result = store_call(cron.deps.store.clone(), move |store| {
-        if stop {
-            store.record_stop(
-                id,
-                generation,
-                at.into(),
-                text.strip_prefix("stopped: ").unwrap_or(&text),
-            )
+        if let Some(reason) = stopped_reason {
+            store.record_stop(id, generation, at.into(), &reason)
         } else {
             store.record_run(id, generation, at.into(), &text)
         }
