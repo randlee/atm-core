@@ -865,6 +865,23 @@ async fn start_while_running_ticks_without_restart() {
 }
 
 #[tokio::test]
+async fn reload_keeps_a_due_tick_for_an_unchanged_slot() {
+    let fixture = Fixture::new();
+    fixture.jitter.values.lock().unwrap().push_back(0);
+    fixture.cron.start(fixture.spec("first")).await.unwrap();
+    fixture.reply(HookReply::PassThrough);
+    let worker = fixture.worker().await;
+
+    let parks = fixture.clock.parks();
+    fixture.clock.advance(chrono::Duration::seconds(60));
+    fixture.cron.start(fixture.spec("second")).await.unwrap();
+    fixture.clock.wait_parks_above(parks).await;
+
+    shutdown(&worker).await;
+    assert_eq!(fixture.calls(), 1);
+}
+
+#[tokio::test]
 async fn end_stops_its_ticks() {
     let fixture = Fixture::new();
     let spec = fixture.spec("ended");

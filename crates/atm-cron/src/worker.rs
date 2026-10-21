@@ -170,15 +170,7 @@ async fn merge(cron: &AtmCron, slots: &mut Vec<Slot>, rows: Vec<CronSchedule>) {
             .iter()
             .position(|slot| unchanged(&slot.schedule, &schedule))
         {
-            let mut slot = previous.remove(index);
-            match next_time(&schedule, cron.deps.clock.now()) {
-                Ok(Some(next)) => {
-                    slot.next = Some(next);
-                    slots.push(slot);
-                }
-                Ok(None) => stop_exhausted(cron, &schedule).await,
-                Err(error) => log_next_time_error(&schedule, &error),
-            }
+            slots.push(previous.remove(index));
         } else {
             match next_time(&schedule, cron.deps.clock.now()) {
                 Ok(Some(next)) => slots.push(Slot {
