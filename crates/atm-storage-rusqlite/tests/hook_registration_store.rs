@@ -11,6 +11,11 @@ use chrono::{TimeZone, Utc};
 use rusqlite::{Connection, params};
 use tempfile::TempDir;
 
+// The primary-key index can incidentally return phase order for tied rows
+// even when a query omits its explicit SQL tie-breaker. Keep the required
+// ORDER BY terms pinned so the tests do not depend on SQLite's query plan.
+const HOOK_REGISTRATION_STORE_SOURCE: &str = include_str!("../src/hook_registration_store.rs");
+
 fn stamp(day: u32) -> IsoTimestamp {
     IsoTimestamp::from_datetime(
         Utc.with_ymd_and_hms(2026, 10, day, 12, 0, 0)
@@ -42,8 +47,18 @@ fn registration(
     module: &str,
     at: IsoTimestamp,
 ) -> HookRegistration {
+    registration_for_team("test-team", phase_id, hook_name, module, at)
+}
+
+fn registration_for_team(
+    team_name: &str,
+    phase_id: &str,
+    hook_name: &str,
+    module: &str,
+    at: IsoTimestamp,
+) -> HookRegistration {
     HookRegistration {
-        team: team(),
+        team: TeamName::from_validated(team_name),
         phase: phase(phase_id),
         hook: hook(hook_name),
         module_path: PathBuf::from(module),
@@ -194,6 +209,9 @@ fn reregister_disabled_key_lists_last() {
 
 #[test]
 fn list_orders_active_first_then_registered_at_then_phase() {
+    assert!(HOOK_REGISTRATION_STORE_SOURCE.contains("ORDER BY registered_at, phase;"));
+    assert!(HOOK_REGISTRATION_STORE_SOURCE.contains("ORDER BY active DESC, registered_at, phase;"));
+
     let h = Harness::new();
     let store = h.store();
     store
@@ -222,6 +240,119 @@ fn list_orders_active_first_then_registered_at_then_phase() {
             ("bj/task.close".to_owned(), false),
         ]
     );
+
+    let tied_h = Harness::new();
+    let tied_store = tied_h.store();
+    tied_store
+        .register(registration("bj", "task.close", "/a.py", stamp(1)))
+        .expect("bj");
+    tied_store
+        .register(registration("bl", "task.close", "/a.py", stamp(2)))
+        .expect("bl");
+    tied_store
+        .register(registration("bk", "task.close", "/a.py", stamp(3)))
+        .expect("bk");
+    tied_store
+        .disable(&team(), &phase("bj"), None, stamp(9))
+        .expect("disable bj");
+    tied_store
+        .register(registration("bl", "task.start", "/c.py", stamp(4)))
+        .expect("bl start");
+    tied_store
+        .register(registration("bk", "task.start", "/c.py", stamp(4)))
+        .expect("bk start");
+    let tied = tied_store
+        .active(&team(), &hook("task.start"))
+        .expect("tied active");
+    assert_eq!(
+        tied.iter()
+            .map(|row| row.phase.as_str())
+            .collect::<Vec<_>>(),
+        ["bk", "bl"]
+    );
+    let listed = tied_store
+        .list(&team(), None)
+        .expect("list with tied times");
+    assert_eq!(
+        listed
+            .iter()
+            .map(|row| row.phase.as_str())
+            .collect::<Vec<_>>(),
+        ["bl", "bk", "bk", "bl", "bj"]
+    );
+}
+
+#[test]
+fn active_all_order_equals_active_order_for_every_key() {
+    assert!(HOOK_REGISTRATION_STORE_SOURCE.contains("ORDER BY team, hook, registered_at, phase;"));
+
+    let h = Harness::new();
+    let store = h.store();
+    store
+        .register(registration_for_team(
+            "test-team",
+            "bk",
+            "task.close",
+            "/a.py",
+            stamp(2),
+        ))
+        .expect("bk");
+    store
+        .register(registration_for_team(
+            "test-team",
+            "bj",
+            "task.close",
+            "/a.py",
+            stamp(1),
+        ))
+        .expect("bj");
+    store
+        .register(registration_for_team(
+            "test-team",
+            "bl",
+            "task.close",
+            "/a.py",
+            stamp(2),
+        ))
+        .expect("bl");
+    for (team_name, hook_name) in [
+        ("test-team", "task.start"),
+        ("test-team-z", "task.close"),
+        ("test-team-z", "task.start"),
+    ] {
+        for (phase_id, day) in [("bl", 2), ("bk", 2), ("bj", 1)] {
+            store
+                .register(registration_for_team(
+                    team_name,
+                    phase_id,
+                    hook_name,
+                    "/a.py",
+                    stamp(day),
+                ))
+                .expect("register");
+        }
+    }
+    let all = store.active_all().expect("all");
+    for team_name in ["test-team", "test-team-z"] {
+        for hook_name in ["task.close", "task.start"] {
+            let team = TeamName::from_validated(team_name);
+            let hook = hook(hook_name);
+            let per_key = store.active(&team, &hook).expect("per key");
+            assert_eq!(
+                per_key
+                    .iter()
+                    .map(|row| row.phase.as_str())
+                    .collect::<Vec<_>>(),
+                ["bj", "bk", "bl"]
+            );
+            let filtered: Vec<HookRegistration> = all
+                .iter()
+                .filter(|row| row.team == team && row.hook == hook)
+                .cloned()
+                .collect();
+            assert_eq!(filtered, per_key);
+        }
+    }
 }
 
 #[test]
