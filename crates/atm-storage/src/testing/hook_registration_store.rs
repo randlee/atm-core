@@ -11,7 +11,8 @@ use std::time::Duration;
 use crate::contract::sealed;
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
-use crate::hook_registration_store::{HookName, HookRegistration, HookRegistrationStore, PhaseId};
+use crate::hook_registration_store::{HookRegistration, HookRegistrationStore};
+use crate::hook_types::{HookName, PhaseId};
 use crate::types::{IsoTimestamp, TeamName};
 
 /// Longest a pause handshake may wait before the test fails instead of hanging.

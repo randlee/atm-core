@@ -12,6 +12,7 @@ pub mod error_codes;
 pub mod factory;
 pub mod hook_error;
 pub mod hook_registration_store;
+pub mod hook_types;
 pub mod peer_catalog_audit;
 mod peer_contract;
 mod read_lane_error;
@@ -73,7 +74,8 @@ pub use factory::{
     StorageHandles, WriteThroughRosterStore,
 };
 pub use hook_error::HookExitCause;
-pub use hook_registration_store::{HookName, HookRegistration, HookRegistrationStore, PhaseId};
+pub use hook_registration_store::{HookRegistration, HookRegistrationStore};
+pub use hook_types::{HookName, PhaseId};
 pub use peer_catalog_audit::TrustedPeerCatalogAudit;
 pub use read_lane_error::ReadLaneError;
 pub use roles::ROLE_WORKER;

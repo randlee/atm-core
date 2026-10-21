@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
-use crate::hook_registration_store::PhaseId;
+use crate::hook_types::PhaseId;
 
 /// Why a hook process produced no usable reply.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,7 +82,7 @@ mod tests {
 
     use super::HookExitCause;
     use crate::error::AtmError;
-    use crate::hook_registration_store::PhaseId;
+    use crate::hook_types::PhaseId;
 
     #[test]
     fn hook_error_constructors_format_and_classify() {

@@ -14,7 +14,7 @@ use crate::cron_schedule_store::{
 };
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
-use crate::hook_registration_store::PhaseId;
+use crate::hook_types::PhaseId;
 use crate::types::{IsoTimestamp, TeamName};
 
 /// Keeps every cron schedule row in memory.

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::contract::sealed;
 use crate::error::AtmError;
-use crate::hook_registration_store::PhaseId;
+use crate::hook_types::PhaseId;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 /// Stable row id of one cron schedule. Display prints the integer.
