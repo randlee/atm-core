@@ -642,8 +642,10 @@ is appended. The CLI exit arms are bk-5's
 
 ### 9.2 Action commands
 
-`HookAction { command: String, run_as: Option<AgentName> (serde "as"),
-request: serde_json::Value }`, with `deny_unknown_fields`.
+`HookAction { command: HookActionCommand, run_as: Option<AgentName> (serde
+"as"), request: serde_json::Value }`, with `deny_unknown_fields`. The closed
+enum (846c6a094) rejects unknown commands while preserving the JSON command
+strings at the contract boundary.
 `HookAction::into_api_request(&self, team: &TeamName, default_as: &AgentName)
 -> Result<ApiRequest, AtmError>` deserializes `request` as the type in this
 table, checks the condition and the team field, and sets the identity field
@@ -753,7 +755,9 @@ impl TaskCommand {
   besides the test double; it runs each action's `ApiRequest` through
   that entry, so no action reaches a filter. `dispatch_actions(spec:
   DispatchSpec { hook, team, phase, default_as, deadline, dry_run },
-  actions)`; with `dry_run` it validates every action and dispatches none.
+  actions) -> Result<Vec<DispatchedAction>, AtmError>` returns one recorded
+  command/response pair per dispatched action; with `dry_run` it validates
+  every action and dispatches none.
   A reply carries at most `HOOK_ACTIONS_MAX` = 32 actions (a longer list
   is `ATM_HOOK_MALFORMED`), which bounds one task or cron run. The three
   `HookRunner` methods stay separate: they differ in argv, stdin and the
@@ -794,9 +798,11 @@ Constants in `atm_storage::request_budget` (bk-1): `HOOK_TIMEOUT_MAX_MS =
   the enforced-budget behavior from finding `atm-bk-3.group-qa-f2`,
   introduced by commit `071991330`.
 - `RequestDeadline` (bk-2) derives `PartialEq, Eq` and gains
-  `remaining_ms()` (0 when expired) and `minus(Duration)`. Tests compare a
-  recorded deadline by equality to the one passed, or bound it, never
-  assert a time exactly.
+  `remaining_ms()` (0 when expired) and `minus(Duration)`. `minus` uses
+  `checked_sub` and falls back to `Instant::now()` when subtraction is not
+  representable, keeping an impossible earlier deadline expired rather than
+  preserving the original deadline. Tests compare a recorded deadline by
+  equality to the one passed, or bound it, never assert a time exactly.
 - Task-hook actions reuse the request's remaining deadline. A cron tick or
   stop check passes `RequestDeadline::after(timeout_ms +
   HOOK_ACTION_RESERVE_MS)`, so the runner's budget is the row's

@@ -67,9 +67,9 @@ pub struct HookRequest {
 }
 pub const HOOK_SCHEMA_VERSION: &str = "1.0.0";   // independent of HTTP_API_VERSION (ADR-068 D8)
 pub const HOOK_CUSTOM_MAX_BYTES: usize = 65_536;  pub const HOOK_PATH_MAX_BYTES: usize = 4096;
-pub const CRON_NAME_MAX_BYTES: usize = 64;        pub const CRON_ARGS_MAX: usize = 32;  pub const CRON_ARGS_MAX_BYTES: usize = 4096;
+pub const CRON_NAME_MAX_BYTES: usize = 64;        pub const CRON_ARGS_MAX: usize = 32;  pub(crate) const CRON_ARGS_MAX_BYTES: usize = 4096;
 /// A non-object or a serialized size above HOOK_CUSTOM_MAX_BYTES is hook_module_invalid naming `custom` and the limit.
-pub fn custom_object(value: serde_json::Value) -> Result<serde_json::Map<String, serde_json::Value>, AtmError>;
+pub(crate) fn custom_object(value: serde_json::Value) -> Result<serde_json::Map<String, serde_json::Value>, AtmError>;
 #[derive(Clone, Debug, PartialEq)]
 pub struct HookTarget { pub team: TeamName, pub phase: PhaseId, pub module_path: PathBuf, pub cwd: PathBuf, pub timeout_ms: u32, pub custom: serde_json::Map<String, serde_json::Value> }
 impl From<&HookRegistration> for HookTarget {}  impl From<&CronSchedule> for HookTarget {}
@@ -80,11 +80,12 @@ impl HookRequest {
 
 // crates/atm-core/src/hook/reply.rs
 pub enum HookReply { Handled(Vec<HookAction>), PassThrough, NotApplicable, Refused { message: String } }   // no serde derive
-pub const HOOK_ACTIONS_MAX: usize = 32;
+pub(crate) const HOOK_ACTIONS_MAX: usize = 32;
 impl HookReply { pub fn parse(stdout: &[u8]) -> Result<Self, AtmError>; }   // table below
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct HookAction { pub command: String, #[serde(rename = "as", default)] pub run_as: Option<AgentName>, pub request: serde_json::Value }
+pub struct HookAction { pub command: HookActionCommand, #[serde(rename = "as", default)] pub run_as: Option<AgentName>, pub request: serde_json::Value }
+// HookActionCommand is the closed command enum introduced by 846c6a094, so unknown commands are rejected at the contract boundary.
 impl HookAction { pub fn into_api_request(&self, team: &TeamName, default_as: &AgentName) -> Result<ApiRequest, AtmError>; }   // action table below
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -102,14 +103,14 @@ pub struct CronEndRequest { pub caller_identity: AgentName, pub caller_team: Tea
 pub struct CronListQuery { pub caller_identity: AgentName, pub caller_team: TeamName, pub phase: Option<PhaseId> }
 pub struct HookActionsResponse { pub dispatched: usize }   // design D-b; all derive Clone, Debug, PartialEq, Serialize, Deserialize
 impl HookRegisterRequest { pub fn check_limits(&self) -> Result<serde_json::Map<String, serde_json::Value>, AtmError>; }
-impl CronStartRequest { pub fn check_limits(&self) -> Result<serde_json::Map<String, serde_json::Value>, AtmError>; }
-// check_limits: custom_object(custom), module_path and cwd at most HOOK_PATH_MAX_BYTES, and for cron name 1..=CRON_NAME_MAX_BYTES,
-// at most CRON_ARGS_MAX args of CRON_ARGS_MAX_BYTES total; each breach is hook_module_invalid naming the field and limit. Ok is the custom map.
+impl CronStartRequest { pub fn into_spec(self) -> Result<CronStartSpec, AtmError>; }
+// into_spec: custom_object(custom), module_path and cwd at most HOOK_PATH_MAX_BYTES, CronName::parse(name), and at most
+// CRON_ARGS_MAX args of CRON_ARGS_MAX_BYTES total; each breach is hook_module_invalid naming the field and limit. It returns the validated CronStartSpec (72b98a000).
 
 // crates/atm-core/src/api.rs (edited :760)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)] pub struct RequestDeadline(Instant);
 impl RequestDeadline { pub fn remaining_ms(self) -> u64;              // remaining() in whole ms, 0 when expired
-                       pub fn minus(self, d: Duration) -> Self; }     // the instant d earlier (checked_sub; self when not representable)
+                       pub fn minus(self, d: Duration) -> Self; }     // the instant d earlier (checked_sub; Instant::now() when not representable)
 
 // crates/atm-core/src/boundary/task_commands.rs  (design.md §9.5)
 pub struct TaskCallCtx {
@@ -271,7 +272,7 @@ error surfaces); `TaskMove` is `task.move`; `Messages(List)` with
 2. `atm-core::boundary`: the four sealed traits, `test-utils` doubles,
    `TaskCommand`, `DispatchSpec` and the re-exports, so no crate but
    `atm-core` imports `atm_storage` for hook or cron types. No `Noop` types.
-3. The six request structs, `HookActionsResponse`, `check_limits`.
+3. The six request structs, `HookActionsResponse`, `HookRegisterRequest::check_limits`, and `CronStartRequest::into_spec`.
 4. `RequestDeadline` additions; the `LocalServiceRuntime` store accessors.
 5. The doctor request, reply, finding and entry types.
 6. Boundary manifests: `allowed_test_double_paths` in the defining-module
@@ -287,7 +288,7 @@ error surfaces); `TaskMove` is `task.move`; `Messages(List)` with
 
 - [ ] (ANC-003) `boundary:BOUNDARY-HookRunner` `crates/atm-core/src/hook/request.rs::tests::hook_request_top_level_keys_and_request_shape_are_pinned`: for the six task commands and both cron hooks the keys are `schema_version, hook, team, phase, caller, request, custom`, `caller` keys `identity, team, host`, task `request` equals the CLI envelope's `encode_request_body`, cron `request` is `{"args": [...], "created_by": <caller.identity>}`.
 - [ ] (ANC-022) `boundary:BOUNDARY-HookRunner` `request.rs::tests::custom_round_trips_and_comes_from_the_registration` (`{"x":[1,{"y":null}]}` byte-identical; `for_task` and `for_cron` copy `target.custom`); `::custom_object_refuses_non_object_and_oversize` (`[1]`, `"s"`, 65 537 bytes refused naming `custom`; 65 536 accepted).
-- [ ] (service limits) `boundary:BOUNDARY-HookRunner` `crates/atm-core/src/hook/routes.rs::tests::check_limits_refuses_each_oversize_field`: a 65-byte cron `name`, an empty one, 33 args, 4 097 arg bytes, and a 4 097-byte `module_path` or `cwd` are each `ATM_HOOK_MODULE_INVALID` naming the field; values at each limit pass.
+- [ ] (service limits) `boundary:BOUNDARY-HookRunner` `crates/atm-core/src/hook/routes.rs::tests::into_spec_refuses_each_oversize_field`: a 65-byte cron `name`, an empty one, 33 args, 4 097 arg bytes, and a 4 097-byte `module_path` or `cwd` are each `ATM_HOOK_MODULE_INVALID` naming the field; values at each limit pass.
 - [ ] (ANC-013) `boundary:BOUNDARY-TaskCommands` `crates/atm-core/src/boundary/task_commands.rs::tests::classify_maps_each_task_request` asserts every classify rule above and each `hook_name()`; `::normalization_error_surfaces_the_existing_validation_error`.
 - [ ] (ANC-007, ANC-009) `boundary:BOUNDARY-HookRunner` `crates/atm-core/src/hook/reply.rs::tests::action_maps_each_command`: one action per command yields the named `ApiRequest`; `as` sets the identity field, else `default_as` even when the body names another; another `caller_team` is malformed; `search`/`doctor` force the team, and `as` on either, `all_teams: true`, or a foreign team are malformed; the CLI's `atm task assign` HTTP body, read with the route's type, gives the handler's request.
 - [ ] (D-6) `boundary:BOUNDARY-HookRunner` `reply.rs::tests::registry_cron_and_internal_commands_are_malformed`: `hook.register`, `cron.start`, `heartbeat`, `task.foo`, and `send` with a `task_id` fail with `ATM_HOOK_MALFORMED`; a key other than `command`, `as`, `request` is refused.
