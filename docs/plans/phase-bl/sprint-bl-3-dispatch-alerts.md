@@ -1,8 +1,11 @@
 # Sprint bl-3 — event requests, aggregation, and scheduled delivery
 
-`BOUNDARY-EventRequests`; wave 2; uses bl-1's `StateSnapshot` and
-`EventRequest` types and must follow bl-10's persisted problem-source records.
-Read those current records, derive held/dispatch transitions, and debounce/aggregate
+closure_type: boundary; target_boundary: EventDispatch; branch:
+sprint/bl-3-event-dispatch; PR target: integrate/phase-bl; wave 2; external_ref:
+#491,#359; recommended_agent: trinity; recommended_model: gpt-6.1-sol.
+must_follow: bl-1 (contract). parallel_safe: every other wave-2 sprint.
+Use only the bl-1 StateSnapshot/EventRequest types, derive held/dispatch
+transitions, and debounce/aggregate
 durable event requests. A separate schedule delivers due ATM requests and
 records outcome. No collector/TUI sends messages and no fresh-BD-and-ATM rule
 exists. Own dispatch/bead event code and deterministic record/debounce/delivery
@@ -10,9 +13,8 @@ tests; retained held rows include bead, task, reason, and source timestamp.
 
 ## Scope and owned paths
 
-Own `dispatch.py`, `beads_source.py`, event-request/delivery JSON state and
-their tests. It does not own collectors, `EventRequest` type definitions,
-sanity D5 selection, or TUI rendering. `must_follow`: bl-10's persisted problem-source records; bl-1's public record and request types. It is not parallel-safe with either producer, but is parallel-safe with unrelated wave-2 sprints once those artifacts are present.
+Own events.py, delivery.py, test_events.py and test_delivery.py. It does not
+own collectors, EventRequest definitions, sanity D5 selection, or TUI rendering.
 
 ## Governing text (verbatim)
 

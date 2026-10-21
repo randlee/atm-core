@@ -1,44 +1,61 @@
 # Phase BL — atm-bd-orchestration 0.18.5
 
-## Goal and authority
+## Authority, architecture, and plan DAG
 
-Phase bl implements the scoped 0.18.5 work with collectors → current JSON
-state → debounced/aggregated event requests → separately scheduled ATM
-delivery. No database is introduced. `design.md` contains Rand's verbatim
-authority; deterministic controlled-input tests are required.
+Phase BL implements collectors → persisted JSON state → state stage →
+EventRequest → debounce/aggregate → separately scheduled delivery. It adds no
+database. design.md holds Rand's verbatim authority. The sole machine-readable
+DAG is docs/plans/phase-bl/phase-bl.jsonl. bl-9 was deleted before planning
+because it duplicated the collector/snapshot seam; its work is now bl-8.
 
-## Boundaries
+## Boundary and ownership map
 
-| Boundary | Producer | Consumers | Artifact |
-| --- | --- | --- | --- |
-| Collectors and state types | bl-1 | bl-3,5,6,7,10,12 | per-source records, stamps, locks, `StateSnapshot`, `EventRequest` |
-| JevResult | bl-2 | bl-5,12 | JSONL and enum |
-| Event delivery | bl-3 | bl-12 | debounced request queue and delivery history |
-| QaReviewers | bl-4 | bl-7,12 | reviewer metadata |
-| SanityState | bl-5 | bl-7,12 | D5 state and emitted `EventRequest` |
-| DashboardRender | bl-6 | bl-7,12 | persisted-state render |
-| ConsoleApp | bl-7 | bl-12 | collector requests and tabs |
-| BdDeadline | bl-8 | none until D1 | command seam |
-| ProblemSources | bl-10 | bl-3,12 | source records and derived problem state |
-| SanityMechanics | bl-11 | none | close/stack mechanics |
+| Sprint | Boundary / closure | Exact owned paths (disjoint within wave) |
+| --- | --- | --- |
+| bl-1 | PhaseBlContract / contract | apps/atm-bd-console/src/atm_bd_console/{types,codec,registry}.py; apps/atm-bd-console/tests/{test_types,test_codec,test_registry}.py |
+| bl-2 | JevResult / boundary | plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/jev_client.py; plugins/atm-bd-orchestration/scripts/tests/test_jev_client.py |
+| bl-3 | EventDispatch / boundary | apps/atm-bd-console/src/atm_bd_console/{events,delivery}.py; apps/atm-bd-console/tests/{test_events,test_delivery}.py |
+| bl-4 | QaReviewers / boundary | plugins/atm-bd-orchestration/{roles/quality-mgr.md,templates/qa-template.xml.j2,templates/finding-bead.json.j2,scripts/tests/test_qa_report_contract.py} |
+| bl-5 | SanityState / boundary | plugins/atm-bd-orchestration/{agents/dev-sanity.md,templates/dev-sanity-template.xml.j2,templates/sanity-run-record.json.j2,scripts/{sanity-merge,sanity-run-history,sanity-stack-link,atm-task-close.py},scripts/tests/test_sanity_*.py} |
+| bl-6 | DashboardRender / boundary | apps/atm-bd-console/src/atm_bd_console/{render,status,show}.py; apps/atm-bd-console/tests/test_{render,status,show}.py; apps/atm-bd-console/README.md |
+| bl-7 | QualityTab / boundary | apps/atm-bd-console/src/atm_bd_console/{runs,icons}.py; apps/atm-bd-console/tests/test_{runs,icons}.py |
+| bl-8 | Collectors / boundary | apps/atm-bd-console/src/atm_bd_console/{refresh,state,adapters/{bd,atm,github}.py,cli.py,command.py}; matching collector tests |
+| bl-10 | ProblemSources / boundary | plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_bd,problem_sources}.py; matching tests |
+| bl-13 | DagRender / boundary | apps/atm-bd-console/src/atm_bd_console/dag.py; apps/atm-bd-console/tests/test_dag.py |
+| bl-14 | ConsoleApp / boundary | apps/atm-bd-console/src/atm_bd_console/app.py; apps/atm-bd-console/tests/test_app.py |
+| bl-12 | PhaseBlComposition / integration | apps/atm-bd-console/src/atm_bd_console/{cron_entry,delivery_entry,wiring}.py; apps/atm-bd-console/tests/test_phase_bl_composition.py |
 
 ## Three waves
 
-| Wave | Sprints | Hard artifact dependency |
+| Wave | Sprints | Contract / ordering |
 | --- | --- | --- |
-| 1 | bl-1, bl-2, bl-4, bl-8, bl-10, bl-11 | bl-10 consumes bl-1 collector-record types only (contract compatibility, not an implementation sequence); bl-8 remains D1-gated |
-| 2 | bl-3, bl-5, bl-6, bl-7 | bl-3 ← bl-1 types + bl-10 source records; bl-5 ← bl-1 types + bl-2 JSONL; bl-6 ← bl-1 aggregate; bl-7 ← bl-1 records + bl-4 metadata |
-| 3 | bl-12 | bl-3 requests + bl-4 metadata + bl-5 sanity state + bl-7 display |
+| 1 | bl-1 | publishes the complete Python/JSON contract and fixtures |
+| 2 | bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13, bl-14 | each consumes only bl-1; paths are disjoint |
+| 3 | bl-12 | composes every wave-2 production boundary |
 
-There are 11 sprints; maximum width is six in wave 1. Critical paths are
-`bl-1 → bl-3 → bl-12`, `bl-10 → bl-3 → bl-12`, and
-`bl-2 → bl-5 → bl-12`. bl-10's use of bl-1 types is contract-only, so it is
-not an implementation edge or a fourth wave.
-`phase-bl.jsonl` and `.sprints/BL/structure.ttl` describe the same DAG.
+Sprint count is 12, usable width is 10, and critical path is 3
+(bl-1 → any wave-2 sprint → bl-12). Every branch is sprint/bl-<id>-<slug>
+and targets integrate/phase-bl; planned layer positions are unique: bl-1 L1;
+wave-2 layers L2–L11 in numeric order; bl-12 L12. The plan branch alone
+targets develop.
 
-## Decisions and integration exit
+## Issue disposition
 
-D1–D4 retain their existing ruled-work limits; D5 remains the bl-5 mechanical
-selection rule. bl-12 proves Jev/reviewer inputs enter current state, the TUI
-displays it, and transitions create requests; controlled delivery time proves
-messages are independent of cron/TUI collection.
+| Issue | Sprint | Deliverable | Deterministic proof / status |
+| --- | --- | --- | --- |
+| #379, #164 | bl-2 | D1 | test_jev_request_array_and_closed_error_enum |
+| #365, #497 | bl-5 | D1 | test_sanity_log_preserves_jev_request_array_and_jsonl |
+| #375, #372 | bl-10 | D1 | test_latest_non_cancelled_check_and_branch_fallback |
+| #492 | bl-8 | carry-forward | D2 remains open; dispatch awaits its ruling |
+| #126, #498 | bl-5 | D3 | test_not_reproducible_close_and_rebase_link |
+| #533 | bl-8 | D4 | test_d1_deadline_is_required_before_command_dispatch |
+| #491, #359 | bl-3 | D2 | test_debounce_and_scheduled_delivery |
+| #360 | bl-13 | D1 | test_dag_ansi_fixture_converts_to_rich_text |
+| #347 | bl-4/bl-7 | D1/D1 | test_qa_close_step_writes_reviewers / test_quality_table_columns_match_sanity |
+
+## Integration exit
+
+bl-12 owns the real cron entry (collect → build_snapshot → enqueue) and
+delivery entry (deliver_due) wiring. Its composed tests inject only clocks,
+ATM, and source fakes and alone prove cron/TUI equality, no send from
+collectors/TUI, retry after source failure, and scheduled delivery.
