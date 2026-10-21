@@ -56,9 +56,12 @@ Owned paths (new unless marked edited):
 ## Public contract
 
 ```rust
-// crates/atm-storage-rusqlite: pub(crate)-constructed, private outside the crate, exactly as SqliteTaskStore (task-store-sqlite.toml)
-pub(crate) struct SqliteHookRegistrationStore { db: SharedDb }   // register: INSERT .. ON CONFLICT(team, phase, hook) DO UPDATE (an upsert, never INSERT OR REPLACE)
-pub(crate) struct SqliteCronScheduleStore { db: SharedDb }       // start-after-end: one UPDATE in the writer transaction, generation = generation + 1
+// crates/atm-storage-rusqlite: private concrete stores constructed through
+// crate-visible factories returning the sealed trait objects.
+struct SqliteHookRegistrationStore { db: Arc<SharedDb> }   // register: INSERT .. ON CONFLICT(team, phase, hook) DO UPDATE (an upsert, never INSERT OR REPLACE)
+struct SqliteCronScheduleStore { db: Arc<SharedDb> }       // start-after-end: one UPDATE in the writer transaction, generation = generation + 1
+pub(crate) fn hook_registration_store(db: Arc<SharedDb>) -> Arc<dyn HookRegistrationStore + Send + Sync>;
+pub(crate) fn cron_schedule_store(db: Arc<SharedDb>) -> Arc<dyn CronScheduleStore + Send + Sync>;
 impl atm_storage::contract::sealed::Sealed for SqliteHookRegistrationStore {}  impl HookRegistrationStore for SqliteHookRegistrationStore {}
 impl atm_storage::contract::sealed::Sealed for SqliteCronScheduleStore {}      impl CronScheduleStore for SqliteCronScheduleStore {}
 pub(crate) fn ensure_schema(connection: &Connection, target: &Path) -> Result<(), AtmError>;   // hook_schema.rs, both CREATE TABLE IF NOT EXISTS
@@ -170,3 +173,13 @@ visibility = "private"`, `constructor = "pub(crate)"`, `module =
 
 - No `LocalServiceRuntime` install of the stores (bk-5 composition); no
   core type, route, runner, scheduler or CLI.
+
+## Store implementation note
+
+`CronScheduleStore::end` and `HookRegistrationStore::disable` keep their
+select-update-patch transactions in their respective store modules. They share
+the selector shape (team, phase, active, and an optional name or hook key),
+but differ in table, key column, ordering keys, row type, and lifecycle
+column. A shared helper in `store_support` would need table-specific SQL
+identifiers and generic row decoding or callbacks, making the storage
+abstraction less clear than the small duplicated transaction shape.

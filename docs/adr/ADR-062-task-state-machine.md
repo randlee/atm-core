@@ -192,6 +192,8 @@ Issue #1932, with Rand's agreed scope (2026-10-20):
 
 1. `max_tasks` lives only in roster member `metadata_json`; no typed HTTP API
    field (no `HTTP_API_VERSION` bump), no doctor change.
+   The separate `1.14.0` bump records `ATM_TASK_MAX_ACTIVE_REACHED`; it does
+   not add an HTTP representation for the `max_tasks` setting.
 2. Nudge, reminder and stall/escalation state are per member: one nudge lists
    all of the member's open tasks.
 3. Ordering: started tasks sort ahead of all unstarted tasks; each group keeps

@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, PoisonError, RwLock};
+use std::sync::{Arc, LazyLock, PoisonError, RwLock};
 use std::time::Instant;
 
 use async_trait::async_trait;
@@ -31,7 +31,10 @@ use crate::hook_actions::UnhookedRouter;
 use crate::hook_chains::ChainTracker;
 use crate::router_support::ControlPathSyncBridge;
 
-type Chains = HashMap<(TeamName, HookName), Arc<[Arc<HookRegistration>]>>;
+type HookChains = HashMap<HookName, Arc<[Arc<HookRegistration>]>>;
+type Chains = HashMap<TeamName, HookChains>;
+
+static EMPTY_CHAIN: LazyLock<Arc<[Arc<HookRegistration>]>> = LazyLock::new(|| Arc::from([]));
 
 /// The active registrations, grouped by `(team, hook)` in store order.
 ///
@@ -76,6 +79,7 @@ impl ActiveHookSnapshot {
             }
             Err(error) => {
                 self.dirty.store(true, Ordering::SeqCst);
+                tracing::error!(error = %error, "hook snapshot reload failed");
                 Err(error)
             }
         }
@@ -114,23 +118,33 @@ impl ActiveHookSnapshot {
     fn chain(&self, team: &TeamName, hook: &HookName) -> Arc<[Arc<HookRegistration>]> {
         let chains = Arc::clone(&self.map.read().unwrap_or_else(PoisonError::into_inner));
         chains
-            .get(&(team.clone(), hook.clone()))
+            .get(team)
+            .and_then(|hooks| hooks.get(hook))
             .cloned()
-            .unwrap_or_else(|| Arc::from(Vec::new()))
+            .unwrap_or_else(|| Arc::clone(&EMPTY_CHAIN))
     }
 }
 
 fn build_chains(store: &dyn HookRegistrationStore) -> Result<Chains, AtmError> {
-    let mut grouped: HashMap<(TeamName, HookName), Vec<Arc<HookRegistration>>> = HashMap::new();
+    let mut grouped: HashMap<TeamName, HashMap<HookName, Vec<Arc<HookRegistration>>>> =
+        HashMap::new();
     for row in store.active_all()? {
         grouped
-            .entry((row.team.clone(), row.hook.clone()))
+            .entry(row.team.clone())
+            .or_default()
+            .entry(row.hook.clone())
             .or_default()
             .push(Arc::new(row));
     }
     Ok(grouped
         .into_iter()
-        .map(|(key, rows)| (key, Arc::from(rows)))
+        .map(|(team, hooks)| {
+            let hooks = hooks
+                .into_iter()
+                .map(|(hook, rows)| (hook, Arc::from(rows)))
+                .collect();
+            (team, hooks)
+        })
         .collect())
 }
 
@@ -230,9 +244,11 @@ impl<D: HookActionDispatcher + 'static> HookedTaskCommands<D> {
             Err(join) if join.is_panic() => Err(AtmError::hook_exit(HookExitCause::Panic(
                 panic_text(join.into_panic()),
             ))),
-            Err(_) => Err(AtmError::daemon_unavailable(
-                "hook chain cancelled: daemon shutting down",
-            )),
+            Err(join) => Err(AtmError::daemon_unavailable_with_recovery(
+                "hook chain was cancelled while the daemon was shutting down",
+                "Retry the task after the daemon is serving again; if cancellation repeats, inspect daemon shutdown logs.",
+            )
+            .with_cause(join)),
             Ok(Err(error)) => Err(error),
             Ok(Ok(Decision::Refused(message))) => Err(AtmError::hook_refused(&message)),
             Ok(Ok(Decision::Done(response))) => Ok(*response),
@@ -316,7 +332,7 @@ async fn dispatch_handled<D: HookActionDispatcher>(
     let last = done
         .into_iter()
         .rev()
-        .find(|(command, _)| command.as_str() == run.hook.as_str())
+        .find(|(command, _)| command.as_ref() == Some(&run.hook))
         .map(|(_, response)| response);
     Ok(Decision::Done(Box::new(if run.dry_run {
         hook_actions(0)
@@ -677,6 +693,7 @@ pub(crate) mod test_support {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::sync::Mutex;
     use std::sync::atomic::Ordering;
 
     use atm_core::boundary::{
@@ -686,6 +703,7 @@ mod tests {
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::hook::HookReply;
     use atm_runtime_test_support::InMemoryHookRegistrationStore;
+    use tracing_subscriber::prelude::*;
 
     use super::ActiveHookSnapshot;
     use super::HookedTaskCommands;
@@ -698,6 +716,43 @@ mod tests {
     use crate::storage_and_nudge_router::StorageAndNudgeRouter;
     use crate::storage_and_nudge_router::tests::{fixture, task_write_request};
     use crate::task_commands::NormalTaskCommands;
+
+    type CapturedEventFields = Vec<(String, String)>;
+    type CapturedEventsInner = Vec<CapturedEventFields>;
+
+    #[derive(Clone, Default)]
+    struct CapturedEvents(Arc<Mutex<CapturedEventsInner>>);
+
+    #[derive(Default)]
+    struct EventFields(Vec<(String, String)>);
+
+    impl tracing::field::Visit for EventFields {
+        fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+            self.0.push((field.name().to_owned(), value.to_owned()));
+        }
+
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            self.0.push((field.name().to_owned(), format!("{value:?}")));
+        }
+    }
+
+    struct EventCapture(CapturedEvents);
+
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for EventCapture {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _context: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            let mut fields = EventFields::default();
+            event.record(&mut fields);
+            self.0
+                .0
+                .lock()
+                .expect("captured hook snapshot events")
+                .push(fields.0);
+        }
+    }
 
     fn list_query() -> atm_core::list::ListQuery {
         atm_core::list::ListQuery {
@@ -1362,7 +1417,31 @@ mod tests {
             .register(registration("task.assign", "bk", 2))
             .expect("register");
         store.fail_active_all.store(true, Ordering::SeqCst);
-        assert!(snapshot.refresh().is_err());
+        let events = CapturedEvents::default();
+        let subscriber = tracing_subscriber::registry().with(EventCapture(events.clone()));
+        let result = tracing::subscriber::with_default(subscriber, || snapshot.refresh());
+        let error = result.expect_err("injected refresh failure");
+        let captured = {
+            events
+                .0
+                .lock()
+                .expect("captured hook snapshot events")
+                .clone()
+        };
+        assert_eq!(captured.len(), 1);
+        assert!(
+            captured[0].iter().any(|(name, value)| {
+                name == "message" && value == "hook snapshot reload failed"
+            })
+        );
+        assert!(captured[0].iter().any(|(name, value)| {
+            name == "error" && value.contains("injected hook registration active_all failure")
+        }));
+        assert!(
+            error
+                .message()
+                .contains("injected hook registration active_all failure")
+        );
         store.fail_active_all.store(false, Ordering::SeqCst);
         let rows = snapshot
             .current(&bridge(), deadline(), &team(), &hook("task.assign"))
@@ -1370,6 +1449,18 @@ mod tests {
             .expect("reloaded active");
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[1].phase, phase("bk"));
+    }
+
+    #[test]
+    fn missing_chain_uses_shared_empty_slice() {
+        let store = Arc::new(InMemoryHookRegistrationStore::new());
+        let snapshot = ActiveHookSnapshot::load(store).expect("snapshot");
+
+        let first = snapshot.chain(&team(), &hook("task.assign"));
+        let second = snapshot.chain(&team(), &hook("task.assign"));
+
+        assert!(first.is_empty());
+        assert!(Arc::ptr_eq(&first, &second));
     }
 
     #[tokio::test]

@@ -16,6 +16,12 @@ use tokio::task::{AbortHandle, JoinHandle};
 
 struct Shared {
     live: watch::Sender<usize>,
+    /// Serializes admission/registration with `ChainGuard::drop` removing one
+    /// handle and `drain` taking all remaining handles. All lock scopes are
+    /// synchronous and end before `drain` awaits. If a panic poisons this lock,
+    /// callers recover the inner map so shutdown can still abort handles that
+    /// remain in it; this is best-effort cleanup, not a guarantee that a
+    /// panicking critical section left the map complete.
     aborts: Mutex<HashMap<u64, AbortHandle>>,
 }
 
@@ -27,6 +33,8 @@ pub struct ChainTracker {
     /// Set under the `aborts` lock when `drain` takes the handles; a chain that
     /// registers after that point is aborted by its own registration.
     collected: AtomicBool,
+    /// Unique map keys only; `admit` increments this while holding `aborts`,
+    /// so the counter publishes no state and needs only relaxed ordering.
     next: AtomicU64,
 }
 
@@ -303,9 +311,23 @@ mod tests {
         assert!(
             error
                 .message()
-                .contains("hook chain cancelled: daemon shutting down"),
+                .contains("hook chain was cancelled while the daemon was shutting down"),
             "unexpected error: {}",
             error.message()
+        );
+        assert!(
+            error
+                .message()
+                .contains("Recovery: Retry the task after the daemon is serving again; if cancellation repeats, inspect daemon shutdown logs."),
+            "missing recovery guidance: {}",
+            error.message()
+        );
+        assert!(
+            error
+                .cause()
+                .is_some_and(|cause| cause.contains("cancelled")),
+            "missing cancellation cause: {:?}",
+            error.cause()
         );
         assert!(held.actions.calls.lock().expect("calls").is_empty());
     }

@@ -2216,7 +2216,9 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn hook_and_cron_routes_round_trip_through_the_handler_and_client_decoder() {
         use super::map_api_response;
-        use atm_core::api::{ApiRequest, decode_http_response, encode_http_request};
+        use atm_core::api::{
+            ApiRequest, MessageCollectionRequest, decode_http_response, encode_http_request,
+        };
         use atm_core::boundary::{
             CronSchedule, CronScheduleId, HookName, HookRegistration, PhaseId, StopCondition,
         };
@@ -2224,9 +2226,11 @@ mod tests {
             CronEndRequest, CronListQuery, CronStartRequest, HookActionsResponse,
             HookDisableRequest, HookListQuery, HookRegisterRequest,
         };
-        use atm_core::protocol::RequestEnvelope;
+        use atm_core::list::ListQuery;
+        use atm_core::protocol::{RequestEnvelope, TaskMoveRequest};
         use atm_core::send::{SendMessageSource, WriteRequest};
-        use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+        use atm_core::types::{AgentName, IsoTimestamp, ReadSelection, TeamName};
+        use atm_storage::MoveTarget;
 
         let caller: AgentName = "sender".parse().expect("agent");
         let team: TeamName = "test-team".parse().expect("team");
@@ -2279,6 +2283,29 @@ mod tests {
             false,
         )
         .expect("write request");
+        let task_move = RequestEnvelope::TaskMove(TaskMoveRequest {
+            caller_identity: caller.clone(),
+            caller_team: team.clone(),
+            task_id: "T1".parse().expect("task id"),
+            target: MoveTarget::Head,
+        });
+        let messages_list = RequestEnvelope::List(
+            ListQuery::new(
+                std::path::PathBuf::from("/atm-home"),
+                std::path::PathBuf::from("/work"),
+                caller.clone(),
+                None,
+                team.clone(),
+                ReadSelection::All,
+                false,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("list query"),
+        );
 
         let register = RequestEnvelope::HookRegister(HookRegisterRequest {
             caller_identity: caller.clone(),
@@ -2332,6 +2359,8 @@ mod tests {
             (&register, "HookRegister"),
             (&disable, "HookDisable"),
             (&list, "HookList"),
+            (&task_move, "TaskMove"),
+            (&messages_list, "List"),
             (&cron_start, "CronStart"),
             (&cron_end, "CronEnd"),
             (&cron_list, "CronList"),
@@ -2342,6 +2371,11 @@ mod tests {
                 ApiRequest::HookRegister(value) => serde_json::to_value(value),
                 ApiRequest::HookDisable(value) => serde_json::to_value(value),
                 ApiRequest::HookList(value) => serde_json::to_value(value),
+                ApiRequest::TaskMove(value) => serde_json::to_value(value),
+                ApiRequest::Messages(value) => match *value {
+                    MessageCollectionRequest::List(value) => serde_json::to_value(value),
+                    _ => panic!("{route} decoded to a different message route"),
+                },
                 ApiRequest::CronStart(value) => serde_json::to_value(value),
                 ApiRequest::CronEnd(value) => serde_json::to_value(value),
                 ApiRequest::CronList(value) => serde_json::to_value(value),
@@ -2355,8 +2389,8 @@ mod tests {
             );
         }
 
-        // Each of the seven responses maps through the handler and decodes on the client to
-        // the same envelope. The HookActions body rides on a task write, as the wire does.
+        // HookActions maps through the handler and decodes on the client for writes, task
+        // moves, and list requests, as each route can dispatch hook actions.
         let write_request = RequestEnvelope::Write(Box::new(write));
         let cases = [
             (
@@ -2370,6 +2404,14 @@ mod tests {
             (&disable, ResponseEnvelope::HookDisabled(vec![registration])),
             (
                 &write_request,
+                ResponseEnvelope::HookActions(HookActionsResponse { dispatched: 2 }),
+            ),
+            (
+                &task_move,
+                ResponseEnvelope::HookActions(HookActionsResponse { dispatched: 2 }),
+            ),
+            (
+                &messages_list,
                 ResponseEnvelope::HookActions(HookActionsResponse { dispatched: 2 }),
             ),
             (&cron_start, ResponseEnvelope::CronStarted(schedule.clone())),

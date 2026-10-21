@@ -283,6 +283,15 @@ registrations takes exactly today's path (ANC-014). Registration and cron
 routes are accepted from `Local` ingress only, from any roster member of
 the team (ADR-068 D5, Rand's round-4 ruling); no lead check.
 
+`HookWiring` represents the construction boundary: its snapshot and runner
+are both `Option` values until `with_hook_filter` installs the filter that
+owns them. This permits an un-hooked router to run ordinary task bodies in
+tests and composition steps. A hook-registry route on that incomplete
+router fails closed with daemon-unavailable (`"hook snapshot was not
+installed"`); daemon startup composes and installs the filter before it
+serves requests. The configured `local_host` is likewise optional: it is
+stamped into `caller.host` when configured and is JSON `null` otherwise.
+
 **D-m Budget.** `HOOK_TIMEOUT_MAX_MS = 2500` is `SERVER_REQUEST_BUDGET`
 (3 s, `crates/atm-storage/src/request_budget.rs:44`) minus a 500 ms action
 reserve. It applies to task hooks only, which run inside a CLI request.

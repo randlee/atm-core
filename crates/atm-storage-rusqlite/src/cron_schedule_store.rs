@@ -16,7 +16,7 @@ use atm_storage::{
     StopCondition,
 };
 use rusqlite::types::Value;
-use rusqlite::{Connection, OptionalExtension, Row, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Row, Transaction, params, params_from_iter};
 
 use crate::shared_db::SharedDb;
 use crate::store_support::{
@@ -39,6 +39,37 @@ const TABLE: &str = "cron_schedule";
 const SELECT_COLUMNS: &str = "id, generation, team, phase, name, cron_expr, module_path, cwd,
     args, timeout_ms, jitter_s, custom, active, until_at, stop_hook, created_by, created_at,
     last_run_at, last_outcome, ended_at";
+
+/// The schedule fields written by both INSERT and restart. Keep their SQL
+/// order and value order in one place so adding a stored field cannot make the
+/// two statements drift apart.
+type ScheduleColumnValue = fn(&ScheduleColumns) -> Value;
+
+const SCHEDULE_COLUMNS: &[(&str, ScheduleColumnValue)] = &[
+    ("team", |columns| text(&columns.team)),
+    ("phase", |columns| text(&columns.phase)),
+    ("name", |columns| text(&columns.name)),
+    ("cron_expr", |columns| text(&columns.cron_expr)),
+    ("module_path", |columns| text(&columns.module_path)),
+    ("cwd", |columns| text(&columns.cwd)),
+    ("args", |columns| text(&columns.args)),
+    ("timeout_ms", |columns| Value::Integer(columns.timeout_ms)),
+    ("jitter_s", |columns| Value::Integer(columns.jitter_s)),
+    ("custom", |columns| text(&columns.custom)),
+    ("until_at", |columns| {
+        columns.until_at.as_deref().map_or(Value::Null, text)
+    }),
+    ("stop_hook", |columns| Value::Integer(columns.stop_hook)),
+    ("created_by", |columns| text(&columns.created_by)),
+    ("created_at", |columns| text(&columns.created_at)),
+];
+
+fn numbered_placeholders(first: usize, count: usize) -> String {
+    (first..first + count)
+        .map(|index| format!("?{index}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 /// One `cron_schedule` row as stored, before the typed fields are parsed.
 struct RawCron {
@@ -136,6 +167,25 @@ fn read_rows(
     raws.into_iter().map(decode).collect()
 }
 
+fn list_query(
+    team: Option<&TeamName>,
+    phase: Option<&PhaseId>,
+    active_only: bool,
+) -> (String, [Value; 3]) {
+    let values = [
+        team.map_or(Value::Null, |team| text(team.as_str())),
+        phase.map_or(Value::Null, |phase| text(phase.as_str())),
+        Value::Integer(if active_only { 1 } else { 0 }),
+    ];
+    let sql = format!(
+        "SELECT {SELECT_COLUMNS} FROM cron_schedule
+         WHERE (?1 IS NULL OR team = ?1) AND (?2 IS NULL OR phase = ?2)
+           AND (?3 = 0 OR active = 1)
+         ORDER BY active DESC, created_at, phase, name;"
+    );
+    (sql, values)
+}
+
 /// `(until_at, stop_hook)` for the stored stop columns: exactly one is set.
 fn stop_columns(stop: &StopCondition) -> (Option<String>, i64) {
     match stop {
@@ -178,6 +228,8 @@ impl ScheduleColumns {
             cron_expr: schedule.cron_expr,
             module_path: schedule.module_path.to_string_lossy().into_owned(),
             cwd: schedule.cwd.to_string_lossy().into_owned(),
+            // `Vec<String>` is always serializable, and `to_string` writes to an
+            // infallible `String`; this mapping is unreachable for this concrete type.
             args: serde_json::to_string(&schedule.args).map_err(|error| internal(TABLE, error))?,
             timeout_ms: i64::from(schedule.timeout_ms),
             jitter_s: i64::from(schedule.jitter_s),
@@ -189,33 +241,28 @@ impl ScheduleColumns {
         })
     }
 
+    fn values(&self) -> Vec<Value> {
+        SCHEDULE_COLUMNS
+            .iter()
+            .map(|(_, value)| value(self))
+            .collect()
+    }
+
     /// Inserts a new row at generation 1 and returns its id.
     fn insert(&self, transaction: &Transaction<'_>, db: &SharedDb) -> Result<i64, AtmError> {
+        let columns = SCHEDULE_COLUMNS
+            .iter()
+            .map(|(column, _)| *column)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let placeholders = numbered_placeholders(1, SCHEDULE_COLUMNS.len());
+        let sql = format!(
+            "INSERT INTO cron_schedule (generation, {columns}, active)
+             VALUES (1, {placeholders}, 1);"
+        );
+        let values = self.values();
         transaction
-            .execute(
-                "INSERT INTO cron_schedule
-                    (generation, team, phase, name, cron_expr, module_path, cwd,
-                     args, timeout_ms, jitter_s, custom, active, until_at,
-                     stop_hook, created_by, created_at)
-                 VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, ?11,
-                     ?12, ?13, ?14);",
-                params![
-                    self.team,
-                    self.phase,
-                    self.name,
-                    self.cron_expr,
-                    self.module_path,
-                    self.cwd,
-                    self.args,
-                    self.timeout_ms,
-                    self.jitter_s,
-                    self.custom,
-                    self.until_at,
-                    self.stop_hook,
-                    self.created_by,
-                    self.created_at
-                ],
-            )
+            .execute(&sql, params_from_iter(values.iter()))
             .map_err(|error| write_error(db, TABLE, error))?;
         Ok(transaction.last_insert_rowid())
     }
@@ -227,34 +274,25 @@ impl ScheduleColumns {
         db: &SharedDb,
         id: i64,
     ) -> Result<(), AtmError> {
+        let assignments = SCHEDULE_COLUMNS
+            .iter()
+            .enumerate()
+            .map(|(index, (column, _))| format!("{column} = ?{}", index + 1))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let id_placeholder = SCHEDULE_COLUMNS.len() + 1;
+        let sql = format!(
+            "UPDATE cron_schedule SET
+                generation = generation + 1,
+                {assignments},
+                active = 1,
+                last_run_at = NULL, last_outcome = NULL, ended_at = NULL
+             WHERE id = ?{id_placeholder};"
+        );
+        let mut values = self.values();
+        values.push(Value::Integer(id));
         transaction
-            .execute(
-                "UPDATE cron_schedule SET
-                    generation = generation + 1,
-                    cron_expr = ?4, module_path = ?5, cwd = ?6, args = ?7,
-                    timeout_ms = ?8, jitter_s = ?9, custom = ?10,
-                    active = 1, until_at = ?11, stop_hook = ?12,
-                    created_by = ?13, created_at = ?14,
-                    last_run_at = NULL, last_outcome = NULL, ended_at = NULL
-                 WHERE id = ?15;",
-                params![
-                    self.team,
-                    self.phase,
-                    self.name,
-                    self.cron_expr,
-                    self.module_path,
-                    self.cwd,
-                    self.args,
-                    self.timeout_ms,
-                    self.jitter_s,
-                    self.custom,
-                    self.until_at,
-                    self.stop_hook,
-                    self.created_by,
-                    self.created_at,
-                    id
-                ],
-            )
+            .execute(&sql, params_from_iter(values.iter()))
             .map_err(|error| write_error(db, TABLE, error))?;
         Ok(())
     }
@@ -348,39 +386,17 @@ impl CronScheduleStore for SqliteCronScheduleStore {
         team: Option<&TeamName>,
         phase: Option<&PhaseId>,
     ) -> Result<Vec<CronSchedule>, AtmError> {
-        let values = [
-            team.map_or(Value::Null, |team| text(team.as_str())),
-            phase.map_or(Value::Null, |phase| text(phase.as_str())),
-        ];
+        let (sql, values) = list_query(team, phase, false);
         let db = Arc::clone(&self.db);
-        self.db.read(move |connection| {
-            read_rows(
-                &db,
-                connection,
-                &format!(
-                    "SELECT {SELECT_COLUMNS} FROM cron_schedule
-                     WHERE (?1 IS NULL OR team = ?1) AND (?2 IS NULL OR phase = ?2)
-                     ORDER BY active DESC, created_at, phase, name;"
-                ),
-                &values,
-            )
-        })
+        self.db
+            .read(move |connection| read_rows(&db, connection, &sql, &values))
     }
 
     fn active_all(&self) -> Result<Vec<CronSchedule>, AtmError> {
+        let (sql, values) = list_query(None, None, true);
         let db = Arc::clone(&self.db);
-        self.db.read(move |connection| {
-            read_rows(
-                &db,
-                connection,
-                &format!(
-                    "SELECT {SELECT_COLUMNS} FROM cron_schedule
-                     WHERE active = 1
-                     ORDER BY active DESC, created_at, phase, name;"
-                ),
-                &[],
-            )
-        })
+        self.db
+            .read(move |connection| read_rows(&db, connection, &sql, &values))
     }
 
     fn record_run(

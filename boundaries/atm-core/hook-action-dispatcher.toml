@@ -46,4 +46,5 @@ socket_io = ["atm_core::boundary::hook_action_dispatcher"]
 
 [status]
 state = "concrete_landed"
-notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters.", "BK.7 concrete_landed in atm-http-runtime: UnhookedRouter implements HookActionDispatcher over the storage and nudge router; each committed action emits one ADR-067 atm_hook action entry."]
+concrete_landed = ["atm_http_runtime::hook_actions::UnhookedRouter"]
+notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters.", "BK.7 concrete_landed in atm-http-runtime: UnhookedRouter is the sole production HookActionDispatcher, built from a StorageAndNudgeRouter clone with no task filter so dispatched actions cannot re-enter the originating hook chain. Each committed action emits one ADR-067 atm_hook action entry."]

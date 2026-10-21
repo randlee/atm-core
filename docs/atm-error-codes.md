@@ -494,6 +494,7 @@ surface.
 - context:
   - raised by `HookName::parse_task_hook` and the register route before any row is written
   - recovery names the supported task hook names and the timeout cap
+  - the CLI exit code is `3`
 
 #### 5.11.2 `ATM_CRON_EXPR_INVALID`
 
@@ -504,6 +505,7 @@ surface.
 - HTTP status: `400 Bad Request` (`is_validation` is true)
 - context:
   - raised by `AtmCron::start` before any schedule row is written
+  - the CLI exit code is `3`
 
 #### 5.11.3 `ATM_HOOK_REFUSED`
 
@@ -515,6 +517,7 @@ surface.
 - context:
   - the message is returned to the caller and logged; nothing is written
   - the error has empty catalog guidance, so no `Recovery:` line is appended
+  - the CLI exit code is `3`
 
 #### 5.11.4 `ATM_HOOK_EXIT`
 

@@ -1,3 +1,9 @@
+//! Daemon-owned execution of task-hook modules.
+//!
+//! Hook children from task chains, cron runs, and doctor requests share one
+//! bounded permit pool so a misbehaving registration cannot exhaust daemon
+//! process capacity.
+
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -21,8 +27,15 @@ use tokio::sync::Semaphore;
 
 use crate::process_deadline::{SpawnFailure, SpawnSpec, SpawnedOutput, spawn_with_deadline};
 
+/// Maximum concurrently running hook children for one daemon.
+///
+/// Sixteen permits leave room for normal daemon work while supporting several
+/// independent task chains, cron runs, and doctor requests at once.
 pub const HOOK_CONCURRENCY_MAX: usize = 16;
 
+/// Runs registered hook modules in the daemon's constrained subprocess
+/// environment.
+#[derive(Debug)]
 pub struct DaemonHookRunner {
     base_env: Result<Vec<(OsString, OsString)>, AtmError>,
     python: Result<PathBuf, AtmError>,
@@ -142,6 +155,8 @@ fn resolve_python(base: &[(OsString, OsString)], env: &dyn EnvSource) -> Result<
 }
 
 impl DaemonHookRunner {
+    /// Captures the daemon environment and configures the production permit
+    /// limit for hook children.
     pub fn new(env: &dyn EnvSource) -> Self {
         Self::with_limit(env, HOOK_CONCURRENCY_MAX)
     }
@@ -198,6 +213,7 @@ impl DaemonHookRunner {
         deadline: RequestDeadline,
         doctor: bool,
     ) -> Result<SpawnedOutput, AtmError> {
+        let started_at = tokio::time::Instant::now();
         let remaining = deadline.remaining().unwrap_or_default();
         let budget = if doctor {
             doctor_budget(target.timeout_ms, remaining)
@@ -205,33 +221,66 @@ impl DaemonHookRunner {
             runner_budget(target.timeout_ms, remaining)
         }
         .ok_or_else(|| {
-            AtmError::hook_timeout(
+            let error = AtmError::hook_timeout(
                 &target.phase,
                 if doctor {
                     "doctor budget exhausted"
                 } else {
                     "request budget exhausted before the hook ran"
                 },
-            )
+            );
+            tracing::warn!(
+                subsystem = "atm_hook",
+                team = %target.team,
+                phase = %target.phase,
+                hook,
+                budget_ms = target.timeout_ms,
+                elapsed_ms = started_at.elapsed().as_millis() as u64,
+                outcome = "budget_exhausted",
+                "hook execution did not receive a budget"
+            );
+            error
         })?;
         let started = tokio::time::Instant::now();
         let _permit = tokio::time::timeout(budget, self.permits.clone().acquire_owned())
             .await
-            .map_err(|_| AtmError::hook_timeout(&target.phase, "hook concurrency limit reached"))?
+            .map_err(|_| {
+                tracing::warn!(
+                    subsystem = "atm_hook", team = %target.team, phase = %target.phase, hook,
+                    budget_ms = budget.as_millis() as u64,
+                    elapsed_ms = started.elapsed().as_millis() as u64,
+                    outcome = "permit_timeout", "hook concurrency limit reached"
+                );
+                AtmError::hook_timeout(&target.phase, "hook concurrency limit reached")
+            })?
             .map_err(|_| missing("hook semaphore closed"))?;
         let spec = self.spec(target, hook)?;
-        let remaining = budget
-            .checked_sub(started.elapsed())
-            .filter(|remaining| !remaining.is_zero())
-            .ok_or_else(|| {
-                AtmError::hook_timeout(&target.phase, "hook concurrency limit reached")
-            })?;
+        let remaining = remaining_spawn_budget(&target.phase, budget, started.elapsed())?;
         let output = spawn_with_deadline(spec, &stdin, remaining)
             .await
             .map_err(|failure| {
-                spawn_failure_error(&target.phase, target.timeout_ms, budget, failure)
+                let error = spawn_failure_error(&target.phase, target.timeout_ms, budget, failure);
+                tracing::warn!(
+                    subsystem = "atm_hook", team = %target.team, phase = %target.phase, hook,
+                    budget_ms = budget.as_millis() as u64,
+                    elapsed_ms = started_at.elapsed().as_millis() as u64,
+                    outcome = "failed", %error, "hook execution failed"
+                );
+                error
             })?;
-        check_status(&output)?;
+        check_status(&output).map_err(|error| {
+            tracing::warn!(
+                subsystem = "atm_hook", team = %target.team, phase = %target.phase, hook,
+                budget_ms = budget.as_millis() as u64, elapsed_ms = output.elapsed_ms,
+                outcome = "nonzero_exit", %error, "hook execution exited unsuccessfully"
+            );
+            error
+        })?;
+        tracing::info!(
+            subsystem = "atm_hook", team = %target.team, phase = %target.phase, hook,
+            budget_ms = budget.as_millis() as u64, elapsed_ms = output.elapsed_ms,
+            outcome = "ok", "hook execution completed"
+        );
         Ok(output)
     }
 }
@@ -334,6 +383,17 @@ pub(crate) fn runner_budget(timeout_ms: u32, remaining: Duration) -> Option<Dura
 pub(crate) fn doctor_budget(timeout_ms: u32, remaining: Duration) -> Option<Duration> {
     let budget = remaining.min(Duration::from_millis(timeout_ms.into()));
     (!budget.is_zero()).then_some(budget)
+}
+
+fn remaining_spawn_budget(
+    phase: &PhaseId,
+    budget: Duration,
+    elapsed: Duration,
+) -> Result<Duration, AtmError> {
+    budget
+        .checked_sub(elapsed)
+        .filter(|remaining| !remaining.is_zero())
+        .ok_or_else(|| AtmError::hook_timeout(phase, "budget exhausted before spawn"))
 }
 
 #[cfg(test)]
@@ -459,6 +519,12 @@ mod tests {
     }
 
     #[test]
+    fn runner_debug_reports_its_type() {
+        let fixture = Fixture::new();
+        assert!(format!("{:?}", fixture.runner()).starts_with("DaemonHookRunner"));
+    }
+
+    #[test]
     fn runner_budget_rules() {
         for (timeout, remaining, expected) in [
             (2500, 10000, Some(2500)),
@@ -486,6 +552,18 @@ mod tests {
                 expected.map(Duration::from_millis)
             );
         }
+    }
+
+    #[test]
+    fn exhausted_post_permit_budget_reports_before_spawn() {
+        let phase = PhaseId::parse("bk").unwrap();
+        let error =
+            remaining_spawn_budget(&phase, Duration::from_millis(1), Duration::from_millis(1))
+                .unwrap_err();
+        assert_eq!(
+            error.message(),
+            AtmError::hook_timeout(&phase, "budget exhausted before spawn").message()
+        );
     }
 
     #[test]
@@ -584,7 +662,7 @@ mod tests {
 
     #[test]
     fn runner_passes_daemon_path_and_home_values() {
-        let output = crate::process_deadline::environment_probe_output();
+        let output = environment_probe_output();
         assert!(
             output.status.success(),
             "{}\n{}",
@@ -594,6 +672,20 @@ mod tests {
         assert!(String::from_utf8_lossy(&output.stdout).contains("BK3_ENVIRONMENT_PROOF_COMPLETE"));
     }
 
+    fn environment_probe_output() -> std::process::Output {
+        std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "hook_runner::tests::environment_child_probe",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env("ATM_BK3_LEAK_SENTINEL", "1")
+            .output()
+            .unwrap()
+    }
+
+    #[ignore = "runs only in the sentinel child process"]
     #[tokio::test]
     async fn environment_child_probe() {
         if ProcessEnvSource.var("ATM_BK3_LEAK_SENTINEL").as_deref() != Some("1") {

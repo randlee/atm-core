@@ -128,6 +128,7 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::TaskNotCounterparty
         | AtmErrorCode::TaskStaleCounterparty
         | AtmErrorCode::TaskMoveInvalid
+        | AtmErrorCode::TaskMaxActiveReached
         | AtmErrorCode::HookModuleInvalid
         | AtmErrorCode::CronExprInvalid
         | AtmErrorCode::HookRefused
@@ -1412,6 +1413,7 @@ mod adapter_tests {
             AtmErrorCode::TaskNotCounterparty,
             AtmErrorCode::TaskStaleCounterparty,
             AtmErrorCode::TaskMoveInvalid,
+            AtmErrorCode::TaskMaxActiveReached,
         ] {
             assert_eq!(exit_code_for_atm_error(&AtmError::new(code, "rejected")), 3);
         }

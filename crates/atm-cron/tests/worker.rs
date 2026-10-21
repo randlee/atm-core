@@ -421,24 +421,18 @@ async fn stopped_worker_refuses_start_end_and_list() {
         fixture.cron.list(None, None).await.unwrap_err().code(),
         AtmErrorCode::DaemonUnavailable
     );
-    assert!(
-        fixture
-            .cron
-            .start(spec.clone())
-            .await
-            .unwrap_err()
-            .message()
-            .contains("cron worker stopped")
-    );
-    assert!(
-        fixture
-            .cron
-            .end(&spec.team, &spec.phase, None)
-            .await
-            .unwrap_err()
-            .message()
-            .contains("cron worker stopped")
-    );
+    let start_error = fixture.cron.start(spec.clone()).await.unwrap_err();
+    assert_eq!(start_error.code(), AtmErrorCode::DaemonUnavailable);
+    assert!(start_error.message().contains("cron worker stopped"));
+
+    let end_error = fixture
+        .cron
+        .end(&spec.team, &spec.phase, None)
+        .await
+        .unwrap_err();
+    assert_eq!(end_error.code(), AtmErrorCode::DaemonUnavailable);
+    assert!(end_error.message().contains("cron worker stopped"));
+
     assert!(
         fixture
             .cron

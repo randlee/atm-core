@@ -114,6 +114,10 @@ mod tests {
                 "ATM_TASK_STALE_COUNTERPARTY",
             ),
             (AtmErrorCode::TaskMoveInvalid, "ATM_TASK_MOVE_INVALID"),
+            (
+                AtmErrorCode::TaskMaxActiveReached,
+                "ATM_TASK_MAX_ACTIVE_REACHED",
+            ),
         ] {
             assert_eq!(code.as_str(), wire);
             assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));

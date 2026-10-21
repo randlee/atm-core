@@ -316,7 +316,12 @@ impl Harness {
         self.backend = SqliteStorageBackend::new(&self.path).expect("reopen backend");
     }
 
-    fn move_task(&self, task: &str, actor: &str, target: MoveTarget) {
+    fn move_task(
+        &self,
+        task: &str,
+        actor: &str,
+        target: MoveTarget,
+    ) -> atm_storage::TaskMoveRecord {
         self.backend
             .task_store()
             .move_task(
@@ -328,7 +333,7 @@ impl Harness {
             )
             .expect("move commit")
             .operation
-            .expect("move task");
+            .expect("move task")
     }
 }
 
@@ -760,9 +765,26 @@ pub(crate) fn start_while_another_task_is_active_is_rejected() {
     h.assign("T2", "alice", "lead", None);
     h.start("T1", "alice").unwrap();
     let error = h.start("T2", "alice").expect_err("active conflict");
-    assert_eq!(error.code(), AtmErrorCode::TaskMoveInvalid);
+    assert_eq!(error.code(), AtmErrorCode::TaskMaxActiveReached);
     assert!(error.message().contains("max_tasks is 1"), "{error}");
+    assert!(
+        error
+            .message()
+            .contains("Complete or cancel an active task"),
+        "{error}"
+    );
+    assert!(
+        error
+            .message()
+            .contains("atm teams update-member ba2 alice --max-tasks <N>"),
+        "{error}"
+    );
     assert_eq!(h.row("T2").state, TaskState::Assigned);
+    assert!(
+        h.events("T2")
+            .iter()
+            .any(|event| event.event == TaskEventKind::Rejected)
+    );
 }
 
 #[test]
@@ -1420,8 +1442,14 @@ pub(crate) fn max_tasks_three_allows_three_active_and_refuses_a_fourth() {
         assert_eq!(h.row(task).state, TaskState::Active);
     }
     let error = h.start("T4", "alice").expect_err("fourth start refused");
-    assert_eq!(error.code(), AtmErrorCode::TaskMoveInvalid);
+    assert_eq!(error.code(), AtmErrorCode::TaskMaxActiveReached);
     assert!(error.message().contains("max_tasks is 3"), "{error}");
+    assert!(
+        error
+            .message()
+            .contains("atm teams update-member ba2 alice --max-tasks <N>"),
+        "{error}"
+    );
     assert_eq!(h.row("T4").state, TaskState::Assigned);
 }
 
@@ -1433,14 +1461,24 @@ pub(crate) fn explicit_max_tasks_one_refuses_a_second_start() {
     h.assign("T2", "alice", "lead", None);
     h.start("T1", "alice").expect("first start");
     let error = h.start("T2", "alice").expect_err("second start refused");
-    assert_eq!(error.code(), AtmErrorCode::TaskMoveInvalid);
+    assert_eq!(error.code(), AtmErrorCode::TaskMaxActiveReached);
     assert!(error.message().contains("max_tasks is 1"), "{error}");
+    assert!(
+        error
+            .message()
+            .contains("atm teams update-member ba2 alice --max-tasks <N>"),
+        "{error}"
+    );
     assert_eq!(h.row("T2").state, TaskState::Assigned);
 }
 
 #[test]
 pub(crate) fn invalid_stored_max_tasks_refuses_the_start() {
-    for stored in [r#"{"max_tasks":0}"#, r#"{"max_tasks":"3"}"#] {
+    for stored in [
+        r#"{"max_tasks":0}"#,
+        r#"{"max_tasks":"3"}"#,
+        r#"{"max_tasks":true}"#,
+    ] {
         let h = Harness::new();
         h.set_roster_metadata("alice", stored);
         h.assign("T1", "alice", "lead", None);
@@ -1507,7 +1545,9 @@ pub(crate) fn move_of_second_active_task_reports_its_position() {
     }
     h.start("T3", "alice").expect("start T3");
     h.start("T1", "alice").expect("start T1");
-    h.move_task("T1", "lead", MoveTarget::End);
+    let moved = h.move_task("T1", "lead", MoveTarget::End);
+    assert_eq!(moved.from.get(), 2);
+    assert_eq!(moved.to.get(), 2);
     let event = h.events("T1").pop().expect("moved event");
     assert_eq!(event.event, TaskEventKind::Moved);
     assert_eq!(event.detail.as_deref(), Some("2→2"));
@@ -1517,10 +1557,16 @@ pub(crate) fn move_of_second_active_task_reports_its_position() {
     );
 }
 
-/// The `TASK_INDEX_DDL` text before bk-8 created `one_active_task_per_agent`.
-const PRE_BK8_ONE_ACTIVE_INDEX: &str = r#"
+/// The full pre-bk-8 `TASK_INDEX_DDL`, before that unique index was dropped.
+const PRE_BK8_TASK_INDEX_DDL: &str = r#"
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_task_per_agent
     ON tasks(team, assignee) WHERE state = 'active';
+
+CREATE UNIQUE INDEX IF NOT EXISTS tasks_position_per_member
+    ON tasks(team, assignee, position) WHERE state <> 'complete';
+
+CREATE INDEX IF NOT EXISTS tasks_open_by_member
+    ON tasks(team, assignee, assigned_at) WHERE state <> 'complete';
 "#;
 
 #[test]
@@ -1528,7 +1574,7 @@ pub(crate) fn ensure_schema_drops_one_active_task_per_agent() {
     let mut h = Harness::new();
     Connection::open(&h.path)
         .unwrap()
-        .execute_batch(PRE_BK8_ONE_ACTIVE_INDEX)
+        .execute_batch(PRE_BK8_TASK_INDEX_DDL)
         .unwrap();
     let index_count = |path: &std::path::Path| -> i64 {
         Connection::open(path)

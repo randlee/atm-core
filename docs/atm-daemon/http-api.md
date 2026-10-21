@@ -9,7 +9,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Current — Phase BA |
-| HTTP API SemVer | `1.13.0`; major is `/v1/atm` |
+| HTTP API SemVer | `1.14.0`; major is `/v1/atm` |
 | Authoritative ADR | ADR-033 |
 | Machine-readable publication | checked-in OpenAPI 3.1 and `atm api spec` |
 
@@ -169,10 +169,11 @@ OpenAPI document against route schemas and tests every documented route. The
 embedded document is published by `atm api spec --format json|yaml`; no daemon
 network endpoint is needed merely to retrieve documentation.
 
-The v1 resource paths are durable. The current baseline is `1.13.0`.
+The v1 resource paths are durable. The current baseline is `1.14.0`.
 
 | Version | Phase / date | Additive HTTP surface |
 | --- | --- | --- |
+| `1.14.0` | Phase BK.8, 2026-10-20 | Adds the stable `ATM_TASK_MAX_ACTIVE_REACHED` code for a task start refused at a member's configured active-task limit, with recovery instructions. The over-limit start formerly returned `ATM_TASK_MOVE_INVALID`; this change stays in the same rejection family and exit code 3 and is covered by the additive-minor classification. See ADR-061. |
 | `1.13.0` | Phase BK.7, 2026-10-19 | Six additive hook and cron routes under `/v1/atm`: `/hooks/register`, `/hooks/disable`, `/hooks/list`, `/cron/start`, `/cron/end` and `/cron/list`; a `HookActions` 200 response with `X-ATM-Hook-Actions` on hooked task commands; and optional `DoctorReport.hooks`, absent when the daemon predates it. See ADR-061. |
 | `1.12.0` | Phase E4E, 2026-10-13 | Adds `TEMPLATE_VARIABLE_RESOLUTION_FAILED` for new variable-resolution failures while retaining `TEMPLATE_REQUIRED_VARIABLE_MISSING` for missing required variables, so existing consumers continue to decode their established rejection. |
 | `1.11.0` | Phase BD.1, 2026-10-07 | Optional `AtmObservabilityHealth.export` (`AtmTelemetryExportHealth`) in the doctor report; closed enums, absent when the daemon predates it. See ADR-061 and ADR-064. |

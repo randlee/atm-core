@@ -31,7 +31,11 @@ pub(crate) enum SpawnFailure {
     Failed(AtmError),
 }
 
+/// Maximum hook stdout retained for parsing: one MiB accommodates a complete
+/// action reply while bounding daemon memory for an untrusted child.
 pub(crate) const STDOUT_CAP: u64 = 1 << 20;
+/// Maximum hook stderr retained for diagnostics: 64 KiB preserves a useful
+/// traceback tail without allowing diagnostic output to dominate memory.
 pub(crate) const STDERR_CAP: u64 = 64 << 10;
 
 struct GroupKillGuard {
@@ -97,9 +101,10 @@ async fn read_capped(
         .read_to_end(&mut bytes)
         .await
         .map_err(|error| {
-            SpawnFailure::Failed(AtmError::hook_exit(HookExitCause::Missing(format!(
-                "cannot read {name}: {error}"
-            ))))
+            SpawnFailure::Failed(AtmError::hook_exit(HookExitCause::Read {
+                stream: name.into(),
+                cause: error.to_string(),
+            }))
         })?;
     if bytes.len() as u64 > cap {
         return Err(SpawnFailure::Failed(AtmError::hook_malformed(&format!(
@@ -107,6 +112,38 @@ async fn read_capped(
         ))));
     }
     Ok(bytes)
+}
+
+async fn read_tail(
+    mut reader: impl AsyncRead + Unpin,
+    cap: u64,
+    name: &str,
+) -> Result<Vec<u8>, SpawnFailure> {
+    let cap = usize::try_from(cap).expect("stream cap must fit usize");
+    let mut tail = Vec::with_capacity(cap);
+    let mut buffer = [0_u8; 8192];
+    loop {
+        let read = reader.read(&mut buffer).await.map_err(|error| {
+            SpawnFailure::Failed(AtmError::hook_exit(HookExitCause::Read {
+                stream: name.into(),
+                cause: error.to_string(),
+            }))
+        })?;
+        if read == 0 {
+            return Ok(tail);
+        }
+        if read >= cap {
+            tail.clear();
+            tail.extend_from_slice(&buffer[read - cap..read]);
+            continue;
+        }
+        let overflow = tail.len().saturating_add(read).saturating_sub(cap);
+        if overflow > 0 {
+            tail.copy_within(overflow.., 0);
+            tail.truncate(tail.len() - overflow);
+        }
+        tail.extend_from_slice(&buffer[..read]);
+    }
 }
 
 async fn collect(
@@ -131,7 +168,7 @@ async fn collect(
         write,
         wait,
         read_capped(stdout, STDOUT_CAP, "stdout"),
-        read_capped(stderr, STDERR_CAP, "stderr")
+        read_tail(stderr, STDERR_CAP, "stderr")
     )?;
     Ok((status, stdout, stderr))
 }
@@ -162,9 +199,17 @@ pub(crate) async fn spawn_until(
         result = collect(&mut child, stdin, &spec) => result,
     };
     if result.is_err() {
+        tracing::warn!(
+            subsystem = "atm_hook",
+            outcome = "killed",
+            elapsed_ms = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+            "killing hook process group after failed or timed-out collection"
+        );
         guard.kill();
-        let _ = child.kill().await;
-        child.wait().await.map_err(|error| failed(&spec, error))?;
+        if !matches!(child.try_wait(), Ok(Some(_))) {
+            let _ = child.kill().await;
+            child.wait().await.map_err(|error| failed(&spec, error))?;
+        }
     }
     guard.disarm();
     result.map(|(status, stdout, stderr)| SpawnedOutput {
@@ -191,31 +236,33 @@ pub(crate) async fn spawn_with_deadline(
 }
 
 #[cfg(test)]
-pub(crate) fn environment_probe_output() -> std::process::Output {
-    std::process::Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "hook_runner::tests::environment_child_probe",
-            "--nocapture",
-        ])
-        .env("ATM_BK3_LEAK_SENTINEL", "1")
-        .output()
-        .unwrap()
-}
-
-#[cfg(test)]
 mod tests {
     use std::fs;
     #[cfg(unix)]
     use std::io::Read;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
 
     use atm_core::atm_temp::{EnvSource, ProcessEnvSource};
     use atm_core::error::AtmErrorCode;
     use tempfile::TempDir;
+    use tokio::io::ReadBuf;
     #[cfg(unix)]
     use tokio::sync::oneshot;
 
     use super::*;
+
+    struct FailingReader;
+
+    impl AsyncRead for FailingReader {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _context: &mut Context<'_>,
+            _buffer: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            Poll::Ready(Err(io::Error::other("injected pipe failure")))
+        }
+    }
 
     fn python() -> PathBuf {
         let path = ProcessEnvSource.var("PATH").expect("test PATH");
@@ -303,13 +350,22 @@ mod tests {
             })
             .await
         });
-        ready.await.unwrap();
+        tokio::time::timeout(Duration::from_secs(10), ready)
+            .await
+            .expect("FIFO reader must observe the child readiness byte")
+            .unwrap();
         cancel.send(()).unwrap();
         assert!(matches!(
             handle.await.unwrap(),
             Err(SpawnFailure::TimedOut { .. })
         ));
-        assert!(reader.await.unwrap().is_empty());
+        assert!(
+            tokio::time::timeout(Duration::from_secs(10), reader)
+                .await
+                .expect("FIFO reader must finish after child cancellation")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[cfg(unix)]
@@ -320,10 +376,19 @@ mod tests {
         let spawn = spec(&root, GROUP_SOURCE, vec![path.into_os_string()]);
         let handle =
             tokio::spawn(async move { spawn_until(spawn, b"{}", std::future::pending()).await });
-        ready.await.unwrap();
+        tokio::time::timeout(Duration::from_secs(10), ready)
+            .await
+            .expect("FIFO reader must observe the child readiness byte")
+            .unwrap();
         handle.abort();
         assert!(handle.await.unwrap_err().is_cancelled());
-        assert!(reader.await.unwrap().is_empty());
+        assert!(
+            tokio::time::timeout(Duration::from_secs(10), reader)
+                .await
+                .expect("FIFO reader must finish after process-group abort")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[cfg(unix)]
@@ -335,29 +400,84 @@ mod tests {
         let spawn = spec(&root, source, vec![path.into_os_string()]);
         let handle =
             tokio::spawn(async move { spawn_until(spawn, b"{}", std::future::pending()).await });
-        ready.await.unwrap();
+        tokio::time::timeout(Duration::from_secs(10), ready)
+            .await
+            .expect("FIFO reader must observe the child readiness byte")
+            .unwrap();
         let Err(SpawnFailure::Failed(error)) = handle.await.unwrap() else {
             panic!("expected cap error")
         };
         assert_eq!(error.code(), AtmErrorCode::HookMalformed);
-        assert!(reader.await.unwrap().is_empty());
+        assert!(
+            tokio::time::timeout(Duration::from_secs(10), reader)
+                .await
+                .expect("FIFO reader must finish after output overflow")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[tokio::test]
-    async fn stderr_over_cap_is_bounded_and_malformed() {
+    async fn stderr_over_cap_is_bounded_and_preserves_exit_status() {
         let root = tempfile::tempdir().unwrap();
         let spawn = spec(
             &root,
-            "import sys,threading\nsys.stderr.write('x'*((64<<10)+1))\nsys.stderr.flush()\nthreading.Event().wait()\n",
+            "import sys\nsys.stderr.write('x'*((64<<10)+1) + 'TAIL')\nsys.stderr.flush()\nsys.exit(3)\n",
             Vec::new(),
         );
-        let Err(SpawnFailure::Failed(error)) =
-            spawn_until(spawn, b"{}", std::future::pending()).await
-        else {
-            panic!("expected cap error")
+        let output = spawn_until(spawn, b"{}", std::future::pending())
+            .await
+            .expect("stderr cap must retain the tail rather than fail the run");
+        assert_eq!(output.status.code(), Some(3));
+        assert_eq!(output.stderr.len(), STDERR_CAP as usize);
+        assert!(output.stderr.ends_with(b"TAIL"));
+    }
+
+    #[tokio::test]
+    async fn pipe_read_error_names_the_stream() {
+        let Err(SpawnFailure::Failed(error)) = read_capped(FailingReader, 1, "stdout").await else {
+            panic!("expected pipe read failure")
         };
-        assert_eq!(error.code(), AtmErrorCode::HookMalformed);
-        assert!(error.message().contains("stderr exceeds"));
+        assert_eq!(error.code(), AtmErrorCode::HookExit);
+        assert!(
+            error
+                .message()
+                .starts_with("HOOK.EXIT: cannot read stdout: injected pipe failure"),
+            "unexpected message: {}",
+            error.message()
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cancel_kills_descendant_after_leader_exits() {
+        let root = tempfile::tempdir().unwrap();
+        let (path, ready, reader) = pipe(&root);
+        let source = "import os,sys,threading\nwriter=open(sys.argv[1],'wb',buffering=0)\nif os.fork()==0:\n writer.write(b'r')\n threading.Event().wait()\nos._exit(0)\n";
+        let spawn = spec(&root, source, vec![path.into_os_string()]);
+        let (cancel, cancelled) = oneshot::channel();
+        let handle = tokio::spawn(async move {
+            spawn_until(spawn, b"{}", async {
+                cancelled.await.unwrap();
+            })
+            .await
+        });
+        tokio::time::timeout(Duration::from_secs(10), ready)
+            .await
+            .expect("FIFO reader must observe descendant readiness")
+            .unwrap();
+        cancel.send(()).unwrap();
+        assert!(matches!(
+            handle.await.unwrap(),
+            Err(SpawnFailure::TimedOut { .. })
+        ));
+        assert!(
+            tokio::time::timeout(Duration::from_secs(10), reader)
+                .await
+                .expect("FIFO closes when the descendant process group is killed")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[tokio::test]

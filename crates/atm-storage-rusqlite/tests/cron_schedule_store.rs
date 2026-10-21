@@ -172,6 +172,37 @@ fn active_all_survives_reopen() {
 }
 
 #[test]
+fn active_all_matches_active_rows_from_list() {
+    let h = Harness::new();
+    let store = h.store();
+    store
+        .start(cron_spec("later", StopCondition::Hook, stamp(5)))
+        .expect("later active schedule");
+    store
+        .start(cron_spec("ended", StopCondition::Hook, stamp(2)))
+        .expect("schedule to end");
+    store
+        .end(&team(), &phase(), Some("ended"), stamp(6))
+        .expect("end schedule");
+    store
+        .start(cron_spec("earlier", StopCondition::Hook, stamp(3)))
+        .expect("earlier active schedule");
+
+    let listed = store.list(None, None).expect("list all schedules");
+    let active_from_list: Vec<_> = listed.into_iter().filter(|row| row.active).collect();
+    let active_all = store.active_all().expect("active_all");
+
+    assert_eq!(active_all, active_from_list);
+    assert_eq!(
+        active_all
+            .iter()
+            .map(|row| row.name.as_str())
+            .collect::<Vec<_>>(),
+        ["earlier", "later"]
+    );
+}
+
+#[test]
 fn stop_condition_check_and_round_trip() {
     let h = Harness::new();
     let until_text = stamp_text(9);
@@ -250,12 +281,48 @@ fn start_after_end_updates_in_place_and_bumps_generation() {
             .len(),
         1
     );
-    let restarted = store
-        .start(cron_spec("nightly", StopCondition::Hook, stamp(6)))
-        .expect("restart");
+    let mut replacement = cron_spec(
+        "nightly",
+        StopCondition::Until {
+            at: stamp(10).into_inner(),
+        },
+        stamp(6),
+    );
+    replacement.cron_expr = "0 15 * * * *".to_owned();
+    replacement.module_path = PathBuf::from("/hooks/replacement.py");
+    replacement.cwd = PathBuf::from("/replacement");
+    replacement.args = vec!["--replacement".to_owned(), "value".to_owned()];
+    replacement.timeout_ms = 12000;
+    replacement.jitter_s = 31;
+    replacement.custom = serde_json::json!({"replacement": true})
+        .as_object()
+        .expect("object literal")
+        .clone();
+    replacement.created_by = AgentName::from_validated("replacement-agent");
+    let restarted = store.start(replacement).expect("restart");
     assert_eq!(restarted.id, first.id);
     assert_eq!(restarted.generation, 2);
     assert!(restarted.active);
+    assert_eq!(restarted.team, team());
+    assert_eq!(restarted.phase, phase());
+    assert_eq!(restarted.name, "nightly");
+    assert_eq!(restarted.cron_expr, "0 15 * * * *");
+    assert_eq!(
+        restarted.module_path,
+        PathBuf::from("/hooks/replacement.py")
+    );
+    assert_eq!(restarted.cwd, PathBuf::from("/replacement"));
+    assert_eq!(restarted.args, vec!["--replacement", "value"]);
+    assert_eq!(restarted.timeout_ms, 12000);
+    assert_eq!(restarted.jitter_s, 31);
+    assert_eq!(restarted.custom["replacement"], true);
+    assert_eq!(
+        restarted.stop,
+        StopCondition::Until {
+            at: stamp(10).into_inner()
+        }
+    );
+    assert_eq!(restarted.created_by.as_str(), "replacement-agent");
     assert_eq!(restarted.created_at, stamp(6));
     assert_eq!(restarted.ended_at, None);
     assert_eq!(restarted.last_run_at, None);
@@ -282,6 +349,19 @@ fn start_refuses_active_duplicate() {
     );
     assert!(error.message().contains("atm cron end --phase bk nightly"));
     assert_eq!(store.list(None, None).expect("list").len(), 1);
+}
+
+#[test]
+fn zero_timeout_fails_the_check() {
+    let h = Harness::new();
+    let mut zero = cron_spec("nightly", StopCondition::Hook, stamp(3));
+    zero.timeout_ms = 0;
+
+    let error = h.store().start(zero).expect_err("zero timeout is refused");
+
+    assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+    assert!(error.message().contains("cron_schedule"));
+    assert!(error.message().contains("timeout_ms"));
 }
 
 #[test]
