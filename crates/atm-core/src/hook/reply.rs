@@ -244,6 +244,8 @@ impl StopReply {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::encode_http_request;
+    use crate::protocol::RequestEnvelope;
     use crate::search::SearchInput;
     use crate::send::SendMessageSource;
     use serde_json::json;
@@ -406,18 +408,22 @@ mod tests {
             foreign["caller_team"] = json!("foreign");
             malformed(action(command, foreign).into_api_request(&team(), &identity()));
         }
-        let route_body: WriteRequest = serde_json::from_value(assign.clone()).unwrap();
-        let ApiRequest::Write(mapped) = action("task.assign", assign)
-            .into_api_request(&team(), &identity())
-            .unwrap()
+        let route_request: WriteRequest = serde_json::from_value(assign.clone()).unwrap();
+        let encoded =
+            encode_http_request(&RequestEnvelope::Write(Box::new(route_request)), &[]).unwrap();
+        let route_body: WriteRequest = serde_json::from_slice(&encoded.body).unwrap();
+        let action_identity: AgentName = "lead".parse().unwrap();
+        let mut expected = serde_json::to_value(route_body).unwrap();
+        expected["caller_identity"] = serde_json::to_value(&action_identity).unwrap();
+        let candidate = HookAction {
+            run_as: Some(action_identity),
+            ..action("task.assign", assign)
+        };
+        let ApiRequest::Write(mapped) = candidate.into_api_request(&team(), &identity()).unwrap()
         else {
             panic!("task assign was not a write")
         };
-        assert_eq!(mapped.task_id, route_body.task_id);
-        assert_eq!(
-            serde_json::to_value(mapped.message_source).unwrap(),
-            serde_json::to_value(route_body.message_source).unwrap()
-        );
+        assert_eq!(serde_json::to_value(mapped).unwrap(), expected);
 
         for command in ["search", "doctor"] {
             let mut body = if command == "search" {
