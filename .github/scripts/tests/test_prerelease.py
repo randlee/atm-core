@@ -70,13 +70,16 @@ class PrereleaseTests(unittest.TestCase):
     def test_host_wheel_selection_requires_a_manifest_distribution_wheel(self) -> None:
         values = manifest(Path("/unused"))
         values["python_distributions"] = [{"name": "fixture-wheel", "wheels": ["ubuntu-latest"]}]
-        digests = {
-            "fixture_wheel-1.5.11-py3-none-any.whl": "0" * 64,
-        }
-        self.assertEqual(
-            PRERELEASE.host_wheel_names(digests, values),
-            ["fixture_wheel-1.5.11-py3-none-any.whl"],
-        )
+        for system, machine, musl, tag in (
+            ("Linux", "x86_64", False, "manylinux_2_17_x86_64"),
+            ("Linux", "aarch64", False, "manylinux_2_17_aarch64"),
+            ("Linux", "x86_64", True, "musllinux_1_2_x86_64"),
+            ("Darwin", "arm64", False, "macosx_11_0_arm64"),
+            ("Windows", "amd64", False, "win_amd64"),
+        ):
+            with self.subTest(tag=tag):
+                name = f"fixture_wheel-1.5.11-cp311-abi3-{tag}.whl"
+                self.assertEqual(PRERELEASE.host_wheel_names({name: "0" * 64}, values, system=system, machine=machine, musl=musl), [name])
     def test_publish_dry_run_never_needs_network_or_authorization(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

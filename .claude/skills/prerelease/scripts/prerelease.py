@@ -167,11 +167,14 @@ def verify_checksum(path: Path, expected: str) -> None:
         raise SystemExit(f"sha256 mismatch for {path.name}")
 
 
-def host_wheel_names(digests: dict[str, str], manifest: dict[str, Any]) -> list[str]:
+def host_wheel_names(
+    digests: dict[str, str], manifest: dict[str, Any], *, system: str | None = None,
+    machine: str | None = None, musl: bool = False,
+) -> list[str]:
     """Select one universal or host-platform wheel per declared distribution."""
-    system = platform.system()
-    machine = platform.machine().lower().replace("amd64", "x86_64").replace("aarch64", "arm64")
-    hints = {"Linux": ("linux", machine), "Darwin": ("macosx", machine), "Windows": ("win", "amd64")}
+    system = platform.system() if system is None else system
+    machine = (platform.machine() if machine is None else machine).lower().replace("amd64", "x86_64")
+    hints = {"Linux": (("musllinux" if musl else "manylinux"), machine), "Darwin": ("macosx", machine), "Windows": ("win", "amd64")}
     if system not in hints:
         raise SystemExit(f"unsupported prerelease wheel host: {system} {machine}")
     os_hint, arch_hint = hints[system]
