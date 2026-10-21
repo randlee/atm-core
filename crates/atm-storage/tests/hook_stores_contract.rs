@@ -10,8 +10,8 @@ use std::path::PathBuf;
 use atm_storage::testing::{InMemoryCronScheduleStore, InMemoryHookRegistrationStore};
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
-    CronSchedule, CronScheduleStore, HookName, HookRegistration, HookRegistrationStore,
-    NewCronSchedule, PhaseId, StopCondition,
+    AtmErrorCode, CronSchedule, CronScheduleStore, HookName, HookRegistration,
+    HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition,
 };
 use chrono::{TimeZone, Utc};
 
@@ -726,6 +726,58 @@ fn cron_write_counter_excludes_fenced_and_noop_calls() {
     assert!(store.record_stop(first.id, 2, stamp(9), "done").unwrap());
     assert_eq!(store.writes.load(Ordering::SeqCst), 5);
     assert_eq!(store.calls.load(Ordering::SeqCst), 12);
+}
+
+#[test]
+fn active_all_failure_preserves_rows_and_write_count() {
+    use std::sync::atomic::Ordering;
+
+    let store = InMemoryCronScheduleStore::new();
+    store
+        .start(cron_spec("nightly", StopCondition::Hook, stamp(3)))
+        .expect("start");
+    let rows_before = store.list(None, None).expect("list before failure");
+    let calls_before = store.calls.load(Ordering::SeqCst);
+    let writes_before = store.writes.load(Ordering::SeqCst);
+    store.fail_active_all.store(true, Ordering::SeqCst);
+
+    let error = store.active_all().expect_err("injected active_all failure");
+
+    assert_eq!(error.code(), AtmErrorCode::InternalError);
+    assert_eq!(store.calls.load(Ordering::SeqCst), calls_before + 1);
+    assert_eq!(store.writes.load(Ordering::SeqCst), writes_before);
+    assert_eq!(
+        store.list(None, None).expect("list after failure"),
+        rows_before
+    );
+    assert_eq!(store.writes.load(Ordering::SeqCst), writes_before);
+}
+
+#[test]
+fn write_failure_preserves_rows_and_write_count() {
+    use std::sync::atomic::Ordering;
+
+    let store = InMemoryCronScheduleStore::new();
+    store
+        .start(cron_spec("nightly", StopCondition::Hook, stamp(3)))
+        .expect("start");
+    let rows_before = store.list(None, None).expect("list before failure");
+    let calls_before = store.calls.load(Ordering::SeqCst);
+    let writes_before = store.writes.load(Ordering::SeqCst);
+    store.fail_writes.store(true, Ordering::SeqCst);
+
+    let error = store
+        .end(&team(), &phase("bk"), Some("nightly"), stamp(4))
+        .expect_err("injected write failure");
+
+    assert_eq!(error.code(), AtmErrorCode::InternalError);
+    assert_eq!(store.calls.load(Ordering::SeqCst), calls_before + 1);
+    assert_eq!(store.writes.load(Ordering::SeqCst), writes_before);
+    assert_eq!(
+        store.list(None, None).expect("list after failure"),
+        rows_before
+    );
+    assert_eq!(store.writes.load(Ordering::SeqCst), writes_before);
 }
 
 #[test]
