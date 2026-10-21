@@ -310,7 +310,7 @@ async fn start_refuses_until_in_the_past_with_daemon_message() {
     let cron = world.cron(Arc::new(ManualClock::new(now())));
     let mut spec = world.spec();
     spec.stop = StopCondition::Until {
-        at: now() - chrono::Duration::seconds(1),
+        at: (now() - chrono::Duration::seconds(1)).into(),
     };
     let error = cron.start(spec).await.unwrap_err();
     assert!(error.message().contains("until is not in the future"));
@@ -473,7 +473,7 @@ async fn blocked_cron_hook_leaves_budget_for_hook_chains_and_later_shutdown_step
     let cron = compose_cron(&world.handler, deps).unwrap();
     let mut spec = world.spec();
     spec.stop = StopCondition::Until {
-        at: now() + chrono::Duration::hours(1),
+        at: (now() + chrono::Duration::hours(1)).into(),
     };
     cron.start(spec).await.unwrap();
     start_cron_worker(&cron, &mut world.workers).await.unwrap();
@@ -759,7 +759,7 @@ async fn daemon_restart_with_schedule_due_while_down_fires_once_at_next_occurren
     )));
     let mut spec = world.spec();
     spec.stop = StopCondition::Until {
-        at: now() + chrono::Duration::hours(1),
+        at: (now() + chrono::Duration::hours(1)).into(),
     };
     cron.start(spec).await.unwrap();
     let World {
@@ -1002,7 +1002,7 @@ async fn cron_tick_action_runs_unhooked() {
     spec.cwd = cwd_a;
     spec.module_path = registration(&cwd_b, TEST_TEAM, "task.assign").module_path;
     spec.stop = StopCondition::Until {
-        at: now() + chrono::Duration::hours(1),
+        at: (now() + chrono::Duration::hours(1)).into(),
     };
     cron.start(spec).await.unwrap();
     start_cron_worker(&cron, &mut world.workers).await.unwrap();

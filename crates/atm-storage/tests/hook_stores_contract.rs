@@ -719,7 +719,7 @@ fn cron_write_counter_excludes_fenced_and_noop_calls() {
     assert_eq!(store.writes.load(Ordering::SeqCst), 4);
     assert!(!store.record_stop(first.id, 1, stamp(8), "stale").unwrap());
     assert_eq!(store.writes.load(Ordering::SeqCst), 4);
-    let missing = atm_storage::CronScheduleId(first.id.0 + 1);
+    let missing = atm_storage::CronScheduleId::new(first.id.get() + 1);
     assert!(!store.record_run(missing, 2, stamp(8), "missing").unwrap());
     assert!(!store.record_stop(missing, 2, stamp(8), "missing").unwrap());
     assert_eq!(store.writes.load(Ordering::SeqCst), 4);

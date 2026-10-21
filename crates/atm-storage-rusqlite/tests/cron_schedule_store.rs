@@ -132,9 +132,7 @@ fn active_all_survives_reopen() {
     let nightly = store
         .start(cron_spec("nightly", StopCondition::Hook, stamp(3)))
         .expect("nightly");
-    let until = StopCondition::Until {
-        at: stamp(9).into_inner(),
-    };
+    let until = StopCondition::Until { at: stamp(9) };
     store
         .start(cron_spec("weekly", until, stamp(4)))
         .expect("weekly");
@@ -224,18 +222,11 @@ fn stop_condition_check_and_round_trip() {
     let until = store
         .start(cron_spec(
             "until-row",
-            StopCondition::Until {
-                at: stamp(9).into_inner(),
-            },
+            StopCondition::Until { at: stamp(9) },
             stamp(1),
         ))
         .expect("start until");
-    assert_eq!(
-        until.stop,
-        StopCondition::Until {
-            at: stamp(9).into_inner()
-        }
-    );
+    assert_eq!(until.stop, StopCondition::Until { at: stamp(9) });
     let hooked = store
         .start(cron_spec("hook-row", StopCondition::Hook, stamp(1)))
         .expect("start hook");
@@ -281,13 +272,7 @@ fn start_after_end_updates_in_place_and_bumps_generation() {
             .len(),
         1
     );
-    let mut replacement = cron_spec(
-        "nightly",
-        StopCondition::Until {
-            at: stamp(10).into_inner(),
-        },
-        stamp(6),
-    );
+    let mut replacement = cron_spec("nightly", StopCondition::Until { at: stamp(10) }, stamp(6));
     replacement.cron_expr = "0 15 * * * *".to_owned();
     replacement.module_path = PathBuf::from("/hooks/replacement.py");
     replacement.cwd = PathBuf::from("/replacement");
@@ -316,12 +301,7 @@ fn start_after_end_updates_in_place_and_bumps_generation() {
     assert_eq!(restarted.timeout_ms, 12000);
     assert_eq!(restarted.jitter_s, 31);
     assert_eq!(restarted.custom["replacement"], true);
-    assert_eq!(
-        restarted.stop,
-        StopCondition::Until {
-            at: stamp(10).into_inner()
-        }
-    );
+    assert_eq!(restarted.stop, StopCondition::Until { at: stamp(10) });
     assert_eq!(restarted.created_by.as_str(), "replacement-agent");
     assert_eq!(restarted.created_at, stamp(6));
     assert_eq!(restarted.ended_at, None);
@@ -447,7 +427,7 @@ fn record_with_unstorable_id_changes_nothing() {
     let h = Harness::new();
     let changed = h
         .store()
-        .record_run(CronScheduleId(u64::MAX), 1, stamp(4), "none")
+        .record_run(CronScheduleId::new(u64::MAX), 1, stamp(4), "none")
         .expect("no row can carry this id");
     assert!(!changed);
 }

@@ -8,7 +8,6 @@
 use std::fmt;
 use std::path::PathBuf;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::contract::sealed;
@@ -19,11 +18,21 @@ use crate::types::{AgentName, IsoTimestamp, TeamName};
 /// Stable row id of one cron schedule. Display prints the integer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct CronScheduleId(pub u64);
+pub struct CronScheduleId(u64);
+
+impl CronScheduleId {
+    pub fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub fn get(self) -> u64 {
+        self.0
+    }
+}
 
 impl fmt::Display for CronScheduleId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.get())
     }
 }
 
@@ -56,7 +65,7 @@ pub struct CronSchedule {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StopCondition {
-    Until { at: DateTime<Utc> },
+    Until { at: IsoTimestamp },
     Hook,
 }
 
@@ -129,4 +138,26 @@ pub trait CronScheduleStore: sealed::Sealed + Send + Sync {
         at: IsoTimestamp,
         reason: &str,
     ) -> Result<bool, AtmError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CronScheduleId, StopCondition};
+    use crate::types::IsoTimestamp;
+
+    #[test]
+    fn cron_schedule_id_construction_and_reading_are_explicit() {
+        let id = CronScheduleId::new(42);
+        assert_eq!(id.get(), 42);
+        assert_eq!(id.to_string(), "42");
+    }
+
+    #[test]
+    fn until_stop_serializes_the_iso_timestamp() {
+        let at: IsoTimestamp = "2026-10-21T00:00:00Z".parse().expect("timestamp");
+        assert_eq!(
+            serde_json::to_value(StopCondition::Until { at }).expect("serialize"),
+            serde_json::json!({"kind": "until", "at": "2026-10-21T00:00:00Z"})
+        );
+    }
 }

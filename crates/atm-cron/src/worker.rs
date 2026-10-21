@@ -120,7 +120,9 @@ pub(crate) fn plan_step(slots: &[SlotView<'_>], now: DateTime<Utc>) -> Step {
             slot.next
         };
         let wake = match slot.schedule.stop {
-            StopCondition::Until { at } => Some(next.map_or(at, |next| next.min(at))),
+            StopCondition::Until { at } => {
+                Some(next.map_or(at.into_inner(), |next| next.min(at.into_inner())))
+            }
             StopCondition::Hook => next,
         };
         if let Some(wake) = wake {
@@ -492,8 +494,8 @@ mod tests {
             .run,
             vec![row.id]
         );
-        let at = "2026-10-19T10:05:00Z".parse().unwrap();
-        row.stop = StopCondition::Until { at };
+        let at: DateTime<Utc> = "2026-10-19T10:05:00Z".parse().unwrap();
+        row.stop = StopCondition::Until { at: at.into() };
         let step = plan_step(
             &[SlotView {
                 schedule: &row,
@@ -549,7 +551,7 @@ mod tests {
         );
         assert_eq!(step.run, vec![row.id]);
         assert_eq!(step.wake, Some("2026-10-19T03:01:00Z".parse().unwrap()));
-        let at = row.created_at.into_inner() + Duration::seconds(90);
+        let at = (row.created_at.into_inner() + Duration::seconds(90)).into();
         row.stop = StopCondition::Until { at };
         for offset in [90, 120] {
             let step = plan_step(

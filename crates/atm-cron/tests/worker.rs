@@ -114,7 +114,7 @@ impl Fixture {
             timeout_ms: 20000,
             custom: serde_json::from_str(r#"{"goal":{"ready":true}}"#).unwrap(),
             stop: StopCondition::Until {
-                at: self.clock.now() + chrono::Duration::days(1),
+                at: (self.clock.now() + chrono::Duration::days(1)).into(),
             },
             created_by: TEST_SENDER.parse().unwrap(),
         }
@@ -335,7 +335,7 @@ async fn start_refuses_until_in_the_past() {
     for offset in [-1, 0] {
         let mut spec = fixture.spec("past");
         spec.stop = StopCondition::Until {
-            at: fixture.clock.now() + chrono::Duration::seconds(offset),
+            at: (fixture.clock.now() + chrono::Duration::seconds(offset)).into(),
         };
         assert!(
             fixture
@@ -532,7 +532,7 @@ async fn until_reached_ends_the_schedule_without_a_run() {
     fixture.reply(HookReply::PassThrough);
     let mut spec = fixture.spec("until");
     spec.stop = StopCondition::Until {
-        at: fixture.clock.now() + chrono::Duration::seconds(90),
+        at: (fixture.clock.now() + chrono::Duration::seconds(90)).into(),
     };
     let (release, mut entered) = fixture.hold();
     fixture.cron.start(spec).await.unwrap();
@@ -1114,7 +1114,7 @@ async fn last_finite_occurrence_ends_the_schedule() {
     let mut spec = fixture.spec("last");
     spec.cron_expr = "0 0 0 20 10 * 2026".into();
     spec.stop = StopCondition::Until {
-        at: fixture.clock.now() + chrono::Duration::days(2),
+        at: (fixture.clock.now() + chrono::Duration::days(2)).into(),
     };
     fixture.cron.start(spec).await.unwrap();
     fixture.reply(HookReply::PassThrough);

@@ -46,7 +46,7 @@ impl CronRunOutcome {
 }
 
 pub(crate) fn stop_due(stop: &StopCondition, now: DateTime<Utc>) -> bool {
-    matches!(stop, StopCondition::Until { at } if now >= *at)
+    matches!(stop, StopCondition::Until { at } if now >= at.into_inner())
 }
 
 pub(crate) fn log(
@@ -228,14 +228,18 @@ mod tests {
     use super::*;
     #[cfg(feature = "test-utils")]
     use atm_core::test_support::TEST_SENDER;
+    use atm_core::types::IsoTimestamp;
 
     #[test]
     fn stop_due_is_the_one_until_rule() {
-        let at = "2026-10-19T00:00:00Z".parse().unwrap();
+        let at: IsoTimestamp = "2026-10-19T00:00:00Z".parse().unwrap();
         let stop = StopCondition::Until { at };
-        assert!(!stop_due(&stop, at - chrono::Duration::seconds(1)));
-        assert!(stop_due(&stop, at));
-        assert!(!stop_due(&StopCondition::Hook, at));
+        assert!(!stop_due(
+            &stop,
+            at.into_inner() - chrono::Duration::seconds(1)
+        ));
+        assert!(stop_due(&stop, at.into_inner()));
+        assert!(!stop_due(&StopCondition::Hook, at.into_inner()));
     }
 
     #[test]

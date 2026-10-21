@@ -2250,7 +2250,7 @@ mod tests {
             disabled_at: None,
         };
         let schedule = CronSchedule {
-            id: CronScheduleId(1),
+            id: CronScheduleId::new(1),
             generation: 1,
             team: team.clone(),
             phase: phase.clone(),

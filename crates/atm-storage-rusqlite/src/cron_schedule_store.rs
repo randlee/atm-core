@@ -125,14 +125,16 @@ fn decode(raw: RawCron) -> Result<CronSchedule, AtmError> {
     let stop = match (raw.stop_hook, raw.until_at.as_deref()) {
         (true, None) => StopCondition::Hook,
         (false, Some(until_at)) => StopCondition::Until {
-            at: parse_stamp(&key, until_at)?.into_inner(),
+            at: parse_stamp(&key, until_at)?,
         },
         _ => return Err(internal(&key, "stop condition is neither hook nor until")),
     };
     let args =
         serde_json::from_str::<Vec<String>>(&raw.args).map_err(|error| internal(&key, error))?;
     Ok(CronSchedule {
-        id: CronScheduleId(u64::try_from(raw.id).map_err(|_| internal(&key, "id is negative"))?),
+        id: CronScheduleId::new(
+            u64::try_from(raw.id).map_err(|_| internal(&key, "id is negative"))?,
+        ),
         generation: u32::try_from(raw.generation)
             .map_err(|_| internal(&key, "generation is out of range"))?,
         team: TeamName::from_validated(raw.team),
@@ -189,7 +191,7 @@ fn list_query(
 /// `(until_at, stop_hook)` for the stored stop columns: exactly one is set.
 fn stop_columns(stop: &StopCondition) -> (Option<String>, i64) {
     match stop {
-        StopCondition::Until { at } => (Some(stamp(IsoTimestamp::from(*at))), 0),
+        StopCondition::Until { at } => (Some(stamp(*at)), 0),
         StopCondition::Hook => (None, 1),
     }
 }
@@ -197,7 +199,7 @@ fn stop_columns(stop: &StopCondition) -> (Option<String>, i64) {
 /// Converts a schedule id to the stored integer. Ids above `i64::MAX` cannot
 /// be stored, so no row can carry them.
 fn stored_id(id: CronScheduleId) -> Option<i64> {
-    i64::try_from(id.0).ok()
+    i64::try_from(id.get()).ok()
 }
 
 /// One schedule's column values, prepared before the writer transaction.

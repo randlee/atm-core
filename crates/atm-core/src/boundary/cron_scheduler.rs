@@ -66,7 +66,7 @@ impl CronScheduler for RecordingCronScheduler {
             ));
         }
         let id = existing.map(|index| rows[index].id).unwrap_or_else(|| {
-            super::CronScheduleId(rows.iter().map(|row| row.id.0).max().unwrap_or(0) + 1)
+            super::CronScheduleId::new(rows.iter().map(|row| row.id.get()).max().unwrap_or(0) + 1)
         });
         let generation = existing.map_or(1, |index| rows[index].generation + 1);
         let row = CronSchedule {
@@ -194,13 +194,13 @@ mod tests {
         let scheduler = RecordingCronScheduler::default();
         let first_spec = spec("test-team", "bk", "first");
         let first = ready(scheduler.start(first_spec.clone())).unwrap();
-        assert_eq!(first.id.0, 1);
+        assert_eq!(first.id.get(), 1);
         assert_eq!(first.generation, 1);
         assert_eq!(first.custom, first_spec.custom);
         assert_eq!(first.stop, first_spec.stop);
         assert!(ready(scheduler.start(first_spec.clone())).is_err());
         let other = ready(scheduler.start(spec("other", "bk", "second"))).unwrap();
-        assert_eq!(other.id.0, 2);
+        assert_eq!(other.id.get(), 2);
         assert_eq!(
             ready(scheduler.list(Some(&first_spec.team), None)).unwrap(),
             vec![first.clone()]

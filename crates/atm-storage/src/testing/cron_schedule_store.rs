@@ -128,8 +128,8 @@ impl CronScheduleStore for InMemoryCronScheduleStore {
                 rows[index].clone()
             }
             None => {
-                let next = rows.iter().map(|row| row.id.0).max().unwrap_or(0) + 1;
-                let row = schedule_row(CronScheduleId(next), 1, schedule);
+                let next = rows.iter().map(|row| row.id.get()).max().unwrap_or(0) + 1;
+                let row = schedule_row(CronScheduleId::new(next), 1, schedule);
                 rows.push(row.clone());
                 row
             }
