@@ -430,7 +430,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn dirty_reload_and_registration_write_serialize_on_the_bridge() {
         let routes = routes();
         let snapshot = routes.router.hooks.snapshot.clone().expect("snapshot");
@@ -455,6 +455,15 @@ mod tests {
                 .await
                 .expect("reload reached the store");
         }
+        assert_eq!(
+            routes
+                .router
+                .control_path_sync_bridge
+                .blocking_bridge()
+                .available_permits(),
+            0,
+            "the paused reload must own the only control-path bridge permit"
+        );
         let mut write = Box::pin(routes.router.hook_register(
             register_request("sender", "task.assign", "bk"),
             AuthenticatedIngress::Local,
