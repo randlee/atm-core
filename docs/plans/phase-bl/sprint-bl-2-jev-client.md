@@ -76,9 +76,9 @@ the enum lives in `jev_client.py`.
 - `scripts/sanity-split`
 - `plugins/atm-bd-orchestration/agents/sc-sanity-jev.md`
 - `scripts/tests/test_jev_client.py`, `scripts/tests/test_wrap_jev_receipt.py`,
-  `scripts/tests/test_sanity_split.py`, `scripts/tests/test_agent_prompts.py`
+  `scripts/tests/test_sanity_split.py`, `scripts/tests/test_jev_client_prompts.py`
 
-bl-5 also edits `test_agent_prompts.py`; bl-5 stacks on this sprint.
+bl-5 owns `test_dev_sanity_prompt.py`; the test path sets do not overlap.
 
 ## Public contract
 
@@ -149,10 +149,9 @@ terminated; no surrounding array):
    `Retry-After` through the injected `sleep`. A connection or timeout error
    raises `TRANSPORT` at once (today it is retried, `:172-175`). Any other
    non-200 raises `HTTP_REJECTED`; 413 raises `CONTEXT_TOO_LARGE`. The busy
-   budget exhausted raises `BUSY_EXHAUSTED`. `OUT_OF_TOKENS` maps TypeSafe's
-   quota signal, which the dev confirms from TypeSafe's API documentation or
-   a recorded reply and cites in the PR; until confirmed, no status maps to it
-   and the member exists for the match.
+   budget exhausted raises `BUSY_EXHAUSTED`. `OUT_OF_TOKENS` is emitted only when Jev returns its documented
+   `out_of_tokens` response code; the recorded response fixture defines that
+   mapping and the PR cites it.
 3. **Delete Python splitting (#497).** Remove `split_request`,
    `diff_pieces`, the `chunks` helper, `evaluate_parts` and its 413 halving
    (`:394-430`), `AttemptBudget` sharing between parts, `parts()`, the
@@ -192,7 +191,7 @@ gh-365
 - [ ] `test_busy_status_retried_and_counted`: fake connection returns 529, 529, 200; that entry is `success`, `retries == 2`; the injected `sleep` saw two calls.
 - [ ] `test_non_busy_failures_not_retried`: 413, 401 and a raised `OSError` each make exactly one request, with kinds `context_too_large`, `http_rejected`, `transport` and `retries == 0`.
 - [ ] `test_elapsed_measured_in_client`: injected clock gives `elapsed_s == 4.0` on a `busy_exhausted` entry, which has `retries == MAX_JEV_ATTEMPTS - 1`.
-- [ ] `test_no_llm_selection_text` (in `test_agent_prompts.py`): neither `jev_client.py` nor `sc-sanity-jev.md` contains "selects the LLM reply" or "Selection takes the LLM reply".
+- [ ] `test_no_llm_selection_text` (in `test_jev_client_prompts.py`): neither `jev_client.py` nor `sc-sanity-jev.md` contains "selects the LLM reply" or "Selection takes the LLM reply".
 
 gh-497
 - [ ] `test_no_python_splitting`: `jev_client` has no attribute `split_request`, `diff_pieces`, `evaluate_parts`, `assignment_requests`; `--assignment` exits 2 as an unknown option.
@@ -227,3 +226,53 @@ and `sleep` are injected fakes.
 
 This sprint does not close #365 or #497 alone: the LLM side that writes the
 array and the sanity-log record are bl-5; the icon is bl-7.
+
+## Error-kind trigger table
+
+| Kind | Exact trigger |
+| --- | --- |
+| `BUSY_EXHAUSTED` | the injected Jev transport returns the documented busy status for every configured retry attempt |
+| `OUT_OF_TOKENS` | Jev returns its documented `out_of_tokens` error code in a response; request byte size did not exceed `MAX_REQUEST_BYTES` |
+| `CONTEXT_TOO_LARGE` | Jev returns its documented context-limit error code |
+| `TRANSPORT` | the injected transport fails before an HTTP response |
+| `HTTP_REJECTED` | a non-busy, non-context, non-token HTTP failure response is returned |
+| `RESPONSE_INVALID` | a successful transport response fails the response schema |
+| `KEY_MISSING` / `KEY_INVALID` | the corresponding local credential check fails |
+| `INPUT_INVALID` | request-array schema or byte-budget validation fails before invocation |
+
+`OUT_OF_TOKENS` is therefore retained only for that explicit Jev response; it
+is never inferred from text.
+
+## Typed error payload contract
+
+```python
+class ErrorPayload(TypedDict):
+    kind: Literal["busy_exhausted", "out_of_tokens", "context_too_large",
+                  "transport", "http_rejected", "response_invalid",
+                  "key_missing", "key_invalid", "input_invalid"]
+    status: NotRequired[int]
+    size: NotRequired[int]
+    budget: NotRequired[int]
+    detail: NotRequired[str]
+
+class JevLine(TypedDict):
+    index: int
+    request_sha256: str
+    success: bool
+    retries: int
+    elapsed_s: float
+    error: ErrorPayload | None
+```
+
+| Kind | Required fields | Optional fields |
+| --- | --- | --- |
+| `BUSY_EXHAUSTED` | `kind`, `status` (int) | `detail` (str) |
+| `OUT_OF_TOKENS` | `kind`, `status` (int) | `detail` (str) |
+| `CONTEXT_TOO_LARGE` | `kind`, `status` (int), `size` (int), `budget` (int) | `detail` (str) |
+| `TRANSPORT` | `kind` | `detail` (str) |
+| `HTTP_REJECTED` | `kind`, `status` (int) | `detail` (str) |
+| `RESPONSE_INVALID` | `kind` | `detail` (str) |
+| `KEY_MISSING`, `KEY_INVALID`, `INPUT_INVALID` | `kind` | `detail` (str); `INPUT_INVALID` may include `size` and `budget` |
+
+Every result line always carries `index` (int), `retries` (int), and
+`elapsed_s` (float); error-specific fields never change their JSON types.

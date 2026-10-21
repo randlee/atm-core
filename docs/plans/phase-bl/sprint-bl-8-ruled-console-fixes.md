@@ -1,65 +1,27 @@
-# Sprint bl-8 — ruling-gated console fixes: merge-check problems (#492) and the bd read deadline (#533)
+# Sprint bl-8 — D1-gated console BD deadline
 
-closure_type `boundary`; target_boundary `BOUNDARY-MergeFactsAndDeadline`
-(`facts.py` merge-problem presentation and `command.DEFAULT_TIMEOUT_S` with its bd callers). Branch
-`sprint/bl-8-ruled-console-fixes`, PR → `sprint/bl-1-refresh-core` only after D1 is recorded; it is not dispatchable while D1/D2 remain open. Wave 2.
-`external_ref`: `gh-492,gh-533`.
-recommended_agent `arch-ctm`; recommended_model `sonnet`.
+closure_type `boundary`; target_boundary `BOUNDARY-BdDeadline`. Branch
+`sprint/bl-8-ruled-console-fixes`, PR → `sprint/bl-4-qa-reviewer-data`. Wave
+1. `external_ref`: `gh-533`.
 
-**Gate.** Do not start a deliverable until its decision (plan D1, D2) is
-recorded verbatim in the plan. Each deliverable is independent: D2 may land
-while D1 is open.
+## Scope
 
-**Hard dependency.** must_follow bl-1: the public `refresh.lock` / `in_progress` behaviour that D1's options rely on. `runner.py` remains owned by bl-1; D2 stays unimplemented until Rand's ruling can be re-cut into a sprint with disjoint ownership.
+This is a D1-gated, deadline-only sprint. Once Rand rules the console BD read
+deadline, it changes only `src/atm_bd_console/command.py` and
+`tests/test_command.py`. It has no dependency on bl-1 and makes no refresh,
+runner, facts, notification, status-table, or merge-policy change.
 
-Paths under `apps/atm-bd-console/src/atm_bd_console/`; line numbers at
-v0.18.4 (86853d5).
+## Deterministic criteria
 
-## Relations
+- A fake clock and controlled command result prove the ruled deadline is
+  passed to the command seam.
+- A completion before that deadline is accepted and a controlled timeout is
+  represented by the existing typed result.
+- The test suite names the rule and value explicitly; it does not wait on
+  wall time.
 
-`must_follow` bl-1 only for the named refresh-lock behaviour. `parallel_safe`:
-bl-2, bl-3, bl-4, bl-5, bl-6, bl-7 (disjoint paths). This decision-gated
-sprint is not dispatched or counted as runnable work until D1/D2 are recorded.
+## Does not close
 
-## Owned paths
-
-- `facts.py`, `command.py`
-- tests: `tests/test_status_table.py`, `tests/test_command.py`
-
-## Facts (verified)
-
-- "head not pushed" and "merge check failed" are display-only strings in
-  the status table (`facts.py:189-194`). No ATM alert path reads them, so the
-  "alert" half of #492 is already true; what remains is whether they show.
-- PR-less branch pairs are still merge-checked (`runner.py:353-381`), but D2 remains blocked and no sprint owns a `runner.py` edit until Rand decides it.
-- Every console subprocess has one deadline, `command.DEFAULT_TIMEOUT_S = 20`
-  (`command.py:11`). The close hook uses 180 s (`ATM_BD_GATE_TIMEOUT_S`). A
-  first bd read on a loaded host exceeds 20 s (#533 item 4, timing data on
-  #528).
-
-## Deliverables (each per its decision)
-
-1. **#492 (D2, blocked).** No product edit is planned until Rand records D2 verbatim. `facts.py` presentation and a `runner.py` policy change must be re-cut into a new disjoint-owner sprint at that time; this plan does not use same-file ordering to force that decision.
-2. **#533 item 4 (D1).** Per D1: one of (a) a longer deadline for the first
-   bd read only, (b) a larger single deadline for bd reads, or (c) another
-   value Rand gives. With bl-1, a long read holds only `refresh.lock`; other
-   callers render the persisted result marked `in_progress`, so a longer bd
-   deadline no longer blanks the console, but it delays the next refresh by
-   up to that deadline.
-
-## Authoritative acceptance criteria (deterministic)
-
-gh-492
-- [ ] `test_head_not_pushed_display_per_d2`: a merge in `HEAD_NOT_PUSHED` state produces exactly the D2 text (or none).
-- [ ] A D2 implementation test is added only with the decision-scoped follow-up sprint; no current acceptance criterion chooses the policy.
-- [ ] `test_merge_problems_never_alert`: neither problem produces an ATM action.
-
-gh-533
-- [ ] `test_bd_deadline_per_d1`: the recorded bd argv call receives the D1 deadline (first tick and later ticks as D1 says), using a fake `subprocess.run` that records `timeout`.
-- [ ] `test_bd_timeout_is_typed_and_not_stamped`: a fake timeout yields a `Timeout` error carrying argv, deadline and fix, and (through bl-1's refresh) no BD success stamp.
-
-## Authoritative validation
-
-```bash
-cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --frozen pyright src && uv run --frozen pytest -q
-```
+D2 / #492 remains open. “Head not pushed,” PR-less merge checks, facts
+presentation, status-table changes, and all three formerly proposed #492
+criteria receive a new sprint only after D2 is ruled.

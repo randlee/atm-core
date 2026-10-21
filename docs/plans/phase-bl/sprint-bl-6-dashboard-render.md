@@ -2,7 +2,7 @@
 
 closure_type `boundary`; target_boundary `BOUNDARY-DashboardRender`
 (`render.dashboard`, `render.status_bar`, `status.py`, `atm-bd show`). Branch
-`sprint/bl-6-dashboard-render`, PR → `sprint/bl-1-refresh-core` (the refresh contract producer). Wave 2.
+`sprint/bl-6-dashboard-render`, PR → `sprint/bl-5-sanity-flow` (the refresh contract producer). Wave 2.
 Priority: the clock rows are P1 (TUI showing improper information); #360 is
 P3 (a diagnosis aid).
 `external_ref`: `gh-126,gh-360`.
@@ -10,8 +10,7 @@ recommended_agent `arch-ctm`; recommended_model `sonnet`.
 
 **Hard dependencies.**
 - must_follow bl-1: consumes `Snapshot.content_at`, `PollHealth` failures
-  restored from `health.json`, and bl-1's edits to `cli.py` (this sprint
-  edits `atm-bd show` in the same file).
+  restored from `health.json`.
 
 Paths under `apps/atm-bd-console/src/atm_bd_console/`; line numbers at
 v0.18.4 (86853d5).
@@ -28,8 +27,7 @@ The 2026-10-21 refresh anchor and the relayed correction are in `design.md` §1.
 
 ## Relations
 
-`must_follow` bl-1: consumes `Snapshot.content_at`, persisted health, and the
-refresh-aware `cli.py` contract. `parallel_safe`: bl-2, bl-3, bl-4, bl-5,
+`must_follow` bl-1: consumes `Snapshot.content_at` and persisted health. `parallel_safe`: bl-2, bl-3, bl-4, bl-5,
 bl-7, bl-8; its owned render/status/show paths are disjoint from each. bl-9
 consumes this sprint's rendered age surface.
 
@@ -45,10 +43,9 @@ of #360 (`app.py`, bl-7), every `app.py` tab (bl-7).
 
 ## Owned paths
 
-- `render.py`, `status.py`,
-  `cli.py` (`show`, `:98-101`)
+- `render.py`, `status.py`, new `show.py`
 - `apps/atm-bd-console/README.md` (Nerd Font Mono note)
-- tests: `tests/test_render.py`, `tests/test_status.py`, `tests/test_cli.py` (after bl-1)
+- tests: `tests/test_render.py`, `tests/test_status.py`, new `tests/test_show.py`
 
 `icons.py` is not edited here (bl-7 owns it); the glyph → style map for
 recolouring is built in `status.py` from the `icons.py` tables.

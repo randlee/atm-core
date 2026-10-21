@@ -30,9 +30,9 @@ In: everything in `design.md` §3 that lives below the UI: `refresh.py`,
 locks, stamps and the dedup rule, `PollHealth` moved into the refresh and
 persisted, sanity/QA run data persisted, `content_at`, the GitHub
 `attempted_at` defect (`runner.py:334-341`), the `prs_read_at` defect
-(`runner.py:331`), cron's closed-bead cache and interval, and #126 item 2b's
-task re-read before `atm task assign`. Cron (`cli.py`) is switched to
-`refresh.refresh` here.
+(`runner.py:331`), and cron's closed-bead cache and interval. Cron (`cli.py`)
+is switched to `refresh.refresh` here. Notification and dispatch timing are
+not part of this boundary.
 
 Out: `app.py` (bl-7 switches the console tick to `refresh.refresh` and
 renders the persisted values), `render.py`/`model.py` (bl-6 renders
@@ -102,24 +102,20 @@ Snapshot.content_at: datetime   # oldest good_at of any carried/reused part; == 
    the next call. A failed first read leaves `prs_read_at = None`
    (`runner.py:331`).
 6. **`content_at`** set by `PollHealth.apply` (design §3.5).
-7. **#126 2b re-read.** In `runner._run_actions`, immediately before each
-   `atm_source.assign`, re-read the bead's ATM task state with the existing
-   task read; if a task now exists, write a `hold` action line naming the
-   task id instead of assigning. (The bead-assignee write in the same #126
-   item is D4.)
+
 
 ## Authoritative acceptance criteria (deterministic; injected clock and fake step)
 
-gh-126 refresh requirement (a) identical
+boundary:BOUNDARY-Refresh (identity)
 - [ ] `test_cron_and_console_identical`: the same scripted reads through `by="cron"` and `by="console"` produce byte-identical `snapshot.json`, `health.json` and `runs.json`.
 - [ ] `test_cron_loads_closed_cache`: cron passes a `ClosedBeads` whose directory is the state dir.
 
-(b) no doubled load
+boundary:BOUNDARY-Refresh (dedup)
 - [ ] `test_second_caller_within_window_reads_nothing`: console succeeds at t=0, cron at t=10 → `ran == frozenset()` and the fake step was not called.
 - [ ] `test_refresh_lock_held_returns_in_progress`: a second descriptor holding `refresh.lock` → `skipped_reason == "in_progress"`, no step call, no exception.
 - [ ] `test_console_lock_does_not_block_cron`.
 
-(c) a failed run never suppresses
+boundary:BOUNDARY-Refresh (failed source is due)
 - [ ] `test_failed_run_never_suppresses`: BD fails at t=0 → a call at t=1 reads BD; `last_success` unchanged, `last_error` typed.
 - [ ] `test_partial_source_is_failure`: `beads.open` Ok, `beads.ready` Err → BD not stamped.
 - [ ] `test_github_failure_due_next_call`: GITHUB Err at t=0 → due at t=1 (today suppressed 600 s).
@@ -147,3 +143,16 @@ one process model the second process (flock conflicts across separate opens).
 
 #126 stays open: the console adoption (bl-7), the live proof (bl-9) and the
 items in D4 remain.
+
+## Step-3 boundary clarification
+
+This sprint is limited to refresh production and persisted state. It does not
+change dispatch or notification timing. A deterministic `test_cron_reuse_is_byte_identical` must drive a successful collection, then both `fresh` and
+`in_progress` reuse paths, and assert byte-identical persisted report, cron
+stdout, and exit outcome from the persisted data.
+
+## This Sprint Does Not Close
+
+bl-9 alone closes feature requirements (a) identical, (b) no doubled load,
+and (c) a failed run never suppresses through real cron and console entry
+points. The criteria here are controlled boundary tests only.

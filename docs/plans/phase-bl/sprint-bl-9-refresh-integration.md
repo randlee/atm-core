@@ -19,7 +19,7 @@ Anchors: `design.md` §1. Paths under `apps/atm-bd-console/`.
 `must_follow` bl-6 for the carried-content render contract and bl-7 for the
 real console tick/tab contract. `parallel_safe`: bl-2, bl-3, bl-4, bl-5, and
 the D1/D2-blocked bl-8. This sprint owns only its integration tests and live
-proof, never the producer paths.
+proof, including all feature-level refresh cases (a), (b), and (c), never the producer paths.
 
 ## Scope boundary
 
@@ -56,13 +56,10 @@ No `src/` file.
    in the states never-read / fresh / stale-after-failure, asserting: no
    blank and no Python repr; the placeholder or stale marker text; the typed
    error text present on screen and in the console log.
-3. **Live run.** On a real phase in atm-core (the lead names it), run
-   `atm-bd console --phase <p>` and `atm-bd cron --phase <p>` together for
-   at least three cron intervals while the host is under its normal agent
-   load. Paste into the PR body, verbatim: the `refresh.json` after each cron
-   run, the cron stdout lines, and the console log lines for each refresh
-   (`by`, `ran`, `skipped_reason`). This is the live-data proof; no evidence
-   file is committed.
+3. **Live proof.** The lead records a real phase observation without a load
+   generator. The PR body reports only persisted `refresh.json` data, cron
+   stdout, and console logs (`by`, `ran`, `skipped_reason`); no evidence file
+   is committed.
 
 ## Authoritative acceptance criteria
 
@@ -90,3 +87,10 @@ cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --froze
 
 No sleeps or threads in tests; the live run is the only real-time part and
 is not a test.
+
+## No-stamp integration case
+
+`test_no_success_stamp_for_failed_source` is owned here: a controlled failed
+source read writes no success stamp, then the next entry point re-reads it.
+This is distinct from the producer unit tests and is one of the feature-level
+(a)/(b)/(c) end-to-end cases.
