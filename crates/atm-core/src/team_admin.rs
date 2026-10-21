@@ -487,6 +487,8 @@ mod tests {
     use serial_test::serial;
     use tempfile::tempdir;
 
+    use crate::delivery_channel::BACKEND_TYPE_METADATA_KEY;
+
     use super::{
         AddMemberRequest, BackendOptions, BackupRequest, ClearNudgeTemplateOverrideRequest,
         DisableNudgeTemplateOverrideRequest, MemberName, MembersQuery, RemoveMemberRequest,
@@ -1365,7 +1367,7 @@ mod tests {
             .insert("alias".into(), serde_json::json!("arch"));
         member
             .metadata_json
-            .insert("backendType".into(), serde_json::json!("local"));
+            .insert(BACKEND_TYPE_METADATA_KEY.into(), serde_json::json!("local"));
         roster_store.seed_team(
             TEST_TEAM,
             vec![roster_member(TEST_TEAM, ROLE_TEAM_LEAD), member],
@@ -1413,7 +1415,7 @@ mod tests {
         );
         assert_eq!(metadata.get("alias"), Some(&serde_json::json!("arch")));
         assert_eq!(
-            metadata.get("backendType"),
+            metadata.get(BACKEND_TYPE_METADATA_KEY),
             Some(&serde_json::json!("local"))
         );
 
