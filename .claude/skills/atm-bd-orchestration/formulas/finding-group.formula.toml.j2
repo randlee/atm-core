@@ -20,8 +20,14 @@ required_variables:
   - sprint
   - stack
   - difficulty
+  - branch
+  - worktree
+  - pr_target
   - priority
   - edge_option
+defaults:
+  found_on_layer: ""
+  has_found_on_layer: false
 ---
 {#
 sc-compose beads formula (sc-compose/beads/v1, ADR-0021): the fix group of one
@@ -57,6 +63,7 @@ container and the repository configuration):
   ref            attach reference, "<finding_ref>-r<round>"
   finding_ref, round, severity, reviewer, remedy, finding_title, filed_by
   found_at_commit, requirements, adrs
+  found_on_layer  optional provenance copied from the checked bead
   phase, sprint, stack, difficulty, priority
   edge_option    E1 option "C" (default), "B" or "A", as in sprint-group
 #}
@@ -80,6 +87,9 @@ sprint = "{{{ sprint }}}"
 stack = "{{{ stack }}}"
 round = {{{ round }}}
 difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
 sprint_bead = "{{{ parent }}}"
 finding_ref = "{{{ finding_ref }}}"
 severity = "{{{ severity }}}"
@@ -87,6 +97,8 @@ reviewer = "{{{ reviewer }}}"
 remedy = "{{{ remedy }}}"
 filed_by = "{{{ filed_by }}}"
 found_at_commit = "{{{ found_at_commit }}}"
+{% if has_found_on_layer %}found_on_layer = {{{ found_on_layer | tojson }}}
+{% endif %}
 requirements = [{% for r in requirements %}"{{{ r }}}"{% if not loop.last %}, {% endif %}{% endfor %}]
 adrs = [{% for r in adrs %}"{{{ r }}}"{% if not loop.last %}, {% endif %}{% endfor %}]
 {% if edge_option != "A" %}
@@ -103,6 +115,9 @@ labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:dev-sanity"]
 [steps.metadata]
 dev_bead = "{{{ parent }}}.{{{ ref }}}-fix"
 difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
 
 [[steps]]
 id = "qa"
@@ -120,6 +135,9 @@ sprint = "{{{ sprint }}}"
 stack = "{{{ stack }}}"
 round = {{{ round }}}
 difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
 checked_bead = "{{{ parent }}}.{{{ ref }}}-fix"
 finding_ref = "{{{ finding_ref }}}"
 reviewer = "{{{ reviewer }}}"

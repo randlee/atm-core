@@ -1,7 +1,7 @@
 ---
 name: dev-sanity-assignment
-version: 1.2.0
-description: Render the fenced-JSON assignment for one sc-sanity-llm or sc-sanity-jev subagent in atm-bd-orchestration. `sanity-split` renders one per numbered deliverable of the checked bead; the subagent judges only `deliverable_number`. `changed_files` is the base..commit file list, `files_outside_owned_paths` the subset outside the bead's `owned_paths` fence, and optional `context` is a list of repo-relative path strings read at the pinned commit. Optional `external_evidence` lists bead notes, PR body or PR comment references (`kind` bead_notes with `bead`, pr_body with `repo` and `pr`, pr_comment with `repo` and `comment_id`) that `jev_client.py` fetches itself.
+version: 1.3.0
+description: Render the fenced-JSON assignment for one sc-sanity-llm or sc-sanity-jev subagent in atm-bd-orchestration. `sanity-split` renders one per numbered deliverable of the checked bead; the subagent judges only `deliverable_number`. `changed_files` is the base..commit file list, `files_outside_owned_paths` the subset outside the bead's `owned_paths` fence, and optional `context` is a list of repo-relative path strings read at the pinned commit. Optional `external_evidence` carries inline bead notes (`kind` bead_notes with `bead` and `text`); PR body or comment references (`kind` pr_body with `repo` and `pr`, pr_comment with `repo` and `comment_id`) are fetched by `jev_client.py`.
 format: json
 required_variables:
   - sanity_bead

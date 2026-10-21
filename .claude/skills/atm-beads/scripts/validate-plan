@@ -3,13 +3,13 @@
 
 Problems (exit 5), and nothing else:
   1. schema: a plan file line that is not {"sprint": "<name>", "depends_on"?: [...]}, a depends_on naming an
-     unknown sprint, a sprint container failing SprintBead, a poured sanity bead failing SanityBead
-     (scripts/bead_schema.py, published as schemas/);
+     unknown sprint, or an open phase bead failing its model (scripts/bead_schema.py, published as schemas/);
   2. a plan sprint with no sprint container `<prefix>-<sprint>`;
   3. an extra sprint container: a `stage:sprint` bead of the phase that the plan file does not list;
   4. the toml's integration_branch differs from the root's metadata.integration_branch;
   5. a depends_on with no `blocks` edge from the dependent's dev bead (`<container>.group-dev`, or its
      container) to the predecessor's initial sanity bead (`<pred>.group-sanity`) or its sprint container.
+  6. an open phase root has no stack bead with that root as parent and its integration branch as trunk.
 Everything else is a warning on stderr: bd doctor errors, open non-epic beads at the top level, a plan-time
 assignee, a poured sanity bead whose metadata.dev_bead is not its group's dev bead, a group not poured yet
 before import (--file).
@@ -25,7 +25,7 @@ before import (--file).
                                                      one "<file>: <problem>" line per problem
 
 The phase file `.atm-bd/phase-<x>.toml` (tracked) names the plan file, root,
-integration branch, lead and seven existing installed assignment templates.
+integration branch, lead and six existing installed assignment templates.
 Without --index the plan file is read from origin/<integration_branch>:<plan>. The bead prefix is taken
 from the root id. Prints one "<bead>: <problem>" line per problem. Exit 0 valid, 5 problems, 2 validation
 could not run (no phase file, no plan file, bd or git failed). Report problems to the lead; never edit
@@ -75,6 +75,7 @@ class Beads:
         self.file = {b["id"]: b for b in file_beads} if file_beads is not None else {}
         self.phase = phase
         self.cache: dict[str, dict | None] = {}
+        self._everything: list[dict] | None = None
 
     def bd(self, *args: str) -> str:
         proc = subprocess.run(["bd", *args], capture_output=True, text=True)
@@ -97,20 +98,21 @@ class Beads:
 
     def sprint_containers(self) -> set[str]:
         label = f"phase-{self.phase}"
-        if self.fixed is not None:
-            rows = list(self.fixed.values())
-        else:
-            rows = json.loads(self.bd("list", "-l", label, "-l", SPRINT_LABEL, "--all", "-n", "0", "--json") or "[]")
-            rows += list(self.file.values())
+        rows = self.everything()
         return {b["id"] for b in rows if {label, SPRINT_LABEL} <= set(b.get("labels") or [])
                 and b.get("status") != "tombstone"}
 
     def everything(self) -> list[dict]:
-        if self.fixed is not None:
-            return list(self.fixed.values())
-        if self.file:
-            return list(self.file.values())
-        return json.loads(self.bd("list", "--all", "-n", "0", "--json") or "[]")
+        if self._everything is None:
+            if self.fixed is not None:
+                self._everything = list(self.fixed.values())
+            else:
+                rows = json.loads(self.bd("list", "-l", f"phase-{self.phase}", "--include-gates", "-n", "0", "--json") or "[]")
+                merged = {b["id"]: b for b in rows}
+                merged.update({bead_id: bead for bead_id, bead in self.cache.items() if bead is not None})
+                merged.update(self.file)
+                self._everything = list(merged.values())
+        return self._everything
 
 
 def git(*args: str) -> str:
@@ -145,6 +147,12 @@ def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], bef
     if branch != config["integration_branch"]:
         problems.append(f"{root_id}: metadata.integration_branch is {json.dumps(branch)}; "
                         f".atm-bd/phase-{beads.phase}.toml names {config['integration_branch']}")
+    stack_id = f"{root_id}.stack"
+    stack = beads.get(stack_id)
+    if root.get("status") != "closed" and (stack is None or parent_of(stack) != root_id
+                                          or (stack.get("metadata") or {}).get("trunk") != branch):
+        problems.append(f"{stack_id}: missing stack bead, wrong parent or wrong trunk; "
+                        "render stack-bead.json.j2 with the root vars and bd import it")
     planned = {r["sprint"]: plan_io.sprint_bead_id(prefix, r["sprint"]) for r in rows}
     for container in sorted(beads.sprint_containers() - set(planned.values())):
         problems.append(f"{container}: stage:sprint bead of phase-{beads.phase} that the plan file does not list")
@@ -154,11 +162,9 @@ def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], bef
         if bead is None:
             problems.append(f"{container}: sprint {row['sprint']} is in the plan file but has no sprint bead")
             continue
-        problems += bead_schema.problems(bead, bead_schema.SprintBead)
         dev_id, sanity_id = plan_io.group_id(container, "dev"), plan_io.group_id(container, "sanity")
         dev, sanity = beads.get(dev_id), beads.get(sanity_id)
         if sanity is not None:
-            problems += bead_schema.problems(sanity, bead_schema.SanityBead)
             if (sanity.get("metadata") or {}).get("dev_bead") != dev_id:
                 warn(f"{sanity_id}: metadata.dev_bead is not {dev_id}")
         for pred in row["depends_on"]:
@@ -173,10 +179,14 @@ def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], bef
                                 f"or {pred_container} (plan file: {row['sprint']} depends on {pred})")
                 if dev is None:
                     warn(f"{dev_id} does not exist; pour the group with bead-groups")
+    phase_label = f"phase-{beads.phase}"
+    problems += bead_schema.validate_phase([bead for bead in beads.everything()
+                                             if bead.get("status") != "closed"
+                                             and (bead.get("id") == root_id or phase_label in (bead.get("labels") or []))])
 
 
 def warnings(beads: Beads, root_id: str, file_beads: list[dict] | None) -> None:
-    everything = beads.everything()
+    everything = file_beads if file_beads is not None else beads.everything()
     since = next((b.get("created_at") or "" for b in everything if b.get("id") == root_id), "")
     if not since and beads.get(root_id):
         since = beads.get(root_id).get("created_at") or ""

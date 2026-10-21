@@ -1,0 +1,232 @@
+{
+ "schema_version": "1.0.0",
+ "success": true,
+ "canceled": false,
+ "aborted_by": null,
+ "data": {
+  "acceptance_table": [
+   {
+    "case_id": "atm-bj-1 (production cell, recorded)",
+    "expected": {
+     "contradicted": "no",
+     "relevant": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "match_choices": true,
+    "observed": {
+     "addressed": [
+      "no",
+      0.94
+     ],
+     "contradicted": [
+      "no",
+      1.0
+     ],
+     "relevant": [
+      "yes",
+      0.34
+     ]
+    },
+    "production_verdict_t0_6": "underspecified",
+    "semantic_verdict": "satisfied",
+    "source": "anchor-runs/gate/bj-1/out-r2.json results[ANC-022], run plan-20261019T013526Z-atm-bj-1"
+   },
+   {
+    "canonical_request_sha256": "d779b8433374bccbe6913dc859d4301b9f00c0398483466a53292e43314c2280",
+    "case_id": "atm-bj-1 replay r1",
+    "correlation_id": "triage-bj-1:ANC-022:sealed:atm-bj-1:r1",
+    "expected": {
+     "contradicted": "no",
+     "relevant": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "match_choices": true,
+    "observed": {
+     "addressed": [
+      "no",
+      0.91
+     ],
+     "contradicted": [
+      "no",
+      1.0
+     ],
+     "relevant": [
+      "yes",
+      0.74
+     ]
+    },
+    "production_verdict_t0_6": "satisfied",
+    "raw_response_sha256": "ce3bd082abad6d7bd2dc9dddc25345b27e655ef704216f269f45bb88b2de40f3",
+    "semantic_verdict": "satisfied",
+    "source": "runs/replay-canonical.jsonl"
+   },
+   {
+    "canonical_request_sha256": "d779b8433374bccbe6913dc859d4301b9f00c0398483466a53292e43314c2280",
+    "case_id": "atm-bj-1 replay r2",
+    "correlation_id": "triage-bj-1:ANC-022:sealed:atm-bj-1:r2",
+    "expected": {
+     "contradicted": "no",
+     "relevant": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "match_choices": true,
+    "observed": {
+     "addressed": [
+      "no",
+      0.94
+     ],
+     "contradicted": [
+      "no",
+      1.0
+     ],
+     "relevant": [
+      "yes",
+      0.72
+     ]
+    },
+    "production_verdict_t0_6": "satisfied",
+    "raw_response_sha256": "95c0d742eb3454c24bf7bf46647d77503d6ed28746baf640723528efaff77c09",
+    "semantic_verdict": "satisfied",
+    "source": "runs/replay-canonical.jsonl"
+   },
+   {
+    "case_id": "silent_install (frozen oracle)",
+    "expected": {
+     "contradicted": "no",
+     "relevant": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "observed_relevant_confidence": [
+     0.97,
+     0.97
+    ],
+    "production_verdict_t0_6": [
+     "satisfied",
+     "satisfied"
+    ],
+    "source": "../result.json acceptance_table"
+   },
+   {
+    "case_id": "subcommand_feature (frozen oracle)",
+    "expected": {
+     "contradicted": "no",
+     "relevant": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "observed_relevant_confidence": [
+     0.62,
+     0.59
+    ],
+    "production_verdict_t0_6": [
+     "satisfied",
+     "underspecified"
+    ],
+    "source": "../result.json acceptance_table"
+   }
+  ],
+  "authority_citations": [
+   "ANC-022 v4 scope: 'edits the command name, install scripts or any caller of the console'",
+   "ANC-022 v4 kind: prohibition (jev_judge.decide ignores the compliance role; relevant=yes plus a confident contradicted=no is satisfied)",
+   "ANC-022 v4 statement: 'The atm-bd-console command must be replaced by the atm-bd console subcommand.'",
+   "atm-bj-1 Deliverable 9: '`install.py` renders it from the consumer registry key `max_sanity_rounds` when present, else 5'",
+   "Frozen oracle case silent_install (oracle.json sha256 25db339d15bc138167cfae171dfb041370c5af54a4241277fc176f08a5b6fba4): an install.py edit that is silent about the console is expected relevant=yes, contradicted=no, verdict satisfied"
+  ],
+  "authority_recommendations": [],
+  "candidate_rankings": [],
+  "disposition": "question_defect",
+  "evidence": {
+   "authority_digests": {
+    "anchors_sha256": "d0cdf33cf641c28350afbbcebcc33eb1be990e2a1678fd6632972c104019edba",
+    "intent_file_sha256_matches": true,
+    "intent_sha256": "19ed8747a9566a994c2a27dd405eea6579d3e4eda5136896d2eb1f0ccdc001f8"
+   },
+   "authority_files_sha256_before": [
+    "ae662c30761fab029a01b17db81a6008c2d78dda33f42f09a5e811eeb9b437e4  docs/plans/phase-bj/anchors.json",
+    "19ed8747a9566a994c2a27dd405eea6579d3e4eda5136896d2eb1f0ccdc001f8  docs/plans/phase-bj/intent.md"
+   ],
+   "authority_version_note": "Sealed set and oracle were frozen against ANC-022 v3 / INTENT v1; payload authority is ANC-022 v4 / INTENT v2. The scope string, which alone governs the relevant role, is identical in v3 and v4, so the relevant-role evidence is still valid. The statement changed in v4, and the addressed and contradicted evidence is out of scope for this relevant-role triage.",
+   "plan_text_reviewed": "atm-bj-1 Deliverable 9 edits install.py (an install script, in ANC-022 scope); no deliverable names, keeps, aliases, installs or runs atm-bd-console; contradicted=no at 1.0 in all three calls.",
+   "planner_observation_assessment": "Untrusted. The planner says bj-1 does not touch the console. The ANC-022 scope names install scripts as their own category, so the install.py edit is in scope and relevant=yes is correct. The planner's hypothesis that the install-script clause is the defect is rejected.",
+   "replay": {
+    "canonical_request_bytes": 19875,
+    "canonical_request_file": "runs/canonical-request.json",
+    "canonical_request_sha256": "d779b8433374bccbe6913dc859d4301b9f00c0398483466a53292e43314c2280",
+    "model_answered": "jev-1.13.0",
+    "original_request_bytes": 19875,
+    "records": "runs/replay-canonical.jsonl",
+    "relevant_confidences": [
+     0.34,
+     0.74,
+     0.72
+    ],
+    "script": "replicate.py"
+   },
+   "request_contract_check": "anchor_tuning_contract.py request: valid, sha256 5d0b57949ff84646d52fa7aa9e0aa902dec1d12ed58fee6969b1197015c930bf",
+   "runtime_digests_verified": {
+    "anchor_tuning_contract.py": "8f464aa751aa4ef3e17a04cbe5d5be6aa29e9c86f134819f29610584532aa7eb",
+    "jev_judge.py": "575229a11ef03dcbf3f26f657639c086dc1915f584f555e78ed940c2c0df9254",
+    "review_template": "d94fc238030de850c9c6ab5b4a8d202373aca132d77782f5403c648e44659505"
+   },
+   "source_digest_verified": "2ca1f0e70a77836640e453ced8cad442ecc270c5f9244cc2273003e68a6618b5",
+   "template": {
+    "id": "anchor-tuning-review-feedback",
+    "sha256": "d94fc238030de850c9c6ab5b4a8d202373aca132d77782f5403c648e44659505",
+    "version": "0.4.1"
+   }
+  },
+  "explanation": "On the authority, the expected cell is satisfied: bj-1 Deliverable 9 edits install.py, which falls in ANC-022 scope ('install scripts'), and nothing in bj-1 keeps, adds, aliases or runs atm-bd-console. The frozen oracle's silent_install case encodes exactly this pattern (install.py edit, silent about the console -> relevant yes, satisfied). Jev picked the authority-correct choices (relevant yes, contradicted no 1.0), but the sealed relevant question returned 0.34 confidence, below the 0.6 production threshold, so the verdict was underspecified. That response does not support the authority-determined verdict, and the plan text is not the cause: there is no conflicting or missing text the authority requires. Two byte-identical replays of the same canonical request (19875 bytes) returned relevant yes at 0.74 and 0.72. The choice is stable, but confidence on an identical request crosses the production threshold, which makes the sealed relevant question unstable at production threshold for this kind of item. The frozen acceptance table already shows the same weakness on subcommand_feature (relevant yes at 0.62 and 0.59, one production underspecified). A likely contributor is criteria.no's conjunct 'and does not run or describe the console': bj-1 literally meets it even though it touches an install script. Only the relevant tournament is reopened.",
+  "gate": "planning",
+  "operation": "triage",
+  "oracle_sha256": "25db339d15bc138167cfae171dfb041370c5af54a4241277fc176f08a5b6fba4",
+  "planner_action": "Do not edit atm-bj-1 for ANC-022: no plan text violates or omits anything ANC-022 requires, and the install.py edit in Deliverable 9 is correctly in scope. Do not substitute the replay confidences (0.74, 0.72) for the recorded cell. The production cell stays underspecified until the relevant question is resealed and bj-1 is re-judged with the resealed set.",
+  "question_action": "reopen_affected_tournament",
+  "sealed_question_set": {
+   "digest": "b2a1f73bcfb3ea27dda58605a24e82c90b7e29a33cc409c68fae08d37bda84f5",
+   "questions": {
+    "addressed": {
+     "criteria": {
+      "no": "The item text is silent about the directive: it neither includes the directive's specific content nor references it.",
+      "unclear": "The item text alludes to the directive's topic but it is not possible to tell whether the directive itself is included.",
+      "yes": "The item text contains the directive's specific content, in its own words or the user's, as a step, constraint, or stated starting point."
+     },
+     "instructions": "Does `item.text` explicitly carry out, preserve, or plan for the directive given in `anchor.statement`? Look for the directive's specific content being present in the item: the same starting point, the same method, the same constraint, or an explicit step that does what the statement asks. A generic mention of the topic without the directive's specific content does not count. Judge presence of the directive only, not whether the item conflicts with it.",
+     "type": "choice"
+    },
+    "contradicted": {
+     "criteria": {
+      "no": "The item text does not keep, add or run a hyphenated atm-bd-console command: it is silent about it, removes it, or names only the `atm-bd console` subcommand (with a space), the directory apps/atm-bd-console or the module atm_bd_console.",
+      "unclear": "The item text refers to a console command but it is not possible to tell whether it means the hyphenated atm-bd-console command or the `atm-bd console` subcommand.",
+      "yes": "The item text keeps, adds, aliases or runs a command named atm-bd-console (hyphenated), for example as an installed entry point, a console script, a compatibility alias, or a command line in a script, document, test or workflow."
+     },
+     "instructions": "`anchor.statement` forbids one thing: a command named atm-bd-console (one hyphenated word) existing after installation, or any script, document, test or workflow running that hyphenated command. Decide whether `item.text` keeps, adds, aliases or runs that hyphenated atm-bd-console command. `atm-bd console`, written with a space, is a different command: the `console` subcommand of the `atm-bd` command; running, documenting or extending it is not a conflict. The directory apps/atm-bd-console and the Python module atm_bd_console are not the command either. Silence about atm-bd-console is not a conflict. Judge conflict only.",
+     "type": "choice"
+    },
+    "relevant": {
+     "criteria": {
+      "no": "The item touches none of the three: it changes something else, such as a message template, a data model or a review rule, and does not run or describe the console.",
+      "unclear": "The item text is too vague to tell whether it touches any of the three.",
+      "yes": "The item touches a command or entry-point name, an install script, installer or install path, or a script, document, test or workflow that starts, runs or describes the console."
+     },
+     "instructions": "Does `item.text` touch any of the three things listed in `anchor.scope`: (1) the name of a command or installed entry point; (2) an install script, installer or install path; (3) a script, document, test or workflow that starts, runs or describes the console? Judge whether the item touches at least one of them. Do not judge whether the item obeys `anchor.statement`.",
+     "type": "choice"
+    }
+   }
+  },
+  "sealed_question_set_digest_after": "b2a1f73bcfb3ea27dda58605a24e82c90b7e29a33cc409c68fae08d37bda84f5",
+  "sealed_question_set_digest_before": "b2a1f73bcfb3ea27dda58605a24e82c90b7e29a33cc409c68fae08d37bda84f5"
+ },
+ "error": null,
+ "metadata": {
+  "authoritative_sources_unchanged": true,
+  "correlation_id": "triage-ANC-022-atm-bj-1-plan-20261019T013526Z-atm-bj-1.json",
+  "duration_ms": 0,
+  "jev_run_ids": [
+   "plan-20261019T013526Z-atm-bj-1",
+   "triage-bj-1:ANC-022:sealed:atm-bj-1:r1",
+   "triage-bj-1:ANC-022:sealed:atm-bj-1:r2"
+  ],
+  "planner_observation_trust": "untrusted",
+  "retry_count": 0,
+  "tool_calls": 24
+ }
+}

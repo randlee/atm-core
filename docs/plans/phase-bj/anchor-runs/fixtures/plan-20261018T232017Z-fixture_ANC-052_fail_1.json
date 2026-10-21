@@ -1,0 +1,132 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T232017Z-fixture_ANC-052_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T23:20:17+00:00",
+  "anchors_path": "docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-052:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 152,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-052",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When a dev or fix bead closes, the group's sanity bead must be assigned to the dev-sanity member with the sanity template and vars without any lead action: by the dev's close hook in the same shell command as bd close, and by atm-bd when bd ready lists the sanity bead with no ATM task.",
+      "quote": "the first issue to solve is mechanical.  when dev or fix bd is closed, sanity 'bd ready' is true.  the atm-bd cron/console will 'atm task assign <bead-id> <sanity-agent> --template <template> --args <vars> automatically.  This assignment must be done --as <phase-lead>",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+      "anchor_version": 2,
+      "deterministic_check": "close a dev bead through the hook in a scratch repo and read atm task list: the sanity task exists before the hook exits; kill the hook between its commands and one atm-bd tick assigns it",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "907fb722124ef7f964d782287fe9f3f8abbc51285927cefe3362aa0ee5a1c79b",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+            "unclear": "The item text is too vague to tell what part of the system it touches.",
+            "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+          },
+          "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item contains no planned sanity assignment by the close hook or by atm-bd: it is about something else, only names the topic or a goal, or describes only notices, reports, or lead actions.",
+            "unclear": "The item describes some automatic sanity assignment but the text is too vague to tell who performs it or when.",
+            "yes": "Both the close-hook assignment in the same command as bd close and the atm-bd assignment of ready sanity beads without a task appear in the item as planned behaviour, in any wording."
+          },
+          "instructions": "Check `item.text` for the specific mechanism that `anchor.statement` requires. Two things must be planned in the item: a close hook or close script that, when a dev or fix bead closes, runs the sanity bead's task assignment in the same shell command as bd close; and atm-bd assigning the sanity bead on its own when bd ready lists it and it has no ATM task. A statement of intent such as 'sanity should be automated' or 'smoother hand-off' is not the mechanism. A notice, report, or message is not an assignment. Judge whether the mechanism is present, not whether anything conflicts with it.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "The item does not commit to a differing approach; it is silent, consistent with the anchor, or about something else.",
+            "unclear": "The item hints at a different approach but does not state it clearly enough to tell.",
+            "yes": "The item explicitly commits to one of these differing approaches."
+          },
+          "instructions": "Does `item.text` commit to an approach for sanity assignment that differs from the one `anchor.statement` requires? Look for an explicit statement in the item that a person (for example the lead) performs or triggers a sanity assignment, that the close hook does not assign, that atm-bd does not assign ready sanity beads, that only a notice is sent, or that some kind of bead (dev or fix) is left out. A script or hook that runs the assignment under the phase lead's identity (for example `atm task assign ... --as <phase lead>`) is not a lead action; a lead action is the lead personally performing, approving, or triggering the step. An item that does not mention sanity assignment at all, or mentions it only as a goal, does not differ from the anchor. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 1.0,
+            "unclear": 0.0,
+            "yes": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1205,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 152,
+      "item_shortened": false,
+      "request_bytes": 3797
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-052"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

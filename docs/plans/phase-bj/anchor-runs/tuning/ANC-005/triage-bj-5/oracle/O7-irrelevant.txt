@@ -1,0 +1,3 @@
+# Sprint: dashboard colour palette
+
+Replace the console dashboard's CSS colour variables with the new palette and update the screenshot tests.

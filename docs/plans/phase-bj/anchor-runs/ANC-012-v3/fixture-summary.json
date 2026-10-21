@@ -1,0 +1,44 @@
+{
+  "success": true,
+  "data": {
+    "gate": "plan",
+    "dry_run": false,
+    "fixture": false,
+    "checks": [
+      {
+        "anchor_id": "ANC-012",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "atm-bd skill --latest installs the skills from the newest published release of atm-bd-orchestration.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/tmp/atm-bj-anchor-diagnostics/anc012-v3/fixtures/plan-20261019T010225Z-fixture_ANC-012_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-012",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "atm-bd skill --latest installs the unreleased head of the main branch instead of the latest published release.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/tmp/atm-bj-anchor-diagnostics/anc012-v3/fixtures/plan-20261019T010225Z-fixture_ANC-012_fail_1.json"
+      }
+    ],
+    "mismatches": [],
+    "pass": true,
+    "path": "/tmp/atm-bj-anchor-diagnostics/anc012-v3/fixtures",
+    "run_path": "/tmp/atm-bj-anchor-diagnostics/anc012-v3/fixtures",
+    "runs": [
+      "/tmp/atm-bj-anchor-diagnostics/anc012-v3/fixtures/plan-20261019T010225Z-fixture_ANC-012_pass_1.json",
+      "/tmp/atm-bj-anchor-diagnostics/anc012-v3/fixtures/plan-20261019T010225Z-fixture_ANC-012_fail_1.json"
+    ]
+  },
+  "error": null
+}

@@ -1,0 +1,101 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T223924Z-fixture_ANC-068_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T22:39:24+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-068:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 186,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-068",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "sanity-stack must take a timeout for the stack bead claim, and on expiry must return the holder's identity, claim time and active task; dev-sanity must then keep the sanity task active, ask the holder once, continue other sanity work and retry; neither may refuse the task, fail the dev or escalate to a person.",
+      "quote": "make sure there is a --timeout sent to the sanity-stack subagent for how long to wait if lock not available, sanity agent should also report who has the lock if --timeout occurs and lock could not be obtained.  This can not result in an team is blocked because agent could not get lock, likewise it can NOT result in escelate to HUMAN.  The team needs to know how to handle this and not disrupt work underway. ... 300 seconds and 15 seconds both seem quite long depending on how this is implemented.  can you attempt to claim w/ a 1-minute timeout for instance?",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md)",
+      "anchor_version": 2,
+      "deterministic_check": "a scratch run with the stack bead held by another actor: sanity-stack returns lock_timeout naming the holder within 60 s; dev-sanity's procedure has no refused close and no human escalation on that path; a claim older than lease_s is reclaimed by the subagent",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1102,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 186,
+      "item_shortened": false,
+      "request_bytes": 3390
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

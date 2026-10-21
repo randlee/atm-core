@@ -10,6 +10,10 @@ required_variables:
   - phase
   - sprint
   - stack
+  - branch
+  - worktree
+  - pr_target
+  - difficulty
 defaults:
   priority: 2
 ---
@@ -30,6 +34,10 @@ defaults:
     "phase": {{ phase | tojson }},
     "sprint": {{ sprint | tojson }},
     "stack": {{ stack | tojson }},
-    "dev_bead": {{ dev_bead | tojson }}
+    "dev_bead": {{ dev_bead | tojson }},
+    "branch": {{ branch | tojson }},
+    "worktree": {{ worktree | tojson }},
+    "pr_target": {{ pr_target | tojson }},
+    "difficulty": {{ difficulty | tojson }}
   }
 }

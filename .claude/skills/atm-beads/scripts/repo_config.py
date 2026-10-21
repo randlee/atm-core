@@ -2,8 +2,8 @@
 """The repository's atm-bd-orchestration configuration, read at run time.
 
 The installer renders `.claude/project/atm-bd-orchestration.yaml` in the
-consuming repository; every script reads it through `load()`. There are no
-defaults: a missing file raises `ConfigNotFound`, a missing key raises
+consuming repository; every script reads it through `load()`. Only
+max_sanity_rounds defaults to 5: a missing file raises `ConfigNotFound`, a missing key raises
 `ConfigKeyMissing`, and both name the file.
 
     repo_config.py get <key>     print one value (a list or mapping as JSON)
@@ -78,6 +78,9 @@ def load(repo: Path | None = None) -> RepoConfig:
         raise ConfigError(f"{path}: expected a mapping at the top level")
     if "lead" in data:
         raise ConfigError(f"{path}: lead belongs in .atm-bd/phase-<x>.toml; set each phase's lead and re-run the installer to remove the repository lead")
+    rounds = data.setdefault("max_sanity_rounds", 5)
+    if isinstance(rounds, bool) or not isinstance(rounds, int) or rounds < 1:
+        raise ConfigError(f"{path}: max_sanity_rounds must be a positive integer")
     return RepoConfig(path, data)
 
 

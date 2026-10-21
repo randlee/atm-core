@@ -3,17 +3,16 @@ from __future__ import annotations
 
 import copy
 import os
-import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from phase_fixtures import TEMPLATE_DIRECTORY, TEMPLATE_NAMES, phase_data, phase_toml, write_phase
+from phase_fixtures import TEMPLATE_DIRECTORY, TEMPLATE_NAMES, phase_data, phase_toml, run_subprocess, write_phase
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-from sprint_index_common import load_phase_config
+from sprint_index_common import load_phase_config, validate_phase_config
 
 
 class PhaseConfigTests(unittest.TestCase):
@@ -21,7 +20,7 @@ class PhaseConfigTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.repo = Path(self.tmp.name)
-        subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
+        run_subprocess(["git", "init", "-q", str(self.repo)], check=True)
         self.path = write_phase(self.repo, lead="appointed-lead")
         self.data = phase_data(lead="appointed-lead")
 
@@ -33,6 +32,21 @@ class PhaseConfigTests(unittest.TestCase):
         self.assertEqual(set(self.data["templates"]), set(TEMPLATE_NAMES))
         for relative in self.data["templates"].values():
             self.assertTrue((self.repo / relative).is_file())
+
+    def test_optional_code_checkout_is_retained(self):
+        data = copy.deepcopy(self.data)
+        data["code_checkout"] = "../atm-bd-orchestration"
+        self.write(data)
+        self.assertEqual(load_phase_config(self.repo, "t"), data)
+
+    def test_code_checkout_must_be_a_nonempty_string_when_present(self):
+        for value in ("", " \t", 42, "/absolute/path"):
+            with self.subTest(value=value):
+                data = copy.deepcopy(self.data)
+                data["code_checkout"] = value
+                self.write(data)
+                with self.assertRaisesRegex(RuntimeError, "code_checkout: optional repository-relative path"):
+                    load_phase_config(self.repo, "t")
 
     def test_every_missing_blank_or_non_string_value_names_its_key(self):
         for key in ("plan", "root", "integration_branch", "lead", *TEMPLATE_NAMES):
@@ -84,12 +98,27 @@ class PhaseConfigTests(unittest.TestCase):
                         load_phase_config(self.repo, "t")
                     self.assertIn(data["templates"][key], str(caught.exception))
 
-    def test_missing_table_unknown_keys_and_retired_aliases_fail(self):
+    def test_both_readers_require_lead_and_templates_by_default(self):
+        for key in ("lead", "templates"):
+            with self.subTest(key=key):
+                data = copy.deepcopy(self.data)
+                data.pop(key)
+                self.write(data)
+                with self.assertRaisesRegex(RuntimeError, f"{key}: required"):
+                    load_phase_config(self.repo, "t")
+                with self.assertRaisesRegex(RuntimeError, f"{key}: required"):
+                    validate_phase_config(self.repo, "t", data)
+
+    def test_unknown_top_level_key_fails_in_both_readers(self):
         data = copy.deepcopy(self.data)
-        data.pop("templates")
+        data["unexpected"] = "value"
         self.write(data)
-        with self.assertRaisesRegex(RuntimeError, "templates: required table"):
+        with self.assertRaisesRegex(RuntimeError, "unknown key.*unexpected"):
             load_phase_config(self.repo, "t")
+        with self.assertRaisesRegex(RuntimeError, "unknown key.*unexpected"):
+            validate_phase_config(self.repo, "t", data)
+
+    def test_unknown_template_keys_and_retired_aliases_fail(self):
         for key in ("dev_assign", "fix_review", "sanity_assign", "qa_assign", "unknown"):
             with self.subTest(key=key):
                 data = copy.deepcopy(self.data)
@@ -108,7 +137,7 @@ class PhaseConfigTests(unittest.TestCase):
             load_phase_config(self.repo, "t")
         self.assertIn(str(self.path), str(caught.exception))
 
-    def test_missing_lead_never_uses_environment_or_repository_yaml(self):
+    def test_missing_lead_has_no_environment_or_repository_fallback(self):
         data = copy.deepcopy(self.data)
         data.pop("lead")
         self.write(data)
@@ -117,13 +146,13 @@ class PhaseConfigTests(unittest.TestCase):
         config.write_text("lead: repository-fallback\n")
         code = ("from pathlib import Path; from sprint_index_common import load_phase_config; "
                 "load_phase_config(Path('.'), 't')")
-        result = subprocess.run([sys.executable, "-c", code], cwd=self.repo, capture_output=True, text=True,
+        result = run_subprocess([sys.executable, "-c", code], cwd=self.repo, capture_output=True, text=True,
                                 env={**os.environ, "PYTHONPATH": str(SCRIPTS), "ATM_IDENTITY": "env-fallback"})
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("lead: required nonempty string", result.stderr)
+        self.assertIn("lead: required", result.stderr)
 
     def init(self, *arguments):
-        return subprocess.run([sys.executable, str(SCRIPTS / "phase-config"), "init", *arguments],
+        return run_subprocess([sys.executable, str(SCRIPTS / "phase-config"), "init", *arguments],
                               cwd=self.repo, capture_output=True, text=True)
 
     def configure_repo(self):
@@ -131,7 +160,7 @@ class PhaseConfigTests(unittest.TestCase):
         config.parent.mkdir(parents=True)
         config.write_text("bead_prefix: chosen\nplans_dir: work/plans\nintegration_branch_pattern: custom/{phase}\n")
 
-    def test_init_writes_explicit_lead_and_seven_defaults_without_overwrite(self):
+    def test_init_writes_explicit_lead_and_six_defaults_without_overwrite(self):
         self.configure_repo()
         result = self.init("--phase", "new", "--lead", "new-lead")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -144,6 +173,12 @@ class PhaseConfigTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("already exists", result.stderr)
         self.assertEqual(path.read_bytes(), original)
+
+    def test_legacy_dev_fix_is_ignored_even_if_its_file_is_missing(self):
+        data = copy.deepcopy(self.data)
+        data["templates"]["dev_fix"] = "deleted-dev-fix.xml.j2"
+        self.write(data)
+        self.assertEqual(load_phase_config(self.repo, "t"), data)
 
     def test_init_requires_lead_and_installed_templates_before_writing(self):
         self.configure_repo()

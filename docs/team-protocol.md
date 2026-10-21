@@ -15,7 +15,11 @@ This protocol is mandatory for all ATM team communications.
    then close it with `bd close <task-id>`. Every close uses the complete
    template that pairs with the assignment template (see Close Templates),
    so ATM records the template sha and the `*-complete` workflow state that
-   ends the task's lifecycle and span.
+   ends the task's lifecycle and span. Under atm-bd-orchestration a dev,
+   fix, sanity or qa task completes only through its close hook
+   (`atm-task-close.py --role <role>`), and a dev or fix task is closed by
+   the sanity hook on PASS, not by the dev: the dev's close is the hook run,
+   and the task stays open while sanity runs.
 - Example: `task complete: <summary>`
 4. A task close is terminal. The assigner does not acknowledge it; the
    daemon's close receipt is the record, and the assigner closes the mirror

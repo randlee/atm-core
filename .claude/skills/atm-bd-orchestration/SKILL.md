@@ -1,6 +1,6 @@
 ---
 name: atm-bd-orchestration
-version: 0.16.0
+version: 0.18.3
 description: Bead-driven phase orchestration for the lead. Use when running a phase whose plan is in beads, dispatching from `bd ready` with ATM tasks, and landing it as one gh stack.
 requires:
   cli:
@@ -77,11 +77,11 @@ oversight recipients: ATM's escalation recipients,
 `atm escalation list --team "$ATM_TEAM" --json | jq -r '.recipients[]'`, if
 empty `atm escalation list --json | jq -r '.recipients[]'`, if both empty the
 task assigner, saying in the message that no escalation recipient is set;
-`atm send <recipient> --stdin` to each. Once per cause is the cause's workflow
-class bead (`workflow-issue-bead.json.j2`, `parent` as in
+`atm send <recipient> --stdin` to each. For an infrastructure outage tracked by
+the Loop's re-test and re-dispatch hold, use one outage class bead (`workflow-issue-bead.json.j2`, `parent` as in
 `examples/workflow-issue-bead-vars.json`, `remedy` = the command that re-tests
-the cause): announce only when you create it,
-append each later occurrence to it, and close it when the cause clears. When a
+the cause), announce once and close it when the cause clears. Refusals carry
+their reason in the ATM message and do not create or cite a class bead. When a
 backup or fallback exists, use it so work moves forward, never silently: record
 each use with its verbatim error in the log or evidence and announce it the same way.
 
@@ -97,21 +97,31 @@ them from that file (start each vars file from `.claude/skills/atm-beads/scripts
 one fails the render. Phase-specific variables come from
 `sprint_index_common.load_phase_config(repo, phase)`: supply `lead` from that
 phase's `lead`, and use its `templates` entry for the assignment purpose.
-The phase file requires exactly `dev`, `dev_fix`, `fix`, `sanity`, `qa`,
+An optional `code_checkout` path in `.atm-bd/phase-<x>.toml` selects the code
+repository's primary checkout relative to the beads repository root. If absent,
+the code repository defaults to the beads repository. The console verifies that
+the selected path is a Git toplevel with a GitHub `origin`; phase data, beads,
+plans and console state remain in the beads repository.
+The shared phase reader requires `plan`, `root`, `integration_branch`, `lead`,
+and the `templates` table, and rejects unknown top-level keys. `code_checkout`
+is optional. The table requires `dev`, `fix`, `sanity`, `qa`,
 `plan_review` and `review`; each points to an existing repository-relative
 file inside `.claude/skills/atm-bd-orchestration/templates/`. The phase lead
 has no repository YAML, registry-role, CLI identity or environment fallback.
+Only the legacy `templates.dev_fix` key is tolerated in addition to those six.
 
 | Key | Consumed by |
 | --- | --- |
 | `bead_prefix` | `sprint_index_common.py` when no root id is given (a root id `<prefix>-phase-<x>` wins) |
 | `dev_sanity_member` | the `dev-sanity` role (`.claude/skills/atm-beads/scripts/resolve-role dev-sanity`); a team member, which may have no `.claude/agents/<name>.md` |
 | `qa_member` | `qa-bead.json.j2` (`qa_member`), a parallel quick fix's QA bead |
+| checked bead `metadata.sprint_bead` | required `sprint_bead` in `qa-bead.json.j2` for finding and quick-fix QA beads |
 | `worktree_base` | sprint bead `worktree` = `<worktree_base>/<branch>` |
-| `test_command` | `dev-template`, `fix-assignment`, `dev-fix` |
-| `lint_command` | `dev-template`, `fix-assignment`, `dev-fix`, `dev-sanity-template` |
+| `test_command` | `dev-template`, `fix-assignment` |
+| `lint_command` | `dev-template`, `fix-assignment`, `dev-sanity-template` |
 | `integration_branch_pattern` | the root's `integration_branch` (`plan-root.json.j2`), then `review-template` and `plan-review-template` (`integration_branch`) |
 | `plans_dir` | `sprint_index_common.py` (`phase_path`), `sprint-report`, `sprint-review`, `plan-review-template` |
+| `code_checkout` (optional) | console Git and GitHub reads; relative to the beads repository root |
 | `requirements_globs`, `adr_globs` | `plan-review-template`, `fix-assignment` |
 | `policy_path` | `qa-template`, `dev-template`, `fix-assignment`, `schema-reviewer-assignment` |
 | `reviewers_round1` | `qa-template` (sprint reviews) |
@@ -158,16 +168,14 @@ poured dev bead takes; it is a lower bound: the PR's actual base (the layer
 below it) is `pr_target` or a descendant of it. A fix bead's target is the top of its stack, set at
 dispatch. Every PR lands on the top of its stack; there are no forks. A dev or fix branch
 is cut from the top of its stack; before dev-complete or fix-complete the dev rebases onto the
-stack's current top, opens the PR against it and closes with the `/sc-gh-stack-view` output. The lead
-links the PR on top of the phase stack
-(`/sc-gh-stack`), before the sanity check. Layer 0 alone cannot form a stack:
-its PR waits unlinked on the trunk (sanity accepts it there, and `stack-top`
-returns its branch so the next root sprint lands on it), and the lead links
-layers 0 and 1 together, `gh stack link --base <trunk> <pr0> <pr1>`, when
-layer 1's PR opens; a sanity refusal for no PR, not
-stacked or not rebased is the lead's (the stack writer) to fix: it opens,
-links or rebases by a new layer as `/sc-gh-stack` prescribes and re-dispatches
-the sanity check, without interrupting or messaging the dev.
+stack's current top, opens the PR against it and closes with the `/sc-gh-stack-view` output. The PR
+is not linked before sanity. Layer 0 alone cannot form a stack: its PR waits
+unlinked on the trunk, where sanity accepts it. After the sanity PASS close
+hook succeeds, sanity-stack claims the phase stack bead, links the layer and
+records it in that bead before the next developer resolves `stack-top`. When
+layer 1 passes sanity, sanity-stack links layers 0 and 1 together with
+`gh stack link --base <trunk> <pr0> <pr1>`. A stack outcome after close is
+reported to the lead, who owns any required repair or dev redispatch.
 Rebasing is done before sanity or QA is assigned and is the dev's, at
 dev-complete; the lead fixes only what the dev could not, or another stack
 problem, before dispatching sanity or QA, in its own worktree, and dispatches
@@ -206,7 +214,7 @@ on every restack and show up as out-of-scope work in that sprint's PR.
    integration branch for a bug in merged code, or the stack layer whose
    types the change uses.
 3. The finder cuts `fix/<thing>` from the stack's current top
-   (`.claude/skills/atm-bd-orchestration/scripts/assignment-gates.py stack-top --pr-target <pr_target>`) in its own worktree,
+   (`.claude/skills/atm-bd-orchestration/scripts/assignment-gates.py stack-top --root <phase-root> --pr-target <pr_target> --worktree <worktree>`) in its own worktree,
    with only the change, the implementors and call sites the compiler
    forces, and one test when it is a bug. The test command passes; push; PR
    against that top: a new layer, never a PR into a lower layer or the
@@ -216,7 +224,8 @@ on every restack and show up as out-of-scope work in that sprint's PR.
    scope and test rule are the same.
 4. The lead links it on top of the stack and dispatches one QA round on the
    fix PR (`templates.qa` from the phase file, `checked_bead` = the finder's bead, `layer` =
-   its layer; its QA bead from `qa-bead.json.j2` with `quick_fix` true, so QA
+   its layer; its QA bead from `qa-bead.json.j2` with `sprint_bead` from the
+   checked fix bead's `metadata.sprint_bead` and `quick_fix` true, so QA
    skips the sanity-PASS check a quick fix has no sanity for, and `pr_target`,
    which its PR base must descend from). No PR merges without QA. A failed
    quick-fix QA pours nothing and lists its blocking findings in the close's
@@ -312,7 +321,7 @@ or open; dev-sanity closes it on its next passing JEV child
 closes it too.
 For each ready bead, resolve the assignment path from the phase's `templates`
 table. Its purpose keys are: `plan_review` for
-plan review, `dev` for development, `dev_fix` for a reopened development task,
+plan review, `dev` for development,
 `fix` for fixes and findings, `sanity` for sanity checks, `qa` for QA, and
 `review` for phase-end review. This applies to every assignment example in
 this skill; use the configured path when the phase overrides a default.
@@ -325,8 +334,7 @@ this skill; use the configured path when the phase overrides a default.
 | QA (`stage:qa`) | `templates.qa` | quality-mgr |
 | fix (`stage:fix`) | `templates.fix` | the member the lead picks for its `difficulty` |
 | finding from a quick-fix QA (its `discovered-from` QA bead has `metadata.quick_fix` true) | `templates.fix`, no sanity bead; once every finding from that failed QA has closed, one more quick-fix QA bead (Parallel Quick Fix step 4) | an idle dev picked for its `difficulty`, by priority |
-| important or minor finding (`stage:finding`, no `metadata.sanity_finding`, not from a quick-fix QA) | `templates.fix`, in the same step as one `bd import` of its sanity bead (`atm-beads` [`dev-sanity-bead.json.j2`](../atm-beads/templates/dev-sanity-bead.json.j2), `dev_bead` = the finding) and its QA bead ([`qa-bead.json.j2`](templates/qa-bead.json.j2), `checked_bead` = the finding, `blocked_by` = the sanity bead), each with `parent` = the finding's parent; a minor finding left in the backlog gets neither until it is assigned | an idle dev, by priority |
-| sanity finding (`stage:finding` with `metadata.sanity_finding`) | its checked bead's `templates.dev_fix`, once per checked bead | the checked bead's assignee |
+| important or minor finding (`stage:finding`, no `metadata.sanity_finding`, not from a quick-fix QA) | `templates.fix`, in the same step as one `bd import` of its sanity bead (`atm-beads` [`dev-sanity-bead.json.j2`](../atm-beads/templates/dev-sanity-bead.json.j2), `dev_bead` = the finding) and its QA bead ([`qa-bead.json.j2`](templates/qa-bead.json.j2), `checked_bead` = the finding, `sprint_bead` = the finding's `metadata.sprint_bead`, `blocked_by` = the sanity bead), each with `parent` = the finding's parent and the cut layer's `branch`, `worktree`, `pr_target`, and `difficulty`; a minor finding left in the backlog gets neither until it is assigned | an idle dev, by priority |
 | review (`stage:review`) | `templates.review` | the phase-end reviewer |
 
 `difficulty` is a minimum. Pick a dev at that tier, or one tier up when none is idle (fast to terra/sonnet); never far
@@ -339,21 +347,21 @@ Then, on each task close:
 | --- | --- |
 | plan-review PASS | nothing when the bead closed: the root sprints are now ready. With minor findings the bead is assigned to you still open: fix each listed bead with `bd update`, then `bd close <root>-plan-qa --reason "minor fixes applied"` |
 | plan-review FAIL | have the author fix the listed beads, run `validate-plan` again, then dispatch the next round |
-| dev-complete | verify the dev's PR and link it on top of the phase stack, fixing any stack problem yourself (Stack Discipline), record it on the checked bead (`bd update <bead> --append-notes "layer PR #<n> <url>"`, from which a later `layer_prs` is read), then assign the now-ready sanity check; after a dev-fix with `layer_prs` = the sprint's layer PRs, its first layer's (`gh pr view <metadata.pr_target> --json number`) first and the checked PR last |
-| sanity check PASS | verify the PR base is its `pr_target` or a descendant of it; the group's poured QA bead is now ready: dispatch it with `checked_bead` = its `metadata.checked_bead` and `sprint_bead` = its `metadata.sprint_bead`, and `base` = the PR base; for a sprint that had a dev-fix also `layer_prs` = the sprint's layer PRs, its first layer's (`gh pr view <metadata.pr_target> --json number`) first and the checked PR last, so the QA diff is the sprint's own layer ranges and never another sprint's layer between them. For a fix bead's QA, also `carry_forward` = the fix bead (it carries its own requirements and ADRs) and `round` = the fix bead's `metadata.round` + 1. For an important or minor finding bead, the group's QA bead is now ready: dispatch it with `checked_bead` and `carry_forward` = the finding |
-| sanity check FAIL | one coordinator runs LLM/JEV with shared lint, then `sanity-selected` chooses whole replies per deliverable and alone creates finding children. Sanity answers only whether a numbered deliverable is written; requirements and quality are QA. The sanity member creates one child finding bead for every selected undone deliverable under `<checked bead>` at `clamp(parent priority - 1, P1, P4)`, so it ranks ahead of the parent's peers, never one for lint; it does not edit the parent. It copies phase/sprint/stack/layer provenance and uses only `phase-<phase>`, `stage:finding`, and `stack:<stack>` labels. The hierarchy is the parent closure gate (`bd` rejects parent-to-child `blocks` edges); it adds `blocks` edges only between those new beads, where one fix depends on another. Each child stores the exact structured report data. dev-sanity has reopened the checked bead; on a first FAIL the lead assigns it with `templates.dev_fix` from the phase file on a new layer: cut its branch and worktree from the current top of the stack, record the sprint's first layer's branch as the checked bead's `metadata.pr_target` (`bd update <bead> --set-metadata pr_target=<branch>`; a later dev-fix keeps it) and pass it as `pr_target`; never rebase or re-target a linked layer. When the children are excessive, the lead first verifies against the branch that each one's work is really not done and closes, with a reason, any that judges correctness or quality (that is QA). The lead may overrule, amend, split, or reassign children, but does not recreate them. After the second FAIL for the same checked bead, before dispatching a fix the lead diffs flagged files versus the last PASS, checks the branch base for foreign commits, then rules; report `SANITY.ROUND_CAP` with undone deliverable numbers and do not run a third round without that ruling. The parent cannot close until every child closes. This applies to a finding bead too: its task id is the finding, and it closes with `dev-complete.md.j2` |
+| dev-complete | verify the dev's PR, record it on the checked bead (`bd update <bead> --append-notes "layer PR #<n> <url>"`, from which a later `layer_prs` is read), then assign the sanity check without linking; sanity closes first and sanity-stack links afterward. After a reopened dev bead (a sanity FAIL reopens it in place), `layer_prs` is the sprint's own layer PRs with the checked PR last |
+| sanity check PASS | verify the PR base is its `pr_target` or a descendant of it; the group's poured QA bead is now ready: dispatch it with `checked_bead` = its `metadata.checked_bead` and `sprint_bead` = its `metadata.sprint_bead`, and `base` = the PR base; for a sprint whose dev bead was reopened also `layer_prs` = the sprint's layer PRs, its first layer's (`gh pr view <metadata.pr_target> --json number`) first and the checked PR last, so the QA diff is the sprint's own layer ranges and never another sprint's layer between them. For a fix bead's QA, also `carry_forward` = the fix bead (it carries its own requirements and ADRs) and `round` = the fix bead's `metadata.round` + 1. For an important or minor finding bead, the group's QA bead is now ready: dispatch it with `checked_bead` and `carry_forward` = the finding |
+| sanity check FAIL | The close hook reopens the checked bead and sends the undone deliverables to its dev on the existing task; no child finding or new dev assignment is created. At the configured round cap the lead receives `SANITY.ROUND_CAP` and rules on the next action. |
 | qa-complete | nothing: quality-mgr poured a fix group under the sprint per blocking finding (round n+1 for a failed fix verification) and filed the rest as finding beads before it closed the QA bead; the fix beads are now ready. A failed quick-fix QA (`metadata.quick_fix`) poured none: file and dispatch its blocking findings (Parallel Quick Fix step 4). When no step is open under the sprint, close it (below) |
-| fix-complete (`fixed`) | verify the dev's PR and link it on top of the phase stack, fixing any stack problem yourself (Stack Discipline), and record it on the fix bead (`bd update <bead> --append-notes "layer PR #<n> <url>"`). For a poured fix bead or an important or minor finding bead, nothing more: the group's sanity check is now ready. For a quick-fix finding, once every finding from that failed QA has closed, one more quick-fix QA bead (Parallel Quick Fix step 4) |
+| fix-complete (`fixed`) | verify the dev's PR and record it on the fix bead (`bd update <bead> --append-notes "layer PR #<n> <url>"`); sanity links after its PASS close hook. For a poured fix bead or an important or minor finding bead, nothing more: the group's sanity check is now ready. For a quick-fix finding, once every finding from that failed QA has closed, one more quick-fix QA bead (Parallel Quick Fix step 4) |
 | review-complete | file each finding with `finding-bead.json.j2` (`qa_bead` = the review bead) |
-| task-refused | read the reason and the bead state (`open`, or `blocked-failed` for a dev bead that declared failure). Reassign it only once `bd ready` lists the bead (a blocker refusal: as the not-ready or blocker row), split it, or close the bead yourself with `bd close <bead> --force --reason "<why>"`. A `blocked` bead is never in `bd ready`: run `bd update <bead> --status open --assignee <new agent>` before you re-dispatch it. A sanity refusal for no PR, not stacked or not rebased is yours as stack writer (Stack Discipline). A cannot-run caused by an announced outage (its workflow class bead is open) is not re-dispatched until the cause clears and that bead closes; never force-close the bead meanwhile. `REVIEW_PENDING_JEV`: file each code finding in its notes with `finding-bead.json.j2` (`qa_bead` = the review bead) and re-dispatch the review only after the Jev outage clears, with the prior `post_mortem_jev` run IDs in its notes so they are reused |
+| task-refused | read the reason and the bead state (`open`, or `blocked-failed` for a dev bead that declared failure). Reassign it only once `bd ready` lists the bead (a blocker refusal: as the not-ready or blocker row), split it, or close the bead yourself with `bd close <bead> --force --reason "<why>"`. A `blocked` bead is never in `bd ready`: run `bd update <bead> --status open --assignee <new agent>` before you re-dispatch it. A sanity refusal for no PR, not stacked or not rebased is yours as stack writer (Stack Discipline). `REVIEW_PENDING_JEV`: file each code finding in its notes with `finding-bead.json.j2` (`qa_bead` = the review bead) and re-dispatch the review only after the Jev outage clears, with the prior `post_mortem_jev` run IDs in its notes so they are reused |
 | fix-complete (`not_reproducible`) | no commit, no sanity check; the finding is closed. For a poured fix bead or an important or minor finding bead, close its group's sanity bead, then its QA bead, each with `bd close <bead> --reason "not_reproducible: <fix bead>"`. For a quick-fix finding, as for `fixed` |
-| assignee stopped on an active task (it acts as if pair-programming: states what it will do next and waits for a user who does not exist; a turn ending on a promise of future work, status-only replies to reminders, `lead_notified` mail, or an atm-bd-console `task_stalled` row) | the lead gets it running again on the first sign, never waiting for the reminder budget: `atm send <assignee>` "Create a checklist for all deliverables for this task, outside the worktree's tracked tree (an untracked file in the worktree fails the dev-sanity clean-worktree check). Go through the checklist one item at a time and complete the task, marking the task complete AFTER you verify that the task is done and tests pass. Follow the task complete process, closing bd and notifying the task assigner when all deliverables are complete." |
+| assignee stopped on an active task (it acts as if pair-programming: states what it will do next and waits for a user who does not exist; a turn ending on a promise of future work, status-only replies to reminders, `lead_notified` mail, or an atm-bd `task_stalled` row) | the lead gets it running again on the first sign, never waiting for the reminder budget: `atm send <assignee>` "Create a checklist for all deliverables for this task, outside the worktree's tracked tree (an untracked file in the worktree fails the dev-sanity clean-worktree check). Go through the checklist one item at a time and complete the task, marking the task complete AFTER you verify that the task is done and tests pass. Follow the task complete process, closing bd and notifying the task assigner when all deliverables are complete." |
 | assignee silent past the re-nudge | announce it as in Lead Role, then `bd update <bead> --status open --assignee <new agent>` and re-assign the same task id with the same template and vars: `atm task assign <new agent> --task-id <same id> --template <same> --vars <same>` |
-| not-ready or blocker refusal | the task is closed `refused` and the bead is open. Fix the cause it names (usually a blocker still open; a blocker that is not a bead, such as an unfiled fix, gets one first: [`finding-bead.json.j2`](templates/finding-bead.json.j2) or a workflow class bead, whichever fits) and add the dependency it recommends (`bd dep add <bead> --blocked-by <blocker>`, or the right one, sprint beads included; never a replan) so `bd ready` holds the bead until the blocker closes. When bd refuses that edge (it keeps one edge type per bead pair, so a QA bead that already `validates` its checked bead takes no other, and it refuses a parent-child edge), add the edge to an open bead the blocker's work goes through instead (`bd dep add <bead> --blocked-by <it>`, unless it already blocks the bead): for a QA bead whose checked bead changes after its sanity PASS, the change is a new fix bead with its own sanity bead (a passed sanity is frozen, never reopened), and that sanity bead holds the QA bead; never remove an edge; re-assign the same bead (same task id, template and vars) only once `bd ready` lists it. A blocker refusal is never answered with "wait". If the work is no longer wanted, close the bead with a reason instead |
+| not-ready or blocker refusal | the task is closed `refused` and the bead is open. Fix the cause it names (usually a blocker still open; a blocker that is not a bead, such as an unfiled fix, gets one first: [`finding-bead.json.j2`](templates/finding-bead.json.j2)) and add the dependency it recommends (`bd dep add <bead> --blocked-by <blocker>`, or the right one, sprint beads included; never a replan) so `bd ready` holds the bead until the blocker closes. When bd refuses that edge (it keeps one edge type per bead pair, so a QA bead that already `validates` its checked bead takes no other, and it refuses a parent-child edge), add the edge to an open bead the blocker's work goes through instead (`bd dep add <bead> --blocked-by <it>`, unless it already blocks the bead): for a QA bead whose checked bead changes after its sanity PASS, the change is a new fix bead with its own sanity bead (a passed sanity is frozen, never reopened), and that sanity bead holds the QA bead; never remove an edge; re-assign the same bead (same task id, template and vars) only once `bd ready` lists it. A blocker refusal is never answered with "wait". If the work is no longer wanted, close the bead with a reason instead |
 
 Re-run `bd ready` after every close. Never cache the ready list. The open
 phase root also appears in it; it is never dispatched.
-While phase work is under way, a cron must run `atm-bd-console --headless --phase <x>` every 15 minutes, using the lead and templates in `.atm-bd/phase-<x>.toml`. `--headless` runs exactly one tick and exits; it uses the same runner step as the app. The plugin requires `atm-bd-console >= 0.1.0`; install and upgrade enforce this minimum, and the viewer reports `CONSOLE_VERSION_UNAVAILABLE` or `CONSOLE_VERSION_TOO_OLD` with the install fix until the CLI is available. Use `.claude/skills/atm-bd-orchestration/scripts/bead-queues --phase <x>` only as the read-only viewer. Disable the cron when phase work is paused or complete. See the package README's **Phase cron** section for exact crontab and Hermes examples, including output and failure handling.
+While phase work is under way, a cron must run `atm-bd cron --phase <x>` every 15 minutes, using the lead and templates in `.atm-bd/phase-<x>.toml`. The command runs exactly one tick and exits; it uses the same runner step as the app. Use `atm-bd queues --phase <x>` as the read-only viewer. Disable the cron when phase work is paused or complete. See the package README's **Phase cron** section for exact crontab and Hermes examples, including output and failure handling.
 
 Close a sprint container when every child is closed (`bd children <sprint>
 --json | jq -e 'all(.[]; .status == "closed")'`): `bd close <sprint> --reason
@@ -405,7 +413,9 @@ On review-complete, file each finding with `finding-bead.json.j2`, using:
 - `qa_bead` = the review bead;
 - `sprint` and `found_on_layer` from the metadata of the dev bead whose code
   it cites (the phase root when it spans sprints) (`phase-end` and
-  the top layer when it is the root);
+  the top layer when it is the root); `found_on_layer` must be the integer
+  stack layer, and `bead-groups` refuses anything else (omit it and put free
+  text in the description);
 - `found_at_commit` = the reviewed commit;
 - `screen` = `keep`, unless you ran `ceremony-finding-screen` over them;
 - `finding_ref` = the reviewer's numbering (`R-1`, `R-2`, …);
@@ -468,8 +478,7 @@ atm task assign <agent> --task-id <bead> \
 - For a dev or finding bead, create its branch and worktree from the current
   top of its stack (its `pr_target` or a descendant of it), passed as the
   assignment's `pr_target`: `git fetch origin && git worktree add -b <branch> <worktree>
-  origin/<top>`. A `templates.dev_fix` assignment's layer is cut the same way; its
-  `pr_target` is the sprint's first layer's branch.
+  origin/<top>`.
 - Set the bead's assignee to the recipient first:
   `bd update <bead> --assignee <agent>`. For a role, the recipient is
   `.claude/skills/atm-beads/scripts/resolve-role <role>`. A claim fails when the bead is
@@ -529,8 +538,7 @@ one of these defaults; close and package-internal data templates retain their pa
 | `plan-review-template.xml.j2` | assignment | lead → quality-mgr, the plan-review bead |
 | `plan-review-complete.md.j2` | close | quality-mgr, PASS or FAIL |
 | `dev-template.xml.j2` | assignment | lead → dev, a planned dev bead |
-| `dev-fix.xml.j2` | assignment | lead → dev, a dev bead reopened by a failed sanity check |
-| `dev-complete.md.j2` | close | dev, for `dev-template` and `dev-fix` |
+| `dev-complete.md.j2` | close | dev, for `dev-template` |
 | `dev-sanity-template.xml.j2` | assignment | lead → dev-sanity member |
 | `dev-sanity-assignment.json.j2` | fenced JSON | dev-sanity (`sanity-split`) → one `sc-sanity-llm` or `sc-sanity-jev` subagent per numbered deliverable |
 | `dev-sanity-complete.md.j2` | close | dev-sanity member, PASS or FAIL |
@@ -544,7 +552,7 @@ one of these defaults; close and package-internal data templates retain their pa
 | `req-qa`, `arch-qa`, `ruthless-boundary-qa`, `flaky-test-qa`, `schema-reviewer`, `plan-scope-reviewer` `-assignment.json.j2` | fenced JSON | quality-mgr → its background reviewers; `plan-scope-reviewer` on plan QA-1, then only for its carried findings, locked to each finding's original acceptance criterion |
 | `qa-bead.json.j2` | bead | lead, when it assigns an important or minor finding bead (with its sanity bead) or for a parallel quick fix (`quick_fix` true; sprint and fix QA beads are poured) |
 | `finding-bead.json.j2` | bead | quality-mgr (QA, important and minor) and lead (review), one per finding |
-| `workflow-issue-bead.json.j2` | bead | anyone, a workflow class bead for a recurring failure signature |
+| `workflow-issue-bead.json.j2` | bead | lead, an infrastructure outage tracked by the Loop's re-test and re-dispatch hold |
 
 Bead templates render with `sc-compose render --strict --file <t> --var-file <v>
 --strict`, then `jq -c .` into a JSONL file for `bd import`. Examples of every

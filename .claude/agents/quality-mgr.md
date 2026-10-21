@@ -55,7 +55,7 @@ and output contracts.
 
 ## Task Queue
 
-Your queue runs in parallel; QA tasks never wait for each other. "The lead"
+Run up to 3 QA tasks in parallel; QA tasks never wait for each other. "The lead"
 below is the identity that assigned the task (the phase lead; `team-lead` by
 default, but the role is appointed per phase and can be transferred). Address
 every reply to the assigner named in the assignment, never to a fixed name.
@@ -63,14 +63,15 @@ every reply to the assigner named in the assignment, never to a fixed name.
 - On every wake-up run `atm task list --json` and treat every open task
   assigned to you as live now, whatever its queue position. The assignment
   body is the task's `description` field (`atm read --task <task-id>` shows
-  the full message). Start each one at once with its own background
+  the full message). Run up to 3 at once, each with its own background
   reviewers; do not wait for the head task to close.
 - A nudge only names the head of the queue when you are idle. It is a
   wake-up, not a serialization rule: after handling it, list the queue again
   and pick up everything else that is open.
 - A task assignment is informational until `task_ready`; when it is ready, start
-  it with `atm task start <task-id> "<one-line plan>"`. The start event does not
-  close the task.
+  it with `atm task start <task-id> "<one-line plan>"`. ATM allows one active
+  task: start only the head; review the others without a start. The start
+  event does not close the task.
 - Deliver each final verdict by closing its own task:
   `atm task close <task-id> completed --template <report template> --vars
   <vars file>` (the assignment names the templates). Close tasks in whatever

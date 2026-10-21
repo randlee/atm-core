@@ -1,0 +1,142 @@
+{
+ "anchor_id": "ANC-071",
+ "anchor_kind": "prohibition",
+ "anchor_record_sha256": "0cc19b56def06d9a553b7e20c1f43125233ca72481f3b9e915a77151430f7a61",
+ "anchor_scope": "the rebase-required path of dev-sanity and sanity-stack",
+ "anchor_statement": "A rebase-required outcome must not increment metadata.sanity_round on the sanity bead or count toward max_sanity_rounds.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-071-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture: two rebase-required outcomes leave sanity_round at 0.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Branch B loses the top twice and then passes; sanity_round stays 0.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-071-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture: rebase-required incremented the counter.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "sanity_round is 2 after two rebase-required outcomes.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-071-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "dev-sanity leaves metadata.sanity_round untouched when the outcome is rebase-required; only sanity FAIL verdicts count toward max_sanity_rounds.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent_refrains",
+   "item_id": "ANC-071-probe-silent_refrains",
+   "probe": "silence",
+   "rationale": "Prohibition: an in-scope rebase-required path that is silent about the counter refrains; satisfied.",
+   "scored_roles": [
+    "relevance",
+    "conflict"
+   ],
+   "text": "On rebase-required sanity-stack sends the dev rebase-required.xml.j2 on the open task and writes nothing to the stack bead.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_counts",
+   "item_id": "ANC-071-probe-conflict_counts",
+   "probe": "conflict",
+   "rationale": "Direct violation.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Each rebase-required counts as a round toward max_sanity_rounds, so a branch that keeps losing the top escalates to the lead.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "boundary_fail_counts",
+   "item_id": "ANC-071-probe-boundary_fail_counts",
+   "probe": "boundary",
+   "rationale": "Boundary: counting FAILs is not counting rebase-required; no conflict, satisfied under the prohibition mapping.",
+   "scored_roles": [
+    "relevance",
+    "conflict"
+   ],
+   "text": "A sanity FAIL increments metadata.sanity_round by one.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-071-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The console shows the sol icon next to every Codex agent of model sol in the agent list.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

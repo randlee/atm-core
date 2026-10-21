@@ -1,0 +1,3 @@
+# Sprint: release 0.17.0 from the v0.16.1 baseline
+
+Branch from the v0.16.1 tag, add the new `atm-bd doctor` command in new files only, and release the result as atm-bd 0.17.0. Nothing is pushed to the v0.16.1 tag or its release branch.

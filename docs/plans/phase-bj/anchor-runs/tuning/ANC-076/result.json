@@ -1,0 +1,592 @@
+{
+  "aborted_by": null,
+  "canceled": false,
+  "data": {
+    "acceptance_table": [
+      {
+        "accepted": false,
+        "candidate_id": "a",
+        "reason": "role mismatch, unstable repeat, or production syntax"
+      },
+      {
+        "accepted": false,
+        "candidate_id": "b",
+        "reason": "role mismatch, unstable repeat, or production syntax"
+      },
+      {
+        "accepted": false,
+        "candidate_id": "c",
+        "reason": "role mismatch, unstable repeat, or production syntax"
+      },
+      {
+        "accepted": false,
+        "candidate_id": "d",
+        "reason": "role mismatch, unstable repeat, or production syntax"
+      },
+      {
+        "accepted": true,
+        "candidate_id": "e",
+        "reason": "exact frozen-oracle role and verdict match; stable repeats; production question syntax"
+      }
+    ],
+    "accepted": true,
+    "authority_citations": [
+      "phase-bj intent v1",
+      "ANC-076 v2"
+    ],
+    "authority_recommendations": [],
+    "candidate_rankings": [
+      {
+        "candidate_id": "a",
+        "exact_role_cells": 58,
+        "exact_semantic_verdicts": 18,
+        "question_sha256": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05",
+        "regressions": 2,
+        "selected": false,
+        "stable_cases": 10,
+        "total_cases": 10,
+        "total_role_cells": 60,
+        "total_semantic_verdicts": 20
+      },
+      {
+        "candidate_id": "b",
+        "exact_role_cells": 56,
+        "exact_semantic_verdicts": 16,
+        "question_sha256": "7de0a995d832fde590eaafb69191301d954d0dd032256bbba044a1849ac46d73",
+        "regressions": 4,
+        "selected": false,
+        "stable_cases": 10,
+        "total_cases": 10,
+        "total_role_cells": 60,
+        "total_semantic_verdicts": 20
+      },
+      {
+        "candidate_id": "c",
+        "exact_role_cells": 57,
+        "exact_semantic_verdicts": 17,
+        "question_sha256": "fe461ad549b195b87c9e657f1be5ab9a0758acdce5168fcd19cc3f0b3409a125",
+        "regressions": 3,
+        "selected": false,
+        "stable_cases": 9,
+        "total_cases": 10,
+        "total_role_cells": 60,
+        "total_semantic_verdicts": 20
+      },
+      {
+        "candidate_id": "d",
+        "exact_role_cells": 60,
+        "exact_semantic_verdicts": 20,
+        "question_sha256": "8dfe572d663823fecdb1f9f65a57fd68d26893a65da035a1e54682119139d6d7",
+        "regressions": 0,
+        "selected": false,
+        "stable_cases": 10,
+        "total_cases": 10,
+        "total_role_cells": 60,
+        "total_semantic_verdicts": 20
+      },
+      {
+        "candidate_id": "e",
+        "exact_role_cells": 60,
+        "exact_semantic_verdicts": 20,
+        "question_sha256": "376a121c4cf1a7f5e484e94185f3333f95e0fb134f07ae35236e2ca28893d263",
+        "regressions": 0,
+        "selected": true,
+        "stable_cases": 10,
+        "total_cases": 10,
+        "total_role_cells": 60,
+        "total_semantic_verdicts": 20
+      }
+    ],
+    "confidence_diagnostics": {
+      "cells_at_or_above_threshold": 60,
+      "mean": 0.981,
+      "median": 1,
+      "minimum": 0.8,
+      "p10": 0.94,
+      "threshold": 0.8,
+      "total_cells": 60
+    },
+    "confidence_reference_threshold": 0.8,
+    "evidence": {
+      "answer_archive": "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",
+      "answer_archive_encoding": "zlib+base64 canonical JSON; records contain run ID, canonical request SHA, raw response SHA, ordered role choices and confidences",
+      "byte_identical_repeats": true,
+      "candidate_question_sets": {
+        "a": {
+          "addressed": {
+            "criteria": {
+              "no": "The item text is silent about the directive: it neither includes the directive's specific content nor references it.",
+              "unclear": "The item text alludes to the directive's topic but it is not possible to tell whether the directive itself is included.",
+              "yes": "The item text contains the directive's specific content, in its own words or the user's, as a step, constraint, or stated starting point."
+            },
+            "instructions": "Does `item.text` explicitly carry out, preserve, or plan for the directive given in `anchor.statement`? Look for the directive's specific content being present in the item: the same starting point, the same method, the same constraint, or an explicit step that does what the statement asks. A generic mention of the topic without the directive's specific content does not count. Judge presence of the directive only, not whether the item conflicts with it.",
+            "type": "choice"
+          },
+          "contradicted": {
+            "criteria": {
+              "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+              "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+              "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+            },
+            "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+            "type": "choice"
+          },
+          "relevant": {
+            "criteria": {
+              "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+              "unclear": "The item text is too vague to tell what part of the system it touches.",
+              "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+            },
+            "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+            "type": "choice"
+          }
+        },
+        "b": {
+          "addressed": {
+            "criteria": {
+              "no": "It only mentions checksums or manifest publication, verifies a subset, uses a different version, or says nothing about file comparison.",
+              "unclear": "It names manifest checking but leaves it impossible to tell whether installed files and the selected release's manifest are compared.",
+              "yes": "It explicitly plans per-file verification against the manifest for the selected release version."
+            },
+            "instructions": "Does item.text plan to compare every installed skill file with the published manifest belonging to the selected tag or --latest version? Judge stated verification, not conflict.",
+            "type": "choice"
+          },
+          "contradicted": {
+            "criteria": {
+              "no": "It says nothing about verification, or plans compatible selected-version verification.",
+              "unclear": "The proposed checking behavior is too vague to know whether it conflicts.",
+              "yes": "It accepts a mismatch without checking, checks only a subset, or checks against another version's manifest."
+            },
+            "instructions": "Does item.text make an installer choice incompatible with verifying every installed file against the published manifest of the selected tag or --latest release? Silence is not conflict.",
+            "type": "choice"
+          },
+          "relevant": {
+            "criteria": {
+              "no": "The item only publishes a manifest, changes unrelated software, or merely discusses release contents without installer work.",
+              "unclear": "The item refers to a skill installation change but its installer touch is uncertain.",
+              "yes": "The item changes installer behavior, version selection, or installed-file manifest checking."
+            },
+            "instructions": "Does item.text change the atm-bd skill installer, its version selection, or checking installed files against a release manifest? Judge subject overlap only.",
+            "type": "choice"
+          }
+        },
+        "c": {
+          "addressed": {
+            "criteria": {
+              "no": "The item omits per-file checking, checks only some files, or does not tie the manifest to the chosen version.",
+              "unclear": "The item suggests installer integrity checking but its file coverage or version binding is unspecified.",
+              "yes": "The item specifies every installed file and the published manifest of the chosen version, using equivalent words if needed."
+            },
+            "instructions": "Does item.text include the anchor's installer verification obligation? The obligation is to verify every installed file against the published manifest for the version chosen by tag or --latest. Judge presence only.",
+            "type": "choice"
+          },
+          "contradicted": {
+            "criteria": {
+              "no": "The item omits the check without forbidding it, or specifies a compatible full check.",
+              "unclear": "The item names a check but leaves uncertain whether its coverage or version conflicts.",
+              "yes": "The item explicitly skips required files, bypasses mismatches, or verifies against a manifest for a release other than the selected one."
+            },
+            "instructions": "Judge whether item.text explicitly rules out the anchor's required installed-file verification, including through a narrower or wrong-version check. Omission alone does not rule it out.",
+            "type": "choice"
+          },
+          "relevant": {
+            "criteria": {
+              "no": "The work is only a publisher, unrelated application, or documentation outside installer behavior.",
+              "unclear": "The work might touch skill installation, but its target component cannot be determined.",
+              "yes": "The work changes how atm-bd skill installs, selects a release, or verifies installed files."
+            },
+            "instructions": "Look at the work proposed in item.text. Is the installer or its installed-file verification in scope under anchor.scope? Do not judge compliance.",
+            "type": "choice"
+          }
+        },
+        "d": {
+          "addressed": {
+            "criteria": {
+              "no": "It only mentions checksums or manifest publication, verifies a subset, uses a different version, or says nothing about file comparison.",
+              "unclear": "It names manifest checking but leaves it impossible to tell whether installed files and the selected release's manifest are compared.",
+              "yes": "It explicitly plans per-file verification against the manifest for the selected release version."
+            },
+            "instructions": "Does item.text plan to compare every installed skill file with the published manifest belonging to the selected tag or --latest version? Judge stated verification, not conflict.",
+            "type": "choice"
+          },
+          "contradicted": {
+            "criteria": {
+              "no": "It says nothing about verification, or plans compatible selected-version verification.",
+              "unclear": "The proposed checking behavior is too vague to know whether it conflicts.",
+              "yes": "It accepts a mismatch without checking, checks only a subset, or checks against another version's manifest."
+            },
+            "instructions": "Does item.text make an installer choice incompatible with verifying every installed file against the published manifest of the selected tag or --latest release? Silence is not conflict.",
+            "type": "choice"
+          },
+          "relevant": {
+            "criteria": {
+              "no": "The item only produces a release manifest or changes unrelated software without touching installer operation or its description.",
+              "unclear": "The text names the skill package but leaves whether installer operation is involved uncertain.",
+              "yes": "The item changes the installer, its help or documentation, release selection, or installed-file manifest checking."
+            },
+            "instructions": "Does item.text concern atm-bd skill installer operation or the description of that operation, including version selection and installed-file verification? Judge subject overlap only.",
+            "type": "choice"
+          }
+        },
+        "e": {
+          "addressed": {
+            "criteria": {
+              "no": "It only mentions checksums or manifest publication, verifies a subset, uses a different version, or says nothing about file comparison.",
+              "unclear": "It names manifest checking but leaves it impossible to tell whether installed files and the selected release's manifest are compared.",
+              "yes": "It explicitly plans per-file verification against the manifest for the selected release version."
+            },
+            "instructions": "Does `item.text` plan to compare every installed skill file with the published manifest belonging to the selected tag or --latest version? Judge stated verification, not conflict.",
+            "type": "choice"
+          },
+          "contradicted": {
+            "criteria": {
+              "no": "It says nothing about verification, or plans compatible selected-version verification.",
+              "unclear": "The proposed checking behavior is too vague to know whether it conflicts.",
+              "yes": "It accepts a mismatch without checking, checks only a subset, or checks against another version's manifest."
+            },
+            "instructions": "Does `item.text` make an installer choice incompatible with verifying every installed file against the published manifest of the selected tag or --latest release? Silence is not conflict.",
+            "type": "choice"
+          },
+          "relevant": {
+            "criteria": {
+              "no": "The item only produces a release manifest or changes unrelated software without touching installer operation or its description.",
+              "unclear": "The text names the skill package but leaves whether installer operation is involved uncertain.",
+              "yes": "The item changes the installer, its help or documentation, release selection, or installed-file manifest checking."
+            },
+            "instructions": "Does `item.text` concern atm-bd skill installer operation or the description of that operation, including version selection and installed-file verification? Judge subject overlap only.",
+            "type": "choice"
+          }
+        }
+      },
+      "jev_model": "jev-latest",
+      "oracle": {
+        "anchor": "ANC-076",
+        "cases": [
+          {
+            "id": "fixture-pass",
+            "roles": [
+              "yes",
+              "yes",
+              "no"
+            ],
+            "text": "The atm-bd skill installer checks each installed file against the published manifest for the selected --latest release.",
+            "why": "Approved pass fixture explicitly verifies each installed file for selected latest release."
+          },
+          {
+            "id": "fixture-fail",
+            "roles": [
+              "yes",
+              "no",
+              "yes"
+            ],
+            "text": "The atm-bd skill installer accepts a release with a modified installed script without checking the published manifest.",
+            "why": "Approved fail fixture accepts a modified installed script without checking published manifest."
+          },
+          {
+            "id": "tag-compliant",
+            "roles": [
+              "yes",
+              "yes",
+              "no"
+            ],
+            "text": "For a selected release tag, atm-bd skill compares every installed skill file with that tag's published manifest, aborts on mismatch, and lists each mismatched path.",
+            "why": "Directly fulfills version-specific complete verification."
+          },
+          {
+            "id": "latest-compliant",
+            "roles": [
+              "yes",
+              "yes",
+              "no"
+            ],
+            "text": "For --latest, resolve the release version and verify all installed files against that version's published manifest; report paths and refuse any mismatch.",
+            "why": "Directly fulfills version-specific complete verification."
+          },
+          {
+            "id": "silent",
+            "roles": [
+              "yes",
+              "no",
+              "no"
+            ],
+            "text": "Improve atm-bd skill install help text and version selection output.",
+            "why": "Touches installer but says nothing about manifest verification."
+          },
+          {
+            "id": "topical",
+            "roles": [
+              "yes",
+              "no",
+              "no"
+            ],
+            "text": "Add a checksum status note to the skill installer documentation.",
+            "why": "Checksum topic alone does not plan verification of installed files against release manifest."
+          },
+          {
+            "id": "wrong-version",
+            "roles": [
+              "yes",
+              "no",
+              "yes"
+            ],
+            "text": "atm-bd skill verifies downloaded files against the newest release manifest even when the user selected an older tag.",
+            "why": "Verification against a different version violates selected-version manifest requirement."
+          },
+          {
+            "id": "partial",
+            "roles": [
+              "yes",
+              "no",
+              "yes"
+            ],
+            "text": "atm-bd skill checks only installed Python scripts against the published manifest; it installs other skill files without checking.",
+            "why": "Only a subset is verified, conflicting with every-file requirement."
+          },
+          {
+            "id": "irrelevant",
+            "roles": [
+              "no",
+              "no",
+              "no"
+            ],
+            "text": "Change the terminal color scheme in the atm-core console.",
+            "why": "Different system and activity."
+          },
+          {
+            "id": "manifest-only",
+            "roles": [
+              "no",
+              "no",
+              "no"
+            ],
+            "text": "Publish a manifest listing checksums of each shipped file in the release artifact.",
+            "why": "Manifest publication alone does not modify skill installer or its verification."
+          }
+        ],
+        "schema": "anc-076-oracle/1",
+        "version": 2
+      },
+      "run_count": 100
+    },
+    "explanation": "Candidate e matched every frozen-oracle role and derived semantic verdict across two identical requests per case. The diagnostic plan did not determine expectations.",
+    "gate": "planning",
+    "operation": "tune",
+    "oracle_sha256": "9c8bcd00bf130a112368e7eab600805e8a50fa2b8cf12adb7b1617a0554458e2",
+    "planner_action": "Apply the sealed planning questions to ANC-076 only; run the production gate at its configured threshold.",
+    "production_confidence_threshold": 0.6,
+    "production_semantics_unchanged": true,
+    "question_action": null,
+    "sealed_question_set": {
+      "digest": "376a121c4cf1a7f5e484e94185f3333f95e0fb134f07ae35236e2ca28893d263",
+      "questions": {
+        "addressed": {
+          "criteria": {
+            "no": "It only mentions checksums or manifest publication, verifies a subset, uses a different version, or says nothing about file comparison.",
+            "unclear": "It names manifest checking but leaves it impossible to tell whether installed files and the selected release's manifest are compared.",
+            "yes": "It explicitly plans per-file verification against the manifest for the selected release version."
+          },
+          "instructions": "Does `item.text` plan to compare every installed skill file with the published manifest belonging to the selected tag or --latest version? Judge stated verification, not conflict.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "It says nothing about verification, or plans compatible selected-version verification.",
+            "unclear": "The proposed checking behavior is too vague to know whether it conflicts.",
+            "yes": "It accepts a mismatch without checking, checks only a subset, or checks against another version's manifest."
+          },
+          "instructions": "Does `item.text` make an installer choice incompatible with verifying every installed file against the published manifest of the selected tag or --latest release? Silence is not conflict.",
+          "type": "choice"
+        },
+        "relevant": {
+          "criteria": {
+            "no": "The item only produces a release manifest or changes unrelated software without touching installer operation or its description.",
+            "unclear": "The text names the skill package but leaves whether installer operation is involved uncertain.",
+            "yes": "The item changes the installer, its help or documentation, release selection, or installed-file manifest checking."
+          },
+          "instructions": "Does `item.text` concern atm-bd skill installer operation or the description of that operation, including version selection and installed-file verification? Judge subject overlap only.",
+          "type": "choice"
+        }
+      }
+    },
+    "sealed_question_set_digest_after": "376a121c4cf1a7f5e484e94185f3333f95e0fb134f07ae35236e2ca28893d263",
+    "sealed_question_set_digest_before": null,
+    "semantic_score": {
+      "exact_role_cells": 60,
+      "exact_semantic_verdicts": 20,
+      "regressions": 0,
+      "stable_cases": 10,
+      "total_cases": 10,
+      "total_role_cells": 60,
+      "total_semantic_verdicts": 20
+    },
+    "tournament_protocol_version": "plan-anchor/question-tournament/2.0.0",
+    "tuning_history_after": {
+      "events": [
+        {
+          "authority": {
+            "anchor_id": "ANC-076",
+            "anchor_record_sha256": "d556e4273a606069efde374770176584cc18e5f31dcff8e027c22ff69f9deafa",
+            "anchor_version": 2,
+            "intent_id": "phase-bj",
+            "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+            "intent_version": 1
+          },
+          "candidate": {
+            "candidate_id": "e",
+            "question_sha256": "376a121c4cf1a7f5e484e94185f3333f95e0fb134f07ae35236e2ca28893d263"
+          },
+          "decision": {
+            "question_set_sha256": "376a121c4cf1a7f5e484e94185f3333f95e0fb134f07ae35236e2ca28893d263",
+            "reason_code": "TOURNAMENT.EXACT",
+            "status": "sealed"
+          },
+          "event": "question_set_sealed",
+          "event_index": 1,
+          "evidence": {
+            "canonical_request_sha256": [
+              "280fea2c41e1c0593d2fbf707d2d181b249dc1e99610f8b32a27583ecc4f36e8",
+              "280fea2c41e1c0593d2fbf707d2d181b249dc1e99610f8b32a27583ecc4f36e8",
+              "7507a86d85088c63a8e0c02c04a9136a671df79c39bde8cece90cf9511af24e6",
+              "7507a86d85088c63a8e0c02c04a9136a671df79c39bde8cece90cf9511af24e6",
+              "f1349fdb0a0b408a84918bd4a2ad47a1ff5592656d0945a401e4845a7e5c4cf7",
+              "f1349fdb0a0b408a84918bd4a2ad47a1ff5592656d0945a401e4845a7e5c4cf7",
+              "04a57d84b51723b4d3df37c04152e41ae7254317efa037d24fd4888fe03989cf",
+              "04a57d84b51723b4d3df37c04152e41ae7254317efa037d24fd4888fe03989cf",
+              "f218d99750ce7d77996c56092928f8cbe9b7fa75253cba1c41c4a332ffd513f6",
+              "f218d99750ce7d77996c56092928f8cbe9b7fa75253cba1c41c4a332ffd513f6",
+              "822c559f3e593ac4ae63c8b92fe859b720e5ea5135b59132c6ba059a13c1f3ae",
+              "822c559f3e593ac4ae63c8b92fe859b720e5ea5135b59132c6ba059a13c1f3ae",
+              "de4f9aee13b97b1542996aefed0ef1bd9f3549d8f9b4d5e2b1d3bd88c451a464",
+              "de4f9aee13b97b1542996aefed0ef1bd9f3549d8f9b4d5e2b1d3bd88c451a464",
+              "21261f4d7814b9a53aa0e11a00d8c41b790f2444462852e788bddd7c29ce3d6d",
+              "21261f4d7814b9a53aa0e11a00d8c41b790f2444462852e788bddd7c29ce3d6d",
+              "f0a5df5ee42ab4dc343c560df6e9eab554bd691651f95ee482a24a894dd5f228",
+              "f0a5df5ee42ab4dc343c560df6e9eab554bd691651f95ee482a24a894dd5f228",
+              "18c5a3f94327ce7c83e4889d1ac042b85062e38c80be6200f8adb3255aba5f1f",
+              "18c5a3f94327ce7c83e4889d1ac042b85062e38c80be6200f8adb3255aba5f1f"
+            ],
+            "raw_response_sha256": [
+              "4ba2a6cf324e77b14f6e8633e28d11d56d36ce05ffa2373bf66467cca51f9a3d",
+              "4ba2a6cf324e77b14f6e8633e28d11d56d36ce05ffa2373bf66467cca51f9a3d",
+              "6277200aaca04b587a6abe441b60ef16024a4b3ab5ffea684c78539962ceedbc",
+              "6277200aaca04b587a6abe441b60ef16024a4b3ab5ffea684c78539962ceedbc",
+              "0aa800aaf43fc12323d27d425974ab5cc5a846ecd71c9353e1c0e62aadc7c924",
+              "f128e32b8c434d97c37828c94d17d5445dfd79cb59dfd3ea80baf7c41d10d946",
+              "a8905a71f4750508ebfb48e5f0c396d1c5acf5483ebdb041009f33cc2c80559c",
+              "a8905a71f4750508ebfb48e5f0c396d1c5acf5483ebdb041009f33cc2c80559c",
+              "a05412fa447d8050092aeff89896ca1dfde883c8fdde6cbe0755d7aab58fe4e3",
+              "a05412fa447d8050092aeff89896ca1dfde883c8fdde6cbe0755d7aab58fe4e3",
+              "d79322aa0e1e8adb3df852cb003f4d492cc6053fa3d746806ddcd1221b43db94",
+              "d79322aa0e1e8adb3df852cb003f4d492cc6053fa3d746806ddcd1221b43db94",
+              "5719b3bc6503865cef96ffe5cdf7201e0e64866cda3d1f720cc0b80190661b00",
+              "10e6600979a5144c9a5d732e21ceaa1e890c2a6031f522802e626bf375618e0a",
+              "6a00e6ef54a18d28761035d19805496fe384a4f2084c793cd40094f85395653b",
+              "6a00e6ef54a18d28761035d19805496fe384a4f2084c793cd40094f85395653b",
+              "68a2c38447d2989bd6e85bf5e2484e321b574a892f7345c6b7c2f2e4739fe237",
+              "68a2c38447d2989bd6e85bf5e2484e321b574a892f7345c6b7c2f2e4739fe237",
+              "e841fe3871d1666861df7193c8d93a87b7cb242afd66c3b4006effbd04660846",
+              "8c1916ccabf9415274432239bc115d056334e89f8bc107a9cef0dd8e7eae23f0"
+            ],
+            "run_ids": [
+              "ANC-076-e-fixture-pass-r1",
+              "ANC-076-e-fixture-pass-r2",
+              "ANC-076-e-fixture-fail-r1",
+              "ANC-076-e-fixture-fail-r2",
+              "ANC-076-e-tag-compliant-r1",
+              "ANC-076-e-tag-compliant-r2",
+              "ANC-076-e-latest-compliant-r1",
+              "ANC-076-e-latest-compliant-r2",
+              "ANC-076-e-silent-r1",
+              "ANC-076-e-silent-r2",
+              "ANC-076-e-topical-r1",
+              "ANC-076-e-topical-r2",
+              "ANC-076-e-wrong-version-r1",
+              "ANC-076-e-wrong-version-r2",
+              "ANC-076-e-partial-r1",
+              "ANC-076-e-partial-r2",
+              "ANC-076-e-irrelevant-r1",
+              "ANC-076-e-irrelevant-r2",
+              "ANC-076-e-manifest-only-r1",
+              "ANC-076-e-manifest-only-r2"
+            ]
+          },
+          "oracle": {
+            "case_count": 10,
+            "case_ids": [
+              "fixture-pass",
+              "fixture-fail",
+              "tag-compliant",
+              "latest-compliant",
+              "silent",
+              "topical",
+              "wrong-version",
+              "partial",
+              "irrelevant",
+              "manifest-only"
+            ],
+            "repeat_count": 2,
+            "sha256": "9c8bcd00bf130a112368e7eab600805e8a50fa2b8cf12adb7b1617a0554458e2"
+          },
+          "previous_event_sha256": null,
+          "protocol_version": "plan-anchor/question-tournament/2.0.0",
+          "score": {
+            "confidence": {
+              "cells_at_or_above_threshold": 60,
+              "mean": 0.981,
+              "median": 1,
+              "minimum": 0.8,
+              "p10": 0.94,
+              "threshold": 0.8,
+              "total_cells": 60
+            },
+            "exact_role_cells": 60,
+            "exact_semantic_verdicts": 20,
+            "regressions": 0,
+            "stable_cases": 10,
+            "total_cases": 10,
+            "total_role_cells": 60,
+            "total_semantic_verdicts": 20
+          },
+          "supersedes": null
+        }
+      ],
+      "history_id": "ANC-076-plan",
+      "schema": "plan-anchor/tuning-history/2"
+    },
+    "tuning_history_after_sha256": "d689cb38fdb5275bfb8dc9a07ff08aaa251e441fd33b15ee506b870d7af3b46a",
+    "tuning_history_before_sha256": "b7ddd2be8d429dce2dce71f4496ce4394a00d15697c23efe863dadf8a381cd83"
+  },
+  "error": null,
+  "metadata": {
+    "authoritative_sources_unchanged": true,
+    "correlation_id": "ANC-076",
+    "duration_ms": 4000,
+    "jev_run_ids": [
+      "ANC-076-e-fixture-pass-r1",
+      "ANC-076-e-fixture-pass-r2",
+      "ANC-076-e-fixture-fail-r1",
+      "ANC-076-e-fixture-fail-r2",
+      "ANC-076-e-tag-compliant-r1",
+      "ANC-076-e-tag-compliant-r2",
+      "ANC-076-e-latest-compliant-r1",
+      "ANC-076-e-latest-compliant-r2",
+      "ANC-076-e-silent-r1",
+      "ANC-076-e-silent-r2",
+      "ANC-076-e-topical-r1",
+      "ANC-076-e-topical-r2",
+      "ANC-076-e-wrong-version-r1",
+      "ANC-076-e-wrong-version-r2",
+      "ANC-076-e-partial-r1",
+      "ANC-076-e-partial-r2",
+      "ANC-076-e-irrelevant-r1",
+      "ANC-076-e-irrelevant-r2",
+      "ANC-076-e-manifest-only-r1",
+      "ANC-076-e-manifest-only-r2"
+    ],
+    "planner_observation_trust": null,
+    "retry_count": 0,
+    "tool_calls": 101
+  },
+  "schema_version": "1.0.0",
+  "success": true
+}

@@ -17,14 +17,25 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
+from subprocess_helpers import run_command
 import rendering
 
 ROOT = Path(__file__).parents[2]
 AGENTS = ROOT.parents[1] / "agents"
 TEMPLATES = ROOT / "templates"
 EXAMPLES = ROOT / "examples"
+def jev_environment():
+    return {key: os.environ[key] for key in ("PATH", "HOME") if key in os.environ}
+
+
+class BoundedCommandTests(unittest.TestCase):
+    def test_jev_environment_excludes_ambient_settings(self):
+        with patch.dict(os.environ, {"PATH": "/test/bin", "HOME": "/test/home", "TYPESAFE_API_KEY": "secret",
+                                     "JEV_URL": "ambient"}, clear=True):
+            self.assertEqual(jev_environment(), {"PATH": "/test/bin", "HOME": "/test/home"})
 
 
 def render(template: str, variables: Path) -> str:
@@ -102,7 +113,7 @@ class DevSanityHandoffTests(unittest.TestCase):
         repo.mkdir()
 
         def git(*args):
-            return subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", *args],
+            return run_command(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", *args],
                                   check=True, capture_output=True, text=True).stdout.strip()
 
         git("init", "-q")
@@ -156,7 +167,7 @@ class DevSanityHandoffTests(unittest.TestCase):
         for context, read in ((["docs/retry.md"], {"docs/retry.md": "retry policy\n"}),
                               (["docs/limits.md:2-3"], {"docs/limits.md:2-3": "backoff 2s\njitter on\n"})):
             with self.subTest(context=context):
-                rerun = subprocess.run(["bash", "-c", jq], env={"CONTEXT": json.dumps(context), "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin"},
+                rerun = run_command(["bash", "-c", jq], env={"CONTEXT": json.dumps(context), "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin"},
                                        capture_output=True, text=True)
                 self.assertEqual(rerun.returncode, 0, rerun.stderr)
                 sent = json.loads(rerun.stdout)
@@ -191,12 +202,12 @@ class DevSanityHandoffTests(unittest.TestCase):
         runs `jev_client.py --assignment <file>`; the client must read past the fence. With no key set the call stops at
         the key check, so reaching it proves the assignment was parsed and its committed evidence read."""
         sent = self.assignment("dev-sanity-assignment-vars.json")
-        env = {k: v for k, v in os.environ.items() if k != "TYPESAFE_API_KEY"}
+        env = jev_environment()
 
         def run(body: str) -> dict:
             path = Path(self.tmp.name) / "assignment.md"
             path.write_text(body)
-            proc = subprocess.run([sys.executable, str(ROOT / "scripts/jev_client.py"), "--assignment", str(path)],
+            proc = run_command([sys.executable, str(ROOT / "scripts/jev_client.py"), "--assignment", str(path)],
                                   capture_output=True, text=True, env=env)
             self.assertEqual(proc.returncode, 2, proc.stderr)
             return json.loads(proc.stdout)["error"]
@@ -382,7 +393,7 @@ class FixRoundResultHandoffTests(unittest.TestCase):
 
             def run(body: str) -> subprocess.CompletedProcess:
                 result_path.write_text(body)
-                return subprocess.run([sys.executable, str(ROOT / "scripts/fix-round-scope"), "filter", "--carried",
+                return run_command([sys.executable, str(ROOT / "scripts/fix-round-scope"), "filter", "--carried",
                                        str(carried_path), "--reviewer", "arch-qa", "--result", str(result_path)],
                                       capture_output=True, text=True)
 
@@ -531,7 +542,7 @@ class PlanReviewHandoffTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:  # the reviewers step c dispatches: what `fix-round-scope owned --plan` prints
             carried = Path(tmp) / "carried.txt"
             carried.write_text(re.sub(r"\{\{[^}]*\}\}", "x", values["carry_forward"]))  # an install-time prefix
-            proc = subprocess.run([sys.executable, str(ROOT / "scripts/fix-round-scope"), "owned", "--plan", "--carried",
+            proc = run_command([sys.executable, str(ROOT / "scripts/fix-round-scope"), "owned", "--plan", "--carried",
                                    str(carried)], capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         owned = {k: v for k, v in json.loads(proc.stdout).items() if k != "validate-plan"}  # step b re-checks those
@@ -566,21 +577,22 @@ def blocking_shape(rendered: str) -> str:
     return re.search(r"-blocking\.json` = `(\{.*?\})` and run", step, re.S).group(1)
 
 
-@unittest.skipIf(shutil.which("bd") is None or shutil.which("dolt") is None or shutil.which("sc-compose") is None,
-                 "bd, dolt or sc-compose not on PATH: the real bead-groups receiver cannot run")
 class BlockingFindingsHandoffTests(unittest.TestCase):
-    """qa-template step g (fix verification) -> `<qa bead>-blocking.json` -> `bead-groups --findings` on a real bd."""
+    """Rendered QA JSON is accepted by the in-process bead-groups receiver."""
 
-    @classmethod
-    def setUpClass(cls):
-        from test_bead_pour_mock import Workspace, init_workspace, stop_server
-        root = Path(tempfile.mkdtemp(prefix="handoff-blocking-")).resolve()
-        cls.ws = Workspace(root)
-        cls.addClassCleanup(shutil.rmtree, root, ignore_errors=True)
-        cls.addClassCleanup(stop_server, root)
-        init_workspace(cls.ws)
+    def setUp(self):
+        from test_bead_pour_plan import PlanFixture
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.ws = PlanFixture(Path(temporary.name))
 
-    def written(self, sprint: str, qa: str, severity: str) -> Path:
+    def received(self, sprint, path):
+        from test_bead_pour_plan import groups
+        phase = self.ws.rows[sprint]["metadata"]["phase"]
+        with patch.object(groups.sprint_index_common, "load_phase_config", return_value={"root": f"t-phase-{phase}"}):
+            return self.ws.runner.finding_targets(path)[0]
+
+    def written(self, sprint: str, qa: str, severity: str, found_on_layer=None) -> Path:
         values = json.loads((EXAMPLES / "qa-template-fix-round-vars.json").read_text())
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "vars.json"
@@ -594,23 +606,22 @@ class BlockingFindingsHandoffTests(unittest.TestCase):
             self.assertIn(placeholder, shape)
             shape = shape.replace(placeholder, value)
         out = self.ws.root / f"{sprint}-{severity}-blocking.json"
-        out.write_text(json.dumps(json.loads(shape)))
+        document = json.loads(shape)
+        if found_on_layer is not None:
+            document["findings"][0]["found_on_layer"] = found_on_layer
+        out.write_text(json.dumps(document))
         return out
 
-    def test_the_fix_round_shape_pours_and_a_non_blocking_one_is_refused(self):
-        from test_bead_pour_mock import fix_group, group
+    def test_the_fix_round_shape_is_accepted_and_a_non_blocking_one_is_refused(self):
         ws = self.ws
         sprint = ws.sprint("hz", 1)
-        dev, sanity, qa = group(sprint)
-        ws.groups("--sprint", sprint)
-        ws.close(dev, "done")
-        ws.close(sanity, "PASS")
-        result = ws.groups("--findings", self.written(sprint, qa, "blocking"))
-        fix = fix_group(sprint, "qa1-f1", 2)[0]
-        self.assertEqual(ws.show(fix)["metadata"]["reviewer"], "arch-qa")
-        refused = ws.groups("--findings", self.written(sprint, qa, "important"), expect=2)  # planted negative
-        self.assertEqual(refused["targets"][0]["error"]["code"], "BEAD_GROUPS_NOT_BLOCKING")
-        self.assertTrue(result["targets"])
+        qa = f"{sprint}.group-qa"
+        result = self.received(sprint, self.written(sprint, qa, "blocking", found_on_layer=15))
+        self.assertEqual(result["compose"]["reviewer"], "arch-qa")
+        self.assertEqual(result["compose"]["found_on_layer"], 15)
+        self.assertEqual(result["compose"]["ref"], "qa1-f1-r2")
+        refused = self.received(sprint, self.written(sprint, qa, "important"))
+        self.assertEqual(refused.code, "BEAD_GROUPS_NOT_BLOCKING")
 
 
     def round_one(self, sprint: str, qa: str, **finding) -> Path:
@@ -631,27 +642,26 @@ class BlockingFindingsHandoffTests(unittest.TestCase):
         out.write_text(json.dumps({**sent, "findings": [{k: v for k, v in row.items() if v is not None}]}))
         return out
 
-    def test_the_round_one_shape_parses_and_pours_and_one_without_its_remedy_is_refused(self):
-        from test_bead_pour_mock import fix_group, group
+    def test_the_round_one_shape_is_accepted_and_one_without_its_remedy_is_refused(self):
         ws = self.ws
         sprint = ws.sprint("hx", 1)
-        _, _, qa = group(sprint)
-        ws.groups("--sprint", sprint)
-        ws.groups("--findings", self.round_one(sprint, qa))
-        fix = fix_group(sprint, "qa1-f1")[0]
-        self.assertEqual({k: ws.show(fix)["metadata"][k] for k in ("reviewer", "difficulty")},
+        qa = f"{sprint}.group-qa"
+        target = self.received(sprint, self.round_one(sprint, qa, found_on_layer=15))
+        self.assertEqual(target["compose"]["found_on_layer"], 15)
+        self.assertEqual({key: target["compose"][key] for key in ("reviewer", "difficulty")},
                          {"reviewer": "arch-qa", "difficulty": "normal"})
-        ws.groups("--findings", self.round_one(sprint, qa, ref="qa1-f2", difficulty="hard"))
-        self.assertEqual(ws.show(fix_group(sprint, "qa1-f2")[0])["metadata"]["difficulty"], "hard")
+        target = self.received(sprint, self.round_one(sprint, qa, ref="qa1-f2", difficulty="hard"))
+        self.assertEqual(target["compose"]["difficulty"], "hard")
+        self.assertFalse(target["compose"]["has_found_on_layer"])
         # planted negatives: the old key-list shape is not JSON, and a finding without its remedy is refused
         with self.assertRaises(ValueError):
             json.loads('{"findings": [{"ref": "qa1-f1", "severity": "blocking", "reviewer", "title", "remedy", '
                        '"priority": 1, optional "difficulty"}]}')
-        refused = ws.groups("--findings", self.round_one(sprint, qa, ref="qa1-f3", remedy=None), expect=2)
-        self.assertEqual(refused["targets"][0]["error"]["code"], "BEAD_GROUPS_FINDINGS_INVALID")
-        self.assertIsNone(ws.show(fix_group(sprint, "qa1-f3")[0]))
+        refused = self.received(sprint, self.round_one(sprint, qa, ref="qa1-f3", remedy=None))
+        self.assertEqual(refused.code, "BEAD_GROUPS_FINDINGS_INVALID")
+        self.assertIn("remedy", str(refused))
 
-    def test_a_workflow_issue_bead_imports_and_a_render_without_its_remedy_is_refused(self):
+    def test_a_workflow_issue_jsonl_has_its_parent_and_requires_its_remedy(self):
         ws = self.ws
         parent = ws.sprint("hy", 1)
         values = {**json.loads((EXAMPLES / "workflow-issue-bead-vars.json").read_text()), "id": "t-wf-jev-outage", "parent": parent}
@@ -665,10 +675,9 @@ class BlockingFindingsHandoffTests(unittest.TestCase):
         rows = ws.root / "workflow.jsonl"
         path.write_text(json.dumps(values))
         rows.write_text(json.dumps(json.loads(render("workflow-issue-bead.json.j2", path))) + "\n")
-        ws.bd("import", "-i", rows)
-        bead = ws.show("t-wf-jev-outage")
+        bead = json.loads(rows.read_text())
         self.assertIn("workflow-issue", bead["labels"])
-        self.assertEqual(ws.deps("t-wf-jev-outage"), {parent: "parent-child"})
+        self.assertEqual(bead["dependencies"], [{"issue_id": "t-wf-jev-outage", "depends_on_id": parent, "type": "parent-child"}])
 
 
 if __name__ == "__main__":

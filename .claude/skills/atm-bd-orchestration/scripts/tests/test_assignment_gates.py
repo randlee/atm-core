@@ -4,10 +4,12 @@ from contextlib import redirect_stderr, redirect_stdout
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 MODULE = Path(__file__).parents[1] / "assignment-gates.py"
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -28,21 +30,7 @@ class FakeRunner:
         return subprocess.CompletedProcess(args, code, stdout, "".join(stderr))
 
 
-STACKS = (str(gates.PRIMARY), gates.STACKS)
-
-
-def HEADS(flag, ref):
-    return ("gh", "pr", "list", flag, ref, "--state", "open", "--json", "headRefName")
-
-
-def pr(number, head, state="open", merged_at=None):
-    return {"number": number, "state": state, "draft": False, "merged_at": merged_at, "head": {"ref": head, "sha": "s"}}
-
-
-def stacks(*prs, base="integrate", is_open=True, others=()):
-    """A faked `gh api repos/{owner}/{repo}/stacks --paginate --jq '.[]'`: one stack object per line, PRs bottom first."""
-    rows = [*others, {"number": 1, "base": {"ref": base}, "open": is_open, "pull_requests": list(prs)}]
-    return {STACKS: (0, "\n".join(json.dumps(row) for row in rows))}
+STACKS = (str(gates.PRIMARY), ("gh", "api", "repos/{owner}/{repo}/stacks", "--paginate", "--jq", ".[]"))
 
 
 def ns(kind, **overrides):
@@ -57,6 +45,7 @@ def dumped(value): return json.dumps(value)
 
 def dev_runner(overrides=None):
     data = {
+        ("bd", "show", gates.stack_bead_id("atm-phase-d"), "--json"): (0, dumped([{"metadata": {}}])),
         (gates.VALIDATE_PLAN, "--root", "atm-phase-d"): (0, ""),
         ("bd", "ready", "-n", "0", "--json"): (0, dumped([{"id": "bead"}])),
         ("bd", "show", "bead", "--json"): (0, dumped([{"status": "open", "assignee": "", "metadata": {"difficulty": "normal", "pr_target": "target"}}])),
@@ -76,15 +65,8 @@ HISTORY_PASSED = [{"CommitHash": "c4", "Issue": {"id": "bead", "status": "open"}
 
 def sanity_runner(overrides=None):
     data = {
-        ("bd", "show", "bead", "--json"): (0, dumped([{"metadata": {}}])),
-        ("gh", "pr", "view", "7", "--json", "baseRefName,headRefName,headRefOid"): (0, dumped({"baseRefName": "target", "headRefName": "branch", "headRefOid": "head"})),
-        **stacks(pr(5, "merged", "closed", "2026-10-01T00:00:00Z"), pr(6, "target"), pr(7, "branch")),
-        HEADS("--head", "target"): (0, dumped([{"headRefName": "target"}])),
-        ("git", "fetch", "origin"): (0, ""),
-        ("git", "rev-parse", "target"): (0, "base"),
-        ("git", "rev-parse", "origin/target"): (0, "base"),
-        ("git", "log", "--format=%H", "origin/target..head"): (0, "delta"),
-        ("git", "status", "--porcelain", "--untracked-files=no"): (0, "?? .beads.gate.lock"),
+        ("bd", "ready", "-n", "0", "--json"): (0, dumped([{"id": "bead"}])),
+        ("git", "rev-parse", "HEAD"): (0, "head"),
         ("bd", "history", "bead", "--json"): (0, dumped(HISTORY_NEVER_PASSED)),
     }; data.update(overrides or {}); return FakeRunner(data)
 
@@ -105,6 +87,53 @@ def qa_runner(overrides=None):
 
 
 class AssignmentGateTests(unittest.TestCase):
+    def test_runner_timeouts_are_typed_and_name_command(self):
+        for timed_out in ((gates.VALIDATE_PLAN, "--root", "atm-phase-d"),
+                          ("bd", "ready", "-n", "0", "--json"),
+                          ("git", "merge-base", "--is-ancestor", "origin/target", "HEAD")):
+            with self.subTest(command=timed_out):
+                delegate = dev_runner()
+                seen = []
+
+                def runner(argv, **kwargs):
+                    seen.append(kwargs["timeout"])
+                    if tuple(argv) == timed_out:
+                        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+                    return delegate(argv, **kwargs)
+
+                stderr, stdout = io.StringIO(), io.StringIO()
+                with patch.object(gates, "COMMAND_TIMEOUT", 7), patch.object(gates, "VALIDATE_PLAN_TIMEOUT", 7), redirect_stderr(stderr), redirect_stdout(stdout):
+                    exit_code = gates.main(["dev", "--root", "atm-phase-d", "--bead", "bead",
+                                            "--pr-target", "target", "--identity", "terra"], runner)
+                self.assertEqual((exit_code, stdout.getvalue().strip()), (2, "GATE_CANNOT_RUN"))
+                self.assertIn(timed_out[0], stderr.getvalue())
+                self.assertIn("7s", stderr.getvalue())
+                self.assertIn("retry once, or raise ATM_BD_GATE_TIMEOUT_S", stderr.getvalue())
+                self.assertTrue(seen and all(timeout == 7 for timeout in seen))
+
+    def test_invalid_timeout_env_is_gate_cannot_run_not_a_traceback(self):
+        for bad in ("abc", "0", "-3"):
+            with self.subTest(bad=bad):
+                runner = FakeRunner({})
+                stderr, stdout = io.StringIO(), io.StringIO()
+                with patch.dict(os.environ, {"ATM_BD_GATE_TIMEOUT_S": bad}), redirect_stderr(stderr), redirect_stdout(stdout):
+                    exit_code = gates.main(["dev", "--root", "r", "--bead", "b", "--pr-target", "t"], runner)
+                self.assertEqual((exit_code, stdout.getvalue().strip()), (2, "GATE_CANNOT_RUN"))
+                self.assertIn(f"ATM_BD_GATE_TIMEOUT_S={bad!r}", stderr.getvalue())
+                self.assertIn("ATM_BD_GATE_TIMEOUT_S=180", stderr.getvalue())
+                self.assertNotIn("Traceback", stderr.getvalue())
+                self.assertEqual(runner.calls, [])
+
+    def test_stack_top_timeout_is_typed(self):
+        def timeout(argv, **kwargs):
+            raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+        stderr, stdout = io.StringIO(), io.StringIO()
+        with redirect_stderr(stderr), redirect_stdout(stdout):
+            exit_code = gates.main(["stack-top", "--root", "phase", "--pr-target", "target"], timeout)
+        self.assertEqual((exit_code, stdout.getvalue().strip()), (2, "GATE_CANNOT_RUN"))
+        self.assertIn("bd", stderr.getvalue())
+
     def expected(self, name): return json.loads((FIXTURES / name).read_text())["expected"]
 
     def assert_fixture(self, name, gate_args, runner):
@@ -161,41 +190,47 @@ class AssignmentGateTests(unittest.TestCase):
 
     def test_sanity_refusals_and_ready(self):
         cases = [
-            ("pr-required.json", ns("sanity", pr_number=""), sanity_runner()),
-            ("not-stacked.json", ns("sanity"), sanity_runner({("gh", "pr", "view", "7", "--json", "baseRefName,headRefName,headRefOid"): (0, dumped({"baseRefName": "wrong", "headRefName": "branch", "headRefOid": "head"}))})),
-            ("not-stacked.json", ns("sanity"), sanity_runner({("gh", "pr", "view", "7", "--json", "baseRefName,headRefName,headRefOid"): (0, dumped({"baseRefName": "target", "headRefName": "branch", "headRefOid": "moved"}))})),
-            ("not-stacked.json", ns("sanity"), sanity_runner({STACKS: (0, "")})),
-            ("not-stacked.json", ns("sanity"), sanity_runner(stacks(pr(6, "target")))),
-            ("not-stacked.json", ns("sanity"), sanity_runner(stacks(pr(6, "target"), pr(7, "branch"), is_open=False))),
-            ("not-stacked.json", ns("sanity"), sanity_runner(stacks(pr(6, "target"), pr(8, "other"), pr(7, "branch")))),
-            ("sanity-ready.json", ns("sanity"), sanity_runner(stacks(pr(6, "target"), pr(8, "closed-unmerged", "closed"), pr(7, "branch"),
-                                                                     others=[{"number": 2, "base": {"ref": "main"}, "open": True, "pull_requests": [pr(9, "x")]}]))),
-            ("not-stacked.json", ns("sanity", pr_target="planned"), sanity_runner({("git", "merge-base", "--is-ancestor", "origin/planned", "origin/target"): (1, "")})),
-            ("sanity-ready.json", ns("sanity", pr_target="planned"), sanity_runner({("git", "merge-base", "--is-ancestor", "origin/planned", "origin/target"): (0, "")})),
-            ("not-rebased.json", ns("sanity"), sanity_runner({("git", "merge-base", "--is-ancestor", "origin/target", "head"): (1, "")})),
-            ("zero-delta.json", ns("sanity"), sanity_runner({("git", "log", "--format=%H", "origin/target..head"): (0, "")})),
-            ("dirty-tree.json", ns("sanity"), sanity_runner({("git", "status", "--porcelain", "--untracked-files=no"): (0, " M tracked.py")})),
             ("sanity-frozen.json", ns("sanity"), sanity_runner({("bd", "history", "bead", "--json"): (0, dumped(HISTORY_PASSED))})),
             ("sanity-ready.json", ns("sanity"), sanity_runner()),
+            ("sanity-ready.json", ns("sanity", pr_number=""), sanity_runner()),
         ]
         for fixture, gate_args, runner in cases:
-            with self.subTest(fixture=fixture): self.assert_fixture(fixture, gate_args, runner)
+            with self.subTest(fixture=fixture, pr_number=gate_args.pr_number):
+                self.assert_fixture(fixture, gate_args, runner)
 
-    def test_sanity_checks_the_assigned_base_and_runs_git_in_the_worktree(self):
-        self.assertEqual(gates.evaluate(ns("sanity", base="target"), sanity_runner()), "READY")
-        self.assertEqual(gates.evaluate(ns("sanity", base="assigned-elsewhere"), sanity_runner()), "NOT_STACKED")
-        moved = {("git", "-C", "/wt", "log", "--format=%H", "origin/target..head"): (0, "")}
-        runner = sanity_runner(moved)
-        self.assertEqual(gates.evaluate(ns("sanity", worktree="/wt"), runner), "ZERO_DELTA")
-        git_calls = [argv for _, argv in runner.calls if argv[0] == "git"]
-        self.assertTrue(git_calls and all(argv[1:3] == ("-C", "/wt") for argv in git_calls), git_calls)
+    def test_sanity_requires_an_assigned_commit_before_reading_state(self):
+        runner = sanity_runner()
+        self.assertEqual(gates.evaluate(ns("sanity", commit=""), runner), "COMMIT_REQUIRED")
+        self.assertEqual(runner.calls, [])
 
-    def test_sanity_rebase_check_that_cannot_run_is_not_a_refusal(self):
-        runner = sanity_runner({("git", "merge-base", "--is-ancestor", "origin/target", "head"): (128, "")})
-        self.assertEqual(gates.evaluate(ns("sanity"), runner), "GATE_CANNOT_RUN")
+    def test_sanity_checks_only_history_and_the_assigned_worktree_commit(self):
+        runner = sanity_runner({("git", "-C", "/wt", "rev-parse", "HEAD"): (0, "head")})
+        self.assertEqual(gates.evaluate(ns("sanity", worktree="/wt", base="elsewhere", pr_number=""), runner), "READY")
+        self.assertEqual(runner.calls, [
+            (None, ("bd", "ready", "-n", "0", "--json")),
+            (None, ("bd", "history", "bead", "--json")),
+            (None, ("git", "-C", "/wt", "rev-parse", "HEAD")),
+        ])
+        moved = sanity_runner({("git", "-C", "/wt", "rev-parse", "HEAD"): (0, "moved")})
+        self.assertEqual(gates.evaluate(ns("sanity", worktree="/wt"), moved), "COMMIT_MISMATCH")
+
+    def test_sanity_commit_check_that_cannot_run_is_not_a_refusal(self):
+        runner = sanity_runner({("git", "rev-parse", "HEAD"): (128, "", "not a git repository")})
+        err = io.StringIO()
+        with redirect_stderr(err):
+            self.assertEqual(gates.evaluate(ns("sanity"), runner), "GATE_CANNOT_RUN")
+        self.assertIn("not a git repository", err.getvalue())
+
+    def test_sanity_frozen_history_wins_even_when_the_worktree_head_changed(self):
+        runner = sanity_runner({
+            ("bd", "history", "bead", "--json"): (0, dumped(HISTORY_PASSED)),
+            ("git", "rev-parse", "HEAD"): (0, "moved"),
+        })
+        self.assertEqual(gates.evaluate(ns("sanity"), runner), "SANITY_FROZEN")
+        self.assertEqual(runner.calls, [(None, ("bd", "ready", "-n", "0", "--json")),
+                                        (None, ("bd", "history", "bead", "--json"))])
 
     def test_sanity_history_that_is_not_snapshots_cannot_run(self):
-        """Malformed `bd history` output is GATE_CANNOT_RUN naming the output, never an empty history (READY)."""
         for output in (dumped({"verdict": "PASS"}), dumped([{"description": "lint passes"}]), dumped([{"Issue": "closed"}]),
                        dumped([HISTORY_NEVER_PASSED[0], "PASS at abc1234"]), "not json"):
             with self.subTest(output=output):
@@ -206,40 +241,72 @@ class AssignmentGateTests(unittest.TestCase):
                 self.assertIn(output, err.getvalue())
         self.assertEqual(gates.evaluate(ns("sanity"), sanity_runner({("bd", "history", "bead", "--json"): (0, "[]")})), "READY")
 
-    def test_sanity_stack_checks_that_cannot_run_are_not_refusals(self):
-        for override in ({STACKS: (1, "", "gh: Not Found (HTTP 404)")}, {STACKS: (0, "not json")},
-                         {("git", "merge-base", "--is-ancestor", "origin/planned", "origin/target"): (128, "")}):
-            with self.subTest(override=override):
-                self.assertEqual(gates.evaluate(ns("sanity", pr_target="planned"), sanity_runner(override)), "GATE_CANNOT_RUN")
+    def test_sanity_not_ready_is_a_gate_result(self):
+        show = ("bd", "show", "bead", "--json")
+        for bead in ({"status": "open", "assignee": ""}, {"status": "in_progress", "assignee": "someone-else"},
+                     {"status": "closed", "assignee": "terra"}):
+            with self.subTest(bead=bead):
+                runner = sanity_runner({("bd", "ready", "-n", "0", "--json"): (0, "[]"), show: (0, dumped([bead]))})
+                self.assertEqual(gates.evaluate(ns("sanity"), runner), "NOT_READY")
+                self.assertEqual(runner.calls, [(None, ("bd", "ready", "-n", "0", "--json")), (None, show)])
 
-    def test_the_first_open_layer_is_based_on_the_trunk(self):
-        runner = sanity_runner({**stacks(pr(5, "merged", "closed", "2026-10-01T00:00:00Z"), pr(7, "target")),("gh", "pr", "view", "7", "--json", "baseRefName,headRefName,headRefOid"): (0, dumped({"baseRefName": "integrate", "headRefName": "target", "headRefOid": "head"})),
-                                ("git", "merge-base", "--is-ancestor", "origin/target", "origin/integrate"): (1, ""),
-                                ("git", "log", "--format=%H", "origin/integrate..head"): (0, "delta")})
-        self.assertEqual(gates.evaluate(ns("sanity", pr_target="integrate"), runner), "READY")
-        self.assertEqual(gates.evaluate(ns("sanity"), runner), "NOT_STACKED")  # the trunk does not descend from a planned layer above it
+    def test_sanity_replay_of_a_bead_the_caller_already_claimed_is_ready(self):
+        runner = sanity_runner({("bd", "ready", "-n", "0", "--json"): (0, "[]"),
+                                ("bd", "show", "bead", "--json"): (0, dumped([{"status": "in_progress", "assignee": "terra"}]))})
+        self.assertEqual(gates.evaluate(ns("sanity"), runner), "READY")
 
-    def test_layer_0_awaiting_layer_1_is_accepted_only_on_the_trunk(self):
-        unlinked = {STACKS: (0, ""), HEADS("--head", "integrate"): (0, "[]"),
-                    ("gh", "pr", "view", "7", "--json", "baseRefName,headRefName,headRefOid"): (0, dumped({"baseRefName": "integrate", "headRefName": "layer-0", "headRefOid": "head"})),
-                    ("git", "log", "--format=%H", "origin/integrate..head"): (0, "delta")}
-        self.assertEqual(gates.evaluate(ns("sanity", pr_target="integrate"), sanity_runner(unlinked)), "READY")
-        self.assertEqual(gates.evaluate(ns("sanity", pr_target="integrate"), sanity_runner(
-            {**unlinked, ("git", "merge-base", "--is-ancestor", "origin/integrate", "head"): (1, "")})), "NOT_REBASED")
-        # based on another layer's branch, or on a planned layer above the trunk: it must be in a stack
-        self.assertEqual(gates.evaluate(ns("sanity", pr_target="integrate"), sanity_runner(
-            {**unlinked, HEADS("--head", "integrate"): (0, dumped([{"headRefName": "integrate"}]))})), "NOT_STACKED")
-        self.assertEqual(gates.evaluate(ns("sanity", pr_target="planned"), sanity_runner(unlinked)), "NOT_STACKED")
-        self.assertEqual(gates.evaluate(ns("sanity", pr_target="integrate"), sanity_runner(
-            {**unlinked, HEADS("--head", "integrate"): (1, "", "HTTP 502")})), "GATE_CANNOT_RUN")
+    def test_validate_plan_alone_gets_the_longer_timeout(self):
+        runner = dev_runner()
+        seen = {}
+        original = runner.__call__
+        def spy(args, **kwargs):
+            seen[args[0]] = kwargs["timeout"]
+            return original(args, **kwargs)
+        with patch.object(gates, "COMMAND_TIMEOUT", 7), patch.object(gates, "VALIDATE_PLAN_TIMEOUT", 99):
+            self.assertEqual(gates.evaluate(ns("dev"), spy), "READY")
+        self.assertEqual(seen.pop(gates.VALIDATE_PLAN), 99)
+        self.assertTrue(seen and set(seen.values()) == {7})
+        self.assertEqual((gates.DEFAULT_COMMAND_TIMEOUT, gates.MIN_VALIDATE_PLAN_TIMEOUT), (180, 300))
 
-    def test_sanity_reads_the_stack_from_githubs_stacks_api_not_local_tracking(self):
-        # The dev's worktree has no gh-stack tracking (the dev never runs gh stack), so `gh stack view` exits 2 there.
-        runner = sanity_runner({("/wt", ("gh", "stack", "view", "--json")): (2, ""),
-                                ("git", "-C", "/wt", "log", "--format=%H", "origin/target..head"): (0, "delta")})
-        self.assertEqual(gates.evaluate(ns("sanity", worktree="/wt"), runner), "READY")
-        self.assertIn(STACKS, runner.calls)
-        self.assertFalse([call for call in runner.calls if call[1][:3] == ("gh", "stack", "view")])
+    def test_command_timeout_defaults_to_180_and_env_overrides_it(self):
+        self.assertEqual(gates.command_timeout({}), 180)
+        self.assertEqual(gates.command_timeout({"ATM_BD_GATE_TIMEOUT_S": ""}), 180)
+        self.assertEqual(gates.command_timeout({"ATM_BD_GATE_TIMEOUT_S": "45"}), 45)
+        for bad in ("0", "-5", "ninety", "1.5"):
+            with self.subTest(value=bad), self.assertRaises(ValueError) as caught:
+                gates.command_timeout({"ATM_BD_GATE_TIMEOUT_S": bad})
+            self.assertIn("ATM_BD_GATE_TIMEOUT_S=180", str(caught.exception))
+
+    def test_module_timeouts_follow_the_env_at_import(self):
+        for env, expected in (({}, (180, 300)), ({"ATM_BD_GATE_TIMEOUT_S": "45"}, (45, 300)),
+                              ({"ATM_BD_GATE_TIMEOUT_S": "600"}, (600, 600))):
+            with self.subTest(env=env), patch.dict(os.environ, env, clear=False):
+                if not env:
+                    os.environ.pop("ATM_BD_GATE_TIMEOUT_S", None)
+                fresh = importlib.util.module_from_spec(SPEC)
+                SPEC.loader.exec_module(fresh)
+                self.assertEqual((fresh.COMMAND_TIMEOUT, fresh.VALIDATE_PLAN_TIMEOUT), expected)
+
+    def test_sanity_history_command_failure_cannot_run(self):
+        runner = sanity_runner({("bd", "history", "bead", "--json"): (1, "", "database unavailable")})
+        err = io.StringIO()
+        with redirect_stderr(err):
+            self.assertEqual(gates.evaluate(ns("sanity"), runner), "GATE_CANNOT_RUN")
+        self.assertIn("database unavailable", err.getvalue())
+
+    def test_sanity_does_not_consult_linking_dirty_state_or_github(self):
+        runner = sanity_runner({
+            STACKS: (1, "", "GitHub unavailable"),
+            ("gh", "pr", "view", "7", "--json", "baseRefName,headRefName,headRefOid"): (1, "", "unlinked PR"),
+            ("git", "status", "--porcelain", "--untracked-files=no"): (0, " M tracked.py"),
+            ("git", "merge-base", "--is-ancestor", "origin/target", "head"): (1, ""),
+            ("git", "log", "--format=%H", "origin/target..head"): (0, ""),
+        })
+        self.assertEqual(gates.evaluate(ns("sanity", pr_target="unlinked-target"), runner), "READY")
+        self.assertEqual([argv for _, argv in runner.calls], [
+            ("bd", "ready", "-n", "0", "--json"),
+            ("bd", "history", "bead", "--json"), ("git", "rev-parse", "HEAD"),
+        ])
 
     def test_a_lower_bound_whose_branch_is_gone_holds_only_when_its_pr_merged(self):
         gone = {("git", "merge-base", "--is-ancestor", "origin/planned", "origin/target"): (128, ""),
@@ -248,51 +315,76 @@ class AssignmentGateTests(unittest.TestCase):
         in_base = ("git", "merge-base", "--is-ancestor", "m1", "origin/target")
         listed = {**gone, merged: (0, dumped([{"mergeCommit": {"oid": "old"}}, {"mergeCommit": {"oid": "m1"}}])),
                   ("git", "merge-base", "--is-ancestor", "old", "origin/target"): (1, "")}
-        self.assertEqual(gates.evaluate(ns("sanity", pr_target="planned"), sanity_runner({**listed, in_base: (0, "")})), "READY")
-        # an older merged PR of a reused branch name whose merge commit is not in the base does not satisfy the bound
-        self.assertEqual(gates.evaluate(ns("sanity", pr_target="planned"), sanity_runner({**listed, in_base: (1, "")})), "GATE_CANNOT_RUN")
-        self.assertEqual(gates.evaluate(ns("sanity", pr_target="planned"), sanity_runner({**gone, merged: (0, "[]")})), "GATE_CANNOT_RUN")
+        self.assertTrue(gates.descends(FakeRunner({**listed, in_base: (0, "")}), "planned", "target"))
+        for responses in ({**listed, in_base: (1, "")}, {**gone, merged: (0, "[]")}):
+            with self.subTest(responses=responses):
+                with self.assertRaises(RuntimeError):
+                    gates.descends(FakeRunner(responses), "planned", "target")
 
     def stack_top(self, responses, target="integrate"):
         output = io.StringIO()
         with redirect_stdout(output):
-            code = gates.main(["stack-top", "--pr-target", target], FakeRunner(responses))
+            code = gates.main(["stack-top", "--root", "atm-phase-bj", "--pr-target", target, "--worktree", "/wt"], FakeRunner(responses))
         return output.getvalue().strip(), code
 
-    def test_stack_top_is_the_last_open_pr_of_the_one_matching_stack(self):
-        other = {"number": 9, "base": {"ref": "main"}, "open": True, "pull_requests": [pr(9, "elsewhere")]}
-        layers = (pr(5, "merged", "closed", "2026-10-01T00:00:00Z"), pr(6, "target"), pr(7, "branch"), pr(8, "dropped", "closed"))
+    def test_stack_top_reads_the_phase_ledger_and_rejects_invalid_data(self):
+        bead = ("bd", "show", "atm-phase-bj.stack", "--json")
+        head = ("git", "-C", "/wt", "rev-parse", "origin/integrate")
         cases = [
-            ("trunk match", stacks(*layers, others=[other]), "integrate", ("branch", 0)),
-            ("head match", stacks(*layers, others=[other]), "target", ("branch", 0)),
-            ("merged head match", stacks(*layers), "merged", ("branch", 0)),
-            ("no open PR left", stacks(pr(5, "merged", "closed", "2026-10-01T00:00:00Z")), "merged", ("integrate", 0)),
-            ("closed stack ignored", {**stacks(*layers, is_open=False), HEADS("--base", "integrate"): (0, "[]")}, "integrate", ("integrate", 0)),
-            ("empty", {STACKS: (0, ""), HEADS("--base", "integrate"): (0, "[]")}, "integrate", ("integrate", 0)),
-            ("unlinked layer 0", {STACKS: (0, ""), HEADS("--base", "integrate"): (0, dumped([{"headRefName": "layer-0"}])),
-                                  HEADS("--base", "layer-0"): (0, "[]")}, "integrate", ("layer-0", 0)),
-            ("unlinked layers 0 and 1", {STACKS: (0, ""), HEADS("--base", "integrate"): (0, dumped([{"headRefName": "layer-0"}])),
-                                         HEADS("--base", "layer-0"): (0, dumped([{"headRefName": "layer-1"}])),
-                                         HEADS("--base", "layer-1"): (0, "[]")}, "integrate", ("layer-1", 0)),
-            ("unlinked chain branches", {STACKS: (0, ""), HEADS("--base", "integrate"): (0, dumped([{"headRefName": "layer-0"}])),
-                                         HEADS("--base", "layer-0"): (0, dumped([{"headRefName": "a"}, {"headRefName": "b"}]))}, "integrate", ("STACK_AMBIGUOUS", 5)),
-            ("unlinked chain cycles", {STACKS: (0, ""), HEADS("--base", "integrate"): (0, dumped([{"headRefName": "layer-0"}])),
-                                       HEADS("--base", "layer-0"): (0, dumped([{"headRefName": "integrate"}]))}, "integrate", ("STACK_AMBIGUOUS", 5)),
-            ("unlinked chain lookup fails", {STACKS: (0, ""), HEADS("--base", "integrate"): (0, dumped([{"headRefName": "layer-0"}])),
-                                             HEADS("--base", "layer-0"): (1, "", "HTTP 502")}, "integrate", ("GATE_CANNOT_RUN", 2)),
-            ("several unlinked PRs", {STACKS: (0, ""), HEADS("--base", "integrate"): (0, dumped([{"headRefName": "a"}, {"headRefName": "b"}]))}, "integrate", ("STACK_AMBIGUOUS", 5)),
-            ("unlinked lookup fails", {STACKS: (0, ""), HEADS("--base", "integrate"): (1, "", "HTTP 502")}, "integrate", ("GATE_CANNOT_RUN", 2)),
-            ("several stacks on one trunk", stacks(*layers, others=[{**other, "base": {"ref": "integrate"}}]), "integrate", ("STACK_AMBIGUOUS", 5)),
-            ("API failure", {STACKS: (1, "", "gh: Not Found (HTTP 404)")}, "integrate", ("GATE_CANNOT_RUN", 2)),
-            ("not json", {STACKS: (0, "<html>")}, "integrate", ("GATE_CANNOT_RUN", 2)),
+            ("last layer", {bead: (0, dumped([{"metadata": {"layers": [{"branch": "first", "head": "a"}, {"branch": "last", "head": "b"}]}}]))}, ("last", 0)),
+            ("empty", {bead: (0, dumped([{"metadata": {"layers": []}}])), head: (0, "abc")}, ("integrate", 0)),
+            ("null metadata", {bead: (0, dumped([{"metadata": None}])), head: (0, "abc")}, ("integrate", 0)),
+            ("missing bead", {bead: (0, "[]")}, ("GATE_CANNOT_RUN", 2)),
+            ("multiple beads", {bead: (0, "[{}, {}]")}, ("GATE_CANNOT_RUN", 2)),
+            ("invalid json", {bead: (0, "not json")}, ("GATE_CANNOT_RUN", 2)),
+            ("bd fails", {bead: (1, "", "database down")}, ("GATE_CANNOT_RUN", 2)),
+            ("invalid metadata", {bead: (0, dumped([{"metadata": "bad"}]))}, ("GATE_CANNOT_RUN", 2)),
+            ("invalid layers", {bead: (0, dumped([{"metadata": {"layers": "bad"}}]))}, ("GATE_CANNOT_RUN", 2)),
+            ("missing head", {bead: (0, dumped([{"metadata": {"layers": [{"branch": "top"}]}}]))}, ("GATE_CANNOT_RUN", 2)),
+            ("missing fallback", {bead: (0, "[{}]"), head: (1, "", "unknown ref")}, ("GATE_CANNOT_RUN", 2)),
         ]
-        for name, responses, target, expected in cases:
+        for name, responses, expected in cases:
             with self.subTest(name):
-                self.assertEqual(self.stack_top(responses, target), expected)
+                self.assertEqual(self.stack_top(responses), expected)
+
+    def test_stack_top_requires_root(self):
+        with self.assertRaises(SystemExit):
+            gates.main(["stack-top", "--pr-target", "target"], FakeRunner({}))
+
+    def test_stack_top_reads_bead_in_primary_and_resolves_fallback_in_worktree(self):
+        runner = FakeRunner({("bd", "show", "phase.stack", "--json"): (0, "[{}]"),
+                             ("git", "-C", "/wt", "rev-parse", "origin/trunk"): (0, "abc")})
+        with redirect_stdout(io.StringIO()), patch.object(gates, "stack_bead_id", wraps=gates.stack_bead_id) as stack_id:
+            assert gates.main(["stack-top", "--root", "phase", "--pr-target", "trunk", "--worktree", "/wt"], runner) == 0
+        stack_id.assert_called_once_with("phase")
+        assert runner.calls == [(str(gates.PRIMARY), ("bd", "show", "phase.stack", "--json")),
+                                (None, ("git", "-C", "/wt", "rev-parse", "origin/trunk"))]
 
     def test_gate_kinds_still_require_root_and_bead(self):
         with self.assertRaises(SystemExit):
             gates.main(["dev", "--pr-target", "target"], dev_runner())
+
+    def test_sanity_cli_needs_only_bead_commit_and_worktree(self):
+        runner = sanity_runner({("git", "-C", "/wt", "rev-parse", "HEAD"): (0, "head")})
+        output = io.StringIO()
+        with redirect_stdout(output):
+            result = gates.main(["sanity", "--bead", "bead", "--commit", "head", "--worktree", "/wt"], runner)
+        self.assertEqual(result, 0)
+        self.assertEqual(output.getvalue(), "READY\n")
+
+    def test_sanity_cli_still_requires_bead(self):
+        with self.assertRaises(SystemExit):
+            gates.main(["sanity", "--commit", "head"], sanity_runner())
+
+    def test_other_cli_kinds_still_require_pr_target(self):
+        for kind in ("dev", "qa", "stack-top"):
+            with self.subTest(kind=kind):
+                with self.assertRaises(SystemExit):
+                    gates.main([kind, "--root", "root", "--bead", "bead"], FakeRunner({}))
+
+    def test_qa_cli_still_requires_root(self):
+        with self.assertRaises(SystemExit):
+            gates.main(["qa", "--bead", "bead", "--pr-target", "target"], qa_runner())
 
     def test_qa_refusals_and_ready(self):
         cases = [

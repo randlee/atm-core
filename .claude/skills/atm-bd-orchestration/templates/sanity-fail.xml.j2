@@ -1,0 +1,23 @@
+---
+name: sanity-fail
+version: 1.0.0
+format: xml
+required_variables:
+  - checked_bead
+  - checked_title
+  - sprint
+  - branch
+  - commit
+  - pr_number
+  - round
+  - max_sanity_rounds
+  - undone
+metadata:
+  type: sanity-fail
+---
+<sanity-fail bead="{{ checked_bead | string | cdata_escape }}" sprint="{{ sprint | string | cdata_escape }}">
+  <description><![CDATA[{{ checked_title | string | cdata_escape }}: sanity round {{ round }} of {{ max_sanity_rounds }}.
+Branch {{ branch | string | cdata_escape }}, PR #{{ pr_number }}, commit {{ commit | string | cdata_escape }}.
+{% for item in undone %}{{ item.number }}. NOT complete: {{ item.reason | string | cdata_escape }}
+{% endfor %}]]></description>
+</sanity-fail>
