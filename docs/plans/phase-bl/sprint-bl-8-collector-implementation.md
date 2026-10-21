@@ -32,6 +32,11 @@ Own `refresh.py`, `state.py`, `adapters/{bd,atm,github}.py`, `cli.py`, `command.
 
 Tests inject clocks, storage, source responses, locks, and the derivation function; no test uses sleep, scheduling, load, or a live source.
 
+## Validation
+```bash
+cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --frozen pyright src && uv run --frozen pytest -q tests/test_refresh.py tests/test_state.py
+```
+
 ## This sprint does not close
 
 It does not select checks or derive problems (bl-10), queue/deliver events (bl-3), render UI, or prove end-to-end cron/TUI equality (bl-12).
