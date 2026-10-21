@@ -144,6 +144,36 @@ impl HookName {
     }
 }
 
+/// The six task hooks as a closed set; converts to `HookName` without validation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TaskHook {
+    Assign = 0,
+    Start = 1,
+    Close = 2,
+    Move = 3,
+    List = 4,
+    Events = 5,
+}
+
+impl TaskHook {
+    pub const ALL: [TaskHook; 6] = [
+        Self::Assign,
+        Self::Start,
+        Self::Close,
+        Self::Move,
+        Self::List,
+        Self::Events,
+    ];
+
+    pub const fn as_str(self) -> &'static str {
+        HookName::TASK_HOOKS[self as usize]
+    }
+
+    pub fn hook_name(self) -> HookName {
+        HookName(self.as_str().to_owned())
+    }
+}
+
 impl TryFrom<String> for HookName {
     type Error = AtmError;
 

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use super::{HookName, TaskOp, sealed};
+use super::{HookName, TaskHook, TaskOp, sealed};
 use crate::api::{
     ApiRequest, ApiResponse, AuthenticatedIngress, MessageCollectionRequest, RequestDeadline,
 };
@@ -90,15 +90,15 @@ impl TaskCommand {
     }
 
     pub fn hook_name(&self) -> HookName {
-        HookName::parse(match self {
-            Self::Assign(_) => "task.assign",
-            Self::Start(_) => "task.start",
-            Self::Close(_) => "task.close",
-            Self::Move(_) => "task.move",
-            Self::List(_) => "task.list",
-            Self::Events(_) => "task.events",
+        (match self {
+            Self::Assign(_) => TaskHook::Assign,
+            Self::Start(_) => TaskHook::Start,
+            Self::Close(_) => TaskHook::Close,
+            Self::Move(_) => TaskHook::Move,
+            Self::List(_) => TaskHook::List,
+            Self::Events(_) => TaskHook::Events,
         })
-        .expect("task command names are valid hook names")
+        .hook_name()
     }
 
     /// The caller identity and team carried by this classified task command.

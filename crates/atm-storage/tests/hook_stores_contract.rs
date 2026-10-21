@@ -11,7 +11,7 @@ use atm_storage::testing::{InMemoryCronScheduleStore, InMemoryHookRegistrationSt
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
     AtmErrorCode, CronGeneration, CronSchedule, CronScheduleStore, HookName, HookRegistration,
-    HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition, stopped_outcome,
+    HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition, TaskHook, stopped_outcome,
 };
 use chrono::{TimeZone, Utc};
 
@@ -385,6 +385,14 @@ fn hook_name_parse_sets() {
             "{name}: {}",
             error.message()
         );
+    }
+}
+
+#[test]
+fn task_hook_enum_matches_parsed_task_hooks() {
+    for (hook, name) in TaskHook::ALL.into_iter().zip(HookName::TASK_HOOKS) {
+        assert_eq!(hook.as_str(), name);
+        assert_eq!(hook.hook_name(), HookName::parse_task_hook(name).unwrap());
     }
 }
 
