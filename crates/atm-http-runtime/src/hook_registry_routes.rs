@@ -454,23 +454,16 @@ mod tests {
                 .await
                 .expect("reload reached the store");
         }
-        let write = {
-            let router = routes.router.clone();
-            tokio::spawn(async move {
-                router
-                    .hook_register(
-                        register_request("sender", "task.assign", "bk"),
-                        AuthenticatedIngress::Local,
-                        deadline(),
-                    )
-                    .await
-                    .map(|_| ())
-            })
-        };
+        let mut write = Box::pin(routes.router.hook_register(
+            register_request("sender", "task.assign", "bk"),
+            AuthenticatedIngress::Local,
+            deadline(),
+        ));
+        assert_pending_once(write.as_mut());
         pause.release();
 
         reload.await.expect("reload task").expect("reload");
-        write.await.expect("write task").expect("write");
+        write.await.expect("write");
         let rows = snapshot
             .current(
                 &routes.router.control_path_sync_bridge,
