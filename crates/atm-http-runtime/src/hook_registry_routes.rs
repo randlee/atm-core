@@ -541,7 +541,7 @@ mod tests {
         router.service_runtime = router
             .service_runtime
             .clone()
-            .with_hook_registration_store(hooks);
+            .with_hook_registration_store(hooks.clone());
 
         let error = router
             .hook_register(
@@ -557,6 +557,41 @@ mod tests {
             error.message(),
             "hook snapshot is unavailable because hook-filter startup wiring was not installed\n  Recovery: Install the hook filter during daemon startup before serving hook registry routes, then retry.",
         );
+        assert_eq!(hooks.calls.load(Ordering::SeqCst), 0);
+        assert!(hooks.active_all().expect("rows").is_empty());
+    }
+
+    #[tokio::test]
+    async fn disable_route_without_installed_filter_fails_closed() {
+        let fixture = fixture(true, None, None);
+        let hooks = Arc::new(InMemoryHookRegistrationStore::default());
+        let mut router = fixture.router.clone();
+        router.service_runtime = router
+            .service_runtime
+            .clone()
+            .with_hook_registration_store(hooks.clone());
+
+        let error = router
+            .hook_disable(
+                HookDisableRequest {
+                    caller_identity: agent("sender"),
+                    caller_team: team(),
+                    phase: phase("bk"),
+                    hook: None,
+                },
+                AuthenticatedIngress::Local,
+                deadline(),
+            )
+            .await
+            .expect_err("a router without a hook filter has no snapshot to refresh");
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert_eq!(
+            error.message(),
+            "hook snapshot is unavailable because hook-filter startup wiring was not installed\n  Recovery: Install the hook filter during daemon startup before serving hook registry routes, then retry.",
+        );
+        assert_eq!(hooks.calls.load(Ordering::SeqCst), 0);
+        assert!(hooks.active_all().expect("rows").is_empty());
     }
 
     #[tokio::test]
