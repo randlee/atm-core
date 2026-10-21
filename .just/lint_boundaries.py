@@ -285,6 +285,17 @@ IO_FORBIDDEN_SOURCE_EXCEPTIONS: dict[tuple[str, str], tuple[str, ...]] = {
         "BOUNDARY-PeerConfigStore",
         "socket_io",
     ): (r"\bstd::net::SocketAddr\b",),
+    # The bootstrap hook-runner's environment sentinel test launches its own
+    # test process; production hook spawning remains delegated to
+    # process_deadline and is still forbidden in hook_runner.
+    (
+        "BOUNDARY-ReplacementDaemonBootstrap",
+        "process_spawn",
+    ): (r"std::process::Command::new\(std::env::current_exe\(\)\.unwrap\(\)\)",),
+    (
+        "BOUNDARY-HookRunner",
+        "process_spawn",
+    ): (r"std::process::Command::new\(std::env::current_exe\(\)\.unwrap\(\)\)",),
 }
 SCB_CONFIG_ALLOWLIST_PATH = Path(".just/allowlists/scb_config_allowlist.toml")
 SCB_CONFIG_FIXTURE_PATH = Path(".just/fixtures/scb_config_known_bad.rs")

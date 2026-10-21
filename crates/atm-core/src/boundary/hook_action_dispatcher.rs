@@ -37,6 +37,7 @@ pub struct DispatchCall {
 pub struct RecordingHookActionDispatcher {
     pub calls: std::sync::Mutex<Vec<DispatchCall>>,
     pub fail_at: Option<usize>,
+    pub fail_with: Option<AtmError>,
     pub panic_at: Option<usize>,
 }
 
@@ -73,8 +74,12 @@ impl HookActionDispatcher for RecordingHookActionDispatcher {
                 "RecordingHookActionDispatcher action panic"
             );
             if self.fail_at == Some(index) {
-                return Err(AtmError::hook_malformed(&format!(
-                    "hook action {}/{} ({}) failed after {} committed: injected dispatch failure",
+                let error = self
+                    .fail_with
+                    .clone()
+                    .unwrap_or_else(|| AtmError::hook_malformed("injected dispatch failure"));
+                return Err(error.with_context(format!(
+                    "hook action {}/{} ({}) failed after {} committed",
                     index + 1,
                     total,
                     action.command,
@@ -184,6 +189,10 @@ mod tests {
     fn injected_failure_preserves_action_position_and_committed_count() {
         let dispatcher = RecordingHookActionDispatcher {
             fail_at: Some(1),
+            fail_with: Some(AtmError::new(
+                crate::error::AtmErrorCode::HookExit,
+                "injected dispatch failure",
+            )),
             ..Default::default()
         };
         let error = ready(dispatcher.dispatch_actions(
@@ -191,9 +200,13 @@ mod tests {
             vec![action("bk-1"), action("bk-2"), action("bk-3")],
         ))
         .unwrap_err();
-        assert!(error.to_string().contains(
-            "hook action 2/3 (task.move) failed after 1 committed: injected dispatch failure"
-        ));
+        assert_eq!(error.code(), crate::error::AtmErrorCode::HookExit);
+        assert!(
+            error
+                .message()
+                .starts_with("hook action 2/3 (task.move) failed after 1 committed: ")
+        );
+        assert!(error.message().contains("injected dispatch failure"));
         assert_eq!(dispatcher.calls.lock().unwrap().len(), 1);
     }
 
