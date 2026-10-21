@@ -3,8 +3,9 @@
 triage:PhaseBL a triage:Phase .
 
 # Declaration order only. The authoritative three-wave relation table is
-# docs/plans/phase-bl/phase-bl-plan.md and phase-bl.jsonl. BL3 consumes BL1
-# types and BL10 source records; BL5 consumes BL1 types and BL2 JSONL.
+# docs/plans/phase-bl/phase-bl-plan.md and phase-bl.jsonl. BL10 consumes BL1
+# collector-record types contract-only in wave 1; BL3 follows BL10 source
+# records and uses BL1 types; BL5 consumes BL1 types and BL2 JSONL.
 triage:BL1 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 1 ; triage:branch "sprint/bl-1-refresh-core" ; triage:criteria "docs/plans/phase-bl/sprint-bl-1-refresh-core.md" .
 triage:BL2 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 2 ; triage:branch "sprint/bl-2-jev-client" ; triage:criteria "docs/plans/phase-bl/sprint-bl-2-jev-client.md" .
 triage:BL3 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 3 ; triage:branch "sprint/bl-3-dispatch-alerts" ; triage:criteria "docs/plans/phase-bl/sprint-bl-3-dispatch-alerts.md" .

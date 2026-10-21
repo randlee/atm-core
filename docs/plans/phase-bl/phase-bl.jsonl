@@ -2,7 +2,7 @@
 {"sprint":"bl-2","wave":1,"depends_on":[]}
 {"sprint":"bl-4","wave":1,"depends_on":[]}
 {"sprint":"bl-8","wave":1,"depends_on":[]}
-{"sprint":"bl-10","wave":1,"depends_on":["bl-1"]}
+{"sprint":"bl-10","wave":1,"depends_on":[],"consumes_types":["bl-1:CollectorRecord"]}
 {"sprint":"bl-11","wave":1,"depends_on":[]}
 {"sprint":"bl-3","wave":2,"depends_on":["bl-1","bl-10"]}
 {"sprint":"bl-5","wave":2,"depends_on":["bl-1","bl-2"]}
