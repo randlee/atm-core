@@ -1,4 +1,7 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::atomic::{AtomicI64, Ordering},
+};
 
 use atm_storage::contract::{Message, MessageKey};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope};
@@ -9,7 +12,7 @@ use atm_storage::{
     TaskEventKind, TaskId, TaskOp, TaskState, TeamName,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use rusqlite::{Connection, params};
 use serde_json::Map;
 use tempfile::TempDir;
@@ -50,7 +53,7 @@ fn bd2_rejected_move_returns_committed_rejection() {
         &"MISSING".parse().unwrap(),
         &"alice".parse().unwrap(),
         &MoveTarget::Head,
-        IsoTimestamp::now(),
+        h.timestamp(),
     );
     let result = result.expect("audit transaction committed");
     assert_eq!(
@@ -145,6 +148,7 @@ struct Harness {
     path: std::path::PathBuf,
     backend: SqliteStorageBackend,
     team: TeamName,
+    timestamp_counter: AtomicI64,
 }
 
 impl Harness {
@@ -157,7 +161,18 @@ impl Harness {
             path,
             backend,
             team: "ba2".parse().expect("team"),
+            timestamp_counter: AtomicI64::new(0),
         }
+    }
+
+    fn timestamp(&self) -> IsoTimestamp {
+        let offset = self.timestamp_counter.fetch_add(1, Ordering::Relaxed);
+        IsoTimestamp::from_datetime(
+            "2026-10-20T00:00:00Z"
+                .parse::<chrono::DateTime<Utc>>()
+                .unwrap()
+                + Duration::seconds(offset),
+        )
     }
 
     fn save(&self, message: &Message) -> Result<(), atm_storage::AtmError> {
@@ -237,7 +252,7 @@ impl Harness {
                 from: from.parse().expect("sender"),
                 source_chat_id: None,
                 text: text.to_owned(),
-                timestamp: IsoTimestamp::from_datetime(Utc::now()),
+                timestamp: self.timestamp(),
                 read: false,
                 source_team: Some(self.team.clone()),
                 destination_chat_id: None,
@@ -306,7 +321,7 @@ impl Harness {
                     self.team.as_str(),
                     member,
                     metadata_json,
-                    IsoTimestamp::now().to_string()
+                    self.timestamp().to_string()
                 ],
             )
             .unwrap();
@@ -329,7 +344,7 @@ impl Harness {
                 &task.parse().expect("task"),
                 &actor.parse().expect("actor"),
                 &target,
-                IsoTimestamp::now(),
+                self.timestamp(),
             )
             .expect("move commit")
             .operation
@@ -387,7 +402,7 @@ pub(crate) fn assignee_task_report_is_plain_message_and_leaves_task_unchanged() 
         .record_reminder(
             &MemberKey::new(h.team.clone(), "alice".parse().unwrap()),
             &"T1".parse().unwrap(),
-            IsoTimestamp::now(),
+            h.timestamp(),
             ReminderOutcome::Emitted,
         )
         .expect("record reminder");
@@ -1045,7 +1060,7 @@ pub(crate) fn move_of_complete_task_appends_rejected_row() {
             &"T1".parse().unwrap(),
             &"lead".parse().unwrap(),
             &MoveTarget::Head,
-            IsoTimestamp::now(),
+            h.timestamp(),
         )
         .expect("rejection committed")
         .operation
@@ -1304,7 +1319,7 @@ fn trailing_refusal_run_counts_raw_stored_event_values() {
     .into_iter()
     .enumerate()
     {
-        connection.execute("INSERT INTO task_events(team,task_id,assignee,seq,at,event,actor) VALUES (?1,?2,'alice',?3,?4,?5,'alice')", params![h.team.as_str(), format!("T{seq}"), seq + 1, IsoTimestamp::now().to_string(), event]).unwrap();
+        connection.execute("INSERT INTO task_events(team,task_id,assignee,seq,at,event,actor) VALUES (?1,?2,'alice',?3,?4,?5,'alice')", params![h.team.as_str(), format!("T{seq}"), seq + 1, h.timestamp().to_string(), event]).unwrap();
     }
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -1376,26 +1391,16 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
     let task_store = h.backend.task_store();
 
     task_store
-        .record_reminder(
-            &member,
-            &task_id,
-            IsoTimestamp::now(),
-            ReminderOutcome::Emitted,
-        )
+        .record_reminder(&member, &task_id, h.timestamp(), ReminderOutcome::Emitted)
         .expect("record reminder");
     task_store
-        .record_reminder(
-            &member,
-            &task_id,
-            IsoTimestamp::now(),
-            ReminderOutcome::Emitted,
-        )
+        .record_reminder(&member, &task_id, h.timestamp(), ReminderOutcome::Emitted)
         .expect("record second reminder");
     task_store
         .record_lead_notified(
             &member,
             &task_id,
-            IsoTimestamp::now(),
+            h.timestamp(),
             &"lead".parse().unwrap(),
             &AtmMessageId::new(),
         )
@@ -1405,7 +1410,7 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
     assert_eq!(reminded.lead_notified_count, 1);
     assert!(reminded.last_reminded_at.is_some());
 
-    let reset_at = IsoTimestamp::now();
+    let reset_at = h.timestamp();
     let reset = task_store
         .reset_reminders(&member, &task_id, reset_at)
         .expect("reset reminders");
@@ -1420,12 +1425,7 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
 
     // A reminder recorded after the reset starts the budget over from one.
     let after_reset = task_store
-        .record_reminder(
-            &member,
-            &task_id,
-            IsoTimestamp::now(),
-            ReminderOutcome::Emitted,
-        )
+        .record_reminder(&member, &task_id, h.timestamp(), ReminderOutcome::Emitted)
         .expect("record reminder after reset");
     assert_eq!(after_reset.row.reminder_count, 1);
 }
