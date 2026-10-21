@@ -1,8 +1,10 @@
 //! SQLite adapter for the hook registration store (ADR-068 D1, ADR-069 D1).
 //!
-//! Writes run in the shared writer transaction and reads run on the reader
-//! pool. Timestamps are fixed-width UTC text (see `store_support`), so SQL
-//! `ORDER BY` matches the chronological order the trait documents.
+//! Writes run in the shared writer transaction and request reads run on the
+//! reader pool. The daemon-startup snapshot uses one dedicated read-only
+//! connection so it cannot queue behind reader-worker scheduling. Timestamps
+//! are fixed-width UTC text (see `store_support`), so SQL `ORDER BY` matches
+//! the chronological order the trait documents.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -245,7 +247,7 @@ impl HookRegistrationStore for SqliteHookRegistrationStore {
 
     fn active_all(&self) -> Result<Vec<HookRegistration>, AtmError> {
         let db = Arc::clone(&self.db);
-        self.db.read(move |connection| {
+        self.db.read_startup(move |connection| {
             read_rows(
                 &db,
                 connection,

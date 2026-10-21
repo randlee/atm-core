@@ -1220,6 +1220,38 @@ async fn shutdown_deadline_aborts_the_held_run_before_returning() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn shutdown_records_settled_deadline_expiry() {
+    initialize_logs();
+    let logs = capture_logs();
+    // Model a run whose settled count never reaches zero after the worker has
+    // joined. Keeping the sender alive makes the unsettled state explicit.
+    let (_never_settles, settled) = watch::channel(1);
+    let worker = CronWorkerHandle::with_settled_for_test(settled);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let mut shutdown = Box::pin(worker.shutdown(deadline));
+    let waker = Waker::noop();
+    let mut context = Context::from_waker(waker);
+
+    assert!(matches!(
+        shutdown.as_mut().poll(&mut context),
+        Poll::Pending
+    ));
+    tokio::time::advance(Duration::from_secs(5)).await;
+    tokio::time::timeout_at(deadline + Duration::from_secs(1), &mut shutdown)
+        .await
+        .expect("shutdown should return at the settled deadline");
+
+    assert_eq!(tokio::time::Instant::now(), deadline);
+    let logs = logs.lock().unwrap();
+    let expiry = logs
+        .iter()
+        .find(|entry| entry.contains("action=\"shutdown_deadline\""))
+        .expect("settled deadline expiry should be recorded");
+    assert!(expiry.contains("outcome=\"failed\""), "{expiry}");
+    assert!(expiry.contains("running=1"), "{expiry}");
+}
+
+#[tokio::test(start_paused = true)]
 async fn shutdown_waits_for_cleanup_after_worker_stops() {
     struct Dropped {
         entered: std::sync::mpsc::Sender<()>,
@@ -1229,7 +1261,9 @@ async fn shutdown_waits_for_cleanup_after_worker_stops() {
     impl Drop for Dropped {
         fn drop(&mut self) {
             self.entered.send(()).expect("cleanup entry was observed");
-            self.release.recv().expect("cleanup release was sent");
+            self.release
+                .recv_timeout(TEST_WAIT_TIMEOUT)
+                .expect("missing cleanup release event (timeout or disconnected)");
             self.running.send_replace(0);
         }
     }
@@ -1249,7 +1283,9 @@ async fn shutdown_waits_for_cleanup_after_worker_stops() {
             release: parked,
         });
     });
-    cleanup_started.recv().expect("cleanup entered");
+    cleanup_started
+        .recv_timeout(TEST_WAIT_TIMEOUT)
+        .expect("missing cleanup entry event (timeout or disconnected)");
 
     let mut shutdown = Box::pin(worker.shutdown(tokio::time::Instant::now() + TEST_WAIT_TIMEOUT));
     let waker = Waker::noop();
@@ -1542,7 +1578,11 @@ fn hold_blocking(fixture: &Fixture) -> (std::sync::mpsc::Sender<()>, watch::Rece
         let entered = entered.clone();
         Box::pin(async move {
             entered.send_replace(index + 1);
-            let _ = parked.lock().unwrap().recv();
+            parked
+                .lock()
+                .unwrap()
+                .recv_timeout(TEST_WAIT_TIMEOUT)
+                .expect("missing run release event (timeout or disconnected)");
         })
     }));
     (release, calls)
