@@ -1,8 +1,8 @@
 # Sprint bl-1 — shared refresh core: one refresh for cron and console, per-source success stamps, persisted last-good
 
-closure_type `contract`; target_boundary `BOUNDARY-Refresh` (`refresh.refresh`,
+closure_type `boundary`; target_boundary `BOUNDARY-Refresh` (`refresh.refresh`,
 `refresh.json`, `health.json`, `runs.json`, the carried `snapshot.json`).
-Branch `sprint/bl-1-refresh-core`, PR → `integrate/phase-bl` (layer 1). Wave 1; no
+Branch `sprint/bl-1-refresh-core`, PR → `integrate/phase-bl`. Wave 1; no
 dependency. Priority P1 (the TUI showing improper information).
 `external_ref`: `gh-126`.
 recommended_agent `arch-ctm`; recommended_model `opus`.
@@ -10,6 +10,19 @@ recommended_agent `arch-ctm`; recommended_model `opus`.
 Authority: `design.md` (this directory) §1-§4; the anchors there are Rand's
 verbatim text and the coordinator's relayed correction. Paths under
 `apps/atm-bd-console/src/atm_bd_console/`; line numbers at v0.18.4 (86853d5).
+
+## Relations and boundary rationale
+
+`BOUNDARY-Refresh` is new in this phase. This sprint owns the complete shared
+refresh implementation and its persisted files so that later consumers do not
+share its paths. Its `vertical_rationale` is creation of that boundary and its
+first production implementation; no pre-existing manifest or producer can
+provide the contract separately.
+
+**Relations.** `parallel_safe`: bl-2, bl-3, bl-4 (disjoint paths and
+artifacts). Its public refresh contract is consumed by bl-6, bl-7, bl-8, and
+bl-9; those consumers list the specific artifact they need. `must_follow`:
+none.
 
 ## Scope boundary
 

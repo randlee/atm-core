@@ -2,7 +2,7 @@
 
 closure_type `contract`; target_boundary `BOUNDARY-QaReviewers` (the
 `metadata.reviewers` shapes quality-mgr writes). Branch
-`sprint/bl-4-qa-reviewer-data`, PR → `sprint/bl-3-dispatch-alerts` (layer 4; cut from `integrate/phase-bl`, rebased in order). Wave 1; no
+`sprint/bl-4-qa-reviewer-data`, PR → `integrate/phase-bl`. Wave 1; no
 dependency. Priority P3 (diagnosis aid).
 `external_ref`: `gh-347`.
 recommended_agent `arch-ctm`; recommended_model `sonnet`.
@@ -21,6 +21,12 @@ Line numbers at v0.18.4 (86853d5).
 Narrowed scope (2026-10-21 review of #347): the Sanity tab is delivered; the
 remainder is the Quality tab. This sprint is the producer half; bl-7 is the
 console half and consumes the shapes below.
+
+## Relations
+
+`parallel_safe`: bl-1, bl-2, bl-3 (disjoint paths and artifacts).
+`must_follow`: none. bl-7 is the sole consumer of the `metadata.reviewers`
+contract and names that artifact in its relation record.
 
 ## Scope boundary
 

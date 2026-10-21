@@ -60,39 +60,70 @@ Execution rules for this phase:
 | --- | --- | --- |
 | Refresh (core) | bl-1 → bl-6, bl-7 → bl-9 | #126 (refresh), audit remainder |
 | Jev | bl-2 → bl-5 | #365, #497, #379, #164, #498, #126 item 4 |
-| Alert accuracy | bl-3, bl-8 | #375, #372, #491, #126 R1, #492, #533 |
-| TUI diagnosis | bl-4 → bl-7, bl-6 | #347, #359, #360 |
+| Alert accuracy and console-model labels | bl-3, bl-8 | #375, #372, #491, #126 R1, #359, #492, #533 |
+| TUI diagnosis | bl-4 → bl-7, bl-6 | #347, #360 |
+
+
+## Boundary map and track cut
+
+The code repository does not publish `boundaries/<crate>/*.toml` manifests:
+the manifests available in atm-core describe ATM crates and do not govern
+atm-bd-orchestration. This map therefore records the actual Python/plugin
+contracts named by the phase, their allowed consumers, and the disjoint path
+sets that make those consumers parallel. It is the reviewable substitute for
+a manifest map; it does not infer any unstated dependency.
+
+| Boundary | Contract artifact | Producer | Allowed consumers in this phase | Owned implementation path family |
+| --- | --- | --- | --- | --- |
+| `BOUNDARY-Refresh` | `refresh.refresh`, `Refreshed`, refresh/health/runs file schemas, `Snapshot.content_at` | bl-1 | bl-6, bl-7, bl-8, bl-9 | console refresh/state/poll/runner/CLI core |
+| `BOUNDARY-JevResult` | `jev_client --requests` JSONL, `JevErrorKind` stable tags | bl-2 | bl-5 | plugin Jev client and child wrapper |
+| `BOUNDARY-ProblemsAndDispatch` | latest CI rows, branch fallback, typed `Held` rows, and sprint-label render data | bl-3 | none | console model/source/dispatch paths |
+| `BOUNDARY-QaReviewers` | QA/finding `metadata.reviewers` schema | bl-4 | bl-7 | plugin quality-manager templates and examples |
+| `BOUNDARY-SanityRecord` | sanity log v5 JSON row with request and JSONL-result arrays | bl-5 | bl-7 | plugin dev-sanity templates/scripts |
+| `BOUNDARY-DashboardRender` | carried-content age and dashboard/status/show surface | bl-6 | bl-9 | console render/status/show paths |
+| `BOUNDARY-ConsoleApp` | refresh-driven console tick and tab model | bl-7 | bl-9 | console app/icons/runs paths |
+| `BOUNDARY-MergeFactsAndDeadline` | D1/D2-gated merge/deadline policy | bl-8 | none until ruled | console facts/command and the named merge-policy seam |
+
+**Tracks.** Refresh is bl-1 → {bl-6, bl-7, bl-8} → bl-9; Jev is bl-2 →
+bl-5; QA reviewer data is bl-4 → bl-7; alert accuracy and console-model labels are bl-3. D5 is closed in bl-5; D1–D4 remain open and block only their named work.
+The braces are parallel consumers with disjoint `owned_paths`. bl-8 remains
+blocked at its D1/D2 decision gate and does not lengthen the refresh
+acceptance path. The longest required chain is still three waves: bl-1 →
+bl-7 → bl-9.
 
 ## Sprints
 
-Layers are one append-only stack; each PR targets the layer below. Parallel
-sprints are cut from their dependency's head and rebased into the stack in
-layer order.
+Sprints are cut from `integrate/phase-bl` or from the named contract
+producer in their own track. A branch targets `integrate/phase-bl` unless it
+consumes that producer's named contract; independent tracks are not linked
+into an append-only stack. The lead serializes only a true same-track
+dependency after it is pushed.
 
-| Layer | Sprint | Wave | Closure | Issues (`external_ref`) | Owned paths (summary; full list in the doc) | Model |
+| Sprint | Wave | Closure | Target boundary | Issues (`external_ref`) | Owned paths (summary; full list in the doc) | Model |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | bl-1 refresh-core | 1 | contract | gh-126 | console `refresh.py` (new), `state.py`, `poll_health.py`, `runner.py`, `step_result.py`, `cli.py`, `types.py`, `codec.py`, `closed_cache.py`; their tests; plugin `SKILL.md` cron paragraph | opus |
-| 2 | bl-2 jev-client | 1 | contract | gh-365, gh-497, gh-379, gh-164 | `jev_client.py`, `wrap_jev_receipt.py`, `sanity-split`, `agents/sc-sanity-jev.md`; tests jev_client, wrap, sanity_split, agent_prompts | opus |
-| 3 | bl-3 dispatch-alerts | 1 | boundary | gh-375, gh-372, gh-491, gh-126 | console `model.py` (problems/PR rows/texts), `github_source.py`, `atm_bd.py`, `dispatch.py`, `beads_source.py`; tests incl. new `test_dispatch_tick.py` | sonnet |
-| 4 | bl-4 qa-reviewer-data | 1 | contract | gh-347 | `roles/quality-mgr.md`, `qa-template.xml.j2`, `finding-bead.json.j2`, their examples, `test_qa_report_contract.py` | sonnet |
-| 5 | bl-5 sanity-flow | 2 | boundary | gh-365, gh-497, gh-498, gh-126 | `agents/dev-sanity.md`, `dev-sanity-template.xml.j2`, `sanity-run-record.json.j2`, examples, `sanity-merge`, `sanity-run-history`, `assignment-gates.py`, `sanity-stack-link`, `atm-task-close.py`; their tests incl. `test_templates.py`, `test_handoff_contracts.py`, `test_task_close.py`, `test_agent_prompts.py` | opus |
-| 6 | bl-6 dashboard-render | 2 | boundary | gh-126, gh-359, gh-360 | console `render.py`, `model.py` (label region), `status.py`, `cli.py` (`show`), `README.md`; tests | sonnet |
-| 7 | bl-7 console-tabs | 2 | boundary | gh-126, gh-347, gh-365, gh-360 | console `app.py`, `icons.py`, `runs.py`; tests app, tabs, icons, runs | opus |
-| 8 | bl-8 ruled-console-fixes | 2 | boundary | gh-492, gh-533 | console `facts.py`, `command.py`, `runner.py` (merge region); tests | sonnet |
-| 9 | bl-9 refresh-integration | 3 | integration | gh-126 | new `tests/test_refresh_uniform.py`, `tests/fixtures/refresh/`; live run | opus |
+| bl-1 refresh-core | 1 | boundary | BOUNDARY-Refresh | gh-126 | console `refresh.py` (new), `state.py`, `poll_health.py`, `runner.py`, `step_result.py`, `cli.py`, `types.py`, `codec.py`, `closed_cache.py`; their tests; plugin `SKILL.md` cron paragraph | opus |
+| bl-2 jev-client | 1 | contract | BOUNDARY-JevResult | gh-365, gh-497, gh-379, gh-164 | `jev_client.py`, `wrap_jev_receipt.py`, `sanity-split`, `agents/sc-sanity-jev.md`; tests jev_client, wrap, sanity_split, agent_prompts | opus |
+| bl-3 dispatch-alerts | 1 | boundary | BOUNDARY-ProblemsAndDispatch | gh-375, gh-372, gh-491, gh-126, gh-359 | console `model.py` (problems/PR rows/texts and sprint labels), `github_source.py`, `atm_bd.py`, `dispatch.py`, `beads_source.py`; tests incl. new `test_dispatch_tick.py` | sonnet |
+| bl-4 qa-reviewer-data | 1 | contract | BOUNDARY-QaReviewers | gh-347 | `roles/quality-mgr.md`, `qa-template.xml.j2`, `finding-bead.json.j2`, their examples, `test_qa_report_contract.py` | sonnet |
+| bl-5 sanity-flow | 2 | boundary | BOUNDARY-SanityRecord | gh-365, gh-497, gh-498, gh-126 | `agents/dev-sanity.md`, `dev-sanity-template.xml.j2`, `sanity-run-record.json.j2`, examples, `sanity-merge`, `sanity-run-history`, `assignment-gates.py`, `sanity-stack-link`, `atm-task-close.py`; their tests incl. `test_templates.py`, `test_handoff_contracts.py`, `test_task_close.py`, `test_agent_prompts.py` | opus |
+| bl-6 dashboard-render | 2 | boundary | BOUNDARY-DashboardRender | gh-126, gh-360 | console `render.py`, `status.py`, `cli.py` (`show`), `README.md`; tests | sonnet |
+| bl-7 console-tabs | 2 | boundary | BOUNDARY-ConsoleApp | gh-126, gh-347, gh-365, gh-360 | console `app.py`, `icons.py`, `runs.py`; tests app, tabs, icons, runs | opus |
+| bl-8 ruled-console-fixes | 2 (decision-gated) | boundary | BOUNDARY-MergeFactsAndDeadline | gh-492, gh-533 | console `facts.py`, `command.py`; tests. A D2 `runner.py` policy change is deferred to a re-cut, disjoint-owner sprint once ruled. | sonnet |
+| bl-9 refresh-integration | 3 | integration | BOUNDARY-Refresh | gh-126 | new `tests/test_refresh_uniform.py`, `tests/fixtures/refresh/`; live run | opus |
 
-`owned_paths` do not intersect within a wave. Files shared across waves are
-sequenced by the hard dependencies below.
+`owned_paths` do not intersect within a wave. A later consumer may use a
+producer's named public contract; shared-file ordering is never a dependency
+rationale. Each sprint records its relation set in its own doc.
 
 ## Wave table
 
 | Wave | Sprints | Hard dependency (consumed API or artifact) |
 | --- | --- | --- |
 | 1 | bl-1, bl-2, bl-3, bl-4 | none |
-| 2 | bl-5 | ← bl-2: `jev_client.py --requests`, its printed result (`results[]`, `error.kind`, `retries`, `elapsed_s`), `JevErrorKind`; and `test_agent_prompts.py` after bl-2's edit |
-| 2 | bl-6 | ← bl-1: `Snapshot.content_at`, `PollHealth.restore`/`health.json`, bl-1's `cli.py`; ← bl-3: `model.py` after `_problems`/`_pr_rows` edits, `test_model.py` |
+| 2 | bl-5 | ← bl-2: `jev_client.py --requests`, its ordered JSONL response lines (`error.kind`, `retries`, `elapsed_s`), `JevErrorKind`; and `test_agent_prompts.py` after bl-2's edit |
+| 2 | bl-6 | ← bl-1: `Snapshot.content_at`, `PollHealth.restore`/`health.json`, bl-1's `cli.py` |
 | 2 | bl-7 | ← bl-1: `refresh.refresh(by="console")`, `Refreshed`, `acquire_console_lock`, `runs.json` `Held` values; ← bl-4: `metadata.reviewers` shapes (QA bead and finding bead) |
-| 2 | bl-8 | ← bl-1: `runner.py` after the GitHub/merge gate rewrite, refresh `in_progress` behaviour; gated on D1/D2 |
+| 2 | bl-8 (not dispatchable) | ← bl-1: public refresh `in_progress` behaviour; gated on D1/D2. D2 has no owned `runner.py` change until a decision-scoped re-cut. |
 | 3 | bl-9 | ← bl-6: dashboard/status bar `content_at` rendering; ← bl-7: console tick on `refresh.refresh`, tab renderers |
 
 Critical path: 3 waves (bl-1 → bl-7 → bl-9). Width: 4 (waves 1 and 2).
@@ -110,7 +141,7 @@ Work that does not depend on these starts now; each names what waits.
 | D2 | #492 | Should "head not pushed" (display-only today, `facts.py:189-190`; no ATM alert exists) be dropped or shown as informational? Should PR-less branch pairs still be merge-checked (`runner.py:353-381`)? | bl-8 deliverable 1 |
 | D3 | #498 item 3 | Is the notice to the lead on `rebase_required` (`sanity-stack-link:250`, today) enough, or must the bead also be reopened? | bl-5 deliverable 6 (the test of today's behaviour is not gated) |
 | D4 | #126 remainder | Not planned, pending a ruling on each: 1 candidate-scoped GitHub read before dispatch (adds GitHub load, against requirement (b)); 3/5a QA gate on "top not red" (CLAUDE.md: "CI is a merge gate only — never a dispatch gate"); 5b reviewers from bead metadata; 6 dispatcher `gh stack link` (overtaken by sanity-stack-link on PASS); 7b launchd/herdr supervision; 7c escalation recipients; R4 `pulls?head=` lookup (adds GitHub calls); 2b's bead-assignee write before assign (interacts with the ANC-057 assignee rules; the task re-read of 2b is in bl-1). R5 (pouring important and minor findings) is a standing ruling with no work found. | nothing in this plan |
-| D5 | #365 / #497 | When Jev returns no evaluation (any `results[i].success == false`), which reply decides the deliverable: the LLM reply mechanically (as #497's text says), or CANNOT_RUN (as #365's original "never silently substitute" says)? The agent never decides either way. | bl-5 deliverable 3's selection change (recording and icon are not gated) |
+| D5 | #365 / #497 | **Ruled 2026-10-21.** "if jev-api failed (i.e. jev did not respond), the parallel llm evaluator's response is used. If both llm+jev respond a failure on either is failure on iteration #1. for iteration > 1, sanity-agent to triage (which should be done w/ background agent if sanity-agent has queue backlog)." | bl-5 delivers the mechanical merge rule. The Jev JSONL error remains recorded and bl-7 shows the do-not-enter icon. |
 
 Not planned: #497's earlier "split inconclusive" error. Under the 2026-10-21
 ruling it can only be computed by reading each reply's `choice`, which is
@@ -118,10 +149,11 @@ interpreting verdicts; it is left out unless Rand rules for it.
 
 ## Governed interfaces
 
-- `jev_client.py` stdout (bl-2): a breaking change from
-  `{success,data,error,elapsed_s}` with `data.parts` to the request-array
-  result; its only consumers are `wrap_jev_receipt.py`, `sanity-merge` and
-  `sanity-run-history`, all changed in bl-2/bl-5 of this stack.
+- `jev_client.py` stdout (bl-2): a breaking change from one JSON envelope
+  with `data.parts` to JSONL: one stable tagged JSON result per input request,
+  in request order. Its consumers are `wrap_jev_receipt.py`, `sanity-merge`
+  and `sanity-run-history`; bl-2 supplies the producer contract and bl-5 is
+  the sole consumer migration.
 - Sanity-log row (`sanity-run-record.json.j2` 4.0.0 → 5.0.0, bl-5): adds
   `jev_requests`, `jev_results`, `jev_retries`; read by the console
   (`runs.py`, which reads `kind` and keeps working on older rows).

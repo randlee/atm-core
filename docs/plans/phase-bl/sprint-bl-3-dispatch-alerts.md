@@ -1,11 +1,10 @@
-# Sprint bl-3 — alert accuracy and visible dispatch: CI latest-per-name, stack top, branch fallback, typed Held rows
+# Sprint bl-3 — alert accuracy, visible dispatch, and console-model labels
 
 closure_type `boundary`; target_boundary `BOUNDARY-ProblemsAndDispatch`
-(`model._problems`, `model._pr_rows`, `dispatch.candidates`/`dispatch.plan`,
-and the CI state read by `github_source`). Branch `sprint/bl-3-dispatch-alerts`,
-PR → `sprint/bl-2-jev-client` (layer 3; cut from `integrate/phase-bl`, rebased in order). Wave 1; no dependency. Priority P1 (erroneous or
+(`model._problems`, `model._pr_rows`, `dispatch.candidates`/`dispatch.plan`, the sprint-label render data, and the CI state read by `github_source`). Branch `sprint/bl-3-dispatch-alerts`,
+PR → `integrate/phase-bl`. Wave 1; no dependency. Priority P1 (erroneous or
 spam ATM messages).
-`external_ref`: `gh-375,gh-372,gh-491,gh-126`.
+`external_ref`: `gh-375,gh-372,gh-491,gh-126,gh-359`.
 recommended_agent `arch-ctm`; recommended_model `sonnet`.
 
 Paths under `apps/atm-bd-console/src/atm_bd_console/`; line numbers at
@@ -25,13 +24,19 @@ dispatcher's bead-assignee write (D4).
 ## Owned paths
 
 - `model.py` (regions `_problems`, `_pr_rows`, `github_unavailable` and the
-  `unknown_*` texts at `:179-196`), `github_source.py`, `atm_bd.py`,
+  `unknown_*` texts at `:179-196`, and `_sprint_views` / label helpers), `github_source.py`, `atm_bd.py`,
   `dispatch.py`, `beads_source.py`
 - tests: `tests/test_model.py`, `tests/test_github_source.py`,
   `tests/test_atm_bd.py`, `tests/test_dispatch.py`, `tests/test_beads_source.py`,
   new `tests/test_dispatch_tick.py`
 
-bl-6 edits `model.py` (label region) after this sprint.
+No other sprint owns `model.py`; dashboard rendering consumes its produced label data without editing this file.
+
+## Relations
+
+`parallel_safe`: bl-1, bl-2, bl-4 (disjoint paths and no consumed artifact).
+`must_follow`: none. bl-6 consumes the rendered model data but does not own or
+edit `model.py`; its renderer remains a separate boundary.
 
 ## Public contract
 
@@ -75,11 +80,16 @@ HeldReason = Literal["render_error", "sprint_not_found", "target_not_found",
 6. **#491 tick test.** New `tests/test_dispatch_tick.py`: drive
    `runner.step` with fake bd/atm/git/gh sources from a sanity-PASS bead at a
    valid PR head, lead idle, QA bead with an assignee (the #491 root cause),
-   and assert the tick's actions include the QA `assign`. A second case with
+   and assert the tick's actions include the QA `assign`. #359's sprint-label data also lives here, so no later sprint shares `model.py`. A second case with
    the bd read failing asserts a visible "dispatch refused" Held row
    (`inputs_unavailable`) and no assign.
 7. **#126 R1.** `beads_source.ready()` and `open_rows()` pass
    `--exclude-label anchor` (as `queues.py:150` does).
+8. **#359 sprint labels.** `_sprint_views` builds each node label as exactly
+   `<state icon> <sprint id>` plus ` <agent icon>` per active agent, single
+   spaces, no role word, no agent name, and no title lines. Pad each label to
+   the widest so mmdflux boxes have equal width. This is owned here because
+   this sprint owns all of `model.py`.
 
 ## Authoritative acceptance criteria (per issue, deterministic)
 

@@ -2,7 +2,7 @@
 
 closure_type `integration`; target_boundary `BOUNDARY-Refresh` end to end
 (`atm-bd cron` and `atm-bd console` on one phase state dir). Branch
-`sprint/bl-9-refresh-integration`, PR → `sprint/bl-8-ruled-console-fixes` (layer 9; if bl-8 still waits on D1/D2, bl-9 targets `sprint/bl-7-console-tabs` and bl-8 is linked above it). Wave 3.
+`sprint/bl-9-refresh-integration`, PR → `sprint/bl-7-console-tabs`; bl-8 is decision-gated and is not an integration prerequisite. Wave 3.
 Priority P1. `external_ref`: `gh-126`.
 recommended_agent `arch-ctm`; recommended_model `opus`.
 
@@ -13,6 +13,13 @@ recommended_agent `arch-ctm`; recommended_model `opus`.
 - (bl-1 is below both.)
 
 Anchors: `design.md` §1. Paths under `apps/atm-bd-console/`.
+
+## Relations
+
+`must_follow` bl-6 for the carried-content render contract and bl-7 for the
+real console tick/tab contract. `parallel_safe`: bl-2, bl-3, bl-4, bl-5, and
+the D1/D2-blocked bl-8. This sprint owns only its integration tests and live
+proof, never the producer paths.
 
 ## Scope boundary
 

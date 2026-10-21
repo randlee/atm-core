@@ -1,9 +1,8 @@
-# Sprint bl-2 — jev_client: request array in, typed JSON out, busy-only retry
+# Sprint bl-2 — jev_client: request array in, typed JSONL out, busy-only retry
 
 closure_type `contract`; target_boundary `BOUNDARY-JevResult` (the JSON that
 `jev_client.py` prints, and the `JevErrorKind` enum behind its `error.kind`).
-Branch `sprint/bl-2-jev-client`, PR → `sprint/bl-1-refresh-core` (layer 2; cut from `integrate/phase-bl`, rebased in order).
-Wave 1; no dependency. Priority P1 (Jev errors or misuse).
+Branch `sprint/bl-2-jev-client`, PR → `integrate/phase-bl`. Wave 1; no dependency. Priority P1 (Jev errors or misuse).
 `external_ref`: `gh-365,gh-497,gh-379,gh-164`.
 recommended_agent `arch-ctm`; recommended_model `opus` (bl-5 consumes the
 enum and the result shape).
@@ -28,6 +27,10 @@ Rand, 2026-10-21, on #497 (this replaces every earlier #497 remedy, including
 
 > "then it is a poor design and will be removed. context packing LLM must split and send array of requests to jev."
 
+Rand, 2026-10-21, on the child boundary: sc-sanity-jev returns the client
+JSONL unchanged. It does not select the LLM reply; D5 selection belongs to
+the mechanical merge in bl-5.
+
 Consequences used below: all Python splitting is deleted; the context-packing
 LLM (the dev-sanity side that holds the full context) writes one or more Jev
 requests per deliverable; `jev_client.py` sends each request as given and
@@ -43,9 +46,22 @@ The do-not-enter icon is bl-7's (console). Recording the request array and
 the verbatim result in the sanity log, and the dev-sanity flow that writes the
 array, are bl-5's. This sprint owns the client and the Jev child prompt.
 
+## Dev-sanity requirements and relations
+
+Requirements 51–56 govern this sprint ahead of the historic issue prose:
+Jev receives the LLM-created request array unchanged, never splits it; the
+launcher emits one JSONL response per request; only known busy failures retry;
+all failure variants are stable closed tags; and downstream consumers preserve
+those responses without interpreting a verdict. This doc uses those rules as
+the authoritative contract.
+
+**Relations.** `parallel_safe`: bl-1, bl-3, bl-4 (disjoint paths and no
+consumed artifact). `must_follow`: none. bl-5 is a consumer and must follow
+this sprint's named JSONL contract, not its files.
+
 ## Scope boundary
 
-In: the client's input (a request array), its printed JSON, the error enum
+In: the client's input (a request array), its printed JSONL, the error enum
 and its exhaustive matches, the retry policy, `retries`, `elapsed_s`, the
 budget refusal, deletion of the splitting code, `sc-sanity-jev.md`, the null
 PR body (#379, see deliverable 6), and `sanity-split --external-evidence`
@@ -66,21 +82,28 @@ bl-5 also edits `test_agent_prompts.py`; bl-5 stacks on this sprint.
 
 ## Public contract
 
+The client is a launcher seam: it accepts the LLM-authored request array and
+writes **JSONL**, exactly one JSON object per input request in input order.
+Each line is self-contained and stable enough for a future Rust launcher to
+mirror with an exhaustive enum match. There is no top-level envelope, no
+Python exception name, and no display text that a consumer could interpret as
+behaviour.
+
 ```python
-class JevErrorKind(enum.Enum):          # jev_client.py; every known failure, nothing else
-    BUSY_EXHAUSTED = "busy_exhausted"        # HTTP in BUSY_STATUSES still busy after MAX_JEV_ATTEMPTS
-    OUT_OF_TOKENS = "out_of_tokens"          # quota refusal; never retried
-    CONTEXT_TOO_LARGE = "context_too_large"  # request over MAX_REQUEST_BYTES (refused before sending) or HTTP 413
-    TRANSPORT = "transport"                  # connection refused/reset/timed out; not "busy", not retried
-    HTTP_REJECTED = "http_rejected"          # any other non-200
-    RESPONSE_INVALID = "response_invalid"    # non-JSON, oversized or schema-invalid reply
+class JevErrorKind(enum.Enum):
+    BUSY_EXHAUSTED = "busy_exhausted"
+    OUT_OF_TOKENS = "out_of_tokens"
+    CONTEXT_TOO_LARGE = "context_too_large"
+    TRANSPORT = "transport"
+    HTTP_REJECTED = "http_rejected"
+    RESPONSE_INVALID = "response_invalid"
     KEY_MISSING = "key_missing"
     KEY_INVALID = "key_invalid"
-    INPUT_INVALID = "input_invalid"          # unreadable/invalid request array
+    INPUT_INVALID = "input_invalid"
 
-def error_code(kind: JevErrorKind) -> str: ...                     # match kind: ... case _: assert_never(kind)
-def suggested_action(kind: JevErrorKind, message: str) -> str: ...  # same exhaustive match
-BUSY_STATUSES: frozenset[int] = frozenset({429, 502, 529})
+# Every match on the enum is exhaustive and ends with assert_never(kind).
+def error_fields(kind: JevErrorKind, *, status: int | None = None,
+                 size: int | None = None, budget: int | None = None) -> dict[str, object]: ...
 ```
 
 Command: `jev_client.py --requests <file>`, where the file is a JSON array of
@@ -88,31 +111,32 @@ Jev requests (each the shape `validate_request` accepts today, `:121-140`),
 written by the LLM. `--startup` and `--announce` stay. `--assignment` and
 `--request` are removed.
 
-Printed result (one JSON object on stdout; exit 0 when every request
-succeeded, 2 otherwise):
+For every array element, stdout has one line with this tagged shape (newline
+terminated; no surrounding array):
 
 ```json
-{"model": "jev-1.13.0",
- "results": [
-   {"index": 1, "request_sha256": "...", "success": true,  "data": {"answers": {...}}, "receipt": {...},
-    "error": null, "retries": 0, "elapsed_s": 0.18},
-   {"index": 2, "request_sha256": "...", "success": false, "data": null, "receipt": null,
-    "error": {"kind": "context_too_large", "code": "SANITY.JEV_REQUEST_TOO_LARGE", "message": "...",
-              "recoverable": false, "suggested_action": "...", "size": 131072, "budget": 96000},
-    "retries": 0, "elapsed_s": 0.0}],
+{"index": 0, "request_sha256": "...", "success": true,
+ "data": {"answers": {}}, "receipt": {"...": "..."}, "error": null,
  "retries": 0, "elapsed_s": 0.18}
+{"index": 1, "request_sha256": "...", "success": false,
+ "data": null, "receipt": null,
+ "error": {"kind": "context_too_large", "size": 131072, "budget": 96000},
+ "retries": 0, "elapsed_s": 0.0}
 ```
 
-- One `results` entry per request, in input order; `data` is Jev's JSON
+- `index`, `request_sha256`, `success`, `data`, `receipt`, `error`,
+  `retries`, and `elapsed_s` are present on every line. `data` is Jev's JSON
   unchanged. The client never reads `choice`.
-- `retries` counts only busy retries; top-level is the sum.
-- `elapsed_s` is measured inside the client around each request (as
-  `evaluation_result` does today, `:570-605`); the top level covers the run.
-- `error.code` keeps today's `SANITY.JEV_*` / `VALIDATION.INPUT` strings and
-  `CLIENT_MESSAGES` (`:199`) stays verbatim, so `sanity-merge` and
-  `sanity-run-history` keep working until bl-5 switches them to `kind`.
-- A request over the budget is not sent. Its entry is `CONTEXT_TOO_LARGE`
-  with `size` and `budget`; the other requests are still sent.
+- `error.kind` is exactly one `JevErrorKind` stable string. Remaining fields
+  are machine data for that kind (for example `status`, `size`, `budget`),
+  never Python exception classes or message text that directs control flow.
+- Each request has its own busy-only retry budget. `retries` counts only busy
+  retries and `elapsed_s` is measured inside the client around that request.
+- A request over the budget is not sent and gets its ordered
+  `context_too_large` line; the other requests are still sent. A malformed
+  array is refused before execution as `input_invalid` and exits 2.
+- Exit status is 0 iff every request line is successful; otherwise 2. A
+  consumer reads the ordered lines, never reconstructs a synthetic envelope.
 
 ## Authoritative deliverables
 
@@ -134,12 +158,11 @@ succeeded, 2 otherwise):
    (`:394-430`), `AttemptBudget` sharing between parts, `parts()`, the
    `assignment_requests` request builder and its pack loop (`:470-528`), and
    the `--assignment` / `--request` modes. Delete their tests.
-4. **Request array in, results out (#497, #365).** Add `--requests <file>`:
+4. **Request array in, JSONL results out (#497, #365).** Add `--requests <file>`:
    validate each element with `validate_request`; a non-array or invalid
    element fails the whole run as `INPUT_INVALID` naming the index. Refuse an
    element over `MAX_REQUEST_BYTES` as `CONTEXT_TOO_LARGE` without sending
-   it. Send the rest in order, each with its own busy budget, and print the
-   result above. Receipts are computed per request as today (`receipt`,
+   it. Send the rest in order, each with its own busy budget, and print exactly its one JSONL result line above. Receipts are computed per request as today (`receipt`,
    `:230-240`).
 5. **No interpretation text (#365).** Remove "Selection takes the LLM reply
    for JEV slots until a Jev child succeeds." (`:629`). Rewrite
@@ -148,9 +171,7 @@ succeeded, 2 otherwise):
    stdout unchanged through `wrap_jev_receipt.py`. Delete from it the
    per-part rule (`:63-67`, "When every part answers the same, that answer
    sets the findings...") and "selects the LLM reply for that deliverable"
-   (`:125-127`). The child never reads `choice`. `wrap_jev_receipt.py` copies
-   the client's `results` verbatim (today it copies `data.receipt` or
-   `data.parts`).
+   (`:125-127`). The child never reads `choice`. `wrap_jev_receipt.py` copies the ordered client JSONL result lines verbatim (today it copies `data.receipt` or `data.parts`).
 6. **Null PR body (#379).** Deliverable 3 deletes the client's request
    builder, which is where `external_evidence()` (`:447-468`) runs. If the
    dev finds `external_evidence()` still called after deliverable 3 (by
@@ -167,7 +188,7 @@ succeeded, 2 otherwise):
 ## Authoritative acceptance criteria (per issue, deterministic)
 
 gh-365
-- [ ] `test_every_error_kind_has_code_and_action`: iterates `JevErrorKind`; both match functions return non-empty text for every member; a member without a `case` hits `assert_never` and fails.
+- [ ] `test_every_error_kind_has_stable_tag_and_fields`: iterates `JevErrorKind`; every emitted error has its enum value in `error.kind` and only kind-specific machine fields; a member without a `case` hits `assert_never` and fails.
 - [ ] `test_busy_status_retried_and_counted`: fake connection returns 529, 529, 200; that entry is `success`, `retries == 2`; the injected `sleep` saw two calls.
 - [ ] `test_non_busy_failures_not_retried`: 413, 401 and a raised `OSError` each make exactly one request, with kinds `context_too_large`, `http_rejected`, `transport` and `retries == 0`.
 - [ ] `test_elapsed_measured_in_client`: injected clock gives `elapsed_s == 4.0` on a `busy_exhausted` entry, which has `retries == MAX_JEV_ATTEMPTS - 1`.
@@ -175,9 +196,9 @@ gh-365
 
 gh-497
 - [ ] `test_no_python_splitting`: `jev_client` has no attribute `split_request`, `diff_pieces`, `evaluate_parts`, `assignment_requests`; `--assignment` exits 2 as an unknown option.
-- [ ] `test_requests_sent_as_given`: three requests produce three fake HTTP bodies byte-equal to `json.dumps` of each input element, in order, and three `results`.
+- [ ] `test_requests_sent_as_given`: three requests produce three fake HTTP bodies byte-equal to `json.dumps` of each input element, in order, and exactly three JSONL result lines.
 - [ ] `test_over_budget_request_refused_not_cut`: an element of `MAX_REQUEST_BYTES + 1` bytes is never sent, its entry is `context_too_large` with `size` and `budget`, and the other elements are sent.
-- [ ] `test_results_carry_jev_json_verbatim`: each `results[i].data` equals the fake reply object.
+- [ ] `test_jsonl_results_carry_jev_json_verbatim`: parsing each emitted JSONL line yields a `data` value equal to that request's fake reply object; no output line is an aggregate envelope.
 
 gh-379
 - [ ] Either `test_pr_body_null_is_empty_text` (a fake `gh api` printing `{"body": null}` with exit 0 gives evidence text `""`), when `external_evidence()` survives; or `test_external_evidence_removed` (no module in `scripts/` defines or calls `external_evidence`), when it is deleted.

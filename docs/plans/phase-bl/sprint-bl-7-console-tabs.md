@@ -2,8 +2,7 @@
 
 closure_type `boundary`; target_boundary `BOUNDARY-ConsoleApp` (`app.py`:
 the tick, the Status, Sanity, Quality and Diagnostics tabs). Branch
-`sprint/bl-7-console-tabs`, PR → `sprint/bl-6-dashboard-render` (layer 7; cut
-from the bl-4 head after bl-1, rebased in order). Wave 2.
+`sprint/bl-7-console-tabs`, PR → `integrate/phase-bl`; merge the named bl-1 and bl-4 contract producers before each dev/fix round. Wave 2.
 Priority: the refresh adoption and the do-not-enter icon are P1 (TUI showing
 improper information; Jev); the Quality reviewer pane and colour are P3.
 `external_ref`: `gh-126,gh-347,gh-365,gh-360`.
@@ -19,6 +18,13 @@ recommended_agent `arch-ctm`; recommended_model `opus`.
 
 Paths under `apps/atm-bd-console/src/atm_bd_console/`; line numbers at
 v0.18.4 (86853d5).
+
+## Relations
+
+`must_follow` bl-1 for `refresh.refresh`, `Refreshed`, `runs.json`, and the
+console lock contract; `must_follow` bl-4 for the `metadata.reviewers`
+schema. `parallel_safe`: bl-2, bl-3, bl-5, bl-6, bl-8 (disjoint paths). bl-9
+is the integration consumer of this sprint's real console tab surface.
 
 ## Governing text (verbatim)
 

@@ -2,15 +2,14 @@
 
 closure_type `boundary`; target_boundary `BOUNDARY-SanityRecord` (the
 sanity-log row written by `sanity-run-history`, and the dev-sanity steps that
-produce it). Branch `sprint/bl-5-sanity-flow`, PR → `sprint/bl-4-qa-reviewer-data`
-(layer 5; cut from the bl-2 head, rebased in order). Wave 2. Priority P1.
+produce it). Branch `sprint/bl-5-sanity-flow`, PR → `sprint/bl-2-jev-client`
+(the named contract producer). Wave 2. Priority P1.
 `external_ref`: `gh-365,gh-497,gh-498,gh-126`.
 recommended_agent `arch-ctm`; recommended_model `opus`.
 
 **Hard dependency.** must_follow bl-2. It consumes from bl-2:
-`jev_client.py --requests <file>`, the printed result (`results[]` with
-`success`, `data`, `receipt`, `error.kind`, `retries`, `elapsed_s`), and
-`JevErrorKind`. It also edits `test_agent_prompts.py` after bl-2.
+`jev_client.py --requests <file>`, the ordered JSONL response lines (`success`, `data`, `receipt`, `error.kind`,
+`retries`, `elapsed_s` on each line), and `JevErrorKind`. It also edits `test_agent_prompts.py` after bl-2.
 
 Paths under `plugins/atm-bd-orchestration/` unless stated. Line numbers at
 v0.18.4 (86853d5).
@@ -29,6 +28,10 @@ Rand, 2026-10-21, on #497:
 
 > "then it is a poor design and will be removed. context packing LLM must split and send array of requests to jev."
 
+Rand, 2026-10-21, D5 ruling:
+
+> "if jev-api failed (i.e. jev did not respond), the parallel llm evaluator's response is used. If both llm+jev respond a failure on either is failure on iteration #1. for iteration > 1, sanity-agent to triage (which should be done w/ background agent if sanity-agent has queue backlog)."
+
 Rand, #498 target flow (issue body): "the sanity agent (1) passes the bead
 *content* to the Jev and LLM subagents in parallel (subagents never look up
 the bead), (2) reconciles their answers, (3) reports and closes, (4) hands off
@@ -40,15 +43,28 @@ into the sanity template's first step, so the sanity check does not depend on
 the lead having bootstrapped the worktree (observed failure: sanity lint exit
 127, missing `.bootstrap-venv`)."
 
+## Dev-sanity requirements and relations
+
+Requirements 51–56 supersede the historical #365/#497 text: the LLM owns
+splitting, `jev_client` returns JSONL one request at a time, and this consumer
+records those values mechanically. D5 is ruled and this sprint applies its mechanical selection rule: an absent
+Jev evaluation uses the parallel LLM evaluator response; if both respond, a
+failure from either fails iteration 1; later iterations send the sanity agent
+to triage (background when its queue is backlogged). The Jev JSONL error stays
+recorded and is never rewritten.
+
+**Relations.** `must_follow` bl-2 because it consumes the named JSONL line
+schema and `JevErrorKind` stable tags. `parallel_safe`: bl-6, bl-7, bl-8
+(disjoint paths; bl-7 later consumes this sprint's finished record schema).
+
 ## Scope boundary
 
 In: the dev-sanity side of #365 and #497 (the LLM writes the request array;
-the array and the client's JSON are copied unchanged into the sanity-log
+the array and the client's JSONL lines are copied unchanged into the sanity-log
 row), #498's remaining items, #126 item 4. Out: the client (bl-2), the
 console icon (bl-7). Which reply decides a deliverable when Jev returned no
 evaluation is decision D5; this sprint does not change selection beyond
-removing the agent's interpretation of Jev output, and implements D5 only
-once it is recorded. The rebase_required reopen is decision D3.
+removing the agent's interpretation of Jev output, and applies the ruled D5 selection mechanically in the merge. The rebase_required reopen is decision D3.
 
 No new plugin file (`manifest.yaml` untouched).
 
@@ -73,21 +89,28 @@ tests; bl-4 does not edit those two files (its tests go in
 
 ## Public contract
 
+`jev_client` output is JSONL, one response per LLM-authored request. The
+sanity flow stores the parsed ordered lines without adding an aggregate client
+envelope or interpreting any response. It may mechanically validate the
+closed `JevErrorKind` tag set and sum numeric retry/elapsed fields; it never
+uses a message string or a `choice` to direct behaviour.
+
 Sanity-log row (template `sanity-run-record.json.j2` 5.0.0) gains two
 required fields on a `sanity-jev` row, empty arrays on `sanity-llm`:
 
 ```json
 "jev_requests": [ <the request array the LLM wrote, verbatim> ],
-"jev_results":  { <jev_client.py stdout, verbatim: model, results[], retries, elapsed_s> }
+"jev_results":  [ <each parsed `jev_client.py` JSONL response, in order and unchanged> ]
 ```
 
-- `jev_elapsed_s` = `jev_results.elapsed_s`; `jev_retries` = `jev_results.retries`
-  (new field). Neither is computed by the agent.
-- `kind` = `"API_FAILURE"` iff some `jev_results.results[i].success` is false,
-  decided by an exhaustive `match` on `JevErrorKind` in `sanity-run-history`
-  (no string prefix test). The console (bl-7) shows the do-not-enter icon
-  for this `kind`, distinct from a Jev `no`.
-- `jev_receipts` is replaced by the receipts inside `jev_results`.
+- `jev_elapsed_s` is the sum of each response line's `elapsed_s`; `jev_retries`
+  is the sum of each line's `retries`. Neither is computed by an agent.
+- `kind` = `"API_FAILURE"` iff at least one response line has `success: false`.
+  `sanity-run-history` validates every `error.kind` against the closed
+  `JevErrorKind` set, with no string-prefix test. The console (bl-7) shows the
+  do-not-enter icon for this `kind`, distinct from a Jev `no`.
+- `jev_receipts` is replaced by the receipts inside the ordered `jev_results`
+  lines.
 
 ## Authoritative deliverables
 
@@ -99,7 +122,7 @@ required fields on a `sanity-jev` row, empty arrays on `sanity-llm`:
    instruction that relies on the client to build or split requests, or that
    tells the agent to trim context.
 2. **Verbatim record (#365).** `sanity-run-history` reads the request file and
-   the client stdout file by path (new options `--jev-requests <file>` and
+   the client JSONL stdout file by path (new options `--jev-requests <file>` and
    `--jev-results <file>`) and writes them into the row unchanged. The agent
    passes paths, never values. `kind`, `jev_elapsed_s` and `jev_retries` are
    derived there. Remove the `code.startswith("SANITY.JEV_")` matcher
@@ -107,8 +130,9 @@ required fields on a `sanity-jev` row, empty arrays on `sanity-llm`:
 3. **No agent interpretation (#365).** Remove "selection takes the LLM reply"
    from `sanity-merge` `screen_jev_results` (`:290-305`) and the matching text
    in `dev-sanity.md`; a Jev result with an error is passed through as
-   recorded and never rewritten by the agent. The D5 outcome is applied here
-   when recorded.
+   recorded and never rewritten by the agent. The merge applies D5 mechanically:
+   absent Jev evaluation uses the parallel LLM evaluator response; iteration 1
+   fails if both responded and either failed; later iterations go to triage.
 4. **NOT_READY is mechanical (#498 item 7).** `assignment-gates.py sanity`
    prints, on NOT_READY, the bead's open blockers and its status (what
    template step a now asks the agent to get with `bd show` and `bd blocked`,
@@ -130,14 +154,24 @@ required fields on a `sanity-jev` row, empty arrays on `sanity-llm`:
    bootstrap (the repo's `just bootstrap`, or the command in
    `close_context.bootstrap_command` when set) before `assignment-gates.py`,
    and fails the task as CANNOT_RUN with the command's stderr when it fails.
+9. **Dev-sanity role and speed.** In concise text, `agents/dev-sanity.md`
+   says dev-sanity verifies that each listed deliverable is written and does
+   not perform QA; expected work is 2–4 minutes. It may run up to three ATM
+   tasks in parallel: start one active task, claim the other two, and work all
+   three. The one-ACTIVE-task ATM rule does not limit parallel work. Remove
+   longer or conflicting prose so the prompt is shorter after this edit.
 
 ## Authoritative acceptance criteria (per issue, deterministic)
 
 gh-365
-- [ ] `test_row_copies_jev_json_verbatim`: given a request file and a client stdout file, the appended row's `jev_requests` and `jev_results` are `==` to the files' JSON.
-- [ ] `test_kind_from_error_enum_exhaustive`: one fixture per `JevErrorKind` member gives `kind == "API_FAILURE"`; all-success gives `"verdict"`; a member missing from the match fails the test.
-- [ ] `test_retries_and_elapsed_from_client`: row `jev_retries == 2`, `jev_elapsed_s == 4.0` from a client file carrying those values.
+- [ ] `test_row_copies_jev_jsonl_verbatim`: given a request file and a client JSONL stdout file, the appended row's `jev_requests` and ordered `jev_results` equal the parsed source values, with no aggregate envelope.
+- [ ] `test_kind_from_closed_error_tags`: one fixture per `JevErrorKind` stable tag gives `kind == "API_FAILURE"`; all-success gives `"verdict"`; an unknown tag is refused.
+- [ ] `test_retries_and_elapsed_from_client`: two JSONL lines with retries 1/1 and elapsed 1.5/2.5 yield row `jev_retries == 2`, `jev_elapsed_s == 4.0`.
 - [ ] `test_no_llm_selection_text`: `sanity-merge` and `dev-sanity.md` contain neither "selection takes the LLM reply" nor "selects the LLM reply".
+- [ ] `test_d5_mechanical_fallback`: an absent Jev evaluation with a parallel
+  LLM response selects that LLM response; an iteration-1 pair where either
+  response fails returns failure; an iteration greater than 1 emits the
+  triage route. The Jev JSONL error remains byte-for-byte in the row.
 
 gh-497
 - [ ] `test_template_step_b_has_request_array`: the rendered step b names the request-array file and `jev_client.py --requests`; it contains no "trim" / "narrow context" instruction.
@@ -152,6 +186,10 @@ gh-498
 gh-126 (item 4)
 - [ ] `test_step_a_bootstraps_first`: rendered step a runs the bootstrap command before `assignment-gates.py`.
 - [ ] `test_bootstrap_failure_is_cannot_run`: the template text routes a failed bootstrap to CANNOT_RUN with stderr.
+- [ ] `test_dev_sanity_role_and_parallel_capacity`: `agents/dev-sanity.md`
+  contains the concise deliverable-only, 2–4-minute, and three-task-parallel
+  rules, contains no instruction to perform QA, and is shorter than its
+  v0.18.4 prompt fixture.
 
 The #498 acceptance timing (PASS closes within lint + review + ~30 s) is not
 a test here: it is measured from `atm task events` on the first real phase
