@@ -1794,6 +1794,14 @@ pub(crate) mod tests {
         )
     }
 
+    fn fixture_dirs(root: &TempDir) -> (PathBuf, PathBuf) {
+        let home_dir = root.path().join("home");
+        let current_dir = root.path().join("workspace");
+        fs::create_dir_all(&home_dir).expect("create fixture home");
+        fs::create_dir_all(&current_dir).expect("create fixture workspace");
+        (home_dir, current_dir)
+    }
+
     fn fixture_with_selector_and_template_and_pending<F>(
         with_recipient: bool,
         hook_failure: Option<AtmError>,
@@ -1835,10 +1843,7 @@ pub(crate) mod tests {
             failure: hook_failure,
             cancelled_on_drop,
         });
-        let home_dir = temporary_root.path().join("home");
-        let current_dir = temporary_root.path().join("workspace");
-        fs::create_dir_all(&home_dir).expect("create fixture home");
-        fs::create_dir_all(&current_dir).expect("create fixture workspace");
+        let (home_dir, current_dir) = fixture_dirs(&temporary_root);
         let health = RuntimeHealth::with_owner(99);
         let service_runtime = match template_composer {
             Some(composer) => assembly.service_runtime.with_template_composer(composer),

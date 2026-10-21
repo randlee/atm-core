@@ -2,6 +2,8 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
 use std::num::NonZeroU16;
+#[cfg(unix)]
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -51,12 +53,16 @@ fn claim_error(dir: &Path, error: impl std::fmt::Display) -> AtmError {
 
 fn prepare_claims_dir(dir: &Path) -> Result<(), AtmError> {
     fs::create_dir_all(dir).map_err(|error| claim_error(dir, error))?;
+    let metadata = fs::symlink_metadata(dir).map_err(|error| claim_error(dir, error))?;
+    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+        return Err(claim_error(
+            dir,
+            "expected a directory, not a symlink or file",
+        ));
+    }
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let permissions = fs::metadata(dir)
-            .map_err(|error| claim_error(dir, error))?
-            .permissions();
+        let permissions = metadata.permissions();
         if permissions.mode() & 0o7777 != 0o1777 {
             fs::set_permissions(dir, fs::Permissions::from_mode(0o1777))
                 .map_err(|error| claim_error(dir, error))?;
@@ -68,7 +74,6 @@ fn prepare_claims_dir(dir: &Path) -> Result<(), AtmError> {
 fn write_claim(file: &mut fs::File) -> Result<(), AtmError> {
     #[cfg(unix)]
     let uid = {
-        use std::os::unix::fs::MetadataExt;
         Some(
             file.metadata()
                 .map_err(|error| {
@@ -196,9 +201,9 @@ pub fn parse_peer_wire_mode(
     Ok(mode.unwrap_or_default())
 }
 
-/// Resolve the account's durable peer-listener port. Every enabled interface
-/// must advertise the same port because the direct listener binds all IPv4
-/// addresses on this account's one selected port.
+/// Resolve the account's durable peer-listener port, claiming and persisting a
+/// free system port on first launch. Every enabled interface must advertise
+/// the same port because the direct listener binds all IPv4 addresses on it.
 pub fn configured_direct_peer_port(
     store: &(dyn PeerConfigStore + Send + Sync),
     arguments: impl IntoIterator<Item = std::ffi::OsString>,
@@ -219,12 +224,9 @@ fn configured_direct_peer_port_with(
             ));
         }
     }
+    let interfaces = store.list_interfaces()?;
     let mut selected = None;
-    for interface in store
-        .list_interfaces()?
-        .into_iter()
-        .filter(|item| item.enabled)
-    {
+    for interface in interfaces.iter().filter(|item| item.enabled) {
         let port = NonZeroU16::new(interface.bind_addr.port()).ok_or_else(|| {
             AtmError::peer_config_validation("enabled peer interface requires a non-zero bind port")
         })?;
@@ -239,6 +241,15 @@ fn configured_direct_peer_port_with(
     if let Some(port) = selected {
         let _ = claim_file(claims_dir, port)?;
         return Ok(port);
+    }
+    if let Some(interface) = interfaces.first() {
+        let port = NonZeroU16::new(interface.bind_addr.port()).ok_or_else(|| {
+            AtmError::peer_config_validation("peer interface requires a non-zero bind port")
+        })?;
+        let _ = claim_file(claims_dir, port)?;
+        return Err(AtmError::peer_config_validation(
+            "peer interfaces exist but none is enabled; enable an existing interface before daemon launch",
+        ));
     }
     for raw_port in FIRST_PEER_PORT..=LAST_PEER_PORT {
         let port = NonZeroU16::new(raw_port).expect("claim range excludes zero");
@@ -374,6 +385,33 @@ mod direct_peer_port_tests {
     }
 
     #[test]
+    fn disabled_existing_interface_does_not_allocate_a_new_port() {
+        let root = tempfile::tempdir().expect("test root");
+        let claims = root.path().join("claims");
+        let account = open_sqlite_boundary(root.path().join("account.sqlite")).expect("account");
+        account
+            .peer_config_store()
+            .save_interface(&HttpsInterface {
+                bind_addr: "127.0.0.1:43201".parse().expect("bind address"),
+                advertise_host: "peer.example.test".parse().expect("host"),
+                enabled: false,
+            })
+            .expect("save disabled interface");
+        let error = configured_direct_peer_port_with(
+            account.peer_config_store().as_ref(),
+            args(),
+            &claims,
+            |_| true,
+        )
+        .expect_err("disabled interface must stay disabled");
+        assert_eq!(
+            error.code(),
+            atm_core::error::AtmErrorCode::PeerConfigValidationFailed
+        );
+        assert!(claims.join("43201").exists());
+    }
+
+    #[test]
     fn exclusive_claim_file_race_and_bound_port_skip_are_deterministic() {
         let root = tempfile::tempdir().expect("test root");
         let claims = root.path().join("claims");
@@ -438,6 +476,31 @@ mod direct_peer_port_tests {
         );
         assert!(error.message().contains(&claims.display().to_string()));
         assert!(error.message().contains("mode 1777"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_claims_directory_is_rejected() {
+        let root = tempfile::tempdir().expect("test root");
+        let real_dir = root.path().join("real");
+        std::fs::create_dir(&real_dir).expect("real directory");
+        let claims = root.path().join("claims");
+        std::os::unix::fs::symlink(&real_dir, &claims).expect("claims symlink");
+        let account = open_sqlite_boundary(root.path().join("account.sqlite")).expect("account");
+        let error = configured_direct_peer_port_with(
+            account.peer_config_store().as_ref(),
+            args(),
+            &claims,
+            |_| true,
+        )
+        .expect_err("symlinked claims directory");
+        assert!(error.message().contains("symlink"));
+        assert!(
+            std::fs::read_dir(real_dir)
+                .expect("real directory entries")
+                .next()
+                .is_none()
+        );
     }
 }
 

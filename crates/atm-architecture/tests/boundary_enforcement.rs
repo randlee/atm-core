@@ -271,9 +271,10 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
     );
     assert!(
         launch_config.contains(".list_interfaces()?")
-            && launch_config.contains("no enabled peer interface configured")
+            && launch_config.contains(".create_new(true)")
+            && launch_config.contains("store.save_interface(&interface)")
             && launch_config.contains("--direct-peer-port is unsupported"),
-        "direct-peer launch configuration must require the persisted account interface port"
+        "direct-peer launch configuration must claim and persist the account interface port"
     );
     let plaintext_adapter_arm = bootstrap
         .split("fn peer_stream_adapter_for_mode")

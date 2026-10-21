@@ -107,10 +107,11 @@ pub use bare_cli_fifo::{
 };
 #[cfg(unix)]
 pub use client::unix_socket_client;
+#[cfg(test)]
+pub use client::{DIRECT_PEER_TCP_PORT, direct_peer_port};
 pub use client::{
-    DIRECT_PEER_TCP_PORT, SAME_HOST_REQUEST_DEADLINE, diagnostics_query, direct_peer_port,
-    direct_peer_tcp_client, loopback_tcp_client, preferred_local_client, selected_write_transport,
-    shared_direct_peer_client,
+    SAME_HOST_REQUEST_DEADLINE, diagnostics_query, direct_peer_tcp_client, loopback_tcp_client,
+    preferred_local_client, selected_write_transport, shared_direct_peer_client,
 };
 pub use diagnostics_route::{DEFAULT_DIAGNOSTICS_LIMIT, MAX_DIAGNOSTICS_LIMIT};
 pub use herdr_queue_wake::{
