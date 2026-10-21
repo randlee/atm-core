@@ -62,6 +62,11 @@ BD_WINDOW_S = 60; ATM_WINDOW_S = 60; GITHUB_WINDOW_S = 600
 
 Run frozen ruff, pyright, and pytest with fixtures and controlled values only. No sleep, timing, race, or live-service test is permitted.
 
+## Validation
+```bash
+cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --frozen pyright src && uv run --frozen pytest -q
+```
+
 ## This sprint does not close
 
 bl-8 implements locks/timers/force and snapshot construction; bl-10 implements pure problem derivation; bl-3 owns durable queue/delivery; bl-12 owns the integrated pipeline.

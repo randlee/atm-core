@@ -26,6 +26,11 @@ Own only `plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_b
 
 Use fixture JSON and pure functions only; run plugin pytest/lint with no network, clock, or source reads.
 
+## Validation
+```bash
+cd plugins/atm-bd-orchestration && python3 -m pytest -q -rs
+```
+
 ## This sprint does not close
 
 It does not collect source data (bl-8), queue or deliver events (bl-3), or render rows. bl-12 owns integrated source-to-display proof.
