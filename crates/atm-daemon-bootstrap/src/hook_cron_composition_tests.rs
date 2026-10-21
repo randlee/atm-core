@@ -60,14 +60,9 @@ struct World {
 impl World {
     fn new() -> Self {
         let root = tempfile::tempdir().unwrap();
-        let mut assembly = open_isolated_sqlite_boundary(root.path())
+        let assembly = open_isolated_sqlite_boundary(root.path())
             .unwrap()
             .for_daemon();
-        // Default cases have no hook rows; keep their startup load independent
-        // of SQLite worker scheduling. Reopen tests below use the durable store.
-        assembly.service_runtime = assembly
-            .service_runtime
-            .with_hook_registration_store(Arc::new(InMemoryHookRegistrationStore::default()));
         Self::assemble(root, assembly).unwrap()
     }
 

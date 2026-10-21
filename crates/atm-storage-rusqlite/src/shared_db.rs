@@ -197,6 +197,21 @@ impl SharedDb {
         self.read_with_deadline(self.read_pool.request_deadline(), operation)
     }
 
+    /// Runs the daemon-startup snapshot read on a dedicated read-only
+    /// connection rather than queueing behind live reader-pool work.
+    ///
+    /// Startup happens before the daemon admits requests, so this preserves
+    /// the bounded shared pool for request traffic while making the snapshot
+    /// independent of reader-worker scheduling.
+    pub(crate) fn read_startup<T>(
+        &self,
+        operation: impl FnOnce(&Connection) -> Result<T, AtmError>,
+    ) -> Result<T, AtmError> {
+        let connection =
+            crate::shared_db_reader_lanes::open_read_connection_for_target(self.target.as_ref())?;
+        operation(&connection)
+    }
+
     /// Runs one pure synchronous read with the caller's bounded deadline.
     pub(crate) fn read_with_deadline<T>(
         &self,
