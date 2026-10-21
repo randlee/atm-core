@@ -2,8 +2,11 @@
 {"sprint": "bl-2"}
 {"sprint": "bl-3"}
 {"sprint": "bl-4"}
+{"sprint": "bl-8"}
+{"sprint": "bl-10"}
+{"sprint": "bl-11"}
 {"sprint": "bl-5", "depends_on": ["bl-2"]}
-{"sprint": "bl-6", "depends_on": ["bl-1", "bl-3"]}
+{"sprint": "bl-6", "depends_on": ["bl-1"]}
 {"sprint": "bl-7", "depends_on": ["bl-1", "bl-4"]}
-{"sprint": "bl-8", "depends_on": ["bl-1"]}
 {"sprint": "bl-9", "depends_on": ["bl-6", "bl-7"]}
+{"sprint": "bl-12", "depends_on": ["bl-4", "bl-5", "bl-7"]}
