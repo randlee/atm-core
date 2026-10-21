@@ -215,26 +215,15 @@ jobs:
           toolchain: "1.94.1"
           components: clippy, rustfmt
 
-      - name: Cache cargo registry
+      # Only develop/main save; PRs restore the default branch (develop) cache.
+      # Per-PR saves filled the 10 GB repo limit with identical 3 GB targets.
+      - name: Cache cargo
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: ~/.cargo/registry
-          key: ubuntu-clippy-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ubuntu-clippy-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ubuntu-clippy-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          shared-key: clippy
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main' }}
 
       - name: Run clippy
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
@@ -295,26 +284,15 @@ jobs:
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
 
-      - name: Cache cargo registry
+      # Only develop/main save; PRs restore the default branch (develop) cache.
+      # Per-PR saves filled the 10 GB repo limit with identical 3 GB targets.
+      - name: Cache cargo
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          shared-key: test
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main' }}
 
       - name: Cache bootstrap outputs
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
