@@ -24,6 +24,7 @@ use atm_core::error::AtmError;
 use atm_core::hook::{HookReply, HookRequest, StopReply};
 use atm_core::types::TeamName;
 use tokio::sync::Semaphore;
+use tracing::Instrument;
 
 use crate::process_deadline::{SpawnFailure, SpawnSpec, SpawnedOutput, spawn_with_deadline};
 
@@ -245,6 +246,7 @@ impl DaemonHookRunner {
         let spec = self.spec(target, hook).await?;
         let remaining = remaining_spawn_budget(&target.phase, budget, started.elapsed())?;
         let output = spawn_with_deadline(spec, &stdin, remaining)
+            .instrument(hook_spawn_span(target, hook, budget))
             .await
             .map_err(|failure| {
                 let error = spawn_failure_error(&target.phase, target.timeout_ms, budget, failure);
@@ -271,6 +273,16 @@ impl DaemonHookRunner {
         );
         Ok(output)
     }
+}
+
+fn hook_spawn_span(target: &HookTarget, hook: &str, budget: Duration) -> tracing::Span {
+    tracing::info_span!(
+        "atm_hook.spawn",
+        team = %target.team,
+        phase = %target.phase,
+        hook,
+        budget_ms = budget.as_millis() as u64,
+    )
 }
 
 fn spawn_failure_error(
@@ -389,6 +401,7 @@ mod tests {
     use std::cell::Cell;
     use std::collections::BTreeMap;
     use std::fs;
+    use std::sync::Mutex;
 
     use atm_core::atm_temp::ProcessEnvSource;
     use atm_core::boundary::{CronSchedule, HookName, HookRegistration};
@@ -396,8 +409,67 @@ mod tests {
     use atm_core::hook::{HOOK_SCHEMA_VERSION, HookCaller};
     use serde_json::{Value, json};
     use tempfile::TempDir;
+    use tracing::field::{Field, Visit};
+    use tracing::span::{Attributes, Id};
+    use tracing::{Event, Subscriber};
+    use tracing_subscriber::Layer;
+    use tracing_subscriber::layer::{Context, SubscriberExt};
+    use tracing_subscriber::registry::LookupSpan;
 
     use super::*;
+
+    #[derive(Clone, Default)]
+    struct CapturedFields(BTreeMap<String, String>);
+
+    impl Visit for CapturedFields {
+        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+            self.0.insert(field.name().into(), format!("{value:?}"));
+        }
+
+        fn record_str(&mut self, field: &Field, value: &str) {
+            self.0.insert(field.name().into(), value.into());
+        }
+
+        fn record_u64(&mut self, field: &Field, value: u64) {
+            self.0.insert(field.name().into(), value.to_string());
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct KillEventCapture(Arc<Mutex<Vec<CapturedFields>>>);
+
+    impl<S> Layer<S> for KillEventCapture
+    where
+        S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+    {
+        fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
+            let mut fields = CapturedFields::default();
+            attrs.record(&mut fields);
+            ctx.span(id)
+                .expect("new span is registered")
+                .extensions_mut()
+                .insert(fields);
+        }
+
+        fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
+            let mut fields = CapturedFields::default();
+            if let Some(scope) = ctx.event_scope(event) {
+                for span in scope.from_root() {
+                    if let Some(span_fields) = span.extensions().get::<CapturedFields>() {
+                        fields.0.extend(span_fields.0.clone());
+                    }
+                }
+            }
+            event.record(&mut fields);
+            if fields
+                .0
+                .get("outcome")
+                .is_some_and(|value| value == "killed")
+            {
+                self.0.lock().expect("capture lock").push(fields);
+            }
+        }
+    }
 
     struct TestEnv(BTreeMap<String, String>);
 
@@ -1039,6 +1111,30 @@ mod tests {
         let error = fixture.run().await.unwrap_err();
         assert_eq!(error.code(), AtmErrorCode::HookMalformed);
         assert!(error.message().contains("stdout exceeds"));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn spawn_until_kill_event_inherits_hook_fields() {
+        let capture = KillEventCapture::default();
+        let subscriber = tracing_subscriber::registry().with(capture.clone());
+        let _subscriber = tracing::subscriber::set_default(subscriber);
+        let fixture = Fixture::new();
+        fixture.script("import sys,threading\nsys.stdout.write('x' * ((1 << 20) + 1))\nsys.stdout.flush()\nthreading.Event().wait()\n");
+
+        let error = fixture
+            .run()
+            .await
+            .expect_err("oversized output kills the hook");
+        assert_eq!(error.code(), AtmErrorCode::HookMalformed);
+        let events = capture.0.lock().expect("capture lock");
+        assert_eq!(events.len(), 1, "exactly one spawn_until kill event");
+        let fields = &events[0].0;
+        assert_eq!(fields.get("team").map(String::as_str), Some("test-team"));
+        assert_eq!(fields.get("phase").map(String::as_str), Some("bk"));
+        assert_eq!(fields.get("hook").map(String::as_str), Some("task.close"));
+        assert_eq!(fields.get("budget_ms").map(String::as_str), Some("30000"));
+        assert_eq!(fields.get("outcome").map(String::as_str), Some("killed"));
+        assert!(fields.get("elapsed_ms").unwrap().parse::<u64>().is_ok());
     }
 
     #[tokio::test]
