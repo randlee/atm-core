@@ -21,19 +21,32 @@ bl-1 records and bl-4 reviewers, not a shared scheduler or delivery seam.
    GitHub, and every tab renders persisted aggregate state without sending ATM.
 2. Status header prints full typed error text and age; Quality has a labelled
    never-loaded row.
-3. Quality has two panes: newest runs above; reviewer rows below with status,
-   elapsed, API_FAILURE icon, reviewer filtering, contributing reviewers and
-   filing reviewer marked; absent metadata says `reviewers: not recorded`.
-4. `API_FAILURE` uses a verified Nerd Font do-not-enter codepoint distinct
-   from a Jev negative verdict, with typed error detail.
-5. Diagnostics preserves Rich `Text` colour.
+3. Quality matches the Sanity tab's table discipline: one aligned line per
+   run, no vertical-bar separators, with columns time, sprint, result icon,
+   elapsed, dev name and icon, then one status-icon-and-elapsed column for
+   every reviewer. Beneath it, whitespace separates the selected run detail:
+   selectable reviewers are left and findings Markdown is right. Selecting a
+   reviewer filters to that reviewer's findings. A shared finding renders once
+   with every contributor and its filing reviewer marked. The never-loaded
+   row is exactly `Open QA runs: not loaded yet`; absent metadata says exactly
+   `reviewers: not recorded`.
+4. `API_FAILURE` uses a red circle with a diagonal line, candidate
+   `nf-fa-ban` U+F05E, verified against the Nerd Fonts list and cited in the
+   PR. A Jev answer keeps its existing red/green Jev icon. The selected-row
+   detail includes the typed error and retry count.
+5. `r` requests every collector past its due check while respecting each
+   collector lock. A successful collector restarts only its own poll timer; a
+   failed collector remains due. If a run already owns a collector lock, `r`
+   waits for that result and makes no duplicate query. Activating the PR tab
+   requests GitHub only.
+6. Diagnostics preserves Rich `Text` colour.
 
 ## Deterministic acceptance and validation
 
-Keep old test names for unchanged Quality split/filter/contributor, missing
-reviewer, status, icon and Diagnostics behaviour. Add injected collector
-requests/persisted-state tests. Run frozen ruff, pyright and pytest; no
-sleeps, threads, or message delivery.
+Keep old test coverage where behaviour is unchanged, but rename the replaced
+Quality-layout tests for the table contract below. Inject collector and
+persisted-state records with controlled fakes; no sleeps, threads, delivery,
+or timing-based tests. Run frozen ruff, pyright and pytest.
 
 ## Governing text (verbatim)
 
@@ -41,10 +54,10 @@ sleeps, threads, or message delivery.
 
 > "if you don't have valid data, don't force an error."
 
-The top pane is about 60%; lower left is reviewer rows and lower right is
-findings Markdown, including all contributors and filing reviewer marked. The
-candidate do-not-enter glyph is `nf-md-minus_circle` U+F0376; verify it
-against the Nerd Fonts list and cite the verification in the PR.
+The Quality selected-run detail preserves reviewer selection, findings
+Markdown, all contributors, and the filing reviewer marker; its table is now
+the Sanity-parity layout above. Verify `nf-fa-ban` U+F05E against the Nerd
+Fonts list and cite that verification in the PR.
 
 ### Acceptance checklist
 
@@ -52,13 +65,20 @@ against the Nerd Fonts list and cite the verification in the PR.
 - [ ] `test_second_console_exits`: console lock rejects another instance.
 - [ ] `test_console_never_sends_atm_message`: TUI performs no delivery.
 - [ ] `test_status_header_full_typed_text`: status renders typed detail.
-- [ ] `test_quality_never_loaded_placeholder`: Quality has labelled empty state.
-- [ ] `test_quality_split_panes`: rows show reviewer status and elapsed time.
+- [ ] `test_quality_never_loaded_placeholder`: Quality renders `Open QA runs: not loaded yet`.
+- [ ] `test_quality_table_columns_match_sanity`: Quality uses the ordered aligned Sanity-parity columns.
+- [ ] `test_quality_no_vertical_bars`: Quality table output has no vertical-bar separators.
 - [ ] `test_reviewer_selection_filters_findings`: selection filters findings.
 - [ ] `test_finding_lists_contributing_reviewers_filing_marked`: contributors/filer render.
 - [ ] `test_missing_reviewers_metadata_placeholder`: absent metadata is labelled.
-- [ ] `test_jev_api_failure_glyph_is_do_not_enter`: API failure differs from verdicts.
+- [ ] `test_jev_api_failure_uses_nf_fa_ban_u_f05e`: API failure is the red ban glyph and differs from Jev verdicts.
+- [ ] `test_jev_detail_shows_typed_error_and_retry_count`: selected-row detail preserves the typed error and retry count.
 - [ ] `test_sanity_row_api_failure_vs_no`: API failure differs from Jev no.
+- [ ] `test_refresh_key_forces_every_collector_past_due_gate`: `r` bypasses due checks for every collector.
+- [ ] `test_refresh_success_restarts_only_its_poll_timer`: success resets only that collector's timer.
+- [ ] `test_refresh_failure_stays_due`: a failed forced refresh remains due.
+- [ ] `test_refresh_lock_waits_for_existing_result_without_second_query`: an occupied lock is awaited without a duplicate request.
+- [ ] `test_pr_tab_activation_requests_github_only`: PR activation does not request other collectors.
 - [ ] `test_diagnostics_agent_icons_coloured`: Diagnostics icons retain colour.
 
 ## Non-closure
