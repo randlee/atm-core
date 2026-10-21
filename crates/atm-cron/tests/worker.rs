@@ -1,8 +1,10 @@
 use std::{
     collections::BTreeSet,
     fs,
+    future::Future,
     path::{Path, PathBuf},
     sync::{Arc, atomic::Ordering},
+    task::{Context, Poll, Waker},
     time::Duration,
 };
 
@@ -1201,6 +1203,52 @@ async fn shutdown_deadline_aborts_the_held_run_before_returning() {
             .iter()
             .any(|entry| entry.contains("action=\"shutdown_deadline\""))
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn shutdown_waits_for_cleanup_after_worker_stops() {
+    struct Dropped {
+        entered: std::sync::mpsc::Sender<()>,
+        running: watch::Sender<usize>,
+        release: std::sync::mpsc::Receiver<()>,
+    }
+    impl Drop for Dropped {
+        fn drop(&mut self) {
+            self.entered.send(()).expect("cleanup entry was observed");
+            self.release.recv().expect("cleanup release was sent");
+            self.running.send_replace(0);
+        }
+    }
+
+    // The worker has stopped, but a cancelled run is still cleaning up.
+    // Polling shutdown directly makes its settled-wait decision observable
+    // without relying on when Tokio schedules a spawned shutdown task.
+    let (running, settled) = watch::channel(1);
+    let finished = settled.clone();
+    let worker = CronWorkerHandle::with_settled_for_test(settled);
+    let (cleanup_entered, cleanup_started) = std::sync::mpsc::channel();
+    let (release, parked) = std::sync::mpsc::channel();
+    let cleanup = std::thread::spawn(move || {
+        drop(Dropped {
+            entered: cleanup_entered,
+            running,
+            release: parked,
+        });
+    });
+    cleanup_started.recv().expect("cleanup entered");
+
+    let mut shutdown = Box::pin(worker.shutdown(tokio::time::Instant::now() + TEST_WAIT_TIMEOUT));
+    let waker = Waker::noop();
+    let mut context = Context::from_waker(waker);
+    let pending_while_held = matches!(shutdown.as_mut().poll(&mut context), Poll::Pending);
+    release.send(()).unwrap();
+    cleanup.join().unwrap();
+    assert!(
+        pending_while_held,
+        "shutdown returned before cleanup finished"
+    );
+    shutdown.await;
+    assert_eq!(*finished.borrow(), 0);
 }
 
 fn actions() -> Vec<atm_core::hook::HookAction> {
