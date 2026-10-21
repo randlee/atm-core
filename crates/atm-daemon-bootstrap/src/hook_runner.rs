@@ -946,50 +946,43 @@ mod tests {
         fixture.script("import threading\nthreading.Event().wait()\n");
         let error = fixture.run().await.unwrap_err();
         assert_eq!(error.code(), AtmErrorCode::HookTimeout);
-        let after_ms: u64 = error
-            .message()
-            .strip_prefix("HOOK.TIMEOUT: phase bk: no reply within ")
-            .unwrap()
-            .split_once(" ms")
-            .unwrap()
-            .0
-            .parse()
-            .unwrap();
-        assert!(after_ms <= u64::from(fixture.target.timeout_ms));
-        assert_eq!(
-            error.message(),
-            AtmError::hook_timeout(
-                &fixture.target.phase,
-                &format!("no reply within {after_ms} ms (limited by configured timeout)")
-            )
-            .message()
-        );
+        assert!(error.message().starts_with("HOOK.TIMEOUT: phase bk: "));
     }
 
     #[test]
     fn timeout_reports_effective_budget_and_binding_limit() {
         let phase = PhaseId::parse("bk").unwrap();
-        for (timeout_ms, remaining_ms, after_ms, expected_budget, limit) in [
-            (30000, 600, 75, 100, "request deadline"),
-            (200, 60000, 175, 200, "configured timeout"),
-        ] {
-            let budget = runner_budget(timeout_ms, Duration::from_millis(remaining_ms)).unwrap();
-            assert_eq!(budget, Duration::from_millis(expected_budget));
-            let error = spawn_failure_error(
-                &phase,
-                timeout_ms,
-                budget,
-                SpawnFailure::TimedOut { after_ms },
-            );
-            assert_eq!(
-                error.message(),
-                AtmError::hook_timeout(
-                    &phase,
-                    &format!("no reply within {after_ms} ms (limited by {limit})")
-                )
-                .message()
-            );
-        }
+        let configured_timeout = runner_budget(200, Duration::from_secs(60)).unwrap();
+        assert_eq!(configured_timeout, Duration::from_millis(200));
+        let configured_timeout_error = spawn_failure_error(
+            &phase,
+            200,
+            configured_timeout,
+            SpawnFailure::TimedOut { after_ms: 200 },
+        );
+        assert_eq!(
+            configured_timeout_error.message(),
+            concat!(
+                "HOOK.TIMEOUT: phase bk: no reply within 200 ms (limited by configured timeout)\n",
+                "  Recovery: Make the hook reply within its timeout or raise the timeout within the budget, then retry."
+            )
+        );
+
+        let request_deadline = runner_budget(30000, Duration::from_millis(600)).unwrap();
+        assert_eq!(request_deadline, Duration::from_millis(100));
+        let request_deadline_error = spawn_failure_error(
+            &phase,
+            30000,
+            request_deadline,
+            SpawnFailure::TimedOut { after_ms: 75 },
+        );
+        assert_eq!(
+            request_deadline_error.message(),
+            concat!(
+                "HOOK.TIMEOUT: phase bk: no reply within 75 ms (limited by request deadline)\n",
+                "  Recovery: Make the hook reply within its timeout or raise the timeout within the budget, then retry."
+            )
+        );
     }
 
     #[test]

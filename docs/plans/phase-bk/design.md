@@ -634,7 +634,7 @@ is appended. The CLI exit arms are bk-5's
 | Constructor | Message |
 | --- | --- |
 | `hook_exit(cause: HookExitCause)` | `Exit { code, stderr_tail }`: `HOOK.EXIT: exit <code>: <tail>`; `Signal(n)`: `HOOK.EXIT: terminated by signal <n>`; `Spawn { path, cause }`: `HOOK.EXIT: cannot run <path>: <cause>`; `Panic(payload)`: `HOOK.EXIT: hook runner panicked: <payload>`; `Missing(what)`: `HOOK.EXIT: <what>` (e.g. `python3 not found on PATH`) |
-| `hook_timeout(phase: &PhaseId, detail: &str)` | `HOOK.TIMEOUT: phase <p>: <detail>`; detail is `no reply within <n> ms`, `request budget exhausted before the hook ran`, `budget exhausted before spawn` or `doctor budget exhausted` |
+| `hook_timeout(phase: &PhaseId, detail: &str)` | `HOOK.TIMEOUT: phase <p>: <detail>`; detail is `no reply within <n> ms (limited by configured timeout|request deadline)`, `request budget exhausted before the hook ran`, `budget exhausted before spawn` or `doctor budget exhausted` |
 | `hook_malformed(detail: &str)` | `HOOK.MALFORMED: <detail>` |
 | `hook_module_invalid(detail: &str)` | `HOOK.MODULE_INVALID: <detail>` |
 | `hook_refused(message: &str)` | `<message>` |
@@ -787,6 +787,12 @@ Constants in `atm_storage::request_budget` (bk-1): `HOOK_TIMEOUT_MAX_MS =
   `doctor` uses `doctor_budget`: `min(timeout_ms,
   remaining)` with no reserve, `None` giving `ATM_HOOK_TIMEOUT` "doctor
   budget exhausted" without spawning.
+- A timed-out child reports the remaining child budget that was actually
+  enforced: `no reply within <n> ms (limited by configured timeout)` when
+  `timeout_ms` binds, or `no reply within <n> ms (limited by request
+  deadline)` when the request deadline binds. This message contract records
+  the enforced-budget behavior from finding `atm-bk-3.group-qa-f2`,
+  introduced by commit `071991330`.
 - `RequestDeadline` (bk-2) derives `PartialEq, Eq` and gains
   `remaining_ms()` (0 when expired) and `minus(Duration)`. Tests compare a
   recorded deadline by equality to the one passed, or bound it, never
