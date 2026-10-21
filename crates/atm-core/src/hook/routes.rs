@@ -7,9 +7,8 @@ use crate::boundary::{PhaseId, StopCondition};
 use crate::error::AtmError;
 use crate::types::{AgentName, TeamName};
 
-use super::{
-    CRON_ARGS_MAX, CRON_ARGS_MAX_BYTES, CRON_NAME_MAX_BYTES, HOOK_PATH_MAX_BYTES, custom_object,
-};
+use super::request::{CRON_ARGS_MAX_BYTES, custom_object};
+use super::{CRON_ARGS_MAX, CRON_NAME_MAX_BYTES, HOOK_PATH_MAX_BYTES};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HookRegisterRequest {

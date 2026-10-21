@@ -14,7 +14,7 @@ use crate::search::SearchRequest;
 use crate::send::WriteRequest;
 use crate::types::{AgentName, TeamName};
 
-pub const HOOK_ACTIONS_MAX: usize = 32;
+pub(crate) const HOOK_ACTIONS_MAX: usize = 32;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum HookReply {

@@ -12,7 +12,7 @@ pub const HOOK_CUSTOM_MAX_BYTES: usize = 65_536;
 pub const HOOK_PATH_MAX_BYTES: usize = 4096;
 pub const CRON_NAME_MAX_BYTES: usize = 64;
 pub const CRON_ARGS_MAX: usize = 32;
-pub const CRON_ARGS_MAX_BYTES: usize = 4096;
+pub(crate) const CRON_ARGS_MAX_BYTES: usize = 4096;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HookCaller {
@@ -33,7 +33,7 @@ pub struct HookRequest {
     pub custom: Map<String, Value>,
 }
 
-pub fn custom_object(value: Value) -> Result<Map<String, Value>, AtmError> {
+pub(crate) fn custom_object(value: Value) -> Result<Map<String, Value>, AtmError> {
     let message =
         format!("custom must be an object of at most {HOOK_CUSTOM_MAX_BYTES} serialized bytes");
     let Value::Object(object) = value else {
