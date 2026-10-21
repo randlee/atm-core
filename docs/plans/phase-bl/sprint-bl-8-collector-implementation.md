@@ -1,27 +1,36 @@
 # Sprint bl-8 — collector implementation and snapshot builder
 
-closure_type: boundary; target_boundary: Collectors; branch:
-sprint/bl-8-collector-implementation; PR target: integrate/phase-bl; wave 2;
-external_ref: #533,#492; recommended_agent: trinity; recommended_model: gpt-6.1-sol.
-must_follow: bl-1 (PhaseBlContract). parallel_safe: bl-2,3,4,5,6,7,10,13,14.
+closure_type: boundary; target_boundary: Collectors; branch: sprint/bl-8-collector-implementation; PR target: integrate/phase-bl; wave: 2; external_ref: #533, #492; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (`CollectorRequest`, records, JSON codec); parallel_safe: bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-10, bl-13, bl-14.
 
-Own refresh.py, state.py, adapters/bd.py, adapters/atm.py, adapters/github.py,
-cli.py, command.py and matching named test files under apps/atm-bd-console.
-Every deliverable is production-ready in this boundary.
+Own `refresh.py`, `state.py`, `adapters/{bd,atm,github}.py`, `cli.py`, `command.py`, and matching collector/state tests under `apps/atm-bd-console`. This sprint alone reads sources. Every adapter, persisted record, lock, and snapshot is production-ready at this boundary.
 
-1. Implement each source collector in its sole adapter file with the bl-1
-lock/due contract and atomic JSON record persistence.
-2. state.py owns pure build_snapshot(records, clock) -> StateSnapshot and
-persists current state; it computes oldest good content_at, preserves carried
-last-good data/typed reason, and labels never-read state.
-3. D1-gated deadline seam: command.py accepts the Rand-supplied D1 value from
-team-lead; until supplied dispatch blocks and invents no deadline. D2/#492 is
-an explicit carry-forward awaiting its ruling.
+## Governing text (verbatim)
 
-- [ ] test_each_adapter_has_one_controlled_source_and_test_file
-- [ ] test_build_snapshot_content_at_carried_reason_and_never_read
-- [ ] test_d1_deadline_is_required_before_command_dispatch
-- [ ] test_atomic_record_and_snapshot_persistence
+> "we do NOT need to collect data from all sources at the same rate."
 
-No send, debounce, display, or composition proof closes here; bl-12 owns
-feature-level cron/TUI equality and retry evidence.
+> "my expectation for 'atm-bd cron' and 'atm-bd console' is that both are run on a specific phase. They both 'schedule' a info refresh which a) is exactly the same regardless of which system instigated it. b) is checked for duplication so running both does not DOUBLE the query load on bd/dolt, atm, github c) A failed run which did not produce successful data does NOT cause a run to be skipped."
+
+## Deliverables
+
+1. Implement sole source reads in the three adapter files, with atomic persisted JSON `CollectorRecord`s and short nonblocking per-source locks. Due windows are BD/dolt 60 seconds, ATM 60 seconds, GitHub 600 seconds; only successful data advances `last_success`.
+2. Implement `build_snapshot(records, clock, derive_problem_records) -> StateSnapshot` in `state.py`. It calls bl-10's pure fixture/codec-backed `derive_problem_records` seam, carries last-good data and typed reason, derives oldest valid `content_at`, and labels never-read state.
+3. Implement `r` as a force request: it bypasses only due eligibility, respects an existing source lock and consumes its result without a second query; success restarts only that source timer and failure remains due.
+4. Keep D1 deadline input gated in `command.py`: only the Rand-supplied D1 value permits command dispatch; D2/#492 remains open and no value is invented.
+
+## Deterministic acceptance
+
+- [ ] `test_collector_windows_are_source_specific`
+- [ ] `test_second_caller_within_window_reads_nothing`
+- [ ] `test_refresh_lock_returns_in_progress_without_second_query`
+- [ ] `test_failed_or_partial_read_is_due_on_next_request`
+- [ ] `test_force_request_respects_lock_and_success_only_resets_own_timer`
+- [ ] `test_snapshot_from_failed_and_superseded_fixture_carries_expected_problems`
+- [ ] `test_build_snapshot_content_at_carried_reason_and_never_read`
+- [ ] `test_d1_deadline_is_required_before_command_dispatch`
+- [ ] `test_atomic_record_and_snapshot_persistence`
+
+Tests inject clocks, storage, source responses, locks, and the derivation function; no test uses sleep, scheduling, load, or a live source.
+
+## This sprint does not close
+
+It does not select checks or derive problems (bl-10), queue/deliver events (bl-3), render UI, or prove end-to-end cron/TUI equality (bl-12).

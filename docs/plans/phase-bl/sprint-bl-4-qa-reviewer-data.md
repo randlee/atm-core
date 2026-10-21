@@ -1,11 +1,6 @@
 # Sprint bl-4 — QA reviewer data: `metadata.reviewers` on the QA bead and on finding beads
 
-closure_type `contract`; target_boundary `BOUNDARY-QaReviewers` (the
-`metadata.reviewers` shapes quality-mgr writes). Branch
-`sprint/bl-4-qa-reviewer-data`, PR → `integrate/phase-bl`. Wave 1; no
-dependency. Priority P3 (diagnosis aid).
-`external_ref`: `gh-347`.
-recommended_agent `arch-ctm`; recommended_model `sonnet`.
+closure_type: boundary; target_boundary: QaReviewers; branch: sprint/bl-4-qa-reviewer-data; PR target: integrate/phase-bl; wave: 2; external_ref: #347; recommended_agent: arch-ctm; recommended_model: sonnet; must_follow: bl-1 (versioned reviewer metadata fixture); parallel_safe: bl-2, bl-3, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13, bl-14.
 
 Paths under `plugins/atm-bd-orchestration/skills/atm-bd-orchestration/`.
 Line numbers at v0.18.4 (86853d5).
@@ -24,9 +19,9 @@ console half and consumes the shapes below.
 
 ## Relations
 
-`parallel_safe`: bl-1, bl-2, bl-3 (disjoint paths and artifacts).
-`must_follow`: none. bl-7 is the sole consumer of the `metadata.reviewers`
-contract and names that artifact in its relation record.
+bl-1 supplies the fixture/codec boundary; every other wave-2 sprint is
+parallel-safe. bl-7 is the sole Quality presentation consumer of
+`metadata.reviewers` and names that artifact in its relation record.
 
 ## Scope boundary
 

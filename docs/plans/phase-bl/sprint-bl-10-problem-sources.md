@@ -1,20 +1,8 @@
-# Sprint bl-10 — problem collectors and state derivation
+# Sprint bl-10 — problem-source derivation
 
-`BOUNDARY-ProblemSources`; wave 1; consumes bl-1's published collector-record
-types only, not its collector implementation. GitHub, BD, and atm-bd source
-modules collect independently; state derivation produces typed actionable
-problems from current records without triggering reads or messages. Retain
-latest non-cancelled check selection, branch fallback, sprint labels, and
-`--exclude-label anchor`; fixtures construct the published record types to
-prove independent failure/rate state and exact derived fields.
+closure_type: boundary; target_boundary: ProblemSources; branch: sprint/bl-10-problem-sources; PR target: integrate/phase-bl; wave: 2; external_ref: #375, #372; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (versioned collector-record fixtures and `ActionableProblem` codec); parallel_safe: bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-13, bl-14.
 
-## Relations, scope, and owned paths
-
-The bl-1 relation is type-only; it is not an implementation edge. Own
-`model.py`, `github_source.py`, `atm_bd.py` and their tests. bl-3 consumes
-the persisted problem-source records. `must_follow`: none; `parallel_safe`:
-all wave-1 sprints. This sprint owns no dispatch/delivery, collector type
-definition, or console-rendering paths.
+Own only `plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_bd,problem_sources}.py` and matching tests. bl-8 is the sole source-read owner; this sprint is pure derivation over persisted codec fixtures and never calls GitHub, BD, ATM, or delivery.
 
 ## Governing text (verbatim)
 
@@ -22,32 +10,22 @@ definition, or console-rendering paths.
 
 > "if you don't have valid data, don't force an error."
 
-## Public contract and deliverables
+## Deliverables
 
-Collectors retain latest non-cancelled check selection, branch fallback,
-sprint labels and anchor exclusion. Derivation reads current typed records and
-never triggers reads/sends. Controlled fixtures prove superseded checks cannot
-win, independent source errors/rates, and exact actionable fields. Run plugin
-boundary tests and lint; no live source calls.
+1. Implement `derive_problem_records(records) -> tuple[ActionableProblem, ...]`, a pure decoder/deriver over bl-1 JSON fixtures. bl-8 passes it into `build_snapshot`; therefore `StateSnapshot.problems` is populated from failed/superseded-check fixtures without a plugin-to-console implementation import.
+2. Preserve latest non-cancelled-check selection, direct-branch then sprint-container fallback, sprint labels, and `--exclude-label anchor` in pure `problem_sources.py` helpers.
+3. Preserve typed source failure as source status, never an invented actionable problem.
 
-`derive_problem_records(records: Sequence[CollectorRecord[SourceValue]]) -> Sequence[ActionableProblem]`
-is pure over current persisted records: `ActionableProblem` carries the
-selected check, resolved branch, sprint labels, and typed source status.
+## Deterministic acceptance
 
-## Deterministic acceptance and validation
+- [ ] `test_latest_non_cancelled_check_per_name_wins`
+- [ ] `test_branch_falls_back_from_problem_to_sprint_container`
+- [ ] `test_sprint_labels_and_anchor_exclusion_are_preserved`
+- [ ] `test_failed_source_decodes_to_typed_status_not_forced_problem`
+- [ ] `test_derive_problem_records_is_pure_over_contract_fixture`
 
-- [ ] `test_latest_non_cancelled_check_per_name_wins`: controlled source rows prove cancelled and superseded checks cannot become the source record.
-- [ ] `test_branch_falls_back_from_problem_to_sprint_container`: fixtures yield the exact typed branch when the direct field is absent.
-- [ ] `test_sprint_labels_and_anchor_exclusion_are_preserved`: an injected BD payload retains labels while `--exclude-label anchor` removes only anchors.
-- [ ] `test_independent_source_failure_is_typed_not_forced_problem`: a failed GitHub/BD/ATM record remains an explicit source failure, not invented data.
-- [ ] `test_derivation_uses_current_records_without_read_or_send`: fake adapters prove derivation has no collection or delivery side effect.
+Use fixture JSON and pure functions only; run plugin pytest/lint with no network, clock, or source reads.
 
-```bash
-cd plugins/atm-bd-orchestration && python3 -m pytest -q -rs
-```
+## This sprint does not close
 
-Tests use controlled source records and fakes only; no live sources, sleeps, load, or timing-dependent behavior.
-
-## Non-closure
-
-Does not implement bl-1 collector infrastructure, debounce or deliver event requests, or render problem rows. It publishes persisted problem-source input for bl-3 and later display consumers.
+It does not collect source data (bl-8), queue or deliver events (bl-3), or render rows. bl-12 owns integrated source-to-display proof.

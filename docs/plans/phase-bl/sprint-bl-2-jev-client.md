@@ -1,11 +1,6 @@
 # Sprint bl-2 — jev_client: request array in, typed JSONL out, busy-only retry
 
-closure_type `contract`; target_boundary `BOUNDARY-JevResult` (the JSON that
-`jev_client.py` prints, and the `JevErrorKind` enum behind its `error.kind`).
-Branch `sprint/bl-2-jev-client`, PR → `integrate/phase-bl`. Wave 1; no dependency. Priority P1 (Jev errors or misuse).
-`external_ref`: `gh-365,gh-497,gh-379,gh-164`.
-recommended_agent `arch-ctm`; recommended_model `opus` (bl-5 consumes the
-enum and the result shape).
+closure_type: boundary; target_boundary: JevResult; branch: sprint/bl-2-jev-client; PR target: integrate/phase-bl; wave: 2; external_ref: #379, #164; recommended_agent: arch-ctm; recommended_model: opus; must_follow: bl-1 (versioned JSON codec fixtures); parallel_safe: bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13, bl-14.
 
 Code under `plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/`
 unless a path says otherwise. Line numbers are at v0.18.4 (86853d5).
@@ -13,7 +8,7 @@ unless a path says otherwise. Line numbers are at v0.18.4 (86853d5).
 ## Requirement source (verbatim)
 
 The two rulings below are dev-sanity requirements of atm-bd-orchestration
-(`docs/requirements/dev-sanity.md`, PR in flight), not phase-bl anchors. This
+(`docs/requirements/dev-sanity.md`, PR #553), not phase-bl anchors. This
 sprint implements them; cite their requirement numbers here once that PR
 lands.
 
@@ -55,9 +50,9 @@ all failure variants are stable closed tags; and downstream consumers preserve
 those responses without interpreting a verdict. This doc uses those rules as
 the authoritative contract.
 
-**Relations.** `parallel_safe`: bl-1, bl-3, bl-4 (disjoint paths and no
-consumed artifact). `must_follow`: none. bl-5 is a consumer and must follow
-this sprint's named JSONL contract, not its files.
+**Relations.** bl-1 supplies the versioned JSON codec fixture only; all other
+wave-2 boundaries are parallel-safe. bl-5 reads this sprint's emitted JSONL
+through the fixture contract, not its files.
 
 ## Scope boundary
 
