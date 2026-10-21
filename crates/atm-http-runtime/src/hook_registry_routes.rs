@@ -1384,6 +1384,31 @@ mod tests {
         assert!(routes.cron.calls.lock().expect("calls").is_empty());
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn cron_start_times_out_when_scheduler_never_completes() {
+        let routes = routes();
+        routes.cron.start_pending.store(true, Ordering::SeqCst);
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            routes.router.cron_start(
+                cron_request("sender", 1_000, json!({})),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            ),
+        )
+        .await
+        .expect("cron route must enforce its request deadline");
+        let error = result.expect_err("a stalled scheduler must time out");
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert_eq!(
+            error.message(),
+            "request deadline expired during cron schedule start\n  Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry."
+        );
+        assert_eq!(*routes.cron.calls.lock().expect("calls"), vec!["start"]);
+    }
+
     #[tokio::test]
     async fn cron_routes_without_scheduler_are_unavailable() {
         let fixture = fixture(true, None, None);
