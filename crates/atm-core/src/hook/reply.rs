@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::api::{ApiRequest, MessageCollectionRequest};
-use crate::boundary::TaskCommand;
+use crate::boundary::{HookName, TaskCommand};
 use crate::clear::ClearQuery;
 use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
@@ -63,10 +63,104 @@ impl HookReply {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum HookActionCommand {
+    Send,
+    Ack,
+    TaskAssign,
+    TaskStart,
+    TaskClose,
+    TaskMove,
+    TaskList,
+    TaskEvents,
+    TaskHistory,
+    Read,
+    Peek,
+    Clear,
+    Search,
+    Doctor,
+}
+
+impl HookActionCommand {
+    pub const ALL: [Self; 14] = [
+        Self::Send,
+        Self::Ack,
+        Self::TaskAssign,
+        Self::TaskStart,
+        Self::TaskClose,
+        Self::TaskMove,
+        Self::TaskList,
+        Self::TaskEvents,
+        Self::TaskHistory,
+        Self::Read,
+        Self::Peek,
+        Self::Clear,
+        Self::Search,
+        Self::Doctor,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Send => "send",
+            Self::Ack => "ack",
+            Self::TaskAssign => "task.assign",
+            Self::TaskStart => "task.start",
+            Self::TaskClose => "task.close",
+            Self::TaskMove => "task.move",
+            Self::TaskList => "task.list",
+            Self::TaskEvents => "task.events",
+            Self::TaskHistory => "task.history",
+            Self::Read => "read",
+            Self::Peek => "peek",
+            Self::Clear => "clear",
+            Self::Search => "search",
+            Self::Doctor => "doctor",
+        }
+    }
+
+    pub fn task_hook(self) -> Option<HookName> {
+        match self {
+            Self::TaskAssign
+            | Self::TaskStart
+            | Self::TaskClose
+            | Self::TaskMove
+            | Self::TaskList
+            | Self::TaskEvents => HookName::parse_task_hook(self.as_str()).ok(),
+            _ => None,
+        }
+    }
+}
+
+impl TryFrom<String> for HookActionCommand {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::ALL
+            .into_iter()
+            .find(|command| command.as_str() == value)
+            .ok_or_else(|| {
+                AtmError::hook_malformed(&format!("command {value} is not an allowed hook action"))
+            })
+    }
+}
+
+impl From<HookActionCommand> for String {
+    fn from(command: HookActionCommand) -> Self {
+        command.as_str().to_owned()
+    }
+}
+
+impl std::fmt::Display for HookActionCommand {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HookAction {
-    pub command: String,
+    pub command: HookActionCommand,
     #[serde(rename = "as", default)]
     pub run_as: Option<AgentName>,
     pub request: Value,
@@ -93,19 +187,21 @@ impl HookAction {
         let mut request: WriteRequest = self.body()?;
         self.check_team(&request.caller_team, team)?;
         request.caller_identity = identity.clone();
-        match self.command.as_str() {
-            "send"
+        match self.command {
+            HookActionCommand::Send
                 if request.task_id.is_none()
                     && request.task_op.is_none()
                     && request.task_complete.is_none()
                     && request.acknowledges_message_id.is_none() => {}
-            "ack" if request.acknowledges_message_id.is_some() => {}
-            "task.assign" | "task.start" | "task.close" => {
+            HookActionCommand::Ack if request.acknowledges_message_id.is_some() => {}
+            HookActionCommand::TaskAssign
+            | HookActionCommand::TaskStart
+            | HookActionCommand::TaskClose => {
                 let classified = TaskCommand::classify(ApiRequest::Write(Box::new(
                     request.clone(),
                 )))
                 .map_err(|_| self.malformed("request does not classify as a task command"))?;
-                if classified.hook_name().as_str() != self.command {
+                if Some(classified.hook_name()) != self.command.task_hook() {
                     return Err(self.malformed("request classifies as a different task command"));
                 }
             }
@@ -121,13 +217,13 @@ impl HookAction {
     fn list_request(&self, team: &TeamName, identity: &AgentName) -> Result<ApiRequest, AtmError> {
         let mut request: ListQuery = self.body()?;
         self.check_team(&request.caller_team, team)?;
-        let is_history = self.command == "task.history"
+        let is_history = self.command == HookActionCommand::TaskHistory
             && matches!(request.task_ledger, Some(TaskLedgerQuery::History { .. }));
         request.caller_identity = identity.clone();
         let api_request = ApiRequest::Messages(Box::new(MessageCollectionRequest::List(request)));
         if !is_history
             && !TaskCommand::classify(api_request.clone())
-                .is_ok_and(|classified| classified.hook_name().as_str() == self.command)
+                .is_ok_and(|classified| Some(classified.hook_name()) == self.command.task_hook())
         {
             return Err(self.malformed("task_ledger must match the named task query"));
         }
@@ -140,18 +236,22 @@ impl HookAction {
         default_as: &AgentName,
     ) -> Result<ApiRequest, AtmError> {
         let identity = self.run_as.as_ref().unwrap_or(default_as);
-        match self.command.as_str() {
-            "send" | "ack" | "task.assign" | "task.start" | "task.close" => {
-                self.write_request(team, identity)
-            }
-            "task.move" => {
+        match self.command {
+            HookActionCommand::Send
+            | HookActionCommand::Ack
+            | HookActionCommand::TaskAssign
+            | HookActionCommand::TaskStart
+            | HookActionCommand::TaskClose => self.write_request(team, identity),
+            HookActionCommand::TaskMove => {
                 let mut request: TaskMoveRequest = self.body()?;
                 self.check_team(&request.caller_team, team)?;
                 request.caller_identity = identity.clone();
                 Ok(ApiRequest::TaskMove(request))
             }
-            "task.list" | "task.events" | "task.history" => self.list_request(team, identity),
-            "read" => {
+            HookActionCommand::TaskList
+            | HookActionCommand::TaskEvents
+            | HookActionCommand::TaskHistory => self.list_request(team, identity),
+            HookActionCommand::Read => {
                 let mut request: ReadQuery = self.body()?;
                 self.check_team(&request.caller_team, team)?;
                 request.caller_identity = identity.clone();
@@ -159,7 +259,7 @@ impl HookAction {
                     MessageCollectionRequest::Receive(request),
                 )))
             }
-            "peek" => {
+            HookActionCommand::Peek => {
                 let mut request: PeekQuery = self.body()?;
                 self.check_team(&request.caller_team, team)?;
                 request.caller_identity = identity.clone();
@@ -167,13 +267,13 @@ impl HookAction {
                     MessageCollectionRequest::Peek(request),
                 )))
             }
-            "clear" => {
+            HookActionCommand::Clear => {
                 let mut request: ClearQuery = self.body()?;
                 self.check_team(&request.caller_team, team)?;
                 request.caller_identity = identity.clone();
                 Ok(ApiRequest::Clear(request))
             }
-            "search" => {
+            HookActionCommand::Search => {
                 let mut request: SearchRequest = self.body()?;
                 if self.run_as.is_some()
                     || request
@@ -187,7 +287,7 @@ impl HookAction {
                 request.query.team = Some(team.to_string());
                 Ok(ApiRequest::Search(Box::new(request)))
             }
-            "doctor" => {
+            HookActionCommand::Doctor => {
                 let mut request: DoctorQuery = self.body()?;
                 if self.run_as.is_some()
                     || request.all_teams
@@ -207,7 +307,6 @@ impl HookAction {
                 request.team_override = Some(team.clone());
                 Ok(ApiRequest::Doctor(request))
             }
-            _ => Err(self.malformed("command is not an allowed hook action")),
         }
     }
 }
@@ -259,9 +358,9 @@ mod tests {
         "caller".parse().unwrap()
     }
 
-    fn action(command: &str, request: Value) -> HookAction {
+    fn action(command: HookActionCommand, request: Value) -> HookAction {
         HookAction {
-            command: command.to_owned(),
+            command,
             run_as: None,
             request,
         }
@@ -355,35 +454,35 @@ mod tests {
         let mut close = assign.clone();
         close["task_op"] = json!({"op":"close", "outcome":"completed"});
         let cases = [
-            ("send", send, "write"),
-            ("ack", ack, "write"),
-            ("task.assign", assign.clone(), "write"),
-            ("task.start", start, "write"),
-            ("task.close", close, "write"),
+            (HookActionCommand::Send, send, "write"),
+            (HookActionCommand::Ack, ack, "write"),
+            (HookActionCommand::TaskAssign, assign.clone(), "write"),
+            (HookActionCommand::TaskStart, start, "write"),
+            (HookActionCommand::TaskClose, close, "write"),
             (
-                "task.move",
+                HookActionCommand::TaskMove,
                 json!({"caller_identity":"untrusted", "caller_team":"test-team", "task_id":"work-1", "target":{"to":"head"}}),
                 "move",
             ),
             (
-                "task.list",
+                HookActionCommand::TaskList,
                 list_body(json!({"Tasks":{"member":null}})),
                 "list",
             ),
             (
-                "task.events",
+                HookActionCommand::TaskEvents,
                 list_body(json!({"Events":{"task_id":"work-1", "member":null}})),
                 "list",
             ),
             (
-                "task.history",
+                HookActionCommand::TaskHistory,
                 list_body(json!({"History":{"member":null, "limit":10}})),
                 "list",
             ),
-            ("read", mailbox_body(true), "read"),
-            ("peek", mailbox_body(false), "peek"),
+            (HookActionCommand::Read, mailbox_body(true), "read"),
+            (HookActionCommand::Peek, mailbox_body(false), "peek"),
             (
-                "clear",
+                HookActionCommand::Clear,
                 json!({"home_dir":"/home", "current_dir":"/repo", "caller_identity":"untrusted", "caller_team":"test-team", "idle_only":false, "dry_run":false}),
                 "clear",
             ),
@@ -417,7 +516,7 @@ mod tests {
         expected["caller_identity"] = serde_json::to_value(&action_identity).unwrap();
         let candidate = HookAction {
             run_as: Some(action_identity),
-            ..action("task.assign", assign)
+            ..action(HookActionCommand::TaskAssign, assign)
         };
         let ApiRequest::Write(mapped) = candidate.into_api_request(&team(), &identity()).unwrap()
         else {
@@ -425,15 +524,15 @@ mod tests {
         };
         assert_eq!(serde_json::to_value(mapped).unwrap(), expected);
 
-        for command in ["search", "doctor"] {
-            let mut body = if command == "search" {
+        for command in [HookActionCommand::Search, HookActionCommand::Doctor] {
+            let mut body = if command == HookActionCommand::Search {
                 search_body()
             } else {
                 doctor_body()
             };
             for configured in [false, true] {
                 if configured {
-                    if command == "search" {
+                    if command == HookActionCommand::Search {
                         body["query"]["team"] = json!("test-team");
                     } else {
                         body["team_override"] = json!("test-team");
@@ -445,8 +544,8 @@ mod tests {
                         .into_api_request(&team(), &identity())
                         .unwrap(),
                 );
-                assert_eq!(variant, command);
-                if command == "search" {
+                assert_eq!(variant, command.as_str());
+                if command == HookActionCommand::Search {
                     assert_eq!(mapped["query"]["team"], "test-team");
                 } else {
                     assert_eq!(mapped["team_override"], "test-team");
@@ -458,7 +557,7 @@ mod tests {
                 ..action(command, body.clone())
             };
             malformed(with_as.into_api_request(&team(), &identity()));
-            if command == "search" {
+            if command == HookActionCommand::Search {
                 body["query"]["team"] = json!("foreign");
             } else {
                 body["team_override"] = json!("foreign");
@@ -470,7 +569,9 @@ mod tests {
             body.as_object_mut()
                 .unwrap()
                 .extend(change.as_object().unwrap().clone());
-            malformed(action("doctor", body).into_api_request(&team(), &identity()));
+            malformed(
+                action(HookActionCommand::Doctor, body).into_api_request(&team(), &identity()),
+            );
         }
     }
 
@@ -491,22 +592,35 @@ mod tests {
             "task.foo",
             "",
         ] {
-            malformed(action(command, write_body()).into_api_request(&team(), &identity()));
+            let reply = format!(
+                r#"{{"result":"handled","atm-action":[{{"command":"{command}","request":{{}}}}]}}"#
+            );
+            malformed(HookReply::parse(reply.as_bytes()));
         }
         let mut body = write_body();
         body["task_id"] = json!("work-1");
-        malformed(action("send", body.clone()).into_api_request(&team(), &identity()));
-        malformed(action("task.start", body.clone()).into_api_request(&team(), &identity()));
-        malformed(action("task.close", body.clone()).into_api_request(&team(), &identity()));
-        malformed(action("ack", body).into_api_request(&team(), &identity()));
+        malformed(
+            action(HookActionCommand::Send, body.clone()).into_api_request(&team(), &identity()),
+        );
+        malformed(
+            action(HookActionCommand::TaskStart, body.clone())
+                .into_api_request(&team(), &identity()),
+        );
+        malformed(
+            action(HookActionCommand::TaskClose, body.clone())
+                .into_api_request(&team(), &identity()),
+        );
+        malformed(action(HookActionCommand::Ack, body).into_api_request(&team(), &identity()));
         malformed(
             action(
-                "task.list",
+                HookActionCommand::TaskList,
                 list_body(json!({"History":{"member":null,"limit":1}})),
             )
             .into_api_request(&team(), &identity()),
         );
-        malformed(action("send", json!({})).into_api_request(&team(), &identity()));
+        malformed(
+            action(HookActionCommand::Send, json!({})).into_api_request(&team(), &identity()),
+        );
         assert!(
             serde_json::from_value::<HookAction>(
                 json!({"command":"send", "request":{}, "extra":1})
@@ -516,20 +630,53 @@ mod tests {
     }
 
     #[test]
+    fn hook_action_command_round_trips_every_variant() {
+        for command in HookActionCommand::ALL {
+            assert_eq!(
+                HookActionCommand::try_from(command.as_str().to_owned()),
+                Ok(command)
+            );
+            assert_eq!(
+                serde_json::to_value(command).unwrap(),
+                json!(command.as_str())
+            );
+            assert_eq!(
+                command.task_hook().is_some(),
+                matches!(
+                    command,
+                    HookActionCommand::TaskAssign
+                        | HookActionCommand::TaskStart
+                        | HookActionCommand::TaskClose
+                        | HookActionCommand::TaskMove
+                        | HookActionCommand::TaskList
+                        | HookActionCommand::TaskEvents
+                )
+            );
+        }
+    }
+
+    #[test]
     fn task_query_action_must_match_classified_command_or_history() {
         let ledgers = [
-            ("task.list", json!({"Tasks":{"member":null}})),
             (
-                "task.events",
+                HookActionCommand::TaskList,
+                json!({"Tasks":{"member":null}}),
+            ),
+            (
+                HookActionCommand::TaskEvents,
                 json!({"Events":{"task_id":"work-1", "member":null}}),
             ),
             (
-                "task.history",
+                HookActionCommand::TaskHistory,
                 json!({"History":{"member":null, "limit":10}}),
             ),
-            ("", Value::Null),
+            (HookActionCommand::TaskList, Value::Null),
         ];
-        for command in ["task.list", "task.events", "task.history"] {
+        for command in [
+            HookActionCommand::TaskList,
+            HookActionCommand::TaskEvents,
+            HookActionCommand::TaskHistory,
+        ] {
             for (expected, ledger) in &ledgers {
                 let candidate = action(command, list_body(ledger.clone()));
                 let result = candidate.into_api_request(&team(), &identity());
@@ -574,7 +721,7 @@ mod tests {
         .map(|case| case.as_bytes().to_vec())
         .collect::<Vec<_>>();
         cases.push(vec![255]);
-        cases.push(serde_json::to_vec(&json!({"result":"handled","atm-action":vec![action("send", write_body()); HOOK_ACTIONS_MAX + 1]})).unwrap());
+        cases.push(serde_json::to_vec(&json!({"result":"handled","atm-action":vec![action(HookActionCommand::Send, write_body()); HOOK_ACTIONS_MAX + 1]})).unwrap());
         cases
     }
 
@@ -595,8 +742,8 @@ mod tests {
             }
         );
         let actions = vec![
-            action("send", write_body()),
-            action("doctor", doctor_body()),
+            action(HookActionCommand::Send, write_body()),
+            action(HookActionCommand::Doctor, doctor_body()),
         ];
         assert_eq!(
             HookReply::parse(
@@ -605,7 +752,7 @@ mod tests {
             .unwrap(),
             HookReply::Handled(actions)
         );
-        let actions = vec![action("send", write_body()); HOOK_ACTIONS_MAX];
+        let actions = vec![action(HookActionCommand::Send, write_body()); HOOK_ACTIONS_MAX];
         assert_eq!(
             HookReply::parse(
                 &serde_json::to_vec(&json!({"result":"handled","atm-action":actions})).unwrap()

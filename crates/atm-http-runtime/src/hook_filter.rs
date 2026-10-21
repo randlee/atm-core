@@ -328,8 +328,8 @@ async fn dispatch_handled<D: HookActionDispatcher>(
     let last = done
         .into_iter()
         .rev()
-        .find(|(command, _)| command.as_ref() == Some(&run.hook))
-        .map(|(_, response)| response);
+        .find(|dispatched| dispatched.command.task_hook().as_ref() == Some(&run.hook))
+        .map(|dispatched| dispatched.response);
     Ok(Decision::Done(Box::new(if run.dry_run {
         hook_actions(0)
     } else {
@@ -448,8 +448,8 @@ pub(crate) mod test_support {
         RecordingHookActionDispatcher, RecordingTaskCommands, TaskCallCtx,
     };
     use atm_core::error::AtmError;
-    use atm_core::hook::HookAction;
     use atm_core::hook::HookReply;
+    use atm_core::hook::{HookAction, HookActionCommand};
     use atm_core::protocol::{ResponseEnvelope, next_request_id};
     use atm_core::send::{SendMessageSource, WriteRequest};
     use atm_core::types::{AgentName, HostName, IsoTimestamp, TeamName};
@@ -519,9 +519,9 @@ pub(crate) mod test_support {
         .expect("write request")
     }
 
-    pub fn handled_action(command: &str, request: &WriteRequest) -> HookAction {
+    pub fn handled_action(command: HookActionCommand, request: &WriteRequest) -> HookAction {
         HookAction {
-            command: command.to_owned(),
+            command,
             run_as: None,
             request: serde_json::to_value(request).expect("request json"),
         }
@@ -687,7 +687,7 @@ mod tests {
         TaskAssign, TaskClose, TaskCommands, TaskEvents, TaskList, TaskStart,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
-    use atm_core::hook::HookReply;
+    use atm_core::hook::{HookActionCommand, HookReply};
     use atm_runtime_test_support::InMemoryHookRegistrationStore;
     use tracing_subscriber::prelude::*;
 
@@ -958,7 +958,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &h.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         h.commands
             .assign(TaskAssign(Box::new(request)), &ctx(deadline()))
@@ -1048,7 +1051,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &h.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         h.commands
             .assign(TaskAssign(Box::new(request)), &ctx(deadline()))
@@ -1112,7 +1118,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &h.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         reply(&h.runner, HookReply::PassThrough);
         h.commands
@@ -1165,7 +1174,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &h.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         h.commands
             .assign(TaskAssign(Box::new(request)), &ctx(deadline()))
@@ -1184,7 +1196,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &h.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         let ctx = ctx(deadline());
         h.commands
@@ -1484,7 +1499,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &h.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         let error = expect_err(
             h.commands

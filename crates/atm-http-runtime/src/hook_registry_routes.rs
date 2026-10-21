@@ -969,7 +969,10 @@ mod tests {
         request.to = Some("recipient@test-team".parse().expect("address"));
         reply(
             &runner,
-            atm_core::hook::HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            atm_core::hook::HookReply::Handled(vec![handled_action(
+                atm_core::hook::HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         let commands = Arc::new(crate::hook_filter::HookedTaskCommands::new(
             Arc::new(NormalTaskCommands::new(routes.router.clone())),

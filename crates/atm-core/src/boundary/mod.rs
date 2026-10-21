@@ -98,7 +98,7 @@ pub use atm_storage::{
     HookRegistration, HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition,
 };
 pub use cron_scheduler::{CronScheduler, CronStartSpec};
-pub use hook_action_dispatcher::{DispatchSpec, HookActionDispatcher};
+pub use hook_action_dispatcher::{DispatchSpec, DispatchedAction, HookActionDispatcher};
 pub use hook_runner::{HookOutcome, HookRunner};
 #[cfg(any(test, feature = "test-utils"))]
 pub use task_commands::RecordingTaskCommands;

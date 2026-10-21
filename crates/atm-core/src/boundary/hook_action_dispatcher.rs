@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use super::{HookName, PhaseId, sealed};
 use crate::api::{ApiResponse, RequestDeadline};
 use crate::error::AtmError;
-use crate::hook::HookAction;
+use crate::hook::{HookAction, HookActionCommand};
 use crate::types::{AgentName, TeamName};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -16,13 +16,19 @@ pub struct DispatchSpec {
     pub dry_run: bool,
 }
 
+#[derive(Debug)]
+pub struct DispatchedAction {
+    pub command: HookActionCommand,
+    pub response: ApiResponse,
+}
+
 #[async_trait]
 pub trait HookActionDispatcher: sealed::Sealed + Send + Sync {
     async fn dispatch_actions(
         &self,
         spec: DispatchSpec,
         actions: Vec<HookAction>,
-    ) -> Result<Vec<(Option<HookName>, ApiResponse)>, AtmError>;
+    ) -> Result<Vec<DispatchedAction>, AtmError>;
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -51,7 +57,7 @@ impl HookActionDispatcher for RecordingHookActionDispatcher {
         &self,
         spec: DispatchSpec,
         actions: Vec<HookAction>,
-    ) -> Result<Vec<(Option<HookName>, ApiResponse)>, AtmError> {
+    ) -> Result<Vec<DispatchedAction>, AtmError> {
         self.calls
             .lock()
             .expect("dispatch calls mutex poisoned")
@@ -86,10 +92,10 @@ impl HookActionDispatcher for RecordingHookActionDispatcher {
                     index
                 )));
             }
-            responses.push((
-                HookName::parse_task_hook(&action.command).ok(),
-                ApiResponse::new(crate::protocol::ResponseEnvelope::RuntimeViewReloaded),
-            ));
+            responses.push(DispatchedAction {
+                command: action.command,
+                response: ApiResponse::new(crate::protocol::ResponseEnvelope::RuntimeViewReloaded),
+            });
         }
         Ok(responses)
     }
@@ -126,7 +132,7 @@ mod tests {
 
     fn action(task: &str) -> HookAction {
         HookAction {
-            command: "task.move".into(),
+            command: HookActionCommand::TaskMove,
             run_as: None,
             request: serde_json::json!({"caller_identity": "other", "caller_team": "test-team", "task_id": task, "target": {"to": "end"}}),
         }
@@ -156,12 +162,15 @@ mod tests {
         let results =
             ready(dispatcher.dispatch_actions(expected_spec.clone(), actions.clone())).unwrap();
         assert_eq!(results.len(), 2);
-        let task_move = Some(HookName::parse("task.move").unwrap());
-        assert!(results.iter().all(|(name, response)| name == &task_move
-            && matches!(
-                response.clone().into_inner(),
-                crate::protocol::ResponseEnvelope::RuntimeViewReloaded
-            )));
+        assert!(
+            results
+                .iter()
+                .all(|result| result.command == HookActionCommand::TaskMove
+                    && matches!(
+                        result.response.clone().into_inner(),
+                        crate::protocol::ResponseEnvelope::RuntimeViewReloaded
+                    ))
+        );
         let calls = dispatcher.calls.lock().unwrap();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].spec, expected_spec);
@@ -181,7 +190,7 @@ mod tests {
                 .is_empty()
         );
         let mut invalid = action("bk-2");
-        invalid.command = "hook.register".into();
+        invalid.request["caller_team"] = serde_json::json!("foreign");
         assert!(ready(dispatcher.dispatch_actions(spec(true), vec![invalid])).is_err());
     }
 
