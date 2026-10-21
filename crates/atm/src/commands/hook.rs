@@ -148,6 +148,21 @@ pub(super) mod tests {
     }
 
     #[tokio::test]
+    async fn register_rejects_a_mismatched_hook_list_response() {
+        let (result, requests) = execute(
+            register("valid_hook.py", "task.close"),
+            ResponseEnvelope::HookList(vec![]),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            requests.as_slice(),
+            [RequestEnvelope::HookRegister(_)]
+        ));
+    }
+
+    #[tokio::test]
     async fn register_over_cap_sends_and_prints_the_daemon_refusal() {
         let error = atm_core::error::AtmError::hook_module_invalid("daemon cap refusal");
         let (result, requests) = execute(
@@ -353,16 +368,14 @@ impl HookCommand {
         composition: &CliComposition<'_>,
         request: RequestEnvelope,
     ) -> Result<String> {
-        match composition.execute_request(request).await? {
-            ResponseEnvelope::HookRegistered(row) => Ok(format!(
+        let response = composition.execute_request(request).await?;
+        match (&self.command, response) {
+            (HookSubcommand::Register(_), ResponseEnvelope::HookRegistered(row)) => Ok(format!(
                 "registered {} for {}/{} (timeout {} ms)\n",
                 row.hook, row.team, row.phase, row.timeout_ms
             )),
-            ResponseEnvelope::HookDisabled(rows) => {
+            (HookSubcommand::Disable(args), ResponseEnvelope::HookDisabled(rows)) => {
                 if rows.is_empty() {
-                    let HookSubcommand::Disable(args) = &self.command else {
-                        unreachable!()
-                    };
                     Ok(format!("no active hooks for phase {}\n", args.phase))
                 } else {
                     Ok(rows
@@ -373,13 +386,10 @@ impl HookCommand {
                         .collect())
                 }
             }
-            ResponseEnvelope::HookList(rows) => {
-                let HookSubcommand::List(args) = &self.command else {
-                    unreachable!()
-                };
+            (HookSubcommand::List(args), ResponseEnvelope::HookList(rows)) => {
                 crate::output::render_hook_list(&rows, args.json)
             }
-            other => Err(atm_daemon_client::unexpected_response("hook", other).into()),
+            (_, other) => Err(atm_daemon_client::unexpected_response("hook", other).into()),
         }
     }
 }
