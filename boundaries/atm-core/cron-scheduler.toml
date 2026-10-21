@@ -46,4 +46,5 @@ socket_io = ["atm_core::boundary::cron_scheduler"]
 
 [status]
 state = "concrete_landed"
+concrete_landed = ["atm_cron::scheduler::AtmCron"]
 notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters."]
