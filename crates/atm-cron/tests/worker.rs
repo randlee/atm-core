@@ -1261,7 +1261,9 @@ async fn shutdown_waits_for_cleanup_after_worker_stops() {
     impl Drop for Dropped {
         fn drop(&mut self) {
             self.entered.send(()).expect("cleanup entry was observed");
-            self.release.recv().expect("cleanup release was sent");
+            self.release
+                .recv_timeout(TEST_WAIT_TIMEOUT)
+                .expect("missing cleanup release event (timeout or disconnected)");
             self.running.send_replace(0);
         }
     }
@@ -1281,7 +1283,9 @@ async fn shutdown_waits_for_cleanup_after_worker_stops() {
             release: parked,
         });
     });
-    cleanup_started.recv().expect("cleanup entered");
+    cleanup_started
+        .recv_timeout(TEST_WAIT_TIMEOUT)
+        .expect("missing cleanup entry event (timeout or disconnected)");
 
     let mut shutdown = Box::pin(worker.shutdown(tokio::time::Instant::now() + TEST_WAIT_TIMEOUT));
     let waker = Waker::noop();
@@ -1574,7 +1578,11 @@ fn hold_blocking(fixture: &Fixture) -> (std::sync::mpsc::Sender<()>, watch::Rece
         let entered = entered.clone();
         Box::pin(async move {
             entered.send_replace(index + 1);
-            let _ = parked.lock().unwrap().recv();
+            parked
+                .lock()
+                .unwrap()
+                .recv_timeout(TEST_WAIT_TIMEOUT)
+                .expect("missing run release event (timeout or disconnected)");
         })
     }));
     (release, calls)
