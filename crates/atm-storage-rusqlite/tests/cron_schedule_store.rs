@@ -527,3 +527,21 @@ fn malformed_stored_args_is_an_internal_error_naming_the_row() {
     assert_eq!(error.code(), AtmErrorCode::InternalError);
     assert!(error.message().contains("cron_schedule id 1"));
 }
+
+#[test]
+fn malformed_stored_phase_is_an_internal_error_naming_the_row() {
+    let h = Harness::new();
+    h.store()
+        .start(cron_spec("nightly", StopCondition::Hook, stamp(1)))
+        .expect("start");
+    h.sql()
+        .execute("UPDATE cron_schedule SET phase = 'BK'", [])
+        .expect("corrupt phase");
+
+    let error = h
+        .store()
+        .list(None, None)
+        .expect_err("corrupt phase is refused");
+    assert_eq!(error.code(), AtmErrorCode::InternalError);
+    assert!(error.message().contains("cron_schedule id 1"));
+}

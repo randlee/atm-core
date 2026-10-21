@@ -596,3 +596,49 @@ fn malformed_stored_custom_is_an_internal_error_naming_the_row() {
     assert_eq!(error.code(), AtmErrorCode::InternalError);
     assert!(error.message().contains("test-team/bk/task.close"));
 }
+
+#[test]
+fn malformed_stored_phase_is_an_internal_error_naming_the_row_in_active_all() {
+    let h = Harness::new();
+    h.store()
+        .register(registration("bk", "task.close", "/a.py", stamp(1)))
+        .expect("register");
+    Connection::open(&h.path)
+        .expect("connection")
+        .execute("UPDATE hook_registration SET phase = 'BK'", [])
+        .expect("corrupt phase");
+
+    let error = h
+        .store()
+        .active_all()
+        .expect_err("corrupt phase is refused");
+    assert_eq!(error.code(), AtmErrorCode::InternalError);
+    assert!(
+        error
+            .message()
+            .contains("hook_registration test-team/BK/task.close")
+    );
+}
+
+#[test]
+fn malformed_stored_hook_is_an_internal_error_naming_the_row() {
+    let h = Harness::new();
+    h.store()
+        .register(registration("bk", "task.close", "/a.py", stamp(1)))
+        .expect("register");
+    Connection::open(&h.path)
+        .expect("connection")
+        .execute("UPDATE hook_registration SET hook = 'Task.close'", [])
+        .expect("corrupt hook");
+
+    let error = h
+        .store()
+        .list(&team(), None)
+        .expect_err("corrupt hook is refused");
+    assert_eq!(error.code(), AtmErrorCode::InternalError);
+    assert!(
+        error
+            .message()
+            .contains("hook_registration test-team/bk/Task.close")
+    );
+}
