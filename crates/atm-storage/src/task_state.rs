@@ -152,12 +152,6 @@ impl MaxTasks {
 /// Active-task limit for a member whose roster row has no `max_tasks` key.
 pub const DEFAULT_MAX_TASKS: MaxTasks = MaxTasks::DEFAULT;
 
-/// Parses the stored `max_tasks` metadata value as a positive task limit.
-#[must_use]
-pub fn parse_max_tasks(value: i64) -> Option<NonZeroU32> {
-    u32::try_from(value).ok().and_then(NonZeroU32::new)
-}
-
 /// Open state and a terminal outcome are unrepresentable together. JSON goes
 /// through `TaskRowWire` / `TaskEventRowWire` (scalar `state` + `close_outcome`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

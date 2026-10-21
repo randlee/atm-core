@@ -93,10 +93,10 @@ Owned paths (all edited):
 ```rust
 // crates/atm-storage/src/task_state.rs
 pub const MAX_TASKS_METADATA_KEY: &str = "max_tasks";      // key in team_roster.metadata_json
-pub const DEFAULT_MAX_TASKS: NonZeroU32 = NonZeroU32::MIN; // 1, used when the key is absent
+pub const DEFAULT_MAX_TASKS: MaxTasks = MaxTasks::DEFAULT; // 1, used when the key is absent
 
 // crates/atm-core/src/team_admin/member_mutation.rs
-pub struct UpdateMemberRequest { /* existing fields */ pub max_tasks: Option<NonZeroU32> } // None = leave unchanged
+pub struct UpdateMemberRequest { /* existing fields */ pub max_tasks: Option<MaxTasks> } // None = leave unchanged
 impl UpdateMemberRequest {
     /// `Some(0)` -> AtmError::validation (ATM_MESSAGE_VALIDATION_FAILED):
     /// "--max-tasks must be at least 1"; `None` leaves it unchanged.
