@@ -460,6 +460,10 @@ fn peer_config_doctor_report_inner(
                 .iter()
                 .filter(|interface| interface.enabled)
                 .count(),
+            claimed_direct_peer_port: interfaces
+                .iter()
+                .find(|interface| interface.enabled)
+                .map(|interface| interface.bind_addr.port()),
             certificate_fingerprint: certificate
                 .map(|certificate| certificate.fingerprint.to_string()),
             trusted_peer_count: peers.len(),
@@ -2939,6 +2943,7 @@ mod tests {
         assert!(findings.is_empty());
         assert_eq!(report.configured_interface_count, 1);
         assert_eq!(report.enabled_interface_count, 1);
+        assert_eq!(report.claimed_direct_peer_port, Some(43101));
         assert_eq!(report.trusted_peer_count, 1);
         assert_eq!(report.enabled_trusted_peer_count, 1);
         assert_eq!(
@@ -2949,6 +2954,7 @@ mod tests {
         assert!(report.legacy_literal_ip_peers.is_empty());
 
         let serialized = serde_json::to_string(&report).expect("serialize doctor projection");
+        assert!(serialized.contains("\"claimed_direct_peer_port\":43101"));
         assert!(!serialized.contains("keychain:secret"));
         assert!(!serialized.contains("private_key_ref"));
     }

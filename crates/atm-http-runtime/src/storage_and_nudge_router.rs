@@ -6,6 +6,7 @@
 
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+#[cfg(test)]
 use std::num::NonZeroU16;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -30,7 +31,9 @@ use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
     NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_preflight_async_runtime,
 };
-use atm_runtime::{AsyncMailboxRuntime, DoctorProjection, DoctorProjectionContext};
+use atm_runtime::{
+    AsyncMailboxRuntime, DoctorProjection, DoctorProjectionContext, PeerPortResolver,
+};
 
 use crate::CanonicalWriteHandler;
 use crate::PeerConnectionPool;
@@ -45,6 +48,7 @@ use crate::router_support::{
 
 pub(crate) mod hook_wiring;
 mod non_write_dispatch;
+mod peer_port;
 mod roster_ingress;
 
 /// The replacement implementation of the canonical write operation.
@@ -66,6 +70,8 @@ pub struct StorageAndNudgeRouter {
     doctor_ports: Option<atm_core::doctor::RuntimeDoctorPorts>,
     daemon_context: Option<atm_core::doctor::DoctorExecutionContext>,
     diagnostic_counters: Option<Arc<dyn DiagnosticCountersSource>>,
+    peer_port_resolver: Option<PeerPortResolver>,
+    #[cfg(test)]
     direct_peer_port: NonZeroU16,
     peer_connection_pool: Option<PeerConnectionPool>,
     shared_direct_peer_client: Option<reqwest::Client>,
@@ -141,6 +147,8 @@ impl StorageAndNudgeRouter {
             doctor_ports: None,
             daemon_context: None,
             diagnostic_counters: None,
+            peer_port_resolver: None,
+            #[cfg(test)]
             direct_peer_port: crate::direct_peer_port(),
             peer_connection_pool: None,
             shared_direct_peer_client: None,
@@ -176,6 +184,13 @@ impl StorageAndNudgeRouter {
     #[cfg(test)]
     fn with_direct_peer_port(mut self, direct_peer_port: NonZeroU16) -> Self {
         self.direct_peer_port = direct_peer_port;
+        self
+    }
+
+    /// Installs the durable exact-peer authority used to select outbound ports.
+    #[must_use]
+    pub fn with_peer_port_resolver(mut self, resolver: PeerPortResolver) -> Self {
+        self.peer_port_resolver = Some(resolver);
         self
     }
 
@@ -396,6 +411,7 @@ impl StorageAndNudgeRouter {
                 "cross-host delivery requires a host-qualified recipient",
             ));
         };
+        let port = self.resolved_peer_port(host, deadline).await?;
         let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "request deadline expired before cross-host acknowledgement delivery",
@@ -404,22 +420,18 @@ impl StorageAndNudgeRouter {
         let client = match self.peer_connection_pool.as_ref() {
             Some(pool) => crate::client::pooled_peer_stream_write_client(
                 host.clone(),
-                self.direct_peer_port,
+                port,
                 remaining,
                 pool.clone(),
             )?,
             None => match self.shared_direct_peer_client.as_ref() {
                 Some(client) => crate::client::direct_peer_tcp_client_with_shared_client(
                     host.clone(),
-                    self.direct_peer_port,
+                    port,
                     remaining,
                     client.clone(),
                 )?,
-                None => crate::client::direct_peer_tcp_client(
-                    host.clone(),
-                    self.direct_peer_port,
-                    remaining,
-                )?,
+                None => crate::client::direct_peer_tcp_client(host.clone(), port, remaining)?,
             },
         };
         let request = request
@@ -1564,6 +1576,8 @@ pub(crate) mod tests {
         pub(crate) _temporary_root: TempDir,
         pub(crate) router: StorageAndNudgeRouter,
         pub(crate) message_store: Arc<dyn MessageStore + Send + Sync>,
+        pub(crate) peer_config_store: Arc<dyn atm_storage::PeerConfigStore + Send + Sync>,
+        pub(crate) peer_port_resolver: atm_runtime::PeerPortResolver,
         pub(crate) pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
         pub(crate) task_store: Arc<dyn TaskStore + Send + Sync>,
         pub(crate) async_task_ledger_reader:
@@ -1573,6 +1587,23 @@ pub(crate) mod tests {
         pub(crate) database_path: PathBuf,
         pub(crate) home_dir: PathBuf,
         pub(crate) current_dir: PathBuf,
+    }
+
+    fn trust_loopback_at_port(fixture: &Fixture, port: u16) {
+        fixture
+            .peer_config_store
+            .save_trusted_peer(&atm_storage::TrustedPeer {
+                host: "127.0.0.1".parse().expect("loopback host"),
+                fingerprint: "a".repeat(64).parse().expect("test fingerprint"),
+                enabled: true,
+                https_port: NonZeroU16::new(port).expect("non-zero trusted port"),
+            })
+            .expect("persist trusted peer port");
+    }
+
+    fn different_port(port: u16) -> NonZeroU16 {
+        NonZeroU16::new(if port == 43_101 { 43_102 } else { 43_101 })
+            .expect("non-zero fallback test port")
     }
 
     /// Test-only opaque adapter: it preserves the selected authenticated-peer
@@ -1782,6 +1813,8 @@ pub(crate) mod tests {
             seed_fixture_roster(&assembly.shared_roster_store_arc(), &team);
         }
         let message_store = assembly.message_store_arc();
+        let peer_config_store = assembly.peer_config_store();
+        let peer_port_resolver = assembly.peer_port_resolver();
         let pending_nudge_store = assembly
             .service_runtime
             .pending_nudge_store()
@@ -1831,6 +1864,8 @@ pub(crate) mod tests {
             _temporary_root: temporary_root,
             router,
             message_store,
+            peer_config_store,
+            peer_port_resolver,
             pending_nudge_store,
             task_store,
             async_task_ledger_reader,
@@ -5943,10 +5978,12 @@ pub(crate) mod tests {
         // The sender need not carry a local roster entry for a recipient
         // resolved to a remote host. That peer owns receiver-hook selection.
         let mut local = fixture(false, None, None);
+        trust_loopback_at_port(&local, remote_port);
         local.router = local
             .router
             .clone()
-            .with_direct_peer_port(NonZeroU16::new(remote_port).expect("non-zero port"))
+            .with_direct_peer_port(different_port(remote_port))
+            .with_peer_port_resolver(local.peer_port_resolver.clone())
             .with_shared_direct_peer_client(
                 shared_direct_peer_client().expect("shared direct peer client"),
             );
@@ -6025,6 +6062,34 @@ pub(crate) mod tests {
                 .len(),
             1,
             "the peer ingress owns exactly one receiver hook"
+        );
+    }
+
+    #[tokio::test]
+    async fn host_qualified_write_without_trusted_port_fails_with_peer_config_error() {
+        let mut local = fixture(false, None, None);
+        local.router = local
+            .router
+            .clone()
+            .with_peer_port_resolver(local.peer_port_resolver.clone());
+        let mut outbound = write_request(local.home_dir.clone(), local.current_dir.clone());
+        outbound.to = Some(
+            "recipient@test-team.127.0.0.1"
+                .parse()
+                .expect("host-qualified recipient"),
+        );
+        let error = local
+            .router
+            .dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+            )
+            .await
+            .expect_err("missing trusted peer must not dial a default port");
+        assert_eq!(
+            error.code(),
+            atm_core::error_codes::AtmErrorCode::PeerConfigValidationFailed
         );
     }
 
@@ -6123,10 +6188,12 @@ pub(crate) mod tests {
             .port();
 
         let mut local = fixture(true, None, None);
+        trust_loopback_at_port(&local, remote_port);
         local.router = local
             .router
             .clone()
-            .with_direct_peer_port(std::num::NonZeroU16::new(remote_port).expect("non-zero port"))
+            .with_direct_peer_port(different_port(remote_port))
+            .with_peer_port_resolver(local.peer_port_resolver.clone())
             .with_shared_direct_peer_client(
                 shared_direct_peer_client().expect("shared direct peer client"),
             );

@@ -263,21 +263,17 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         .and_then(|source| source.split("impl LoopbackTcpConnector").next())
         .expect("direct-peer connector implementation");
     assert!(
-        bootstrap
-            .matches("parse_direct_peer_port(std::env::args_os())?")
-            .count()
-            == 2
-            && bootstrap
-                .matches("DirectPeerTcpConfig::configured(direct_peer_port)")
-                .count()
-                == 2
+        bootstrap.matches("configured_direct_peer_port(").count() == 1
+            && bootstrap.contains("assembly.peer_config_store().as_ref()")
+            && bootstrap.contains("DirectPeerTcpConfig::configured(configured_direct_peer_port(")
             && !bootstrap.contains("DirectPeerTcpConfig::standard()"),
-        "the bootstrap alone must select direct-peer ports from immutable daemon launch arguments"
+        "the bootstrap must select the direct-peer port from persisted peer interfaces"
     );
     assert!(
-        launch_config.contains("NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT)")
-            && launch_config.contains("--direct-peer-port may be supplied only once"),
-        "direct-peer launch configuration must default to the protocol port and reject ambiguous port selection"
+        launch_config.contains(".list_interfaces()?")
+            && launch_config.contains("no enabled peer interface configured")
+            && launch_config.contains("--direct-peer-port is unsupported"),
+        "direct-peer launch configuration must require the persisted account interface port"
     );
     let plaintext_adapter_arm = bootstrap
         .split("fn peer_stream_adapter_for_mode")
@@ -3652,6 +3648,9 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         .split("\n#[cfg(test)]\nmod tests")
         .next()
         .expect("router production/test split");
+    let peer_port = read_source(
+        &workspace_root().join("crates/atm-http-runtime/src/storage_and_nudge_router/peer_port.rs"),
+    );
     assert!(
         !production_router.contains("BlockingCoreBridge"),
         "D1 deletes the legacy BlockingCoreBridge identifier from production source"
@@ -3666,9 +3665,11 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         "graft_receiver_register".to_owned(),
         "graft_receiver_refresh".to_owned(),
         "graft_receiver_unregister".to_owned(),
+        "resolved_peer_port".to_owned(),
     ]);
+    let combined_router = format!("{production_router}\n{peer_port}");
     assert_eq!(
-        av3_bridge_run_call_sites_by_enclosing_fn(production_router),
+        av3_bridge_run_call_sites_by_enclosing_fn(&combined_router),
         residual,
         "AV-FU-1 owns the only permitted residual ControlPathSyncBridge::run call sites"
     );

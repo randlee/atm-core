@@ -534,6 +534,19 @@ def run_capacity(
         run_lifecycle_phase(evidence, "reset", clear_benchmark_database_state)
         before = count_atm_daemon_processes()
         home.mkdir(parents=True, exist_ok=False)
+        interface_setup = command_result(
+            [
+                str(atm), "peer", "interface", "set", "--bind", f"127.0.0.1:{direct_peer_port}",
+                "--advertise-host", disposable_peer_host(roster), "--enabled",
+            ],
+            timeout=10.0,
+            env=benchmark_runtime_client_environment(env),
+        )
+        if interface_setup["exit_code"] != 0:
+            raise SmokeError(
+                "could not persist benchmark peer interface: "
+                + (interface_setup["stderr"].strip() or interface_setup["stdout"].strip())
+            )
         if launch_peer_wire_security == "mutual-tls":
             # Every mTLS daemon launch validates its configured identity,
             # including the secure-default daemon used by the sqlite and UDS

@@ -615,14 +615,14 @@ Usage: atm peer trust [OPTIONS] <COMMAND>
 **Usage:**
 
 ```text
-Usage: atm peer trust add [OPTIONS] --host <HOST> --fingerprint <FINGERPRINT>
+Usage: atm peer trust add [OPTIONS] --host <HOST> --fingerprint <FINGERPRINT> --https-port <HTTPS_PORT>
 ```
 
 | Flag | Short | Value | Required | Default | Allowed values | Description |
 |------|-------|-------|----------|---------|----------------|-------------|
 | `--host` | `` | `HOST` | yes | `` |  | Durable hostname of the trusted peer |
 | `--fingerprint` | `` | `FINGERPRINT` | yes | `` |  | TLS certificate fingerprint expected from the peer |
-| `--https-port` | `` | `HTTPS_PORT` | no | `43101` |  | HTTPS port exposed by the trusted peer |
+| `--https-port` | `` | `HTTPS_PORT` | yes | `` |  | HTTPS port exposed by the trusted peer |
 | `--yes` | `` | `YES` | no | `false` |  | Confirm adding the trusted peer |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
@@ -660,14 +660,14 @@ Usage: atm peer trust migrate [OPTIONS]
 **Usage:**
 
 ```text
-Usage: atm peer trust replace [OPTIONS] --host <HOST> --fingerprint <FINGERPRINT>
+Usage: atm peer trust replace [OPTIONS] --host <HOST> --fingerprint <FINGERPRINT> --https-port <HTTPS_PORT>
 ```
 
 | Flag | Short | Value | Required | Default | Allowed values | Description |
 |------|-------|-------|----------|---------|----------------|-------------|
 | `--host` | `` | `HOST` | yes | `` |  | Durable hostname of the trusted peer |
 | `--fingerprint` | `` | `FINGERPRINT` | yes | `` |  | Replacement TLS certificate fingerprint |
-| `--https-port` | `` | `HTTPS_PORT` | no | `43101` |  | HTTPS port exposed by the trusted peer |
+| `--https-port` | `` | `HTTPS_PORT` | yes | `` |  | HTTPS port exposed by the trusted peer |
 | `--yes` | `` | `YES` | no | `false` |  | Confirm replacing the trusted-peer configuration |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 

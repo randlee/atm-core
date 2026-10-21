@@ -2082,14 +2082,14 @@
                   "short": null
                 },
                 {
-                  "has_default": true,
+                  "has_default": false,
                   "id": "https_port",
                   "long": "https-port",
                   "num_args": {
                     "max": 1,
                     "min": 1
                   },
-                  "required": false,
+                  "required": true,
                   "short": null
                 },
                 {
@@ -2210,14 +2210,14 @@
                   "short": null
                 },
                 {
-                  "has_default": true,
+                  "has_default": false,
                   "id": "https_port",
                   "long": "https-port",
                   "num_args": {
                     "max": 1,
                     "min": 1
                   },
-                  "required": false,
+                  "required": true,
                   "short": null
                 },
                 {

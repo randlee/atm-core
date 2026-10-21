@@ -19,6 +19,7 @@ use crate::legacy_storage_adapters::{
     StorageBackends, boundary_mail_store_view, boundary_roster_store_view, runtime_doctor_ports,
 };
 use crate::mailbox_runtime::StorageAsyncMailboxRuntime;
+use crate::peer_port::PeerPortResolver;
 use crate::task_telemetry::{TaskTelemetryRuntime, TaskTelemetrySetup};
 
 #[derive(Clone)]
@@ -316,6 +317,11 @@ impl RuntimeAssembly {
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
         Arc::clone(&self.peer_config_store)
     }
+
+    pub fn peer_port_resolver(&self) -> PeerPortResolver {
+        PeerPortResolver::new(self.peer_config_store())
+    }
+
     /// Returns the bootstrap-provided template-composition port, if enabled.
     pub fn template_composer(&self) -> Option<Arc<dyn TemplateComposer>> {
         self.service_runtime.template_composer()

@@ -72,7 +72,7 @@ use singleton_guard::SingletonGuards;
 pub use daemon_observability::DaemonObservability;
 pub use owner_gate::DaemonOwnerGuard;
 pub use peer_launch_config::{
-    parse_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
+    configured_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
 };
 pub use received_hook_selector::active_received_hook_selector;
 pub use received_hook_selector::active_received_hook_selector_with_health;
@@ -285,7 +285,6 @@ async fn run_replacement_daemon_with_owner(
     observability: Option<DaemonObservability>,
 ) -> Result<(), AtmError> {
     let peer_wire_mode = parse_peer_wire_mode(std::env::args_os())?;
-    let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         observability,
@@ -300,7 +299,6 @@ async fn run_replacement_daemon_with_owner(
         },
         resolve_daemon_launch_identity(),
         peer_wire_mode,
-        DirectPeerTcpConfig::configured(direct_peer_port),
         peer_pool_config,
         None,
     )
@@ -315,7 +313,6 @@ async fn run_replacement_daemon_with_owner(
 #[cfg(feature = "benchmark-harness")]
 pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), AtmError> {
     let peer_wire_mode = parse_peer_wire_mode(std::env::args_os())?;
-    let direct_peer_port = parse_direct_peer_port(std::env::args_os())?;
     let peer_pool_config = parse_peer_pool_config(std::env::args_os())?;
     run_replacement_daemon_with_selector(
         None,
@@ -331,7 +328,6 @@ pub async fn run_benchmark_daemon(hook_mode: BenchmarkHookMode) -> Result<(), At
         },
         resolve_daemon_launch_identity(),
         peer_wire_mode,
-        DirectPeerTcpConfig::configured(direct_peer_port),
         peer_pool_config,
         Some(Arc::new(
             received_hook_selector::BenchmarkNoopHerdrProcessAdapter,
@@ -457,7 +453,6 @@ async fn run_replacement_daemon_with_selector(
     ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
-    direct_peer_tcp: DirectPeerTcpConfig,
     peer_pool_config: PeerPoolConfig,
     herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
 ) -> Result<(), AtmError> {
@@ -469,6 +464,10 @@ async fn run_replacement_daemon_with_selector(
         start_atm_temp_sweeper(Arc::clone(&observability), daemon_launch_identity.clone())?;
     let herdr_config = daemon_herdr_config(&ProcessEnvSource)?;
     let assembly = assemble_daemon_runtime(obs_owner.as_ref())?;
+    let direct_peer_tcp = DirectPeerTcpConfig::configured(configured_direct_peer_port(
+        assembly.peer_config_store().as_ref(),
+        std::env::args_os(),
+    )?);
     let telemetry = assembly.task_telemetry.clone();
     let diagnostic_timeline = Arc::clone(&assembly.diagnostic_timeline);
     let diagnostic_counters = diagnostic_timeline::active_counters();

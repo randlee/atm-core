@@ -324,6 +324,7 @@ fn compose_storage_router(
         .with_state_handoff(HandoffConfig::default())?;
     let doctor_projection = build_doctor_projection(&assembly, Arc::clone(&observability))?;
     let task_telemetry = assembly.task_telemetry.clone();
+    let peer_port_resolver = assembly.peer_port_resolver();
     let handler = StorageAndNudgeRouter::new(
         assembly.service_runtime,
         observability,
@@ -331,6 +332,7 @@ fn compose_storage_router(
         daemon_home,
     )
     .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime))
+    .with_peer_port_resolver(peer_port_resolver)
     .with_doctor_projection(Arc::new(doctor_projection))
     .with_maintenance(queue_wake_pump)
     .with_runtime_health(runtime_health, assembly.doctor_ports)

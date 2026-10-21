@@ -1670,6 +1670,7 @@ mod tests {
         let rendered = render_doctor_peer_config(&PeerConfigDoctorReport {
             configured_interface_count: 2,
             enabled_interface_count: 1,
+            claimed_direct_peer_port: Some(43101),
             certificate_fingerprint: Some("sha256:public-fingerprint".to_string()),
             trusted_peer_count: 3,
             enabled_trusted_peer_count: 2,
@@ -1696,6 +1697,7 @@ mod tests {
         let rendered = render_doctor_peer_config(&PeerConfigDoctorReport {
             configured_interface_count: 1,
             enabled_interface_count: 1,
+            claimed_direct_peer_port: Some(43101),
             certificate_fingerprint: Some("sha256:public-fingerprint".to_string()),
             trusted_peer_count: 2,
             enabled_trusted_peer_count: 1,
