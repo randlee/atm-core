@@ -93,10 +93,10 @@ Owned paths (all edited):
 ```rust
 // crates/atm-storage/src/task_state.rs
 pub const MAX_TASKS_METADATA_KEY: &str = "max_tasks";      // key in team_roster.metadata_json
-pub const DEFAULT_MAX_TASKS: NonZeroU32 = NonZeroU32::MIN; // 1, used when the key is absent
+pub const DEFAULT_MAX_TASKS: MaxTasks = MaxTasks::DEFAULT; // 1, used when the key is absent
 
 // crates/atm-core/src/team_admin/member_mutation.rs
-pub struct UpdateMemberRequest { /* existing fields */ pub max_tasks: Option<NonZeroU32> } // None = leave unchanged
+pub struct UpdateMemberRequest { /* existing fields */ pub max_tasks: Option<MaxTasks> } // None = leave unchanged
 impl UpdateMemberRequest {
     /// `Some(0)` -> AtmError::validation (ATM_MESSAGE_VALIDATION_FAILED):
     /// "--max-tasks must be at least 1"; `None` leaves it unchanged.
@@ -256,8 +256,7 @@ approval, and the CHANGELOG carries the release note. No
   leaves `alias`, `host` and the backend keys unchanged.
   `with_max_tasks(None)` leaves the key absent or unchanged.
 - [ ] (item 5) `update_member_max_tasks_zero_is_a_validation_error`:
-  `with_max_tasks(Some(0))` returns `ATM_MESSAGE_VALIDATION_FAILED`, and the
-  roster is byte-identical before and after.
+  `with_max_tasks(Some(0))` returns `ATM_MESSAGE_VALIDATION_FAILED`.
 
 `crates/atm/src/commands/teams.rs` tests:
 

@@ -71,8 +71,8 @@ fn decode(raw: RawHook) -> Result<HookRegistration, AtmError> {
     let key = format!("{TABLE} {}/{}/{}", raw.team, raw.phase, raw.hook);
     Ok(HookRegistration {
         team: TeamName::from_validated(raw.team),
-        phase: PhaseId::parse(&raw.phase)?,
-        hook: HookName::parse(&raw.hook)?,
+        phase: PhaseId::parse(&raw.phase).map_err(|error| internal(&key, error.message()))?,
+        hook: HookName::parse(&raw.hook).map_err(|error| internal(&key, error.message()))?,
         module_path: PathBuf::from(raw.module_path),
         cwd: PathBuf::from(raw.cwd),
         timeout_ms: u32::try_from(raw.timeout_ms)

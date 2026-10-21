@@ -13,6 +13,12 @@ pub struct HookOutcome {
 }
 
 #[async_trait]
+/// Runs hook modules for the daemon.
+///
+/// The production runner kills a hook process group on Unix. Windows has no
+/// job-object implementation here, so `kill_on_drop` and the explicit child
+/// kill terminate only the direct hook process; its descendants can outlive
+/// the hook invocation.
 pub trait HookRunner: sealed::Sealed + Send + Sync {
     async fn run(
         &self,

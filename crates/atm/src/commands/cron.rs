@@ -474,16 +474,14 @@ impl CronCommand {
         composition: &CliComposition<'_>,
         request: RequestEnvelope,
     ) -> Result<String> {
-        match composition.execute_request(request).await? {
-            ResponseEnvelope::CronStarted(row) => Ok(format!(
+        let response = composition.execute_request(request).await?;
+        match (&self.command, response) {
+            (CronSubcommand::Start(_), ResponseEnvelope::CronStarted(row)) => Ok(format!(
                 "started {} for {}/{} (timeout {} ms)\n",
                 row.name, row.team, row.phase, row.timeout_ms
             )),
-            ResponseEnvelope::CronEnded(rows) => {
+            (CronSubcommand::End(args), ResponseEnvelope::CronEnded(rows)) => {
                 if rows.is_empty() {
-                    let CronSubcommand::End(args) = &self.command else {
-                        unreachable!()
-                    };
                     Ok(format!("no active schedules for phase {}\n", args.phase))
                 } else {
                     Ok(rows
@@ -492,13 +490,10 @@ impl CronCommand {
                         .collect())
                 }
             }
-            ResponseEnvelope::CronList(rows) => {
-                let CronSubcommand::List(args) = &self.command else {
-                    unreachable!()
-                };
+            (CronSubcommand::List(args), ResponseEnvelope::CronList(rows)) => {
                 crate::output::render_cron_list(&rows, args.json)
             }
-            other => Err(atm_daemon_client::unexpected_response("cron", other).into()),
+            (_, other) => Err(atm_daemon_client::unexpected_response("cron", other).into()),
         }
     }
 }

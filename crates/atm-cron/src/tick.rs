@@ -128,7 +128,6 @@ async fn reply_outcome(
     cron: &AtmCron,
     schedule: &CronSchedule,
     reply: HookReply,
-    run_deadline: RequestDeadline,
 ) -> CronRunOutcome {
     match reply {
         HookReply::Refused { message } => CronRunOutcome::Refused(message),
@@ -144,7 +143,7 @@ async fn reply_outcome(
                         team: schedule.team.clone(),
                         phase: schedule.phase.clone(),
                         default_as: schedule.created_by.clone(),
-                        deadline: Some(run_deadline),
+                        deadline: None,
                         dry_run: false,
                     },
                     actions,
@@ -205,7 +204,7 @@ pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunO
         .await
     {
         Err(error) => runner_error(error),
-        Ok(result) => reply_outcome(cron, schedule, result.reply, run_deadline).await,
+        Ok(result) => reply_outcome(cron, schedule, result.reply).await,
     };
     log(
         schedule,
@@ -262,18 +261,24 @@ mod tests {
             jitter: Arc::new(crate::SeqJitter::default()),
         });
         let outcomes = [
-            CronRunOutcome::Ok,
-            CronRunOutcome::Refused("quota".into()),
-            CronRunOutcome::Actions(3),
-            CronRunOutcome::SkippedInFlight,
-            CronRunOutcome::Exit(String::new()),
-            CronRunOutcome::Timeout,
-            CronRunOutcome::Malformed,
-            CronRunOutcome::ActionErr(AtmErrorCode::HookMalformed),
-            CronRunOutcome::StopCheckFailed(AtmErrorCode::HookTimeout),
-            CronRunOutcome::Stopped("done".into()),
+            (CronRunOutcome::Ok, "ok"),
+            (CronRunOutcome::Refused("quota".into()), "refused: quota"),
+            (CronRunOutcome::Actions(3), "actions: 3"),
+            (CronRunOutcome::SkippedInFlight, "skipped_in_flight"),
+            (CronRunOutcome::Exit(String::new()), "exit"),
+            (CronRunOutcome::Timeout, "timeout"),
+            (CronRunOutcome::Malformed, "malformed"),
+            (
+                CronRunOutcome::ActionErr(AtmErrorCode::HookMalformed),
+                "action_err: ATM_HOOK_MALFORMED",
+            ),
+            (
+                CronRunOutcome::StopCheckFailed(AtmErrorCode::HookTimeout),
+                "stop_check_failed: ATM_HOOK_TIMEOUT",
+            ),
+            (CronRunOutcome::Stopped("done".into()), "stopped: done"),
         ];
-        for (index, outcome) in outcomes.into_iter().enumerate() {
+        for (index, (outcome, expected_outcome)) in outcomes.into_iter().enumerate() {
             let row = cron
                 .start(CronStartSpec {
                     team: "test-team".parse().unwrap(),
@@ -298,7 +303,7 @@ mod tests {
                 .into_iter()
                 .find(|entry| entry.id == row.id)
                 .unwrap();
-            assert_eq!(saved.last_outcome, Some(outcome.as_str()));
+            assert_eq!(saved.last_outcome.as_deref(), Some(expected_outcome));
             if matches!(outcome, CronRunOutcome::Stopped(_)) {
                 assert!(!saved.active);
             } else {

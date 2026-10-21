@@ -141,7 +141,7 @@ fn decode(raw: RawCron) -> Result<CronSchedule, AtmError> {
         )
         .map_err(|_| internal(&key, "generation is zero"))?,
         team: TeamName::from_validated(raw.team),
-        phase: PhaseId::parse(&raw.phase)?,
+        phase: PhaseId::parse(&raw.phase).map_err(|error| internal(&key, error.message()))?,
         name: raw.name,
         cron_expr: raw.cron_expr,
         module_path: PathBuf::from(raw.module_path),

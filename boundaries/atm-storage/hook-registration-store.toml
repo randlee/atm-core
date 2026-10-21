@@ -48,5 +48,5 @@ lint_rules = ["LINT-BOUNDARY-HOOK-REGISTRATION-STORE-REFERENCES"]
 review_gates = ["no_cli_sqlite_lookup", "no_backend_to_core_edge_for_hook_registration_store"]
 
 [status]
-state = "stub_landed"
-notes = ["bk-1 lands the sealed trait, its row and id types, the in-memory double and the contract tests; the rusqlite implementation is bk-6"]
+state = "concrete_landed"
+notes = ["bk-1 lands the sealed trait, its row and id types, the in-memory double and the contract tests; bk-6 lands SqliteHookRegistrationStore in atm-storage-rusqlite"]

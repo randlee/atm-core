@@ -643,7 +643,6 @@ fn apply_queued_task_move(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
 /// The 1-based queue position of `task_id` in `order`.
 fn queue_position_of(order: &[TaskId], task_id: &TaskId) -> Result<QueuePosition, AtmError> {
     order

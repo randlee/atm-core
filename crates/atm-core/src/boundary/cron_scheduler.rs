@@ -42,6 +42,7 @@ pub struct CronStartSpec {
 pub struct RecordingCronScheduler {
     pub rows: std::sync::Mutex<Vec<CronSchedule>>,
     pub calls: std::sync::Mutex<Vec<&'static str>>,
+    pub start_pending: std::sync::atomic::AtomicBool,
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -55,6 +56,9 @@ impl CronScheduler for RecordingCronScheduler {
             .lock()
             .expect("cron calls mutex poisoned")
             .push("start");
+        if self.start_pending.load(std::sync::atomic::Ordering::SeqCst) {
+            std::future::pending::<()>().await;
+        }
         let mut rows = self.rows.lock().expect("cron rows mutex poisoned");
         let existing = rows.iter().position(|row| {
             row.team == spec.team && row.phase == spec.phase && row.name == spec.name.as_str()

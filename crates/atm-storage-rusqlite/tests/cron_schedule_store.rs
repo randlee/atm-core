@@ -205,6 +205,37 @@ fn active_all_matches_active_rows_from_list() {
 }
 
 #[test]
+fn list_schedules_orders_active_first_then_created_at_then_phase() {
+    let h = Harness::new();
+    let store = h.store();
+    store
+        .start(cron_spec("late", StopCondition::Hook, stamp(5)))
+        .expect("late");
+    store
+        .start(cron_spec("early", StopCondition::Hook, stamp(2)))
+        .expect("early");
+    let mut other_phase = cron_spec("zulu", StopCondition::Hook, stamp(2));
+    other_phase.phase = PhaseId::parse("bj").expect("phase");
+    store.start(other_phase).expect("earlier phase");
+    store
+        .start(cron_spec("alpha", StopCondition::Hook, stamp(2)))
+        .expect("earlier name");
+    store
+        .start(cron_spec("ended", StopCondition::Hook, stamp(1)))
+        .expect("ended");
+    store
+        .end(&team(), &phase(), Some("ended"), stamp(6))
+        .expect("end");
+    let names: Vec<String> = store
+        .list(None, None)
+        .expect("list")
+        .into_iter()
+        .map(|row| row.name)
+        .collect();
+    assert_eq!(names, ["zulu", "alpha", "early", "late", "ended"]);
+}
+
+#[test]
 fn stop_condition_check_and_round_trip() {
     let h = Harness::new();
     let until_text = stamp_text(9);
@@ -493,6 +524,24 @@ fn malformed_stored_args_is_an_internal_error_naming_the_row() {
         .store()
         .list(None, None)
         .expect_err("corrupt args is refused");
+    assert_eq!(error.code(), AtmErrorCode::InternalError);
+    assert!(error.message().contains("cron_schedule id 1"));
+}
+
+#[test]
+fn malformed_stored_phase_is_an_internal_error_naming_the_row() {
+    let h = Harness::new();
+    h.store()
+        .start(cron_spec("nightly", StopCondition::Hook, stamp(1)))
+        .expect("start");
+    h.sql()
+        .execute("UPDATE cron_schedule SET phase = 'BK'", [])
+        .expect("corrupt phase");
+
+    let error = h
+        .store()
+        .list(None, None)
+        .expect_err("corrupt phase is refused");
     assert_eq!(error.code(), AtmErrorCode::InternalError);
     assert!(error.message().contains("cron_schedule id 1"));
 }

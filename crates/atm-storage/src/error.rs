@@ -23,7 +23,7 @@ impl AtmError {
         }
     }
 
-    fn with_recovery(
+    pub(crate) fn with_recovery(
         code: AtmErrorCode,
         detail: impl Into<String>,
         recovery: impl Into<String>,

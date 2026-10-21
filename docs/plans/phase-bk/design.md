@@ -634,7 +634,7 @@ is appended. The CLI exit arms are bk-5's
 | Constructor | Message |
 | --- | --- |
 | `hook_exit(cause: HookExitCause)` | `Exit { code, stderr_tail }`: `HOOK.EXIT: exit <code>: <tail>`; `Signal(n)`: `HOOK.EXIT: terminated by signal <n>`; `Spawn { path, cause }`: `HOOK.EXIT: cannot run <path>: <cause>`; `Panic(payload)`: `HOOK.EXIT: hook runner panicked: <payload>`; `Missing(what)`: `HOOK.EXIT: <what>` (e.g. `python3 not found on PATH`) |
-| `hook_timeout(phase: &PhaseId, detail: &str)` | `HOOK.TIMEOUT: phase <p>: <detail>`; detail is `no reply within <n> ms`, `request budget exhausted before the hook ran`, `budget exhausted before spawn` or `doctor budget exhausted` |
+| `hook_timeout(phase: &PhaseId, detail: &str)` | `HOOK.TIMEOUT: phase <p>: <detail>`; detail is `no reply within <n> ms (limited by configured timeout|request deadline)`, `request budget exhausted before the hook ran`, `budget exhausted before spawn` or `doctor budget exhausted` |
 | `hook_malformed(detail: &str)` | `HOOK.MALFORMED: <detail>` |
 | `hook_module_invalid(detail: &str)` | `HOOK.MODULE_INVALID: <detail>` |
 | `hook_refused(message: &str)` | `<message>` |
@@ -642,8 +642,10 @@ is appended. The CLI exit arms are bk-5's
 
 ### 9.2 Action commands
 
-`HookAction { command: String, run_as: Option<AgentName> (serde "as"),
-request: serde_json::Value }`, with `deny_unknown_fields`.
+`HookAction { command: HookActionCommand, run_as: Option<AgentName> (serde
+"as"), request: serde_json::Value }`, with `deny_unknown_fields`. The closed
+enum (846c6a094) rejects unknown commands while preserving the JSON command
+strings at the contract boundary.
 `HookAction::into_api_request(&self, team: &TeamName, default_as: &AgentName)
 -> Result<ApiRequest, AtmError>` deserializes `request` as the type in this
 table, checks the condition and the team field, and sets the identity field
@@ -753,7 +755,9 @@ impl TaskCommand {
   besides the test double; it runs each action's `ApiRequest` through
   that entry, so no action reaches a filter. `dispatch_actions(spec:
   DispatchSpec { hook, team, phase, default_as, deadline, dry_run },
-  actions)`; with `dry_run` it validates every action and dispatches none.
+  actions) -> Result<Vec<DispatchedAction>, AtmError>` returns one recorded
+  command/response pair per dispatched action; with `dry_run` it validates
+  every action and dispatches none.
   A reply carries at most `HOOK_ACTIONS_MAX` = 32 actions (a longer list
   is `ATM_HOOK_MALFORMED`), which bounds one task or cron run. The three
   `HookRunner` methods stay separate: they differ in argv, stdin and the
@@ -787,10 +791,18 @@ Constants in `atm_storage::request_budget` (bk-1): `HOOK_TIMEOUT_MAX_MS =
   `doctor` uses `doctor_budget`: `min(timeout_ms,
   remaining)` with no reserve, `None` giving `ATM_HOOK_TIMEOUT` "doctor
   budget exhausted" without spawning.
+- A timed-out child reports the remaining child budget that was actually
+  enforced: `no reply within <n> ms (limited by configured timeout)` when
+  `timeout_ms` binds, or `no reply within <n> ms (limited by request
+  deadline)` when the request deadline binds. This message contract records
+  the enforced-budget behavior from finding `atm-bk-3.group-qa-f2`,
+  introduced by commit `071991330`.
 - `RequestDeadline` (bk-2) derives `PartialEq, Eq` and gains
-  `remaining_ms()` (0 when expired) and `minus(Duration)`. Tests compare a
-  recorded deadline by equality to the one passed, or bound it, never
-  assert a time exactly.
+  `remaining_ms()` (0 when expired) and `minus(Duration)`. `minus` uses
+  `checked_sub` and falls back to `Instant::now()` when subtraction is not
+  representable, keeping an impossible earlier deadline expired rather than
+  preserving the original deadline. Tests compare a recorded deadline by
+  equality to the one passed, or bound it, never assert a time exactly.
 - Task-hook actions reuse the request's remaining deadline. A cron tick or
   stop check passes `RequestDeadline::after(timeout_ms +
   HOOK_ACTION_RESERVE_MS)`, so the runner's budget is the row's
@@ -819,10 +831,11 @@ result. On unix the child gets `process_group(0)` and a
 timeout kills the group with `if let Some(pid) =
 child.id().and_then(|id| Pid::from_raw(id as i32)) {
 rustix::process::kill_process_group(pid, Signal::KILL) }` (workspace `rustix` 1.1 with `process`, already in
-`Cargo.lock`, used only in `process_deadline.rs`). On Windows only the
-hook process is killed and its children are not; this is a known
-limitation (ADR-068 D4), there is no Windows job-object code, and
-`hooks.md` documents it. On elapsed the helper then
+`Cargo.lock`, used only in `process_deadline.rs`). Windows has no job-object
+implementation here, so `kill_on_drop` and the explicit child kill terminate
+only the direct hook process; its descendants can outlive the hook invocation.
+This is a known limitation (ADR-068 D4), and `hooks.md` documents it. On
+elapsed the helper then
 calls `kill().await` and returns a phase-less `SpawnFailure::TimedOut {
 after_ms }`, which `DaemonHookRunner` converts to `hook_timeout(phase, "no
 reply within <n> ms")`. `hook_runner.rs` spawns only through this helper;
@@ -831,8 +844,8 @@ reply within <n> ms")`. `hook_runner.rs` spawns only through this helper;
 read unbounded output, which a hook cannot use. The helper is
 `spawn_until(spec, stdin, cancel)` with `spawn_with_deadline` passing
 `sleep(remaining)` as `cancel`, so a test cancels on a signal instead of a
-timer. A `GroupKillGuard` held until the child is reaped kills the group
-on drop, so an aborted or dropped call orphans no grandchild.
+timer. On Unix, a `GroupKillGuard` held until the child is reaped kills the
+group on drop, so an aborted or dropped call orphans no grandchild.
 `DaemonHookRunner` holds a semaphore of `HOOK_CONCURRENCY_MAX` = 16 live
 hook children shared by task chains, cron runs and doctor; a permit not
 acquired within the call's budget is `hook_timeout(phase, "hook
@@ -854,7 +867,7 @@ concurrency limit reached")` with no spawn.
 the chain decision and the action dispatch inside one task spawned through
 the router's `ChainTracker` over cloned `Arc`s; shutdown refuses new
 chains, waits for live ones up to its deadline, then aborts them
-(`daemon_unavailable` "hook chain cancelled: daemon shutting down"). The
+(`daemon_unavailable` "hook chain was cancelled while the daemon was shutting down"). The
 snapshot holds `Arc<HookRegistration>` rows and each `HookRequest` is built
 only when its hook runs. The task returns `Result<Decision, AtmError>`, with `enum
 Decision { Inner, Refused(String), Done(ApiResponse) }`. The filter maps
@@ -911,7 +924,7 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
   what it reads), `runner: Option<Arc<dyn HookRunner>>` (doctor only),
   `local_host: Option<HostName>`, and `cron:
   Arc<OnceLock<Arc<dyn CronScheduler>>>`, shared by clones. Unset, the cron
-  routes return `daemon_unavailable("cron scheduler not installed")`.
+  routes return `daemon_unavailable("cron scheduler is unavailable because daemon startup did not install it")`.
   `install_cron_scheduler(&self, Arc<dyn CronScheduler>) -> Result<(),
   AtmError>` errors on a second call. There are no `Noop` types.
 - bk-5, in `run_replacement_daemon_with_selector`
@@ -928,8 +941,11 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
   the listener's finish as a future; its steps are `cron_worker`, then
   `hook_chains` (begin shutdown, drain to the deadline), then `listener`.
   The three functions live in `cron_composition.rs`. The three functions are extracted so the in-crate
-  tests call them with no listener. `CronWorkerHandle::shutdown` stops scheduling,
-  awaits in-flight runs until the deadline, then aborts them.
+  tests call them with no listener. The `cron_worker` step uses
+  `min(deadline, Instant::now() + 1 s)` as its deadline: a stuck cron run
+  cannot consume the replacement daemon's full drain budget needed by the
+  following hook-chain and listener steps. `CronWorkerHandle::shutdown` stops
+  scheduling, awaits in-flight runs until that deadline, then aborts them.
 
 ### 9.10 Doctor collection
 

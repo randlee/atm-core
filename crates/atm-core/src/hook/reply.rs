@@ -186,6 +186,15 @@ impl HookAction {
     fn write_request(&self, team: &TeamName, identity: &AgentName) -> Result<ApiRequest, AtmError> {
         let mut request: WriteRequest = self.body()?;
         self.check_team(&request.caller_team, team)?;
+        if request.authenticated_source_host.is_some()
+            || request.peer_http_api_version.is_some()
+            || request.origin_message_id.is_some()
+            || request.origin_timestamp.is_some()
+        {
+            return Err(
+                self.malformed("request must not supply authenticated peer provenance fields")
+            );
+        }
         request.caller_identity = identity.clone();
         match self.command {
             HookActionCommand::Send
@@ -621,6 +630,16 @@ mod tests {
         malformed(
             action(HookActionCommand::Send, json!({})).into_api_request(&team(), &identity()),
         );
+        for (field, value) in [
+            ("authenticated_source_host", json!("peer.example.test")),
+            ("peer_http_api_version", json!("1.0.0")),
+            ("origin_message_id", json!("01ARZ3NDEKTSV4RRFFQ69G5FAV")),
+            ("origin_timestamp", json!("2026-10-20T00:00:00Z")),
+        ] {
+            let mut body = write_body();
+            body[field] = value;
+            malformed(action(HookActionCommand::Send, body).into_api_request(&team(), &identity()));
+        }
         assert!(
             serde_json::from_value::<HookAction>(
                 json!({"command":"send", "request":{}, "extra":1})

@@ -1,7 +1,23 @@
 //! Contract tests for the hook registration and cron schedule stores.
 //!
-//! Run against the in-memory doubles with fixed timestamps; bk-6 runs the
-//! same cases against SQLite.
+//! The SQLite integration tests run these fixed-timestamp contract cases:
+//! `active_all_order_equals_active_order_for_every_key`,
+//! `active_all_spans_teams` (the multi-team assertions from
+//! `active_all_spans_teams_and_counts_calls`),
+//! `disable_keeps_rows_inactive`,
+//! `disable_phase_with_no_rows_returns_empty`,
+//! `disable_single_hook_leaves_other_hooks_of_phase_active`,
+//! `disable_twice_keeps_first_disabled_at`,
+//! `list_orders_active_first_then_registered_at_then_phase`,
+//! `list_schedules_orders_active_first_then_created_at_then_phase`,
+//! `record_run_on_ended_row_changes_nothing`, `record_stop_ends_the_row_once`,
+//! `record_with_stale_generation_changes_nothing`,
+//! `register_second_phase_same_hook_succeeds`,
+//! `reregister_active_key_keeps_chain_position`,
+//! `reregister_disabled_key_lists_last`,
+//! `start_after_end_updates_in_place_and_bumps_generation`, and
+//! `start_refuses_active_duplicate`. Double-only call/write-counter and
+//! injected-failure assertions are not part of the SQLite contract suite.
 
 #![cfg(feature = "test-utils")]
 
@@ -86,6 +102,20 @@ fn phases(rows: &[HookRegistration]) -> Vec<String> {
 
 fn generation(value: u32) -> CronGeneration {
     CronGeneration::new(value).expect("generation")
+}
+
+#[test]
+fn new_cron_schedule_requires_a_stop_condition() {
+    assert_eq!(
+        serde_json::to_value(StopCondition::Hook).expect("serialize hook stop"),
+        serde_json::json!({"kind": "hook"})
+    );
+
+    let until = StopCondition::Until { at: stamp(3) };
+    let serialized = serde_json::to_value(&until).expect("serialize until stop");
+    let decoded: StopCondition =
+        serde_json::from_value(serialized).expect("deserialize until stop");
+    assert_eq!(decoded, until);
 }
 
 #[test]

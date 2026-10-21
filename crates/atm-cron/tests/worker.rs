@@ -1,8 +1,10 @@
 use std::{
     collections::BTreeSet,
     fs,
+    future::Future,
     path::{Path, PathBuf},
     sync::{Arc, atomic::Ordering},
+    task::{Context, Poll, Waker},
     time::Duration,
 };
 
@@ -494,11 +496,25 @@ async fn ticks_fire_only_when_the_manual_clock_reaches_them() {
 async fn missed_ticks_are_not_replayed_after_a_pause() {
     let fixture = Fixture::new();
     fixture.reply(HookReply::PassThrough);
+    fixture.reply(HookReply::PassThrough);
     fixture.cron.start(fixture.spec("missed")).await.unwrap();
+    let (release, mut entered) = fixture.hold();
     let worker = fixture.worker().await;
     fixture.step(180 * 60).await;
-    shutdown(&worker).await;
+    wait_for_entered(&mut entered, 1).await;
     assert_eq!(fixture.calls(), 1);
+    let parks = fixture.clock.parks();
+    release.send_replace(true);
+    fixture.clock.wait_parks_above(parks).await;
+    assert_eq!(fixture.calls(), 1);
+    assert_eq!(*entered.borrow(), 1);
+    fixture.step(0).await;
+    assert_eq!(fixture.calls(), 1);
+    assert_eq!(*entered.borrow(), 1);
+    fixture.step(60).await;
+    wait_for_entered(&mut entered, 2).await;
+    assert_eq!(fixture.calls(), 2);
+    shutdown(&worker).await;
 }
 
 #[tokio::test]
@@ -685,7 +701,7 @@ async fn tick_request_has_the_seven_keys_and_args_in_request_only() {
 #[tokio::test]
 async fn cron_tick_uses_cron_timeout_ms_not_timeout_ms() {
     let fixture = Fixture::new();
-    fixture.reply(HookReply::PassThrough);
+    fixture.reply(HookReply::Handled(actions()));
     let mut spec = fixture.spec("timeout");
     spec.stop = StopCondition::Hook;
     fixture
@@ -713,6 +729,9 @@ async fn cron_tick_uses_cron_timeout_ms_not_timeout_ms() {
     release.send_replace(true);
     shutdown(&worker).await;
     assert_eq!(fixture.calls(), 2);
+    let dispatches = fixture.dispatcher.calls.lock().unwrap();
+    assert_eq!(dispatches.len(), 1);
+    assert_eq!(dispatches[0].spec.deadline, None);
     for (_, _, deadline) in fixture.runner.calls.lock().unwrap().iter() {
         assert_eq!(
             deadline.remaining_ms_at(fixture.clock.monotonic_now()),
@@ -1157,15 +1176,17 @@ async fn shutdown_joins_within_deadline_with_run_in_flight() {
     assert_eq!(fixture.row().last_outcome, None);
 }
 
-#[tokio::test]
-async fn shutdown_waits_for_cancelled_run_cleanup() {
+#[tokio::test(start_paused = true)]
+async fn shutdown_deadline_aborts_the_held_run_before_returning() {
     struct Dropped(watch::Sender<bool>);
     impl Drop for Dropped {
         fn drop(&mut self) {
             self.0.send_replace(true);
         }
     }
+
     let fixture = Fixture::new();
+    let logs = capture_logs();
     let (entered, mut received) = watch::channel(false);
     let (dropped, finished) = watch::channel(false);
     *fixture.runner.before_reply.lock().unwrap() = Some(Arc::new(move |_| {
@@ -1181,9 +1202,67 @@ async fn shutdown_waits_for_cancelled_run_cleanup() {
     let worker = fixture.worker().await;
     fixture.step(60).await;
     wait_for_release(&mut received).await;
-    worker.shutdown(tokio::time::Instant::now()).await;
-    assert!(*finished.borrow());
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+    tokio::join!(worker.shutdown(deadline), async {
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(1)).await;
+    });
+
+    assert!(*finished.borrow(), "aborting the worker drops the held run");
     assert_eq!(fixture.row().last_outcome, None);
+    assert!(
+        logs.lock()
+            .unwrap()
+            .iter()
+            .any(|entry| entry.contains("action=\"shutdown_deadline\""))
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn shutdown_waits_for_cleanup_after_worker_stops() {
+    struct Dropped {
+        entered: std::sync::mpsc::Sender<()>,
+        running: watch::Sender<usize>,
+        release: std::sync::mpsc::Receiver<()>,
+    }
+    impl Drop for Dropped {
+        fn drop(&mut self) {
+            self.entered.send(()).expect("cleanup entry was observed");
+            self.release.recv().expect("cleanup release was sent");
+            self.running.send_replace(0);
+        }
+    }
+
+    // The worker has stopped, but a cancelled run is still cleaning up.
+    // Polling shutdown directly makes its settled-wait decision observable
+    // without relying on when Tokio schedules a spawned shutdown task.
+    let (running, settled) = watch::channel(1);
+    let finished = settled.clone();
+    let worker = CronWorkerHandle::with_settled_for_test(settled);
+    let (cleanup_entered, cleanup_started) = std::sync::mpsc::channel();
+    let (release, parked) = std::sync::mpsc::channel();
+    let cleanup = std::thread::spawn(move || {
+        drop(Dropped {
+            entered: cleanup_entered,
+            running,
+            release: parked,
+        });
+    });
+    cleanup_started.recv().expect("cleanup entered");
+
+    let mut shutdown = Box::pin(worker.shutdown(tokio::time::Instant::now() + TEST_WAIT_TIMEOUT));
+    let waker = Waker::noop();
+    let mut context = Context::from_waker(waker);
+    let pending_while_held = matches!(shutdown.as_mut().poll(&mut context), Poll::Pending);
+    release.send(()).unwrap();
+    cleanup.join().unwrap();
+    assert!(
+        pending_while_held,
+        "shutdown returned before cleanup finished"
+    );
+    shutdown.await;
+    assert_eq!(*finished.borrow(), 0);
 }
 
 fn actions() -> Vec<atm_core::hook::HookAction> {
@@ -1217,8 +1296,8 @@ async fn three_actions_dispatch_once_in_order_as_created_by() {
         .filter_map(|(_, call, deadline)| matches!(call, HookCall::Run(_)).then_some(*deadline))
         .collect();
     assert_eq!(run_deadlines.len(), calls.len());
-    for (dispatch, run_deadline) in calls.iter().zip(run_deadlines) {
-        assert_eq!(dispatch.spec.deadline, Some(run_deadline));
+    for dispatch in calls.iter() {
+        assert_eq!(dispatch.spec.deadline, None);
     }
     assert!(!calls[0].spec.dry_run);
     assert_eq!(fixture.row().last_outcome.as_deref(), Some("actions: 3"));

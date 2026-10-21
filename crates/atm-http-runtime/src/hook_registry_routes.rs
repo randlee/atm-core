@@ -39,9 +39,9 @@ fn require_local(ingress: AuthenticatedIngress) -> Result<(), AtmError> {
 
 fn check_timeout(timeout_ms: u32, max: u32, name: &str) -> Result<(), AtmError> {
     if timeout_ms == 0 || timeout_ms > max {
-        return Err(AtmError::validation_with_recovery(
-            format!("{name}={timeout_ms} is outside the accepted 1..={max} milliseconds"),
-            format!("Set {name} to a value from 1 through {max} milliseconds and retry."),
+        return Err(AtmError::hook_module_invalid_with_recovery(
+            &format!("{name}={timeout_ms} is outside the accepted 1..={max} milliseconds"),
+            &format!("Set {name} to a value from 1 through {max} milliseconds and retry."),
         )
         .with_cause(format!("{name} timeout bounds validation failed")));
     }
@@ -388,11 +388,11 @@ mod tests {
     }
 
     fn assert_timeout_validation(error: &AtmError, name: &str, timeout_ms: u32, max: u32) {
-        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert_eq!(error.code(), AtmErrorCode::HookModuleInvalid);
         assert_eq!(
             error.message(),
             format!(
-                "{name}={timeout_ms} is outside the accepted 1..={max} milliseconds\n  Recovery: Set {name} to a value from 1 through {max} milliseconds and retry."
+                "HOOK.MODULE_INVALID: {name}={timeout_ms} is outside the accepted 1..={max} milliseconds\n  Recovery: Set {name} to a value from 1 through {max} milliseconds and retry."
             )
         );
         let expected_cause = format!("{name} timeout bounds validation failed");
@@ -430,7 +430,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn dirty_reload_and_registration_write_serialize_on_the_bridge() {
         let routes = routes();
         let snapshot = routes.router.hooks.snapshot.clone().expect("snapshot");
@@ -455,23 +455,25 @@ mod tests {
                 .await
                 .expect("reload reached the store");
         }
-        let write = {
-            let router = routes.router.clone();
-            tokio::spawn(async move {
-                router
-                    .hook_register(
-                        register_request("sender", "task.assign", "bk"),
-                        AuthenticatedIngress::Local,
-                        deadline(),
-                    )
-                    .await
-                    .map(|_| ())
-            })
-        };
+        assert_eq!(
+            routes
+                .router
+                .control_path_sync_bridge
+                .blocking_bridge()
+                .available_permits(),
+            0,
+            "the paused reload must own the only control-path bridge permit"
+        );
+        let mut write = Box::pin(routes.router.hook_register(
+            register_request("sender", "task.assign", "bk"),
+            AuthenticatedIngress::Local,
+            deadline(),
+        ));
+        assert_pending_once(write.as_mut());
         pause.release();
 
         reload.await.expect("reload task").expect("reload");
-        write.await.expect("write task").expect("write");
+        write.await.expect("write");
         let rows = snapshot
             .current(
                 &routes.router.control_path_sync_bridge,
@@ -539,7 +541,7 @@ mod tests {
         router.service_runtime = router
             .service_runtime
             .clone()
-            .with_hook_registration_store(hooks);
+            .with_hook_registration_store(hooks.clone());
 
         let error = router
             .hook_register(
@@ -555,6 +557,41 @@ mod tests {
             error.message(),
             "hook snapshot is unavailable because hook-filter startup wiring was not installed\n  Recovery: Install the hook filter during daemon startup before serving hook registry routes, then retry.",
         );
+        assert_eq!(hooks.calls.load(Ordering::SeqCst), 0);
+        assert!(hooks.active_all().expect("rows").is_empty());
+    }
+
+    #[tokio::test]
+    async fn disable_route_without_installed_filter_fails_closed() {
+        let fixture = fixture(true, None, None);
+        let hooks = Arc::new(InMemoryHookRegistrationStore::default());
+        let mut router = fixture.router.clone();
+        router.service_runtime = router
+            .service_runtime
+            .clone()
+            .with_hook_registration_store(hooks.clone());
+
+        let error = router
+            .hook_disable(
+                HookDisableRequest {
+                    caller_identity: agent("sender"),
+                    caller_team: team(),
+                    phase: phase("bk"),
+                    hook: None,
+                },
+                AuthenticatedIngress::Local,
+                deadline(),
+            )
+            .await
+            .expect_err("a router without a hook filter has no snapshot to refresh");
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert_eq!(
+            error.message(),
+            "hook snapshot is unavailable because hook-filter startup wiring was not installed\n  Recovery: Install the hook filter during daemon startup before serving hook registry routes, then retry.",
+        );
+        assert_eq!(hooks.calls.load(Ordering::SeqCst), 0);
+        assert!(hooks.active_all().expect("rows").is_empty());
     }
 
     #[tokio::test]
@@ -1380,6 +1417,31 @@ mod tests {
             assert!(error.message().contains("request deadline expired"));
         }
         assert!(routes.cron.calls.lock().expect("calls").is_empty());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cron_start_times_out_when_scheduler_never_completes() {
+        let routes = routes();
+        routes.cron.start_pending.store(true, Ordering::SeqCst);
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            routes.router.cron_start(
+                cron_request("sender", 1_000, json!({})),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            ),
+        )
+        .await
+        .expect("cron route must enforce its request deadline");
+        let error = result.expect_err("a stalled scheduler must time out");
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert_eq!(
+            error.message(),
+            "request deadline expired during cron schedule start\n  Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry."
+        );
+        assert_eq!(*routes.cron.calls.lock().expect("calls"), vec!["start"]);
     }
 
     #[tokio::test]

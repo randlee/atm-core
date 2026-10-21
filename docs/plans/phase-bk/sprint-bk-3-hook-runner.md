@@ -83,7 +83,7 @@ impl atm_core::boundary::sealed::Sealed for DaemonHookRunner {}
 // exhausted"); no spawn either way. Then timeout(budget, permits.acquire_owned()): elapsed is hook_timeout(phase, "hook concurrency limit
 // reached"), no spawn; the permit is held until the child is reaped. After `spec()` validates the target, an exhausted
 // `budget - waited` is hook_timeout(phase, "budget exhausted before spawn"), no spawn; otherwise spawn_with_deadline uses it:
-// TimedOut -> hook_timeout(phase, "no reply within <timeout_ms> ms"); exit n -> hook_exit(Exit{code: n, stderr_tail}); signal ->
+// TimedOut -> hook_timeout(phase, "no reply within <n> ms (limited by configured timeout|request deadline)"); exit n -> hook_exit(Exit{code: n, stderr_tail}); signal ->
 // hook_exit(Signal(n)); exit 0 -> HookReply::parse / StopReply::parse / HookDoctorReply::parse of stdout, errors unchanged.
 /// The only task-hook and cron budget arithmetic: Some(min(timeout_ms, remaining - HOOK_ACTION_RESERVE_MS)) when positive, else None.
 pub(crate) fn runner_budget(timeout_ms: u32, remaining: Duration) -> Option<Duration>;
@@ -119,10 +119,10 @@ unchanged and hooks get `spawn_until`.
    recorded set: tokio — `atm-daemon-bootstrap/src/process_deadline.rs`,
    `atm-daemon-bootstrap/src/received_hook_selector.rs`,
    `atm-herdr/src/transport_cli.rs`, `atm/src/commands/send_to.rs`; std —
-   `atm-daemon-client/src/lib.rs`, `atm/src/commands/internal_nudge.rs`,
-   `sc-lint-boundary/src/graph.rs`. REQ-BK-D3's locked check names this
-   file; `io_forbidden_source_modules` covers one crate's modules, this
-   covers the workspace.
+   `atm-daemon-client/src/lib.rs`, `atm/src/commands/internal_nudge.rs`.
+   REQ-BK-D3's locked check names these files;
+   `io_forbidden_source_modules` covers one crate's modules, this covers the
+   workspace.
 3. `fixture_hook.py` (§9.8 `__main__` block): prints `fixture_reply.json`
    from its cwd, writes stdin to `fixture_request.json` and `os.environ`
    to `fixture_env.json`; implements `task.close` unless
@@ -142,15 +142,15 @@ unchanged and hooks get `spawn_until`.
 
 `crates/atm-daemon-bootstrap/src/hook_runner.rs::tests` unless stated:
 
-- [ ] (ANC-012) `boundary:BOUNDARY-HookRunner` `process_deadline.rs::tests::cancel_kills_child_and_grandchild` (`#[cfg(unix)]`, FIFO above; the cancel future is a oneshot fired after `r`): `Err(TimedOut)` is returned after the child is reaped and the FIFO reaches EOF; `::abort_kills_the_process_group` (the same, aborting the task running `spawn_until` instead: EOF); `runner_timeout_returns_hook_timeout` (module sleeping 3600 s, `timeout_ms = 200`: `HOOK.TIMEOUT: phase bk: no reply within 200 ms`).
-- [ ] (REQ-BK-ERRORS) `boundary:BOUNDARY-HookRunner` each message pinned to the failure table: `nonzero_exit_returns_hook_exit_with_stderr_tail` (`HOOK.EXIT: exit 3: <tail>`), `hook_killed_by_signal_reports_signal` (unix, the module kills itself with SIGKILL: `terminated by signal 9`), `module_exception_returns_hook_exit_with_traceback_tail` (holds `ValueError: boom`), `stdout_over_cap_is_malformed_and_child_reaped`, `not_json_stdout_is_malformed`, `python3_missing_returns_hook_exit` (empty `PATH` dir), `{module_path,cwd}_missing_returns_hook_exit` (`cannot run <path>: `), `zero_remaining_budget_returns_timeout_without_spawn` (`RequestDeadline::after(ZERO)`: `request budget exhausted before the hook ran`, no `fixture_request.json`), `doctor_expired_deadline_times_out_without_spawn`.
+- [ ] (ANC-012) `boundary:BOUNDARY-HookRunner` `process_deadline.rs::tests::cancel_kills_child_and_grandchild` (`#[cfg(unix)]`, FIFO above; the cancel future is a oneshot fired after `r`): `Err(TimedOut)` is returned after the child is reaped and the FIFO reaches EOF; `::abort_kills_the_process_group` (the same, aborting the task running `spawn_until` instead: EOF); `runner_timeout_returns_hook_timeout` (module that never replies, `timeout_ms = 200`: `ATM_HOOK_TIMEOUT`); `timeout_reports_effective_budget_and_binding_limit` (controlled inputs pin exact messages: `no reply within 200 ms (limited by configured timeout)` and `no reply within 75 ms (limited by request deadline)`).
+- [ ] (REQ-BK-ERRORS) `boundary:BOUNDARY-HookRunner` each message pinned to the failure table: `nonzero_exit_returns_hook_exit_with_stderr_tail` (`HOOK.EXIT: exit 3: <tail>`), `hook_killed_by_signal_reports_signal` (unix, the module kills itself with SIGKILL: `terminated by signal 9`), `module_exception_returns_hook_exit_with_traceback_tail` (holds `ValueError: boom`), `stdout_over_cap_is_malformed`; `process_deadline.rs::tests::output_overflow_kills_both_fifo_writers_and_reaps_child` proves overflow kills both FIFO writers and reaps the child, `not_json_stdout_is_malformed`, `python3_missing_returns_hook_exit` (empty `PATH` dir), `{module_path,cwd}_missing_returns_hook_exit` (`cannot run <path>: `), `zero_remaining_budget_returns_timeout_without_spawn` (`RequestDeadline::after(ZERO)`: `request budget exhausted before the hook ran`, no `fixture_request.json`), `doctor_expired_deadline_times_out_without_spawn`.
 - [ ] (service limit) `boundary:BOUNDARY-HookRunner` `saturated_runner_times_out_without_spawn` (`start_paused`, `with_limit(env, 0)`, `timeout_ms = 2500`, deadline 10 s: `HOOK.TIMEOUT: phase bk: hook concurrency limit reached`, no `fixture_request.json`).
 - [ ] (§9.7 stdin) `boundary:BOUNDARY-HookRunner` `module_exiting_without_reading_stdin_reports_its_exit_code` (128 KiB `custom`, `sys.exit(3)` first: `HOOK.EXIT: exit 3`); `module_never_reading_stdin_times_out` (128 KiB, sleeps 3600 s, `timeout_ms = 200`: `ATM_HOOK_TIMEOUT`).
 - [ ] (D-5) `boundary:BOUNDARY-HookRunner` `runner_budget_rules` (pure): `(2500, 10 s)` → 2500 ms, `(2500, 2 s)` → 1500 ms, `(30000, 600 ms)` → 100 ms, `(2500, 500 ms)` and `(2500, 0)` → `None`; `doctor_budget_has_no_reserve`: `(2500, 600 ms)` → 600 ms, `(2500, 10 s)` → 2500 ms, `(2500, 0)` → `None`.
 - [ ] (ANC-003, ANC-022) `boundary:BOUNDARY-HookRunner` `stdin_is_the_request_and_custom_is_byte_identical`: `fixture_request.json` equals `serde_json::to_vec(&request)` and its `custom` equals `serde_json::to_string(&target.custom)` for `{"goal":"ship","n":[1,{"y":null}]}`; argv[1] is `request.hook`.
-- [ ] (REQ-BK-D1) `boundary:BOUNDARY-HookRunner` `runner_passes_daemon_path_and_home_values`: `fixture_env.json` keys are exactly `{ATM_TEAM, ATM_PHASE, PATH, HOME}` on unix with the values given to `new`, and `os.getcwd()` is the target cwd; `hook_env_rules` (pure, both `windows` values): unix without `HOME` or `PATH` is `hook_exit(Missing)`; windows without `HOME` succeeds, without `SystemRoot` or `USERPROFILE` fails, and `Path` is found as `PATH`; `#[cfg(windows)] windows_runner_works_without_home_and_with_path_cased_Path`.
+- [ ] (REQ-BK-D1) `boundary:BOUNDARY-HookRunner` `runner_passes_daemon_path_and_home_values`: `fixture_env.json` keys are exactly `{ATM_TEAM, ATM_PHASE, PATH, HOME}` on unix with the values given to `new`, and `os.getcwd()` is the target cwd; `hook_env_rules` (pure, both `windows` values): unix without `HOME` or `PATH` is `hook_exit(Missing)`; windows without `HOME` succeeds, without `SystemRoot` or `USERPROFILE` fails, and `Path` is found as `PATH`; `#[cfg(windows)] windows_runner_works_without_home_and_with_mixed_case_path`.
 - [ ] (ADR-068 D3, ADR-069 D4, ANC-024) `boundary:BOUNDARY-HookRunner` `doctor_sends_team_phase_custom_and_returns_findings` (argv[1] `doctor` for a registration and a schedule target, stdin `HookDoctorRequest::for_target`; the §9.10 example gives one finding; `{"ok":1}` is `ATM_HOOK_MALFORMED`); `stop_parses_both_shapes_and_refuses_missing_reason` (argv[1] and stdin `hook` are `cron.stop`).
-- [ ] (REQ-BK-D3) `boundary:BOUNDARY-HookRunner` `process_spawn_sites.rs::process_spawn_sites_are_the_recorded_files` (the seven files of deliverable 2, paths relative to `crates/`, split by `tokio`/`std`); `received_hook_selector.rs` is unchanged; `just lint` passes with `process_spawn` forbidden in `hook_runner` and `hook-runner.toml` `concrete_landed`.
+- [ ] (REQ-BK-D3) `boundary:BOUNDARY-HookRunner` `process_spawn_sites.rs::process_spawn_sites_are_the_recorded_files` (the six files of deliverable 2, paths relative to `crates/`, split by `tokio`/`std`); `received_hook_selector.rs` is unchanged; `just lint` passes with `process_spawn` forbidden in `hook_runner` and `hook-runner.toml` `concrete_landed`.
 - [ ] (ANC-010) `boundary:BOUNDARY-HookRunner` `rg -n '"bd"|\.beads' crates/atm-daemon-bootstrap/src` matches nothing.
 
 ## Authoritative validation

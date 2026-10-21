@@ -4,7 +4,7 @@
 //! touched the store (ANC-014).
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TryRecvError};
 use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
@@ -24,7 +24,7 @@ const PAUSE_DEADLINE: Duration = Duration::from_secs(10);
 pub struct InMemoryHookRegistrationStore {
     rows: Mutex<Vec<HookRegistration>>,
     pub calls: AtomicUsize,
-    /// When set, `active_all` fails once with an injected error (refresh failure tests).
+    /// When set, `active_all` fails every call with an injected error (refresh failure tests).
     pub fail_active_all: AtomicBool,
     pause: Mutex<Option<PauseSlot>>,
 }
@@ -42,16 +42,27 @@ struct PauseSlot {
 pub struct ActiveAllPause {
     entered: Mutex<Receiver<()>>,
     release: SyncSender<()>,
+    entry_deadline: Duration,
 }
 
 impl ActiveAllPause {
     /// Blocks until a store read has reached the pause. Panics if none arrives
-    /// within [`PAUSE_DEADLINE`], so a missed pause fails instead of hanging.
+    /// within this pause's entry deadline, so a missed pause fails instead of hanging.
     pub fn wait_entered(&self) {
         let entered = self.entered.lock().unwrap_or_else(PoisonError::into_inner);
-        match entered.recv_timeout(PAUSE_DEADLINE) {
+        let result = if self.entry_deadline.is_zero() {
+            // A negative test can inspect the empty channel without using a clock.
+            entered.try_recv().map_err(|error| match error {
+                TryRecvError::Empty => RecvTimeoutError::Timeout,
+                TryRecvError::Disconnected => RecvTimeoutError::Disconnected,
+            })
+        } else {
+            entered.recv_timeout(self.entry_deadline)
+        };
+        match result {
             Err(RecvTimeoutError::Timeout) => panic!(
-                "hook registration pause: timed out after {PAUSE_DEADLINE:?} waiting for a paused active_all to reach the pause (entered)"
+                "hook registration pause: timed out after {:?} waiting for a paused active_all to reach the pause (entered)",
+                self.entry_deadline
             ),
             Ok(()) | Err(RecvTimeoutError::Disconnected) => {}
         }
@@ -71,6 +82,12 @@ impl InMemoryHookRegistrationStore {
     /// The next `active_all` reports entry and then blocks until the returned
     /// pause is released; later calls run unpaused.
     pub fn pause_next_active_all(&self) -> ActiveAllPause {
+        self.pause_next_active_all_with_deadline(PAUSE_DEADLINE)
+    }
+
+    /// Like `pause_next_active_all`, with a deadline for observing entry.
+    /// The store's release wait retains its normal 10-second safety limit.
+    pub fn pause_next_active_all_with_deadline(&self, entry_deadline: Duration) -> ActiveAllPause {
         let (entered_tx, entered_rx) = std::sync::mpsc::sync_channel(1);
         let (release_tx, release_rx) = std::sync::mpsc::sync_channel(1);
         *self.pause.lock().unwrap_or_else(PoisonError::into_inner) = Some(PauseSlot {
@@ -80,6 +97,7 @@ impl InMemoryHookRegistrationStore {
         ActiveAllPause {
             entered: Mutex::new(entered_rx),
             release: release_tx,
+            entry_deadline,
         }
     }
 
@@ -246,7 +264,7 @@ mod tests {
     #[test]
     fn wait_entered_panics_naming_entered_when_no_read_reaches_the_pause() {
         let store = InMemoryHookRegistrationStore::new();
-        let pause = store.pause_next_active_all();
+        let pause = store.pause_next_active_all_with_deadline(Duration::ZERO);
 
         let failure =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| pause.wait_entered()))

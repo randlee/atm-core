@@ -217,6 +217,16 @@ pub struct CronWorkerHandle {
 }
 
 impl CronWorkerHandle {
+    #[cfg(feature = "test-utils")]
+    #[doc(hidden)]
+    pub fn with_settled_for_test(settled: watch::Receiver<usize>) -> Self {
+        Self {
+            shutdown: Mutex::new(None),
+            worker: Mutex::new(None),
+            settled,
+        }
+    }
+
     /// Stops the worker within the supplied daemon shutdown deadline.
     pub async fn shutdown(&self, deadline: tokio::time::Instant) {
         if let Some(sender) = self
@@ -232,18 +242,29 @@ impl CronWorkerHandle {
             .lock()
             .expect("cron worker lock poisoned")
             .take();
+        let mut deadline_expired = false;
         if let Some(mut worker) = worker
             && tokio::time::timeout_at(deadline, &mut worker)
                 .await
                 .is_err()
         {
+            deadline_expired = true;
+            let running = *self.settled.borrow();
+            tracing::error!(
+                subsystem = "atm_cron",
+                action = "shutdown_deadline",
+                outcome = "failed",
+                running,
+                "cron shutdown deadline passed with {running} run(s) still in flight"
+            );
             worker.abort();
             let _ = worker.await;
         }
         let mut settled = self.settled.clone();
-        if tokio::time::timeout_at(deadline, settled.wait_for(|running| *running == 0))
-            .await
-            .is_err()
+        if !deadline_expired
+            && tokio::time::timeout_at(deadline, settled.wait_for(|running| *running == 0))
+                .await
+                .is_err()
         {
             let running = *self.settled.borrow();
             tracing::error!(
@@ -272,15 +293,42 @@ impl Drop for CronWorkerHandle {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{
+        future::Future,
+        sync::{Arc, Mutex},
+        task::{Context, Poll, Waker},
+        time::Duration,
+    };
 
     use atm_core::{
         boundary::CronScheduleStore,
         error::{AtmError, AtmErrorCode},
     };
     use atm_runtime_test_support::InMemoryCronScheduleStore;
+    use tokio::sync::watch;
 
-    use super::store_call;
+    use super::{CronWorkerHandle, store_call};
+
+    #[tokio::test(start_paused = true)]
+    async fn shutdown_waits_for_in_flight_runs_after_worker_join() {
+        let (running, settled) = watch::channel(1);
+        let worker = CronWorkerHandle {
+            shutdown: Mutex::new(None),
+            worker: Mutex::new(None),
+            settled,
+        };
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+        let mut shutdown = Box::pin(worker.shutdown(deadline));
+        let waker = Waker::noop();
+        let mut context = Context::from_waker(waker);
+
+        assert!(matches!(
+            shutdown.as_mut().poll(&mut context),
+            Poll::Pending
+        ));
+        running.send_replace(0);
+        shutdown.await;
+    }
 
     #[tokio::test]
     async fn store_task_join_error_keeps_its_source_and_specific_code() {

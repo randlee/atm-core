@@ -170,15 +170,7 @@ async fn merge(cron: &AtmCron, slots: &mut Vec<Slot>, rows: Vec<CronSchedule>) {
             .iter()
             .position(|slot| unchanged(&slot.schedule, &schedule))
         {
-            let mut slot = previous.remove(index);
-            match next_time(&schedule, cron.deps.clock.now()) {
-                Ok(Some(next)) => {
-                    slot.next = Some(next);
-                    slots.push(slot);
-                }
-                Ok(None) => stop_exhausted(cron, &schedule).await,
-                Err(error) => log_next_time_error(&schedule, &error),
-            }
+            slots.push(previous.remove(index));
         } else {
             match next_time(&schedule, cron.deps.clock.now()) {
                 Ok(Some(next)) => slots.push(Slot {
@@ -420,7 +412,13 @@ pub(crate) async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "test-utils")]
+    use crate::{AtmCronDeps, SeqJitter, SystemClock};
     use atm_core::test_support::TEST_SENDER;
+    #[cfg(feature = "test-utils")]
+    use atm_runtime_test_support::{
+        DummyHookRunner, InMemoryCronScheduleStore, RecordingHookActionDispatcher,
+    };
 
     #[test]
     fn reload_retry_doubles_per_failure_then_caps_at_one_minute() {
@@ -457,6 +455,31 @@ mod tests {
             "last_run_at":null,"last_outcome":null,"ended_at":null
         }))
         .unwrap()
+    }
+
+    #[cfg(feature = "test-utils")]
+    #[tokio::test]
+    async fn merge_keeps_a_due_next_for_an_unchanged_slot() {
+        let cron = AtmCron::new(AtmCronDeps {
+            store: Arc::new(InMemoryCronScheduleStore::new()),
+            runner: Arc::new(DummyHookRunner::default()),
+            dispatcher: Arc::new(RecordingHookActionDispatcher::default()),
+            clock: Arc::new(SystemClock),
+            host: None,
+            jitter: Arc::new(SeqJitter::default()),
+        });
+        let schedule = row();
+        let due = Utc::now() - Duration::seconds(1);
+        let mut slots = vec![Slot {
+            schedule: schedule.clone(),
+            next: Some(due),
+            in_flight: None,
+        }];
+
+        merge(&cron, &mut slots, vec![schedule]).await;
+
+        assert_eq!(slots.len(), 1);
+        assert_eq!(slots[0].next, Some(due));
     }
 
     #[test]

@@ -487,6 +487,8 @@ mod tests {
     use serial_test::serial;
     use tempfile::tempdir;
 
+    use crate::delivery_channel::BACKEND_TYPE_METADATA_KEY;
+
     use super::{
         AddMemberRequest, BackendOptions, BackupRequest, ClearNudgeTemplateOverrideRequest,
         DisableNudgeTemplateOverrideRequest, MemberName, MembersQuery, RemoveMemberRequest,
@@ -1359,12 +1361,16 @@ mod tests {
     #[serial(team_config_write_env)]
     fn update_member_max_tasks_writes_roster_metadata() {
         let roster_store = RecordingRosterStore::default();
+        let mut member = roster_member(TEST_TEAM, TEST_SENDER);
+        member
+            .metadata_json
+            .insert("alias".into(), serde_json::json!("arch"));
+        member
+            .metadata_json
+            .insert(BACKEND_TYPE_METADATA_KEY.into(), serde_json::json!("local"));
         roster_store.seed_team(
             TEST_TEAM,
-            vec![
-                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
-                roster_member(TEST_TEAM, TEST_SENDER),
-            ],
+            vec![roster_member(TEST_TEAM, ROLE_TEAM_LEAD), member],
         );
         let host_request = UpdateMemberRequest::new(
             ROLE_TEAM_LEAD.parse().expect("caller"),
@@ -1407,6 +1413,11 @@ mod tests {
             Some(&serde_json::json!("fastpc4.local")),
             "setting max_tasks leaves the host unchanged"
         );
+        assert_eq!(metadata.get("alias"), Some(&serde_json::json!("arch")));
+        assert_eq!(
+            metadata.get(BACKEND_TYPE_METADATA_KEY),
+            Some(&serde_json::json!("local"))
+        );
 
         let untouched_request = UpdateMemberRequest::new(
             ROLE_TEAM_LEAD.parse().expect("caller"),
@@ -1433,14 +1444,6 @@ mod tests {
 
     #[test]
     fn update_member_max_tasks_zero_is_a_validation_error() {
-        let roster_store = RecordingRosterStore::default();
-        roster_store.seed_team(
-            TEST_TEAM,
-            vec![
-                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
-                roster_member(TEST_TEAM, TEST_SENDER),
-            ],
-        );
         let Err(error) = UpdateMemberRequest::new(
             ROLE_TEAM_LEAD.parse().expect("caller"),
             TEST_TEAM.parse().expect("caller team"),
@@ -1459,12 +1462,6 @@ mod tests {
         };
         assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
         assert!(error.message().contains("at least 1"), "{error}");
-        assert!(
-            stored_member_metadata(&roster_store, TEST_TEAM, TEST_SENDER)
-                .get("max_tasks")
-                .is_none(),
-            "a refused request never reaches the roster"
-        );
     }
 
     #[test]
