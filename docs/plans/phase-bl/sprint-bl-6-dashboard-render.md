@@ -25,3 +25,23 @@ It consumes persisted aggregate state; it does not collect, evaluate, or send.
 Persisted fresh/stale/never-read fixtures cover header age, status-bar
 wording, agents placeholder, DAG/fallback styles and TTY/plain show output.
 Run frozen ruff, pyright and pytest; this sprint does not close TUI paths.
+
+## Governing text (verbatim)
+
+> "if you don't have valid data, don't force an error."
+
+> "I spent a lot of time on it and the color doesn't show up hardly anywhere"
+
+### Acceptance checklist
+
+- [ ] `test_header_shows_content_age_when_carried`: t0 content at t0+300 shows t0, 5m and typed reason.
+- [ ] `test_header_no_age_when_fresh`: equal times have no age text.
+- [ ] `test_status_bar_carried_since`: bar labels carried data, not failure time as data age.
+- [ ] `test_agents_placeholder_first_failure`: failed members read has typed unavailable line.
+- [ ] `test_dag_icons_coloured`: DAG icon spans carry anchored hex colour.
+- [ ] `test_fallback_icons_coloured`: fallback icon spans carry anchored colour.
+- [ ] `test_show_ansi_on_tty_plain_otherwise`: TTY has ANSI; pipe does not.
+
+## Non-closure
+
+Quality/Diagnostics console paths remain bl-7; event delivery remains bl-3.
