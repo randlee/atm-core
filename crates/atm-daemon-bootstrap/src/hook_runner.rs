@@ -667,9 +667,9 @@ mod tests {
         assert_eq!(fixture.json("fixture_argv.json"), json!(["task.close"]));
     }
 
-    #[test]
-    fn runner_passes_daemon_path_and_home_values() {
-        let output = environment_probe_output();
+    #[tokio::test(flavor = "current_thread")]
+    async fn runner_passes_daemon_path_and_home_values() {
+        let output = environment_probe_output().await;
         assert!(
             output.status.success(),
             "{}\n{}",
@@ -679,17 +679,28 @@ mod tests {
         assert!(String::from_utf8_lossy(&output.stdout).contains("BK3_ENVIRONMENT_PROOF_COMPLETE"));
     }
 
-    fn environment_probe_output() -> std::process::Output {
-        std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "hook_runner::tests::environment_child_probe",
-                "--ignored",
-                "--nocapture",
-            ])
-            .env("ATM_BK3_LEAK_SENTINEL", "1")
-            .output()
-            .unwrap()
+    async fn environment_probe_output() -> SpawnedOutput {
+        let mut env: Vec<_> = std::env::vars_os()
+            .filter(|(name, _)| name != "ATM_BK3_LEAK_SENTINEL")
+            .collect();
+        env.push((OsString::from("ATM_BK3_LEAK_SENTINEL"), OsString::from("1")));
+        spawn_with_deadline(
+            SpawnSpec {
+                program: std::env::current_exe().unwrap(),
+                args: vec![
+                    "--exact".into(),
+                    "hook_runner::tests::environment_child_probe".into(),
+                    "--ignored".into(),
+                    "--nocapture".into(),
+                ],
+                env,
+                cwd: std::env::current_dir().unwrap(),
+            },
+            &[],
+            Duration::from_secs(60),
+        )
+        .await
+        .unwrap()
     }
 
     #[ignore = "runs only in the sentinel child process"]
