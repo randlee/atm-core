@@ -4,8 +4,8 @@
 {"sprint":"bl-8","wave":1,"depends_on":[]}
 {"sprint":"bl-10","wave":1,"depends_on":["bl-1"]}
 {"sprint":"bl-11","wave":1,"depends_on":[]}
-{"sprint":"bl-3","wave":2,"depends_on":["bl-1"]}
-{"sprint":"bl-5","wave":2,"depends_on":["bl-2","bl-3"]}
+{"sprint":"bl-3","wave":2,"depends_on":["bl-1","bl-10"]}
+{"sprint":"bl-5","wave":2,"depends_on":["bl-1","bl-2"]}
 {"sprint":"bl-6","wave":2,"depends_on":["bl-1"]}
 {"sprint":"bl-7","wave":2,"depends_on":["bl-1","bl-4"]}
 {"sprint":"bl-12","wave":3,"depends_on":["bl-3","bl-4","bl-5","bl-7"]}
