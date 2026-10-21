@@ -41,7 +41,7 @@ GitHub 600 s; source-specific timeouts/rate limits remain source rules. Each
 record has value plus `SourceStamp(last_success,last_attempt,last_error,since)`.
 Only last_success gates collection, so failure or partial data is eligible on
 the next request. The contract has force: r bypasses only due eligibility,
-respects the per-collector lock, waits through the injected result seam when a
+respects the per-collector lock, returns the in-progress/persisted record when a
 lock is held, and never issues a second query. Success restarts that
 collector's poll timer; failure stays due. Cron and TUI may request a
 collector; fresh callers receive current persisted data and duplicate requests
