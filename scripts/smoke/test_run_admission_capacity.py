@@ -1093,6 +1093,8 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
                 mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(RUNNER, "disposable_peer_host", return_value="capacity-test.example.test"),
+                mock.patch.object(RUNNER, "command_result", return_value={"exit_code": 0, "stdout": "", "stderr": ""}),
                 mock.patch.object(RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("stop after evidence setup")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=Path(directory) / "raw.json"),
                 mock.patch.object(
@@ -1131,6 +1133,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
                 mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(RUNNER, "disposable_peer_host", return_value="capacity-test.example.test"),
                 mock.patch.object(
                     RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("setup failed"),
                 ),
@@ -1177,6 +1180,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "disposable_peer_host", return_value="capacity-test.example.test"),
                 mock.patch.object(RUNNER, "command_result", return_value={"exit_code": 0, "stdout": "", "stderr": ""}),
                 mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, output)),
                 mock.patch.object(
