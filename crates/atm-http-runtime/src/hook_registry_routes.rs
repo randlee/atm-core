@@ -39,9 +39,10 @@ fn require_local(ingress: AuthenticatedIngress) -> Result<(), AtmError> {
 
 fn check_timeout(timeout_ms: u32, max: u32, name: &str) -> Result<(), AtmError> {
     if timeout_ms == 0 || timeout_ms > max {
-        return Err(AtmError::hook_module_invalid(&format!(
-            "{name}={timeout_ms} is outside the accepted 1..={max} milliseconds"
-        ))
+        return Err(AtmError::hook_module_invalid_with_recovery(
+            &format!("{name}={timeout_ms} is outside the accepted 1..={max} milliseconds"),
+            &format!("Set {name} to a value from 1 through {max} milliseconds and retry."),
+        )
         .with_cause(format!("{name} timeout bounds validation failed")));
     }
     Ok(())
@@ -391,7 +392,7 @@ mod tests {
         assert_eq!(
             error.message(),
             format!(
-                "HOOK.MODULE_INVALID: {name}={timeout_ms} is outside the accepted 1..={max} milliseconds\n  Recovery: Register a task hook module path and name the hook from the supported list, then retry."
+                "HOOK.MODULE_INVALID: {name}={timeout_ms} is outside the accepted 1..={max} milliseconds\n  Recovery: Set {name} to a value from 1 through {max} milliseconds and retry."
             )
         );
         let expected_cause = format!("{name} timeout bounds validation failed");

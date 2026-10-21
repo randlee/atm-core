@@ -68,6 +68,14 @@ impl AtmError {
         )
     }
 
+    pub fn hook_module_invalid_with_recovery(detail: &str, recovery: &str) -> Self {
+        Self::with_recovery(
+            AtmErrorCode::HookModuleInvalid,
+            format!("HOOK.MODULE_INVALID: {detail}"),
+            recovery,
+        )
+    }
+
     /// The hook's refusal message, shown verbatim with no `Recovery:` line.
     pub fn hook_refused(message: &str) -> Self {
         Self::new(AtmErrorCode::HookRefused, message)
