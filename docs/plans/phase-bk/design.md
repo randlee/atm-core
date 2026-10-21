@@ -812,9 +812,10 @@ itself and spawns it. One `timeout(remaining)` joins the stdin write and
 close, the wait and both pipe reads, so a module that never reads stdin
 cannot block the daemon. A `BrokenPipe` write error is ignored: a module
 that exits without reading stdin is judged by its exit status and
-stdout. stdout is capped at 1 MiB and stderr at 64 KiB through
-bounded `take()` reads; overflow kills the child and is
-`ATM_HOOK_MALFORMED`. On unix the child gets `process_group(0)` and a
+stdout. stdout is capped at 1 MiB through a bounded `take()` read;
+overflow kills the child and is `ATM_HOOK_MALFORMED`. stderr keeps only
+its last 64 KiB; overflow is not an error, and the exit status decides the
+result. On unix the child gets `process_group(0)` and a
 timeout kills the group with `if let Some(pid) =
 child.id().and_then(|id| Pid::from_raw(id as i32)) {
 rustix::process::kill_process_group(pid, Signal::KILL) }` (workspace `rustix` 1.1 with `process`, already in
