@@ -499,8 +499,10 @@ async fn missed_ticks_are_not_replayed_after_a_pause() {
     fixture.cron.start(fixture.spec("missed")).await.unwrap();
     let worker = fixture.worker().await;
     fixture.step(180 * 60).await;
-    shutdown(&worker).await;
     assert_eq!(fixture.calls(), 1);
+    fixture.step(60).await;
+    assert_eq!(fixture.calls(), 2);
+    shutdown(&worker).await;
 }
 
 #[tokio::test]
