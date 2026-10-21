@@ -174,14 +174,15 @@ jobs:
         with:
           path: assets
           pattern: "{x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,x86_64-apple-darwin,aarch64-apple-darwin,x86_64-pc-windows-msvc,hermes-atm-wheels-*,atm-graft-sdist}"
-          merge-multiple: true
       - name: Generate checksums and publish GitHub prerelease assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          find assets -type f -exec cp {} . \;
+          find assets -maxdepth 2 -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} . \;
+          find assets/hermes-atm-wheels-* -maxdepth 1 -type f -name 'atm_graft*.whl' -exec cp {} . \;
+          find assets/hermes-atm-wheels-linux-x86_64 -maxdepth 1 -type f \( -name 'hermes_atm*.whl' -o -name 'atm_query*.whl' \) -exec cp {} . \;
           mapfile -t assets_to_publish < <(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.whl' \) -print | sed 's#^./##' | sort -u)
           ((${#assets_to_publish[@]} > 0)) || { echo "no prerelease assets were downloaded" >&2; exit 1; }
           shasum -a 256 "${assets_to_publish[@]}" > checksums.txt

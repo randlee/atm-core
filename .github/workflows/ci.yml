@@ -636,19 +636,10 @@ jobs:
             '
 
       - name: Upload release-wheel candidates
-        if: ${{ matrix.artifact == 'linux-x86_64' }}
         uses: actions/upload-artifact@v4
         with:
           name: hermes-atm-wheels-${{ matrix.artifact }}
           path: dist/*.whl
-          if-no-files-found: error
-
-      - name: Upload platform atm-graft wheel candidate
-        if: ${{ matrix.artifact != 'linux-x86_64' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: hermes-atm-wheels-${{ matrix.artifact }}
-          path: dist/atm_graft*.whl
           if-no-files-found: error
 
   hermes-atm-abi3-compat:
