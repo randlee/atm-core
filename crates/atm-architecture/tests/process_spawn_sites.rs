@@ -9,8 +9,20 @@ fn test_only(attributes: &[syn::Attribute]) -> bool {
         attribute.path().is_ident("cfg")
             && attribute
                 .parse_args::<syn::Meta>()
-                .is_ok_and(|meta| matches!(meta, syn::Meta::Path(path) if path.is_ident("test")))
+                .is_ok_and(|meta| configuration_requires_test(&meta))
     })
+}
+
+fn configuration_requires_test(meta: &syn::Meta) -> bool {
+    match meta {
+        syn::Meta::Path(path) => path.is_ident("test"),
+        syn::Meta::List(list) if list.path.is_ident("all") => list
+            .parse_args_with(
+                syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+            )
+            .is_ok_and(|requirements| requirements.iter().any(configuration_requires_test)),
+        _ => false,
+    }
 }
 
 fn files(directory: &Path) -> Vec<PathBuf> {
@@ -103,6 +115,54 @@ impl<'ast> Visit<'ast> for SpawnSites {
     fn visit_item_fn(&mut self, item: &'ast syn::ItemFn) {
         if !test_only(&item.attrs) {
             syn::visit::visit_item_fn(self, item);
+        }
+    }
+
+    fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+        if !test_only(&item.attrs) {
+            syn::visit::visit_item_impl(self, item);
+        }
+    }
+
+    fn visit_item_trait(&mut self, item: &'ast syn::ItemTrait) {
+        if !test_only(&item.attrs) {
+            syn::visit::visit_item_trait(self, item);
+        }
+    }
+
+    fn visit_impl_item_fn(&mut self, item: &'ast syn::ImplItemFn) {
+        if !test_only(&item.attrs) {
+            syn::visit::visit_impl_item_fn(self, item);
+        }
+    }
+
+    fn visit_impl_item_const(&mut self, item: &'ast syn::ImplItemConst) {
+        if !test_only(&item.attrs) {
+            syn::visit::visit_impl_item_const(self, item);
+        }
+    }
+
+    fn visit_item_const(&mut self, item: &'ast syn::ItemConst) {
+        if !test_only(&item.attrs) {
+            syn::visit::visit_item_const(self, item);
+        }
+    }
+
+    fn visit_item_static(&mut self, item: &'ast syn::ItemStatic) {
+        if !test_only(&item.attrs) {
+            syn::visit::visit_item_static(self, item);
+        }
+    }
+
+    fn visit_trait_item_fn(&mut self, item: &'ast syn::TraitItemFn) {
+        if !test_only(&item.attrs) {
+            syn::visit::visit_trait_item_fn(self, item);
+        }
+    }
+
+    fn visit_trait_item_const(&mut self, item: &'ast syn::TraitItemConst) {
+        if !test_only(&item.attrs) {
+            syn::visit::visit_trait_item_const(self, item);
         }
     }
 
@@ -224,5 +284,33 @@ fn aliases_and_qualified_calls_are_found_but_tests_and_unrelated_commands_are_no
     );
     let mut visitor = SpawnSites::default();
     visitor.scan(&syn::parse_file("use cargo_metadata::MetadataCommand; fn run() { MetadataCommand::new(); } #[cfg(test)] fn test() { std::process::Command::new(\"x\"); }").unwrap());
+    assert!(visitor.kinds.is_empty());
+}
+
+#[test]
+fn cfg_test_items_are_excluded_across_supported_item_kinds() {
+    let file = syn::parse_file(
+        r#"
+            use std::process::Command;
+            struct Fixture;
+            impl Fixture {
+                #[cfg(test)]
+                fn helper() { Command::new("impl-helper"); }
+                #[cfg(all(test, unix))]
+                const HELPER: () = { Command::new("impl-const"); };
+            }
+            #[cfg(all(test, unix))]
+            const TEST_COMMAND: () = { Command::new("const"); };
+            #[cfg(all(unix, test))]
+            static TEST_FACTORY: () = { Command::new("static"); };
+            #[cfg(test)]
+            trait TestOnlyTrait {
+                fn helper() { Command::new("trait-helper"); }
+            }
+        "#,
+    )
+    .unwrap();
+    let mut visitor = SpawnSites::default();
+    visitor.scan(&file);
     assert!(visitor.kinds.is_empty());
 }

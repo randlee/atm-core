@@ -12,6 +12,7 @@ pub mod error_codes;
 pub mod factory;
 pub mod hook_error;
 pub mod hook_registration_store;
+pub mod hook_types;
 pub mod peer_catalog_audit;
 mod peer_contract;
 mod read_lane_error;
@@ -60,7 +61,8 @@ pub use contract::{
     roster_write_delta, team_scoped_roster_unique_name_collisions,
 };
 pub use cron_schedule_store::{
-    CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule, StopCondition,
+    CronGeneration, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule,
+    StopCondition, stopped_outcome,
 };
 pub use diagnostics::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
@@ -73,7 +75,8 @@ pub use factory::{
     StorageHandles, WriteThroughRosterStore,
 };
 pub use hook_error::HookExitCause;
-pub use hook_registration_store::{HookName, HookRegistration, HookRegistrationStore, PhaseId};
+pub use hook_registration_store::{HookRegistration, HookRegistrationStore};
+pub use hook_types::{CRON_NAME_MAX_BYTES, CronName, HookName, PhaseId, TaskHook};
 pub use peer_catalog_audit::TrustedPeerCatalogAudit;
 pub use read_lane_error::ReadLaneError;
 pub use roles::ROLE_WORKER;

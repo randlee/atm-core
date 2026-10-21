@@ -8,9 +8,12 @@ use std::path::PathBuf;
 
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
-use crate::hook_registration_store::PhaseId;
+use crate::hook_types::PhaseId;
 
 /// Why a hook process produced no usable reply.
+///
+/// Kept beside the shared error constructors by the bk-1 contract, even though
+/// the runner produces these causes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HookExitCause {
     /// The hook exited non-zero; `stderr_tail` is the last bytes of its stderr.
@@ -28,6 +31,8 @@ pub enum HookExitCause {
 }
 
 impl AtmError {
+    /// Deliberately renders a typed runner cause as one stable `ATM_HOOK_EXIT`
+    /// message; the cause is not retained as a separate error field.
     pub fn hook_exit(cause: HookExitCause) -> Self {
         let detail = match cause {
             HookExitCause::Exit { code, stderr_tail } => format!("exit {code}: {stderr_tail}"),
@@ -82,7 +87,7 @@ mod tests {
 
     use super::HookExitCause;
     use crate::error::AtmError;
-    use crate::hook_registration_store::PhaseId;
+    use crate::hook_types::PhaseId;
 
     #[test]
     fn hook_error_constructors_format_and_classify() {

@@ -57,25 +57,7 @@ impl EnvSource for CapturedEnv<'_> {
     }
 }
 
-fn env_value(env: &dyn EnvSource, key: &str, windows: bool) -> Option<String> {
-    if !windows {
-        return env.var(key);
-    }
-    (0..(1usize << key.len())).find_map(|mask| {
-        let variant: String = key
-            .bytes()
-            .enumerate()
-            .map(|(index, byte)| {
-                if mask & (1 << index) == 0 {
-                    byte.to_ascii_uppercase() as char
-                } else {
-                    byte.to_ascii_lowercase() as char
-                }
-            })
-            .collect();
-        env.var(&variant)
-    })
-}
+// On Windows `ProcessEnvSource` (std::env::var) matches names case-insensitively, so `Path` satisfies `PATH`.
 
 fn base_environment(
     env: &dyn EnvSource,
@@ -88,7 +70,7 @@ fn base_environment(
     };
     let mut values = Vec::new();
     for key in keys {
-        match env_value(env, key, windows) {
+        match env.var(key) {
             Some(value) => values.push((OsString::from(key), OsString::from(value))),
             None if windows && *key == "HOME" => {}
             None => return Err(missing(format!("{key} missing"))),
@@ -132,7 +114,7 @@ fn resolve_python(base: &[(OsString, OsString)], env: &dyn EnvSource) -> Result<
         .ok_or_else(|| missing("PATH missing"))?;
     let name = if cfg!(windows) { "python" } else { "python3" };
     let extensions = if cfg!(windows) {
-        env_value(env, "PATHEXT", true)
+        env.var("PATHEXT")
             .unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into())
             .split(';')
             .filter(|extension| !extension.is_empty())
@@ -174,20 +156,26 @@ impl DaemonHookRunner {
         }
     }
 
-    fn spec(&self, target: &HookTarget, hook: &str) -> Result<SpawnSpec, AtmError> {
+    async fn spec(&self, target: &HookTarget, hook: &str) -> Result<SpawnSpec, AtmError> {
         for (path, directory) in [
             (target.cwd.clone(), true),
             (target.cwd.join(&target.module_path), false),
         ] {
-            let valid = if directory {
-                path.is_dir()
-            } else {
-                path.is_file()
-            };
-            if !valid {
+            let metadata = tokio::fs::metadata(&path).await.map_err(|error| {
+                AtmError::hook_exit(HookExitCause::Spawn {
+                    path: path.clone(),
+                    cause: error.to_string(),
+                })
+            })?;
+            if (directory && !metadata.is_dir()) || (!directory && !metadata.is_file()) {
                 return Err(AtmError::hook_exit(HookExitCause::Spawn {
                     path,
-                    cause: "path does not exist or has the wrong type".into(),
+                    cause: if directory {
+                        "not a directory"
+                    } else {
+                        "not a regular file"
+                    }
+                    .into(),
                 }));
             }
         }
@@ -254,7 +242,7 @@ impl DaemonHookRunner {
                 AtmError::hook_timeout(&target.phase, "hook concurrency limit reached")
             })?
             .map_err(|_| missing("hook semaphore closed"))?;
-        let spec = self.spec(target, hook)?;
+        let spec = self.spec(target, hook).await?;
         let remaining = remaining_spawn_budget(&target.phase, budget, started.elapsed())?;
         let output = spawn_with_deadline(spec, &stdin, remaining)
             .await
@@ -376,7 +364,7 @@ impl HookRunner for DaemonHookRunner {
 pub(crate) fn runner_budget(timeout_ms: u32, remaining: Duration) -> Option<Duration> {
     doctor_budget(
         timeout_ms,
-        remaining.checked_sub(Duration::from_millis(HOOK_ACTION_RESERVE_MS))?,
+        remaining.checked_sub(Duration::from_millis(u64::from(HOOK_ACTION_RESERVE_MS)))?,
     )
 }
 
@@ -398,6 +386,7 @@ fn remaining_spawn_budget(
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
     use std::collections::BTreeMap;
     use std::fs;
 
@@ -412,9 +401,40 @@ mod tests {
 
     struct TestEnv(BTreeMap<String, String>);
 
+    fn fold_lookup(values: &BTreeMap<String, String>, key: &str) -> Option<String> {
+        values
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(key))
+            .map(|(_, value)| value.clone())
+    }
+
     impl EnvSource for TestEnv {
         fn var(&self, key: &str) -> Option<String> {
-            self.0.get(key).cloned()
+            if cfg!(windows) {
+                fold_lookup(&self.0, key)
+            } else {
+                self.0.get(key).cloned()
+            }
+        }
+    }
+
+    struct WindowsEnv(BTreeMap<String, String>);
+
+    impl EnvSource for WindowsEnv {
+        fn var(&self, key: &str) -> Option<String> {
+            fold_lookup(&self.0, key)
+        }
+    }
+
+    struct CountingEnv {
+        inner: WindowsEnv,
+        calls: Cell<usize>,
+    }
+
+    impl EnvSource for CountingEnv {
+        fn var(&self, key: &str) -> Option<String> {
+            self.calls.set(self.calls.get() + 1);
+            self.inner.var(key)
         }
     }
 
@@ -592,7 +612,7 @@ mod tests {
             ("SystemRoot".into(), "C:\\Windows".into()),
             ("USERPROFILE".into(), "C:\\Users\\test".into()),
         ]);
-        let captured: BTreeMap<_, _> = hook_env(&TestEnv(windows.clone()), &team, &phase, true)
+        let captured: BTreeMap<_, _> = hook_env(&WindowsEnv(windows.clone()), &team, &phase, true)
             .unwrap()
             .into_iter()
             .collect();
@@ -605,7 +625,7 @@ mod tests {
             let mut values = windows.clone();
             values.remove(key);
             assert_eq!(
-                hook_env(&TestEnv(values), &team, &phase, true)
+                hook_env(&WindowsEnv(values), &team, &phase, true)
                     .unwrap_err()
                     .code(),
                 AtmErrorCode::HookExit
@@ -614,11 +634,46 @@ mod tests {
     }
 
     #[test]
-    fn configured_environment_has_only_explicit_contract_keys() {
+    fn windows_env_lookup_is_one_call_per_key() {
+        let team = "test-team".parse().unwrap();
+        let phase = PhaseId::parse("bk").unwrap();
+        let env = CountingEnv {
+            inner: WindowsEnv(BTreeMap::from([
+                ("pAtH".into(), "C:\\Py".into()),
+                ("systemroot".into(), "C:\\Windows".into()),
+                ("UserProfile".into(), "C:\\Users\\t".into()),
+            ])),
+            calls: Cell::new(0),
+        };
+
+        let actual: BTreeMap<_, _> = hook_env(&env, &team, &phase, true)
+            .unwrap()
+            .into_iter()
+            .collect();
+        assert_eq!(env.calls.get(), 4);
+        assert_eq!(
+            actual,
+            BTreeMap::from([
+                (OsString::from("PATH"), OsString::from("C:\\Py")),
+                (OsString::from("SystemRoot"), OsString::from("C:\\Windows")),
+                (
+                    OsString::from("USERPROFILE"),
+                    OsString::from("C:\\Users\\t"),
+                ),
+                (OsString::from("ATM_TEAM"), OsString::from("test-team")),
+                (OsString::from("ATM_PHASE"), OsString::from("bk")),
+            ])
+        );
+        assert_eq!(env.var(&"X".repeat(70)), None);
+    }
+
+    #[tokio::test]
+    async fn configured_environment_has_only_explicit_contract_keys() {
         let fixture = Fixture::new();
         let spec = fixture
             .runner()
             .spec(&fixture.target, "task.close")
+            .await
             .unwrap();
         let actual: BTreeMap<_, _> = spec.env.into_iter().collect();
         let mut expected = BTreeMap::from([
@@ -660,9 +715,9 @@ mod tests {
         assert_eq!(fixture.json("fixture_argv.json"), json!(["task.close"]));
     }
 
-    #[test]
-    fn runner_passes_daemon_path_and_home_values() {
-        let output = environment_probe_output();
+    #[tokio::test(flavor = "current_thread")]
+    async fn runner_passes_daemon_path_and_home_values() {
+        let output = environment_probe_output().await;
         assert!(
             output.status.success(),
             "{}\n{}",
@@ -672,17 +727,28 @@ mod tests {
         assert!(String::from_utf8_lossy(&output.stdout).contains("BK3_ENVIRONMENT_PROOF_COMPLETE"));
     }
 
-    fn environment_probe_output() -> std::process::Output {
-        std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "hook_runner::tests::environment_child_probe",
-                "--ignored",
-                "--nocapture",
-            ])
-            .env("ATM_BK3_LEAK_SENTINEL", "1")
-            .output()
-            .unwrap()
+    async fn environment_probe_output() -> SpawnedOutput {
+        let mut env: Vec<_> = std::env::vars_os()
+            .filter(|(name, _)| name != "ATM_BK3_LEAK_SENTINEL")
+            .collect();
+        env.push((OsString::from("ATM_BK3_LEAK_SENTINEL"), OsString::from("1")));
+        spawn_with_deadline(
+            SpawnSpec {
+                program: std::env::current_exe().unwrap(),
+                args: vec![
+                    "--exact".into(),
+                    "hook_runner::tests::environment_child_probe".into(),
+                    "--ignored".into(),
+                    "--nocapture".into(),
+                ],
+                env,
+                cwd: std::env::current_dir().unwrap(),
+            },
+            &[],
+            Duration::from_secs(60),
+        )
+        .await
+        .unwrap()
     }
 
     #[ignore = "runs only in the sentinel child process"]

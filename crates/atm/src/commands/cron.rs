@@ -432,7 +432,7 @@ impl CronCommand {
                 let (module_path, cwd) = canonical_paths(&args.module, args.cwd.as_deref())?;
                 let timeout_ms = read_cron_timeout_ms(&module_path)?;
                 let stop = match (args.until, args.until_hook) {
-                    (Some(at), false) => StopCondition::Until { at },
+                    (Some(at), false) => StopCondition::Until { at: at.into() },
                     (None, true) => StopCondition::Hook,
                     _ => {
                         return Err(atm_core::error::AtmError::validation(

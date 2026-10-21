@@ -39,14 +39,14 @@ impl CronRunOutcome {
             Self::Timeout => "timeout".into(),
             Self::Malformed => "malformed".into(),
             Self::ActionErr(code) => format!("action_err: {code}"),
-            Self::Stopped(reason) => format!("stopped: {reason}"),
+            Self::Stopped(reason) => atm_core::boundary::stopped_outcome(reason),
             Self::StopCheckFailed(code) => format!("stop_check_failed: {code}"),
         }
     }
 }
 
 pub(crate) fn stop_due(stop: &StopCondition, now: DateTime<Utc>) -> bool {
-    matches!(stop, StopCondition::Until { at } if now >= *at)
+    matches!(stop, StopCondition::Until { at } if now >= at.into_inner())
 }
 
 pub(crate) fn log(
@@ -68,21 +68,15 @@ pub(crate) fn log(
 }
 
 pub(crate) async fn record(cron: &AtmCron, schedule: &CronSchedule, outcome: &CronRunOutcome) {
-    let (id, generation, at, text) = (
-        schedule.id,
-        schedule.generation,
-        cron.deps.clock.now(),
-        outcome.as_str(),
-    );
-    let stop = matches!(outcome, CronRunOutcome::Stopped(_));
+    let (id, generation, at) = (schedule.id, schedule.generation, cron.deps.clock.now());
+    let stopped_reason = match outcome {
+        CronRunOutcome::Stopped(reason) => Some(reason.clone()),
+        _ => None,
+    };
+    let text = outcome.as_str();
     let result = store_call(cron.deps.store.clone(), move |store| {
-        if stop {
-            store.record_stop(
-                id,
-                generation,
-                at.into(),
-                text.strip_prefix("stopped: ").unwrap_or(&text),
-            )
+        if let Some(reason) = stopped_reason {
+            store.record_stop(id, generation, at.into(), &reason)
         } else {
             store.record_run(id, generation, at.into(), &text)
         }
@@ -94,7 +88,7 @@ pub(crate) async fn record(cron: &AtmCron, schedule: &CronSchedule, outcome: &Cr
 }
 
 fn deadline_budget(timeout_ms: u32) -> Duration {
-    Duration::from_millis(u64::from(timeout_ms) + HOOK_ACTION_RESERVE_MS)
+    Duration::from_millis(u64::from(timeout_ms) + u64::from(HOOK_ACTION_RESERVE_MS))
 }
 
 fn deadline(cron: &AtmCron, schedule: &CronSchedule) -> RequestDeadline {
@@ -228,14 +222,18 @@ mod tests {
     use super::*;
     #[cfg(feature = "test-utils")]
     use atm_core::test_support::TEST_SENDER;
+    use atm_core::types::IsoTimestamp;
 
     #[test]
     fn stop_due_is_the_one_until_rule() {
-        let at = "2026-10-19T00:00:00Z".parse().unwrap();
+        let at: IsoTimestamp = "2026-10-19T00:00:00Z".parse().unwrap();
         let stop = StopCondition::Until { at };
-        assert!(!stop_due(&stop, at - chrono::Duration::seconds(1)));
-        assert!(stop_due(&stop, at));
-        assert!(!stop_due(&StopCondition::Hook, at));
+        assert!(!stop_due(
+            &stop,
+            at.into_inner() - chrono::Duration::seconds(1)
+        ));
+        assert!(stop_due(&stop, at.into_inner()));
+        assert!(!stop_due(&StopCondition::Hook, at.into_inner()));
     }
 
     #[test]
@@ -280,7 +278,7 @@ mod tests {
                 .start(CronStartSpec {
                     team: "test-team".parse().unwrap(),
                     phase: PhaseId::parse("bk").unwrap(),
-                    name: format!("job-{index}"),
+                    name: atm_core::boundary::CronName::parse(&format!("job-{index}")).unwrap(),
                     cron_expr: "@hourly".into(),
                     module_path: "/module.py".into(),
                     cwd: "/work".into(),

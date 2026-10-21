@@ -42,8 +42,49 @@ fn test_only(attributes: &[syn::Attribute]) -> bool {
         attribute.path().is_ident("cfg")
             && attribute
                 .parse_args::<syn::Meta>()
-                .is_ok_and(|meta| matches!(meta, syn::Meta::Path(path) if path.is_ident("test")))
+                .is_ok_and(|meta| cfg_requires_test(&meta))
     })
+}
+
+fn cfg_requires_test(meta: &syn::Meta) -> bool {
+    match meta {
+        syn::Meta::Path(path) => path.is_ident("test"),
+        syn::Meta::List(list) if list.path.is_ident("all") => {
+            cfg_args(list).iter().any(cfg_requires_test)
+        }
+        syn::Meta::List(list) if list.path.is_ident("any") => {
+            let args = cfg_args(list);
+            !args.is_empty() && args.iter().all(cfg_requires_test)
+        }
+        _ => false,
+    }
+}
+
+fn cfg_args(list: &syn::MetaList) -> Vec<syn::Meta> {
+    list.parse_args_with(syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated)
+        .map(|args| args.into_iter().collect())
+        .unwrap_or_default()
+}
+
+fn item_attrs(item: &syn::Item) -> &[syn::Attribute] {
+    match item {
+        syn::Item::Const(item) => &item.attrs,
+        syn::Item::Enum(item) => &item.attrs,
+        syn::Item::ExternCrate(item) => &item.attrs,
+        syn::Item::Fn(item) => &item.attrs,
+        syn::Item::ForeignMod(item) => &item.attrs,
+        syn::Item::Impl(item) => &item.attrs,
+        syn::Item::Macro(item) => &item.attrs,
+        syn::Item::Mod(item) => &item.attrs,
+        syn::Item::Static(item) => &item.attrs,
+        syn::Item::Struct(item) => &item.attrs,
+        syn::Item::Trait(item) => &item.attrs,
+        syn::Item::TraitAlias(item) => &item.attrs,
+        syn::Item::Type(item) => &item.attrs,
+        syn::Item::Union(item) => &item.attrs,
+        syn::Item::Use(item) => &item.attrs,
+        _ => &[],
+    }
 }
 
 struct StoreImports {
@@ -100,22 +141,14 @@ impl StoreImports {
 }
 
 impl<'ast> Visit<'ast> for StoreImports {
-    fn visit_item_mod(&mut self, module: &'ast syn::ItemMod) {
-        if !test_only(&module.attrs) {
-            syn::visit::visit_item_mod(self, module);
+    fn visit_item(&mut self, item: &'ast syn::Item) {
+        if !test_only(item_attrs(item)) {
+            syn::visit::visit_item(self, item);
         }
     }
 
     fn visit_item_use(&mut self, item: &'ast syn::ItemUse) {
-        if !test_only(&item.attrs) {
-            self.inspect_use(&[], &item.tree);
-        }
-    }
-
-    fn visit_item_fn(&mut self, function: &'ast syn::ItemFn) {
-        if !test_only(&function.attrs) {
-            syn::visit::visit_item_fn(self, function);
-        }
+        self.inspect_use(&[], &item.tree);
     }
 
     fn visit_path(&mut self, path: &'ast syn::Path) {
@@ -130,6 +163,7 @@ impl<'ast> Visit<'ast> for StoreImports {
     }
 }
 
+// Limitation: paths inside macro token streams and renamed crate aliases (e.g. extern crate atm_storage as s) are not inspected.
 #[test]
 fn bk_hook_and_cron_types_reach_runtime_crates_only_through_atm_core_boundary() {
     let names = [
@@ -176,11 +210,18 @@ fn bk_hook_and_cron_types_reach_runtime_crates_only_through_atm_core_boundary() 
 
 struct Implementations<'a> {
     name: &'a str,
-    allowed: &'a [&'a str],
+    krate: &'a str,
+    allowed: &'a [(&'a str, &'a str)],
     violations: Vec<String>,
 }
 
 impl<'ast> Visit<'ast> for Implementations<'_> {
+    fn visit_item(&mut self, item: &'ast syn::Item) {
+        if !test_only(item_attrs(item)) {
+            syn::visit::visit_item(self, item);
+        }
+    }
+
     fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
         if let Some((_, path, _)) = &item.trait_
             && path
@@ -198,15 +239,19 @@ impl<'ast> Visit<'ast> for Implementations<'_> {
                     .to_string(),
                 _ => "<non-path implementer>".to_owned(),
             };
-            if !self.allowed.contains(&implementation.as_str()) {
-                self.violations.push(implementation);
+            if !self
+                .allowed
+                .contains(&(self.krate, implementation.as_str()))
+            {
+                self.violations
+                    .push(format!("{}::{}", self.krate, implementation));
             }
         }
         syn::visit::visit_item_impl(self, item);
     }
 }
 
-fn assert_known_implementations(name: &str, allowed: &[&str]) {
+fn assert_known_implementations(name: &str, allowed: &[(&str, &str)]) {
     let crates = workspace_root().join("crates");
     let mut packages = fs::read_dir(crates)
         .expect("workspace crates")
@@ -214,13 +259,22 @@ fn assert_known_implementations(name: &str, allowed: &[&str]) {
         .collect::<Vec<_>>();
     packages.sort();
     for package in packages {
+        let krate = package
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("crate dir name");
         for path in rust_files(&package.join("src")) {
+            let syntax = parse(&path);
+            if test_only(&syntax.attrs) {
+                continue;
+            }
             let mut visitor = Implementations {
                 name,
+                krate,
                 allowed,
                 violations: Vec::new(),
             };
-            visitor.visit_file(&parse(&path));
+            visitor.visit_file(&syntax);
             assert!(
                 visitor.violations.is_empty(),
                 "{} has unauthorized {name} implementations: {:?}",
@@ -236,27 +290,108 @@ fn bk_task_commands_has_only_known_implementations() {
     assert_known_implementations(
         "TaskCommands",
         &[
-            "NormalTaskCommands",
-            "HookedTaskCommands",
-            "RecordingTaskCommands",
+            ("atm-http-runtime", "NormalTaskCommands"),
+            ("atm-http-runtime", "HookedTaskCommands"),
+            ("atm-core", "RecordingTaskCommands"),
         ],
     );
 }
 
 #[test]
 fn bk_hook_runner_has_only_known_implementations() {
-    assert_known_implementations("HookRunner", &["DaemonHookRunner", "DummyHookRunner"]);
+    assert_known_implementations(
+        "HookRunner",
+        &[
+            ("atm-daemon-bootstrap", "DaemonHookRunner"),
+            ("atm-core", "DummyHookRunner"),
+        ],
+    );
 }
 
 #[test]
 fn bk_cron_scheduler_has_only_known_implementations() {
-    assert_known_implementations("CronScheduler", &["AtmCron", "RecordingCronScheduler"]);
+    assert_known_implementations(
+        "CronScheduler",
+        &[
+            ("atm-cron", "AtmCron"),
+            ("atm-core", "RecordingCronScheduler"),
+        ],
+    );
 }
 
 #[test]
 fn bk_hook_action_dispatcher_has_only_known_implementations() {
     assert_known_implementations(
         "HookActionDispatcher",
-        &["UnhookedRouter", "RecordingHookActionDispatcher"],
+        &[
+            ("atm-http-runtime", "UnhookedRouter"),
+            ("atm-core", "RecordingHookActionDispatcher"),
+        ],
     );
+}
+
+#[test]
+fn bk_cfg_requires_test_matches_only_test_gated_predicates() {
+    for item in [
+        syn::parse_quote!(
+            #[cfg(test)]
+            struct Probe;
+        ),
+        syn::parse_quote!(
+            #[cfg(all(test, unix))]
+            struct Probe;
+        ),
+        syn::parse_quote!(
+            #[cfg(any(test, all(test, unix)))]
+            struct Probe;
+        ),
+    ] {
+        assert!(test_only(item_attrs(&item)));
+    }
+    for item in [
+        syn::parse_quote!(
+            #[cfg(any(test, feature = "test-utils"))]
+            struct Probe;
+        ),
+        syn::parse_quote!(
+            #[cfg(not(test))]
+            struct Probe;
+        ),
+        syn::parse_quote!(
+            #[cfg(unix)]
+            struct Probe;
+        ),
+    ] {
+        assert!(!test_only(item_attrs(&item)));
+    }
+}
+
+#[test]
+fn bk_implementer_allowlist_is_bound_to_crate() {
+    let trait_name: syn::Ident = syn::parse_quote!(TaskCommands);
+    let normal: syn::Ident = syn::parse_quote!(NormalTaskCommands);
+    let fake: syn::Ident = syn::parse_quote!(Fake);
+    let syntax: syn::File = syn::parse_quote! {
+        impl #trait_name for #normal {}
+        #[cfg(all(test, unix))]
+        impl #trait_name for #fake {}
+    };
+    let allowed = &[("atm-http-runtime", "NormalTaskCommands")];
+    let mut wrong_crate = Implementations {
+        name: "TaskCommands",
+        krate: "atm-core",
+        allowed,
+        violations: Vec::new(),
+    };
+    wrong_crate.visit_file(&syntax);
+    assert_eq!(wrong_crate.violations, ["atm-core::NormalTaskCommands"]);
+
+    let mut allowed_crate = Implementations {
+        name: "TaskCommands",
+        krate: "atm-http-runtime",
+        allowed,
+        violations: Vec::new(),
+    };
+    allowed_crate.visit_file(&syntax);
+    assert!(allowed_crate.violations.is_empty());
 }

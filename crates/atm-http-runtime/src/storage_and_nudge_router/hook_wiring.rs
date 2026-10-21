@@ -16,7 +16,6 @@ use atm_core::types::HostName;
 use crate::hook_actions::UnhookedRouter;
 use crate::hook_chains::ChainTracker;
 use crate::hook_filter::{ActiveHookSnapshot, HookedTaskCommands};
-use crate::task_commands::task_caller;
 
 use super::StorageAndNudgeRouter;
 
@@ -130,10 +129,10 @@ impl StorageAndNudgeRouter {
         deadline: RequestDeadline,
         request_id: RequestId,
     ) -> Result<ApiResponse, AtmError> {
-        let (caller_identity, caller_team) = task_caller(&command);
+        let (caller_identity, caller_team) = command.caller();
         let ctx = TaskCallCtx {
-            caller_identity,
-            caller_team,
+            caller_identity: caller_identity.clone(),
+            caller_team: caller_team.clone(),
             host: self.hooks.local_host.clone(),
             ingress,
             deadline,

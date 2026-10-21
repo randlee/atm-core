@@ -38,6 +38,13 @@ pub(crate) const STDOUT_CAP: u64 = 1 << 20;
 /// traceback tail without allowing diagnostic output to dominate memory.
 pub(crate) const STDERR_CAP: u64 = 64 << 10;
 
+/// Owns the hook process tree until its direct child has been reaped.
+///
+/// On Unix, the child starts a new process group and this guard kills that
+/// group after a timeout, output overflow, cancellation, or dropped future.
+/// Windows has no job-object implementation here, so `kill_on_drop` and the
+/// explicit child kill terminate only the direct hook process; its descendants
+/// can outlive the hook invocation.
 struct GroupKillGuard {
     #[cfg(unix)]
     pgid: Option<rustix::process::Pid>,

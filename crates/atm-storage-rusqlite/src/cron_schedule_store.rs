@@ -12,8 +12,8 @@ use std::sync::Arc;
 use atm_storage::contract::sealed;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
-    AtmError, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule, PhaseId,
-    StopCondition,
+    AtmError, CronGeneration, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule,
+    PhaseId, StopCondition, stopped_outcome,
 };
 use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, params, params_from_iter};
@@ -125,16 +125,21 @@ fn decode(raw: RawCron) -> Result<CronSchedule, AtmError> {
     let stop = match (raw.stop_hook, raw.until_at.as_deref()) {
         (true, None) => StopCondition::Hook,
         (false, Some(until_at)) => StopCondition::Until {
-            at: parse_stamp(&key, until_at)?.into_inner(),
+            at: parse_stamp(&key, until_at)?,
         },
         _ => return Err(internal(&key, "stop condition is neither hook nor until")),
     };
     let args =
         serde_json::from_str::<Vec<String>>(&raw.args).map_err(|error| internal(&key, error))?;
     Ok(CronSchedule {
-        id: CronScheduleId(u64::try_from(raw.id).map_err(|_| internal(&key, "id is negative"))?),
-        generation: u32::try_from(raw.generation)
-            .map_err(|_| internal(&key, "generation is out of range"))?,
+        id: CronScheduleId::new(
+            u64::try_from(raw.id).map_err(|_| internal(&key, "id is negative"))?,
+        ),
+        generation: CronGeneration::new(
+            u32::try_from(raw.generation)
+                .map_err(|_| internal(&key, "generation is out of range"))?,
+        )
+        .map_err(|_| internal(&key, "generation is zero"))?,
         team: TeamName::from_validated(raw.team),
         phase: PhaseId::parse(&raw.phase)?,
         name: raw.name,
@@ -189,7 +194,7 @@ fn list_query(
 /// `(until_at, stop_hook)` for the stored stop columns: exactly one is set.
 fn stop_columns(stop: &StopCondition) -> (Option<String>, i64) {
     match stop {
-        StopCondition::Until { at } => (Some(stamp(IsoTimestamp::from(*at))), 0),
+        StopCondition::Until { at } => (Some(stamp(*at)), 0),
         StopCondition::Hook => (None, 1),
     }
 }
@@ -197,7 +202,7 @@ fn stop_columns(stop: &StopCondition) -> (Option<String>, i64) {
 /// Converts a schedule id to the stored integer. Ids above `i64::MAX` cannot
 /// be stored, so no row can carry them.
 fn stored_id(id: CronScheduleId) -> Option<i64> {
-    i64::try_from(id.0).ok()
+    i64::try_from(id.get()).ok()
 }
 
 /// One schedule's column values, prepared before the writer transaction.
@@ -402,7 +407,7 @@ impl CronScheduleStore for SqliteCronScheduleStore {
     fn record_run(
         &self,
         id: CronScheduleId,
-        generation: u32,
+        generation: CronGeneration,
         at: IsoTimestamp,
         outcome: &str,
     ) -> Result<bool, AtmError> {
@@ -416,7 +421,7 @@ impl CronScheduleStore for SqliteCronScheduleStore {
                 .execute(
                     "UPDATE cron_schedule SET last_run_at = ?3, last_outcome = ?4
                      WHERE id = ?1 AND generation = ?2 AND active = 1;",
-                    params![id, i64::from(generation), at_text, outcome],
+                    params![id, i64::from(generation.get()), at_text, outcome],
                 )
                 .map_err(|error| write_error(&self.db, TABLE, error))?;
             Ok(changed == 1)
@@ -426,7 +431,7 @@ impl CronScheduleStore for SqliteCronScheduleStore {
     fn record_stop(
         &self,
         id: CronScheduleId,
-        generation: u32,
+        generation: CronGeneration,
         at: IsoTimestamp,
         reason: &str,
     ) -> Result<bool, AtmError> {
@@ -434,13 +439,13 @@ impl CronScheduleStore for SqliteCronScheduleStore {
             return Ok(false);
         };
         let at_text = stamp(at);
-        let outcome = format!("stopped: {reason}");
+        let outcome = stopped_outcome(reason);
         self.db.with_transaction(|transaction| {
             let changed = transaction
                 .execute(
                     "UPDATE cron_schedule SET active = 0, ended_at = ?3, last_outcome = ?4
                      WHERE id = ?1 AND generation = ?2 AND active = 1;",
-                    params![id, i64::from(generation), at_text, outcome],
+                    params![id, i64::from(generation.get()), at_text, outcome],
                 )
                 .map_err(|error| write_error(&self.db, TABLE, error))?;
             Ok(changed == 1)

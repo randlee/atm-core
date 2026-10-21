@@ -10,8 +10,8 @@ use std::path::PathBuf;
 use atm_storage::testing::{InMemoryCronScheduleStore, InMemoryHookRegistrationStore};
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
-    CronSchedule, CronScheduleStore, HookName, HookRegistration, HookRegistrationStore,
-    NewCronSchedule, PhaseId, StopCondition,
+    AtmErrorCode, CronGeneration, CronSchedule, CronScheduleStore, HookName, HookRegistration,
+    HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition, TaskHook, stopped_outcome,
 };
 use chrono::{TimeZone, Utc};
 
@@ -82,6 +82,10 @@ fn phases(rows: &[HookRegistration]) -> Vec<String> {
     rows.iter()
         .map(|row| row.phase.as_str().to_owned())
         .collect()
+}
+
+fn generation(value: u32) -> CronGeneration {
+    CronGeneration::new(value).expect("generation")
 }
 
 #[test]
@@ -385,6 +389,14 @@ fn hook_name_parse_sets() {
 }
 
 #[test]
+fn task_hook_enum_matches_parsed_task_hooks() {
+    for (hook, name) in TaskHook::ALL.into_iter().zip(HookName::TASK_HOOKS) {
+        assert_eq!(hook.as_str(), name);
+        assert_eq!(hook.hook_name(), HookName::parse_task_hook(name).unwrap());
+    }
+}
+
+#[test]
 fn cron_hook_names_have_infallible_constructors() {
     assert_eq!(HookName::cron_tick().as_str(), HookName::CRON_TICK);
     assert_eq!(HookName::cron_stop().as_str(), HookName::CRON_STOP);
@@ -583,21 +595,30 @@ fn record_stop_ends_the_row_once() {
         .expect("start");
     assert!(
         store
-            .record_stop(row.id, 1, stamp(4), "phase bead closed")
+            .record_stop(row.id, generation(1), stamp(4), "phase bead closed")
             .expect("stop")
     );
     let ended = store.list(None, None).expect("list");
     assert!(!ended[0].active);
     assert_eq!(ended[0].ended_at, Some(stamp(4)));
+    let expected_outcome = stopped_outcome("phase bead closed");
     assert_eq!(
         ended[0].last_outcome.as_deref(),
-        Some("stopped: phase bead closed")
+        Some(expected_outcome.as_str())
     );
     assert!(store.active_all().expect("active").is_empty());
     assert!(
         !store
-            .record_stop(row.id, 1, stamp(5), "again")
+            .record_stop(row.id, generation(1), stamp(5), "again")
             .expect("second stop")
+    );
+}
+
+#[test]
+fn stopped_outcome_has_the_contract_format() {
+    assert_eq!(
+        stopped_outcome("phase bead closed"),
+        "stopped: phase bead closed"
     );
 }
 
@@ -614,7 +635,7 @@ fn start_after_end_updates_in_place_and_bumps_generation() {
         .start(cron_spec("nightly", StopCondition::Hook, stamp(6)))
         .expect("restart");
     assert_eq!(restarted.id, first.id);
-    assert_eq!(restarted.generation, 2);
+    assert_eq!(restarted.generation.get(), 2);
     assert!(restarted.active);
     assert_eq!(restarted.created_at, stamp(6));
     assert_eq!(restarted.ended_at, None);
@@ -669,12 +690,12 @@ fn record_with_stale_generation_changes_nothing() {
     let before = store.list(None, None).expect("list");
     assert!(
         !store
-            .record_run(first.id, 1, stamp(7), "ok")
+            .record_run(first.id, generation(1), stamp(7), "ok")
             .expect("stale run")
     );
     assert!(
         !store
-            .record_stop(first.id, 1, stamp(7), "stale")
+            .record_stop(first.id, generation(1), stamp(7), "stale")
             .expect("stale stop")
     );
     assert_eq!(store.list(None, None).expect("list"), before);
@@ -689,7 +710,11 @@ fn cron_write_counter_excludes_fenced_and_noop_calls() {
         .start(cron_spec("nightly", StopCondition::Hook, stamp(3)))
         .expect("start");
     assert_eq!(store.writes.load(Ordering::SeqCst), 1);
-    assert!(store.record_run(first.id, 1, stamp(4), "ok").unwrap());
+    assert!(
+        store
+            .record_run(first.id, generation(1), stamp(4), "ok")
+            .unwrap()
+    );
     assert_eq!(store.writes.load(Ordering::SeqCst), 2);
     assert_eq!(
         store
@@ -705,27 +730,107 @@ fn cron_write_counter_excludes_fenced_and_noop_calls() {
             .unwrap()
             .is_empty()
     );
-    assert!(!store.record_run(first.id, 1, stamp(6), "ended").unwrap());
-    assert!(!store.record_stop(first.id, 1, stamp(6), "ended").unwrap());
+    assert!(
+        !store
+            .record_run(first.id, generation(1), stamp(6), "ended")
+            .unwrap()
+    );
+    assert!(
+        !store
+            .record_stop(first.id, generation(1), stamp(6), "ended")
+            .unwrap()
+    );
     assert_eq!(store.writes.load(Ordering::SeqCst), 3);
 
     let restarted = store
         .start(cron_spec("nightly", StopCondition::Hook, stamp(7)))
         .expect("restart");
     assert_eq!(restarted.id, first.id);
-    assert_eq!(restarted.generation, 2);
+    assert_eq!(restarted.generation.get(), 2);
     assert_eq!(store.writes.load(Ordering::SeqCst), 4);
-    assert!(!store.record_run(first.id, 1, stamp(8), "stale").unwrap());
+    assert!(
+        !store
+            .record_run(first.id, generation(1), stamp(8), "stale")
+            .unwrap()
+    );
     assert_eq!(store.writes.load(Ordering::SeqCst), 4);
-    assert!(!store.record_stop(first.id, 1, stamp(8), "stale").unwrap());
+    assert!(
+        !store
+            .record_stop(first.id, generation(1), stamp(8), "stale")
+            .unwrap()
+    );
     assert_eq!(store.writes.load(Ordering::SeqCst), 4);
-    let missing = atm_storage::CronScheduleId(first.id.0 + 1);
-    assert!(!store.record_run(missing, 2, stamp(8), "missing").unwrap());
-    assert!(!store.record_stop(missing, 2, stamp(8), "missing").unwrap());
+    let missing = atm_storage::CronScheduleId::new(first.id.get() + 1);
+    assert!(
+        !store
+            .record_run(missing, generation(2), stamp(8), "missing")
+            .unwrap()
+    );
+    assert!(
+        !store
+            .record_stop(missing, generation(2), stamp(8), "missing")
+            .unwrap()
+    );
     assert_eq!(store.writes.load(Ordering::SeqCst), 4);
-    assert!(store.record_stop(first.id, 2, stamp(9), "done").unwrap());
+    assert!(
+        store
+            .record_stop(first.id, generation(2), stamp(9), "done")
+            .unwrap()
+    );
     assert_eq!(store.writes.load(Ordering::SeqCst), 5);
     assert_eq!(store.calls.load(Ordering::SeqCst), 12);
+}
+
+#[test]
+fn active_all_failure_preserves_rows_and_write_count() {
+    use std::sync::atomic::Ordering;
+
+    let store = InMemoryCronScheduleStore::new();
+    store
+        .start(cron_spec("nightly", StopCondition::Hook, stamp(3)))
+        .expect("start");
+    let rows_before = store.list(None, None).expect("list before failure");
+    let calls_before = store.calls.load(Ordering::SeqCst);
+    let writes_before = store.writes.load(Ordering::SeqCst);
+    store.fail_active_all.store(true, Ordering::SeqCst);
+
+    let error = store.active_all().expect_err("injected active_all failure");
+
+    assert_eq!(error.code(), AtmErrorCode::InternalError);
+    assert_eq!(store.calls.load(Ordering::SeqCst), calls_before + 1);
+    assert_eq!(store.writes.load(Ordering::SeqCst), writes_before);
+    assert_eq!(
+        store.list(None, None).expect("list after failure"),
+        rows_before
+    );
+    assert_eq!(store.writes.load(Ordering::SeqCst), writes_before);
+}
+
+#[test]
+fn write_failure_preserves_rows_and_write_count() {
+    use std::sync::atomic::Ordering;
+
+    let store = InMemoryCronScheduleStore::new();
+    store
+        .start(cron_spec("nightly", StopCondition::Hook, stamp(3)))
+        .expect("start");
+    let rows_before = store.list(None, None).expect("list before failure");
+    let calls_before = store.calls.load(Ordering::SeqCst);
+    let writes_before = store.writes.load(Ordering::SeqCst);
+    store.fail_writes.store(true, Ordering::SeqCst);
+
+    let error = store
+        .end(&team(), &phase("bk"), Some("nightly"), stamp(4))
+        .expect_err("injected write failure");
+
+    assert_eq!(error.code(), AtmErrorCode::InternalError);
+    assert_eq!(store.calls.load(Ordering::SeqCst), calls_before + 1);
+    assert_eq!(store.writes.load(Ordering::SeqCst), writes_before);
+    assert_eq!(
+        store.list(None, None).expect("list after failure"),
+        rows_before
+    );
+    assert_eq!(store.writes.load(Ordering::SeqCst), writes_before);
 }
 
 #[test]
@@ -740,7 +845,7 @@ fn record_run_on_ended_row_changes_nothing() {
     let before: CronSchedule = store.list(None, None).expect("list").remove(0);
     assert!(
         !store
-            .record_run(row.id, 1, stamp(5), "ok")
+            .record_run(row.id, generation(1), stamp(5), "ok")
             .expect("run on ended")
     );
     assert_eq!(store.list(None, None).expect("list")[0], before);

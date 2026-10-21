@@ -11,13 +11,15 @@ use std::time::Duration;
 use crate::contract::sealed;
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
-use crate::hook_registration_store::{HookName, HookRegistration, HookRegistrationStore, PhaseId};
+use crate::hook_registration_store::{HookRegistration, HookRegistrationStore};
+use crate::hook_types::{HookName, PhaseId};
 use crate::types::{IsoTimestamp, TeamName};
 
 /// Longest a pause handshake may wait before the test fails instead of hanging.
 const PAUSE_DEADLINE: Duration = Duration::from_secs(10);
 
 /// Keeps every registration row in memory, keyed by `(team, phase, hook)`.
+/// `Mutex` and atomics because the trait mutates through `&self` and requires `Send + Sync`; `SeqCst` is deliberate (test counters, not a hot path).
 #[derive(Debug, Default)]
 pub struct InMemoryHookRegistrationStore {
     rows: Mutex<Vec<HookRegistration>>,

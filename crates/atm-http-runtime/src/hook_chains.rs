@@ -259,7 +259,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &held.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                atm_core::hook::HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         let commands = Arc::clone(&held.commands);
         tokio::spawn(async move {

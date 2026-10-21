@@ -94,13 +94,18 @@ pub use atm_storage::request_budget::{
     CRON_TIMEOUT_MAX_MS, HOOK_ACTION_RESERVE_MS, HOOK_TIMEOUT_MAX_MS, SERVER_REQUEST_BUDGET,
 };
 pub use atm_storage::{
-    CronSchedule, CronScheduleId, CronScheduleStore, HookExitCause, HookName, HookRegistration,
-    HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition,
+    CronGeneration, CronName, CronSchedule, CronScheduleId, CronScheduleStore, HookExitCause,
+    HookName, HookRegistration, HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition,
+    TaskHook, stopped_outcome,
 };
 pub use cron_scheduler::{CronScheduler, CronStartSpec};
-pub use hook_action_dispatcher::{DispatchSpec, HookActionDispatcher};
+pub use hook_action_dispatcher::{DispatchSpec, DispatchedAction, HookActionDispatcher};
 pub use hook_runner::{HookOutcome, HookRunner};
-pub use task_commands::*;
+#[cfg(any(test, feature = "test-utils"))]
+pub use task_commands::RecordingTaskCommands;
+pub use task_commands::{
+    TaskAssign, TaskCallCtx, TaskClose, TaskCommand, TaskCommands, TaskEvents, TaskList, TaskStart,
+};
 #[cfg(any(test, feature = "test-utils"))]
 pub use {
     cron_scheduler::RecordingCronScheduler,

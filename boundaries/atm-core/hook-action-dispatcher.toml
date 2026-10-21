@@ -27,8 +27,8 @@ scope = "outside_owner_crate"
 forbidden = []
 
 [contracts]
-request_types = ["DispatchSpec","HookAction"]
-response_types = ["Vec<(String, ApiResponse)>"]
+request_types = ["DispatchSpec","HookAction","HookActionCommand"]
+response_types = ["Vec<DispatchedAction>"]
 error_types = ["AtmError"]
 
 [testing]

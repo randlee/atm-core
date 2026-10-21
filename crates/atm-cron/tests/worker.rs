@@ -8,8 +8,8 @@ use std::{
 
 use atm_core::{
     boundary::{
-        CronSchedule, CronScheduleStore, CronScheduler, CronStartSpec, HookCall, HookOutcome,
-        PhaseId, StopCondition,
+        CronName, CronSchedule, CronScheduleStore, CronScheduler, CronStartSpec, HookCall,
+        HookOutcome, PhaseId, StopCondition,
     },
     error::{AtmError, AtmErrorCode},
     hook::{HookReply, StopReply},
@@ -106,7 +106,7 @@ impl Fixture {
         CronStartSpec {
             team: "test-team".parse().unwrap(),
             phase: PhaseId::parse("bk").unwrap(),
-            name: name.into(),
+            name: CronName::parse(name).unwrap(),
             cron_expr: "0 * * * * *".into(),
             module_path: "/module.py".into(),
             cwd: "/work".into(),
@@ -114,7 +114,7 @@ impl Fixture {
             timeout_ms: 20000,
             custom: serde_json::from_str(r#"{"goal":{"ready":true}}"#).unwrap(),
             stop: StopCondition::Until {
-                at: self.clock.now() + chrono::Duration::days(1),
+                at: (self.clock.now() + chrono::Duration::days(1)).into(),
             },
             created_by: TEST_SENDER.parse().unwrap(),
         }
@@ -218,7 +218,7 @@ async fn atm_cron_public_surface_is_worker_and_scheduler_trait() {
         .end(
             &"test-team".parse().unwrap(),
             &PhaseId::parse("bk").unwrap(),
-            Some("api-surface"),
+            Some(&CronName::parse("api-surface").unwrap()),
         )
         .await
         .unwrap();
@@ -335,7 +335,7 @@ async fn start_refuses_until_in_the_past() {
     for offset in [-1, 0] {
         let mut spec = fixture.spec("past");
         spec.stop = StopCondition::Until {
-            at: fixture.clock.now() + chrono::Duration::seconds(offset),
+            at: (fixture.clock.now() + chrono::Duration::seconds(offset)).into(),
         };
         assert!(
             fixture
@@ -363,7 +363,7 @@ async fn start_after_end_updates_in_place_and_keeps_the_id() {
         .unwrap();
     let restarted = fixture.cron.start(spec).await.unwrap();
     assert_eq!(row.id, restarted.id);
-    assert_eq!(restarted.generation, row.generation + 1);
+    assert_eq!(Some(restarted.generation), row.generation.next());
 }
 
 #[tokio::test]
@@ -532,7 +532,7 @@ async fn until_reached_ends_the_schedule_without_a_run() {
     fixture.reply(HookReply::PassThrough);
     let mut spec = fixture.spec("until");
     spec.stop = StopCondition::Until {
-        at: fixture.clock.now() + chrono::Duration::seconds(90),
+        at: (fixture.clock.now() + chrono::Duration::seconds(90)).into(),
     };
     let (release, mut entered) = fixture.hold();
     fixture.cron.start(spec).await.unwrap();
@@ -731,7 +731,11 @@ async fn worker_schedules_only_active_rows() {
     let spec = fixture.spec("ended");
     fixture
         .cron
-        .end(&spec.team, &spec.phase, Some("ended"))
+        .end(
+            &spec.team,
+            &spec.phase,
+            Some(&CronName::parse("ended").unwrap()),
+        )
         .await
         .unwrap();
     let worker = fixture.worker().await;
@@ -891,7 +895,11 @@ async fn reload_keeps_in_flight_of_an_unchanged_slot() {
     let parks = fixture.clock.parks();
     fixture
         .cron
-        .end(&spec.team, &spec.phase, Some("absent"))
+        .end(
+            &spec.team,
+            &spec.phase,
+            Some(&CronName::parse("absent").unwrap()),
+        )
         .await
         .unwrap();
     fixture.clock.wait_parks_above(parks).await;
@@ -913,7 +921,7 @@ async fn end_then_start_before_reload_applies_new_expression_and_jitter() {
         .end(
             &spec.team,
             &spec.phase,
-            Some(&spec.name),
+            Some(spec.name.as_str()),
             fixture.clock.now().into(),
         )
         .unwrap();
@@ -948,7 +956,7 @@ async fn stale_run_never_writes_the_restarted_row() {
         .end(
             &spec.team,
             &spec.phase,
-            Some(&spec.name),
+            Some(spec.name.as_str()),
             fixture.clock.now().into(),
         )
         .unwrap();
@@ -957,7 +965,7 @@ async fn stale_run_never_writes_the_restarted_row() {
     fixture.clock.wait_parks_above(parks).await;
     release.send_replace(true);
     shutdown(&worker).await;
-    assert_eq!(restarted.generation, row.generation + 1);
+    assert_eq!(Some(restarted.generation), row.generation.next());
     assert_eq!(fixture.row().last_outcome, None);
     assert_eq!(fixture.store.writes.load(Ordering::SeqCst), 3);
 }
@@ -976,7 +984,7 @@ async fn restart_during_tick_does_not_replay_after_reload() {
         .end(
             &spec.team,
             &spec.phase,
-            Some(&spec.name),
+            Some(spec.name.as_str()),
             fixture.clock.now().into(),
         )
         .unwrap();
@@ -1114,7 +1122,7 @@ async fn last_finite_occurrence_ends_the_schedule() {
     let mut spec = fixture.spec("last");
     spec.cron_expr = "0 0 0 20 10 * 2026".into();
     spec.stop = StopCondition::Until {
-        at: fixture.clock.now() + chrono::Duration::days(2),
+        at: (fixture.clock.now() + chrono::Duration::days(2)).into(),
     };
     fixture.cron.start(spec).await.unwrap();
     fixture.reply(HookReply::PassThrough);
@@ -1331,7 +1339,11 @@ async fn reload_failure_keeps_slots_and_retries() {
     let parks = fixture.clock.parks();
     fixture
         .cron
-        .end(&spec.team, &spec.phase, Some("absent"))
+        .end(
+            &spec.team,
+            &spec.phase,
+            Some(&CronName::parse("absent").unwrap()),
+        )
         .await
         .unwrap();
     fixture.clock.wait_parks_above(parks).await;
@@ -1378,7 +1390,11 @@ async fn failed_reload_retries_on_backoff_before_the_next_occurrence() {
     let parks = fixture.clock.parks();
     fixture
         .cron
-        .end(&spec.team, &spec.phase, Some("absent"))
+        .end(
+            &spec.team,
+            &spec.phase,
+            Some(&CronName::parse("absent").unwrap()),
+        )
         .await
         .unwrap();
     fixture.clock.wait_parks_above(parks).await;

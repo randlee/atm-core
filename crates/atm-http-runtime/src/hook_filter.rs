@@ -4,10 +4,6 @@
 //! Registrations are shared `Arc`s, and each hook request is built only when
 //! its hook actually runs. A command with no registration never spawns a chain.
 
-// Built ahead of its composition consumer (bk-5 installs the filter at daemon
-// startup); this allow lifts with that install.
-#![cfg_attr(not(test), allow(dead_code))]
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, PoisonError, RwLock};
@@ -235,7 +231,7 @@ impl<D: HookActionDispatcher + 'static> HookedTaskCommands<D> {
             team: ctx.caller_team.clone(),
             who: ctx.caller_identity.clone(),
             deadline: ctx.deadline,
-            dry_run: dry_run_of(&cmd),
+            dry_run: cmd.dry_run(),
             body: cmd.clone(),
             hook,
         };
@@ -332,8 +328,8 @@ async fn dispatch_handled<D: HookActionDispatcher>(
     let last = done
         .into_iter()
         .rev()
-        .find(|(command, _)| command.as_ref() == Some(&run.hook))
-        .map(|(_, response)| response);
+        .find(|dispatched| dispatched.command.task_hook().as_ref() == Some(&run.hook))
+        .map(|dispatched| dispatched.response);
     Ok(Decision::Done(Box::new(if run.dry_run {
         hook_actions(0)
     } else {
@@ -396,16 +392,6 @@ pub(crate) fn elapsed_ms(started: Instant) -> u64 {
     u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
-/// The write's own `dry_run`; move, list and events are never dry runs.
-fn dry_run_of(cmd: &TaskCommand) -> bool {
-    match cmd {
-        TaskCommand::Assign(TaskAssign(request))
-        | TaskCommand::Start(TaskStart(request))
-        | TaskCommand::Close(TaskClose(request)) => request.dry_run,
-        TaskCommand::Move(_) | TaskCommand::List(_) | TaskCommand::Events(_) => false,
-    }
-}
-
 fn hook_actions(dispatched: usize) -> ApiResponse {
     ApiResponse::new(ResponseEnvelope::HookActions(HookActionsResponse {
         dispatched,
@@ -462,8 +448,8 @@ pub(crate) mod test_support {
         RecordingHookActionDispatcher, RecordingTaskCommands, TaskCallCtx,
     };
     use atm_core::error::AtmError;
-    use atm_core::hook::HookAction;
     use atm_core::hook::HookReply;
+    use atm_core::hook::{HookAction, HookActionCommand};
     use atm_core::protocol::{ResponseEnvelope, next_request_id};
     use atm_core::send::{SendMessageSource, WriteRequest};
     use atm_core::types::{AgentName, HostName, IsoTimestamp, TeamName};
@@ -533,9 +519,9 @@ pub(crate) mod test_support {
         .expect("write request")
     }
 
-    pub fn handled_action(command: &str, request: &WriteRequest) -> HookAction {
+    pub fn handled_action(command: HookActionCommand, request: &WriteRequest) -> HookAction {
         HookAction {
-            command: command.to_owned(),
+            command,
             run_as: None,
             request: serde_json::to_value(request).expect("request json"),
         }
@@ -701,7 +687,7 @@ mod tests {
         TaskAssign, TaskClose, TaskCommands, TaskEvents, TaskList, TaskStart,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
-    use atm_core::hook::HookReply;
+    use atm_core::hook::{HookActionCommand, HookReply};
     use atm_runtime_test_support::InMemoryHookRegistrationStore;
     use tracing_subscriber::prelude::*;
 
@@ -972,7 +958,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &h.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         h.commands
             .assign(TaskAssign(Box::new(request)), &ctx(deadline()))
@@ -1062,7 +1051,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &h.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         h.commands
             .assign(TaskAssign(Box::new(request)), &ctx(deadline()))
@@ -1126,7 +1118,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &h.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         reply(&h.runner, HookReply::PassThrough);
         h.commands
@@ -1179,7 +1174,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &h.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         h.commands
             .assign(TaskAssign(Box::new(request)), &ctx(deadline()))
@@ -1198,7 +1196,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &h.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         let ctx = ctx(deadline());
         h.commands
@@ -1498,7 +1499,10 @@ mod tests {
         let request = assign_request(false);
         reply(
             &h.runner,
-            HookReply::Handled(vec![handled_action("task.assign", &request)]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::TaskAssign,
+                &request,
+            )]),
         );
         let error = expect_err(
             h.commands

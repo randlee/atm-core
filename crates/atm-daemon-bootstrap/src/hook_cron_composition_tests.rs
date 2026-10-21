@@ -145,7 +145,7 @@ impl World {
         CronStartSpec {
             team: TEST_TEAM.parse().unwrap(),
             phase: PhaseId::parse(TEST_TEAM).unwrap(),
-            name: "test".into(),
+            name: atm_core::boundary::CronName::parse("test").unwrap(),
             cron_expr: "0 * * * * *".into(),
             module_path: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("tests/cron_fixture/fixture_cron.py"),
@@ -263,7 +263,7 @@ async fn start_persists_row_with_args_and_timeout() {
     let row = cron.start(spec.clone()).await.unwrap();
     assert_eq!(row.team, spec.team);
     assert_eq!(row.phase, spec.phase);
-    assert_eq!(row.name, spec.name);
+    assert_eq!(row.name, spec.name.as_str());
     assert_eq!(row.cron_expr, spec.cron_expr);
     assert_eq!(row.custom, spec.custom);
     assert_eq!(row.created_by, spec.created_by);
@@ -310,7 +310,7 @@ async fn start_refuses_until_in_the_past_with_daemon_message() {
     let cron = world.cron(Arc::new(ManualClock::new(now())));
     let mut spec = world.spec();
     spec.stop = StopCondition::Until {
-        at: now() - chrono::Duration::seconds(1),
+        at: (now() - chrono::Duration::seconds(1)).into(),
     };
     let error = cron.start(spec).await.unwrap_err();
     assert!(error.message().contains("until is not in the future"));
@@ -473,7 +473,7 @@ async fn blocked_cron_hook_leaves_budget_for_hook_chains_and_later_shutdown_step
     let cron = compose_cron(&world.handler, deps).unwrap();
     let mut spec = world.spec();
     spec.stop = StopCondition::Until {
-        at: now() + chrono::Duration::hours(1),
+        at: (now() + chrono::Duration::hours(1)).into(),
     };
     cron.start(spec).await.unwrap();
     start_cron_worker(&cron, &mut world.workers).await.unwrap();
@@ -598,7 +598,7 @@ async fn cron_scheduler_installed_once_and_cron_routes_reach_it() {
             caller_identity: spec.created_by,
             caller_team: spec.team,
             phase: spec.phase,
-            name: spec.name,
+            name: spec.name.into(),
             cron_expr: spec.cron_expr,
             module_path: spec.module_path,
             cwd: spec.cwd,
@@ -759,7 +759,7 @@ async fn daemon_restart_with_schedule_due_while_down_fires_once_at_next_occurren
     )));
     let mut spec = world.spec();
     spec.stop = StopCondition::Until {
-        at: now() + chrono::Duration::hours(1),
+        at: (now() + chrono::Duration::hours(1)).into(),
     };
     cron.start(spec).await.unwrap();
     let World {
@@ -1002,7 +1002,7 @@ async fn cron_tick_action_runs_unhooked() {
     spec.cwd = cwd_a;
     spec.module_path = registration(&cwd_b, TEST_TEAM, "task.assign").module_path;
     spec.stop = StopCondition::Until {
-        at: now() + chrono::Duration::hours(1),
+        at: (now() + chrono::Duration::hours(1)).into(),
     };
     cron.start(spec).await.unwrap();
     start_cron_worker(&cron, &mut world.workers).await.unwrap();

@@ -8,9 +8,9 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use atm_core::api::AuthenticatedIngress;
-use atm_core::boundary::{DispatchSpec, HookActionDispatcher, HookName, sealed};
+use atm_core::boundary::{DispatchSpec, DispatchedAction, HookActionDispatcher, sealed};
 use atm_core::error::AtmError;
-use atm_core::hook::HookAction;
+use atm_core::hook::{HookAction, HookActionCommand};
 use atm_core::protocol::next_request_id;
 
 use crate::CanonicalWriteHandler;
@@ -34,7 +34,7 @@ impl HookActionDispatcher for UnhookedRouter {
         &self,
         spec: DispatchSpec,
         actions: Vec<HookAction>,
-    ) -> Result<Vec<(Option<HookName>, atm_core::api::ApiResponse)>, AtmError> {
+    ) -> Result<Vec<DispatchedAction>, AtmError> {
         let deadline = spec
             .deadline
             .ok_or_else(|| AtmError::hook_malformed("hook action dispatch has no deadline"))?;
@@ -50,19 +50,14 @@ impl HookActionDispatcher for UnhookedRouter {
                         action.command
                     ))
                 })?;
-            requests.push((
-                HookName::parse_task_hook(&action.command).ok(),
-                action.command.clone(),
-                identity.clone(),
-                request,
-            ));
+            requests.push((action.command, identity.clone(), request));
         }
         if spec.dry_run {
             return Ok(Vec::new());
         }
         let total = requests.len();
         let mut done = Vec::with_capacity(total);
-        for (index, (hook_name, command, run_as, request)) in requests.into_iter().enumerate() {
+        for (index, (command, run_as, request)) in requests.into_iter().enumerate() {
             let started = Instant::now();
             let result = self
                 .0
@@ -73,14 +68,14 @@ impl HookActionDispatcher for UnhookedRouter {
                     next_request_id(),
                 )
                 .await;
-            log_action(&spec, &command, &run_as, result.is_ok(), started);
+            log_action(&spec, command, &run_as, result.is_ok(), started);
             let response = result.map_err(|error| {
                 error.with_context(format!(
                     "hook action {}/{total} ({command}) failed after {index} committed",
                     index + 1
                 ))
             })?;
-            done.push((hook_name, response));
+            done.push(DispatchedAction { command, response });
         }
         Ok(done)
     }
@@ -89,7 +84,7 @@ impl HookActionDispatcher for UnhookedRouter {
 /// One ADR-067 `action` entry per dispatched action.
 fn log_action(
     spec: &DispatchSpec,
-    command: &str,
+    command: HookActionCommand,
     run_as: &impl std::fmt::Display,
     ok: bool,
     started: Instant,
@@ -100,7 +95,7 @@ fn log_action(
         team = %spec.team,
         phase = %spec.phase,
         hook = %spec.hook,
-        action_command = command,
+        action_command = command.as_str(),
         run_as = %run_as,
         outcome = if ok { "action_ok" } else { "action_err" },
         elapsed_ms = elapsed_ms(started),
@@ -109,15 +104,16 @@ fn log_action(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex, Once, OnceLock};
+    use std::thread::ThreadId;
 
     use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
-        DispatchSpec, HookActionDispatcher, HookName, TaskAssign, TaskCallCtx, TaskClose,
-        TaskCommands,
+        DispatchSpec, HookActionDispatcher, TaskAssign, TaskCallCtx, TaskClose, TaskCommands,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
-    use atm_core::hook::{HookAction, HookActionsResponse, HookReply};
+    use atm_core::hook::{HookAction, HookActionCommand, HookActionsResponse, HookReply};
     use atm_core::protocol::ResponseEnvelope;
     use atm_core::send::WriteRequest;
     use atm_runtime_test_support::InMemoryHookRegistrationStore;
@@ -160,7 +156,7 @@ mod tests {
         let mut request = assign_request(fixture, task);
         request.to = Some("ghost@test-team".parse().expect("address"));
         HookAction {
-            command: "task.assign".to_owned(),
+            command: HookActionCommand::TaskAssign,
             run_as: None,
             request: serde_json::to_value(request).expect("json"),
         }
@@ -176,7 +172,7 @@ mod tests {
 
     fn assign_action(fixture: &Fixture, task: &str, run_as: Option<&str>) -> HookAction {
         HookAction {
-            command: "task.assign".to_owned(),
+            command: HookActionCommand::TaskAssign,
             run_as: run_as.map(agent),
             request: serde_json::to_value(assign_request(fixture, task)).expect("json"),
         }
@@ -211,7 +207,7 @@ mod tests {
     #[tokio::test]
     async fn send_action_persists_a_message() {
         let fixture = fixture(true, None, None);
-        let action = handled_action("send", &send_request(&fixture));
+        let action = handled_action(HookActionCommand::Send, &send_request(&fixture));
         let done = fixture
             .router
             .unhooked()
@@ -219,9 +215,9 @@ mod tests {
             .await
             .expect("send action");
         assert_eq!(done.len(), 1);
-        assert_eq!(done[0].0, None);
+        assert_eq!(done[0].command, HookActionCommand::Send);
         assert!(matches!(
-            done[0].1.clone().into_inner(),
+            done[0].response.clone().into_inner(),
             ResponseEnvelope::Send(_)
         ));
     }
@@ -229,7 +225,7 @@ mod tests {
     #[tokio::test]
     async fn dry_run_handled_reply_dispatches_nothing() {
         let fixture = fixture(true, None, None);
-        let action = handled_action("send", &send_request(&fixture));
+        let action = handled_action(HookActionCommand::Send, &send_request(&fixture));
         let done = fixture
             .router
             .unhooked()
@@ -252,14 +248,10 @@ mod tests {
             .dispatch_actions(spec(deadline(), false), actions)
             .await
             .expect("assign actions");
-        let commands: Vec<Option<HookName>> =
-            done.iter().map(|(command, _)| command.clone()).collect();
+        let commands: Vec<HookActionCommand> = done.iter().map(|action| action.command).collect();
         assert_eq!(
             commands,
-            vec![
-                Some(HookName::parse("task.assign").expect("task hook")),
-                Some(HookName::parse("task.assign").expect("task hook")),
-            ]
+            vec![HookActionCommand::TaskAssign, HookActionCommand::TaskAssign,]
         );
         for task in ["T-ORDER-A", "T-ORDER-B"] {
             let row = fixture
@@ -278,7 +270,10 @@ mod tests {
         let runner = Arc::new(atm_core::boundary::DummyHookRunner::default());
         reply(
             &runner,
-            HookReply::Handled(vec![handled_action("send", &send_request(&fixture))]),
+            HookReply::Handled(vec![handled_action(
+                HookActionCommand::Send,
+                &send_request(&fixture),
+            )]),
         );
         let commands = hooked(&fixture.router, &store, runner.clone());
         let response = commands
@@ -314,7 +309,7 @@ mod tests {
         reply(
             &runner,
             HookReply::Handled(vec![
-                handled_action("send", &send_request(&fixture)),
+                handled_action(HookActionCommand::Send, &send_request(&fixture)),
                 assign_action(&fixture, "T-LAST", None),
             ]),
         );
@@ -367,7 +362,7 @@ mod tests {
         let actions = vec![
             assign_action(&fixture, "T-NOT-RUN", None),
             HookAction {
-                command: "task.assign".to_owned(),
+                command: HookActionCommand::TaskAssign,
                 run_as: None,
                 request: serde_json::to_value(other_team).expect("json"),
             },
@@ -409,20 +404,12 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn hook_register_action_is_malformed() {
-        let fixture = fixture(true, None, None);
-        let action = HookAction {
-            command: "hook.register".to_owned(),
-            run_as: None,
-            request: serde_json::json!({}),
-        };
-        let error = fixture
-            .router
-            .unhooked()
-            .dispatch_actions(spec(deadline(), false), vec![action])
-            .await
-            .expect_err("hook.register is not an action");
+    #[test]
+    fn hook_register_action_is_malformed() {
+        let error = HookReply::parse(
+            br#"{"result":"handled","atm-action":[{"command":"hook.register","request":{}}]}"#,
+        )
+        .expect_err("hook.register is not an action");
         assert_eq!(error.code(), AtmErrorCode::HookMalformed);
     }
 
@@ -460,7 +447,7 @@ mod tests {
             .unhooked()
             .dispatch_actions(
                 spec(deadline(), false),
-                vec![handled_action("send", &request)],
+                vec![handled_action(HookActionCommand::Send, &request)],
             )
             .await
             .expect("action send");
@@ -475,20 +462,79 @@ mod tests {
             .await
             .expect("direct send");
         let via_action_json =
-            serde_json::to_value(via_action[0].1.clone().into_inner()).expect("action json");
+            serde_json::to_value(via_action[0].response.clone().into_inner()).expect("action json");
         let direct_json = serde_json::to_value(direct.into_inner()).expect("cli json");
         assert_eq!(shape(&via_action_json), shape(&direct_json));
         assert!(matches!(
-            via_action[0].1.clone().into_inner(),
+            via_action[0].response.clone().into_inner(),
             ResponseEnvelope::Send(_)
         ));
     }
 
     type CapturedEvents = Arc<std::sync::Mutex<Vec<Vec<(String, String)>>>>;
 
-    /// Captures every tracing event as its field pairs, for the ADR-067 entries.
-    #[derive(Clone, Default)]
+    /// The event sinks registered by the tracing-capture tests, keyed by their
+    /// test thread. The process-global layer consults this registry for every
+    /// event and records only into the matching test's sink.
+    static CAPTURE_SINKS: OnceLock<Mutex<HashMap<ThreadId, CapturedEvents>>> = OnceLock::new();
+    static CAPTURE_SUBSCRIBER: Once = Once::new();
+
+    /// Captures the ADR-067 entries produced by one registered test thread.
+    #[derive(Clone)]
     struct Captured(CapturedEvents);
+
+    struct CaptureRegistration {
+        captured: Captured,
+        thread: ThreadId,
+    }
+
+    impl CaptureRegistration {
+        fn new() -> Self {
+            install_capture_subscriber();
+            let captured = Captured(Arc::new(Mutex::new(Vec::new())));
+            let thread = std::thread::current().id();
+            assert!(
+                capture_sinks()
+                    .lock()
+                    .expect("capture sinks")
+                    .insert(thread, captured.0.clone())
+                    .is_none(),
+                "test thread already has a capture sink"
+            );
+            Self { captured, thread }
+        }
+
+        fn captured(&self) -> &Captured {
+            &self.captured
+        }
+    }
+
+    impl Drop for CaptureRegistration {
+        fn drop(&mut self) {
+            let removed = capture_sinks()
+                .lock()
+                .expect("capture sinks")
+                .remove(&self.thread)
+                .expect("test capture sink");
+            assert!(Arc::ptr_eq(&removed, &self.captured.0));
+        }
+    }
+
+    fn capture_sinks() -> &'static Mutex<HashMap<ThreadId, CapturedEvents>> {
+        CAPTURE_SINKS.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    fn install_capture_subscriber() {
+        CAPTURE_SUBSCRIBER.call_once(|| {
+            tracing::subscriber::set_global_default(
+                tracing_subscriber::layer::SubscriberExt::with(
+                    tracing_subscriber::Registry::default(),
+                    Capture,
+                ),
+            )
+            .expect("install process-global capture subscriber");
+        });
+    }
 
     #[derive(Default)]
     struct FieldPairs(Vec<(String, String)>);
@@ -505,17 +551,32 @@ mod tests {
         }
     }
 
-    struct Capture(Captured);
+    struct Capture;
 
     impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
+        fn register_callsite(
+            &self,
+            _metadata: &'static tracing::Metadata<'static>,
+        ) -> tracing::subscriber::Interest {
+            tracing::subscriber::Interest::always()
+        }
+
         fn on_event(
             &self,
             event: &tracing::Event<'_>,
             _context: tracing_subscriber::layer::Context<'_, S>,
         ) {
+            let Some(sink) = capture_sinks()
+                .lock()
+                .expect("capture sinks")
+                .get(&std::thread::current().id())
+                .cloned()
+            else {
+                return;
+            };
             let mut fields = FieldPairs::default();
             event.record(&mut fields);
-            self.0.0.lock().expect("captured log").push(fields.0);
+            sink.lock().expect("captured log").push(fields.0);
         }
     }
 
@@ -581,12 +642,7 @@ mod tests {
 
     #[tokio::test]
     async fn two_action_run_logs_one_run_and_two_action_entries() {
-        let captured = Captured::default();
-        let _guard =
-            tracing::subscriber::set_default(tracing_subscriber::layer::SubscriberExt::with(
-                tracing_subscriber::Registry::default(),
-                Capture(captured.clone()),
-            ));
+        let capture = CaptureRegistration::new();
         let fixture = fixture(true, None, None);
         let store = Arc::new(InMemoryHookRegistrationStore::default());
         crate::hook_filter::test_support::register(&store, "task.assign", "bk", 1);
@@ -609,7 +665,7 @@ mod tests {
             .expect("hooked assign");
 
         assert_eq!(
-            hook_entries(&captured),
+            hook_entries(capture.captured()),
             vec![
                 run_entry("bk", "2", "actions"),
                 action_entry("action_ok"),
@@ -620,12 +676,7 @@ mod tests {
 
     #[tokio::test]
     async fn two_phase_chain_logs_not_applicable_then_actions() {
-        let captured = Captured::default();
-        let _guard =
-            tracing::subscriber::set_default(tracing_subscriber::layer::SubscriberExt::with(
-                tracing_subscriber::Registry::default(),
-                Capture(captured.clone()),
-            ));
+        let capture = CaptureRegistration::new();
         let fixture = fixture(true, None, None);
         let store = Arc::new(InMemoryHookRegistrationStore::default());
         crate::hook_filter::test_support::register(&store, "task.assign", "bj", 1);
@@ -650,7 +701,7 @@ mod tests {
             .expect("hooked assign");
 
         assert_eq!(
-            hook_entries(&captured),
+            hook_entries(capture.captured()),
             vec![
                 run_entry("bj", "0", "not_applicable"),
                 run_entry("bk", "2", "actions"),
@@ -662,12 +713,7 @@ mod tests {
 
     #[tokio::test]
     async fn runner_timeout_logs_a_timeout_run_and_no_action_entries() {
-        let captured = Captured::default();
-        let _guard =
-            tracing::subscriber::set_default(tracing_subscriber::layer::SubscriberExt::with(
-                tracing_subscriber::Registry::default(),
-                Capture(captured.clone()),
-            ));
+        let capture = CaptureRegistration::new();
         let fixture = fixture(true, None, None);
         let store = Arc::new(InMemoryHookRegistrationStore::default());
         crate::hook_filter::test_support::register(&store, "task.assign", "bk", 1);
@@ -694,7 +740,7 @@ mod tests {
 
         assert_eq!(error.code(), AtmErrorCode::HookTimeout);
         assert_eq!(
-            hook_entries(&captured),
+            hook_entries(capture.captured()),
             vec![run_entry("bk", "0", "timeout")]
         );
     }

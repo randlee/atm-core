@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
-    AtmErrorCode, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule, PhaseId,
-    StopCondition,
+    AtmErrorCode, CronGeneration, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule,
+    PhaseId, StopCondition, stopped_outcome,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
 use chrono::{TimeZone, Utc};
@@ -125,6 +125,10 @@ fn stored_last_outcome(path: &Path, name: &str) -> Option<String> {
         .expect("stored row")
 }
 
+fn generation(value: u32) -> CronGeneration {
+    CronGeneration::new(value).expect("generation")
+}
+
 #[test]
 fn active_all_survives_reopen() {
     let h = Harness::new();
@@ -132,9 +136,7 @@ fn active_all_survives_reopen() {
     let nightly = store
         .start(cron_spec("nightly", StopCondition::Hook, stamp(3)))
         .expect("nightly");
-    let until = StopCondition::Until {
-        at: stamp(9).into_inner(),
-    };
+    let until = StopCondition::Until { at: stamp(9) };
     store
         .start(cron_spec("weekly", until, stamp(4)))
         .expect("weekly");
@@ -161,14 +163,14 @@ fn active_all_survives_reopen() {
     assert_eq!(row.id, nightly.id);
     assert_eq!(row.cron_expr, "*/5 * * * *");
     assert_eq!(row.jitter_s, 1799);
-    assert_eq!(row.generation, 1);
+    assert_eq!(row.generation.get(), 1);
     assert_eq!(row.custom, nightly.custom);
     assert_eq!(row.stop, StopCondition::Hook);
     let restarted = after
         .iter()
         .find(|row| row.name == "weekly")
         .expect("weekly");
-    assert_eq!(restarted.generation, 2);
+    assert_eq!(restarted.generation.get(), 2);
 }
 
 #[test]
@@ -224,18 +226,11 @@ fn stop_condition_check_and_round_trip() {
     let until = store
         .start(cron_spec(
             "until-row",
-            StopCondition::Until {
-                at: stamp(9).into_inner(),
-            },
+            StopCondition::Until { at: stamp(9) },
             stamp(1),
         ))
         .expect("start until");
-    assert_eq!(
-        until.stop,
-        StopCondition::Until {
-            at: stamp(9).into_inner()
-        }
-    );
+    assert_eq!(until.stop, StopCondition::Until { at: stamp(9) });
     let hooked = store
         .start(cron_spec("hook-row", StopCondition::Hook, stamp(1)))
         .expect("start hook");
@@ -271,7 +266,7 @@ fn start_after_end_updates_in_place_and_bumps_generation() {
         .expect("start");
     assert!(
         store
-            .record_run(first.id, 1, stamp(4), "exit 0")
+            .record_run(first.id, generation(1), stamp(4), "exit 0")
             .expect("record run")
     );
     assert_eq!(
@@ -281,13 +276,7 @@ fn start_after_end_updates_in_place_and_bumps_generation() {
             .len(),
         1
     );
-    let mut replacement = cron_spec(
-        "nightly",
-        StopCondition::Until {
-            at: stamp(10).into_inner(),
-        },
-        stamp(6),
-    );
+    let mut replacement = cron_spec("nightly", StopCondition::Until { at: stamp(10) }, stamp(6));
     replacement.cron_expr = "0 15 * * * *".to_owned();
     replacement.module_path = PathBuf::from("/hooks/replacement.py");
     replacement.cwd = PathBuf::from("/replacement");
@@ -301,7 +290,7 @@ fn start_after_end_updates_in_place_and_bumps_generation() {
     replacement.created_by = AgentName::from_validated("replacement-agent");
     let restarted = store.start(replacement).expect("restart");
     assert_eq!(restarted.id, first.id);
-    assert_eq!(restarted.generation, 2);
+    assert_eq!(restarted.generation.get(), 2);
     assert!(restarted.active);
     assert_eq!(restarted.team, team());
     assert_eq!(restarted.phase, phase());
@@ -316,12 +305,7 @@ fn start_after_end_updates_in_place_and_bumps_generation() {
     assert_eq!(restarted.timeout_ms, 12000);
     assert_eq!(restarted.jitter_s, 31);
     assert_eq!(restarted.custom["replacement"], true);
-    assert_eq!(
-        restarted.stop,
-        StopCondition::Until {
-            at: stamp(10).into_inner()
-        }
-    );
+    assert_eq!(restarted.stop, StopCondition::Until { at: stamp(10) });
     assert_eq!(restarted.created_by.as_str(), "replacement-agent");
     assert_eq!(restarted.created_at, stamp(6));
     assert_eq!(restarted.ended_at, None);
@@ -379,18 +363,18 @@ fn record_with_stale_generation_changes_nothing() {
         .expect("restart");
     assert!(
         !store
-            .record_run(first.id, 1, stamp(7), "stale")
+            .record_run(first.id, generation(1), stamp(7), "stale")
             .expect("stale run")
     );
     assert!(
         !store
-            .record_stop(first.id, 1, stamp(7), "stale")
+            .record_stop(first.id, generation(1), stamp(7), "stale")
             .expect("stale stop")
     );
     assert_eq!(stored_last_outcome(&h.path, "nightly"), None);
     assert!(
         store
-            .record_run(first.id, 2, stamp(8), "fresh")
+            .record_run(first.id, generation(2), stamp(8), "fresh")
             .expect("current run")
     );
     assert_eq!(
@@ -408,20 +392,21 @@ fn record_stop_ends_the_row_once() {
         .expect("start");
     assert!(
         store
-            .record_stop(row.id, 1, stamp(4), "phase bead closed")
+            .record_stop(row.id, generation(1), stamp(4), "phase bead closed")
             .expect("stop")
     );
     assert!(
         !store
-            .record_stop(row.id, 1, stamp(5), "again")
+            .record_stop(row.id, generation(1), stamp(5), "again")
             .expect("second stop")
     );
     let ended = store.list(None, None).expect("list");
     assert!(!ended[0].active);
     assert_eq!(ended[0].ended_at, Some(stamp(4)));
+    let expected_outcome = stopped_outcome("phase bead closed");
     assert_eq!(
         ended[0].last_outcome.as_deref(),
-        Some("stopped: phase bead closed")
+        Some(expected_outcome.as_str())
     );
     assert!(store.active_all().expect("active").is_empty());
 }
@@ -436,7 +421,7 @@ fn record_run_on_ended_row_changes_nothing() {
     store.end(&team(), &phase(), None, stamp(4)).expect("end");
     assert!(
         !store
-            .record_run(row.id, 1, stamp(5), "late")
+            .record_run(row.id, generation(1), stamp(5), "late")
             .expect("late run")
     );
     assert_eq!(stored_last_outcome(&h.path, "nightly"), None);
@@ -447,7 +432,12 @@ fn record_with_unstorable_id_changes_nothing() {
     let h = Harness::new();
     let changed = h
         .store()
-        .record_run(CronScheduleId(u64::MAX), 1, stamp(4), "none")
+        .record_run(
+            CronScheduleId::new(u64::MAX),
+            generation(1),
+            stamp(4),
+            "none",
+        )
         .expect("no row can carry this id");
     assert!(!changed);
 }

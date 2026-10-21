@@ -46,7 +46,8 @@ pub(crate) fn render_cron_list(rows: &[CronSchedule], json: bool) -> Result<Stri
             StopCondition::Hook => "hook".into(),
             StopCondition::Until { at } => format!(
                 "until {}",
-                at.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true)
+                at.into_inner()
+                    .to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true)
             ),
         };
         writeln!(
