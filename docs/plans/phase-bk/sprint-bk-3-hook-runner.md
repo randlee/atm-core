@@ -81,7 +81,8 @@ impl atm_core::boundary::sealed::Sealed for DaemonHookRunner {}
 // argv [module_path, request.hook] for run and stop, [module_path, "doctor"] for doctor. Budget first: run, stop use runner_budget, None is
 // hook_timeout(phase, "request budget exhausted before the hook ran"); doctor uses doctor_budget, None is hook_timeout(phase, "doctor budget
 // exhausted"); no spawn either way. Then timeout(budget, permits.acquire_owned()): elapsed is hook_timeout(phase, "hook concurrency limit
-// reached"), no spawn; the permit is held until the child is reaped. Then spawn_with_deadline(.., budget - waited):
+// reached"), no spawn; the permit is held until the child is reaped. After `spec()` validates the target, an exhausted
+// `budget - waited` is hook_timeout(phase, "budget exhausted before spawn"), no spawn; otherwise spawn_with_deadline uses it:
 // TimedOut -> hook_timeout(phase, "no reply within <timeout_ms> ms"); exit n -> hook_exit(Exit{code: n, stderr_tail}); signal ->
 // hook_exit(Signal(n)); exit 0 -> HookReply::parse / StopReply::parse / HookDoctorReply::parse of stdout, errors unchanged.
 /// The only task-hook and cron budget arithmetic: Some(min(timeout_ms, remaining - HOOK_ACTION_RESERVE_MS)) when positive, else None.

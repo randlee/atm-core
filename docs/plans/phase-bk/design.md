@@ -631,7 +631,7 @@ is appended. The CLI exit arms are bk-5's
 | Constructor | Message |
 | --- | --- |
 | `hook_exit(cause: HookExitCause)` | `Exit { code, stderr_tail }`: `HOOK.EXIT: exit <code>: <tail>`; `Signal(n)`: `HOOK.EXIT: terminated by signal <n>`; `Spawn { path, cause }`: `HOOK.EXIT: cannot run <path>: <cause>`; `Panic(payload)`: `HOOK.EXIT: hook runner panicked: <payload>`; `Missing(what)`: `HOOK.EXIT: <what>` (e.g. `python3 not found on PATH`) |
-| `hook_timeout(phase: &PhaseId, detail: &str)` | `HOOK.TIMEOUT: phase <p>: <detail>`; detail is `no reply within <n> ms`, `request budget exhausted before the hook ran` or `doctor budget exhausted` |
+| `hook_timeout(phase: &PhaseId, detail: &str)` | `HOOK.TIMEOUT: phase <p>: <detail>`; detail is `no reply within <n> ms`, `request budget exhausted before the hook ran`, `budget exhausted before spawn` or `doctor budget exhausted` |
 | `hook_malformed(detail: &str)` | `HOOK.MALFORMED: <detail>` |
 | `hook_module_invalid(detail: &str)` | `HOOK.MODULE_INVALID: <detail>` |
 | `hook_refused(message: &str)` | `<message>` |
@@ -777,8 +777,11 @@ Constants in `atm_storage::request_budget` (bk-1): `HOOK_TIMEOUT_MAX_MS =
   with the pure `runner_budget(timeout_ms, remaining) ->
   Option<Duration>`: `min(timeout_ms, remaining - HOOK_ACTION_RESERVE_MS)`,
   `None` at or below zero, which returns `ATM_HOOK_TIMEOUT` without
-  spawning. The filter passes `ctx.deadline` unchanged and has no check
-  of its own (D-5). `doctor` uses `doctor_budget`: `min(timeout_ms,
+  spawning. After the permit is acquired and `spec()` validates the target,
+  the runner subtracts elapsed time from that budget; an exhausted remainder
+  returns `ATM_HOOK_TIMEOUT` "budget exhausted before spawn" without spawning.
+  The filter passes `ctx.deadline` unchanged and has no check of its own (D-5).
+  `doctor` uses `doctor_budget`: `min(timeout_ms,
   remaining)` with no reserve, `None` giving `ATM_HOOK_TIMEOUT` "doctor
   budget exhausted" without spawning.
 - `RequestDeadline` (bk-2) derives `PartialEq, Eq` and gains
