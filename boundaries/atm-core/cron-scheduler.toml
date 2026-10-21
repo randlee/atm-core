@@ -45,5 +45,5 @@ process_spawn = ["atm_core::boundary::cron_scheduler"]
 socket_io = ["atm_core::boundary::cron_scheduler"]
 
 [status]
-state = "active"
+state = "concrete_landed"
 notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters."]
