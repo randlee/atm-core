@@ -1033,7 +1033,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stdout_over_cap_is_malformed_and_child_reaped() {
+    async fn stdout_over_cap_is_malformed() {
         let fixture = Fixture::new();
         fixture.script("import sys,threading\nsys.stdout.write('x' * ((1 << 20) + 1))\nsys.stdout.flush()\nthreading.Event().wait()\n");
         let error = fixture.run().await.unwrap_err();
