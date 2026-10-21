@@ -11,12 +11,10 @@
 use async_trait::async_trait;
 use atm_core::api::ApiResponse;
 use atm_core::boundary::{
-    TaskAssign, TaskCallCtx, TaskClose, TaskCommand, TaskCommands, TaskEvents, TaskList, TaskStart,
-    sealed,
+    TaskAssign, TaskCallCtx, TaskClose, TaskCommands, TaskEvents, TaskList, TaskStart, sealed,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::TaskMoveRequest;
-use atm_core::types::{AgentName, TeamName};
 
 use crate::storage_and_nudge_router::StorageAndNudgeRouter;
 
@@ -63,23 +61,6 @@ impl TaskCommands for NormalTaskCommands {
     }
     async fn events(&self, req: TaskEvents, ctx: &TaskCallCtx) -> Result<ApiResponse, AtmError> {
         self.router.list_messages(req.0, ctx.deadline).await
-    }
-}
-
-/// The caller a classified task command acts for.
-pub(crate) fn task_caller(command: &TaskCommand) -> (AgentName, TeamName) {
-    match command {
-        TaskCommand::Assign(TaskAssign(request))
-        | TaskCommand::Start(TaskStart(request))
-        | TaskCommand::Close(TaskClose(request)) => {
-            (request.caller_identity.clone(), request.caller_team.clone())
-        }
-        TaskCommand::Move(request) => {
-            (request.caller_identity.clone(), request.caller_team.clone())
-        }
-        TaskCommand::List(TaskList(query)) | TaskCommand::Events(TaskEvents(query)) => {
-            (query.caller_identity.clone(), query.caller_team.clone())
-        }
     }
 }
 

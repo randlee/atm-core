@@ -101,6 +101,29 @@ impl TaskCommand {
         .expect("task command names are valid hook names")
     }
 
+    /// The caller identity and team carried by this classified task command.
+    pub fn caller(&self) -> (&AgentName, &TeamName) {
+        match self {
+            Self::Assign(TaskAssign(request))
+            | Self::Start(TaskStart(request))
+            | Self::Close(TaskClose(request)) => (&request.caller_identity, &request.caller_team),
+            Self::Move(request) => (&request.caller_identity, &request.caller_team),
+            Self::List(TaskList(query)) | Self::Events(TaskEvents(query)) => {
+                (&query.caller_identity, &query.caller_team)
+            }
+        }
+    }
+
+    /// Whether this task command is a dry-run write.
+    pub fn dry_run(&self) -> bool {
+        match self {
+            Self::Assign(TaskAssign(request))
+            | Self::Start(TaskStart(request))
+            | Self::Close(TaskClose(request)) => request.dry_run,
+            Self::Move(_) | Self::List(_) | Self::Events(_) => false,
+        }
+    }
+
     pub fn request_body(&self) -> serde_json::Value {
         match self {
             Self::Assign(TaskAssign(request))
@@ -307,6 +330,80 @@ mod tests {
             TaskCommand::classify(ApiRequest::ReloadRuntimeView),
             Err(ApiRequest::ReloadRuntimeView)
         ));
+    }
+
+    #[test]
+    fn caller_and_dry_run_cover_every_task_command_variant() {
+        let assign = write();
+        let mut start = write();
+        start.task_op = Some(TaskOp::Start);
+        start.caller_identity = "starter".parse().unwrap();
+        start.caller_team = "start-team".parse().unwrap();
+        start.dry_run = true;
+        let mut close = write();
+        close.task_op = Some(TaskOp::Close {
+            outcome: TaskCloseOutcome::Completed,
+            reason: Some("done".into()),
+        });
+        close.caller_identity = "closer".parse().unwrap();
+        close.caller_team = "close-team".parse().unwrap();
+        close.dry_run = true;
+
+        let cases = [
+            (
+                TaskCommand::Assign(TaskAssign(Box::new(assign))),
+                "solar",
+                "test-team",
+                false,
+            ),
+            (
+                TaskCommand::Start(TaskStart(Box::new(start))),
+                "starter",
+                "start-team",
+                true,
+            ),
+            (
+                TaskCommand::Close(TaskClose(Box::new(close))),
+                "closer",
+                "close-team",
+                true,
+            ),
+            (
+                TaskCommand::Move(TaskMoveRequest {
+                    caller_identity: "mover".parse().unwrap(),
+                    caller_team: "move-team".parse().unwrap(),
+                    task_id: "bk-2".parse().unwrap(),
+                    target: atm_storage::MoveTarget::End,
+                }),
+                "mover",
+                "move-team",
+                false,
+            ),
+            (
+                TaskCommand::List(TaskList(query(Some(TaskLedgerQuery::Tasks {
+                    member: None,
+                })))),
+                "solar",
+                "test-team",
+                false,
+            ),
+            (
+                TaskCommand::Events(TaskEvents(query(Some(TaskLedgerQuery::Events {
+                    task_id: "bk-2".parse().unwrap(),
+                    member: None,
+                })))),
+                "solar",
+                "test-team",
+                false,
+            ),
+        ];
+
+        for (command, identity, team, dry_run) in cases {
+            let (caller_identity, caller_team) = command.caller();
+            assert_eq!(caller_identity.as_str(), identity);
+            assert_eq!(caller_team.as_str(), team);
+            assert_eq!(command.dry_run(), dry_run);
+        }
     }
 
     #[test]

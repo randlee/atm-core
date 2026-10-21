@@ -235,7 +235,7 @@ impl<D: HookActionDispatcher + 'static> HookedTaskCommands<D> {
             team: ctx.caller_team.clone(),
             who: ctx.caller_identity.clone(),
             deadline: ctx.deadline,
-            dry_run: dry_run_of(&cmd),
+            dry_run: cmd.dry_run(),
             body: cmd.clone(),
             hook,
         };
@@ -394,16 +394,6 @@ fn reply_action_count(reply: &HookReply) -> usize {
 /// Whole milliseconds since `started`, saturating; timing is diagnostic only.
 pub(crate) fn elapsed_ms(started: Instant) -> u64 {
     u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
-}
-
-/// The write's own `dry_run`; move, list and events are never dry runs.
-fn dry_run_of(cmd: &TaskCommand) -> bool {
-    match cmd {
-        TaskCommand::Assign(TaskAssign(request))
-        | TaskCommand::Start(TaskStart(request))
-        | TaskCommand::Close(TaskClose(request)) => request.dry_run,
-        TaskCommand::Move(_) | TaskCommand::List(_) | TaskCommand::Events(_) => false,
-    }
 }
 
 fn hook_actions(dispatched: usize) -> ApiResponse {
