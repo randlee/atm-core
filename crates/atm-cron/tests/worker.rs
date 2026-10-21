@@ -1160,15 +1160,17 @@ async fn shutdown_joins_within_deadline_with_run_in_flight() {
     assert_eq!(fixture.row().last_outcome, None);
 }
 
-#[tokio::test]
-async fn shutdown_waits_for_cancelled_run_cleanup() {
+#[tokio::test(start_paused = true)]
+async fn shutdown_deadline_aborts_the_held_run_before_returning() {
     struct Dropped(watch::Sender<bool>);
     impl Drop for Dropped {
         fn drop(&mut self) {
             self.0.send_replace(true);
         }
     }
+
     let fixture = Fixture::new();
+    let logs = capture_logs();
     let (entered, mut received) = watch::channel(false);
     let (dropped, finished) = watch::channel(false);
     *fixture.runner.before_reply.lock().unwrap() = Some(Arc::new(move |_| {
@@ -1184,9 +1186,21 @@ async fn shutdown_waits_for_cancelled_run_cleanup() {
     let worker = fixture.worker().await;
     fixture.step(60).await;
     wait_for_release(&mut received).await;
-    worker.shutdown(tokio::time::Instant::now()).await;
-    assert!(*finished.borrow());
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+    tokio::join!(worker.shutdown(deadline), async {
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(1)).await;
+    });
+
+    assert!(*finished.borrow(), "aborting the worker drops the held run");
     assert_eq!(fixture.row().last_outcome, None);
+    assert!(
+        logs.lock()
+            .unwrap()
+            .iter()
+            .any(|entry| entry.contains("action=\"shutdown_deadline\""))
+    );
 }
 
 fn actions() -> Vec<atm_core::hook::HookAction> {

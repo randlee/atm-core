@@ -232,18 +232,29 @@ impl CronWorkerHandle {
             .lock()
             .expect("cron worker lock poisoned")
             .take();
+        let mut deadline_expired = false;
         if let Some(mut worker) = worker
             && tokio::time::timeout_at(deadline, &mut worker)
                 .await
                 .is_err()
         {
+            deadline_expired = true;
+            let running = *self.settled.borrow();
+            tracing::error!(
+                subsystem = "atm_cron",
+                action = "shutdown_deadline",
+                outcome = "failed",
+                running,
+                "cron shutdown deadline passed with {running} run(s) still in flight"
+            );
             worker.abort();
             let _ = worker.await;
         }
         let mut settled = self.settled.clone();
-        if tokio::time::timeout_at(deadline, settled.wait_for(|running| *running == 0))
-            .await
-            .is_err()
+        if !deadline_expired
+            && tokio::time::timeout_at(deadline, settled.wait_for(|running| *running == 0))
+                .await
+                .is_err()
         {
             let running = *self.settled.borrow();
             tracing::error!(
