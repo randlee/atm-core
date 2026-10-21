@@ -24,7 +24,7 @@ const PAUSE_DEADLINE: Duration = Duration::from_secs(10);
 pub struct InMemoryHookRegistrationStore {
     rows: Mutex<Vec<HookRegistration>>,
     pub calls: AtomicUsize,
-    /// When set, `active_all` fails once with an injected error (refresh failure tests).
+    /// When set, `active_all` fails every call with an injected error (refresh failure tests).
     pub fail_active_all: AtomicBool,
     pause: Mutex<Option<PauseSlot>>,
 }

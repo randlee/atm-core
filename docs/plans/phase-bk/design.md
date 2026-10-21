@@ -860,7 +860,7 @@ concurrency limit reached")` with no spawn.
 the chain decision and the action dispatch inside one task spawned through
 the router's `ChainTracker` over cloned `Arc`s; shutdown refuses new
 chains, waits for live ones up to its deadline, then aborts them
-(`daemon_unavailable` "hook chain cancelled: daemon shutting down"). The
+(`daemon_unavailable` "hook chain was cancelled while the daemon was shutting down"). The
 snapshot holds `Arc<HookRegistration>` rows and each `HookRequest` is built
 only when its hook runs. The task returns `Result<Decision, AtmError>`, with `enum
 Decision { Inner, Refused(String), Done(ApiResponse) }`. The filter maps
@@ -917,7 +917,7 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
   what it reads), `runner: Option<Arc<dyn HookRunner>>` (doctor only),
   `local_host: Option<HostName>`, and `cron:
   Arc<OnceLock<Arc<dyn CronScheduler>>>`, shared by clones. Unset, the cron
-  routes return `daemon_unavailable("cron scheduler not installed")`.
+  routes return `daemon_unavailable("cron scheduler is unavailable because daemon startup did not install it")`.
   `install_cron_scheduler(&self, Arc<dyn CronScheduler>) -> Result<(),
   AtmError>` errors on a second call. There are no `Noop` types.
 - bk-5, in `run_replacement_daemon_with_selector`
