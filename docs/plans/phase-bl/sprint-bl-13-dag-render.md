@@ -29,3 +29,8 @@ Own only `dag.py` and `test_dag.py`. It renders persisted snapshots through the 
 - [ ] `test_dag_fallback_list_same_cells_and_colours`
 
 No test launches mmdflux or relies on timing.
+
+## Validation
+```bash
+cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --frozen pyright src && uv run --frozen pytest -q tests/test_dag.py
+```

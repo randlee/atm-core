@@ -12,9 +12,10 @@ Own `cron_entry.py`, `delivery_entry.py`, `wiring.py`, and `test_phase_bl_compos
 
 ## Deliverables
 
-1. Wire the fixed architecture: collectors → persisted JSON state → state stage → `EventRequest` → debounce/aggregate → separately scheduled delivery, with no database.
+1. Wire the fixed architecture: collectors → persisted JSON state → state stage → `EventRequest` → debounce/aggregate → separately scheduled delivery, with no database. `cron_entry` calls bl-3 `derive_transitions(snapshot, previous)` then `enqueue_event_request`.
 2. Wire both cron-originated and bl-5 sanity-originated `EventRequest`s through the named `enqueue_event_request` seam into bl-3's durable queue; `delivery_entry.deliver_due(clock)` is the only send entry.
 3. Compose JSONL error state, reviewer metadata, persisted snapshot, Quality presentation, event aggregation, and delivery history using deterministic fakes.
+4. Production wiring injects bl-10 `ProblemDeriver` into bl-8 `build_snapshot` and routes bl-5's JSON/CLI enqueue seam into bl-3.
 
 ## Deterministic acceptance
 
@@ -23,11 +24,19 @@ Own `cron_entry.py`, `delivery_entry.py`, `wiring.py`, and `test_phase_bl_compos
 - [ ] `test_eligible_sanity_transition_creates_one_aggregated_request`
 - [ ] `test_eligible_sanity_transition_creates_aggregated_request`
 - [ ] `test_sanity_event_request_enters_durable_queue_via_enqueue_event_request`
+- [ ] `test_cron_enqueues_transition_derived_from_fixture_snapshot`
+- [ ] `test_wiring_injects_problem_deriver_and_plugin_enqueue_path`
 - [ ] `test_only_advanced_delivery_clock_sends_request`
 - [ ] `test_cron_and_tui_render_same_persisted_state_without_collection`
 - [ ] `test_failed_source_is_eligible_on_next_controlled_request`
 
 All fixtures inject the source, stored JSON, queue, ATM sender, and clock. No integration test sleeps, races, orders event loops, loads CPU, or contacts a service.
+
+## Validation
+```bash
+cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --frozen pyright src && uv run --frozen pytest -q tests/test_phase_bl_composition.py
+cd plugins/atm-bd-orchestration && python3 -m pytest -q -rs
+```
 
 ## This sprint does not close
 

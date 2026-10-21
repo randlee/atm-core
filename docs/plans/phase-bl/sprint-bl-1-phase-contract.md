@@ -39,9 +39,17 @@ class EventRequest: transition: Transition; recipients: tuple[str, ...]; payload
 class DeliveryHistoryEntry: request_id: str; outcome: DeliveryOutcome; at: float; error: str | None
 class CollectorRequest(Protocol):
     def request(self, source: str, *, force: bool, clock: float) -> CollectorRecord: ...
+class EventEnqueue(Protocol):
+    def enqueue_event_request(self, request: EventRequest) -> None: ...
+class EventSender(Protocol):
+    def send(self, request: EventRequest) -> None: ...
+class ProblemDeriver(Protocol):
+    def derive_problem_records(self, records: tuple[CollectorRecord, ...]) -> tuple[ActionableProblem, ...]: ...
+BD_WINDOW_S = 60; ATM_WINDOW_S = 60; GITHUB_WINDOW_S = 600
 ```
 
 3. Supply codec schema and fixtures for `CollectorRecord`, `StateSnapshot`, `ActionableProblem`, and `EventRequest`; plugin fixture decoding is the durable console/plugin seam.
+4. `atm_bd_console` is the real Python import path. Plugin scripts never import console implementation modules: they exchange codec JSON through files/CLI; bl-5 invokes the `enqueue_event_request` CLI seam, while doubles implement all three Protocols in `registry.py` tests.
 
 ## Deterministic acceptance
 

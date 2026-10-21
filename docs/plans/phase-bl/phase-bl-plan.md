@@ -44,15 +44,16 @@ branch alone targets develop.
 
 | Issue | Sprint | Deliverable | Deterministic proof / status |
 | --- | --- | --- | --- |
-| #379, #164 | bl-2 | D4, D7 | `test_jev_request_array_and_closed_error_enum` |
+| #379 | bl-2 | D6 | `test_pr_body_null_is_empty_text` |
+| #164 | bl-2 | D7 | `test_external_evidence_flag_appends` |
 | #365, #497 | bl-5 | D1 | `test_sanity_log_preserves_jev_request_array_and_jsonl` |
 | #375, #372 | bl-10 | D2 | `test_latest_non_cancelled_check_per_name_wins` |
-| #492 | bl-8 | D4 | D2 remains open; `test_d1_deadline_is_required_before_command_dispatch` |
+| #492 | bl-8 | carry-forward | D2 remains open; no proof test is claimed |
 | #126, #498 | bl-5 | D3 | `test_not_reproducible_close_and_rebase_link` |
 | #533 | bl-8 | D4 | `test_d1_deadline_is_required_before_command_dispatch` |
-| #491, #359 | bl-3 | D1, D2 | `test_deliver_due_is_only_send_seam_and_respects_injected_clock` |
+| #491, #359 | bl-3 | D1 | `test_derive_transitions_emits_held_dispatch_and_alert_requests` |
 | #360 | bl-13 | D1 | `test_dag_mmds_fixture_node_ids_labels_and_strokes` |
-| #347 | bl-4 | D1 | `test_qa_close_step_writes_reviewers` |
+| #347 | bl-4/bl-7 | D1/D1 | `test_qa_close_step_writes_reviewers` / `test_quality_table_columns_match_sanity` |
 
 ## Integration exit
 

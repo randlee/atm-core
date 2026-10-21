@@ -1,0 +1,32 @@
+# Sprint bl-3 — event dispatch
+
+closure_type: boundary; target_boundary: EventDispatch; branch: sprint/bl-3-event-dispatch; PR target: integrate/phase-bl; wave: 2; external_ref: #491, #359; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (`EventRequest`, `DeliveryHistoryEntry` codec); parallel_safe: bl-2, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13, bl-14.
+
+Own `events.py`, `delivery.py`, `test_events.py`, and `test_delivery.py` in the console package. It implements durable enqueue, debounce/aggregation, due selection, and separately scheduled delivery; it does not collect or render.
+
+## Deliverables
+
+> "ATM messages occur on a specified schedule based on timing... nothing to do with either tui or cron."
+
+> "multiple collectors each in separate module governed by it's own rules (i.e. gh rate limited, dolt timeouts, atm no limits today). state evaluation based on current state. specific state transitions would trigger 'atm message request'."
+
+1. Implement pure `derive_transitions(snapshot, previous) -> tuple[EventRequest, ...]` for held, dispatch, and alert transitions. Retained held rows carry bead, task, reason, and source timestamp.
+2. Persist and enqueue derived or supplied `EventRequest`s through `enqueue_event_request`; aggregate/debounce by `debounce_key` and preserve delivery history.
+2. Implement `due_requests(clock)` and `deliver_due(clock, sender)`; only `deliver_due` may invoke sender.
+
+## Deterministic acceptance
+
+- [ ] `test_enqueue_persists_event_request_and_debounce_key`
+- [ ] `test_derive_transitions_emits_held_dispatch_and_alert_requests`
+- [ ] `test_held_row_preserves_bead_task_reason_and_source_timestamp`
+- [ ] `test_debounce_aggregates_requests_deterministically`
+- [ ] `test_due_requests_never_call_send_seam`
+- [ ] `test_deliver_due_is_only_send_seam_and_respects_injected_clock`
+- [ ] `test_delivery_history_preserves_typed_outcome`
+
+No source-read or TUI assertion is made here; bl-12 owns collector/TUI no-send integration proof.
+
+## Validation
+```bash
+cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --frozen pyright src && uv run --frozen pytest -q tests/test_events.py tests/test_delivery.py
+```

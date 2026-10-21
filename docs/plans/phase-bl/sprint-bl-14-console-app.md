@@ -13,12 +13,14 @@ Own `app.py` and `test_app.py`. Implement the console-instance lock, persisted-s
 ## Deterministic acceptance
 
 - [ ] `test_second_console_exits`
-- [ ] `test_refresh_key_calls_collector_request_seam`
+- [ ] `test_refresh_key_calls_collector_request_seam_with_force_true_for_every_source`
 - [ ] `test_pr_tab_activation_requests_github_only`
 - [ ] `test_diagnostics_rich_text_colour_is_preserved`
-- [ ] `test_console_app_calls_no_send_seam`
 - [ ] `test_console_never_sends_atm_message`
-- [ ] `test_diagnostics_agent_icons_coloured`
-- [ ] `test_r_forces_all_sources_pr_tab_forces_github`
+
+## Validation
+```bash
+cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --frozen pyright src && uv run --frozen pytest -q tests/test_app.py
+```
 
 No UI test uses sleeps, real time, threads, or delivery.
