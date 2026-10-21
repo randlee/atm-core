@@ -69,7 +69,7 @@ impl HookName {
     pub const TASK_HOOKS: [&'static str; 6] = ["task.assign", "task.start", "task.close", "task.move", "task.list", "task.events"];
     pub const CRON_TICK: &'static str = "cron.tick";
     pub const CRON_STOP: &'static str = "cron.stop";
-    pub fn parse(name: &str) -> Result<Self, AtmError>;            // any of the eight, else AtmError::hook_malformed("unknown hook name <n>")
+    pub fn parse(name: &str) -> Result<Self, AtmError>;            // any of the eight, else AtmError::hook_module_invalid("unknown hook name <n>; expected one of ...")
     pub fn parse_task_hook(name: &str) -> Result<Self, AtmError>;  // exactly TASK_HOOKS, else hook_module_invalid (the register route's only validator, ADR-068 D3)
     pub fn as_str(&self) -> &str;
 }
@@ -224,7 +224,7 @@ All in `crates/atm-storage/tests/hook_stores_contract.rs` unless stated, against
 - [ ] (D-5) `boundary:BOUNDARY-HookRegistrationStore` `register_second_phase_same_hook_succeeds`: `task.close` for `bk` (stamp t2) while `bj`'s (stamp t1) is active: both active, `active(team, task.close) == [bj, bk]`; `disable(bj)` leaves `[bk]`; `reregister_active_key_keeps_chain_position`: re-registering `bj` at t3 with a new `module_path` keeps `registered_at == t1`; re-registering a disabled key at t4 stores `registered_at == t4`, clears `disabled_at` and lists last; `disable_single_hook_leaves_other_hooks_of_phase_active`.
 - [ ] (REQ-P-HOOK-003 §23.1) `boundary:BOUNDARY-HookRegistrationStore` `list_orders_active_first_then_registered_at_then_phase`: disabled `bj` (t1), active `bl` (t2), `bk` (t3) list as `[bl, bk, bj]`; two active rows with one stamp list by phase; `list_schedules_orders_active_first_then_created_at_then_phase` does the same for schedules.
 - [ ] `boundary:BOUNDARY-HookRegistrationStore` `disable_twice_keeps_first_disabled_at` (second call returns `[]`, `disabled_at` unchanged) and `disable_phase_with_no_rows_returns_empty`.
-- [ ] (ADR-068 D3) `boundary:BOUNDARY-HookRegistrationStore` `hook_name_parse_sets`: `parse_task_hook` accepts exactly the six task names and refuses `cron.tick`, `cron.stop`, `task.foo` with `ATM_HOOK_MODULE_INVALID`; `parse` accepts all eight and refuses `task.foo` with `ATM_HOOK_MALFORMED`; `hook_name_deserialize_rejects_unknown` (`"\"task.foo\""` is `Err`).
+- [ ] (ADR-068 D3) `boundary:BOUNDARY-HookRegistrationStore` `hook_name_parse_sets`: `parse_task_hook` accepts exactly the six task names and refuses `cron.tick`, `cron.stop`, `task.foo` with `ATM_HOOK_MODULE_INVALID`; `parse` accepts all eight and refuses `task.foo` with `ATM_HOOK_MODULE_INVALID`; `hook_name_deserialize_rejects_unknown` (`"\"task.foo\""` is `Err`). The unknown-name code follows `atm-bk-1.group-qa-f3` and `REQ-P-HOOK-001` §23.1.
 - [ ] `boundary:BOUNDARY-HookRegistrationStore` `phase_id_rejects_empty_uppercase_space_and_newline`: accepts `bk`, `bk-2`, a 32-character id; refuses `""`, `Bk`, `b k`, `bk\n`, `2bk`, a 33-character id, each with code `ATM_MESSAGE_VALIDATION_FAILED`, the grammar in the message and the recovery line.
 - [ ] (D-8) `boundary:BOUNDARY-HookRegistrationStore` `active_all_spans_teams_and_counts_calls`: two teams' active rows, disabled rows omitted, `calls` counts the call; `active_all_order_equals_active_order_for_every_key`.
 - [ ] (ANC-018, ANC-020) `boundary:BOUNDARY-CronScheduleStore` `active_all_returns_started_rows_with_cron_expr_byte_identical` and `jitter_custom_and_created_at_round_trip` (`jitter_s = 1799`, `custom = {"goal":"x","n":[1,{"y":null}]}`, `created_at` equal to the `NewCronSchedule` value).
