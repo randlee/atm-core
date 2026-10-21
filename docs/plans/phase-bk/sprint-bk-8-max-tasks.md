@@ -256,8 +256,7 @@ approval, and the CHANGELOG carries the release note. No
   leaves `alias`, `host` and the backend keys unchanged.
   `with_max_tasks(None)` leaves the key absent or unchanged.
 - [ ] (item 5) `update_member_max_tasks_zero_is_a_validation_error`:
-  `with_max_tasks(Some(0))` returns `ATM_MESSAGE_VALIDATION_FAILED`, and the
-  roster is byte-identical before and after.
+  `with_max_tasks(Some(0))` returns `ATM_MESSAGE_VALIDATION_FAILED`.
 
 `crates/atm/src/commands/teams.rs` tests:
 

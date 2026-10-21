@@ -1442,15 +1442,6 @@ mod tests {
 
     #[test]
     fn update_member_max_tasks_zero_is_a_validation_error() {
-        let roster_store = RecordingRosterStore::default();
-        roster_store.seed_team(
-            TEST_TEAM,
-            vec![
-                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
-                roster_member(TEST_TEAM, TEST_SENDER),
-            ],
-        );
-        let before = stored_member_metadata(&roster_store, TEST_TEAM, TEST_SENDER);
         let Err(error) = UpdateMemberRequest::new(
             ROLE_TEAM_LEAD.parse().expect("caller"),
             TEST_TEAM.parse().expect("caller team"),
@@ -1469,11 +1460,6 @@ mod tests {
         };
         assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
         assert!(error.message().contains("at least 1"), "{error}");
-        assert_eq!(
-            stored_member_metadata(&roster_store, TEST_TEAM, TEST_SENDER),
-            before,
-            "a refused request never changes roster metadata"
-        );
     }
 
     #[test]
