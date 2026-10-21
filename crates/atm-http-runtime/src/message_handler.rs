@@ -2220,7 +2220,8 @@ mod tests {
             ApiRequest, MessageCollectionRequest, decode_http_response, encode_http_request,
         };
         use atm_core::boundary::{
-            CronSchedule, CronScheduleId, HookName, HookRegistration, PhaseId, StopCondition,
+            CronGeneration, CronSchedule, CronScheduleId, HookName, HookRegistration, PhaseId,
+            StopCondition,
         };
         use atm_core::hook::{
             CronEndRequest, CronListQuery, CronStartRequest, HookActionsResponse,
@@ -2251,7 +2252,7 @@ mod tests {
         };
         let schedule = CronSchedule {
             id: CronScheduleId::new(1),
-            generation: 1,
+            generation: CronGeneration::FIRST,
             team: team.clone(),
             phase: phase.clone(),
             name: "nightly".to_owned(),

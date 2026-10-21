@@ -363,7 +363,7 @@ async fn start_after_end_updates_in_place_and_keeps_the_id() {
         .unwrap();
     let restarted = fixture.cron.start(spec).await.unwrap();
     assert_eq!(row.id, restarted.id);
-    assert_eq!(restarted.generation, row.generation + 1);
+    assert_eq!(Some(restarted.generation), row.generation.next());
 }
 
 #[tokio::test]
@@ -957,7 +957,7 @@ async fn stale_run_never_writes_the_restarted_row() {
     fixture.clock.wait_parks_above(parks).await;
     release.send_replace(true);
     shutdown(&worker).await;
-    assert_eq!(restarted.generation, row.generation + 1);
+    assert_eq!(Some(restarted.generation), row.generation.next());
     assert_eq!(fixture.row().last_outcome, None);
     assert_eq!(fixture.store.writes.load(Ordering::SeqCst), 3);
 }

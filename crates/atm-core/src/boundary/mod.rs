@@ -94,8 +94,8 @@ pub use atm_storage::request_budget::{
     CRON_TIMEOUT_MAX_MS, HOOK_ACTION_RESERVE_MS, HOOK_TIMEOUT_MAX_MS, SERVER_REQUEST_BUDGET,
 };
 pub use atm_storage::{
-    CronSchedule, CronScheduleId, CronScheduleStore, HookExitCause, HookName, HookRegistration,
-    HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition,
+    CronGeneration, CronSchedule, CronScheduleId, CronScheduleStore, HookExitCause, HookName,
+    HookRegistration, HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition,
 };
 pub use cron_scheduler::{CronScheduler, CronStartSpec};
 pub use hook_action_dispatcher::{DispatchSpec, HookActionDispatcher};

@@ -12,8 +12,8 @@ use std::sync::Arc;
 use atm_storage::contract::sealed;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
-    AtmError, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule, PhaseId,
-    StopCondition,
+    AtmError, CronGeneration, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule,
+    PhaseId, StopCondition,
 };
 use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, params, params_from_iter};
@@ -135,8 +135,11 @@ fn decode(raw: RawCron) -> Result<CronSchedule, AtmError> {
         id: CronScheduleId::new(
             u64::try_from(raw.id).map_err(|_| internal(&key, "id is negative"))?,
         ),
-        generation: u32::try_from(raw.generation)
-            .map_err(|_| internal(&key, "generation is out of range"))?,
+        generation: CronGeneration::new(
+            u32::try_from(raw.generation)
+                .map_err(|_| internal(&key, "generation is out of range"))?,
+        )
+        .map_err(|_| internal(&key, "generation is zero"))?,
         team: TeamName::from_validated(raw.team),
         phase: PhaseId::parse(&raw.phase)?,
         name: raw.name,
@@ -404,7 +407,7 @@ impl CronScheduleStore for SqliteCronScheduleStore {
     fn record_run(
         &self,
         id: CronScheduleId,
-        generation: u32,
+        generation: CronGeneration,
         at: IsoTimestamp,
         outcome: &str,
     ) -> Result<bool, AtmError> {
@@ -418,7 +421,7 @@ impl CronScheduleStore for SqliteCronScheduleStore {
                 .execute(
                     "UPDATE cron_schedule SET last_run_at = ?3, last_outcome = ?4
                      WHERE id = ?1 AND generation = ?2 AND active = 1;",
-                    params![id, i64::from(generation), at_text, outcome],
+                    params![id, i64::from(generation.get()), at_text, outcome],
                 )
                 .map_err(|error| write_error(&self.db, TABLE, error))?;
             Ok(changed == 1)
@@ -428,7 +431,7 @@ impl CronScheduleStore for SqliteCronScheduleStore {
     fn record_stop(
         &self,
         id: CronScheduleId,
-        generation: u32,
+        generation: CronGeneration,
         at: IsoTimestamp,
         reason: &str,
     ) -> Result<bool, AtmError> {
@@ -442,7 +445,7 @@ impl CronScheduleStore for SqliteCronScheduleStore {
                 .execute(
                     "UPDATE cron_schedule SET active = 0, ended_at = ?3, last_outcome = ?4
                      WHERE id = ?1 AND generation = ?2 AND active = 1;",
-                    params![id, i64::from(generation), at_text, outcome],
+                    params![id, i64::from(generation.get()), at_text, outcome],
                 )
                 .map_err(|error| write_error(&self.db, TABLE, error))?;
             Ok(changed == 1)

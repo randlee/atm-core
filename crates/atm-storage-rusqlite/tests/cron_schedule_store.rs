@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
-    AtmErrorCode, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule, PhaseId,
-    StopCondition,
+    AtmErrorCode, CronGeneration, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule,
+    PhaseId, StopCondition,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
 use chrono::{TimeZone, Utc};
@@ -125,6 +125,10 @@ fn stored_last_outcome(path: &Path, name: &str) -> Option<String> {
         .expect("stored row")
 }
 
+fn generation(value: u32) -> CronGeneration {
+    CronGeneration::new(value).expect("generation")
+}
+
 #[test]
 fn active_all_survives_reopen() {
     let h = Harness::new();
@@ -159,14 +163,14 @@ fn active_all_survives_reopen() {
     assert_eq!(row.id, nightly.id);
     assert_eq!(row.cron_expr, "*/5 * * * *");
     assert_eq!(row.jitter_s, 1799);
-    assert_eq!(row.generation, 1);
+    assert_eq!(row.generation.get(), 1);
     assert_eq!(row.custom, nightly.custom);
     assert_eq!(row.stop, StopCondition::Hook);
     let restarted = after
         .iter()
         .find(|row| row.name == "weekly")
         .expect("weekly");
-    assert_eq!(restarted.generation, 2);
+    assert_eq!(restarted.generation.get(), 2);
 }
 
 #[test]
@@ -262,7 +266,7 @@ fn start_after_end_updates_in_place_and_bumps_generation() {
         .expect("start");
     assert!(
         store
-            .record_run(first.id, 1, stamp(4), "exit 0")
+            .record_run(first.id, generation(1), stamp(4), "exit 0")
             .expect("record run")
     );
     assert_eq!(
@@ -286,7 +290,7 @@ fn start_after_end_updates_in_place_and_bumps_generation() {
     replacement.created_by = AgentName::from_validated("replacement-agent");
     let restarted = store.start(replacement).expect("restart");
     assert_eq!(restarted.id, first.id);
-    assert_eq!(restarted.generation, 2);
+    assert_eq!(restarted.generation.get(), 2);
     assert!(restarted.active);
     assert_eq!(restarted.team, team());
     assert_eq!(restarted.phase, phase());
@@ -359,18 +363,18 @@ fn record_with_stale_generation_changes_nothing() {
         .expect("restart");
     assert!(
         !store
-            .record_run(first.id, 1, stamp(7), "stale")
+            .record_run(first.id, generation(1), stamp(7), "stale")
             .expect("stale run")
     );
     assert!(
         !store
-            .record_stop(first.id, 1, stamp(7), "stale")
+            .record_stop(first.id, generation(1), stamp(7), "stale")
             .expect("stale stop")
     );
     assert_eq!(stored_last_outcome(&h.path, "nightly"), None);
     assert!(
         store
-            .record_run(first.id, 2, stamp(8), "fresh")
+            .record_run(first.id, generation(2), stamp(8), "fresh")
             .expect("current run")
     );
     assert_eq!(
@@ -388,12 +392,12 @@ fn record_stop_ends_the_row_once() {
         .expect("start");
     assert!(
         store
-            .record_stop(row.id, 1, stamp(4), "phase bead closed")
+            .record_stop(row.id, generation(1), stamp(4), "phase bead closed")
             .expect("stop")
     );
     assert!(
         !store
-            .record_stop(row.id, 1, stamp(5), "again")
+            .record_stop(row.id, generation(1), stamp(5), "again")
             .expect("second stop")
     );
     let ended = store.list(None, None).expect("list");
@@ -416,7 +420,7 @@ fn record_run_on_ended_row_changes_nothing() {
     store.end(&team(), &phase(), None, stamp(4)).expect("end");
     assert!(
         !store
-            .record_run(row.id, 1, stamp(5), "late")
+            .record_run(row.id, generation(1), stamp(5), "late")
             .expect("late run")
     );
     assert_eq!(stored_last_outcome(&h.path, "nightly"), None);
@@ -427,7 +431,12 @@ fn record_with_unstorable_id_changes_nothing() {
     let h = Harness::new();
     let changed = h
         .store()
-        .record_run(CronScheduleId::new(u64::MAX), 1, stamp(4), "none")
+        .record_run(
+            CronScheduleId::new(u64::MAX),
+            generation(1),
+            stamp(4),
+            "none",
+        )
         .expect("no row can carry this id");
     assert!(!changed);
 }

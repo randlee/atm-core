@@ -68,7 +68,12 @@ impl CronScheduler for RecordingCronScheduler {
         let id = existing.map(|index| rows[index].id).unwrap_or_else(|| {
             super::CronScheduleId::new(rows.iter().map(|row| row.id.get()).max().unwrap_or(0) + 1)
         });
-        let generation = existing.map_or(1, |index| rows[index].generation + 1);
+        let generation = existing.map_or(super::CronGeneration::FIRST, |index| {
+            rows[index]
+                .generation
+                .next()
+                .expect("cron generation overflow")
+        });
         let row = CronSchedule {
             id,
             generation,
@@ -195,7 +200,7 @@ mod tests {
         let first_spec = spec("test-team", "bk", "first");
         let first = ready(scheduler.start(first_spec.clone())).unwrap();
         assert_eq!(first.id.get(), 1);
-        assert_eq!(first.generation, 1);
+        assert_eq!(first.generation.get(), 1);
         assert_eq!(first.custom, first_spec.custom);
         assert_eq!(first.stop, first_spec.stop);
         assert!(ready(scheduler.start(first_spec.clone())).is_err());
@@ -222,7 +227,7 @@ mod tests {
         );
         let restarted = ready(scheduler.start(first_spec)).unwrap();
         assert_eq!(restarted.id, first.id);
-        assert_eq!(restarted.generation, 2);
+        assert_eq!(restarted.generation.get(), 2);
         assert!(restarted.active);
         assert_eq!(restarted.ended_at, None);
         let all = ready(scheduler.list(None, None)).unwrap();

@@ -10,7 +10,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use crate::contract::sealed;
 use crate::cron_schedule_store::{
-    CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule,
+    CronGeneration, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule,
 };
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
@@ -64,6 +64,10 @@ fn injected_failure() -> AtmError {
     )
 }
 
+fn fenced(row: &CronSchedule, id: CronScheduleId, generation: CronGeneration) -> bool {
+    row.id == id && row.generation == generation && row.active
+}
+
 fn ordered_for_listing(rows: &mut [CronSchedule]) {
     rows.sort_by(|a, b| {
         (!a.active)
@@ -74,7 +78,11 @@ fn ordered_for_listing(rows: &mut [CronSchedule]) {
     });
 }
 
-fn schedule_row(id: CronScheduleId, generation: u32, spec: NewCronSchedule) -> CronSchedule {
+fn schedule_row(
+    id: CronScheduleId,
+    generation: CronGeneration,
+    spec: NewCronSchedule,
+) -> CronSchedule {
     CronSchedule {
         id,
         generation,
@@ -123,13 +131,15 @@ impl CronScheduleStore for InMemoryCronScheduleStore {
             }
             Some(index) => {
                 let id = rows[index].id;
-                let generation = rows[index].generation + 1;
+                let generation = rows[index].generation.next().ok_or_else(|| {
+                    AtmError::new(AtmErrorCode::InternalError, "cron generation overflow")
+                })?;
                 rows[index] = schedule_row(id, generation, schedule);
                 rows[index].clone()
             }
             None => {
                 let next = rows.iter().map(|row| row.id.get()).max().unwrap_or(0) + 1;
-                let row = schedule_row(CronScheduleId::new(next), 1, schedule);
+                let row = schedule_row(CronScheduleId::new(next), CronGeneration::FIRST, schedule);
                 rows.push(row.clone());
                 row
             }
@@ -199,17 +209,14 @@ impl CronScheduleStore for InMemoryCronScheduleStore {
     fn record_run(
         &self,
         id: CronScheduleId,
-        generation: u32,
+        generation: CronGeneration,
         at: IsoTimestamp,
         outcome: &str,
     ) -> Result<bool, AtmError> {
         self.record_call();
         self.check_writes()?;
         let mut rows = self.lock()?;
-        let changed = match rows
-            .iter_mut()
-            .find(|row| row.id == id && row.generation == generation && row.active)
-        {
+        let changed = match rows.iter_mut().find(|row| fenced(row, id, generation)) {
             Some(row) => {
                 row.last_run_at = Some(at);
                 row.last_outcome = Some(outcome.to_owned());
@@ -226,17 +233,14 @@ impl CronScheduleStore for InMemoryCronScheduleStore {
     fn record_stop(
         &self,
         id: CronScheduleId,
-        generation: u32,
+        generation: CronGeneration,
         at: IsoTimestamp,
         reason: &str,
     ) -> Result<bool, AtmError> {
         self.record_call();
         self.check_writes()?;
         let mut rows = self.lock()?;
-        let changed = match rows
-            .iter_mut()
-            .find(|row| row.id == id && row.generation == generation && row.active)
-        {
+        let changed = match rows.iter_mut().find(|row| fenced(row, id, generation)) {
             Some(row) => {
                 row.active = false;
                 row.ended_at = Some(at);
