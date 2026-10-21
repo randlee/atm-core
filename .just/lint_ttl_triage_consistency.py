@@ -81,9 +81,8 @@ def is_allowlisted_legacy(allowlist: list[tuple[str, str]], path: str, raw_value
 def is_managed_phase(repo_root: Path, rel_path: str) -> bool:
     """A phase is managed when `.sprints/<PHASE>` exists (case-insensitive).
 
-    This is the same rule the pre-push hook applies before it accepts a
-    `.triage/phase-*` change, so a legacy phase that the hook freezes is not
-    held to closure contracts that postdate it.
+    A legacy phase without a `.sprints/<PHASE>` directory is not held to
+    closure contracts that postdate it.
     """
     parts = rel_path.split("/")
     if len(parts) < 2 or not parts[1].startswith("phase-"):
