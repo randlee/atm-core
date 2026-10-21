@@ -22,7 +22,11 @@ fn system_claims_dir() -> Result<PathBuf, AtmError> {
     }
     #[cfg(target_os = "linux")]
     {
-        Ok(PathBuf::from("/var/lib/atm/ports"))
+        // A first launch must be able to create the shared claim directory
+        // without an installer or root privileges. /var/tmp is shared across
+        // local accounts and survives reboot; prepare_claims_dir enforces
+        // the sticky mode.
+        Ok(PathBuf::from("/var/tmp/atm-ports"))
     }
     #[cfg(windows)]
     {
@@ -282,6 +286,8 @@ fn configured_direct_peer_port_with(
 mod direct_peer_port_tests {
     use std::ffi::OsString;
     use std::num::NonZeroU16;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
 
     use atm_runtime_test_support::open_sqlite_boundary;
@@ -381,6 +387,49 @@ mod direct_peer_port_tests {
         assert_eq!(
             resolve(restarted.peer_config_store().as_ref(), &claims),
             FIRST_PEER_PORT
+        );
+    }
+
+    #[test]
+    fn first_launch_with_clean_account_claims_and_persists_enabled_peer_interface() {
+        let root = tempfile::tempdir().expect("test root");
+        let claims = root.path().join("claims");
+        let account =
+            open_sqlite_boundary(root.path().join("account.sqlite")).expect("clean account");
+        let store = account.peer_config_store();
+        assert!(
+            store
+                .list_interfaces()
+                .expect("clean interfaces")
+                .is_empty()
+        );
+
+        let port = configured_direct_peer_port_with(store.as_ref(), args(), &claims, |_| true)
+            .expect("first launch claims a port");
+        assert_eq!(port.get(), FIRST_PEER_PORT);
+        let interfaces = store.list_interfaces().expect("persisted interfaces");
+        assert_eq!(interfaces.len(), 1);
+        assert!(interfaces[0].enabled);
+        assert_eq!(interfaces[0].bind_addr.port(), port.get());
+        assert_eq!(interfaces[0].advertise_host.to_string(), "localhost");
+        assert!(claims.join(port.get().to_string()).is_file());
+        #[cfg(unix)]
+        assert_eq!(
+            std::fs::metadata(&claims)
+                .expect("claim directory")
+                .permissions()
+                .mode()
+                & 0o7777,
+            0o1777
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_claim_directory_does_not_require_privileged_var_lib_creation() {
+        assert_eq!(
+            super::system_claims_dir().expect("Linux claims path"),
+            std::path::PathBuf::from("/var/tmp/atm-ports")
         );
     }
 
