@@ -19,6 +19,7 @@ use crate::types::{IsoTimestamp, TeamName};
 const PAUSE_DEADLINE: Duration = Duration::from_secs(10);
 
 /// Keeps every registration row in memory, keyed by `(team, phase, hook)`.
+/// `Mutex` and atomics because the trait mutates through `&self` and requires `Send + Sync`; `SeqCst` is deliberate (test counters, not a hot path).
 #[derive(Debug, Default)]
 pub struct InMemoryHookRegistrationStore {
     rows: Mutex<Vec<HookRegistration>>,

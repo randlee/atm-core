@@ -18,6 +18,7 @@ use crate::hook_types::PhaseId;
 use crate::types::{IsoTimestamp, TeamName};
 
 /// Keeps every cron schedule row in memory.
+/// `Mutex` and atomics because the trait mutates through `&self` and requires `Send + Sync`; `SeqCst` is deliberate (test counters, not a hot path).
 #[derive(Debug, Default)]
 pub struct InMemoryCronScheduleStore {
     rows: Mutex<Vec<CronSchedule>>,
