@@ -22,6 +22,9 @@ pub struct HookRegistration {
     pub hook: HookName,
     pub module_path: PathBuf,
     pub cwd: PathBuf,
+    /// Hook timeout in ms. Callers must keep it in `1..=HOOK_TIMEOUT_MAX_MS`. The bound is
+    /// enforced only by the HTTP register route (`check_timeout`), and the SQLite CHECK enforces
+    /// only `> 0`.
     pub timeout_ms: u32,
     /// Registration-time custom JSON object (design §2.1).
     pub custom: serde_json::Map<String, serde_json::Value>,

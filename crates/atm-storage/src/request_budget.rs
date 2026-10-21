@@ -85,19 +85,23 @@ pub const SQLITE_BUSY_TIMEOUT: Duration = SERVER_REQUEST_BUDGET.saturating_sub(B
 
 /// Reserve, in milliseconds, kept out of [`SERVER_REQUEST_BUDGET`] for the
 /// hook runner's own work after a hook's timeout (design §9.7).
-pub const HOOK_ACTION_RESERVE_MS: u64 = 500;
+pub const HOOK_ACTION_RESERVE_MS: u32 = 500;
 
 /// Largest `timeout_ms` a task hook may register: the server budget minus
-/// [`HOOK_ACTION_RESERVE_MS`] (D-m). Enforced by the register route.
+/// [`HOOK_ACTION_RESERVE_MS`] (D-m). Enforced only by `check_timeout` in
+/// `atm-http-runtime`'s `hook_registry_routes.rs`, called from `hook_register`;
+/// [`crate::HookRegistration`] and the store do not re-check it.
 pub const HOOK_TIMEOUT_MAX_MS: u32 = 2500;
 
 /// Largest `timeout_ms` a cron `cron.tick` or `cron.stop` hook may register
-/// (Rand 2026-10-18, design §9.8). Enforced by the cron start route.
+/// (Rand 2026-10-18, design §9.8). Enforced only by `check_timeout` in
+/// `atm-http-runtime`'s `hook_registry_routes.rs`, called from `cron_start`;
+/// [`crate::NewCronSchedule`] and the store do not re-check it.
 pub const CRON_TIMEOUT_MAX_MS: u32 = 30000;
 
+// `as_millis` returns u128; the budget constants are all u32.
 const _: () = assert!(
-    HOOK_TIMEOUT_MAX_MS as u128 + HOOK_ACTION_RESERVE_MS as u128
-        == SERVER_REQUEST_BUDGET.as_millis()
+    (HOOK_TIMEOUT_MAX_MS + HOOK_ACTION_RESERVE_MS) as u128 == SERVER_REQUEST_BUDGET.as_millis()
 );
 
 // Compile-time enforcement of the two contract invariants above: a same-host

@@ -364,7 +364,7 @@ impl HookRunner for DaemonHookRunner {
 pub(crate) fn runner_budget(timeout_ms: u32, remaining: Duration) -> Option<Duration> {
     doctor_budget(
         timeout_ms,
-        remaining.checked_sub(Duration::from_millis(HOOK_ACTION_RESERVE_MS))?,
+        remaining.checked_sub(Duration::from_millis(u64::from(HOOK_ACTION_RESERVE_MS)))?,
     )
 }
 

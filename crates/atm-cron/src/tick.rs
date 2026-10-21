@@ -94,7 +94,7 @@ pub(crate) async fn record(cron: &AtmCron, schedule: &CronSchedule, outcome: &Cr
 }
 
 fn deadline_budget(timeout_ms: u32) -> Duration {
-    Duration::from_millis(u64::from(timeout_ms) + HOOK_ACTION_RESERVE_MS)
+    Duration::from_millis(u64::from(timeout_ms) + u64::from(HOOK_ACTION_RESERVE_MS))
 }
 
 fn deadline(cron: &AtmCron, schedule: &CronSchedule) -> RequestDeadline {
