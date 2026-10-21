@@ -11,10 +11,21 @@ use chrono::{TimeZone, Utc};
 use rusqlite::{Connection, params};
 use tempfile::TempDir;
 
-// The primary-key index can incidentally return phase order for tied rows
-// even when a query omits its explicit SQL tie-breaker. Keep the required
-// ORDER BY terms pinned so the tests do not depend on SQLite's query plan.
-const HOOK_REGISTRATION_STORE_SOURCE: &str = include_str!("../src/hook_registration_store.rs");
+// Force the ordering cases through indexes that provide every ORDER BY key
+// before `phase`. Tied rows then arrive in rowid (insertion) order unless the
+// query explicitly sorts the final phase key.
+fn install_tie_break_indexes(path: &Path) {
+    Connection::open(path)
+        .expect("open database for test indexes")
+        .execute_batch(
+            "CREATE INDEX hook_order_test_active
+                 ON hook_registration(team, active DESC, registered_at);
+             CREATE INDEX hook_order_test_active_all
+                 ON hook_registration(team, hook, registered_at) WHERE active = 1;
+             ANALYZE hook_registration;",
+        )
+        .expect("install deterministic tie-break indexes");
+}
 
 fn stamp(day: u32) -> IsoTimestamp {
     IsoTimestamp::from_datetime(
@@ -247,10 +258,8 @@ fn reregister_disabled_key_lists_last() {
 
 #[test]
 fn list_orders_active_first_then_registered_at_then_phase() {
-    assert!(HOOK_REGISTRATION_STORE_SOURCE.contains("ORDER BY registered_at, phase;"));
-    assert!(HOOK_REGISTRATION_STORE_SOURCE.contains("ORDER BY active DESC, registered_at, phase;"));
-
     let h = Harness::new();
+    install_tie_break_indexes(&h.path);
     let store = h.store();
     store
         .register(registration("bk", "task.close", "/a.py", stamp(2)))
@@ -280,6 +289,7 @@ fn list_orders_active_first_then_registered_at_then_phase() {
     );
 
     let tied_h = Harness::new();
+    install_tie_break_indexes(&tied_h.path);
     let tied_store = tied_h.store();
     tied_store
         .register(registration("bj", "task.close", "/a.py", stamp(1)))
@@ -322,9 +332,8 @@ fn list_orders_active_first_then_registered_at_then_phase() {
 
 #[test]
 fn active_all_order_equals_active_order_for_every_key() {
-    assert!(HOOK_REGISTRATION_STORE_SOURCE.contains("ORDER BY team, hook, registered_at, phase;"));
-
     let h = Harness::new();
+    install_tie_break_indexes(&h.path);
     let store = h.store();
     store
         .register(registration_for_team(
