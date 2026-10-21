@@ -551,6 +551,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn registry_route_without_installed_filter_fails_closed() {
+        let fixture = fixture(true, None, None);
+        let hooks = Arc::new(InMemoryHookRegistrationStore::default());
+        let mut router = fixture.router.clone();
+        router.service_runtime = router
+            .service_runtime
+            .clone()
+            .with_hook_registration_store(hooks);
+
+        let error = router
+            .hook_register(
+                register_request("sender", "task.assign", "bk"),
+                AuthenticatedIngress::Local,
+                deadline(),
+            )
+            .await
+            .expect_err("a router without a hook filter has no snapshot to refresh");
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert_eq!(
+            error.message(),
+            "hook snapshot was not installed\n  Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry.",
+        );
+    }
+
+    #[tokio::test]
     async fn disable_keeps_rows_and_list_returns_them() {
         let routes = routes();
         register(&routes, register_request("sender", "task.assign", "bk"))
