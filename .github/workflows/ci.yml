@@ -580,6 +580,9 @@ jobs:
       - name: Build universal hermes-atm wheel
         run: python -m pip wheel --no-deps --wheel-dir dist crates/hermes-atm
 
+      - name: Build universal atm-query wheel
+        run: python -m pip wheel --no-deps --wheel-dir dist crates/atm-query-python
+
       - name: Verify abi3 artifact metadata
         shell: bash
         run: |
