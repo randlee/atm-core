@@ -4,10 +4,6 @@
 //! Registrations are shared `Arc`s, and each hook request is built only when
 //! its hook actually runs. A command with no registration never spawns a chain.
 
-// Built ahead of its composition consumer (bk-5 installs the filter at daemon
-// startup); this allow lifts with that install.
-#![cfg_attr(not(test), allow(dead_code))]
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, PoisonError, RwLock};

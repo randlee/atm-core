@@ -4,10 +4,6 @@
 //! It delegates to the router's un-hooked owners (`write_unhooked`, `task_move`,
 //! `list_messages`), so no task body is copied here.
 
-// Built ahead of its composition consumer (bk-5 installs the filter at daemon
-// startup); this allow lifts with that install.
-#![cfg_attr(not(test), allow(dead_code))]
-
 use async_trait::async_trait;
 use atm_core::api::ApiResponse;
 use atm_core::boundary::{
