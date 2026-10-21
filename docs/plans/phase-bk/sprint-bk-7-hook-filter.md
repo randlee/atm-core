@@ -65,14 +65,16 @@ rules):
 // crates/atm-http-runtime/src/storage_and_nudge_router/hook_wiring.rs   (design.md §9.9)
 pub(crate) struct HookWiring {
     pub task_commands: Option<Arc<dyn TaskCommands>>,         // None: the un-hooked body
-    pub snapshot: Arc<ActiveHookSnapshot>,                     // shared with the filter
+    pub snapshot: Option<Arc<ActiveHookSnapshot>>,             // set by with_hook_filter; None makes registry routes unavailable
     pub runner: Option<Arc<dyn HookRunner>>,                   // doctor only
     pub cron: Arc<OnceLock<Arc<dyn CronScheduler>>>,           // shared by clones; unset: daemon_unavailable("cron scheduler not installed")
     pub chains: Arc<ChainTracker>,
+    pub local_host: Option<HostName>,                           // stamped into filtered requests' caller.host
 }
 impl StorageAndNudgeRouter {
-    pub fn with_task_commands(self, c: Arc<dyn TaskCommands>) -> Self;  pub fn with_hook_runner(self, r: Arc<dyn HookRunner>) -> Self;
-    pub fn with_hook_snapshot(self, s: Arc<ActiveHookSnapshot>) -> Self; pub fn hook_chains(&self) -> Arc<ChainTracker>;
+    pub fn with_task_commands(self, c: Arc<dyn TaskCommands>) -> Self;
+    pub fn with_hook_filter<D: HookActionDispatcher + 'static>(self, filter: Arc<HookedTaskCommands<D>>) -> Self;
+    pub fn with_local_host(self, host: HostName) -> Self;       pub fn hook_chains(&self) -> Arc<ChainTracker>;
     pub fn install_cron_scheduler(&self, s: Arc<dyn CronScheduler>) -> Result<(), AtmError>;   // a second call errors
     pub fn unhooked(&self) -> UnhookedRouter;                           // a clone with task_commands = None
 }

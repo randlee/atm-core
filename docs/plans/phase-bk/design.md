@@ -270,27 +270,30 @@ Flow for a hooked task command:
 6. One structured log entry per hook call (hook, team, phase, caller,
    duration, outcome, action count) and one per action (ADR-067).
 
-**D-8 Active hooks are an in-memory snapshot.** The router field `hooks:
-Arc<ActiveHookSnapshot>` is loaded once in `compose_storage_router`
-(`active_all()`); a load error aborts daemon startup. Each committed `atm
-hook register` or `disable` runs its store call and the snapshot refresh
-in the same `control_path_sync_bridge.run` closure. A refresh failure after
-the commit returns an internal error "registration committed; snapshot
-refresh failed; restart the daemon". An in-flight hook call keeps its
-cloned registration, so a disable does not cancel its actions. The task
-request path never reads `hook_registration`, so a daemon with no
-registrations takes exactly today's path (ANC-014). Registration and cron
-routes are accepted from `Local` ingress only, from any roster member of
-the team (ADR-068 D5, Rand's round-4 ruling); no lead check.
+**D-8 Active hooks are an in-memory snapshot.** The router's `HookWiring`
+field `snapshot: Option<Arc<ActiveHookSnapshot>>` is `None` until
+`with_hook_filter` installs a filter and its snapshot. The snapshot is loaded
+once in `compose_storage_router` (`active_all()`); a load error aborts daemon
+startup. Each committed `atm hook register` or `disable` runs its store call
+and the snapshot refresh in the same `control_path_sync_bridge.run` closure.
+A refresh failure after the commit returns daemon-unavailable "registration
+committed; snapshot refresh failed; the next hooked call reloads it". An
+in-flight hook call keeps its cloned registration, so a disable does not
+cancel its actions. The task request path never reads `hook_registration`, so
+a daemon with no registrations takes exactly today's path (ANC-014).
+Registration and cron routes are accepted from `Local` ingress only, from any
+roster member of the team (ADR-068 D5, Rand's round-4 ruling); no lead check.
 
 `HookWiring` represents the construction boundary: its snapshot and runner
 are both `Option` values until `with_hook_filter` installs the filter that
 owns them. This permits an un-hooked router to run ordinary task bodies in
-tests and composition steps. A hook-registry route on that incomplete
-router fails closed with daemon-unavailable (`"hook snapshot was not
-installed"`); daemon startup composes and installs the filter before it
-serves requests. The configured `local_host` is likewise optional: it is
-stamped into `caller.host` when configured and is JSON `null` otherwise.
+tests and composition steps. A hook-registry route on that incomplete router
+fails closed with daemon-unavailable: "hook snapshot is unavailable because
+hook-filter startup wiring was not installed" and recovery "Install the hook
+filter during daemon startup before serving hook registry routes, then retry."
+Daemon startup composes and installs the filter before it serves requests.
+`with_local_host` configures the optional `local_host`; it is stamped into
+`caller.host` when configured and is JSON `null` otherwise.
 
 **D-m Budget.** `HOOK_TIMEOUT_MAX_MS = 2500` is `SERVER_REQUEST_BUDGET`
 (3 s, `crates/atm-storage/src/request_budget.rs:44`) minus a 500 ms action
@@ -886,7 +889,7 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
 ### 9.9 Composition
 
 - `compose_storage_router` (`crates/atm-daemon-bootstrap/src/replacement_handler.rs:268`,
-  bk-5) builds the base router with `.with_hook_runner(runner.clone())`,
+  bk-5) builds the base router with
   `.with_local_host(daemon_atm_config(&env).and_then(|c| c.local_host))`
   and the snapshot load, whose error aborts startup. It then builds
   `NormalTaskCommands::new(base.clone())` and `HookedTaskCommands` over
@@ -901,12 +904,13 @@ grammar to `CRON_TIMEOUT_MS`; with no `CRON_TIMEOUT_MS` line it returns
   `Arc`s used by the filter and the cron crate. bk-5 updates all four call
   sites (`lib.rs:471`, `:1303`, `:1505`,
   `telemetry_lifecycle_tests.rs:172`).
-- Router fields: `task_commands: Option<Arc<dyn TaskCommands>>`,
-  `hooks: Arc<ActiveHookSnapshot>` (shared with the filter so the register
-  and disable routes refresh what the filter reads), `hook_runner:
-  Option<Arc<dyn HookRunner>>` (doctor only), and `cron:
-  Arc<OnceLock<Arc<dyn CronScheduler>>>`, shared by clones. Unset, the
-  cron routes return `daemon_unavailable("cron scheduler not installed")`.
+- Router field `hooks: HookWiring`: `task_commands: Option<Arc<dyn
+  TaskCommands>>`, `snapshot: Option<Arc<ActiveHookSnapshot>>` (set only by
+  `with_hook_filter`, shared with the filter so register and disable refresh
+  what it reads), `runner: Option<Arc<dyn HookRunner>>` (doctor only),
+  `local_host: Option<HostName>`, and `cron:
+  Arc<OnceLock<Arc<dyn CronScheduler>>>`, shared by clones. Unset, the cron
+  routes return `daemon_unavailable("cron scheduler not installed")`.
   `install_cron_scheduler(&self, Arc<dyn CronScheduler>) -> Result<(),
   AtmError>` errors on a second call. There are no `Noop` types.
 - bk-5, in `run_replacement_daemon_with_selector`

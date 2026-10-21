@@ -435,14 +435,10 @@ mod tests {
             Err(error) => error,
         };
         assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
-        assert!(
-            error
-                .message()
-                .contains("hook-filter startup wiring was not installed")
+        assert_eq!(
+            error.message(),
+            "hook snapshot is unavailable because hook-filter startup wiring was not installed\n  Recovery: Install the hook filter during daemon startup before serving hook registry routes, then retry."
         );
-        assert!(error.message().contains(
-            "Recovery: Install the hook filter during daemon startup before serving hook registry routes, then retry."
-        ));
         assert_eq!(
             error.cause(),
             Some("StorageAndNudgeRouter::with_hook_filter was not called")
@@ -572,7 +568,7 @@ mod tests {
         assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
         assert_eq!(
             error.message(),
-            "hook snapshot was not installed\n  Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry.",
+            "hook snapshot is unavailable because hook-filter startup wiring was not installed\n  Recovery: Install the hook filter during daemon startup before serving hook registry routes, then retry.",
         );
     }
 
