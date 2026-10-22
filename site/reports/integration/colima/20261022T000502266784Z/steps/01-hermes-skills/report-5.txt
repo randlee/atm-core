@@ -1,0 +1,13 @@
+ATM TEST REPORT
+skill: atm-hermes-ready
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.6.4 daemon 1.6.4
+result: PASS   (5/5 steps)
+steps:
+  0 PASS Start line — 01M5GF1F7GN1QACP3GH7TKD75F
+  1 PASS Roster — hermes present in testbed; missing: none
+  2 PASS Receivers registered — hermes: last_seen_age_seconds 0 (under 600)
+  3 PASS Ping — hermes ping 01M5GF1JGHD8Z3PE0Y4VC50CTM (ack required)
+  4 PASS Pong — hermes reply 01M5GF1PE2CPYADMS9DFZYXCCE after approx. 5 s, text "ready", acknowledges the ping
+elapsed: approx. 30s

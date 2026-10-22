@@ -1,0 +1,25 @@
+{
+  "feature": "colima-prompt-handoffs",
+  "generated_at": "2026-10-22T00:19:33Z",
+  "source_revision": "9814239e7e260c4907a6e41c88ef388df068c130",
+  "container": "hermes-testbed",
+  "atm_version": "1.6.4",
+  "status": "PASS",
+  "cases": [
+    {
+      "name": "prompted-task-events-only",
+      "status": "pass",
+      "detail": "Initial `atm teams clear-nudge-template --team fx-at11 --kind task_reminder --json` (run with ATM_IDENTITY=fx-at11-alpha ATM_TEAM=fx-at11; first attempt without identity failed 'identity is not configured') -> {\"action\":\"clear-nudge-template\",\"team\":\"fx-at11\",\"kind\":\"task_reminder\",\"cleared\":false}. Assigned at11-20261022T001539-1/-2/-3 to fx-at11-beta. `atm task events at11-20261022T001539-1 --json` handoffs: task_queued at 2026-10-22T00:15:39.129Z; task_ready at 2026-10-22T00:15:43.208678111Z; task_reminder at 2026-10-22T00:16:48.107292462Z (events[] reminded outcome emitted at same times). After `atm task start at11-20261022T001539-1 --json` as beta: handoffs gained task_started at 2026-10-22T00:16:57.577Z, events[] started at 00:16:57.577823276Z. Order: task_queued, task_ready, task_reminder, task_started. Tasks -2 and -3 events: only assigned + handoff task_queued (00:15:40.139Z, 00:15:41.151Z). Observed interval ready->reminder = 64.899s (~65s); case 2 wait = ~130s."
+    },
+    {
+      "name": "disabled-reminder-doctor-finding",
+      "status": "pass",
+      "detail": "Tasks 1-3 closed first (`atm task list --all --json` -> []). `atm teams disable-nudge-template --team fx-at11 --kind task_reminder --json` -> {\"action\":\"disable-nudge-template\",\"team\":\"fx-at11\",\"kind\":\"task_reminder\",\"updated_at\":\"2026-10-22T00:17:03.705510844Z\"}. Assigned at11-20261022T001703-4 at 00:17:03; polled events until 00:19:30 (147s >= 2x64.9s=129.8s). `atm task events at11-20261022T001703-4 --json` handoffs: task_queued 00:17:03.712Z, task_ready 00:17:08.111911623Z; no task_reminder handoff. NOTE: events[] contains {\"actor\":\"daemon\",\"at\":\"2026-10-22T00:17:08.111911623Z\",\"event\":\"reminded\",\"outcome\":\"emitted\",\"seq\":2} at the same timestamp as task_ready (the ready handoff is recorded as a 'reminded' event); no later reminded event and no task_reminder handoff appeared. `atm doctor --json --team fx-at11` finding: {\"severity\":\"warning\",\"code\":\"ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED\",\"message\":\"disabled_task_nudge_template_override: team fx-at11 has disabled `task_reminder`\",\"remediation\":\"atm teams clear-nudge-template --team fx-at11 --kind task_reminder\"}."
+    },
+    {
+      "name": "cleanup",
+      "status": "pass",
+      "detail": "`atm task close <id> completed done --json` as beta sent for at11-20261022T001539-1, -2, -3 and at11-20261022T001703-4 (each outcome sent, rc=0). `atm task list --all --json` -> []. `atm teams clear-nudge-template --team fx-at11 --kind task_reminder --json` -> {\"action\":\"clear-nudge-template\",\"team\":\"fx-at11\",\"kind\":\"task_reminder\",\"cleared\":true}."
+    }
+  ]
+}

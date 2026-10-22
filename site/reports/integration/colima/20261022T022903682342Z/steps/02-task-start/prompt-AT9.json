@@ -1,0 +1,15 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT9-task-start",
+  "agent": "claude-code",
+  "steps": [
+    {"name": "started-line-at-write-time", "status": "pass", "detail": "`ATM_IDENTITY=fx-at9-beta ATM_TEAM=fx-at9 atm task start at9-c1-1792636449 --json` -> {\"action\":\"send\",\"sender\":\"fx-at9-beta\",\"outcome\":\"sent\",\"message_id\":\"01M5GQB4F82HZ1KFZ6X24TF2PX\",\"task_id\":\"at9-c1-1792636449\",\"summary\":\"started at9-c1-1792636449\"}. This was before alpha's read. Alpha's `atm list --unread --json` then showed rows[0] {\"message_id\":\"01M5GQB4F82HZ1KFZ6X24TF2PX\",\"summary\":\"started at9-c1-1792636449\",\"from\":\"fx-at9-beta\",\"read\":false,\"task_id\":\"at9-c1-1792636449\"}. `atm read --message-id 01M5GQB4F82HZ1KFZ6X24TF2PX --json` -> \"taskId\":\"at9-c1-1792636449\",\"taskOp\":{\"op\":\"start\"}. `atm task events at9-c1-1792636449 --json` -> events[].event 'started' (seq 3, to_state active) and handoffs[].kind 'task_started' (agent fx-at9-alpha, at 2026-10-22T02:34:17.448Z). Note: `--as` on `atm task assign` returned 'identity is not configured', so the ATM_IDENTITY/ATM_TEAM env prefix was used for all task commands."},
+    {"name": "out-of-order-start-reorders-queue", "status": "pass", "detail": "Assigned at9-c2a-1792636449 then at9-c2b-1792636449 (each returned {\"task_id\":...}); beta ran `atm task start at9-c2b-1792636449 --json` (summary 'started at9-c2b-1792636449'). `atm task list --json` as beta -> [{\"task_id\":\"at9-c2b-1792636449\",\"state\":\"active\",\"position\":1,...},{\"task_id\":\"at9-c2a-1792636449\",\"state\":\"assigned\",\"position\":2,...}]"},
+    {"name": "unstarted-task-keeps-reminding", "status": "pass", "detail": "Assigned at9-c3-1792636449 at 02:34:23Z (`{\"task_id\":\"at9-c3-1792636449\"}`) and did not start it. `atm task events at9-c3-1792636449 --json` handoffs[] contained {\"kind\":\"task_reminder\",\"attempt\":1,\"at\":\"2026-10-22T02:35:25.580718217Z\",\"task_id\":\"at9-c3-1792636449\",\"trigger\":\"task_pass\"} and {\"kind\":\"task_reminder\",\"attempt\":2,\"at\":\"2026-10-22T02:36:25.581296615Z\",\"task_id\":\"at9-c3-1792636449\",\"trigger\":\"task_pass\"}, seen at 02:36:28Z (125s after assign, inside the 150s limit). The first 'reminded' event and the 'task_ready' handoff (02:34:25Z) were not counted. `atm task list --json` as beta -> \"state\":\"assigned\",\"position\":1."},
+    {"name": "cleanup", "status": "pass", "detail": "`atm task close <id> <outcome> <reason> --json` returned outcome 'sent' for at9-c1-1792636449 (completed, summary 'done'), at9-c2b-1792636449 (completed, 'done'), at9-c2a-1792636449 (cancelled, 'cleanup') and at9-c3-1792636449 (cancelled, 'cleanup'), each with rc=0. Final `atm task list --json` as beta -> []"}
+  ],
+  "verdict": "pass",
+  "atm_versions": {"atm": "1.6.5", "hermes_atm": "unknown (not exposed by atm CLI)", "atm_graft": "unknown (not exposed by atm CLI)"},
+  "started_at": "2026-10-22T02:34:12Z",
+  "finished_at": "2026-10-22T02:36:31Z"
+}

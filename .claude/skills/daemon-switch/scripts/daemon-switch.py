@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shlex
 import signal
 import stat
 import subprocess
@@ -667,6 +668,34 @@ def switch_pair(
         )
     if require_development_signature:
         require_macos_development_signatures(cli_target, daemon_target)
+    if getattr(args, "no_managed_service", False) is True:
+        already_selected = cli_link.resolve() == cli_target and daemon_link.resolve() == daemon_target
+        if not already_selected:
+            if args.dry_run:
+                print(json.dumps({
+                    "cli_link": str(cli_link),
+                    "daemon_link": str(daemon_link),
+                    "cli_target": str(cli_target),
+                    "daemon_target": str(daemon_target),
+                    "service_restarted": False,
+                }, indent=2))
+                return
+            if not args.yes:
+                raise SwitchError("switch changes the system-wide pair; re-run with --yes")
+            if old_pair is not None:
+                save_default_pair(*old_pair)
+            try:
+                replace_link(cli_link, cli_target)
+                replace_link(daemon_link, daemon_target)
+            except Exception:
+                if old_pair is not None:
+                    replace_link(cli_link, old_pair[0])
+                    replace_link(daemon_link, old_pair[1])
+                raise
+        print("The requested pair is selected; no managed service was found or restarted.")
+        start_command = subprocess.list2cmdline([str(daemon_link)]) if os.name == "nt" else shlex.quote(str(daemon_link))
+        print(f"To start the daemon manually, run: {start_command}")
+        return
     if cli_link.resolve() == cli_target and daemon_link.resolve() == daemon_target:
         print("already selected; service left running")
         return
@@ -1238,6 +1267,11 @@ def parser() -> argparse.ArgumentParser:
         "--discover-managed-service",
         action="store_true",
         help="discover exactly one current-user service that launches the selected daemon link",
+    )
+    selectors.add_argument(
+        "--allow-missing-managed-service",
+        action="store_true",
+        help="when discovery finds none, select the pair without claiming to restart a service",
     )
     selectors.add_argument("--launch-agent-plist", help="macOS LaunchAgent plist used to restart the singleton")
     selectors.add_argument(

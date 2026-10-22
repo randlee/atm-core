@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from contextlib import redirect_stderr
 import hashlib
+import shlex
 import subprocess
 import sys
 import tarfile
@@ -195,12 +196,24 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         )["prerelease"]
         self.assertEqual(prerelease["binaries"], ["atm", "atm-daemon"])
         self.assertIn(
-            "daemon-switch.py switch --prerelease {version} --yes --discover-managed-service",
+            "{python} .claude/skills/daemon-switch/scripts/daemon-switch.py switch "
+            "--prerelease {version} --yes --cli-link {cli_link} --daemon-link {daemon_link} "
+            "--discover-managed-service --allow-missing-managed-service",
             prerelease["post_install"],
         )
         self.assertTrue(prerelease["selector_dir"]["darwin"].startswith(prerelease["install_root"]))
         self.assertTrue(prerelease["selector_dir"]["linux"].startswith(prerelease["install_root"]))
         self.assertNotIn("Programs\\\\ATM", prerelease["selector_dir"]["windows"])
+
+    def test_prerelease_requires_python_311_with_typed_remediation(self) -> None:
+        prerelease = prerelease_script()
+        with mock.patch.object(prerelease.sys, "version_info", (3, 9, 18)):
+            with self.assertRaisesRegex(
+                SystemExit,
+                r"PRERELEASE\.PYTHON_VERSION_UNSUPPORTED: Python 3\.11 or newer.*"
+                r"fix: install Python 3\.11\+ and run prerelease\.py with that interpreter",
+            ):
+                prerelease.require_supported_python()
 
     @unittest.skipUnless(os.name == "posix", "selector composition uses POSIX symlinks")
     def test_prerelease_install_activates_only_through_daemon_switch(self) -> None:
@@ -262,8 +275,11 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                     )
                 self.assertEqual(
                     command_text,
-                    "python3 .claude/skills/daemon-switch/scripts/daemon-switch.py "
-                    "switch --prerelease 1.5.11 --yes --discover-managed-service",
+                    f"{shlex.quote(prerelease.sys.executable)} "
+                    ".claude/skills/daemon-switch/scripts/daemon-switch.py "
+                    f"switch --prerelease 1.5.11 --yes --cli-link {shlex.quote(str(private_bin / 'atm'))} "
+                    f"--daemon-link {shlex.quote(str(private_bin / 'atm-daemon'))} "
+                    "--discover-managed-service --allow-missing-managed-service",
                 )
                 self.assertEqual(active_cli.resolve(), (old_bin / "atm").resolve())
                 self.assertEqual(active_daemon.resolve(), (old_bin / "atm-daemon").resolve())
@@ -281,7 +297,12 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                         "--prerelease",
                         "1.5.11",
                         "--yes",
+                        "--cli-link",
+                        str(private_bin / "atm"),
+                        "--daemon-link",
+                        str(private_bin / "atm-daemon"),
                         "--discover-managed-service",
+                        "--allow-missing-managed-service",
                     ],
                 ):
                     self.assertEqual(daemon_switch.main(), 0)
@@ -303,7 +324,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 mock.patch.object(
                     daemon_switch._service_control_module,
                     "_linux_candidates",
-                    return_value=[("fixture", None)],
+                    return_value=[],
                 ),
                 mock.patch.object(daemon_switch, "save_default_pair"),
                 mock.patch.object(daemon_switch, "run_service") as service,
@@ -321,17 +342,16 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             self.assertEqual(
                 (private_bin / "atm-daemon").resolve(), (candidate_bin / "atm-daemon").resolve()
             )
-            self.assertEqual(active_cli.resolve(), (candidate_bin / "atm").resolve())
-            self.assertEqual(active_daemon.resolve(), (candidate_bin / "atm-daemon").resolve())
+            self.assertEqual(active_cli.resolve(), (old_bin / "atm").resolve())
+            self.assertEqual(active_daemon.resolve(), (old_bin / "atm-daemon").resolve())
             resolve.assert_called_once_with("1.5.11")
             sign.assert_called_once_with(candidate_bin / "atm", candidate_bin / "atm-daemon")
-            self.assertEqual([call.args[1] for call in service.call_args_list], ["stop", "start"])
-            stopped.assert_called_once()
-            self.assertEqual(stopped.call_args.args[1], (old_bin / "atm").resolve())
-            live_proof.assert_called_once_with(
-                (candidate_bin / "atm").resolve(), (candidate_bin / "atm-daemon").resolve()
-            )
-            self.assertEqual(calls, ["atm --version"])
+            service.assert_not_called()
+            stopped.assert_not_called()
+            live_proof.assert_not_called()
+            self.assertIn("no managed service was found or restarted", stdout.getvalue())
+            self.assertIn(f"run: {private_bin / 'atm-daemon'}", stdout.getvalue())
+            self.assertEqual(calls, [f"{shlex.quote(str(private_bin / 'atm'))} --version"])
             self.assertEqual(set(requested_assets), set(assets))
             self.assertNotIn("already selected; service left running", stdout.getvalue())
 
