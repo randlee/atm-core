@@ -250,10 +250,17 @@ impl AuthenticatedConnector {
                 )?;
                 Ok(AuthenticatedIngress::Peer)
             }
-            // Direct plain-TCP smoke is intentionally anonymous and does not
-            // become a governed authenticated peer merely by sending doctor
-            // metadata.
-            Self::PeerSocket => Ok(AuthenticatedIngress::AnonymousSmoke),
+            // Direct plain-TCP smoke remains anonymous, but its doctor
+            // request still crosses the peer HTTP boundary. Reject explicit
+            // incompatible metadata before dispatch, as for peer writes.
+            Self::PeerSocket => {
+                validate_peer_write_version(query.peer_http_api_version.take())?;
+                validate_peer_write_security(
+                    query.peer_wire_security.take(),
+                    PeerWireSecurity::PlaintextTest,
+                )?;
+                Ok(AuthenticatedIngress::AnonymousSmoke)
+            }
         }
     }
 }
@@ -1997,18 +2004,51 @@ mod tests {
                 .expect("older peer doctor may omit additive metadata"),
             AuthenticatedIngress::Peer
         );
+    }
 
-        let mut smoke = ApiRequest::Doctor(DoctorQuery {
+    #[test]
+    fn peer_socket_doctor_rejects_incompatible_metadata_before_dispatch() {
+        let socket = AuthenticatedConnector::peer_socket();
+        let mut compatible_smoke = ApiRequest::Doctor(DoctorQuery {
             peer_http_api_version: Some(
-                HttpApiVersion::parse("2.0.0").expect("major-skew fixture"),
+                HttpApiVersion::parse("1.0.0").expect("same-major minor-skew fixture"),
             ),
-            peer_wire_security: Some(PeerWireSecurity::Mtls),
+            peer_wire_security: Some(PeerWireSecurity::PlaintextTest),
             ..DoctorQuery::default()
         });
         assert_eq!(
-            AuthenticatedConnector::peer_socket()
-                .normalize_request(&mut smoke, None)
-                .expect("untrusted direct smoke stays separate"),
+            socket
+                .normalize_request(&mut compatible_smoke, None)
+                .expect("compatible direct smoke remains anonymous"),
+            AuthenticatedIngress::AnonymousSmoke
+        );
+
+        let mut major_mismatch_smoke = ApiRequest::Doctor(DoctorQuery {
+            peer_http_api_version: Some(
+                HttpApiVersion::parse("2.0.0").expect("major-skew fixture"),
+            ),
+            peer_wire_security: Some(PeerWireSecurity::PlaintextTest),
+            ..DoctorQuery::default()
+        });
+        let error = socket
+            .normalize_request(&mut major_mismatch_smoke, None)
+            .expect_err("direct smoke rejects a different HTTP major");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+
+        let mut security_mismatch_smoke = ApiRequest::Doctor(DoctorQuery {
+            peer_wire_security: Some(PeerWireSecurity::Mtls),
+            ..DoctorQuery::default()
+        });
+        let error = socket
+            .normalize_request(&mut security_mismatch_smoke, None)
+            .expect_err("direct smoke rejects a different wire-security mode");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+
+        let mut older_smoke = ApiRequest::Doctor(DoctorQuery::default());
+        assert_eq!(
+            socket
+                .normalize_request(&mut older_smoke, None)
+                .expect("older direct smoke may omit additive metadata"),
             AuthenticatedIngress::AnonymousSmoke
         );
     }

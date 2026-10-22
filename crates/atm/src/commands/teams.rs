@@ -362,6 +362,8 @@ impl TeamsCommand {
             caller_identity: atm_core::caller_context::read_cli_identity_from_env_or_warn(
                 "atm::teams::members::runtime",
             ),
+            peer_http_api_version: None,
+            peer_wire_security: None,
         };
         let composition = CliComposition::bootstrap(
             "teams",

@@ -80,6 +80,8 @@ impl DoctorCommand {
             all_teams: self.all_teams,
             caller_team,
             caller_identity,
+            peer_http_api_version: None,
+            peer_wire_security: None,
         })
     }
 

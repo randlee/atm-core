@@ -905,6 +905,8 @@ async fn doctor_runs_the_registered_module_doctor_for_its_team() {
             all_teams: false,
             caller_team: Some(team.parse().unwrap()),
             caller_identity: Some(TEST_SENDER.parse().unwrap()),
+            peer_http_api_version: None,
+            peer_wire_security: None,
         })
     };
     let ResponseEnvelope::Doctor(report) =
