@@ -14,8 +14,8 @@ use atm_core::boundary::{
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
 use atm_core::send::{
-    NudgeMode, SendMessageSource, WriteRequest, write_herdr_escalation_mail_with_runtime,
-    write_mail_with_runtime,
+    NudgeMode, SendMessageSource, WriteRequest,
+    write_current_herdr_terminal_escalation_with_runtime, write_mail_with_runtime,
 };
 use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
@@ -190,6 +190,27 @@ pub(crate) async fn escalate_mail(
     kind: EscalationKind,
     suppress_since: Option<IsoTimestamp>,
 ) -> Result<EscalationOutcome, AtmError> {
+    if episode.is_some() {
+        let runtime = runtime.clone();
+        let daemon_home = daemon_home.to_path_buf();
+        let source_member = MemberKey::new(source_task.team.clone(), source_task.assignee.clone());
+        let admitted = blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                write_current_herdr_terminal_escalation_with_runtime(
+                    daemon_home,
+                    &source_member,
+                    &NullObservability,
+                    &runtime,
+                )
+            })
+            .await?;
+        let recipients_written = admitted.recipients_written();
+        return Ok(EscalationOutcome {
+            audit_delivery: admitted.deliveries.into_iter().next(),
+            recipients_written,
+            recipients_failed: 0,
+        });
+    }
     let targets = match load_escalation_targets(blocking_bridge, runtime, task_store, team).await {
         Ok(targets) => targets,
         Err(error) => {
@@ -231,8 +252,6 @@ pub(crate) async fn escalate_mail(
         match write_escalation_mail_with_summary(
             blocking_bridge,
             runtime,
-            source_task,
-            episode,
             daemon_home,
             team,
             &recipient,
@@ -372,15 +391,9 @@ async fn load_escalation_recipients(
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the escalation write boundary keeps authoritative task, episode, routing, and body inputs explicit"
-)]
 async fn write_escalation_mail_with_summary(
     blocking_bridge: &BoundedBlockingBridge,
     runtime: &LocalServiceRuntime,
-    source_task: &TaskRow,
-    episode: Option<(atm_core::protocol::RuntimeMemberState, IsoTimestamp)>,
     daemon_home: &Path,
     team: &TeamName,
     recipient: &atm_core::address::AgentAddress,
@@ -393,42 +406,23 @@ async fn write_escalation_mail_with_summary(
     let recipient = recipient.to_string();
     let team = team.clone();
     let summary = summary.to_owned();
-    let source_member = MemberKey::new(source_task.team.clone(), source_task.assignee.clone());
-    let task_id = source_task.task_id.clone();
     blocking_bridge
         .run(herdr_request_deadline(), move || {
-            if let Some((state, started_at)) = episode {
-                write_herdr_escalation_mail_with_runtime(
-                    daemon_home,
-                    team,
-                    &recipient,
-                    body,
-                    summary,
-                    &source_member,
-                    &task_id,
-                    Some(state),
-                    Some(started_at),
-                    &NullObservability,
-                    &runtime,
-                )
+            let request = WriteRequest::new(
+                daemon_home.clone(),
+                daemon_home,
+                AgentName::from_validated(atm_core::boundary::DAEMON_ACTOR_NAME),
+                &recipient,
+                team,
+                SendMessageSource::Inline(body),
+                Some(summary),
+                false,
+                None,
+                false,
+            )?
+            .with_nudge_mode(NudgeMode::Deferred);
+            write_mail_with_runtime(request, &NullObservability, &runtime)
                 .map(|outcome| outcome.persisted_message_id())
-            } else {
-                let request = WriteRequest::new(
-                    daemon_home.clone(),
-                    daemon_home,
-                    AgentName::from_validated(atm_core::boundary::DAEMON_ACTOR_NAME),
-                    &recipient,
-                    team,
-                    SendMessageSource::Inline(body),
-                    Some(summary),
-                    false,
-                    None,
-                    false,
-                )?
-                .with_nudge_mode(NudgeMode::Deferred);
-                write_mail_with_runtime(request, &NullObservability, &runtime)
-                    .map(|outcome| outcome.persisted_message_id())
-            }
         })
         .await
 }

@@ -26,8 +26,8 @@ use atm_core::observability::NullObservability;
 use atm_core::protocol::{RuntimeMemberState, RuntimeObservationAvailability};
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{
-    NudgeMode, SendMessageSource, WriteRequest, write_herdr_escalation_mail_with_runtime,
-    write_mail_with_runtime,
+    NudgeMode, SendMessageSource, WriteRequest,
+    write_current_herdr_terminal_escalation_with_runtime, write_mail_with_runtime,
 };
 use atm_core::test_support as atm_storage;
 use atm_core::types::{IsoTimestamp, ModelName, TaskId, TeamName};
@@ -2077,124 +2077,31 @@ async fn ac01_fifo_per_member_via_claim() {
 }
 
 #[test]
-fn public_inprocess_escalation_admission_rejects_a_member_without_an_open_task() {
+fn public_writes_cannot_supply_terminal_escalation_facts() {
     let (root, runtime, _fake, _pump, _health, key) = build_test_pump();
     let home = root.path().join("home");
     std::fs::create_dir_all(&home).expect("home");
-    let error = write_herdr_escalation_mail_with_runtime(
+    let error = write_current_herdr_terminal_escalation_with_runtime(
         home,
-        key.team().clone(),
-        &format!("{}@{}", key.agent(), key.team()),
-        "spoofed terminal escalation".to_owned(),
-        "escalation:offline_escalated:spoof".to_owned(),
         &key,
-        &"AQ2-SPOOF".parse().expect("task id"),
-        None,
-        None,
         &NullObservability,
         &runtime,
     )
-    .expect_err("public API cannot stamp terminal provenance without a live task");
+    .expect_err("core derives its task admission and rejects a member without one");
     assert_eq!(
         error.code(),
         atm_core::error::AtmErrorCode::MessageValidationFailed
     );
 
-    let task_id: TaskId = "AQ2-EPOCH-ADMISSION".parse().expect("task id");
-    queue_task_message(
+    let ordinary = queue_spoofed_daemon_escalation_message(
         root.path(),
         &runtime,
         key.team(),
         key.agent().as_str(),
-        task_id.clone(),
     );
-    let stale_episode = write_herdr_escalation_mail_with_runtime(
-        root.path().join("home"),
-        key.team().clone(),
-        &format!("{}@{}", key.agent(), key.team()),
-        "stale terminal escalation".to_owned(),
-        "escalation:blocked_escalated:stale".to_owned(),
-        &key,
-        &task_id,
-        Some(atm_core::protocol::RuntimeMemberState::Blocked),
-        Some(IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("epoch")),
-        &NullObservability,
-        &runtime,
-    )
-    .expect_err("stale caller-supplied episode cannot stamp terminal provenance");
-    assert_eq!(
-        stale_episode.code(),
-        atm_core::error::AtmErrorCode::MessageValidationFailed
-    );
-
-    let current_epoch = IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("epoch");
-    runtime.apply_roster_runtime_observations(
-        key.team(),
-        &[
-            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
-                key.agent().clone(),
-                RuntimeMemberState::Blocked,
-                atm_core::protocol::RuntimeObservationSource::HerdrPoll,
-                current_epoch,
-                None,
-            ),
-        ],
-    );
-    let unauthorized_recipient = write_herdr_escalation_mail_with_runtime(
-        root.path().join("home"),
-        key.team().clone(),
-        &format!("{}@{}", key.agent(), key.team()),
-        "terminal escalation to an arbitrary member".to_owned(),
-        "escalation:blocked_escalated:unauthorized-recipient".to_owned(),
-        &key,
-        &task_id,
-        Some(RuntimeMemberState::Blocked),
-        Some(current_epoch),
-        &NullObservability,
-        &runtime,
-    )
-    .expect_err("terminal provenance requires an authoritative escalation recipient");
-    assert_eq!(
-        unauthorized_recipient.code(),
-        atm_core::error::AtmErrorCode::MessageValidationFailed
-    );
-
-    let active_epoch = IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("active epoch");
-    runtime.apply_roster_runtime_observations(
-        key.team(),
-        &[
-            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
-                key.agent().clone(),
-                RuntimeMemberState::Active,
-                atm_core::protocol::RuntimeObservationSource::HerdrPoll,
-                active_epoch,
-                None,
-            ),
-        ],
-    );
-    let active_spoof = write_herdr_escalation_mail_with_runtime(
-        root.path().join("home"),
-        key.team().clone(),
-        &format!("{}@{}", key.agent(), key.team()),
-        "spoofed ordinary daemon mail".to_owned(),
-        "escalation:blocked_escalated:active-spoof".to_owned(),
-        &key,
-        &task_id,
-        Some(RuntimeMemberState::Active),
-        Some(active_epoch),
-        &NullObservability,
-        &runtime,
-    )
-    .expect_err("an open task and arbitrary recipient cannot stamp an active episode terminal");
-    assert_eq!(
-        active_spoof.code(),
-        atm_core::error::AtmErrorCode::MessageValidationFailed
-    );
-
-    let ordinary = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
     assert!(
         pending_state(root.path(), &key, ordinary).0.is_some(),
-        "ordinary public writes retain the normal deferred reminder marker"
+        "public WriteRequest cannot carry terminal provenance and re-arms normally",
     );
 }
 
