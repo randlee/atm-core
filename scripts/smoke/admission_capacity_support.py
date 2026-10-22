@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -228,6 +228,7 @@ class V4EmissionContext:
     os_name: str
     baseline: BaselineEntry
     binary_hashes: dict[str, str]
+    binary_versions: dict[str, str] = field(default_factory=dict)
 
 
 def benchmark_os() -> str:
@@ -239,12 +240,12 @@ def benchmark_os() -> str:
     return "linux"
 
 
-def binary_hashes() -> dict[str, str]:
-    """Record the exact release executables measured by a v4 campaign."""
+def binary_hashes(binary_dir: Path | None = None) -> dict[str, str]:
+    """Record the exact selected executables measured by a v4 campaign."""
     try:
         return {
-            "atm": hashlib.sha256(release_binary("atm").read_bytes()).hexdigest(),
-            "atm-daemon": hashlib.sha256(release_binary("atm-daemon").read_bytes()).hexdigest(),
+            "atm": hashlib.sha256(release_binary("atm", binary_dir).read_bytes()).hexdigest(),
+            "atm-daemon": hashlib.sha256(release_binary("atm-daemon", binary_dir).read_bytes()).hexdigest(),
         }
     except OSError as error:
         raise SmokeError(f"could not hash benchmark release binaries: {error}") from error
@@ -321,6 +322,7 @@ def v4_result_from_evidence(
         generated_at=generated_at,
         source_revision=str(evidence.get("source_revision") or source_revision()),
         binary_hashes=context.binary_hashes,
+        binary_versions=context.binary_versions,
         frames_per_connection=(
             0 if context.target == "sqlite" else int(evidence["frames_per_connection"])
         ),
@@ -935,12 +937,13 @@ def validate_capacity_home(path: Path) -> Path:
     return resolved
 
 
-def release_binary(name: str) -> Path:
-    """Locate an already-built branch release executable without using PATH."""
+def release_binary(name: str, binary_dir: Path | None = None) -> Path:
+    """Locate a selected release executable without consulting PATH."""
     suffix = ".exe" if os.name == "nt" else ""
-    path = ROOT / "target" / "release" / f"{name}{suffix}"
+    path = ((binary_dir / f"{name}{suffix}") if binary_dir is not None else ROOT / "target" / "release" / f"{name}{suffix}")
     if not path.is_file():
-        raise SmokeError(f"release-built {name} is required at {path}; run cargo build --release first")
+        origin = "--bin-dir" if binary_dir is not None else "target/release"
+        raise SmokeError(f"benchmark {name} is required in {origin}: {path}")
     return path
 
 

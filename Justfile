@@ -245,10 +245,8 @@ benchmark-bootstrap:
 # only. The runner rejects ambient daemon/database state and writes one
 # report-compatible JSON artifact per run.
 benchmark *args:
-    cargo build --release -p agent-team-mail -p atm-daemon
-    {{python_cmd}} .just/sign_daemon_dev.py
-    # The wrapper preserves the runner verdict while rebuilding reports on
-    # both POSIX shells and PowerShell.
+    # With --bin-dir the wrapper uses GitHub prerelease binaries and never builds locally.
+    # The wrapper preserves the runner verdict while rebuilding reports on both shells.
     {{python_cmd}} .just/run_benchmark.py {{args}}
 
 # Rebuild immutable benchmark panels, phase reports, and the report index from JSON.
