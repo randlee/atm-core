@@ -533,6 +533,20 @@ impl AtmToolError {
     }
 }
 
+#[pymethods]
+impl AtmToolError {
+    /// Serialize the nested error object consumed by JSON-native tool hosts.
+    fn to_json(&self) -> String {
+        serde_json::json!({
+            "code": self.code,
+            "message": self.message,
+            "recovery": self.recovery,
+            "layer": self.layer,
+        })
+        .to_string()
+    }
+}
+
 const DELIVERY_UNCERTAIN_CODES: [AtmErrorCode; 3] = [
     AtmErrorCode::DaemonMayHaveExecuted,
     AtmErrorCode::RemoteDeliveryUnconfirmed,
@@ -626,6 +640,33 @@ mod tests {
 
             assert_eq!(result.code, AtmErrorCode::InternalError.as_str());
             assert_eq!(result.layer, "native_client");
+        });
+    }
+
+    #[test]
+    fn tool_error_to_json_exposes_the_nested_error_fields() {
+        Python::initialize();
+        Python::attach(|py| {
+            let error = AtmToolError {
+                code: AtmErrorCode::DaemonUnavailable.as_str().to_owned(),
+                message: "daemon unavailable".to_owned(),
+                recovery: "check the configured daemon".to_owned(),
+                layer: "native_client".to_owned(),
+                observability: None,
+            };
+            let value = Py::new(py, error).expect("Python tool error");
+            let json = value
+                .bind(py)
+                .call_method0("to_json")
+                .expect("tool error exposes JSON")
+                .extract::<String>()
+                .expect("tool error JSON is a string");
+            let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+            assert_eq!(value["code"], "ATM_DAEMON_UNAVAILABLE");
+            assert_eq!(value["message"], "daemon unavailable");
+            assert_eq!(value["recovery"], "check the configured daemon");
+            assert_eq!(value["layer"], "native_client");
+            assert_eq!(value.as_object().expect("error object").len(), 4);
         });
     }
 

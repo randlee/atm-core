@@ -106,6 +106,8 @@ impl MembersCommand {
             all_teams: false,
             caller_team,
             caller_identity,
+            peer_http_api_version: None,
+            peer_wire_security: None,
         };
         let composition = CliComposition::bootstrap(
             "members",

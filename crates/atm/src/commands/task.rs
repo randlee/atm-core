@@ -586,6 +586,8 @@ impl TaskListCommand {
                     all_teams: false,
                     caller_team: Some(contract.team),
                     caller_identity: Some(caller.caller_identity),
+                    peer_http_api_version: None,
+                    peer_wire_security: None,
                 })
                 .await?
                 .runtime_status

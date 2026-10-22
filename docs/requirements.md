@@ -639,15 +639,33 @@ Product requirement ID:
 
 - `REQ-P-HTTP-COMPAT-001` The daemon HTTP API has a strict, independently
   declared SemVer version. Product release versions identify builds only; they
-  are never the CLI-to-daemon compatibility gate.
+  are never a compatibility gate on any link that speaks the HTTP API.
+
+The HTTP API links this requirement governs (ADR-061 D1, HTTP/peer API row):
+
+- CLI → daemon: the `atm` CLI and the local daemon on the same host
+- daemon ↔ daemon: peer daemons on different hosts (cross-host delivery,
+  acknowledgement and peer doctor)
+- graft → daemon: an in-process `atm-graft` session (including Hermes
+  profiles through `hermes-atm`) and the local daemon
 
 Required behavior:
 
 - `/v{major}/atm` and the HTTP API's declared SemVer have the same major;
   different major versions fail before a write with a typed compatibility
   error
-- the compatibility preflight compares the explicit CLI/daemon schema version
-  and HTTP API major, not `atm` or `atm-daemon` product release strings
+- on every governed link, compatibility is decided by the HTTP API major
+  (`HTTP_API_VERSION`); the local links (CLI → daemon, graft → daemon) also
+  compare the explicit `CLI_SCHEMA_VERSION`; peer links also require the same
+  `peer_wire_security` mode
+- `atm`, `atm-daemon` and `atm-graft` product release strings are never
+  compared to decide compatibility on any governed link, including two hosts
+  running different releases; they are reported only as diagnostic evidence
+  (doctor output, smoke and benchmark reports)
+- each host still reports a coherent, ready local CLI/daemon pair; that local
+  readiness check is separate from cross-host compatibility
+- smoke, integration and release harnesses apply the same rule: a cross-host
+  or graft lane never fails on a release-string difference alone
 - an additive endpoint, optional JSON field, response field, or error detail
   increments the HTTP API minor version and must preserve successful
   communication for clients and servers sharing the same major; patch versions
