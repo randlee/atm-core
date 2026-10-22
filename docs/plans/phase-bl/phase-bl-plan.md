@@ -1,96 +1,79 @@
 # Phase BL — atm-bd-orchestration 0.18.5
 
-## Goal and authority
+## Authority, architecture, and plan DAG
 
-Release 0.18.5 for the fourteen scoped issues: #379, #164, #365, #497, #375,
-#492, #372, #126, #533, #498, #491, #359, #360, and #347. Code is in
-`randlee/atm-bd-orchestration`, branch `integrate/phase-bl`, based on v0.18.4
-(`86853d5`). This repository owns the plan and beads.
+Phase BL implements collectors → persisted JSON state → state stage →
+EventRequest → debounce/aggregate → separately scheduled delivery. It adds no
+database. design.md holds Rand's verbatim authority. The sole machine-readable
+DAG is docs/plans/phase-bl/phase-bl.jsonl. bl-9 was deleted before planning
+because it duplicated the collector/snapshot seam; its work is now bl-8.
+bl-14 is folded into bl-12 composition; no separate bl-14 deliverable remains.
 
-The refresh contract follows Rand's 2026-10-21 ruling:
+Implementation lands in the separate `randlee/atm-bd-orchestration` repository:
+all sprint branches target its `integrate/phase-bl` (cut from `main`) and all
+listed validation commands run in that repository's worktree. This `atm-core`
+branch (`plan/phase-bl`, PR to `develop`) publishes the contract and dispatch
+plan only; it is handed to the implementation repository before Wave 1.
 
-> "my expectation for 'atm-bd cron' and 'atm-bd console' is that both are run on a specific phase. They both 'schedule' a info refresh which a) is exactly the same regardless of which system instigated it. b) is checked for duplication so running both does not DOUBLE the query load on bd/dolt, atm, github c) A failed run which did not produce successful data does NOT cause a run to be skipped."
+## Pre-Wave-1 handoff
 
-Tests use injected clocks, controlled fakes, and deterministic inputs. They do
-not use sleeps, threads, races, event ordering, load, or real bd/dolt/atm/gh.
+bl-1 owns the handoff gate. Before its implementation branch opens, copy this
+plan, `design.md`, `phase-bl.jsonl`, the `beads/` render, and
+`.sprints/BL/structure.ttl` into `randlee/atm-bd-orchestration` at
+`docs/plans/phase-bl/`; record both the atm-core plan SHA and destination SHA
+in `phase-bl-handoff.json`. Dispatch/QA parses the copied JSONL and registry,
+resolves every criteria path, and rejects a mismatch. The gate test is
+`test_phase_bl_handoff_pins_commits_and_resolves_all_sprints`.
 
-## Boundaries and ownership
+## Boundary and ownership map
 
-| Boundary | Producer | Consumers | Ownership |
-| --- | --- | --- | --- |
-| `BOUNDARY-Refresh` | bl-1 | bl-6, bl-7, bl-9 | refresh state, source stamps, `Snapshot.content_at` |
-| `BOUNDARY-JevResult` | bl-2 | bl-5, bl-12 | ordered Jev JSONL and `JevErrorKind` |
-| `BOUNDARY-DispatchHeld` | bl-3 | none | dispatch and bead-source held rows |
-| `BOUNDARY-ProblemSources` | bl-10 | none | model, GitHub and atm-bd problem sources |
-| `BOUNDARY-QaReviewers` | bl-4 | bl-7, bl-12 | reviewer metadata |
-| `BOUNDARY-SanityRecord` | bl-5 | bl-7, bl-12 | sanity-history record and merge rule |
-| `BOUNDARY-SanityMechanics` | bl-11 | none | task close and stack mechanics |
-| `BOUNDARY-DashboardRender` | bl-6 | bl-9 | render, status, show |
-| `BOUNDARY-ConsoleApp` | bl-7 | bl-9, bl-12 | console tabs and icons |
-| `BOUNDARY-BdDeadline` | bl-8 | none until D1 | deadline-only command seam |
-
-No boundary implies ownership of a consumer's implementation files. In
-particular, bl-1 owns `cli.py` refresh entry; bl-6 owns `show.py` and
-`test_show.py` and consumes only `Snapshot.content_at` and restored
-`PollHealth` from bl-1.
-
-## Three-wave execution and one stack
-
-| Wave | Sprints | Hard API/artifact dependency |
+| Sprint | Boundary / closure | Exact owned paths (disjoint within wave) |
 | --- | --- | --- |
-| 1 | bl-1, bl-2, bl-3, bl-4, bl-8, bl-10, bl-11 | none; bl-8 dispatch begins only after D1 |
-| 2 | bl-5, bl-6, bl-7 | bl-5 ← bl-2 JSONL; bl-6 ← bl-1 content/health; bl-7 ← bl-1 refresh and bl-4 reviewers |
-| 3 | bl-9, bl-12 | bl-9 ← bl-6/bl-7; bl-12 ← bl-4/bl-5/bl-7 |
+| bl-1 | PhaseBlContract / contract | apps/atm-bd-console/src/atm_bd_console/{types,codec,registry}.py; apps/atm-bd-console/tests/{test_types,test_codec,test_registry}.py |
+| bl-2 | JevResult / boundary | plugins/atm-bd-orchestration/{skills/atm-bd-orchestration/scripts/{jev_client.py,wrap_jev_receipt.py,sanity-split},agents/sc-sanity-jev.md,scripts/tests/test_{jev_client,wrap_jev_receipt,sanity_split,jev_client_prompts}.py} |
+| bl-3 | EventDispatch / boundary | apps/atm-bd-console/src/atm_bd_console/{events,delivery}.py; apps/atm-bd-console/tests/{test_events,test_delivery}.py; sole `enqueue-event` CLI, sender schedule, and recipient tests |
+| bl-4 | QaReviewers / boundary | plugins/atm-bd-orchestration/{roles/quality-mgr.md,templates/qa-template.xml.j2,templates/finding-bead.json.j2,scripts/tests/test_qa_report_contract.py} |
+| bl-5 | SanityState / boundary | plugins/atm-bd-orchestration/{agents/dev-sanity.md,templates/dev-sanity-template.xml.j2,templates/sanity-run-record.json.j2,scripts/{sanity-merge,sanity-run-history,sanity-stack-link,atm-task-close.py},scripts/tests/{test_sanity_merge,test_sanity_run_history,test_templates,test_handoff_contracts,test_dev_sanity_prompt}.py} |
+| bl-6 | DashboardRender / boundary | apps/atm-bd-console/src/atm_bd_console/{render,status,show}.py; apps/atm-bd-console/tests/test_{render,status,show}.py; apps/atm-bd-console/README.md |
+| bl-7 | QualityTab / boundary | apps/atm-bd-console/src/atm_bd_console/{runs,icons}.py; apps/atm-bd-console/tests/test_{runs,icons}.py |
+| bl-8 | Collectors / boundary | apps/atm-bd-console/src/atm_bd_console/{refresh,state,adapters/{__init__,bd,atm,github}.py,cli.py,command.py}; matching collector tests |
+| bl-10 | ProblemSources / boundary | plugins/atm-bd-orchestration/{atm_bd_orchestration/{github_source,atm_bd,problem_sources,__init__}.py,pyproject.toml,uv.lock,manifest.yaml,tests/gen_manifest.py}; matching tests |
+| bl-13 | DagRender / boundary | apps/atm-bd-console/src/atm_bd_console/dag.py; apps/atm-bd-console/tests/test_dag.py |
+| bl-12 | PhaseBlComposition / integration | apps/atm-bd-console/src/atm_bd_console/{cli,app,runner,model,cron_entry,delivery_entry,wiring}.py; apps/atm-bd-console/tests/{test_phase_bl_composition,test_app}.py |
 
-Critical path: three waves. Maximum implementation width: seven in wave 1.
+## Three waves
 
-The DAG is in `phase-bl.jsonl`; this table is its authoritative human view.
-Development can proceed in parallel according to that DAG. At handoff there
-is one append-only stack: `bl-1 → bl-2 → bl-3 → bl-4 → bl-8 → bl-10 → bl-11
-→ bl-5 → bl-6 → bl-7 → bl-9 → bl-12`. Each PR targets the immediately
-preceding layer. The stack writer rebases a ready branch on that layer and
-merge-forwards its declared producers before linking it; no sprint is an
-independent, unlinked delivery track. bl-9 is the higher parent that
-merge-forwards the completed dashboard and console consumers; bl-12 follows
-bl-9 for the final integration surface.
-
-| Sprint | Boundary | PR target | Scope summary |
-| --- | --- | --- | --- |
-| bl-1 | Refresh | `integrate/phase-bl` | shared refresh and persisted data |
-| bl-2 | JevResult | bl-1 | typed Jev JSONL producer |
-| bl-3 | DispatchHeld | bl-2 | dispatch and bead source only |
-| bl-4 | QaReviewers | bl-3 | QA/finding reviewer schema |
-| bl-8 | BdDeadline | bl-4 | D1 deadline in `command.py` only |
-| bl-10 | ProblemSources | bl-8 | model, GitHub, atm-bd sources |
-| bl-11 | SanityMechanics | bl-10 | close and stack mechanics |
-| bl-5 | SanityRecord | bl-11 | Jev consumer and history |
-| bl-6 | DashboardRender | bl-5 | render, status, show |
-| bl-7 | ConsoleApp | bl-6 | app tabs and icons |
-| bl-9 | Refresh integration | bl-7 | refresh end-to-end tests and proof |
-| bl-12 | Uniform integrations | bl-9 | Jev/history/console/reviewer integration |
-
-## Decisions
-
-D1–D4 remain open and block only the named work below. When any is ruled,
-the lead creates a new decision-specific sprint; no current sprint assumes its
-answer.
-
-| Decision | Question | Current effect |
+| Wave | Sprints | Contract / ordering |
 | --- | --- | --- |
-| D1 / #533 | What BD read deadline is acceptable for the console command? | bl-8's sole `command.py` deadline change waits. |
-| D2 / #492 | Should display-only “head not pushed” remain informational, and should PR-less pairs be merge-checked? | no current change; a new sprint follows a ruling. |
-| D3 / #498 | Is notice on `rebase_required` sufficient, or must the bead reopen? | only that unruled behavior waits. |
-| D4 / #126 | Which remaining candidate, gate, reviewer, link, supervision, escalation, and lookup proposals are wanted? | no current implementation work waits on it. |
+| 1 | bl-1 | publishes the complete Python/JSON contract and fixtures |
+| 2 | bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13 | each consumes only bl-1; paths are disjoint |
+| 3 | bl-12 | composes every wave-2 production boundary |
 
-D5 is ruled and is implemented mechanically by bl-5:
+Sprint count is 11, usable width is 9, and critical path is 3
+(bl-1 → any wave-2 sprint → bl-12). Every branch is sprint/bl-<id>-<slug>
+and targets integrate/phase-bl. This plan intentionally records no synthetic
+per-sprint layer: all Wave-2 boundaries are siblings cut from the Wave-1
+contract, and the stack writer cuts any delivery stack at landing. The plan
+branch alone targets develop.
 
-> "if jev-api failed (i.e. jev did not respond), the parallel llm evaluator's response is used. If both llm+jev respond a failure on either is failure on iteration #1. for iteration > 1, sanity-agent to triage (which should be done w/ background agent if sanity-agent has queue backlog)."
+## Issue disposition
 
-## Integration exits
+| Issue | Sprint | Deliverable | Deterministic proof / status |
+| --- | --- | --- | --- |
+| #379 | bl-2 | D6 | `test_pr_body_null_is_empty_text` |
+| #164 | bl-2 | D7 | `test_external_evidence_flag_appends` |
+| #365, #497 | bl-5 | D1 | `test_sanity_log_preserves_jev_request_array_and_jsonl` |
+| #375, #372 | bl-10 | D2 | `test_latest_non_cancelled_check_per_name_wins` |
+| #492 | bl-8 | carry-forward | D2 remains open; no proof test is claimed |
+| #126, #498 | bl-5 | D3 | `test_not_reproducible_close_and_rebase_link` |
+| #533 | bl-8 | D4 | `test_d1_deadline_is_required_before_command_dispatch` |
+| #491, #359 | bl-3 | D1 | `test_derive_transitions_emits_held_dispatch_and_alert_requests` |
+| #360 | bl-13 | D1 | `test_dag_mmds_fixture_node_ids_labels_and_strokes` |
+| #347 | bl-12 (closure); bl-4 producer; bl-7 UI | D3 | `test_composed_quality_two_panel_markdown_selection` |
 
-bl-9 proves cron and console reuse exactly the same persisted report, stdout,
-and exit outcome for `fresh` and `in_progress` reuse; it reports only
-persisted state. bl-12 proves Jev JSONL flows through sanity history to the
-console do-not-enter state and that reviewer metadata reaches the Quality
-pane. Product behavior defects discovered by integration return to the owning
-boundary sprint.
+## Integration exit
+
+bl-12 owns the real cron entry (collect → build_snapshot → enqueue) and
+delivery entry (deliver_due) wiring. Its composed tests inject only clocks,
+ATM, and source fakes and alone prove cron/TUI equality, no send from
+collectors/TUI, retry after source failure, and scheduled delivery.
