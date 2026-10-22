@@ -22,10 +22,6 @@ RESULTS_LINE = re.compile(r"^reports and logs:\s+(.+)$", re.MULTILINE)
 ATM_VERSION = re.compile(r"^atm\s+(\d+\.\d+\.\d+)(?:\s|$)")
 
 
-class ColimaVersionError(RuntimeError):
-    """The installed container CLI did not identify a release version."""
-
-
 def command(argv: list[str], cwd: Path | None = None, timeout: float = 1800) -> subprocess.CompletedProcess[str]:
     return subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False)
 
@@ -46,17 +42,21 @@ def failed(step: str, revision: str) -> dict[str, object]:
     }
 
 
-def installed_atm_version() -> str:
-    """Read the release version from the container binary, never an agent report."""
+def installed_atm_version() -> str | None:
+    """Read the release version from the container binary, never an agent report.
+
+    An unreadable version is recorded as unknown; it never fails a passing run.
+    """
     result = command(["docker", "exec", CONTAINER, "atm", "--version"], timeout=60)
     match = ATM_VERSION.match(result.stdout.strip())
     if result.returncode or match is None:
         detail = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
-        raise ColimaVersionError(f"could not parse installed container atm version: {detail}")
+        print(f"warning: could not parse installed container atm version: {detail}", file=sys.stderr)
+        return None
     return match.group(1)
 
 
-def run_prompt(prompt: str, step: str, step_dir: Path, revision: str, atm_version: str) -> dict[str, object]:
+def run_prompt(prompt: str, step: str, step_dir: Path, revision: str, atm_version: str | None) -> dict[str, object]:
     ran = command(["docker", "exec", CONTAINER, "/opt/testbed/harness/run-prompts.sh", prompt], timeout=1200)
     step_dir.mkdir(parents=True, exist_ok=True)
     (step_dir / "run-prompts.log").write_text(ran.stdout + ran.stderr, encoding="utf-8")

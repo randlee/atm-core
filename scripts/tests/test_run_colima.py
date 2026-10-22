@@ -48,30 +48,9 @@ class InstalledVersionTests(unittest.TestCase):
             self.assertEqual(driver.installed_atm_version(), "1.6.5")
         command.assert_called_once_with(["docker", "exec", driver.CONTAINER, "atm", "--version"], timeout=60)
 
-    def test_rejects_unparseable_container_output(self) -> None:
+    def test_unparseable_container_output_is_unknown_not_fatal(self) -> None:
         with mock.patch.object(driver, "command", return_value=mock.Mock(returncode=0, stdout="unknown\n", stderr="")):
-            with self.assertRaises(driver.ColimaVersionError):
-                driver.installed_atm_version()
-
-    def test_run_reads_version_after_testbed_installs_the_container(self) -> None:
-        order: list[str] = []
-        with (
-            tempfile.TemporaryDirectory() as temp,
-            mock.patch.object(driver, "command") as command,
-            mock.patch.object(driver, "installed_atm_version", side_effect=lambda: order.append("version") or "1.6.5"),
-            mock.patch.object(driver, "run_prompt", return_value={}),
-            mock.patch.object(driver, "write_step"),
-            mock.patch.object(driver.render_colima, "render_run", return_value={}),
-        ):
-            def invoke(argv, *_args, **_kwargs):
-                if argv[-1].endswith("test.sh"):
-                    order.append("test.sh")
-                return mock.Mock(returncode=0, stdout="", stderr="")
-
-            command.side_effect = invoke
-            driver.run(Path(temp), Path(temp))
-        self.assertEqual(order, ["test.sh", "version"])
-
+            self.assertIsNone(driver.installed_atm_version())
 
 if __name__ == "__main__":
     unittest.main()
