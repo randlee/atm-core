@@ -1605,6 +1605,34 @@ def test_verify_python_release_assets_accepts_manifest_declared_wheels_and_sdist
     assert "'sc-compose': {'wheel': 2, 'sdist': 1}" in result.stdout
 
 
+def test_verify_python_release_asset_mismatch_is_a_workflow_warning(tmp_path: Path) -> None:
+    _, manifest = write_repo_fixture(tmp_path, manifest_wheels=["ubuntu-latest", "windows-latest"])
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    with zipfile.ZipFile(assets / "fixture-linux.whl", "w") as wheel:
+        wheel.writestr("fixture-1.1.0.dist-info/METADATA", "Name: sc-compose\nVersion: 1.1.0\n")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(scripts_root() / "release_artifacts.py"),
+            "verify-python-release-assets",
+            "--manifest",
+            str(manifest),
+            "--asset-dir",
+            str(assets),
+        ],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=TEST_COMMAND_TIMEOUT_SECONDS,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "::warning::published GitHub Release Python assets mismatch:" in result.stdout
+
+
 def test_release_manifest_publishes_sc_sha_before_its_consumers() -> None:
     """Keep manifest-declared crate ordering and fields regression-tested."""
     manifest = require_manifest_crates()

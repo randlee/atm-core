@@ -15,6 +15,7 @@ import tarfile
 import tempfile
 import time
 import tomllib
+from urllib.error import HTTPError
 from urllib.request import urlopen
 import zipfile
 from typing import Any, Sequence
@@ -206,7 +207,7 @@ def host_wheel_names(
     digests: dict[str, str], manifest: dict[str, Any], *, system: str | None = None,
     machine: str | None = None,
 ) -> list[str]:
-    """Select one universal or host-platform wheel per declared distribution."""
+    """Select an unambiguous universal or host-platform wheel when available."""
     system = platform.system() if system is None else system
     machine = (platform.machine() if machine is None else machine).lower().replace("amd64", "x86_64")
     if system == "Windows" and machine == "aarch64":
@@ -225,7 +226,11 @@ def host_wheel_names(
         elif len(compatible) == 1:
             selected.append(compatible[0])
         else:
-            raise SystemExit(f"GitHub prerelease has no unique host wheel for {prefix.rstrip('-')}")
+            print(
+                f"warning: GitHub prerelease has no unique host wheel for {prefix.rstrip('-')}; "
+                "installing binaries and other available wheels",
+                file=sys.stderr,
+            )
     return selected
 
 
@@ -268,31 +273,40 @@ def release_asset_names(release: dict[str, Any]) -> set[str]:
     return {asset["name"] for asset in assets if isinstance(asset, dict) and isinstance(asset.get("name"), str)}
 
 
+def warn_python_asset_drift(names: set[str], manifest: dict[str, Any]) -> None:
+    """Report Python asset-set differences without blocking binaries or publishing."""
+    distributions = manifest.get("python_distributions", [])
+    if not isinstance(distributions, list):
+        raise SystemExit("python_distributions must be an array")
+    for distribution in distributions:
+        name = distribution.get("name")
+        if not isinstance(name, str):
+            raise SystemExit("python_distributions entries require a name")
+        prefix = name.replace("-", "_") + "-"
+        wheels = sum(asset.startswith(prefix) and asset.endswith(".whl") for asset in names)
+        expected_wheels = len(distribution.get("wheels", []))
+        if wheels != expected_wheels:
+            print(
+                f"warning: GitHub prerelease has the wrong manifest-declared wheel set for "
+                f"{name} ({wheels}/{expected_wheels})",
+                file=sys.stderr,
+            )
+        if distribution.get("sdist"):
+            sdists = sum(asset.startswith(prefix) and asset.endswith(".tar.gz") for asset in names)
+            if sdists != 1:
+                print(
+                    f"warning: GitHub prerelease is missing the expected source distribution "
+                    f"for {name} ({sdists}/1)",
+                    file=sys.stderr,
+                )
+
+
 def require_release_assets(release: dict[str, Any], manifest: dict[str, Any], version: str) -> None:
     names = release_asset_names(release)
     missing = expected_assets(manifest, version) - names
     if missing:
         raise SystemExit(f"GitHub prerelease is missing required assets: {', '.join(sorted(missing))}")
-    distributions = manifest.get("python_distributions", [])
-    missing_wheels = []
-    for distribution in distributions:
-        prefix = distribution["name"].replace("-", "_") + "-"
-        expected_count = len(distribution.get("wheels", []))
-        actual_count = sum(name.startswith(prefix) and name.endswith(".whl") for name in names)
-        if actual_count != expected_count:
-            missing_wheels.append(f"{prefix.rstrip('-')} ({actual_count}/{expected_count})")
-    if missing_wheels:
-        raise SystemExit(f"GitHub prerelease has the wrong manifest-declared wheel set: {', '.join(sorted(missing_wheels))}")
-    missing_sdists = []
-    for distribution in distributions:
-        if not distribution.get("sdist"):
-            continue
-        prefix = distribution["name"].replace("-", "_") + "-"
-        actual_count = sum(name.startswith(prefix) and name.endswith(".tar.gz") for name in names)
-        if actual_count != 1:
-            missing_sdists.append(f"{prefix.rstrip('-')} ({actual_count}/1)")
-    if missing_sdists:
-        raise SystemExit(f"GitHub prerelease is missing required source distributions: {', '.join(sorted(missing_sdists))}")
+    warn_python_asset_drift(names, manifest)
 
 
 def download_asset(tag: str, name: str, destination: Path, *, public_url: str | None = None) -> Path:
@@ -378,10 +392,31 @@ def stage_wheels(tag: str, manifest: dict[str, Any], stage: Path, destination: P
         return
     checksum_file = download_asset(tag, "checksums.txt", destination, public_url=public_url)
     digests = checksums(checksum_file.read_text(encoding="utf-8"))
+    names = set(digests)
+    if public_url is None:
+        names &= release_asset_names(release_for_tag(tag))
+    warn_python_asset_drift(names, manifest)
     wheel_dir = stage / "wheels"
     wheel_dir.mkdir(parents=True, exist_ok=True)
     for name in host_wheel_names(digests, manifest):
-        wheel = download_asset(tag, name, destination, public_url=public_url)
+        if name not in names:
+            print(
+                f"warning: GitHub prerelease does not contain host wheel {name}; "
+                "installing binaries and other available wheels",
+                file=sys.stderr,
+            )
+            continue
+        try:
+            wheel = download_asset(tag, name, destination, public_url=public_url)
+        except HTTPError as error:
+            if error.code != 404:
+                raise
+            print(
+                f"warning: GitHub prerelease does not contain host wheel {name}; "
+                "installing binaries and other available wheels",
+                file=sys.stderr,
+            )
+            continue
         verify_checksum(wheel, digests[name])
         shutil.copy2(wheel, wheel_dir / name)
 

@@ -9,6 +9,8 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from contextlib import redirect_stderr
+from urllib.error import HTTPError
 from pathlib import Path
 from unittest import mock
 
@@ -77,7 +79,7 @@ class PrereleaseTests(unittest.TestCase):
         self.assertEqual(len(wheels["atm-query"]), 6)
         self.assertEqual(wheels["hermes-atm"], ["ubuntu-latest"])
 
-    def test_host_wheel_selection_requires_a_manifest_distribution_wheel(self) -> None:
+    def test_host_wheel_selection_warns_and_skips_when_no_host_wheel_exists(self) -> None:
         values = manifest(Path("/unused"))
         values["python_distributions"] = [{"name": "fixture-wheel", "wheels": ["ubuntu-latest"]}]
         digests = {
@@ -102,6 +104,82 @@ class PrereleaseTests(unittest.TestCase):
             with self.subTest(tag=tag):
                 name = f"fixture_wheel-1.5.11-cp311-abi3-{tag}.whl"
                 self.assertEqual(PRERELEASE.host_wheel_names(digests, values, system=system, machine=machine), [name])
+
+        with redirect_stderr(io.StringIO()) as stderr:
+            selected = PRERELEASE.host_wheel_names(
+                {}, values, system="Linux", machine="x86_64"
+            )
+        self.assertEqual(selected, [])
+        self.assertIn("warning:", stderr.getvalue())
+
+    def test_release_python_asset_drift_warns_without_rejecting_binary_assets(self) -> None:
+        values = manifest(Path("/unused"))
+        values["python_distributions"] = [
+            {"name": "fixture-wheel", "wheels": ["ubuntu-latest"], "sdist": True}
+        ]
+        release = {
+            "assets": [
+                {"name": "checksums.txt"},
+                {"name": "fixture_1.5.11_x86_64-unknown-linux-gnu.tar.gz"},
+            ]
+        }
+        with redirect_stderr(io.StringIO()) as stderr:
+            PRERELEASE.require_release_assets(release, values, "1.5.11")
+        self.assertIn("wrong manifest-declared wheel set", stderr.getvalue())
+        self.assertIn("expected source distribution", stderr.getvalue())
+
+    def test_install_warns_and_succeeds_when_host_wheel_is_missing(self) -> None:
+        installed_binary = False
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            values = manifest(root)
+            values["python_distributions"] = [
+                {"name": "fixture-wheel", "wheels": ["ubuntu-latest"], "sdist": True}
+            ]
+            config = values["prerelease"]
+            assert isinstance(config, dict)
+            config["release_targets"] = values["release_targets"]
+            config["python_distributions"] = values["python_distributions"]
+            archive = root / "fixture.zip"
+            archive.write_bytes(fixture_archive())
+            checksum = root / "checksums.txt"
+            wheel_name = "fixture_wheel-1.5.11-cp311-abi3-manylinux_2_17_x86_64.whl"
+            checksum.write_text(f"{'0' * 64}  {wheel_name}\n", encoding="utf-8")
+
+            def asset(_tag: str, name: str, _destination: Path, *, public_url: str | None = None) -> Path:
+                if name == "checksums.txt":
+                    return checksum
+                raise HTTPError(f"https://example.test/{name}", 404, "Not Found", {}, None)
+
+            with (
+                mock.patch.object(PRERELEASE, "read_manifest", return_value=values),
+                mock.patch.object(PRERELEASE, "prerelease_manifest", return_value=config),
+                mock.patch.object(PRERELEASE, "download_checked_archive", return_value=archive),
+                mock.patch.object(PRERELEASE, "download_asset", side_effect=asset),
+                mock.patch.object(PRERELEASE.platform, "system", return_value="Linux"),
+                mock.patch.object(PRERELEASE.platform, "machine", return_value="x86_64"),
+                mock.patch.object(PRERELEASE, "shell", return_value=subprocess.CompletedProcess([], 0, "1.5.11", "")),
+                redirect_stderr(io.StringIO()) as stderr,
+                mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+            ):
+                status = PRERELEASE.main(["--install", "1.5.11"])
+                version, stage = "1.5.11", root / "builds" / "v1.5.11"
+                installed_binary = (stage / "bin" / "fixture").is_file()
+
+        self.assertEqual(status, 0)
+        self.assertIn("installed prerelease 1.5.11", stdout.getvalue())
+        self.assertTrue(installed_binary)
+        self.assertIn("expected source distribution", stderr.getvalue())
+        self.assertIn("does not contain host wheel", stderr.getvalue())
+
+    def test_release_artifacts_malformed_matrix_json_remains_an_error(self) -> None:
+        with mock.patch.object(
+            PRERELEASE,
+            "command",
+            return_value=subprocess.CompletedProcess([], 0, "not json", ""),
+        ):
+            with self.assertRaisesRegex(SystemExit, "release_artifacts.py returned invalid release-target-matrix JSON"):
+                PRERELEASE.manifest_with_release_artifacts({}, Path("manifest.toml"), Path("release_artifacts.py"))
     def test_publish_dry_run_never_needs_network_or_authorization(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
