@@ -3,6 +3,8 @@ Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR ta
 
 closure_type: contract; target_boundary: PhaseBlContract; branch: sprint/bl-1-phase-contract; PR target: integrate/phase-bl; wave: 1; external_ref: none; recommended_agent: arch-ctm; recommended_model: opus; must_follow: none; parallel_safe: bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13.
 
+## Scope boundary
+
 `parallel_safe` lists Wave-2 siblings only after this Wave-1 contract has closed; it does not waive their `must_follow: bl-1` dependency.
 
 Own `apps/atm-bd-console/src/atm_bd_console/{types,codec,registry}.py`, versioned JSON fixtures, and their three test modules. This is the only shared contract owner. Every listed type, codec fixture, registry export, and test double lands production-ready; collection policy, UI, transitions, and delivery do not land here.
@@ -13,7 +15,7 @@ Own `apps/atm-bd-console/src/atm_bd_console/{types,codec,registry}.py`, versione
 
 > "we do NOT need to collect data from all sources at the same rate."
 
-## Deliverables
+## Authoritative deliverables
 
 1. Publish the importable cross-package contract at `atm_bd_console.types`; plugin code consumes versioned JSON fixtures/CLI responses only, never a console implementation import. The registry exports fixture-reading doubles for every layer boundary.
 2. Define the complete frozen-data contract and source error kinds. Windows are contractual: BD/dolt 60 seconds, ATM 60 seconds, GitHub 600 seconds. Lock, timer, and force behaviour are implementation work owned by bl-8.
@@ -81,7 +83,7 @@ BD_WINDOW_S = 60; ATM_WINDOW_S = 60; GITHUB_WINDOW_S = 600
 3. Supply versioned round-trip codec fixtures named `collector_record.v1.json`, `state_snapshot.v1.json`, `qa_run.v1.json`, `jev_results.v1.json`, `dag_input.v1.json`, and `event_request.v1.json` for `CollectorRecord`, `StateSnapshot`, held rows, QA/Jev/DAG inputs, `Transition`, and `EventRequest`; registry doubles cover every consumer boundary. bl-2, bl-3, bl-4, bl-5, bl-7, and bl-13 consume these fixture artifacts at their boundary rather than inventing untyped payloads.
 4. `atm_bd_console` is the real Python import path. Plugin scripts never import console implementation modules: they call `atm-bd-console enqueue-event --request <json>` and receive `{"version":1,"status":"acknowledged|rejected","request_id":...,"error":...}`; fixture/CLI tests cover enqueue, sender, and deriver doubles. `DeliveryOutcome.RETRY` is valid only with `RequestState.RETRY`, while `DeliveryOutcome.SENT` requires `RequestState.ACKNOWLEDGED`; the codec rejects every other combination.
 
-## Deterministic acceptance
+## Authoritative acceptance criteria
 
 - [ ] `test_contract_types_have_exact_fields_enums_and_import_path`
 - [ ] `test_contract_codec_round_trips_versioned_json_fixtures`
@@ -96,11 +98,11 @@ BD_WINDOW_S = 60; ATM_WINDOW_S = 60; GITHUB_WINDOW_S = 600
 
 Run frozen ruff, pyright, and pytest with fixtures and controlled values only. No sleep, timing, race, or live-service test is permitted.
 
-## Validation
+## Authoritative validation
 ```bash
 cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --frozen pyright src && uv run --frozen pytest -q
 ```
 
-## This sprint does not close
+## Non-closure
 
 bl-8 implements locks/timers/force and snapshot construction; bl-10 implements pure problem derivation; bl-3 owns durable queue/delivery; bl-12 owns the integrated pipeline.

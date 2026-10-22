@@ -3,9 +3,11 @@ Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR ta
 
 closure_type: boundary; target_boundary: SanityState; branch: sprint/bl-5-sanity-flow; PR target: integrate/phase-bl; wave: 2; external_ref: #365, #497, #126, #498; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (`EventRequest` JSON codec); parallel_safe: bl-2, bl-3, bl-4, bl-6, bl-7, bl-8, bl-10, bl-13.
 
+## Scope boundary
+
 Own `agents/dev-sanity.md`, `templates/dev-sanity-template.xml.j2`, `templates/sanity-run-record.json.j2`, `scripts/{sanity-merge,sanity-run-history,sanity-stack-link,atm-task-close.py}`, and exactly `scripts/tests/{test_sanity_merge.py,test_sanity_run_history.py,test_templates.py,test_handoff_contracts.py,test_dev_sanity_prompt.py}` under the plugin. bl-2 exclusively owns `test_sanity_split.py`; no glob claims it. Every listed transition, request array, record, and close/stack rule is production-ready at this boundary.
 
-## Deliverables
+## Authoritative deliverables
 
 1. Pack context for the LLM and write the `JevRequest[]` array into `dev-sanity.md`; persist the exact JSONL/result array in the sanity-run log with typed error context (#365, #497).
 2. Select deterministic sanity transitions and emit a contract-codec `EventRequest` through the named `enqueue_event_request` seam; bl-12 proves its arrival in bl-3's durable queue.
@@ -14,7 +16,7 @@ Own `agents/dev-sanity.md`, `templates/dev-sanity-template.xml.j2`, `templates/s
 
 > "if jev-api failed (i.e. jev did not respond), the parallel llm evaluator's response is used. If both llm+jev respond a failure on either is failure on iteration #1. for iteration > 1, sanity-agent to triage (which should be done w/ background agent if sanity-agent has queue backlog)."
 
-## Deterministic acceptance
+## Authoritative acceptance criteria
 
 - [ ] `test_sanity_log_preserves_jev_request_array_and_jsonl`
 - [ ] `test_context_packing_writes_jev_request_array_to_dev_sanity`
@@ -30,11 +32,11 @@ Own `agents/dev-sanity.md`, `templates/dev-sanity-template.xml.j2`, `templates/s
 
 Tests use saved records and a fake enqueue/close seam; no live daemon, sleep, or race.
 
-## Validation
+## Authoritative validation
 ```bash
 cd plugins/atm-bd-orchestration && python3 tests/gen_manifest.py --check && python3 -m pytest -q -rs
 ```
 
-## This sprint does not close
+## Non-closure
 
 It does not implement durable queue/delivery (bl-3) or prove cross-boundary arrival (bl-12).

@@ -3,6 +3,8 @@ Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR ta
 
 closure_type: integration; target_boundary: PhaseBlComposition; branch: sprint/bl-12-phase-composition; PR target: integrate/phase-bl; wave: 3; external_ref: none; recommended_agent: trinity; recommended_model: opus; must_follow: bl-1, bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13; parallel_safe: none.
 
+## Scope boundary
+
 Own `cli.py`, `app.py`, `runner.py`, `model.py`, `cron_entry.py`, `delivery_entry.py`, `wiring.py`, `test_phase_bl_composition.py`, and `test_app.py` in the console package. It replaces the legacy bundled `runner.step` entry path: installed cron, show, and TUI call collector/state/event/delivery seams independently.
 
 ## Governing text (verbatim)
@@ -11,7 +13,7 @@ Own `cli.py`, `app.py`, `runner.py`, `model.py`, `cron_entry.py`, `delivery_entr
 
 > "ATM messages occur on a specified schedule based on timing... nothing to do with either tui or cron."
 
-## Deliverables
+## Authoritative deliverables
 
 1. Wire the fixed architecture: collectors → persisted JSON state → state stage → `EventRequest` → debounce/aggregate → separately scheduled delivery, with no database. `cron_entry` calls bl-3 `derive_transitions(snapshot, previous)` then `enqueue_event_request`. This is the sole owner that populates `StateSnapshot.held_rows`, `qa`, `jev`, and `dag` from their versioned fixtures during snapshot composition.
 2. Wire both cron-originated and bl-5 sanity-originated `EventRequest`s through the named `enqueue_event_request` seam into bl-3's durable queue; `delivery_entry.deliver_due(clock)` is the only send entry.
@@ -20,7 +22,7 @@ Own `cli.py`, `app.py`, `runner.py`, `model.py`, `cron_entry.py`, `delivery_entr
 5. Cut over installed `cli.py`, `app.py`, `runner.py`, and `model.py`: no collection entrypoint calls sender, and TUI/cron share persisted snapshots without a second source query.
 6. Fold the former ConsoleApp boundary here: one console instance, persisted-state consumption, `r` force request, PR-tab GitHub-only request, and Rich Diagnostics colour.
 
-## Deterministic acceptance
+## Authoritative acceptance criteria
 
 - [ ] `test_each_jev_error_kind_flows_jsonl_to_sanity_and_do_not_enter`
 - [ ] `test_reviewer_metadata_reaches_quality_pane_unchanged`
@@ -43,12 +45,12 @@ Own `cli.py`, `app.py`, `runner.py`, `model.py`, `cron_entry.py`, `delivery_entr
 
 All fixtures inject the source, stored JSON, queue, ATM sender, and clock. No integration test sleeps, races, orders event loops, loads CPU, or contacts a service.
 
-## Validation
+## Authoritative validation
 ```bash
 cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --frozen pyright src && uv run --frozen pytest -q
 cd plugins/atm-bd-orchestration && python3 -m pytest -q -rs
 ```
 
-## This sprint does not close
+## Non-closure
 
 It proves composition only; individual source reads, derivation, queue semantics, display rendering, and sanity selection remain owned by their boundary sprints.

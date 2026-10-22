@@ -77,7 +77,7 @@ reviewer, which alone verifies the fix):
    `metadata.reviewers[]` with each reviewer's finding bead ids; a reviewer
    whose findings did not survive triage has `findings: []`.
 
-## Authoritative acceptance criteria (gh-347, deterministic)
+## Authoritative acceptance criteria
 
 - [ ] `test_finding_bead_reviewers_filing_first`: rendering `finding-bead.json.j2` with `reviewer: "req-qa"`, `reviewers: ["req-qa","arch-qa"]` gives that list and the unchanged `reviewer`.
 - [ ] `test_qa_close_step_writes_reviewers`: rendered step i contains the `metadata.reviewers` write with the fields `reviewer, status, kind, elapsed_s, error, findings`.
@@ -90,6 +90,6 @@ reviewer, which alone verifies the fix):
 cd plugins/atm-bd-orchestration && python3 tests/gen_manifest.py --check && python3 -m pytest -q -rs
 ```
 
-## This sprint does not close
+## Non-closure
 
 It produces reviewer metadata only; bl-7 renders the persisted quality data and bl-12 owns installed-console composition.

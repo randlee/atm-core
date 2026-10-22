@@ -3,6 +3,8 @@ Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR ta
 
 closure_type: boundary; target_boundary: ProblemSources; branch: sprint/bl-10-problem-sources; PR target: integrate/phase-bl; wave: 2; external_ref: #375, #372; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (versioned collector-record fixtures and `ActionableProblem` codec); parallel_safe: bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-13.
 
+## Scope boundary
+
 Own only `plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_bd,problem_sources}.py`, `plugins/atm-bd-orchestration/{pyproject.toml,uv.lock,atm_bd_orchestration/__init__.py,manifest.yaml}`, `tests/gen_manifest.py`, and matching tests. bl-8 is the sole source-read/filter owner; this sprint is pure derivation over persisted codec fixtures and never calls GitHub, BD, ATM, or delivery. `gen_manifest.py --check` is the manifest ownership proof.
 
 ## Governing text (verbatim)
@@ -11,13 +13,13 @@ Own only `plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_b
 
 > "if you don't have valid data, don't force an error."
 
-## Deliverables
+## Authoritative deliverables
 
 1. Implement `derive_problem_records(records) -> tuple[ActionableProblem, ...]`, a pure decoder/deriver over bl-1 JSON fixtures. bl-8 passes it into `build_snapshot`; therefore `StateSnapshot.problems` is populated from failed/superseded-check fixtures without a plugin-to-console implementation import.
 2. Preserve latest non-cancelled-check selection, direct-branch then sprint-container fallback, sprint labels, and `--exclude-label anchor` in pure `problem_sources.py` helpers.
 3. Preserve typed source failure as source status, never an invented actionable problem.
 
-## Deterministic acceptance
+## Authoritative acceptance criteria
 
 - [ ] `test_latest_non_cancelled_check_per_name_wins`
 - [ ] `test_branch_falls_back_from_problem_to_sprint_container`
@@ -27,11 +29,11 @@ Own only `plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_b
 
 Use fixture JSON and pure functions only; run plugin pytest/lint with no network, clock, or source reads.
 
-## Validation
+## Authoritative validation
 ```bash
 cd plugins/atm-bd-orchestration && python3 tests/gen_manifest.py --check && python3 -m pytest -q -rs
 ```
 
-## This sprint does not close
+## Non-closure
 
 It does not collect source data (bl-8), queue or deliver events (bl-3), or render rows. bl-12 owns integrated source-to-display proof.

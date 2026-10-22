@@ -3,9 +3,11 @@ Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR ta
 
 closure_type: boundary; target_boundary: EventDispatch; branch: sprint/bl-3-event-dispatch; PR target: integrate/phase-bl; wave: 2; external_ref: #491, #359; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (`EventRequest`, `DeliveryHistoryEntry` codec); parallel_safe: bl-2, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13.
 
+## Scope boundary
+
 Own `events.py`, `delivery.py`, `test_events.py`, and `test_delivery.py` in the console package. It implements durable enqueue, debounce/aggregation, due selection, separately scheduled delivery, and the production ATM sender schedule/recipient selection; it does not collect or render. The durable v1 queue and history live at the configured console state path `events.v1.jsonl`, with one versioned request/history record per line. This is the sole enqueue CLI contract owner: `enqueue-event` returns a versioned typed acknowledgement or typed rejection.
 
-## Deliverables
+## Authoritative deliverables
 
 > "ATM messages occur on a specified schedule based on timing... nothing to do with either tui or cron."
 
@@ -17,7 +19,7 @@ Own `events.py`, `delivery.py`, `test_events.py`, and `test_delivery.py` in the 
 4. Persist request identity and attempt state before send. A failed typed sender result remains due for controlled-clock retry; restart recovery reloads it; acknowledged success is persisted before it becomes ineligible for redelivery.
 5. Schedule production ATM delivery from persisted due requests only, using the request recipients, and record each typed outcome. The proposed 60-second delivery cadence/debounce remains a documented proposal pending Rand confirmation; no sender runs on cron/TUI collection.
 
-## Deterministic acceptance
+## Authoritative acceptance criteria
 
 - [ ] `test_enqueue_persists_event_request_and_debounce_key`
 - [ ] `test_enqueue_cli_returns_versioned_acknowledgement_or_rejection`
@@ -34,7 +36,11 @@ Own `events.py`, `delivery.py`, `test_events.py`, and `test_delivery.py` in the 
 
 No source-read or TUI assertion is made here; bl-12 owns collector/TUI no-send integration proof.
 
-## Validation
+## Authoritative validation
 ```bash
 cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --frozen pyright src && uv run --frozen pytest -q tests/test_events.py tests/test_delivery.py
 ```
+
+## Non-closure
+
+This sprint does not close collection (bl-8), rendering (bl-6, bl-7), the console cutover or any feature-level criterion (bl-12). It closes only the event-dispatch boundary: enqueue, debounce/aggregation, due selection and the production ATM sender schedule.

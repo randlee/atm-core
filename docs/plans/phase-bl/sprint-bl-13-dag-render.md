@@ -3,6 +3,8 @@ Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR ta
 
 closure_type: boundary; target_boundary: DagRender; branch: sprint/bl-13-dag-render; PR target: integrate/phase-bl; wave: 2; external_ref: #360; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (`StateSnapshot` codec fixture); parallel_safe: bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10.
 
+## Scope boundary
+
 Own only `dag.py` and `test_dag.py`. It renders persisted snapshots through the pinned mmdflux Mermaid/MMDS/ANSI contract; it owns no collection, header, app, or delivery code.
 
 ## Governing text (verbatim)
@@ -11,13 +13,13 @@ Own only `dag.py` and `test_dag.py`. It renders persisted snapshots through the 
 
 > "the color doesn't show up hardly anywhere"
 
-## Deliverables
+## Authoritative deliverables
 
 1. Pin `mmdflux >= 2.6.1`; consume captured MMDS/ANSI fixtures (not a binary at test time), including rounded-corner glyphs.
 2. Render labels with QA > sanity > dev priority and the status icon to the left of the sprint name. Render ANC-037/038 with CI icon and `#<pr>`.
 3. Render ready, blocked, and not-started icons; use green/red/white strokes, including red while a fix agent is working. Keep fallback list cells and colours identical.
 
-## Deterministic acceptance
+## Authoritative acceptance criteria
 
 - [ ] `test_dag_mermaid_round_node_and_style_per_sprint`
 - [ ] `test_dag_mmds_fixture_node_ids_labels_and_strokes`
@@ -31,11 +33,11 @@ Own only `dag.py` and `test_dag.py`. It renders persisted snapshots through the 
 
 No test launches mmdflux or relies on timing.
 
-## Validation
+## Authoritative validation
 ```bash
 cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --frozen pyright src && uv run --frozen pytest -q tests/test_dag.py
 ```
 
-## This sprint does not close
+## Non-closure
 
 It renders only the versioned DAG fixture; bl-8 collects, bl-3 dispatches, and bl-12 owns installed-console composition.

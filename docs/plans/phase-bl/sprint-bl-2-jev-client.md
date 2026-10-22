@@ -180,7 +180,7 @@ terminated; no surrounding array):
    `external` list built at `sanity-split:423`, so the entries reach the
    context-packing LLM in its assignment.
 
-## Authoritative acceptance criteria (per issue, deterministic)
+## Authoritative acceptance criteria
 
 - [ ] `test_jev_request_array_and_closed_error_enum`: a controlled request array yields one JSONL row per input and every closed error enum variant is exhaustively matched.
 
