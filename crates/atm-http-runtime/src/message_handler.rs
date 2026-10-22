@@ -932,6 +932,7 @@ mod tests {
         SearchResultKey, SearchTimestampField, StoredSearchAddress,
     };
     use axum::body::{Body, to_bytes};
+    use axum::extract::ConnectInfo;
     use axum::http::header::{CONTENT_TYPE, HeaderName};
     use axum::http::{HeaderMap, HeaderValue, Request, StatusCode};
     use base64::Engine as _;
@@ -1474,6 +1475,46 @@ mod tests {
         assert!(
             peer_calls[0].0.has_daemon_escalation_provenance(),
             "the authenticated peer path retains daemon escalation provenance"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn peer_socket_ingress_clears_a_forged_daemon_escalation_carrier() {
+        let request = write_request().with_internal_daemon_escalation_provenance();
+        let body = serde_json::to_vec(&request).expect("typed write JSON");
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::peer_socket(),
+            limits(4096, 2),
+            timeouts(),
+        );
+        let socket: std::net::SocketAddr = "127.0.0.1:43210".parse().expect("socket");
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(canonical_write_path())
+                    .header(CONTENT_TYPE, "application/json")
+                    .extension(ConnectInfo(socket))
+                    .body(Body::from(body))
+                    .expect("HTTP request"),
+            )
+            .await
+            .expect("infallible Axum service");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let calls = calls.lock().expect("record calls");
+        assert_eq!(calls.len(), 1);
+        assert!(matches!(
+            calls[0].1,
+            AuthenticatedIngress::UntrustedSmoke(_)
+        ));
+        assert!(
+            !calls[0].0.has_daemon_escalation_provenance(),
+            "the untrusted direct-peer socket cannot forge daemon provenance"
         );
     }
 
