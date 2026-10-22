@@ -26,12 +26,13 @@ class DriverTests(unittest.TestCase):
                 return mock.Mock(returncode=int(missing and argv[:2] == ["docker", "cp"]), stdout="out\n", stderr="err\n")
 
             command.side_effect = invoke
-            payload = driver.run_prompt("AT9", "task-start", step_dir, "a" * 40)
+            payload = driver.run_prompt("AT9", "task-start", step_dir, "a" * 40, "1.6.5")
             return payload, (step_dir / "run-prompts.log").read_text()
 
     def test_prompt_report_becomes_step_payload_with_raw_log(self) -> None:
         payload, log = self.run_prompt()
         self.assertEqual((payload["status"], payload["cases"][0]["status"]), ("PASS", "pass"))
+        self.assertEqual(payload["atm_version"], "1.6.5")
         self.assertEqual(log, "out\nerr\n")
 
     def test_missing_prompt_report_is_one_failure(self) -> None:
@@ -43,3 +44,15 @@ class DriverTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InstalledVersionTests(unittest.TestCase):
+    def test_reads_semver_from_container_binary(self) -> None:
+        with mock.patch.object(driver, "command", return_value=mock.Mock(returncode=0, stdout="atm 1.6.5\n", stderr="")) as command:
+            self.assertEqual(driver.installed_atm_version(), "1.6.5")
+        command.assert_called_once_with(["docker", "exec", driver.CONTAINER, "atm", "--version"], timeout=60)
+
+    def test_rejects_unparseable_container_output(self) -> None:
+        with mock.patch.object(driver, "command", return_value=mock.Mock(returncode=0, stdout="unknown\n", stderr="")):
+            with self.assertRaises(driver.ColimaVersionError):
+                driver.installed_atm_version()

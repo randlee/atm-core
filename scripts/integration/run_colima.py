@@ -19,6 +19,11 @@ CONTAINER = "hermes-testbed"
 DEFAULT_TESTBED = Path.home() / "Documents/github/atm-hermes-testbed"
 PROMPTS = (("AT9", "task-start"), ("AT10", "assignment"), ("AT11", "prompt-handoffs"))
 RESULTS_LINE = re.compile(r"^reports and logs:\s+(.+)$", re.MULTILINE)
+ATM_VERSION = re.compile(r"^atm\s+(\d+\.\d+\.\d+)(?:\s|$)")
+
+
+class ColimaVersionError(RuntimeError):
+    """The installed container CLI did not identify a release version."""
 
 
 def command(argv: list[str], cwd: Path | None = None, timeout: float = 1800) -> subprocess.CompletedProcess[str]:
@@ -41,7 +46,17 @@ def failed(step: str, revision: str) -> dict[str, object]:
     }
 
 
-def run_prompt(prompt: str, step: str, step_dir: Path, revision: str) -> dict[str, object]:
+def installed_atm_version() -> str:
+    """Read the release version from the container binary, never an agent report."""
+    result = command(["docker", "exec", CONTAINER, "atm", "--version"], timeout=60)
+    match = ATM_VERSION.match(result.stdout.strip())
+    if result.returncode or match is None:
+        detail = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
+        raise ColimaVersionError(f"could not parse installed container atm version: {detail}")
+    return match.group(1)
+
+
+def run_prompt(prompt: str, step: str, step_dir: Path, revision: str, atm_version: str) -> dict[str, object]:
     ran = command(["docker", "exec", CONTAINER, "/opt/testbed/harness/run-prompts.sh", prompt], timeout=1200)
     step_dir.mkdir(parents=True, exist_ok=True)
     (step_dir / "run-prompts.log").write_text(ran.stdout + ran.stderr, encoding="utf-8")
@@ -59,7 +74,7 @@ def run_prompt(prompt: str, step: str, step_dir: Path, revision: str) -> dict[st
         "generated_at": report["finished_at"],
         "source_revision": revision,
         "container": CONTAINER,
-        "atm_version": report["atm_versions"].get("atm"),
+        "atm_version": atm_version,
         "status": report["verdict"].upper(),
         "cases": report["steps"],
     }
@@ -67,6 +82,7 @@ def run_prompt(prompt: str, step: str, step_dir: Path, revision: str) -> dict[st
 
 def run(run_dir: Path, testbed: Path) -> dict[str, object]:
     revision = command(["git", "rev-parse", "HEAD"], ROOT, 30).stdout.strip()
+    atm_version = installed_atm_version()
     fixture = command([str(testbed / "test.sh")], testbed, 3600)
     first = run_dir / "steps/01-hermes-skills"
     first.mkdir(parents=True, exist_ok=True)
@@ -78,7 +94,7 @@ def run(run_dir: Path, testbed: Path) -> dict[str, object]:
         write_step(first, failed("hermes-skills", revision))
     for order, (prompt, step) in enumerate(PROMPTS, 2):
         step_dir = run_dir / "steps" / f"{order:02d}-{step}"
-        write_step(step_dir, run_prompt(prompt, step, step_dir, revision))
+        write_step(step_dir, run_prompt(prompt, step, step_dir, revision, atm_version))
     return render_colima.render_run(run_dir, root=ROOT)
 
 
