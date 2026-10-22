@@ -1101,6 +1101,103 @@ async fn recipients_only_episode_is_not_duplicated_after_restart() {
 }
 
 #[tokio::test]
+async fn terminal_admission_delivers_only_to_recipient_missing_current_epoch_mail() {
+    let (root, runtime, _fake, _pump, store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    let source = &keys[0];
+    let episode_started =
+        IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("fixed episode epoch");
+    let mut lead = bare_member(source.team(), "lead-a");
+    lead.agent_type = atm_storage::AgentType::Lead;
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&RosterSnapshot {
+            team_name: source.team().clone(),
+            members: vec![herdr_member(source.team(), source.agent().as_str()), lead],
+            refreshed_at: None,
+        })
+        .expect("initial terminal roster");
+    runtime.apply_roster_runtime_observations(
+        source.team(),
+        &[
+            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                source.agent().clone(),
+                RuntimeMemberState::Offline,
+                atm_core::protocol::RuntimeObservationSource::Heartbeat,
+                episode_started,
+                None,
+            ),
+        ],
+    );
+
+    let home = root.path().join("home");
+    let first = write_current_herdr_terminal_escalation_with_runtime(
+        home.clone(),
+        source,
+        &NullObservability,
+        &runtime,
+    )
+    .expect("first terminal admission");
+    assert_eq!(first.recipients_written(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, source.team(), "lead-a")
+            .await
+            .len(),
+        1
+    );
+
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&RosterSnapshot {
+            team_name: source.team().clone(),
+            members: vec![
+                herdr_member(source.team(), source.agent().as_str()),
+                {
+                    let mut lead = bare_member(source.team(), "lead-a");
+                    lead.agent_type = atm_storage::AgentType::Lead;
+                    lead
+                },
+                bare_member(source.team(), "observer-b"),
+            ],
+            refreshed_at: None,
+        })
+        .expect("expanded terminal roster");
+    let observer = "observer-b@ax5-task-only"
+        .parse::<atm_core::address::AgentAddress>()
+        .expect("observer address");
+    store
+        .add_escalation_recipient(
+            &atm_storage::EscalationScope::Team(source.team().clone()),
+            &observer,
+            episode_started,
+        )
+        .expect("second terminal recipient");
+
+    let second = write_current_herdr_terminal_escalation_with_runtime(
+        home,
+        source,
+        &NullObservability,
+        &runtime,
+    )
+    .expect("mixed-recipient terminal admission");
+    assert_eq!(second.recipients_written(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, source.team(), "lead-a")
+            .await
+            .len(),
+        1,
+        "the current-epoch delivery for the first recipient is retained"
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, source.team(), "observer-b")
+            .await
+            .len(),
+        1,
+        "the recipient without a current-epoch delivery receives one"
+    );
+}
+
+#[tokio::test]
 async fn episode_message_summary_and_body() {
     let (_root, runtime, _fake, pump, store, keys, now) =
         build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
