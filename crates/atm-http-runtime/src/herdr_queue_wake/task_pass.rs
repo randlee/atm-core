@@ -301,6 +301,9 @@ impl HerdrQueueWakePump {
                     self,
                     task_store,
                     &candidate.member,
+                    &head
+                        .expect("episode escalation requires an open task")
+                        .task_id,
                     kind,
                     candidate.state_changed_at.unwrap_or(now),
                     stats,

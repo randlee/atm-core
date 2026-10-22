@@ -8,6 +8,7 @@ use atm_core::boundary::{
     TaskRow,
 };
 use atm_core::types::IsoTimestamp;
+use atm_core::types::TaskId;
 
 use crate::herdr_escalation::{
     EpisodeObservation, EscalationKind, escalate_mail, escalation_summary,
@@ -168,6 +169,7 @@ pub(crate) async fn escalate_episode(
     pump: &HerdrQueueWakePump,
     task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     member: &MemberKey,
+    task_id: &TaskId,
     kind: EpisodeKind,
     since: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
@@ -176,6 +178,15 @@ pub(crate) async fn escalate_episode(
     // to its write boundary. Re-read the canonical runtime record and require
     // both the episode kind and epoch to match before emitting mail.
     if !episode_is_current(pump, member, kind, since) {
+        return;
+    }
+    // The task snapshot that admitted this escalation can close while target
+    // lookup and mailbox suppression await. Re-read this exact task identity
+    // at the mail boundary so a stale open row cannot emit an escalation.
+    let Ok(Some(task)) = task_store.load_task(member.team(), task_id) else {
+        return;
+    };
+    if !task.state.is_open() || task.assignee != *member.agent() {
         return;
     }
     let body = episode_body(member, kind, since);

@@ -855,6 +855,7 @@ async fn recovered_member_is_not_escalated_from_a_stale_episode_observation() {
     let (_root, runtime, _fake, pump, task_store, keys, now) =
         build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
     let key = keys[0].clone();
+    let task_id: atm_core::types::TaskId = "stale-episode-task".parse().expect("task id");
     add_lead_roster_member(&runtime, key.team(), "sender");
     let since = *now.lock().expect("clock");
     runtime.apply_roster_runtime_observations(
@@ -876,6 +877,7 @@ async fn recovered_member_is_not_escalated_from_a_stale_episode_observation() {
         &pump,
         &task_store,
         &key,
+        &task_id,
         crate::herdr_task_disposition::EpisodeKind::Blocked,
         since,
         &mut stats,
