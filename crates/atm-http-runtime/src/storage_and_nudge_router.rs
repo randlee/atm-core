@@ -6098,8 +6098,12 @@ pub(crate) mod tests {
     async fn selected_router_reuses_one_opaque_peer_connection_across_three_loopback_writes() {
         let adapter = Arc::new(CountingPassthroughPeerAdapter::default());
         let remote = fixture(true, None, None);
+        // The pooled sender marks these writes as mTLS. Configure the receiver
+        // for the same authenticated-peer mode; the pass-through adapter here
+        // exercises connection reuse, while the live peer gate covers TLS.
         let remote_runtime = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
+            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test())
+                .with_peer_stream_adapter(Arc::new(CountingPassthroughPeerAdapter::default())),
             Arc::new(remote.router.clone()),
         )
         .build()

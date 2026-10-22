@@ -249,6 +249,18 @@ def start_smoke_daemon(
     )
 
 
+def start_shared_host_smoke_daemon(
+    daemon_binary: str,
+    env: dict[str, str],
+) -> subprocess.Popen[str]:
+    """Run the local-only fixture with its explicit plaintext test profile."""
+    return start_smoke_daemon(
+        daemon_binary,
+        env,
+        daemon_args=("--peer-wire-security", "plaintext-test"),
+    )
+
+
 def verify_af1_preflight_contract() -> None:
     source = Path(__file__).read_text(encoding="utf-8")
     missing = [marker for marker in AF1_REQUIRED_MARKERS if marker not in source]
@@ -314,7 +326,7 @@ def main() -> int:
         # daemon's post-bind readiness signal before querying through either
         # workspace.
         require_clean_host_daemon_state(smoke_label="shared-host smoke")
-        daemon = start_smoke_daemon(daemon_binary, shared_env_a)
+        daemon = start_shared_host_smoke_daemon(daemon_binary, shared_env_a)
         shared_daemon_pid = daemon.pid
         shared_doctor_a = parse_json_output(
             run_atm(root, shared_env_a, shared_a.workspace_dir, "doctor", "--json")
