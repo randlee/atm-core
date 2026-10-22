@@ -3,6 +3,10 @@ name: CI
 on:
   workflow_call:
     inputs:
+      run_all_os:
+        # Reusable release validation always exercises all supported hosts.
+        type: boolean
+        default: true
       build_release_artifacts:
         # Release callers (hermes-atm-pypi-publish.yml) need the five wheel
         # legs, the abi3 matrix and the sdist. Ordinary PR and push runs do
@@ -47,10 +51,27 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       runtime: ${{ steps.scope.outputs.runtime }}
+      full_os: ${{ steps.os-matrix.outputs.full_os }}
+      lint_matrix: ${{ steps.os-matrix.outputs.lint_matrix }}
+      test_matrix: ${{ steps.os-matrix.outputs.test_matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - id: os-matrix
+        shell: bash
+        env:
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_BASE_REF: ${{ github.base_ref }}
+          CI_REF: ${{ github.ref }}
+          CI_WORKFLOW_CALL: ${{ inputs.run_all_os }}
+        run: |
+          python .github/scripts/ci_os_matrix.py \
+            --event "$CI_EVENT_NAME" \
+            --base "$CI_BASE_REF" \
+            --ref "$CI_REF" \
+            --workflow-call "$CI_WORKFLOW_CALL" >> "$GITHUB_OUTPUT"
 
       - id: scope
         shell: bash
@@ -82,18 +103,11 @@ jobs:
 
   just-lint:
     name: Just lint (${{ matrix.os }})
+    needs: ci-scope
     strategy:
       fail-fast: false
       matrix:
-        # Lint runs on ubuntu only; the macOS/Windows lint legs run on a PR
-        # to main (the release PR) and nowhere else. Lint output is
-        # platform-independent for this repo, macOS runner slots are the CI
-        # queue's bottleneck, and the Windows leg alone took 12-14 min on
-        # every push to develop (Rand, 2026-09-26). Each leg carries its
-        # exact interpreter pin: Unix uses the 3.14.7 contract, Windows uses
-        # the separate stable pin because CPython 3.14.7 corrupts the lint
-        # scanner there (see tools/bootstrap.toml).
-        include: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref == 'main' && '[{"os":"ubuntu-latest","python":"3.14.7"},{"os":"macos-latest","python":"3.14.7"},{"os":"windows-latest","python":"3.12.10"}]' || '[{"os":"ubuntu-latest","python":"3.14.7"}]') }}
+        include: ${{ fromJSON(needs.ci-scope.outputs.lint_matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -236,16 +250,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            release_artifact: linux-x86_64
-            python: "3.14.7"
-          - os: macos-latest
-            release_artifact: macos-aarch64
-            python: "3.14.7"
-          - os: windows-latest
-            release_artifact: windows-x86_64
-            python: "3.12.10"
+        include: ${{ fromJSON(needs.ci-scope.outputs.test_matrix) }}
     # Documentation-only changes keep the required check names but run the
     # skip step on ubuntu instead of waiting for a macOS/Windows runner slot.
     runs-on: ${{ needs.ci-scope.outputs.runtime == 'true' && matrix.os || 'ubuntu-latest' }}
@@ -484,6 +489,21 @@ jobs:
         continue-on-error: true
         if: ${{ always() && needs.ci-scope.outputs.runtime == 'true' }}
         run: python scripts/smoke/run_thorough_shared_host.py
+
+  # integrate/* requires these check names. On Linux-only PRs, publish them
+  # from cheap Ubuntu jobs so branch protection sees successful checks without
+  # consuming macOS or Windows runners. The real test matrix owns the names
+  # on develop/main PRs, protected pushes, and reusable release calls.
+  test-platform-checks:
+    name: Test (${{ matrix.os }})
+    needs: [clippy, ci-scope, hermes-atm-release-wheels]
+    if: ${{ always() && !cancelled() && needs.ci-scope.outputs.full_os != 'true' && needs.clippy.result == 'success' && (needs.ci-scope.outputs.runtime != 'true' || needs.hermes-atm-release-wheels.result == 'success' || needs.hermes-atm-release-wheels.result == 'skipped') }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Platform tests run at the integrate-to-develop boundary."
 
   # The three release-artifact jobs below (five wheel legs, the abi3 matrix,
   # the sdist) run for release callers (workflow_call with

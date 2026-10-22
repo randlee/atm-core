@@ -4,6 +4,7 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import runpy
 import subprocess
 import sys
 import tarfile
@@ -495,8 +496,11 @@ class BootstrapTests(IsolatedHomeTests):
 
     def test_ci_uses_the_shared_bootstrap_recipe(self) -> None:
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        self.assertIn('python: "3.14.7"', workflow)
-        self.assertIn('python: "3.12.10"', workflow)
+        matrix = runpy.run_path(str(SCRIPT.parents[1] / ".github/scripts/ci_os_matrix.py"))
+        self.assertEqual(
+            matrix["PYTHON"],
+            {"ubuntu-latest": "3.14.7", "macos-latest": "3.14.7", "windows-latest": "3.12.10"},
+        )
         self.assertIn("python-version: ${{ matrix.python }}", workflow)
         self.assertIn("tool: just@1.58.0", workflow)
         self.assertIn("cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c", workflow)

@@ -2,6 +2,20 @@
 
 Rules and patterns for ensuring atm works correctly on Ubuntu, macOS, and Windows CI.
 
+## Sprint CI Coverage
+
+For each sprint PR to `integrate/*` or another non-protected base, CI runs
+the Linux lint and test legs. Developers run `just lint` and `just test` on
+their macOS machines for each sprint, so macOS is also covered locally.
+The required `Test (macos-latest)` and `Test (windows-latest)` check names
+are published by lightweight Ubuntu jobs on those PRs; they do not claim
+that the platform suites ran there.
+
+CI runs real Linux, macOS, and Windows legs on PRs to `develop` or `main`,
+on pushes to those branches, and for reusable release workflow calls. This
+proves Windows at the integrate-to-develop boundary, at main, and for
+prerelease validation; macOS is also proven at each phase boundary.
+
 ## Windows Benchmark Execution
 
 Use the dedicated benchmark OS account and the canonical
