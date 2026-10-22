@@ -55,14 +55,8 @@ jobs:
       - id: scope
         shell: bash
         run: |
-          # A change set containing only documentation, site content, report
-          # templates, release manifests, triage/sprint records, or agent
-          # configuration (.claude/, .codex/, .agents/, .cursor/) does not change
-          # executable code, so it does not run the long-lived daemon smoke
-          # matrix.  Pull requests and pushes use the same criteria: a PR is
-          # classified against its base, a push against the previous head of
-          # the branch.  Anything else (workflow_call, a branch creation with
-          # no previous head) exercises the runtime.
+          # Pull requests compare with their base; pushes compare with the
+          # previous head. Unknown ranges and workflow_call exercise runtime.
           case "${{ github.event_name }}" in
             pull_request) range_start="${{ github.event.pull_request.base.sha }}" ;;
             push)         range_start="${{ github.event.before }}" ;;
@@ -73,12 +67,7 @@ jobs:
             exit 0
           fi
 
-          changed_files="$(git diff --name-only "$range_start" "$GITHUB_SHA")"
-          if [[ -z "$changed_files" ]] || grep -qvE '^(docs/|site/|templates/|release/|\.triage/|\.sprints/|\.claude/|\.codex/|\.agents/|\.cursor/|.*\.md$)' <<< "$changed_files"; then
-            echo "runtime=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "runtime=false" >> "$GITHUB_OUTPUT"
-          fi
+          python .github/scripts/ci_scope.py "$range_start" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
   just-lint:
     name: Just lint (${{ matrix.os }})

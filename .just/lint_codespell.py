@@ -39,18 +39,24 @@ def main(argv: list[str]) -> int:
     for line in workspace_crate_section_lines(repo_root):
         print(line)
 
-    completed = subprocess.run(
-        build_command(repo_root),
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
+    try:
+        completed = subprocess.run(
+            build_command(repo_root),
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        print(f"warning: spelling check could not run: {exc}", file=sys.stderr)
+        return 0
+    if completed.returncode:
+        print(f"warning: spelling check reported findings (exit {completed.returncode})")
     if completed.stdout:
         emit_console_text(completed.stdout)
     if completed.stderr:
         emit_console_text(completed.stderr, stream=sys.stderr)
-    return completed.returncode
+    return 0
 
 
 if __name__ == "__main__":

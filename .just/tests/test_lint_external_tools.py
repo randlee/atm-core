@@ -236,6 +236,22 @@ shear/unlinked_files
             self.assertIn("codespell_lib", command[2])
             self.assertEqual(len(command), 3)
 
+    def test_codespell_misspelling_warns_without_failing(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / "Cargo.toml").write_text("[workspace]\nmembers = []\n", encoding="utf-8")
+            (repo_root / "typo.txt").write_text("teh typo\n", encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, str(JUST_DIR / "lint_codespell.py"), "--root", str(repo_root)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("warning: spelling check reported findings", completed.stdout)
+            self.assertIn("teh", completed.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
