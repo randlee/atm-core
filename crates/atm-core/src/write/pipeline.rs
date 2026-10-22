@@ -458,8 +458,11 @@ pub fn write_current_herdr_terminal_escalation_with_runtime(
                 daemon_home,
                 recipients,
                 team,
-                body,
-                summary,
+                TerminalEscalationMail {
+                    body,
+                    summary,
+                    started_at,
+                },
                 observability,
                 runtime,
             )
@@ -549,26 +552,40 @@ fn terminal_escalation_recipients(
     Ok(recipients)
 }
 
+struct TerminalEscalationMail {
+    body: String,
+    summary: String,
+    started_at: IsoTimestamp,
+}
+
 fn write_terminal_escalations(
     daemon_home: std::path::PathBuf,
     recipients: Vec<crate::address::AgentAddress>,
     team: TeamName,
-    body: String,
-    summary: String,
+    mail: TerminalEscalationMail,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<TerminalHerdrEscalationOutcome, AtmError> {
     let mut outcome = TerminalHerdrEscalationOutcome::default();
     for recipient in recipients {
         let recipient_name = recipient.agent().clone();
+        if terminal_recipient_already_reported(
+            runtime,
+            &team,
+            &recipient_name,
+            &mail.summary,
+            mail.started_at,
+        )? {
+            continue;
+        }
         let request = WriteRequest::new(
             daemon_home.clone(),
             daemon_home.clone(),
             AgentName::from_validated(boundary::DAEMON_ACTOR_NAME),
             &recipient.to_string(),
             team.clone(),
-            SendMessageSource::Inline(body.clone()),
-            Some(summary.clone()),
+            SendMessageSource::Inline(mail.body.clone()),
+            Some(mail.summary.clone()),
             false,
             None,
             false,
@@ -586,6 +603,28 @@ fn write_terminal_escalations(
         }
     }
     Ok(outcome)
+}
+
+fn terminal_recipient_already_reported(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    recipient: &AgentName,
+    summary: &str,
+    started_at: IsoTimestamp,
+) -> Result<bool, AtmError> {
+    let messages = runtime
+        .message_store
+        .list_messages(&atm_storage::MessageQuery {
+            team: team.clone(),
+            agent: recipient.clone(),
+            sender: Some(AgentName::from_validated(boundary::DAEMON_ACTOR_NAME)),
+            task_id: None,
+            limit: None,
+        })?;
+    Ok(messages.iter().any(|message| {
+        message.envelope.summary.as_deref() == Some(summary)
+            && message.envelope.timestamp >= started_at
+    }))
 }
 
 pub fn send_mail_with_runtime(
