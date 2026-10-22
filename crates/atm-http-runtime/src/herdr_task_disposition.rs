@@ -29,6 +29,13 @@ impl EpisodeKind {
             Self::Offline => "offline",
         }
     }
+
+    pub(crate) const fn runtime_state(self) -> RuntimeMemberState {
+        match self {
+            Self::Blocked => RuntimeMemberState::Blocked,
+            Self::Offline => RuntimeMemberState::Offline,
+        }
+    }
 }
 
 /// Decides the one nudge/escalation action for an accepted roster

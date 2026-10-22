@@ -2,6 +2,7 @@
 //! entry family, and persisted-write preparation.
 
 use super::*;
+use crate::boundary::MemberKey;
 use crate::send::{NudgeMode, WriteSourcePreflight, send_mode_for_task_request};
 
 /// Result of the one canonical write operation.
@@ -401,11 +402,10 @@ pub fn write_mail_with_runtime(
     prepared.finish_and_mark(runtime, observability)
 }
 
-/// Writes one terminal-provenance message after trusted Herdr escalation
-/// admission has selected its daemon-owned recipient.
-///
-/// Marker construction stays inside `atm-core`; ordinary callers can only
-/// construct unmarked [`WriteRequest`] values and retain normal nudges.
+/// Writes a terminal-provenance message only after core has re-read the
+/// authoritative task and, for an episode escalation, the exact current
+/// runtime state and epoch. The marker is derived here; no public write
+/// request carries a terminal-provenance field.
 #[allow(clippy::too_many_arguments)]
 pub fn write_herdr_escalation_mail_with_runtime(
     home_dir: std::path::PathBuf,
@@ -413,14 +413,96 @@ pub fn write_herdr_escalation_mail_with_runtime(
     recipient: &str,
     body: String,
     summary: String,
+    source_member: &MemberKey,
+    task_id: &TaskId,
+    episode_state: Option<crate::protocol::RuntimeMemberState>,
+    episode_started_at: Option<IsoTimestamp>,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<WriteOutcome, AtmError> {
+    if source_member.team() != &team {
+        return Err(AtmError::validation(
+            "Herdr escalation member is outside the recipient team",
+        ));
+    }
+    let (episode_state, episode_started_at) = match (episode_state, episode_started_at) {
+        (Some(state), Some(started_at)) => (state, started_at),
+        _ => {
+            return Err(AtmError::validation(
+                "terminal Herdr escalation admission requires a runtime episode state and epoch",
+            ));
+        }
+    };
+    let task_store = runtime.task_store()?;
+    let task = task_store.load_task(&team, task_id)?.ok_or_else(|| {
+        AtmError::validation("Herdr escalation admission requires an authoritative task")
+    })?;
+    if task.assignee != *source_member.agent() || !task.state.is_open() {
+        return Err(AtmError::validation(
+            "Herdr escalation admission requires an open task for the source member",
+        ));
+    }
+    if !matches!(
+        episode_state,
+        crate::protocol::RuntimeMemberState::Blocked | crate::protocol::RuntimeMemberState::Offline
+    ) {
+        return Err(AtmError::validation(
+            "Herdr escalation episode must be blocked or offline",
+        ));
+    }
+    let Some(current) = runtime.roster_ephemeral_state(source_member.team(), source_member.agent())
+    else {
+        return Err(AtmError::validation(
+            "Herdr escalation admission member is absent from the runtime roster",
+        ));
+    };
+    if current.runtime.state != episode_state
+        || current.runtime.state_changed_at != Some(episode_started_at)
+    {
+        return Err(AtmError::validation(
+            "Herdr escalation admission no longer matches the authoritative runtime episode",
+        ));
+    }
+
+    let recipient = recipient.parse::<crate::address::AgentAddress>()?;
+    if recipient.host().is_some()
+        || recipient
+            .team()
+            .is_some_and(|recipient_team| recipient_team != &team)
+    {
+        return Err(AtmError::validation(
+            "Herdr escalation recipient must be a local member of the task team",
+        ));
+    }
+    let roster = runtime.shared_roster_store_arc().load_roster(&team)?;
+    let recipient_is_lead = roster.members.iter().any(|member| {
+        member.agent_name == *recipient.agent()
+            && member.agent_type == crate::schema::AgentType::Lead
+    });
+    let recipient_is_member = roster
+        .members
+        .iter()
+        .any(|member| member.agent_name == *recipient.agent());
+    if !recipient_is_member {
+        return Err(AtmError::validation(
+            "Herdr escalation recipient is not a member of the task team",
+        ));
+    }
+    let recipient_is_configured = task_store
+        .effective_escalation_recipients(&team)?
+        .iter()
+        .any(|configured| configured == &recipient);
+    if !recipient_is_lead && !recipient_is_configured {
+        return Err(AtmError::validation(
+            "Herdr escalation recipient is not an authoritative escalation target",
+        ));
+    }
+
     let request = WriteRequest::new(
         home_dir.clone(),
         home_dir,
         AgentName::from_validated(boundary::DAEMON_ACTOR_NAME),
-        recipient,
+        &recipient.to_string(),
         team,
         SendMessageSource::Inline(body),
         Some(summary),

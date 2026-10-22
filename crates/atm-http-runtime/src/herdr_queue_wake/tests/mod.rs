@@ -344,7 +344,22 @@ fn queue_trusted_daemon_escalation_message(
     runtime: &LocalServiceRuntime,
     team: &TeamName,
     agent: &str,
+    task_id: &TaskId,
 ) -> AtmMessageId {
+    promote_roster_member_to_lead(runtime, team, agent);
+    let episode_started_at = IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("epoch");
+    runtime.apply_roster_runtime_observations(
+        team,
+        &[
+            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                agent.parse().expect("agent"),
+                RuntimeMemberState::Offline,
+                atm_core::protocol::RuntimeObservationSource::HerdrPoll,
+                episode_started_at,
+                None,
+            ),
+        ],
+    );
     let home = root.join("home");
     std::fs::create_dir_all(&home).expect("home");
     write_herdr_escalation_mail_with_runtime(
@@ -353,6 +368,10 @@ fn queue_trusted_daemon_escalation_message(
         &format!("{agent}@{team}"),
         "daemon escalation".to_owned(),
         "escalation:offline_escalated:subject@test-team".to_owned(),
+        &atm_core::boundary::MemberKey::new(team.clone(), agent.parse().expect("agent")),
+        task_id,
+        Some(RuntimeMemberState::Offline),
+        Some(episode_started_at),
         &NullObservability,
         runtime,
     )
@@ -639,6 +658,23 @@ fn add_roster_member(runtime: &LocalServiceRuntime, team: &TeamName, agent: &str
         .shared_roster_store_arc()
         .save_roster(&roster)
         .expect("save roster member");
+}
+
+fn promote_roster_member_to_lead(runtime: &LocalServiceRuntime, team: &TeamName, agent: &str) {
+    let mut roster = runtime
+        .shared_roster_store_arc()
+        .load_roster(team)
+        .expect("load roster");
+    let member = roster
+        .members
+        .iter_mut()
+        .find(|member| member.agent_name.as_str() == agent)
+        .expect("existing roster member");
+    member.agent_type = atm_core::schema::AgentType::Lead;
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&roster)
+        .expect("save lead roster member");
 }
 
 fn add_lead_roster_member(runtime: &LocalServiceRuntime, team: &TeamName, agent: &str) {
@@ -2111,22 +2147,156 @@ async fn ac01_fifo_per_member_via_claim() {
     );
 }
 
+#[test]
+fn public_inprocess_escalation_admission_rejects_a_member_without_an_open_task() {
+    let (root, runtime, _fake, _pump, _health, key) = build_test_pump();
+    let home = root.path().join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    let error = write_herdr_escalation_mail_with_runtime(
+        home,
+        key.team().clone(),
+        &format!("{}@{}", key.agent(), key.team()),
+        "spoofed terminal escalation".to_owned(),
+        "escalation:offline_escalated:spoof".to_owned(),
+        &key,
+        &"AQ2-SPOOF".parse().expect("task id"),
+        None,
+        None,
+        &NullObservability,
+        &runtime,
+    )
+    .expect_err("public API cannot stamp terminal provenance without a live task");
+    assert_eq!(
+        error.code(),
+        atm_core::error::AtmErrorCode::MessageValidationFailed
+    );
+
+    let task_id: TaskId = "AQ2-EPOCH-ADMISSION".parse().expect("task id");
+    queue_task_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+        task_id.clone(),
+    );
+    let stale_episode = write_herdr_escalation_mail_with_runtime(
+        root.path().join("home"),
+        key.team().clone(),
+        &format!("{}@{}", key.agent(), key.team()),
+        "stale terminal escalation".to_owned(),
+        "escalation:blocked_escalated:stale".to_owned(),
+        &key,
+        &task_id,
+        Some(atm_core::protocol::RuntimeMemberState::Blocked),
+        Some(IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("epoch")),
+        &NullObservability,
+        &runtime,
+    )
+    .expect_err("stale caller-supplied episode cannot stamp terminal provenance");
+    assert_eq!(
+        stale_episode.code(),
+        atm_core::error::AtmErrorCode::MessageValidationFailed
+    );
+
+    let current_epoch = IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("epoch");
+    runtime.apply_roster_runtime_observations(
+        key.team(),
+        &[
+            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                key.agent().clone(),
+                RuntimeMemberState::Blocked,
+                atm_core::protocol::RuntimeObservationSource::HerdrPoll,
+                current_epoch,
+                None,
+            ),
+        ],
+    );
+    let unauthorized_recipient = write_herdr_escalation_mail_with_runtime(
+        root.path().join("home"),
+        key.team().clone(),
+        &format!("{}@{}", key.agent(), key.team()),
+        "terminal escalation to an arbitrary member".to_owned(),
+        "escalation:blocked_escalated:unauthorized-recipient".to_owned(),
+        &key,
+        &task_id,
+        Some(RuntimeMemberState::Blocked),
+        Some(current_epoch),
+        &NullObservability,
+        &runtime,
+    )
+    .expect_err("terminal provenance requires an authoritative escalation recipient");
+    assert_eq!(
+        unauthorized_recipient.code(),
+        atm_core::error::AtmErrorCode::MessageValidationFailed
+    );
+
+    let active_epoch = IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("active epoch");
+    runtime.apply_roster_runtime_observations(
+        key.team(),
+        &[
+            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                key.agent().clone(),
+                RuntimeMemberState::Active,
+                atm_core::protocol::RuntimeObservationSource::HerdrPoll,
+                active_epoch,
+                None,
+            ),
+        ],
+    );
+    let active_spoof = write_herdr_escalation_mail_with_runtime(
+        root.path().join("home"),
+        key.team().clone(),
+        &format!("{}@{}", key.agent(), key.team()),
+        "spoofed ordinary daemon mail".to_owned(),
+        "escalation:blocked_escalated:active-spoof".to_owned(),
+        &key,
+        &task_id,
+        Some(RuntimeMemberState::Active),
+        Some(active_epoch),
+        &NullObservability,
+        &runtime,
+    )
+    .expect_err("an open task and arbitrary recipient cannot stamp an active episode terminal");
+    assert_eq!(
+        active_spoof.code(),
+        atm_core::error::AtmErrorCode::MessageValidationFailed
+    );
+
+    let ordinary = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+    assert!(
+        pending_state(root.path(), &key, ordinary).0.is_some(),
+        "ordinary public writes retain the normal deferred reminder marker"
+    );
+}
+
 #[tokio::test]
 async fn daemon_escalation_burst_is_one_shot_while_ordinary_mail_rearms() {
     let (root, runtime, fake, pump, _health, key) = build_test_pump();
+    clear_pending_markers(root.path(), &runtime, &key);
+    let task_id: TaskId = "AQ2-TERMINAL-ADMISSION".parse().expect("task id");
+    queue_task_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+        task_id.clone(),
+    );
     clear_pending_markers(root.path(), &runtime, &key);
     let first_escalation = queue_trusted_daemon_escalation_message(
         root.path(),
         &runtime,
         key.team(),
         key.agent().as_str(),
+        &task_id,
     );
     let second_escalation = queue_trusted_daemon_escalation_message(
         root.path(),
         &runtime,
         key.team(),
         key.agent().as_str(),
+        &task_id,
     );
+    complete_task(root.path(), &runtime, key.team(), task_id);
 
     pump.tick_once().await;
     assert_eq!(pump.stats().prompted, 1, "escalation is handed off once");

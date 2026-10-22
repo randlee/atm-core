@@ -9,11 +9,14 @@ use atm_core::LocalServiceRuntime;
 use atm_core::boundary::TaskStore;
 use atm_core::boundary::{
     AsyncMailboxReader, MAX_ESCALATION_RECIPIENTS, MailboxScope, MemberKey, MessageQuery,
-    ReadDeadline, ReadLaneError,
+    ReadDeadline, ReadLaneError, TaskRow,
 };
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
-use atm_core::send::write_herdr_escalation_mail_with_runtime;
+use atm_core::send::{
+    NudgeMode, SendMessageSource, WriteRequest, write_herdr_escalation_mail_with_runtime,
+    write_mail_with_runtime,
+};
 use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
 use crate::herdr_queue_wake::herdr_request_deadline;
@@ -178,6 +181,8 @@ pub(crate) async fn escalate_mail(
     blocking_bridge: &BoundedBlockingBridge,
     runtime: &LocalServiceRuntime,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
+    source_task: &TaskRow,
+    episode: Option<(atm_core::protocol::RuntimeMemberState, IsoTimestamp)>,
     daemon_home: &Path,
     team: &TeamName,
     summary: &str,
@@ -226,6 +231,8 @@ pub(crate) async fn escalate_mail(
         match write_escalation_mail_with_summary(
             blocking_bridge,
             runtime,
+            source_task,
+            episode,
             daemon_home,
             team,
             &recipient,
@@ -365,9 +372,15 @@ async fn load_escalation_recipients(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the escalation write boundary keeps authoritative task, episode, routing, and body inputs explicit"
+)]
 async fn write_escalation_mail_with_summary(
     blocking_bridge: &BoundedBlockingBridge,
     runtime: &LocalServiceRuntime,
+    source_task: &TaskRow,
+    episode: Option<(atm_core::protocol::RuntimeMemberState, IsoTimestamp)>,
     daemon_home: &Path,
     team: &TeamName,
     recipient: &atm_core::address::AgentAddress,
@@ -380,18 +393,42 @@ async fn write_escalation_mail_with_summary(
     let recipient = recipient.to_string();
     let team = team.clone();
     let summary = summary.to_owned();
+    let source_member = MemberKey::new(source_task.team.clone(), source_task.assignee.clone());
+    let task_id = source_task.task_id.clone();
     blocking_bridge
         .run(herdr_request_deadline(), move || {
-            write_herdr_escalation_mail_with_runtime(
-                daemon_home,
-                team,
-                &recipient,
-                body,
-                summary,
-                &NullObservability,
-                &runtime,
-            )
-            .map(|outcome| outcome.persisted_message_id())
+            if let Some((state, started_at)) = episode {
+                write_herdr_escalation_mail_with_runtime(
+                    daemon_home,
+                    team,
+                    &recipient,
+                    body,
+                    summary,
+                    &source_member,
+                    &task_id,
+                    Some(state),
+                    Some(started_at),
+                    &NullObservability,
+                    &runtime,
+                )
+                .map(|outcome| outcome.persisted_message_id())
+            } else {
+                let request = WriteRequest::new(
+                    daemon_home.clone(),
+                    daemon_home,
+                    AgentName::from_validated(atm_core::boundary::DAEMON_ACTOR_NAME),
+                    &recipient,
+                    team,
+                    SendMessageSource::Inline(body),
+                    Some(summary),
+                    false,
+                    None,
+                    false,
+                )?
+                .with_nudge_mode(NudgeMode::Deferred);
+                write_mail_with_runtime(request, &NullObservability, &runtime)
+                    .map(|outcome| outcome.persisted_message_id())
+            }
         })
         .await
 }

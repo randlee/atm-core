@@ -254,7 +254,7 @@ impl HerdrQueueWakePump {
             return;
         }
         let Some(refusal_count) = self
-            .refusal_check(reader, task_store, &candidate.member, stats)
+            .refusal_check(reader, task_store, &candidate.member, head, stats)
             .await
         else {
             return;
@@ -354,6 +354,7 @@ impl HerdrQueueWakePump {
         reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
         task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
         member: &MemberKey,
+        source_task: Option<&TaskRow>,
         stats: &mut HerdrQueueWakeStats,
     ) -> Option<u32> {
         let (refusal_count, refusal_started_at) = match self.refusal_run(reader, member).await {
@@ -371,10 +372,15 @@ impl HerdrQueueWakePump {
             }
         };
         if refusal_count >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD
-            && let Some(since) = refusal_started_at
+            && let (Some(since), Some(source_task)) = (refusal_started_at, source_task)
         {
             crate::herdr_queue_wake_escalation::escalate_refusals(
-                self, task_store, member, since, stats,
+                self,
+                task_store,
+                member,
+                source_task,
+                since,
+                stats,
             )
             .await;
         }
