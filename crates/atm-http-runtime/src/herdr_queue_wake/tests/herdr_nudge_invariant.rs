@@ -239,6 +239,17 @@ fn queue_worker_and_lead_statuses(
     }));
 }
 
+fn queue_lead_only_status(fake: &atm_herdr::testing::FakeHerdrProcessAdapter) {
+    fake.queue_list_result(Ok(HerdrListOutcome {
+        agents: vec![AgentSnapshot {
+            name: Some(atm_storage::roles::ROLE_TEAM_LEAD.to_owned()),
+            pane_id: None,
+            status: HerdrAgentStatus::Idle,
+            workspace_id: None,
+        }],
+    }));
+}
+
 fn install_escalation_targets(
     runtime: &LocalServiceRuntime,
     store: &atm_storage::DummyTaskStore,
@@ -786,6 +797,133 @@ async fn sustained_listing_absence_becomes_offline_after_two_reminder_intervals_
             .await
             .len(),
         1
+    );
+}
+
+#[tokio::test]
+async fn dormant_offline_member_escalates_once_when_a_task_arrives() {
+    let (root, runtime, fake, pump, key, _tasks, now) = build_real_task_pump(&[]);
+
+    // Establish a normal observation, then drive a sustained absence with
+    // exact clock values. There is no task during this outage, so it must not
+    // consume an escalation episode or emit mail.
+    pump.tick_once().await;
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:00:01Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:02:01Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    assert_eq!(
+        runtime
+            .roster_ephemeral_state(key.team(), key.agent())
+            .expect("offline observation")
+            .runtime
+            .state,
+        RuntimeMemberState::Offline
+    );
+    assert!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty(),
+        "a dormant outage has no escalation recipient mail"
+    );
+
+    let task: TaskId = "LIFE-DORMANT-OFFLINE".parse().expect("task id");
+    queue_task_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+        task,
+    );
+    clear_pending_markers(root.path(), &runtime, &key);
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:02:02Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .len(),
+        1,
+        "the open task turns the ongoing offline state into one escalation"
+    );
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:03:02Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .len(),
+        1,
+        "the ongoing offline episode remains a single escalation"
+    );
+}
+
+#[tokio::test]
+async fn active_member_with_open_task_escalates_once_after_going_offline() {
+    let (_root, runtime, fake, pump, key, _tasks, now) =
+        build_real_task_pump(&["LIFE-ACTIVE-TO-OFFLINE"]);
+
+    // The fixture's first response is Idle. Drive a concrete Active
+    // observation, then omit only the worker while keeping the lead visible.
+    pump.tick_once().await;
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:00:01Z").expect("timestamp");
+    queue_worker_and_lead_statuses(
+        &fake,
+        &key,
+        HerdrAgentStatus::Working,
+        HerdrAgentStatus::Idle,
+    );
+    pump.tick_once().await;
+    assert!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty(),
+        "active work does not escalate"
+    );
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:00:02Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:02:02Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    assert_eq!(
+        runtime
+            .roster_ephemeral_state(key.team(), key.agent())
+            .expect("offline observation")
+            .runtime
+            .state,
+        RuntimeMemberState::Offline
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .len(),
+        1,
+        "the active task holder emits exactly one offline escalation"
+    );
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:03:02Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .len(),
+        1,
+        "the same offline episode is not repeated"
     );
 }
 
