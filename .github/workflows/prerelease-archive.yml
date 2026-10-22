@@ -181,8 +181,8 @@ jobs:
         run: |
           set -euo pipefail
           find assets -maxdepth 2 -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} . \;
-          find assets/hermes-atm-wheels-* -maxdepth 1 -type f -name 'atm_graft*.whl' -exec cp {} . \;
-          find assets/hermes-atm-wheels-linux-x86_64 -maxdepth 1 -type f \( -name 'hermes_atm*.whl' -o -name 'atm_query*.whl' \) -exec cp {} . \;
+          find assets/hermes-atm-wheels-* -maxdepth 1 -type f \( -name 'atm_graft*.whl' -o -name 'atm_query*.whl' \) -exec cp {} . \;
+          find assets/hermes-atm-wheels-linux-x86_64 -maxdepth 1 -type f -name 'hermes_atm*.whl' -exec cp {} . \;
           mapfile -t assets_to_publish < <(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.whl' \) -print | sed 's#^./##' | sort -u)
           ((${#assets_to_publish[@]} > 0)) || { echo "no prerelease assets were downloaded" >&2; exit 1; }
           shasum -a 256 "${assets_to_publish[@]}" > checksums.txt

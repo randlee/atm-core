@@ -230,6 +230,18 @@ class PrereleaseTests(unittest.TestCase):
         )
         self.assertNotIn("gh release upload \"$tag\" --clobber", workflow)
 
+    def test_release_wheel_matrix_builds_native_atm_query_for_each_platform(self) -> None:
+        ci = (SCRIPT.parents[4] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        wheel_job = ci.split("  hermes-atm-release-wheels:\n", 1)[1].split(
+            "\n  hermes-atm-abi3-compat:\n", 1
+        )[0]
+        self.assertIn("uses: PyO3/maturin-action@", wheel_job)
+        self.assertIn("working-directory: crates/atm-query-python", wheel_job)
+        self.assertIn("-i ${{ matrix.interpreter }} --out ../../atm-query-native-dist", wheel_job)
+        self.assertIn("cp atm-query-native-dist/atm_query*.whl dist/", wheel_job)
+        self.assertIn("name: hermes-atm-wheels-${{ matrix.artifact }}", wheel_job)
+        self.assertNotIn("pip wheel --no-deps --wheel-dir dist crates/atm-query-python", wheel_job)
+
     def test_prerelease_workflow_uses_manifest_build_contract(self) -> None:
         workflow = (SCRIPT.parents[4] / ".github" / "workflows" / "prerelease-archive.yml").read_text(encoding="utf-8")
         self.assertIn("toolchain: ${{ needs.plan.outputs.rust_toolchain }}", workflow)
@@ -327,7 +339,7 @@ class PrereleaseTests(unittest.TestCase):
             ],
         )
 
-    def test_wait_for_archive_times_out_after_twenty_minutes(self) -> None:
+    def test_wait_for_archive_times_out_after_sixty_minutes(self) -> None:
         clock = [0.0]
         sleeps: list[float] = []
 
@@ -343,11 +355,11 @@ class PrereleaseTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 SystemExit,
-                "timed out waiting for prerelease-archive.yml for prerelease/v1.5.11 after 20.0 minutes",
+                "timed out waiting for prerelease-archive.yml for prerelease/v1.5.11 after 60.0 minutes",
             ):
                 PRERELEASE.wait_for_archive("prerelease/v1.5.11", "new-sha")
-        self.assertEqual(clock, [20 * 60])
-        self.assertEqual(sleeps, [60] * 20)
+        self.assertEqual(clock, [60 * 60])
+        self.assertEqual(sleeps, [60] * 60)
 
     def test_wait_for_archive_clamps_the_final_sleep_to_the_remaining_time(self) -> None:
         clock = [0.0]

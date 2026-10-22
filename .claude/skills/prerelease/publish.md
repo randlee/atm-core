@@ -22,6 +22,6 @@ python3 .claude/skills/prerelease/scripts/prerelease.py --publish --dry-run
 python3 .claude/skills/prerelease/scripts/prerelease.py --publish --authorized
 ```
 
-The helper waits up to 20 minutes for the archive workflow for the newly tagged
+The helper waits up to 60 minutes for the archive workflow for the newly tagged
 commit, polling once per minute, and verifies every manifest-declared asset and
 checksum before reporting success.
