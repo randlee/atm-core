@@ -15,7 +15,7 @@ Phase bl delivers atm-bd-orchestration 0.18.5. atm-bd collects data from separat
 ## What is deliberately out of scope
 
 - Any database (SQLite, dolt tables) for atm-bd state.
-- Changes to the carried phase-bj console icon, status-table and Jev contracts beyond the updated ANC-009 and ANC-084.
+- Carried phase-bj console icon, status-table and Jev contracts that phase-bl does not edit (PR list, CI failure and merge-check glyphs, status-table state and CI producers, dashboard task-row text, diagnostics file removal). Phase-bl does edit the icon table in `icons.py`, the status table pr and unknown-member cells, Markdown rendering, newly displayed names and times and the Diagnostics view; their anchors are owned by bl-6, bl-7, bl-8 and bl-12.
 
 ## Anchors
 

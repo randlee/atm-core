@@ -36,6 +36,7 @@ Own `runs.py`, `icons.py`, and their tests. It presents persisted Quality/Jev da
 - [ ] `test_jev_detail_shows_typed_error_and_retry_count` (asserts a retry count for API-busy and none for other errors)
 - [ ] `test_icons_fixed_per_agent_type_and_model_glyph_colour_table`
 - [ ] `test_sanity_line_columns_jev_llm_dev`
+- [ ] `test_agent_icon_immediately_left_of_every_agent_name_in_quality_and_sanity_rows`
 
 ## Authoritative validation
 ```bash

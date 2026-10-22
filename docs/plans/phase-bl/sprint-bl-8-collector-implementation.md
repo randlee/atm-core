@@ -39,6 +39,7 @@ Own `refresh.py`, `state.py`, `adapters/{bd,atm,github}.py`, `cli.py`, `command.
 - [ ] `test_github_window_configurable_quota_pause_and_paging_past_100`
 - [ ] `test_cron_skipped_collection_prints_same_status_from_snapshot`
 - [ ] `test_ten_ticks_with_one_cached_github_error_log_one_entry`
+- [ ] `test_collector_failure_logs_one_error_line_fix_command_words_exit_code_first_stderr_line` (command words are executable and subcommand, composed once by the writer)
 
 Tests inject clocks, storage, source responses, locks, and the derivation function; no test uses sleep, scheduling, load, or a live source.
 

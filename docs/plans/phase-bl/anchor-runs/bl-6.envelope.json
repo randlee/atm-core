@@ -6,8 +6,8 @@
     "gate": "plan",
     "item_id": "bl-6",
     "bead_id": null,
-    "run_id": "plan-20261022T073606Z-bl-6",
-    "run_path": "docs/plans/phase-bl/anchor-runs/plan-20261022T073606Z-bl-6.json",
+    "run_id": "plan-20261022T151635Z-bl-6",
+    "run_path": "docs/plans/phase-bl/anchor-runs/plan-20261022T151635Z-bl-6.json",
     "dry_run": false,
     "reused_run": false,
     "exit_code": 0,
@@ -56,10 +56,6 @@
         "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
       },
       {
-        "anchor_id": "ANC-028",
-        "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
-      },
-      {
         "anchor_id": "ANC-030",
         "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
       },
@@ -70,10 +66,6 @@
       {
         "anchor_id": "ANC-032",
         "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
-      },
-      {
-        "anchor_id": "ANC-033",
-        "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
       },
       {
         "anchor_id": "ANC-035",
@@ -90,10 +82,6 @@
       {
         "anchor_id": "ANC-039",
         "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
-      },
-      {
-        "anchor_id": "ANC-040",
-        "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
       },
       {
         "anchor_id": "ANC-041",
@@ -188,34 +176,160 @@
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.83,
+            "confidence": 0.77,
             "probabilities": {
-              "yes": 0.06,
-              "no": 0.89,
-              "unclear": 0.05
+              "yes": 0.09,
+              "no": 0.85,
+              "unclear": 0.06
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.95,
+            "confidence": 0.85,
             "probabilities": {
-              "no": 0.97,
-              "unclear": 0.0,
-              "yes": 0.03
+              "no": 0.9,
+              "unclear": 0.01,
+              "yes": 0.09
             }
           }
         },
-        "min_confidence": 0.95,
+        "min_confidence": 0.85,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1982,
+          "input_tokens": 2163,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 6588
+        "request_bytes": 7038
+      },
+      {
+        "anchor_id": "ANC-028",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The console must show bead open with U+F0766 in #2D81E0, sprint not_ready with U+F137C in #D97757, PR open with U+F04C2 in #2D81E0, PR draft with U+F0CB6 in #FFA60D and CI none with U+F01D8 in #2D81E0.",
+        "quote": "\"bead_open\":        \"[#2D81E0]\\U000f0766[/]\",",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-16",
+        "context": "planning session 2026-10-17: REMAINING pasted",
+        "anchor_version": 4,
+        "deterministic_check": "render each of the five states and assert its code point and colour",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.98,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 2000,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 3246,
+        "item_shortened": false,
+        "request_bytes": 6315
+      },
+      {
+        "anchor_id": "ANC-033",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The status table's pr cell must link the PR number to the PR url GitHub returned for that PR (PullRequest.url); it must not derive the link from a base URL or call gh pr view per PR.",
+        "quote": "github url should be fine. I assume it would work.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-18",
+        "context": "bi-6 open question C, Rand to fenix 2026-10-18; replaces the spec's base-URL derivation text",
+        "anchor_version": 2,
+        "deterministic_check": "markdown row for a PR with url U renders [#n](U); a PR with empty url renders #n unlinked; the stubbed gh records no pr view call",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 1.0,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 1948,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 3246,
+        "item_shortened": false,
+        "request_bytes": 6305
       },
       {
         "anchor_id": "ANC-034",
@@ -272,13 +386,13 @@
         "min_confidence": 1.0,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1788,
+          "input_tokens": 1969,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5911
+        "request_bytes": 6361
       },
       {
         "anchor_id": "ANC-038",
@@ -324,24 +438,87 @@
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.97,
+            "confidence": 0.89,
             "probabilities": {
-              "yes": 0.02,
-              "no": 0.98,
+              "yes": 0.07,
+              "no": 0.93,
               "unclear": 0.0
             }
           }
         },
-        "min_confidence": 0.97,
+        "min_confidence": 0.89,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1773,
+          "input_tokens": 1954,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5865
+        "request_bytes": 6315
+      },
+      {
+        "anchor_id": "ANC-040",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The emitted markdown table must use exactly the spec's header line | sprint | state | ci | pr | and alignment row |---|:-:|:-:|---|, with one row per sprint and a glyph in each icon slot.",
+        "quote": "| sprint | state | ci | pr |\n|---|:-:|:-:|---|\n| bi-1 | <icon> | <icon> | <icon> [#118](https://github.com/<owner>/<repo>/pull/118) |",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-17",
+        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
+        "anchor_version": 4,
+        "deterministic_check": "the first two emitted lines equal the spec's header and alignment row byte for byte; row count equals the sprint count",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.99,
+              "no": 0.01,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.98,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 1950,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 3246,
+        "item_shortened": false,
+        "request_bytes": 6307
       },
       {
         "anchor_id": "ANC-103",
@@ -367,44 +544,44 @@
           "relevant": {
             "type": "choice",
             "choice": "yes",
-            "confidence": 0.98,
+            "confidence": 0.97,
             "probabilities": {
-              "yes": 0.99,
-              "no": 0.01,
+              "yes": 0.98,
+              "no": 0.02,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "yes",
-            "confidence": 0.88,
+            "confidence": 0.86,
             "probabilities": {
-              "yes": 0.92,
-              "no": 0.04,
+              "yes": 0.91,
+              "no": 0.05,
               "unclear": 0.04
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.79,
+            "confidence": 0.86,
             "probabilities": {
-              "yes": 0.13,
-              "no": 0.86,
+              "yes": 0.08,
+              "no": 0.91,
               "unclear": 0.01
             }
           }
         },
-        "min_confidence": 0.79,
+        "min_confidence": 0.86,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1762,
+          "input_tokens": 1943,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5827
+        "request_bytes": 6277
       },
       {
         "anchor_id": "ANC-108",
@@ -430,21 +607,21 @@
           "relevant": {
             "type": "choice",
             "choice": "yes",
-            "confidence": 0.94,
+            "confidence": 0.82,
             "probabilities": {
-              "yes": 0.96,
-              "no": 0.04,
+              "yes": 0.88,
+              "no": 0.12,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "yes",
-            "confidence": 0.94,
+            "confidence": 0.88,
             "probabilities": {
-              "yes": 0.96,
-              "no": 0.03,
-              "unclear": 0.01
+              "yes": 0.92,
+              "no": 0.06,
+              "unclear": 0.02
             }
           },
           "contradicted": {
@@ -461,13 +638,13 @@
         "min_confidence": 0.73,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1767,
+          "input_tokens": 1948,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5850
+        "request_bytes": 6300
       },
       {
         "anchor_id": "REQ-BI6-AC6",
@@ -524,13 +701,13 @@
         "min_confidence": 0.98,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1753,
+          "input_tokens": 1934,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5832
+        "request_bytes": 6282
       },
       {
         "anchor_id": "ANC-044",
@@ -551,51 +728,49 @@
           "overridden": false
         },
         "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "near_threshold": true,
-        "confirmed": true,
         "verdict": "not_applicable",
         "answers": {
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.7,
+            "confidence": 0.79,
             "probabilities": {
-              "yes": 0.19,
-              "no": 0.8,
-              "unclear": 0.01
+              "yes": 0.14,
+              "no": 0.86,
+              "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.97,
+            "confidence": 0.95,
             "probabilities": {
               "yes": 0.0,
-              "no": 0.98,
-              "unclear": 0.02
+              "no": 0.97,
+              "unclear": 0.03
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 0.95,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
-              "unclear": 0.0
+              "yes": 0.02,
+              "no": 0.97,
+              "unclear": 0.01
             }
           }
         },
-        "min_confidence": 0.7,
+        "min_confidence": 0.79,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1771,
+          "input_tokens": 1952,
           "output_tokens": 117
         },
-        "attempts": 2,
-        "item_chars_sent": 2799,
+        "attempts": 1,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5867
+        "request_bytes": 6317
       },
       {
         "anchor_id": "ANC-045",
@@ -631,10 +806,10 @@
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.97,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.98,
+              "yes": 0.0,
+              "no": 0.99,
               "unclear": 0.01
             }
           },
@@ -652,13 +827,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1767,
+          "input_tokens": 1948,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5881
+        "request_bytes": 6331
       },
       {
         "anchor_id": "ANC-046",
@@ -684,21 +859,21 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.97,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 0.02,
-              "no": 0.98,
+              "yes": 0.01,
+              "no": 0.99,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.97,
+            "confidence": 1.0,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.98,
-              "unclear": 0.01
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
             }
           },
           "contradicted": {
@@ -712,16 +887,16 @@
             }
           }
         },
-        "min_confidence": 0.97,
+        "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1780,
+          "input_tokens": 1961,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5922
+        "request_bytes": 6372
       },
       {
         "anchor_id": "ANC-048",
@@ -778,13 +953,13 @@
         "min_confidence": 0.95,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1784,
+          "input_tokens": 1965,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5910
+        "request_bytes": 6360
       },
       {
         "anchor_id": "ANC-073",
@@ -870,13 +1045,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1946,
+          "input_tokens": 2127,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 6469
+        "request_bytes": 6919
       },
       {
         "anchor_id": "ANC-091",
@@ -902,10 +1077,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.97,
+            "confidence": 0.95,
             "probabilities": {
-              "yes": 0.02,
-              "no": 0.98,
+              "yes": 0.03,
+              "no": 0.97,
               "unclear": 0.0
             }
           },
@@ -930,16 +1105,16 @@
             }
           }
         },
-        "min_confidence": 0.97,
+        "min_confidence": 0.95,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1763,
+          "input_tokens": 1944,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5821
+        "request_bytes": 6271
       },
       {
         "anchor_id": "ANC-092",
@@ -965,44 +1140,44 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.92,
+            "confidence": 0.94,
             "probabilities": {
-              "yes": 0.05,
-              "no": 0.95,
+              "yes": 0.04,
+              "no": 0.96,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.92,
+            "confidence": 0.89,
             "probabilities": {
-              "yes": 0.02,
-              "no": 0.95,
+              "yes": 0.04,
+              "no": 0.93,
               "unclear": 0.03
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 0.97,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
+              "yes": 0.02,
+              "no": 0.98,
               "unclear": 0.0
             }
           }
         },
-        "min_confidence": 0.92,
+        "min_confidence": 0.89,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1769,
+          "input_tokens": 1950,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5903
+        "request_bytes": 6353
       },
       {
         "anchor_id": "ANC-094",
@@ -1030,21 +1205,21 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.89,
+            "confidence": 0.83,
             "probabilities": {
-              "yes": 0.07,
-              "no": 0.93,
+              "yes": 0.11,
+              "no": 0.89,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.55,
+            "confidence": 0.59,
             "probabilities": {
-              "yes": 0.25,
-              "no": 0.7,
-              "unclear": 0.05
+              "yes": 0.24,
+              "no": 0.73,
+              "unclear": 0.03
             }
           },
           "contradicted": {
@@ -1058,16 +1233,16 @@
             }
           }
         },
-        "min_confidence": 0.55,
+        "min_confidence": 0.59,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1762,
+          "input_tokens": 1943,
           "output_tokens": 117
         },
         "attempts": 2,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5846
+        "request_bytes": 6296
       },
       {
         "anchor_id": "ANC-095",
@@ -1103,11 +1278,11 @@
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 0.97,
             "probabilities": {
               "yes": 0.01,
-              "no": 0.99,
-              "unclear": 0.0
+              "no": 0.98,
+              "unclear": 0.01
             }
           },
           "contradicted": {
@@ -1121,16 +1296,16 @@
             }
           }
         },
-        "min_confidence": 0.98,
+        "min_confidence": 0.97,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1749,
+          "input_tokens": 1930,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5827
+        "request_bytes": 6277
       },
       {
         "anchor_id": "ANC-096",
@@ -1156,21 +1331,21 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.97,
+            "confidence": 0.94,
             "probabilities": {
-              "yes": 0.02,
-              "no": 0.98,
+              "yes": 0.04,
+              "no": 0.96,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.89,
+            "confidence": 0.95,
             "probabilities": {
-              "yes": 0.05,
-              "no": 0.93,
-              "unclear": 0.02
+              "yes": 0.02,
+              "no": 0.97,
+              "unclear": 0.01
             }
           },
           "contradicted": {
@@ -1184,16 +1359,16 @@
             }
           }
         },
-        "min_confidence": 0.89,
+        "min_confidence": 0.94,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1756,
+          "input_tokens": 1937,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5861
+        "request_bytes": 6311
       },
       {
         "anchor_id": "ANC-097",
@@ -1250,13 +1425,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1756,
+          "input_tokens": 1937,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5815
+        "request_bytes": 6265
       },
       {
         "anchor_id": "ANC-098",
@@ -1313,13 +1488,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1742,
+          "input_tokens": 1923,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5768
+        "request_bytes": 6218
       },
       {
         "anchor_id": "ANC-099",
@@ -1345,10 +1520,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.95,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 0.03,
-              "no": 0.97,
+              "yes": 0.01,
+              "no": 0.99,
               "unclear": 0.0
             }
           },
@@ -1373,16 +1548,16 @@
             }
           }
         },
-        "min_confidence": 0.95,
+        "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1756,
+          "input_tokens": 1937,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5824
+        "request_bytes": 6274
       },
       {
         "anchor_id": "ANC-100",
@@ -1439,13 +1614,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1755,
+          "input_tokens": 1936,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5815
+        "request_bytes": 6265
       },
       {
         "anchor_id": "ANC-101",
@@ -1481,20 +1656,20 @@
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.95,
+            "confidence": 0.97,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.97,
+              "yes": 0.0,
+              "no": 0.98,
               "unclear": 0.02
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 1.0,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
+              "yes": 0.0,
+              "no": 1.0,
               "unclear": 0.0
             }
           }
@@ -1502,13 +1677,13 @@
         "min_confidence": 0.92,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1752,
+          "input_tokens": 1933,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5823
+        "request_bytes": 6273
       },
       {
         "anchor_id": "ANC-102",
@@ -1534,20 +1709,20 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.92,
+            "confidence": 0.94,
             "probabilities": {
-              "yes": 0.05,
-              "no": 0.95,
+              "yes": 0.04,
+              "no": 0.96,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.94,
+            "confidence": 0.95,
             "probabilities": {
-              "yes": 0.03,
-              "no": 0.96,
+              "yes": 0.02,
+              "no": 0.97,
               "unclear": 0.01
             }
           },
@@ -1562,16 +1737,16 @@
             }
           }
         },
-        "min_confidence": 0.92,
+        "min_confidence": 0.94,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1744,
+          "input_tokens": 1925,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5788
+        "request_bytes": 6238
       },
       {
         "anchor_id": "ANC-104",
@@ -1597,10 +1772,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.86,
+            "confidence": 0.88,
             "probabilities": {
-              "yes": 0.07,
-              "no": 0.91,
+              "yes": 0.06,
+              "no": 0.92,
               "unclear": 0.02
             }
           },
@@ -1625,16 +1800,16 @@
             }
           }
         },
-        "min_confidence": 0.86,
+        "min_confidence": 0.88,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1749,
+          "input_tokens": 1930,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5798
+        "request_bytes": 6248
       },
       {
         "anchor_id": "ANC-105",
@@ -1691,13 +1866,13 @@
         "min_confidence": 0.97,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1750,
+          "input_tokens": 1931,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5793
+        "request_bytes": 6243
       },
       {
         "anchor_id": "ANC-106",
@@ -1723,10 +1898,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.89,
+            "confidence": 0.88,
             "probabilities": {
-              "yes": 0.06,
-              "no": 0.9299999999999999,
+              "yes": 0.07,
+              "no": 0.92,
               "unclear": 0.01
             }
           },
@@ -1751,16 +1926,16 @@
             }
           }
         },
-        "min_confidence": 0.89,
+        "min_confidence": 0.88,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1757,
+          "input_tokens": 1938,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5866
+        "request_bytes": 6316
       },
       {
         "anchor_id": "ANC-107",
@@ -1786,10 +1961,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
+              "yes": 0.01,
+              "no": 0.99,
               "unclear": 0.0
             }
           },
@@ -1806,10 +1981,10 @@
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 1.0,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
+              "yes": 0.0,
+              "no": 1.0,
               "unclear": 0.0
             }
           }
@@ -1817,13 +1992,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1752,
+          "input_tokens": 1933,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5817
+        "request_bytes": 6267
       },
       {
         "anchor_id": "ANC-109",
@@ -1844,51 +2019,49 @@
           "overridden": false
         },
         "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "near_threshold": true,
-        "confirmed": true,
         "verdict": "not_applicable",
         "answers": {
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.67,
+            "confidence": 0.77,
             "probabilities": {
-              "yes": 0.22,
-              "no": 0.78,
+              "yes": 0.15,
+              "no": 0.85,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.83,
+            "confidence": 0.89,
             "probabilities": {
               "yes": 0.01,
-              "no": 0.89,
-              "unclear": 0.1
+              "no": 0.93,
+              "unclear": 0.06
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.88,
+            "confidence": 0.83,
             "probabilities": {
-              "yes": 0.08,
-              "no": 0.92,
-              "unclear": 0.0
+              "yes": 0.1,
+              "no": 0.89,
+              "unclear": 0.01
             }
           }
         },
-        "min_confidence": 0.67,
+        "min_confidence": 0.77,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1801,
+          "input_tokens": 1982,
           "output_tokens": 117
         },
-        "attempts": 2,
-        "item_chars_sent": 2799,
+        "attempts": 1,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 6032
+        "request_bytes": 6482
       },
       {
         "anchor_id": "ANC-113",
@@ -1914,44 +2087,44 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.89,
+            "confidence": 0.91,
             "probabilities": {
-              "yes": 0.06,
-              "no": 0.93,
+              "yes": 0.05,
+              "no": 0.94,
               "unclear": 0.01
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
               "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
+              "no": 0.99,
+              "unclear": 0.01
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.97,
+            "confidence": 0.94,
             "probabilities": {
-              "yes": 0.02,
-              "no": 0.98,
+              "yes": 0.04,
+              "no": 0.96,
               "unclear": 0.0
             }
           }
         },
-        "min_confidence": 0.89,
+        "min_confidence": 0.91,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1760,
+          "input_tokens": 1941,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false,
-        "request_bytes": 5865
+        "request_bytes": 6315
       },
       {
         "anchor_id": "ANC-090",
@@ -1977,7 +2150,7 @@
         "min_confidence": null,
         "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
         "attempts": 0,
-        "item_chars_sent": 2799,
+        "item_chars_sent": 3246,
         "item_shortened": false
       },
       {
@@ -2211,29 +2384,6 @@
         "attempts": 0
       },
       {
-        "anchor_id": "ANC-028",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "The console must show bead open with U+F0766 in #2D81E0, sprint not_ready with U+F137C in #D97757, PR open with U+F04C2 in #2D81E0, PR draft with U+F0CB6 in #FFA60D and CI none with U+F01D8 in #2D81E0.",
-        "quote": "\"bead_open\":        \"[#2D81E0]\\U000f0766[/]\",",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-16",
-        "context": "planning session 2026-10-17: REMAINING pasted",
-        "anchor_version": 4,
-        "deterministic_check": "render each of the five states and assert its code point and colour",
-        "kind": "directive",
-        "leaning": null,
-        "verdict": "excluded",
-        "answers": null,
-        "min_confidence": null,
-        "exclusion": {
-          "item": "bl-6",
-          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
-        },
-        "explanation": "Excluded from this bead by the anchor's exclude list: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).",
-        "attempts": 0
-      },
-      {
         "anchor_id": "ANC-030",
         "source_type": "ANC",
         "source_ref": null,
@@ -2300,29 +2450,6 @@
           "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
         },
         "explanation": "Excluded from this bead by the anchor's exclude list: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.",
-        "attempts": 0
-      },
-      {
-        "anchor_id": "ANC-033",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "The status table's pr cell must link the PR number to the PR url GitHub returned for that PR (PullRequest.url); it must not derive the link from a base URL or call gh pr view per PR.",
-        "quote": "github url should be fine. I assume it would work.",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-18",
-        "context": "bi-6 open question C, Rand to fenix 2026-10-18; replaces the spec's base-URL derivation text",
-        "anchor_version": 2,
-        "deterministic_check": "markdown row for a PR with url U renders [#n](U); a PR with empty url renders #n unlinked; the stubbed gh records no pr view call",
-        "kind": "directive",
-        "leaning": null,
-        "verdict": "excluded",
-        "answers": null,
-        "min_confidence": null,
-        "exclusion": {
-          "item": "bl-6",
-          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
-        },
-        "explanation": "Excluded from this bead by the anchor's exclude list: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).",
         "attempts": 0
       },
       {
@@ -2415,29 +2542,6 @@
           "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
         },
         "explanation": "Excluded from this bead by the anchor's exclude list: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.",
-        "attempts": 0
-      },
-      {
-        "anchor_id": "ANC-040",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "The emitted markdown table must use exactly the spec's header line | sprint | state | ci | pr | and alignment row |---|:-:|:-:|---|, with one row per sprint and a glyph in each icon slot.",
-        "quote": "| sprint | state | ci | pr |\n|---|:-:|:-:|---|\n| bi-1 | <icon> | <icon> | <icon> [#118](https://github.com/<owner>/<repo>/pull/118) |",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-17",
-        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
-        "anchor_version": 4,
-        "deterministic_check": "the first two emitted lines equal the spec's header and alignment row byte for byte; row count equals the sprint count",
-        "kind": "directive",
-        "leaning": null,
-        "verdict": "excluded",
-        "answers": null,
-        "min_confidence": null,
-        "exclusion": {
-          "item": "bl-6",
-          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
-        },
-        "explanation": "Excluded from this bead by the anchor's exclude list: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).",
         "attempts": 0
       },
       {
@@ -2608,13 +2712,13 @@
     ],
     "item_truncated": false,
     "shortened": [],
-    "report_markdown": "## Anchor gate: plan · bl-6 - dashboard render\n\nRun `plan-20261022T073606Z-bl-6`, model `jev-1.14.0`, threshold 0.6. Counts: satisfied 6, not_applicable 22, deterministic_only 1, excluded 27.\n\n> **bl-6 · ANC-017 · excluded** Anchor: The console must show one fixed icon for every agent whose agent type is qa and one fixed icon for every agent whose agent type is sanity, regardless of its harness or model. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-018 · excluded** Anchor: The console's pull-request list must show the CI pass, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME; the CI fail glyph is governed by ANC-030. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-019 · excluded** Anchor: The console must show, next to every Claude agent whose model is haiku, sonnet, opus or fable, that model's icon in that model's colour: U+F0156 in #FF6533 for haiku, U+F0382 in #FF784D for sonnet, U+F06C4 in #FF8C66 for opus and U+F0717 in #FF9F80 for fable. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-020 · excluded** Anchor: The console must show, next to every Codex agent whose model class is sol, luna, terra or astra, that class's icon in that class's colour: U+F05A8 in #FFA60D for sol, U+F0F65 in #FFE066 for luna, U+F01E7 in #2DE057 for terra and U+F0674 in #FFE066 for astra. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-021 · excluded** Anchor: The console must show a qa agent with the icon U+F029B in #4A5AF8 while it is running QA, in #2EA043 after a QA pass and in #F85149 after a QA fail. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-023 · excluded** Anchor: Wherever the console shows an agent's name, it must show that agent's icon immediately to the left of the name. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-024 · excluded** Anchor: The console must choose an agent's model icon by lower-casing the roster model string and testing it with contains for sol, luna, terra, astra, haiku, sonnet, opus and fable. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-025 · excluded** Anchor: When the roster model string matches none of the model names, the console must use the sonnet icon for a claude-code agent and the terra icon for a codex-cli agent. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-026 · excluded** Anchor: The console must show every sanity agent with the icon U+F01A6 in #E551BA, whatever its harness or model. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-027 · excluded** Anchor: The console must show each bead status in Rand's BEAD_STATUS table with that status's icon and colour: blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed and ready. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-028 · excluded** Anchor: The console must show bead open with U+F0766 in #2D81E0, sprint not_ready with U+F137C in #D97757, PR open with U+F04C2 in #2D81E0, PR draft with U+F0CB6 in #FFA60D and CI none with U+F01D8 in #2D81E0. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-030 · excluded** Anchor: The console must show a CI fail as the failing platform's icon in #F85149 when exactly one platform failed (macOS U+F0035, Windows U+F05B3, Linux U+F033D), and as the bug U+F00E4 in #F85149 when more than one platform failed or a general CI action not tied to a platform failed. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-031 · excluded** Anchor: The console must show a merge check of conflict with the source-branch icon U+F062C in red #F85149. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-032 · excluded** Anchor: The status table's ci cell for a sprint whose shown PR is merged or closed must show the last CI run on that PR's head (pass, running or a fail per ANC-030), not none. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-033 · excluded** Anchor: The status table's pr cell must link the PR number to the PR url GitHub returned for that PR (PullRequest.url); it must not derive the link from a base URL or call gh pr view per PR. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-035 · excluded** Anchor: The status table's state cell must show the icon of the agent working the sprint whenever one is active (a dev agent, severity or QA), and the sprint's own state icon only when no agent is on it; a blocked sprint with an active agent must show the agent, never the lock. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-036 · excluded** Anchor: When more than one agent is active on a sprint, the state cell must draw one icon per active agent, every agent drawn and none collapsed, truncated or dropped, so the cell widens by one glyph per extra agent. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-037 · excluded** Anchor: The status table's ci cell must hold exactly one icon for the sprint's shown PR head: pass U+F062C #2EA043, running U+F0898 #58A6FF, none U+F01D8 #2D81E0 only when no CI run exists for that head, fail per ANC-030, or ? per ANC-034 when the CI state is unknown. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-039 · excluded** Anchor: atm-bd cron --phase <x> --md-table must print the layout C markdown status table (form per ANC-040) to stdout. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-040 · excluded** Anchor: The emitted markdown table must use exactly the spec's header line | sprint | state | ci | pr | and alignment row |---|:-:|:-:|---|, with one row per sprint and a glyph in each icon slot. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-041 · excluded** Anchor: Every time atm-bd prints for a person (console header, rows, PR sheet, Diagnostics view, cron digest) is 24-hour local time produced by the program's one display formatter; every time it writes to a file or log is UTC ISO-8601 with a Z suffix. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-047 · excluded** Anchor: A failure is logged once when it happens; a cached failure still on display (such as the last GitHub error kept with cached PR data) is a sheet status, never a new log entry per tick. Not judged: failure logging is owned by bl-8.\n\n> **bl-6 · ANC-049 · excluded** Anchor: Before each GitHub refresh atm-bd reads the live remaining quota for the resource its mode uses (graphql or core) via gh api rate_limit; when remaining is below the configured threshold (default 50 percent of the limit) it skips the refresh, keeps cached PR data, shows a paused status with the numbers and the local reset time, and refuses forced refreshes until the quota is back above the threshold. Not judged: bl-6 renders persisted state only; the quota check and paused refresh are bl-8.\n\n> **bl-6 · ANC-050 · excluded** Anchor: Agent task rows in the atm-bd dashboard read <sprint or fix id>: <bead title>, truncated to the pane width; never <phase>: <atm message text>. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-093 · excluded** Anchor: atm-bd must persist collected data, evaluated state and event requests as JSON files in the state directory and must not add a database. Not judged: bl-6 only reads persisted state; persistence is bl-8.\n\n> **bl-6 · ANC-110 · excluded** Anchor: the console DAG must draw a sprint's outline green when it is complete with all fixes green, red when it has blocking failures (including while a fix agent, sanity or QA is working on them), and white when its first dev is in progress or it has not started. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-111 · excluded** Anchor: a DAG cell with no active agent and no green QA must show the blue play icon when the sprint is ready and the blocked icon when it is blocked. Not judged: DAG cell ready/blocked icons are drawn by bl-13; bl-6 renders header, age, unknown-member glyph and show output only.\n\nAll judged anchors are satisfied or not applicable.\n\n"
+    "report_markdown": "## Anchor gate: plan · bl-6 - dashboard render\n\nRun `plan-20261022T151635Z-bl-6`, model `jev-1.14.0`, threshold 0.6. Counts: satisfied 9, not_applicable 22, deterministic_only 1, excluded 24.\n\n> **bl-6 · ANC-017 · excluded** Anchor: The console must show one fixed icon for every agent whose agent type is qa and one fixed icon for every agent whose agent type is sanity, regardless of its harness or model. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-018 · excluded** Anchor: The console's pull-request list must show the CI pass, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME; the CI fail glyph is governed by ANC-030. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-019 · excluded** Anchor: The console must show, next to every Claude agent whose model is haiku, sonnet, opus or fable, that model's icon in that model's colour: U+F0156 in #FF6533 for haiku, U+F0382 in #FF784D for sonnet, U+F06C4 in #FF8C66 for opus and U+F0717 in #FF9F80 for fable. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-020 · excluded** Anchor: The console must show, next to every Codex agent whose model class is sol, luna, terra or astra, that class's icon in that class's colour: U+F05A8 in #FFA60D for sol, U+F0F65 in #FFE066 for luna, U+F01E7 in #2DE057 for terra and U+F0674 in #FFE066 for astra. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-021 · excluded** Anchor: The console must show a qa agent with the icon U+F029B in #4A5AF8 while it is running QA, in #2EA043 after a QA pass and in #F85149 after a QA fail. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-023 · excluded** Anchor: Wherever the console shows an agent's name, it must show that agent's icon immediately to the left of the name. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-024 · excluded** Anchor: The console must choose an agent's model icon by lower-casing the roster model string and testing it with contains for sol, luna, terra, astra, haiku, sonnet, opus and fable. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-025 · excluded** Anchor: When the roster model string matches none of the model names, the console must use the sonnet icon for a claude-code agent and the terra icon for a codex-cli agent. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-026 · excluded** Anchor: The console must show every sanity agent with the icon U+F01A6 in #E551BA, whatever its harness or model. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-027 · excluded** Anchor: The console must show each bead status in Rand's BEAD_STATUS table with that status's icon and colour: blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed and ready. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-030 · excluded** Anchor: The console must show a CI fail as the failing platform's icon in #F85149 when exactly one platform failed (macOS U+F0035, Windows U+F05B3, Linux U+F033D), and as the bug U+F00E4 in #F85149 when more than one platform failed or a general CI action not tied to a platform failed. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-031 · excluded** Anchor: The console must show a merge check of conflict with the source-branch icon U+F062C in red #F85149. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-032 · excluded** Anchor: The status table's ci cell for a sprint whose shown PR is merged or closed must show the last CI run on that PR's head (pass, running or a fail per ANC-030), not none. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-035 · excluded** Anchor: The status table's state cell must show the icon of the agent working the sprint whenever one is active (a dev agent, severity or QA), and the sprint's own state icon only when no agent is on it; a blocked sprint with an active agent must show the agent, never the lock. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-036 · excluded** Anchor: When more than one agent is active on a sprint, the state cell must draw one icon per active agent, every agent drawn and none collapsed, truncated or dropped, so the cell widens by one glyph per extra agent. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-037 · excluded** Anchor: The status table's ci cell must hold exactly one icon for the sprint's shown PR head: pass U+F062C #2EA043, running U+F0898 #58A6FF, none U+F01D8 #2D81E0 only when no CI run exists for that head, fail per ANC-030, or ? per ANC-034 when the CI state is unknown. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-039 · excluded** Anchor: atm-bd cron --phase <x> --md-table must print the layout C markdown status table (form per ANC-040) to stdout. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-041 · excluded** Anchor: Every time atm-bd prints for a person (console header, rows, PR sheet, Diagnostics view, cron digest) is 24-hour local time produced by the program's one display formatter; every time it writes to a file or log is UTC ISO-8601 with a Z suffix. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-047 · excluded** Anchor: A failure is logged once when it happens; a cached failure still on display (such as the last GitHub error kept with cached PR data) is a sheet status, never a new log entry per tick. Not judged: failure logging is owned by bl-8.\n\n> **bl-6 · ANC-049 · excluded** Anchor: Before each GitHub refresh atm-bd reads the live remaining quota for the resource its mode uses (graphql or core) via gh api rate_limit; when remaining is below the configured threshold (default 50 percent of the limit) it skips the refresh, keeps cached PR data, shows a paused status with the numbers and the local reset time, and refuses forced refreshes until the quota is back above the threshold. Not judged: bl-6 renders persisted state only; the quota check and paused refresh are bl-8.\n\n> **bl-6 · ANC-050 · excluded** Anchor: Agent task rows in the atm-bd dashboard read <sprint or fix id>: <bead title>, truncated to the pane width; never <phase>: <atm message text>. Not judged: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7).\n\n> **bl-6 · ANC-093 · excluded** Anchor: atm-bd must persist collected data, evaluated state and event requests as JSON files in the state directory and must not add a database. Not judged: bl-6 only reads persisted state; persistence is bl-8.\n\n> **bl-6 · ANC-110 · excluded** Anchor: the console DAG must draw a sprint's outline green when it is complete with all fixes green, red when it has blocking failures (including while a fix agent, sanity or QA is working on them), and white when its first dev is in progress or it has not started. Not judged: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13.\n\n> **bl-6 · ANC-111 · excluded** Anchor: a DAG cell with no active agent and no green QA must show the blue play icon when the sprint is ready and the blocked icon when it is blocked. Not judged: DAG cell ready/blocked icons are drawn by bl-13; bl-6 renders header, age, unknown-member glyph and show output only.\n\nAll judged anchors are satisfied or not applicable.\n\n"
   },
   "error": null,
   "metadata": {
     "duration_ms": null,
     "tool_calls": 9,
-    "retry_count": 3,
+    "retry_count": 1,
     "correlation_id": "bl-6"
   }
 }

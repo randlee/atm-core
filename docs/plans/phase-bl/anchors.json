@@ -1215,6 +1215,13 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:16:10+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "Claude model icon glyphs and colours are drawn and tested by bl-7 icons.py; bl-12 only composes them.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1229,6 +1236,10 @@
         {
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "Claude model icon glyphs and colours are drawn and tested by bl-7 icons.py; bl-12 only composes them."
         }
       ]
     },
@@ -1295,6 +1306,13 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:16:10+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "Codex class icon glyphs and colours are drawn and tested by bl-7 icons.py; bl-12 only composes them.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1309,6 +1327,10 @@
         {
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "Codex class icon glyphs and colours are drawn and tested by bl-7 icons.py; bl-12 only composes them."
         }
       ]
     },
@@ -1733,13 +1755,14 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:15:31+00:00",
+          "event": "exclusion_removed",
+          "item": "bl-7"
         }
       ],
       "exclude": [
-        {
-          "item": "bl-7",
-          "reason": "icon-left-of-name placement across console views is composed in bl-12"
-        },
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
@@ -1830,6 +1853,13 @@
           "item": "bl-6",
           "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:16:10+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "The lower-cased contains match for model strings is implemented and tested in bl-7 icons.py.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1844,6 +1874,10 @@
         {
           "item": "bl-6",
           "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
+        },
+        {
+          "item": "bl-12",
+          "reason": "The lower-cased contains match for model strings is implemented and tested in bl-7 icons.py."
         }
       ]
     },
@@ -1912,6 +1946,13 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:16:10+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "The fallback icon for unmatched models is implemented and tested in bl-7 icons.py.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1922,6 +1963,10 @@
         {
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "The fallback icon for unmatched models is implemented and tested in bl-7 icons.py."
         }
       ]
     },
@@ -1995,6 +2040,13 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:16:10+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "The sanity icon glyph and colour are implemented and tested in bl-7 icons.py.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2013,6 +2065,10 @@
         {
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "The sanity icon glyph and colour are implemented and tested in bl-7 icons.py."
         }
       ]
     },
@@ -2227,6 +2283,11 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:15:31+00:00",
+          "event": "exclusion_removed",
+          "item": "bl-6"
         }
       ],
       "exclude": [
@@ -2237,10 +2298,6 @@
         {
           "item": "atm-bj-1",
           "reason": "bj-1 edits the close hook script and its templates and renders no bead, sprint, PR or CI state in the console; ANC-028 scope is console rendering (relevance no at 0.56 and 0.79, leaning not_applicable, same applicability-noise class as the other phase-bi exclusions)"
-        },
-        {
-          "item": "bl-6",
-          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         },
         {
           "item": "bl-13",
@@ -2624,16 +2681,17 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:15:31+00:00",
+          "event": "exclusion_removed",
+          "item": "bl-6"
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-1",
           "reason": "BJ-1 does not own console PR status-table rendering; it changes only the close hook and its templates."
-        },
-        {
-          "item": "bl-6",
-          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         },
         {
           "item": "bl-13",
@@ -2937,6 +2995,13 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:16:10+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "The status-table multi-agent state cell is not edited by phase-bl; bl-12 composes the DAG, Quality and Diagnostics views.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2959,6 +3024,10 @@
         {
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "The status-table multi-agent state cell is not edited by phase-bl; bl-12 composes the DAG, Quality and Diagnostics views."
         }
       ]
     },
@@ -3235,13 +3304,14 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:15:31+00:00",
+          "event": "exclusion_removed",
+          "item": "bl-12"
         }
       ],
       "exclude": [
-        {
-          "item": "bl-12",
-          "reason": "bl-12 composes the app and proves end-to-end behaviour; Diagnostics rendering is bl-6/bl-7"
-        },
         {
           "item": "bl-13",
           "reason": "bl-13 owns only dag.py and test_dag.py; the status table ci cell and the cron table flag are owned by bl-6"
@@ -3363,6 +3433,11 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:15:31+00:00",
+          "event": "exclusion_removed",
+          "item": "bl-6"
         }
       ],
       "exclude": [
@@ -3373,10 +3448,6 @@
         {
           "item": "bl-7",
           "reason": "status-table header and alignment row belong to bl-6"
-        },
-        {
-          "item": "bl-6",
-          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         },
         {
           "item": "bl-13",
@@ -3791,13 +3862,14 @@
           "item": "bl-13",
           "reason": "bl-13 renders the DAG and fallback list only and owns no Diagnostics log view (dag.py and test_dag.py only)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:15:31+00:00",
+          "event": "exclusion_removed",
+          "item": "bl-12"
         }
       ],
       "exclude": [
-        {
-          "item": "bl-12",
-          "reason": "bl-12 composes the app and proves end-to-end behaviour; Diagnostics log content is bl-8"
-        },
         {
           "item": "bl-13",
           "reason": "bl-13 renders the DAG and fallback list only and owns no Diagnostics log view (dag.py and test_dag.py only)"
@@ -3932,6 +4004,18 @@
           "item": "bl-8",
           "reason": "bl-8 logs a failed read once through the existing program log writer, whose error line form is unchanged by phase-bl",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:15:31+00:00",
+          "event": "exclusion_removed",
+          "item": "bl-8"
+        },
+        {
+          "at": "2026-10-22T15:16:57+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "Failed-command error logging (message format, command words, first stderr line) is implemented and tested by bl-8; bl-12 only composes the Diagnostics view over the unchanged sc-observability log.",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -3948,8 +4032,8 @@
           "reason": "BJ-2 plans bead schemas, formula producers and validation; it does not write or change the atm-bd observability event logger."
         },
         {
-          "item": "bl-8",
-          "reason": "bl-8 logs a failed read once through the existing program log writer, whose error line form is unchanged by phase-bl"
+          "item": "bl-12",
+          "reason": "Failed-command error logging (message format, command words, first stderr line) is implemented and tested by bl-8; bl-12 only composes the Diagnostics view over the unchanged sc-observability log."
         }
       ]
     },

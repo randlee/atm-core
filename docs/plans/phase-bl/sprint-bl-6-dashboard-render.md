@@ -31,6 +31,9 @@ Own `render.py`, `status.py`, `show.py`, their tests, and console README. Render
 - [ ] `test_readme_documents_nerd_font_mono_alignment`
 - [ ] `test_unknown_member_renders_question_mark_in_2d81e0`
 - [ ] `test_markdown_table_render_is_byte_identical_twice`
+- [ ] `test_status_table_icons_glyph_and_colour` (bead open U+F0766 #2D81E0, sprint not_ready U+F137C #D97757, PR open U+F04C2 #2D81E0, PR draft U+F0CB6 #FFA60D, CI none U+F01D8 #2D81E0)
+- [ ] `test_pr_cell_links_number_to_returned_pull_request_url` (PullRequest.url, plain #n when empty, no per-PR gh pr view call)
+- [ ] `test_markdown_table_exact_header_alignment_row_and_one_row_per_sprint` (| sprint | state | ci | pr | and |---|:-:|:-:|---|)
 
 ## Authoritative validation
 ```bash

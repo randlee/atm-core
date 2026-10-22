@@ -19,7 +19,7 @@ In that quote "db" means JSON files in the atm-bd state directory; no database d
 
 1. Wire the fixed architecture (collection, state evaluation and event firing are three separate calls; `cron_entry` only evaluates state from the persisted snapshot and enqueues, never collects or sends, and each stage reads only its persisted input and writes only its persisted output; collected data, state, event requests, the bl-3 durable queue and delivery history are JSON files in the atm-bd state directory; no database is added): collectors → persisted JSON state → state stage → `EventRequest` → debounce/aggregate → separately scheduled delivery, with no database. `cron_entry` calls bl-3 `derive_transitions(snapshot, previous)` then `enqueue_event_request`. This is the sole owner that populates `StateSnapshot.held_rows`, `qa`, `jev`, and `dag` from their versioned fixtures during snapshot composition.
 2. Wire both cron-originated and bl-5 sanity-originated `EventRequest`s through the named `enqueue_event_request` seam into bl-3's durable queue; `delivery_entry.deliver_due(clock)` is the only send entry.
-3. Compose the Quality tab (two horizontal panes, the top about 60% listing QA runs newest first and the bottom filled from the selected run: bottom-left reviewer rows with pass/fail icon and elapsed, bottom-right findings with a multi-reviewer finding shown once, aligned run list with no vertical bars), JSONL error state, reviewer metadata, persisted snapshot, Quality presentation, event aggregation, and delivery history using deterministic fakes.
+3. Compose the Quality tab (two horizontal panes, the top about 60% listing QA runs newest first and the bottom filled from the selected run: bottom-left reviewer rows with pass/fail icon and elapsed, bottom-right findings with a multi-reviewer finding shown once, each QA run one aligned line with a status and elapsed column per reviewer and the dev checked, no vertical bars, asserted by `test_composed_quality_two_panel_markdown_selection`), JSONL error state, reviewer metadata, persisted snapshot, Quality presentation, event aggregation, and delivery history using deterministic fakes.
 4. Production wiring injects bl-10 `ProblemDeriver` into bl-8 `build_snapshot` and routes bl-5's JSON/CLI enqueue seam into bl-3.
 5. `atm-bd cron` and `atm-bd console` start collection through the same request seam with the same collectors and write equal persisted data.
 6. Cut over installed `cli.py`, `app.py`, `runner.py`, and `model.py`: no collection entrypoint calls sender, and TUI/cron share persisted snapshots without a second source query.
@@ -47,6 +47,11 @@ In that quote "db" means JSON files in the atm-bd state directory; no database d
 - [ ] `test_only_advanced_delivery_clock_sends_request`
 - [ ] `test_cron_and_tui_render_same_persisted_state_without_collection`
 - [ ] `test_failed_source_is_eligible_on_next_controlled_request`
+- [ ] `test_installed_cron_tick_uses_console_collected_records_collects_only_due_sources_same_stdout` (seeded with console-collected records: no source inside its interval is re-queried, due sources alone are collected, stdout equals a collecting run over the same persisted state)
+- [ ] `test_cron_md_table_flag_prints_layout_c_table_to_stdout`
+- [ ] `test_every_person_facing_time_is_24h_local_from_one_formatter_and_files_are_utc_z`
+- [ ] `test_diagnostics_view_reads_only_sc_observability_log_timestamp_level_message_unchanged`
+- [ ] `test_agent_icon_immediately_left_of_agent_name_in_composed_diagnostics_agent_details`
 
 All fixtures inject the source, stored JSON, queue, ATM sender, and clock. No integration test sleeps, races, orders event loops, loads CPU, or contacts a service.
 
