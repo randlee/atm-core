@@ -254,6 +254,7 @@ class BenchmarkRunResult(BaseModel):
     generated_at: datetime
     source_revision: str = Field(pattern=r"^[0-9a-f]{40}$")
     binary_hashes: dict[str, str]
+    binary_versions: dict[str, str] = Field(default_factory=dict)
     frames_per_connection: int = Field(ge=0)
     messages_requested: int = Field(ge=0)
     messages_admitted: int = Field(ge=0)

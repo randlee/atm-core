@@ -391,6 +391,7 @@ def run_capacity(
     managed_daemon: ManagedDaemonOptions | None = None,
     campaign_id: str | None = None,
     v4_emission: V4EmissionContext | None = None,
+    binary_dir: Path | None = None,
 ) -> CapacityRunResult:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     if managed_daemon is not None:
@@ -417,8 +418,10 @@ def run_capacity(
         raise SmokeError("capacity worker limit must be positive")
     isolation_mode = "dedicated_benchmark_os_account"
     home = validate_capacity_home(atm_home)
-    atm = release_binary("atm")
-    daemon = release_binary("atm-daemon")
+    atm = release_binary("atm", binary_dir)
+    daemon = release_binary("atm-daemon", binary_dir)
+    if transport == "sqlite" and binary_dir is not None:
+        raise SmokeError("sqlite writer probe is not shipped in --bin-dir; lane must be recorded as not measured")
     direct_writer = sqlite_writer_probe() if transport == "sqlite" else None
     roster = CapacityRoster.unique()
     env = runtime_environment(home, roster)
@@ -755,7 +758,12 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
             "required benchmark campaign has no reviewed baseline: "
             f"{error}"
         ) from error
-    hashes = binary_hashes()
+    binary_dir = args.bin_dir.resolve() if args.bin_dir is not None else None
+    hashes = binary_hashes(binary_dir)
+    versions = (
+        {name: release_version(release_binary(name, binary_dir)) for name in ("atm", "atm-daemon")}
+        if binary_dir is not None else {}
+    )
     print(f"benchmark campaign: {campaign_identifier}")
     published_results: list[BenchmarkRunResult] = []
     for position, (target, (transport, peer_wire_security)) in enumerate(target_matrix, start=1):
@@ -765,7 +773,21 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
             os_name=os_name,
             baseline=target_baselines[target],
             binary_hashes=hashes,
+            binary_versions=versions,
         )
+        if target == "sqlite" and binary_dir is not None:
+            result = BenchmarkRunResult(
+                campaign_id=campaign_identifier, host_label=host_label, os=os_name, target="sqlite",
+                status="INCOMPLETE", incomplete_reason="not measured: --bin-dir does not ship atm-daemon-benchmark; no local build was run",
+                generated_at=datetime.now(timezone.utc), source_revision=source, binary_hashes=hashes,
+                binary_versions=versions, frames_per_connection=0, messages_requested=0,
+                messages_admitted=0, messages_durable=0, baseline=BaselineRef(revision=1, p50_floor=target_baselines[target].p50_floor),
+            )
+            compact_path = args.evidence_dir / f"{campaign_identifier}-{target}.json"
+            atomic_json(compact_path, result.model_dump(mode="json"))
+            published_results.append(result)
+            print(f"NOT MEASURED required f8 target sqlite: {result.incomplete_reason} evidence={compact_path}")
+            continue
         if args.atm_home is None:
             with tempfile.TemporaryDirectory(prefix="atm-capacity-parent-") as temporary:
                 run = run_capacity(
@@ -781,6 +803,7 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
                     benchmark_target=target,
                     campaign_id=campaign_identifier,
                     v4_emission=emission,
+                    binary_dir=binary_dir,
                 )
         else:
             run = run_capacity(
@@ -840,6 +863,7 @@ def main() -> int:
         help="create the account-local benchmark manifest; refuses an account with existing ATM state",
     )
     parser.add_argument("--atm-home", type=Path)
+    parser.add_argument("--bin-dir", type=Path, help="directory containing shipped atm and atm-daemon binaries; skips local builds and the unavailable sqlite writer probe")
     parser.add_argument(
         "--diagnostic-only",
         action="store_true",

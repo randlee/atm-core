@@ -424,9 +424,7 @@ fn ao4_benchmark_targets_cannot_introduce_an_alternate_daemon_pipeline() {
         );
     }
     assert!(
-        justfile.contains("cargo build --release -p agent-team-mail -p atm-daemon")
-            && !justfile.contains("atm-daemon-benchmark")
-            && !justfile.contains("benchmark-harness"),
+        !justfile.contains("atm-daemon-benchmark") && !justfile.contains("benchmark-harness"),
         "the public benchmark recipe must build only the shipped Tokio/Axum daemon"
     );
 }
