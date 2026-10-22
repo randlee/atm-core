@@ -191,48 +191,66 @@ pub(crate) async fn escalate_mail(
     suppress_since: Option<IsoTimestamp>,
 ) -> Result<EscalationOutcome, AtmError> {
     if episode.is_some() {
-        let runtime = runtime.clone();
-        let daemon_home = daemon_home.to_path_buf();
-        let source_member = MemberKey::new(source_task.team.clone(), source_task.assignee.clone());
-        let admitted = blocking_bridge
-            .run(herdr_request_deadline(), move || {
-                write_current_herdr_terminal_escalation_with_runtime(
-                    daemon_home,
-                    &source_member,
-                    &NullObservability,
-                    &runtime,
-                )
-            })
-            .await?;
-        let recipients_written = admitted.recipients_written();
-        return Ok(EscalationOutcome {
-            audit_delivery: admitted.deliveries.into_iter().next(),
-            recipients_written,
-            recipients_failed: 0,
-        });
+        return write_terminal_episode(blocking_bridge, runtime, source_task, daemon_home).await;
     }
-    let targets = match load_escalation_targets(blocking_bridge, runtime, task_store, team).await {
-        Ok(targets) => targets,
-        Err(error) => {
-            log_target_load_error(team, &error);
-            return Err(error);
-        }
+    let targets = load_escalation_targets(blocking_bridge, runtime, task_store, team)
+        .await
+        .inspect_err(|error| log_target_load_error(team, error))?;
+    let context = EscalationWriteContext {
+        daemon_home,
+        team,
+        summary,
+        mail_body,
+        kind,
+        suppress_since,
     };
-    let mut outcome = EscalationOutcome::default();
-    let reader = suppress_since.and_then(|_| match runtime.async_mailbox_reader() {
-        Ok(reader) => Some(reader),
-        Err(error) => {
-            tracing::warn!(
-                subsystem = "herdr_queue_wake",
-                action = "escalation_mail_reader",
-                outcome = "unavailable",
-                error = %error,
-                "Escalation mailbox suppression is unavailable"
-            );
-            None
-        }
-    });
-    let leads = match kind {
+    write_to_escalation_recipients(blocking_bridge, runtime, &context, targets).await
+}
+
+async fn write_terminal_episode(
+    blocking_bridge: &BoundedBlockingBridge,
+    runtime: &LocalServiceRuntime,
+    source_task: &TaskRow,
+    daemon_home: &Path,
+) -> Result<EscalationOutcome, AtmError> {
+    let runtime = runtime.clone();
+    let daemon_home = daemon_home.to_path_buf();
+    let source_member = MemberKey::new(source_task.team.clone(), source_task.assignee.clone());
+    let admitted = blocking_bridge
+        .run(herdr_request_deadline(), move || {
+            write_current_herdr_terminal_escalation_with_runtime(
+                daemon_home,
+                &source_member,
+                &NullObservability,
+                &runtime,
+            )
+        })
+        .await?;
+    let recipients_written = admitted.recipients_written();
+    Ok(EscalationOutcome {
+        audit_delivery: admitted.deliveries.into_iter().next(),
+        recipients_written,
+        recipients_failed: 0,
+    })
+}
+
+struct EscalationWriteContext<'a> {
+    daemon_home: &'a Path,
+    team: &'a TeamName,
+    summary: &'a str,
+    mail_body: &'a str,
+    kind: EscalationKind,
+    suppress_since: Option<IsoTimestamp>,
+}
+
+async fn write_to_escalation_recipients(
+    blocking_bridge: &BoundedBlockingBridge,
+    runtime: &LocalServiceRuntime,
+    context: &EscalationWriteContext<'_>,
+    targets: EscalationTargets,
+) -> Result<EscalationOutcome, AtmError> {
+    let reader = escalation_reader(runtime, context.suppress_since);
+    let leads = match context.kind {
         EscalationKind::TaskStalled => targets.leads,
         _ if targets.leads.len() == 1 => targets.leads,
         _ => Vec::new(),
@@ -240,39 +258,63 @@ pub(crate) async fn escalate_mail(
     let recipients = leads
         .into_iter()
         .map(|lead| {
-            format!("{lead}@{team}")
+            format!("{lead}@{}", context.team)
                 .parse()
                 .expect("validated lead and team form a valid local address")
         })
         .chain(targets.recipients);
+    let mut outcome = EscalationOutcome::default();
     for recipient in recipients {
-        if should_suppress(reader.as_deref(), &recipient, team, summary, suppress_since).await {
+        if should_suppress(
+            reader.as_deref(),
+            &recipient,
+            context.team,
+            context.summary,
+            context.suppress_since,
+        )
+        .await
+        {
             continue;
         }
         match write_escalation_mail_with_summary(
             blocking_bridge,
             runtime,
-            daemon_home,
-            team,
+            context.daemon_home,
+            context.team,
             &recipient,
-            mail_body,
-            summary,
+            context.mail_body,
+            context.summary,
         )
         .await
         {
             Ok(message_id) => {
-                if outcome.audit_delivery.is_none() {
-                    outcome.audit_delivery = Some((recipient.agent().clone(), message_id));
-                }
-                outcome.recipients_written = outcome.recipients_written.saturating_add(1);
+                record_escalation_write(&mut outcome, recipient.agent().clone(), message_id)
             }
             Err(error) => {
                 outcome.recipients_failed = outcome.recipients_failed.saturating_add(1);
-                tracing::warn!(subsystem = "herdr_queue_wake", action = "escalation_mail_write", outcome = "failed", kind = kind.as_str(), recipient = %recipient, error = %error, "Escalation mail write failed");
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "escalation_mail_write", outcome = "failed", kind = context.kind.as_str(), recipient = %recipient, error = %error, "Escalation mail write failed");
             }
         }
     }
     Ok(outcome)
+}
+
+fn escalation_reader(
+    runtime: &LocalServiceRuntime,
+    suppress_since: Option<IsoTimestamp>,
+) -> Option<Arc<dyn AsyncMailboxReader + Send + Sync>> {
+    suppress_since.and_then(|_| runtime.async_mailbox_reader().ok())
+}
+
+fn record_escalation_write(
+    outcome: &mut EscalationOutcome,
+    recipient: AgentName,
+    message_id: atm_core::schema::AtmMessageId,
+) {
+    if outcome.audit_delivery.is_none() {
+        outcome.audit_delivery = Some((recipient, message_id));
+    }
+    outcome.recipients_written = outcome.recipients_written.saturating_add(1);
 }
 
 fn log_target_load_error(team: &TeamName, error: &AtmError) {
