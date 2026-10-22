@@ -2,7 +2,7 @@
 
 use atm_core::boundary::{
     TASK_CONSECUTIVE_REFUSAL_THRESHOLD, TASK_REMINDER_INTERVAL_MS, TASK_STALLED_REMINDER_THRESHOLD,
-    TaskRow,
+    TaskRow, TaskState,
 };
 use atm_core::protocol::RuntimeMemberState;
 use atm_core::types::IsoTimestamp;
@@ -60,9 +60,13 @@ pub(crate) fn dispose(
     use TaskDisposition as D;
 
     match (mail_pending, state, head) {
+        // The ledger's Started transition is the authoritative work signal.
+        // Codex panes can report Idle throughout a running task, so roster
+        // Idle must not override an Active task row. Explicit Blocked/Offline
+        // observations still take the episode-escalation path below.
+        (_, S::Idle, Some(task)) if task.state == TaskState::Active => D::Hold("task active"),
         (_, S::Active, Some(task))
-            if (task.reminder_count > 0 || task.lead_notified_count > 0)
-                && sustained_active(active_since, now) =>
+            if task.reminder_count > 0 && sustained_active(active_since, now) =>
         {
             D::ResetReminders
         }
@@ -88,13 +92,13 @@ pub(crate) fn dispose(
         (_, S::Idle, Some(_)) if consecutive_refusals >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD => {
             D::Hold("refusals escalated")
         }
-        // The lead is escalated again every `TASK_STALLED_REMINDER_THRESHOLD`
-        // reminders during a continued stall, not just once per task.
-        // `lead_notified_count` counts escalations already sent; since it
-        // only advances on an actual escalation and `reminder_count` only
-        // advances when a reminder is recorded, this cannot double-fire
-        // across pump passes.
+        // An unstarted assignment receives one bounded reminder budget and
+        // one lead notification. A new assignment/reopen resets both counters.
         (_, S::Idle, Some(task)) if escalation_due(task) => D::EscalateStalled,
+        (_, S::Idle, Some(task)) if task.lead_notified_count > 0 => D::Hold("stalled reported"),
+        (_, S::Idle, Some(task)) if task.reminder_count >= TASK_STALLED_REMINDER_THRESHOLD => {
+            D::Hold("stalled reported")
+        }
         (true, S::Idle, _) => D::Hold("mail pending"),
         (false, S::Idle, None) => D::Hold("no open task"),
         (false, S::Idle, Some(task)) if !reminder_due(task, now) => D::Hold("rate limited"),
@@ -112,14 +116,15 @@ fn sustained_active(active_since: Option<IsoTimestamp>, now: IsoTimestamp) -> bo
 }
 
 /// Whether `task` has reached its next `TASK_STALLED_REMINDER_THRESHOLD`
-/// reminder budget without a matching lead escalation yet. The lead is
-/// escalated again at every such budget boundary (10, 20, 30, ...), so this
-/// is the single source of truth for that boundary check; it is shared by
+/// reminder budget without a lead escalation yet. A Started task cannot
+/// trigger a stale Assigned-state escalation. This predicate is shared by
 /// [`dispose`]'s `EscalateStalled` trigger and by the queue-wake pump's
 /// `queue_drain_allowed`, which holds queue draining only in the tick where a
 /// stall escalation is about to fire.
 pub(crate) fn escalation_due(task: &TaskRow) -> bool {
-    task.reminder_count / TASK_STALLED_REMINDER_THRESHOLD > task.lead_notified_count
+    task.state == TaskState::Assigned
+        && task.reminder_count >= TASK_STALLED_REMINDER_THRESHOLD
+        && task.lead_notified_count == 0
 }
 
 fn reminder_due(task: &TaskRow, now: IsoTimestamp) -> bool {
@@ -131,7 +136,7 @@ fn reminder_due(task: &TaskRow, now: IsoTimestamp) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{EpisodeKind, TaskDisposition, dispose};
-    use atm_core::boundary::{TaskRow, TaskState};
+    use atm_core::boundary::{TASK_STALLED_REMINDER_THRESHOLD, TaskRow, TaskState};
     use atm_core::protocol::RuntimeMemberState;
     use atm_core::schema::AtmMessageId;
     use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
@@ -215,6 +220,51 @@ mod tests {
     }
 
     #[test]
+    fn started_task_holds_idle_roster_but_blocked_episode_escalates() {
+        let mut task = row();
+        task.state = TaskState::Active;
+        task.reminder_count = TASK_STALLED_REMINDER_THRESHOLD;
+        task.lead_notified_count = 0;
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&task),
+                now(),
+                None,
+                false,
+                0
+            ),
+            TaskDisposition::Hold("task active")
+        );
+        assert!(!super::escalation_due(&task));
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Blocked,
+                Some(&task),
+                now(),
+                None,
+                true,
+                0
+            ),
+            TaskDisposition::EscalateEpisode(EpisodeKind::Blocked)
+        );
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Blocked,
+                Some(&task),
+                now(),
+                None,
+                false,
+                0
+            ),
+            TaskDisposition::Hold("episode reported")
+        );
+    }
+
+    #[test]
     fn active_reset_requires_a_full_reminder_interval() {
         let mut task = row();
         task.reminder_count = 3;
@@ -265,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    fn threshold_escalates_again_every_budget_of_reminders() {
+    fn assigned_stall_escalates_once_then_holds_until_a_state_transition() {
         let mut task = row();
 
         // First budget of reminders exhausted, no escalation sent yet.
@@ -284,7 +334,8 @@ mod tests {
             TaskDisposition::EscalateStalled
         );
 
-        // Still within the escalated budget: keep nudging the assignee.
+        // Once reported, neither a stale counter nor a new idle observation
+        // reopens the same assignment's reminder budget.
         task.reminder_count = 15;
         task.lead_notified_count = 1;
         assert_eq!(
@@ -297,10 +348,11 @@ mod tests {
                 false,
                 0
             ),
-            TaskDisposition::Nudge
+            TaskDisposition::Hold("stalled reported")
         );
 
-        // A second full budget of reminders escalates the lead again.
+        // A second full budget inherited from older daemon versions does not
+        // cause another lead notification.
         task.reminder_count = 20;
         assert_eq!(
             dispose(
@@ -312,11 +364,12 @@ mod tests {
                 false,
                 0
             ),
-            TaskDisposition::EscalateStalled
+            TaskDisposition::Hold("stalled reported")
         );
 
-        // Within the second escalated budget: nudging continues.
-        task.lead_notified_count = 2;
+        // Starting the task overrides even an unreported old threshold.
+        task.lead_notified_count = 0;
+        task.state = TaskState::Active;
         assert_eq!(
             dispose(
                 false,
@@ -327,10 +380,31 @@ mod tests {
                 false,
                 0
             ),
-            TaskDisposition::Nudge
+            TaskDisposition::Hold("task active")
         );
 
-        // The rate limit still applies while within an escalated budget.
+        // The recorded lead notification is a latch even if an activity
+        // reset has cleared the reminder budget.
+        task.state = TaskState::Assigned;
+        task.reminder_count = 0;
+        task.lead_notified_count = 1;
+        assert_eq!(
+            dispose(
+                false,
+                RuntimeMemberState::Idle,
+                Some(&task),
+                now(),
+                None,
+                false,
+                0
+            ),
+            TaskDisposition::Hold("stalled reported")
+        );
+
+        // An assignment below threshold still respects the rate limit.
+        task.state = TaskState::Assigned;
+        task.reminder_count = 2;
+        task.lead_notified_count = 0;
         task.last_reminded_at = Some(now());
         assert_eq!(
             dispose(
@@ -543,7 +617,7 @@ mod tests {
                 true,
                 0
             ),
-            TaskDisposition::Nudge
+            TaskDisposition::Hold("stalled reported")
         );
         assert_eq!(
             dispose(
@@ -591,7 +665,7 @@ mod tests {
                 true,
                 0
             ),
-            TaskDisposition::Nudge
+            TaskDisposition::Hold("task active")
         );
     }
 }

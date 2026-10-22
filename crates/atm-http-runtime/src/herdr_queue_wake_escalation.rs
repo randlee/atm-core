@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use atm_core::boundary::{
     AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskEventKind, TaskEventRow,
-    TaskRow,
+    TaskRow, TaskState,
 };
 use atm_core::types::IsoTimestamp;
 use atm_core::types::TaskId;
@@ -14,7 +14,7 @@ use crate::herdr_escalation::{
     EpisodeObservation, EscalationKind, escalate_mail, escalation_summary,
 };
 use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, herdr_request_deadline};
-use crate::herdr_task_disposition::EpisodeKind;
+use crate::herdr_task_disposition::{EpisodeKind, escalation_due};
 
 const TASK_READ_DEADLINE: Duration = Duration::from_secs(5);
 const MAX_BLOCKED_MAIL_BODY_BYTES: usize = 4_096;
@@ -46,7 +46,35 @@ pub(crate) async fn escalate_stalled_task(
             return;
         }
     };
-    let body = task_escalation_body(row, now, &events);
+    // The task-pass snapshot may predate a Start, reassignment, or reopen.
+    // Re-read the exact assignment immediately before building outbound
+    // escalation mail; an unreadable row fails closed.
+    let deadline = match ReadDeadline::new(TASK_READ_DEADLINE) {
+        Ok(deadline) => deadline,
+        Err(error) => {
+            tracing::warn!(subsystem = "herdr_queue_wake", action = "task_escalation_verify", outcome = "deadline_invalid", task_id = %row.task_id, error = %error, "Task stall escalation held");
+            return;
+        }
+    };
+    let current = match reader
+        .load_task(row.team.clone(), row.task_id.clone(), deadline)
+        .await
+    {
+        Ok(Some(current)) => current,
+        Ok(None) => return,
+        Err(error) => {
+            tracing::warn!(subsystem = "herdr_queue_wake", action = "task_escalation_verify", outcome = "failed", task_id = %row.task_id, error = %error, "Task stall escalation held because its current state is unavailable");
+            return;
+        }
+    };
+    if current.state != TaskState::Assigned
+        || current.assignee != row.assignee
+        || current.assignment_message_id != row.assignment_message_id
+        || !escalation_due(&current)
+    {
+        return;
+    }
+    let body = task_escalation_body(&current, now, &events);
     let Ok(outcome) = escalate_mail(
         &pump.blocking_bridge,
         &pump.service_runtime,

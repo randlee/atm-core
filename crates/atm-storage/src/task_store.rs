@@ -254,8 +254,8 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         outcome: ReminderOutcome,
     ) -> Result<TaskReminderRecord, AtmError>;
     /// Zeroes the reminder budget after the assignee is observed sustained
-    /// active. The budget then counts from the assignee's last observed
-    /// activity rather than from task assignment.
+    /// active. A recorded lead notification remains latched for the current
+    /// assignment, so activity cannot rearm a reported stall.
     fn reset_reminders(
         &self,
         member: &MemberKey,
@@ -662,7 +662,6 @@ impl TaskStore for DummyTaskStore {
                 AtmError::new(crate::AtmErrorCode::InternalError, "dummy task row missing")
             })?;
         row.reminder_count = 0;
-        row.lead_notified_count = 0;
         row.last_reminded_at = None;
         row.updated_at = at;
         Ok(TaskReminderRecord {

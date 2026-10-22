@@ -1107,7 +1107,7 @@ async fn uncertain_terminal_handoff_error_keeps_the_marker_reserved() {
 }
 
 #[tokio::test]
-async fn tenth_reminder_escalates_then_keeps_nudging_and_escalates_again() {
+async fn tenth_reminder_escalates_once_and_holds_the_same_assignment() {
     let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-TENTH"]);
     for minute in 0..10 {
         *now.lock().expect("clock") =
@@ -1154,16 +1154,15 @@ async fn tenth_reminder_escalates_then_keeps_nudging_and_escalates_again() {
         "the first stall escalation must set a queue marker for the lead"
     );
 
-    // Idle nudging continues past the first escalation instead of holding
-    // "stalled" forever: ten more reminders reach the next budget boundary
-    // and escalate the lead again.
+    // A persistent idle roster must not create a second reminder or lead
+    // burst for the same unstarted assignment.
     for minute in 11..=20 {
         *now.lock().expect("clock") =
             IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
     }
-    assert_eq!(prompt_texts(&fake).len(), 20);
+    assert_eq!(prompt_texts(&fake).len(), 10);
     queue_idle_result(&fake, &key);
     *now.lock().expect("clock") =
         IsoTimestamp::from_str("2030-01-01T00:21:00Z").expect("timestamp");
@@ -1172,22 +1171,22 @@ async fn tenth_reminder_escalates_then_keeps_nudging_and_escalates_again() {
         .load_task(key.team(), &tasks[0])
         .expect("task")
         .expect("row");
-    assert_eq!(row.reminder_count, 20);
-    assert_eq!(row.lead_notified_count, 2);
+    assert_eq!(row.reminder_count, 10);
+    assert_eq!(row.lead_notified_count, 1);
     assert_eq!(
         prompt_texts(&fake).len(),
-        20,
-        "the escalation tick itself holds rather than nudging"
+        10,
+        "the assignment remains held after its one escalation"
     );
     assert_eq!(
         daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
             .await
             .len(),
-        2,
-        "a continued stall escalates the lead again at the next budget boundary"
+        1,
+        "a continued idle observation cannot create another lead notification"
     );
 
-    // Nudging resumes again after the second escalation.
+    // Another accepted idle observation still leaves the task held.
     queue_idle_result(&fake, &key);
     *now.lock().expect("clock") =
         IsoTimestamp::from_str("2030-01-01T00:22:00Z").expect("timestamp");
@@ -1196,9 +1195,156 @@ async fn tenth_reminder_escalates_then_keeps_nudging_and_escalates_again() {
         .load_task(key.team(), &tasks[0])
         .expect("task")
         .expect("row");
-    assert_eq!(row.reminder_count, 21);
-    assert_eq!(row.lead_notified_count, 2);
-    assert_eq!(prompt_texts(&fake).len(), 21);
+    assert_eq!(row.reminder_count, 10);
+    assert_eq!(row.lead_notified_count, 1);
+    assert_eq!(prompt_texts(&fake).len(), 10);
+}
+
+#[tokio::test]
+async fn started_task_with_idle_roster_has_no_reminder_or_lead_burst() {
+    let (root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-ACTIVE-IDLE"]);
+    start_task(root.path(), &runtime, &key, tasks[0].clone());
+    let store = runtime.task_store().expect("task store");
+    assert_eq!(
+        store
+            .load_task(key.team(), &tasks[0])
+            .expect("task")
+            .expect("row")
+            .state,
+        TaskState::Active
+    );
+
+    for minute in 0..=21 {
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        queue_idle_result(&fake, &key);
+        pump.tick_once().await;
+    }
+
+    let row = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(row.reminder_count, 0);
+    assert_eq!(row.lead_notified_count, 0);
+    assert!(prompt_texts(&fake).is_empty());
+    assert!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn start_during_exact_task_lookup_cancels_stale_stall_escalation() {
+    let (root, runtime, fake, pump, key, tasks, now) =
+        build_real_task_pump(&["LIFE-START-DURING-LOOKUP"]);
+    for minute in 0..10 {
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        if minute > 0 {
+            queue_idle_result(&fake, &key);
+        }
+        pump.tick_once().await;
+    }
+    let store = runtime.task_store().expect("task store");
+    let pending = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(
+        (pending.reminder_count, pending.lead_notified_count),
+        (10, 0)
+    );
+
+    let root_path = root.path().to_path_buf();
+    let start_runtime = runtime.clone();
+    let start_key = key.clone();
+    let start_task_id = tasks[0].clone();
+    let reader = Arc::new(
+        atm_storage::testing::InMemoryTaskLedgerReader::delegating_with_load_task_hook(
+            runtime.async_task_ledger_reader().expect("task reader"),
+            move || {
+                start_task(
+                    &root_path,
+                    &start_runtime,
+                    &start_key,
+                    start_task_id.clone(),
+                )
+            },
+        ),
+    );
+    let checked_runtime = runtime.clone().with_async_task_ledger_reader(reader);
+    let checked_pump = pump_with_clock(
+        checked_runtime,
+        fake.clone(),
+        RuntimeHealth::default(),
+        Arc::clone(&now),
+    )
+    .with_daemon_home(root.path().join("home"));
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:10:00Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    checked_pump.tick_once().await;
+
+    let started = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(started.state, TaskState::Active);
+    assert_eq!(started.lead_notified_count, 0);
+    assert!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty()
+    );
+    assert_eq!(prompt_texts(&fake).len(), 10);
+}
+
+#[tokio::test]
+async fn sustained_runtime_activity_does_not_rearm_reported_assignment() {
+    let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-STALL-LATCH"]);
+    drive_task_to_stall(&pump, &fake, &key, &now).await;
+    let store = runtime.task_store().expect("task store");
+    let stalled = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(
+        (stalled.reminder_count, stalled.lead_notified_count),
+        (10, 1)
+    );
+
+    for minute in [11, 12] {
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
+        pump.tick_once().await;
+    }
+    let reset = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!((reset.reminder_count, reset.lead_notified_count), (0, 1));
+
+    for minute in 13..=24 {
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        queue_idle_result(&fake, &key);
+        pump.tick_once().await;
+    }
+    let held = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!((held.reminder_count, held.lead_notified_count), (0, 1));
+    assert_eq!(prompt_texts(&fake).len(), 10);
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -1376,10 +1522,9 @@ async fn tenth_reminder_with_no_targets_records_terminal_audit() {
         IsoTimestamp::from_str("2030-01-01T00:11:00Z").expect("timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
-    // Idle nudging to the assignee resumes on the next tick; only the
-    // escalation to the (empty) target list stays quiet until the next
-    // budget boundary.
-    assert_eq!(prompt_texts(&fake).len(), 11);
+    // Even without configured targets, the durable terminal audit holds the
+    // same assignment after its one escalation attempt.
+    assert_eq!(prompt_texts(&fake).len(), 10);
     assert_eq!(
         runtime
             .task_store()
@@ -2490,8 +2635,8 @@ async fn one_nudge_lists_every_open_task_of_an_idle_member() {
     let (_root, _runtime, fake, pump, task_store, keys, _now) = build_open_tasks_pump(vec![(
         "ax8-agent-00",
         vec![
-            ("AX8-A1", TaskState::Active, 0),
-            ("AX8-A2", TaskState::Active, 0),
+            ("AX8-A1", TaskState::Assigned, 0),
+            ("AX8-A2", TaskState::Assigned, 0),
             ("AX8-B1", TaskState::Assigned, 0),
         ],
     )]);
@@ -2526,8 +2671,8 @@ async fn stall_escalates_once_per_member() {
     let (_root, runtime, fake, pump, task_store, keys, _now) = build_open_tasks_pump(vec![(
         "ax8-agent-00",
         vec![
-            ("AX8-A1", TaskState::Active, stalled),
-            ("AX8-A2", TaskState::Active, stalled),
+            ("AX8-A1", TaskState::Assigned, stalled),
+            ("AX8-A2", TaskState::Assigned, stalled),
             ("AX8-B1", TaskState::Assigned, stalled),
         ],
     )]);
@@ -2555,14 +2700,14 @@ async fn members_are_nudged_independently() {
         (
             "ax8-alpha",
             vec![
-                ("AX8-ALPHA-1", TaskState::Active, 0),
+                ("AX8-ALPHA-1", TaskState::Assigned, 0),
                 ("AX8-ALPHA-2", TaskState::Assigned, 0),
             ],
         ),
         (
             "ax8-beta",
             vec![
-                ("AX8-BETA-1", TaskState::Active, 0),
+                ("AX8-BETA-1", TaskState::Assigned, 0),
                 ("AX8-BETA-2", TaskState::Assigned, 0),
             ],
         ),

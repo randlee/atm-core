@@ -1699,7 +1699,7 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
     clear_pending_markers(root.path(), &runtime, &key);
     let first: TaskId = "AX5-ACTIVE".parse().expect("task id");
     let second: TaskId = "AX5-ASSIGNED-2".parse().expect("task id");
-    let first_message = queue_task_message(
+    queue_task_message(
         root.path(),
         &runtime,
         key.team(),
@@ -1751,24 +1751,10 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
         .expect("first task");
     assert_eq!(active.state, atm_storage::TaskState::Active);
     let reminders = prompt_texts(&fake);
-    // BB.5: every prompt comes from the task pass and names the active head;
-    // the newer assigned task is never prompted and never reminded
-    // (task_pass.rs:311-343 keeps one head per member).
-    assert_eq!(reminders.len(), 3);
-    // One nudge per member lists every open task in queue order, so the
-    // newer assigned task is named in `open` but never becomes the head.
-    assert!(reminders.iter().all(|text| text.contains(&format!(
-        "open=\"{} {}\"",
-        first.as_str(),
-        second.as_str()
-    ))));
-    assert!(reminders[0].starts_with(&format!(
-        "<atm task=\"{}\" open=\"{} {}\" ready message=\"{first_message}\"",
-        first.as_str(),
-        first.as_str(),
-        second.as_str()
-    )));
-    assert_eq!(active.reminder_count, 3);
+    // The durable Started transition holds all task reminders for this
+    // member, including the queued assignment behind the active head.
+    assert!(reminders.is_empty());
+    assert_eq!(active.reminder_count, 0);
     let queued = store
         .load_task(key.team(), &second)
         .expect("load task")

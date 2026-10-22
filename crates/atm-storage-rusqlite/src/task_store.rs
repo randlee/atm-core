@@ -498,7 +498,7 @@ impl TaskStore for SqliteTaskStore {
                 .ok_or_else(|| AtmError::validation("cannot reset reminders for a missing task"))?;
             connection
                 .execute(
-                    "UPDATE tasks SET reminder_count = 0, lead_notified_count = 0,
+                    "UPDATE tasks SET reminder_count = 0,
                      last_reminded_at = NULL, updated_at = ?4
                      WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
                     params![
