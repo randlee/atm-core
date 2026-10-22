@@ -10,6 +10,7 @@ Own `runs.py`, `icons.py`, and their tests. It presents persisted Quality/Jev da
 
 1. Keep the aligned Quality/Sanity table: time, sprint, result, elapsed, dev, reviewer status; preserve reviewer selection, contributors, filing reviewer, typed details, and `nf-fa-ban` API failure glyph.
 2. Render the never-loaded text exactly `Open QA runs: not loaded yet`; distinguish a Sanity API failure from an ordinary `no` result and from absent metadata.
+3. Implement #347's 60/40 two-panel layout: the most-recent QA run is the upper pane; selecting a run exposes reviewer status at lower left and rendered Markdown findings at lower right.
 
 ## Deterministic acceptance
 
@@ -20,6 +21,8 @@ Own `runs.py`, `icons.py`, and their tests. It presents persisted Quality/Jev da
 - [ ] `test_jev_api_failure_uses_nf_fa_ban_u_f05e`
 - [ ] `test_reviewer_selection_filters_findings`
 - [ ] `test_finding_lists_contributing_reviewers_filing_marked`
+- [ ] `test_quality_two_panel_60_40_layout`
+- [ ] `test_quality_selection_renders_markdown_findings_in_lower_right`
 
 ## Validation
 ```bash
