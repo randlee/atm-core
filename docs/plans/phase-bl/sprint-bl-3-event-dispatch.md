@@ -12,7 +12,8 @@ Own `events.py`, `delivery.py`, `test_events.py`, and `test_delivery.py` in the 
 
 1. Implement pure `derive_transitions(snapshot, previous) -> tuple[EventRequest, ...]` for held, dispatch, and alert transitions. Retained held rows carry bead, task, reason, and source timestamp.
 2. Persist and enqueue derived or supplied `EventRequest`s through `enqueue_event_request`; aggregate/debounce by `debounce_key` and preserve delivery history.
-2. Implement `due_requests(clock)` and `deliver_due(clock, sender)`; only `deliver_due` may invoke sender.
+3. Implement `due_requests(clock)` and `deliver_due(clock, sender)`; only `deliver_due` may invoke sender.
+4. Persist request identity and attempt state before send. A failed typed sender result remains due for controlled-clock retry; restart recovery reloads it; acknowledged success is persisted before it becomes ineligible for redelivery.
 
 ## Deterministic acceptance
 
@@ -23,6 +24,9 @@ Own `events.py`, `delivery.py`, `test_events.py`, and `test_delivery.py` in the 
 - [ ] `test_due_requests_never_call_send_seam`
 - [ ] `test_deliver_due_is_only_send_seam_and_respects_injected_clock`
 - [ ] `test_delivery_history_preserves_typed_outcome`
+- [ ] `test_failed_send_remains_due_for_controlled_clock_retry`
+- [ ] `test_restart_recovers_pending_delivery_request`
+- [ ] `test_acknowledged_success_is_never_redelivered`
 
 No source-read or TUI assertion is made here; bl-12 owns collector/TUI no-send integration proof.
 

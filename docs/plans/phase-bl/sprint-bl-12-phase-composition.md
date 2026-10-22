@@ -23,12 +23,12 @@ Own `cli.py`, `app.py`, `runner.py`, `model.py`, `cron_entry.py`, `delivery_entr
 - [ ] `test_each_jev_error_kind_flows_jsonl_to_sanity_and_do_not_enter`
 - [ ] `test_reviewer_metadata_reaches_quality_pane_unchanged`
 - [ ] `test_eligible_sanity_transition_creates_one_aggregated_request`
-- [ ] `test_eligible_sanity_transition_creates_aggregated_request`
 - [ ] `test_sanity_event_request_enters_durable_queue_via_enqueue_event_request`
 - [ ] `test_cron_enqueues_transition_derived_from_fixture_snapshot`
 - [ ] `test_wiring_injects_problem_deriver_and_plugin_enqueue_path`
 - [ ] `test_installed_cron_show_and_tui_entrypoints_never_send_or_double_query`
 - [ ] `test_composed_quality_two_panel_markdown_selection`
+- [ ] `test_composed_failed_send_retries_after_restart_without_redelivery_after_ack`
 - [ ] `test_only_advanced_delivery_clock_sends_request`
 - [ ] `test_cron_and_tui_render_same_persisted_state_without_collection`
 - [ ] `test_failed_source_is_eligible_on_next_controlled_request`
