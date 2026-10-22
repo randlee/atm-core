@@ -496,6 +496,14 @@ def remote_preflight(
         return None
 
 
+def ensure_local_member(atm: str, team: str, identity: str) -> None:
+    """Make the live local recipient available without requiring account setup."""
+    result = command([atm, "teams", "add-member", team, identity])
+    if result["exit_code"] != 0:
+        detail = result["stderr"].strip() or result["stdout"].strip() or "unknown error"
+        print(f"WARNING could not add {identity} to {team}: {detail}", flush=True)
+
+
 def add_case(
     cases: list[dict[str, Any]],
     name: str,
@@ -871,6 +879,8 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
         add_case(cases, "doctor", False, str(error))
     if not all(case["status"] == "PASS" for case in cases):
         return cases
+    if feature in {LOCALHOST, LOCAL_IP}:
+        ensure_local_member(atm, team, identity)
     if feature == LOCALHOST:
         # This lane must exercise the portable loopback name, never an
         # advertised hostname or interface address from the current machine.

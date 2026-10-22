@@ -424,6 +424,31 @@ class FeatureSmokeTests(unittest.TestCase):
         self.assertEqual(required_command[2], f"{TEST_SENDER}@{TEST_TEAM}")
         self.assertEqual(required_command[required_command.index("--host") + 1], "localhost")
 
+    def test_localhost_adds_member_once_before_first_send(self):
+        doctor = {
+            "summary": {"status": "healthy", "error_count": 0},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.4.1-beta-ai-1"},
+            "daemon_context": {"version": "1.4.1-beta-ai-1"},
+        }
+        order: list[str] = []
+
+        def stubbed_command(argv):
+            order.append(argv[1])
+            if argv[1] == "doctor":
+                return {"exit_code": 0, "stdout": json.dumps(doctor), "stderr": ""}
+            self.assertEqual(argv, ["atm", "teams", "add-member", TEST_TEAM, TEST_SENDER])
+            return {"exit_code": 0, "stdout": "added", "stderr": ""}
+
+        with mock.patch.object(RUNNER, "require_environment", return_value=("atm", TEST_SENDER, TEST_TEAM)), mock.patch.object(
+            RUNNER, "command", side_effect=stubbed_command
+        ) as command, mock.patch.object(RUNNER, "branch_version", return_value="1.4.1-beta-ai-1"), mock.patch.object(
+            RUNNER, "send_read_ack", side_effect=lambda *_args, **_kwargs: order.append("send")
+        ):
+            RUNNER.run_live_attempt(RUNNER.LOCALHOST, [])
+        self.assertEqual(order, ["doctor", "teams", "send"])
+        self.assertEqual(command.call_count, 2)
+
     def test_localhost_live_attempt_never_discovers_or_targets_advertised_host(self):
         doctor = {
             "summary": {"status": "healthy", "error_count": 0},
