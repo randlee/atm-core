@@ -1,4 +1,5 @@
 # Sprint bl-6 — dashboard render
+Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR target: `integrate/phase-bl`.
 
 closure_type: boundary; target_boundary: DashboardRender; branch: sprint/bl-6-dashboard-render; PR target: integrate/phase-bl; wave: 2; external_ref: none; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (`StateSnapshot` fixture); parallel_safe: bl-2, bl-3, bl-4, bl-5, bl-7, bl-8, bl-10, bl-13, bl-14.
 

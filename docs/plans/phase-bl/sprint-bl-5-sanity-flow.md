@@ -1,4 +1,5 @@
 # Sprint bl-5 — sanity state and close mechanics
+Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR target: `integrate/phase-bl`.
 
 closure_type: boundary; target_boundary: SanityState; branch: sprint/bl-5-sanity-flow; PR target: integrate/phase-bl; wave: 2; external_ref: #365, #497, #126, #498; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (`EventRequest` JSON codec); parallel_safe: bl-2, bl-3, bl-4, bl-6, bl-7, bl-8, bl-10, bl-13, bl-14.
 

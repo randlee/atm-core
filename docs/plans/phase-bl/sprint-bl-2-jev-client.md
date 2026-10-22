@@ -1,4 +1,5 @@
 # Sprint bl-2 — jev_client: request array in, typed JSONL out, busy-only retry
+Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR target: `integrate/phase-bl`.
 
 closure_type: boundary; target_boundary: JevResult; branch: sprint/bl-2-jev-client; PR target: integrate/phase-bl; wave: 2; external_ref: #379, #164; recommended_agent: arch-ctm; recommended_model: opus; must_follow: bl-1 (versioned JSON codec fixtures); parallel_safe: bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13, bl-14.
 

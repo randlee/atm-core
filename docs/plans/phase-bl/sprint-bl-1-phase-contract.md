@@ -1,4 +1,5 @@
 # Sprint bl-1 — Phase BL contract
+Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR target: `integrate/phase-bl`.
 
 closure_type: contract; target_boundary: PhaseBlContract; branch: sprint/bl-1-phase-contract; PR target: integrate/phase-bl; wave: 1; external_ref: none; recommended_agent: arch-ctm; recommended_model: opus; must_follow: none; parallel_safe: bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13, bl-14.
 
