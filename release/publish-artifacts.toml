@@ -41,6 +41,10 @@ archive = "tar.gz"
 target = "x86_64-pc-windows-msvc"
 os = "windows-latest"
 archive = "zip"
+[[release_targets]]
+target = "aarch64-pc-windows-msvc"
+os = "windows-11-arm"
+archive = "zip"
 
 [[crates]]
 artifact = "atm-graft-python"
@@ -200,21 +204,21 @@ source = "crates/atm-graft-python"
 cargo_manifest = "crates/atm-graft-python/Cargo.toml"
 module_path = "crates/atm-graft-python/python/atm_graft"
 sdist = true
-wheels = ["ubuntu-latest", "macos-latest", "windows-latest"]
+wheels = ["ubuntu-latest", "ubuntu-24.04-arm", "macos-latest", "macos-15-intel", "windows-latest", "windows-11-arm"]
 [[python_distributions]]
 name = "atm-query"
 source = "crates/atm-query-python"
 cargo_manifest = "crates/atm-query-python/Cargo.toml"
 module_path = "crates/atm-query-python"
 sdist = true
-wheels = ["ubuntu-latest", "macos-latest", "windows-latest"]
+wheels = ["ubuntu-latest", "ubuntu-24.04-arm", "macos-latest", "macos-15-intel", "windows-latest", "windows-11-arm"]
 [[python_distributions]]
 name = "hermes-atm"
 source = "crates/hermes-atm"
 build_system = "setuptools"
 module_path = "crates/hermes-atm/src/hermes_atm"
 sdist = true
-wheels = ["ubuntu-latest", "macos-latest", "windows-latest"]
+wheels = ["ubuntu-latest"]
 
 [channels.pypi]
 workflow = "pypi-publish.yml"

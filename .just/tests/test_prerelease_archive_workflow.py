@@ -384,8 +384,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertIn("name: ${{ matrix.target }}", workflow)
         self.assertIn('shasum -a 256 "${assets_to_publish[@]}" > checksums.txt', workflow)
         self.assertIn('"${assets_to_publish[@]}" checksums.txt', workflow)
-        self.assertIn("uses: ./.github/workflows/ci.yml", workflow)
-        self.assertIn("build_release_artifacts: true", workflow)
+        self.assertNotIn("uses: ./.github/workflows/ci.yml", workflow)
+        self.assertIn("python-wheel-matrix --manifest", workflow)
+        self.assertIn("python-sdist-matrix --manifest", workflow)
+        self.assertIn("release-target-matrix --manifest", workflow)
         self.assertIn('gh release create "$tag" --prerelease', workflow)
         self.assertIn('cmp checksums.txt existing-release/checksums.txt', workflow)
         self.assertIn("concurrent run converged", workflow)
@@ -394,10 +396,17 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         release_step = workflow.split(
             "      - name: Generate checksums and publish GitHub prerelease assets\n", 1
         )[1]
-        self.assertRegex(release_step, r"find assets/hermes-atm-wheels-\*.*atm_graft\*\.whl")
-        self.assertRegex(release_step, r"find assets/hermes-atm-wheels-\*.*atm_query\*\.whl")
-        self.assertRegex(release_step, r"find assets/hermes-atm-wheels-linux-x86_64.*hermes_atm\*\.whl")
-        self.assertNotRegex(release_step, r"assets/hermes-atm-wheels-linux-x86_64.*atm_query")
+        self.assertIn("find assets -type f", release_step)
+        self.assertIn("verify-python-release-assets", release_step)
+        self.assertNotIn("hermes-atm-wheels-", release_step)
+
+    def test_release_workflows_do_not_duplicate_manifest_target_or_wheel_platform_lists(self) -> None:
+        for name in ("ci.yml", "prerelease-archive.yml", "hermes-atm-pypi-publish.yml"):
+            workflow = workflow_text(name)
+            with self.subTest(workflow=name):
+                self.assertNotRegex(workflow, r"(?:x86_64|aarch64)-(?:unknown-linux|apple-darwin|pc-windows-msvc)")
+                self.assertNotIn("hermes-atm-wheels-", workflow)
+                self.assertIn("python-wheel-matrix --manifest", workflow)
 
     def test_checksums_are_an_explicit_github_release_asset(self) -> None:
         workflow = workflow_text("prerelease-archive.yml")

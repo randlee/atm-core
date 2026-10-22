@@ -23,6 +23,11 @@ jobs:
       source_sha: ${{ steps.version.outputs.source_sha }}
       rust_toolchain: ${{ steps.version.outputs.rust_toolchain }}
       matrix: ${{ steps.matrix.outputs.value }}
+      workspace_toml: ${{ steps.version.outputs.workspace_toml }}
+      has_python_wheels: ${{ steps.version.outputs.has_python_wheels }}
+      has_python_sdists: ${{ steps.version.outputs.has_python_sdists }}
+      python_wheel_matrix: ${{ steps.matrix.outputs.python_wheel_matrix }}
+      python_sdist_matrix: ${{ steps.matrix.outputs.python_sdist_matrix }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -44,18 +49,25 @@ jobs:
           plan="$(python3 .github/scripts/release_artifacts.py build-plan --manifest "$RELEASE_ARTIFACT_MANIFEST")"
           workspace="$(jq -r .workspace_toml <<<"$plan")"
           rust_toolchain="$(jq -r .rust_toolchain <<<"$plan")"
+          has_python_wheels="$(jq -r .has_python_wheels <<<"$plan")"
+          has_python_sdists="$(jq -r .has_python_sdists <<<"$plan")"
           python3 .github/scripts/release_artifacts.py validate-manifest --manifest "$RELEASE_ARTIFACT_MANIFEST" --workspace-toml "$workspace"
           python3 .github/scripts/release_artifacts.py verify-version --manifest "$RELEASE_ARTIFACT_MANIFEST" --workspace-toml "$workspace" --version "$version"
           python3 .github/scripts/release_artifacts.py verify-version-lockstep --manifest "$RELEASE_ARTIFACT_MANIFEST" --workspace-toml "$workspace"
           echo "value=$version" >> "$GITHUB_OUTPUT"
           echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "rust_toolchain=$rust_toolchain" >> "$GITHUB_OUTPUT"
+          echo "workspace_toml=$workspace" >> "$GITHUB_OUTPUT"
+          echo "has_python_wheels=$has_python_wheels" >> "$GITHUB_OUTPUT"
+          echo "has_python_sdists=$has_python_sdists" >> "$GITHUB_OUTPUT"
       - id: matrix
         shell: bash
         run: |
           set -euo pipefail
           matrix="$(python3 .github/scripts/release_artifacts.py release-target-matrix --manifest "$RELEASE_ARTIFACT_MANIFEST")"
           echo "value=$matrix" >> "$GITHUB_OUTPUT"
+          echo "python_wheel_matrix=$(python3 .github/scripts/release_artifacts.py python-wheel-matrix --manifest "$RELEASE_ARTIFACT_MANIFEST")" >> "$GITHUB_OUTPUT"
+          echo "python_sdist_matrix=$(python3 .github/scripts/release_artifacts.py python-sdist-matrix --manifest "$RELEASE_ARTIFACT_MANIFEST")" >> "$GITHUB_OUTPUT"
   build:
     needs: plan
     strategy:
@@ -157,13 +169,91 @@ jobs:
         with:
           name: ${{ matrix.target }}
           path: ${{ env.ARCHIVE }}
-  build-wheels:
+  build-python-wheels:
     needs: plan
-    uses: ./.github/workflows/ci.yml
-    with:
-      build_release_artifacts: true
+    if: ${{ needs.plan.outputs.has_python_wheels == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.python_wheel_matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: ./.github/actions/setup-python-release-build
+        with:
+          release_ref: ${{ needs.plan.outputs.source_sha }}
+          release_version: ${{ needs.plan.outputs.version }}
+          pyproject: ${{ matrix.pyproject }}
+          build_system: ${{ matrix.build_system }}
+          install_maturin_zig: ${{ matrix.os == 'ubuntu-24.04-arm' || (matrix.manylinux != '' && matrix.manylinux != 'off') }}
+          rust_toolchain: ${{ needs.plan.outputs.rust_toolchain }}
+          workspace_toml: ${{ needs.plan.outputs.workspace_toml }}
+      - name: Build wheels (maturin)
+        if: ${{ matrix.build_system == 'maturin' && matrix.target == '' && matrix.os != 'ubuntu-24.04-arm' }}
+        run: maturin build --release --manifest-path ${{ matrix.cargo_manifest }} --out dist
+      - name: Build ARM64 Linux wheel (maturin + Zig)
+        if: ${{ matrix.build_system == 'maturin' && matrix.target == '' && matrix.os == 'ubuntu-24.04-arm' }}
+        run: >-
+          maturin build --release --manifest-path ${{ matrix.cargo_manifest }} --out dist
+          --compatibility manylinux2014 --zig
+      - name: Build declared wheel target (maturin)
+        if: ${{ matrix.build_system == 'maturin' && matrix.target != '' }}
+        shell: bash
+        env:
+          WHEEL_TARGET: ${{ matrix.target }}
+          WHEEL_MANYLINUX: ${{ matrix.manylinux }}
+          CARGO_MANIFEST: ${{ matrix.cargo_manifest }}
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
+        run: |
+          set -euo pipefail
+          rustup target add "$WHEEL_TARGET"
+          args=(--release --locked --manifest-path "$CARGO_MANIFEST" --out dist --target "$WHEEL_TARGET")
+          if [[ "$WHEEL_MANYLINUX" != "off" ]]; then
+            args+=(--compatibility "manylinux_${WHEEL_MANYLINUX}" --zig)
+          fi
+          maturin build "${args[@]}"
+      - name: Build wheels (setuptools)
+        if: ${{ matrix.build_system == 'setuptools' }}
+        run: |
+          python -m pip install build==1.3.0
+          python -m build --wheel --outdir dist '${{ matrix.source }}'
+      - name: Verify declared wheel platform
+        if: ${{ matrix.platform != '' }}
+        env:
+          WHEEL_PLATFORM: ${{ matrix.platform }}
+        run: python3 .github/scripts/release_python.py --asset-dir dist --platform "$WHEEL_PLATFORM"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-wheel-${{ matrix.artifact }}-${{ matrix.id || matrix.os }}
+          path: dist/*.whl
+  build-python-sdists:
+    needs: plan
+    if: ${{ needs.plan.outputs.has_python_sdists == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.python_sdist_matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/setup-python-release-build
+        with:
+          release_ref: ${{ needs.plan.outputs.source_sha }}
+          release_version: ${{ needs.plan.outputs.version }}
+          pyproject: ${{ matrix.pyproject }}
+          build_system: ${{ matrix.build_system }}
+          rust_toolchain: ${{ needs.plan.outputs.rust_toolchain }}
+          workspace_toml: ${{ needs.plan.outputs.workspace_toml }}
+      - name: Build sdist (maturin)
+        if: ${{ matrix.build_system == 'maturin' }}
+        run: maturin sdist --manifest-path ${{ matrix.cargo_manifest }} --out dist
+      - name: Build sdist (setuptools)
+        if: ${{ matrix.build_system == 'setuptools' }}
+        run: |
+          python -m pip install build==1.3.0
+          python -m build --sdist --outdir dist '${{ matrix.source }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-sdist-${{ matrix.artifact }}
+          path: dist/*.tar.gz
   release:
-    needs: [plan, build, build-wheels]
+    needs: [plan, build, build-python-wheels, build-python-sdists]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -173,16 +263,15 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: assets
-          pattern: "{x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,x86_64-apple-darwin,aarch64-apple-darwin,x86_64-pc-windows-msvc,hermes-atm-wheels-*,atm-graft-sdist}"
+          pattern: "*"
       - name: Generate checksums and publish GitHub prerelease assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          find assets -maxdepth 2 -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} . \;
-          find assets/hermes-atm-wheels-* -maxdepth 1 -type f \( -name 'atm_graft*.whl' -o -name 'atm_query*.whl' \) -exec cp {} . \;
-          find assets/hermes-atm-wheels-linux-x86_64 -maxdepth 1 -type f -name 'hermes_atm*.whl' -exec cp {} . \;
+          find assets -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.whl' \) -exec cp -n {} . \;
+          python3 .github/scripts/release_artifacts.py verify-python-release-assets --manifest "$RELEASE_ARTIFACT_MANIFEST" --asset-dir .
           mapfile -t assets_to_publish < <(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.whl' \) -print | sed 's#^./##' | sort -u)
           ((${#assets_to_publish[@]} > 0)) || { echo "no prerelease assets were downloaded" >&2; exit 1; }
           shasum -a 256 "${assets_to_publish[@]}" > checksums.txt

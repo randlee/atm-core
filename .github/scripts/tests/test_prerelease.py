@@ -67,6 +67,16 @@ def fixture_archive() -> bytes:
 
 
 class PrereleaseTests(unittest.TestCase):
+    def test_prerelease_metadata_comes_from_release_artifacts_reader(self) -> None:
+        config = PRERELEASE.prerelease_manifest(Path("release/publish-artifacts.toml"))
+        targets = {entry["target"] for entry in config["release_targets"]}
+        wheels = {entry["name"]: entry["wheels"] for entry in config["python_distributions"]}
+
+        self.assertIn("aarch64-pc-windows-msvc", targets)
+        self.assertEqual(len(wheels["atm-graft"]), 6)
+        self.assertEqual(len(wheels["atm-query"]), 6)
+        self.assertEqual(wheels["hermes-atm"], ["ubuntu-latest"])
+
     def test_host_wheel_selection_requires_a_manifest_distribution_wheel(self) -> None:
         values = manifest(Path("/unused"))
         values["python_distributions"] = [{"name": "fixture-wheel", "wheels": ["ubuntu-latest"]}]
@@ -75,21 +85,23 @@ class PrereleaseTests(unittest.TestCase):
             for tag in (
                 "manylinux_2_17_x86_64",
                 "manylinux_2_17_aarch64",
-                "musllinux_1_2_x86_64",
                 "macosx_11_0_arm64",
+                "macosx_10_13_x86_64",
                 "win_amd64",
+                "win_arm64",
             )
         }
-        for system, machine, musl, tag in (
-            ("Linux", "x86_64", False, "manylinux_2_17_x86_64"),
-            ("Linux", "aarch64", False, "manylinux_2_17_aarch64"),
-            ("Linux", "x86_64", True, "musllinux_1_2_x86_64"),
-            ("Darwin", "arm64", False, "macosx_11_0_arm64"),
-            ("Windows", "amd64", False, "win_amd64"),
+        for system, machine, tag in (
+            ("Linux", "x86_64", "manylinux_2_17_x86_64"),
+            ("Linux", "aarch64", "manylinux_2_17_aarch64"),
+            ("Darwin", "arm64", "macosx_11_0_arm64"),
+            ("Darwin", "x86_64", "macosx_10_13_x86_64"),
+            ("Windows", "amd64", "win_amd64"),
+            ("Windows", "ARM64", "win_arm64"),
         ):
             with self.subTest(tag=tag):
                 name = f"fixture_wheel-1.5.11-cp311-abi3-{tag}.whl"
-                self.assertEqual(PRERELEASE.host_wheel_names(digests, values, system=system, machine=machine, musl=musl), [name])
+                self.assertEqual(PRERELEASE.host_wheel_names(digests, values, system=system, machine=machine), [name])
     def test_publish_dry_run_never_needs_network_or_authorization(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -230,17 +242,19 @@ class PrereleaseTests(unittest.TestCase):
         )
         self.assertNotIn("gh release upload \"$tag\" --clobber", workflow)
 
-    def test_release_wheel_matrix_builds_native_atm_query_for_each_platform(self) -> None:
-        ci = (SCRIPT.parents[4] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        wheel_job = ci.split("  hermes-atm-release-wheels:\n", 1)[1].split(
-            "\n  hermes-atm-abi3-compat:\n", 1
-        )[0]
-        self.assertIn("uses: PyO3/maturin-action@", wheel_job)
-        self.assertIn("working-directory: crates/atm-query-python", wheel_job)
-        self.assertIn("-i ${{ matrix.interpreter }} --out ../../atm-query-native-dist", wheel_job)
-        self.assertIn("cp atm-query-native-dist/atm_query*.whl dist/", wheel_job)
-        self.assertIn("name: hermes-atm-wheels-${{ matrix.artifact }}", wheel_job)
-        self.assertNotIn("pip wheel --no-deps --wheel-dir dist crates/atm-query-python", wheel_job)
+    def test_workflow_host_wheel_selection_supports_windows_arm_and_intel_macos(self) -> None:
+        for system, machine, target in (
+            ("Windows", "ARM64", "aarch64-pc-windows-msvc"),
+            ("Darwin", "x86_64", "x86_64-apple-darwin"),
+        ):
+            with self.subTest(target=target), mock.patch.object(
+                PRERELEASE.platform, "system", return_value=system
+            ), mock.patch.object(PRERELEASE.platform, "machine", return_value=machine):
+                manifest_values = manifest(Path("/unused"))
+                manifest_values["release_targets"] = [
+                    {"target": target, "archive": "zip" if system == "Windows" else "tar.gz"}
+                ]
+                self.assertEqual(PRERELEASE.host_target(manifest_values)["target"], target)
 
     def test_prerelease_workflow_uses_manifest_build_contract(self) -> None:
         workflow = (SCRIPT.parents[4] / ".github" / "workflows" / "prerelease-archive.yml").read_text(encoding="utf-8")
@@ -259,9 +273,10 @@ class PrereleaseTests(unittest.TestCase):
             workflow,
         )
         self.assertIn("timeout-minutes: 45", workflow)
-        self.assertIn("uses: ./.github/workflows/ci.yml", workflow)
-        self.assertIn("build_release_artifacts: true", workflow)
-        self.assertIn("-name '*.whl'", workflow)
+        self.assertIn("python-wheel-matrix --manifest", workflow)
+        self.assertIn("python-sdist-matrix --manifest", workflow)
+        self.assertIn("verify-python-release-assets", workflow)
+        self.assertNotIn("uses: ./.github/workflows/ci.yml", workflow)
         self.assertNotRegex(workflow, r":\s*\{[^\n]*\$\{\{")
 
     def test_prerelease_packager_matches_release_packager(self) -> None:

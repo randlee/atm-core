@@ -47,8 +47,8 @@ def run_release_artifacts(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 class ReleaseTargetsManifestTests(unittest.TestCase):
-    def test_release_manifest_declares_native_aarch64_linux_target(self) -> None:
-        """Regression-test the native aarch64 Linux release target (issue #1057).
+    def test_release_manifest_declares_native_aarch64_linux_and_windows_arm_targets(self) -> None:
+        """Regression-test native ARM release targets declared by the manifest.
 
         Every release target must be built natively (no cross-linker), and the
         manifest-declared target set is what release.yml's build matrix and the
@@ -60,8 +60,9 @@ class ReleaseTargetsManifestTests(unittest.TestCase):
         aarch64_linux = targets["aarch64-unknown-linux-gnu"]
         self.assertEqual(aarch64_linux["os"], "ubuntu-24.04-arm")
         self.assertEqual(aarch64_linux["archive"], "tar.gz")
-        # x86_64 Linux, aarch64 Linux, x86_64 macOS, aarch64 macOS, x86_64 Windows.
-        self.assertEqual(len(targets), 5)
+        self.assertEqual(targets["aarch64-pc-windows-msvc"]["os"], "windows-11-arm")
+        self.assertEqual(targets["aarch64-pc-windows-msvc"]["archive"], "zip")
+        self.assertEqual(len(targets), 6)
 
     def test_release_manifest_validates_with_the_native_aarch64_linux_target(self) -> None:
         """The real manifest (with the new target) must pass validate-manifest."""
@@ -92,6 +93,28 @@ class ReleaseTargetsManifestTests(unittest.TestCase):
             },
             matrix["include"],
         )
+
+    def test_python_wheel_matrix_declares_each_compiled_architecture_once(self) -> None:
+        result = run_release_artifacts(
+            "python-wheel-matrix", "--manifest", "release/publish-artifacts.toml"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        entries = json.loads(result.stdout)["include"]
+        by_name = {
+            name: {entry["os"] for entry in entries if entry["name"] == name}
+            for name in {entry["name"] for entry in entries}
+        }
+        compiled_runners = {
+            "ubuntu-latest",
+            "ubuntu-24.04-arm",
+            "macos-latest",
+            "macos-15-intel",
+            "windows-latest",
+            "windows-11-arm",
+        }
+        self.assertEqual(by_name["atm-graft"], compiled_runners)
+        self.assertEqual(by_name["atm-query"], compiled_runners)
+        self.assertEqual(by_name["hermes-atm"], {"ubuntu-latest"})
 
     def test_homebrew_and_scoop_channels_do_not_reference_the_new_linux_target(self) -> None:
         """arm-linux Homebrew is a deliberate follow-up (#1057), not this change."""

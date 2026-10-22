@@ -14,59 +14,150 @@ on:
 permissions:
   contents: read
 
+env:
+  RELEASE_ARTIFACT_MANIFEST: release/publish-artifacts.toml
+
 jobs:
-  build-release-artifacts:
-    name: Build verified Hermes ATM release artifacts
-    uses: ./.github/workflows/ci.yml
+  release-plan:
+    name: Read manifest Python build plan
+    runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.plan.outputs.source_sha }}
+      version: ${{ steps.plan.outputs.version }}
+      rust_toolchain: ${{ steps.plan.outputs.rust_toolchain }}
+      workspace_toml: ${{ steps.plan.outputs.workspace_toml }}
+      wheel_matrix: ${{ steps.plan.outputs.wheel_matrix }}
+      sdist_matrix: ${{ steps.plan.outputs.sdist_matrix }}
+      has_python_wheels: ${{ steps.plan.outputs.has_python_wheels }}
+      has_python_sdists: ${{ steps.plan.outputs.has_python_sdists }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_plan="$(python3 .github/scripts/release_artifacts.py build-plan --manifest "$RELEASE_ARTIFACT_MANIFEST")"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "wheel_matrix=$(python3 .github/scripts/release_artifacts.py python-wheel-matrix --manifest "$RELEASE_ARTIFACT_MANIFEST")" >> "$GITHUB_OUTPUT"
+          echo "sdist_matrix=$(python3 .github/scripts/release_artifacts.py python-sdist-matrix --manifest "$RELEASE_ARTIFACT_MANIFEST")" >> "$GITHUB_OUTPUT"
+          echo "rust_toolchain=$(jq -r .rust_toolchain <<<"$build_plan")" >> "$GITHUB_OUTPUT"
+          echo "workspace_toml=$(jq -r .workspace_toml <<<"$build_plan")" >> "$GITHUB_OUTPUT"
+          echo "has_python_wheels=$(jq -r .has_python_wheels <<<"$build_plan")" >> "$GITHUB_OUTPUT"
+          echo "has_python_sdists=$(jq -r .has_python_sdists <<<"$build_plan")" >> "$GITHUB_OUTPUT"
+          python3 - <<'PYVERSION' >> "$GITHUB_OUTPUT"
+          import tomllib
+          with open("Cargo.toml", "rb") as manifest:
+              print("version=" + tomllib.load(manifest)["workspace"]["package"]["version"])
+          PYVERSION
+
+  build-python-wheels:
+    name: Build manifest wheel (${{ matrix.name }} on ${{ matrix.os }})
+    needs: release-plan
+    if: ${{ needs.release-plan.outputs.has_python_wheels == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.release-plan.outputs.wheel_matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: ./.github/actions/setup-python-release-build
+        with:
+          release_ref: ${{ needs.release-plan.outputs.source_sha }}
+          release_version: ${{ needs.release-plan.outputs.version }}
+          pyproject: ${{ matrix.pyproject }}
+          build_system: ${{ matrix.build_system }}
+          install_maturin_zig: ${{ matrix.os == 'ubuntu-24.04-arm' || (matrix.manylinux != '' && matrix.manylinux != 'off') }}
+          rust_toolchain: ${{ needs.release-plan.outputs.rust_toolchain }}
+          workspace_toml: ${{ needs.release-plan.outputs.workspace_toml }}
+      - name: Build wheels (maturin)
+        if: ${{ matrix.build_system == 'maturin' && matrix.target == '' && matrix.os != 'ubuntu-24.04-arm' }}
+        run: maturin build --release --manifest-path ${{ matrix.cargo_manifest }} --out dist
+      - name: Build ARM64 Linux wheel (maturin + Zig)
+        if: ${{ matrix.build_system == 'maturin' && matrix.target == '' && matrix.os == 'ubuntu-24.04-arm' }}
+        run: >-
+          maturin build --release --manifest-path ${{ matrix.cargo_manifest }} --out dist
+          --compatibility manylinux2014 --zig
+      - name: Build declared wheel target (maturin)
+        if: ${{ matrix.build_system == 'maturin' && matrix.target != '' }}
+        shell: bash
+        env:
+          WHEEL_TARGET: ${{ matrix.target }}
+          WHEEL_MANYLINUX: ${{ matrix.manylinux }}
+          CARGO_MANIFEST: ${{ matrix.cargo_manifest }}
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
+        run: |
+          set -euo pipefail
+          rustup target add "$WHEEL_TARGET"
+          args=(--release --locked --manifest-path "$CARGO_MANIFEST" --out dist --target "$WHEEL_TARGET")
+          if [[ "$WHEEL_MANYLINUX" != "off" ]]; then args+=(--compatibility "manylinux_${WHEEL_MANYLINUX}" --zig); fi
+          maturin build "${args[@]}"
+      - name: Build wheels (setuptools)
+        if: ${{ matrix.build_system == 'setuptools' }}
+        run: |
+          python -m pip install build==1.3.0
+          python -m build --wheel --outdir dist '${{ matrix.source }}'
+      - name: Verify declared wheel platform
+        if: ${{ matrix.platform != '' }}
+        env:
+          WHEEL_PLATFORM: ${{ matrix.platform }}
+        run: python3 .github/scripts/release_python.py --asset-dir dist --platform "$WHEEL_PLATFORM"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-wheel-${{ matrix.artifact }}-${{ matrix.id || matrix.os }}
+          path: dist/*.whl
+
+  build-python-sdists:
+    name: Build manifest sdist (${{ matrix.name }})
+    needs: release-plan
+    if: ${{ needs.release-plan.outputs.has_python_sdists == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.release-plan.outputs.sdist_matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/setup-python-release-build
+        with:
+          release_ref: ${{ needs.release-plan.outputs.source_sha }}
+          release_version: ${{ needs.release-plan.outputs.version }}
+          pyproject: ${{ matrix.pyproject }}
+          build_system: ${{ matrix.build_system }}
+          rust_toolchain: ${{ needs.release-plan.outputs.rust_toolchain }}
+          workspace_toml: ${{ needs.release-plan.outputs.workspace_toml }}
+      - name: Build sdist (maturin)
+        if: ${{ matrix.build_system == 'maturin' }}
+        run: maturin sdist --manifest-path ${{ matrix.cargo_manifest }} --out dist
+      - name: Build sdist (setuptools)
+        if: ${{ matrix.build_system == 'setuptools' }}
+        run: |
+          python -m pip install build==1.3.0
+          python -m build --sdist --outdir dist '${{ matrix.source }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-sdist-${{ matrix.artifact }}
+          path: dist/*.tar.gz
 
   prepare-publish-artifacts:
-    name: Inspect and stage PyPI artifacts
-    needs: [build-release-artifacts]
+    name: Verify manifest-declared PyPI artifacts
+    needs: [release-plan, build-python-wheels, build-python-sdists]
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download manylinux x86_64 wheels
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: hermes-atm-wheels-linux-x86_64
-          path: artifacts/hermes-atm-wheels-linux-x86_64
-
-      - name: Download musllinux x86_64 wheels
-        uses: actions/download-artifact@v4
+          pattern: python-wheel-*
+          merge-multiple: true
+          path: artifacts
+      - uses: actions/download-artifact@v4
         with:
-          name: hermes-atm-wheels-linux-musl-x86_64
-          path: artifacts/hermes-atm-wheels-linux-musl-x86_64
-
-      - name: Download manylinux aarch64 wheels
-        uses: actions/download-artifact@v4
-        with:
-          name: hermes-atm-wheels-linux-aarch64
-          path: artifacts/hermes-atm-wheels-linux-aarch64
-
-      - name: Download macOS aarch64 wheels
-        uses: actions/download-artifact@v4
-        with:
-          name: hermes-atm-wheels-macos-aarch64
-          path: artifacts/hermes-atm-wheels-macos-aarch64
-
-      - name: Download Windows x86_64 wheels
-        uses: actions/download-artifact@v4
-        with:
-          name: hermes-atm-wheels-windows-x86_64
-          path: artifacts/hermes-atm-wheels-windows-x86_64
-
-      - name: Download atm-graft source distribution
-        uses: actions/download-artifact@v4
-        with:
-          name: atm-graft-sdist
-          path: artifacts/atm-graft-sdist
-
-      - name: Verify artifact cardinality and stage upload set
-        run: python scripts/prepare_hermes_atm_publish_artifacts.py --artifacts artifacts --output publish-dist
-
-      - name: Upload verified publish set
-        uses: actions/upload-artifact@v4
+          pattern: python-sdist-*
+          merge-multiple: true
+          path: artifacts
+      - name: Verify asset cardinality and stage upload set
+        run: python scripts/prepare_hermes_atm_publish_artifacts.py --manifest "$RELEASE_ARTIFACT_MANIFEST" --artifacts artifacts --output publish-dist
+      - uses: actions/upload-artifact@v4
         with:
           name: hermes-atm-pypi-publish-set
           path: publish-dist/*
@@ -79,18 +170,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: testpypi
     steps:
-      - name: Download verified publish set
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: hermes-atm-pypi-publish-set
           path: publish-dist
-
       - name: Install Twine
         run: python -m pip install twine
-
       - name: Validate distributions
         run: twine check publish-dist/*
-
       - name: Upload to TestPyPI
         env:
           TWINE_USERNAME: __token__
@@ -104,18 +191,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     steps:
-      - name: Download verified publish set
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: hermes-atm-pypi-publish-set
           path: publish-dist
-
       - name: Install Twine
         run: python -m pip install twine
-
       - name: Validate distributions
         run: twine check publish-dist/*
-
       - name: Upload to PyPI
         env:
           TWINE_USERNAME: __token__

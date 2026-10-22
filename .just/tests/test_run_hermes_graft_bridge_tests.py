@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import platform
 from pathlib import Path
 import sys
+import sysconfig
 import tempfile
 import textwrap
 import tomllib
@@ -83,9 +85,9 @@ class HermesGraftBridgeRunnerTests(unittest.TestCase):
 
         self.assertIn("Run Hermes graft steer boundary tests", workflow)
         self.assertIn("python .just/run_hermes_graft_bridge_tests.py", workflow)
-        self.assertIn("Hermes ATM release wheel (${{ matrix.name }})", workflow)
+        self.assertIn("Release wheel (${{ matrix.name }})", workflow)
         self.assertIn("Hermes ATM abi3 compatibility (Python", workflow)
-        self.assertIn("Download host release-wheel candidate", workflow)
+        self.assertIn("Download host manifest-declared wheel candidates", workflow)
         self.assertIn("ATM_GRAFT_WHEEL=", workflow)
         self.assertIn("ATM_WHEEL_OUTPUT_DIR=", workflow)
         for version in ("3.11", "3.12", "3.13", "3.14"):
@@ -99,7 +101,14 @@ class HermesGraftBridgeRunnerTests(unittest.TestCase):
             temporary_path = Path(temporary_directory)
             release_wheels = temporary_path / "release-wheels"
             release_wheels.mkdir()
-            wheel = release_wheels / "atm_graft-1.4.2-cp311-abi3-win_amd64.whl"
+            system = platform.system()
+            machine = sysconfig.get_platform().rsplit("-", 1)[-1]
+            platform_tag = {
+                "Linux": f"manylinux_2_17_{machine}",
+                "Darwin": f"macosx_11_0_{machine}",
+                "Windows": f"win_{machine}",
+            }[system]
+            wheel = release_wheels / f"atm_graft-1.4.2-cp311-abi3-{platform_tag}.whl"
             wheel.touch()
             github_environment = temporary_path / "github-env"
             original_directory = Path.cwd()

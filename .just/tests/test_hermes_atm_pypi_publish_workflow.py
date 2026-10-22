@@ -7,7 +7,6 @@ import unittest
 
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "hermes-atm-pypi-publish.yml"
-CI_WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
 
 
 class HermesAtmPyPiPublishWorkflowTests(unittest.TestCase):
@@ -24,22 +23,16 @@ class HermesAtmPyPiPublishWorkflowTests(unittest.TestCase):
         self.assertIn("inputs.target == 'testpypi'", workflow)
         self.assertIn("inputs.target == 'pypi'", workflow)
 
-    def test_publish_workflow_reuses_ci_builds_and_validates_artifact_cardinality(self) -> None:
+    def test_publish_workflow_builds_and_verifies_manifest_declared_artifacts(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("uses: ./.github/workflows/ci.yml", workflow)
-        for artifact in (
-            "hermes-atm-wheels-linux-x86_64",
-            "hermes-atm-wheels-linux-musl-x86_64",
-            "hermes-atm-wheels-linux-aarch64",
-            "hermes-atm-wheels-macos-aarch64",
-            "hermes-atm-wheels-windows-x86_64",
-            "atm-graft-sdist",
-        ):
-            self.assertIn(artifact, workflow)
+        self.assertNotIn("uses: ./.github/workflows/ci.yml", workflow)
+        self.assertIn("python-wheel-matrix --manifest", workflow)
+        self.assertIn("python-sdist-matrix --manifest", workflow)
+        self.assertNotIn("hermes-atm-wheels-", workflow)
         self.assertIn("prepare_hermes_atm_publish_artifacts.py", workflow)
+        self.assertIn("--manifest \"$RELEASE_ARTIFACT_MANIFEST\"", workflow)
         self.assertIn("twine check publish-dist/*", workflow)
-        self.assertIn("workflow_call:", CI_WORKFLOW.read_text(encoding="utf-8"))
 
     def test_publish_workflow_uses_target_scoped_twine_tokens(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")

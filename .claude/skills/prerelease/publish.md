@@ -6,9 +6,11 @@ run only when the operator explicitly requested `--publish` (or its
 compatibility alias `--create`) in writing and the working branch is clean,
 non-protected, and attached.
 
-The GitHub prerelease contains the manifest-declared CLI/daemon archives and
-all declared wheel assets for every platform. It never publishes to crates.io,
-PyPI, Homebrew, Winget, Scoop, npm, or another consumer-facing channel.
+The GitHub prerelease contains the manifest-declared CLI/daemon archives,
+Python wheels for every declared target, Python source distributions, and a
+checksum file. It never publishes to crates.io, PyPI, Homebrew, Winget, Scoop,
+npm, or another consumer-facing channel. The release-artifact manifest is the
+only source for the target and wheel matrices.
 
 Always invoke the consumer's manifest-declared tag script. That script owns
 the repository's version-selection and tag policy: it may use the current

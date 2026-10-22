@@ -3,7 +3,9 @@
 Install the requested version, or the latest matching published prerelease
 when no version was supplied. The helper verifies the manifest-declared host
 archive and checksum, stages the binary set, updates the platform selector,
-and runs the manifest's post-install and verification commands.
+and runs the manifest's post-install and verification commands. The same
+manifest declares all published wheel and source-distribution assets; install
+selects a compatible host wheel only when staging Python packages is needed.
 
 This is the binary-only dogfood path for randlee, Colima, m5-atmbench, and
 other tester hosts: it downloads and checksum-verifies GitHub prerelease

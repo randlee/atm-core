@@ -10,9 +10,10 @@ Operate only on GitHub prerelease binary assets declared by
 Winget, Scoop, or another package channel from this skill.
 
 `--publish` creates one GitHub prerelease containing every manifest-declared
-binary: the CLI/daemon archives and all declared Python wheels for every
-platform. Colima and the m5-atmbench benchmark/smoke account consume those
-GitHub assets; no consumer-facing registry is part of this path.
+CLI/daemon archive, Python wheel, and Python source distribution. The same
+release manifest drives the release, prerelease, CI parity, and PyPI build
+matrices. Colima and the m5-atmbench benchmark/smoke account consume the GitHub
+assets; prerelease creation does not publish to a consumer-facing registry.
 
 ## Step 1 — Verify dependencies
 

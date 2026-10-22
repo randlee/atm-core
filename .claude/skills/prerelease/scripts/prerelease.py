@@ -54,10 +54,56 @@ def read_manifest(path: Path) -> dict[str, Any]:
 
 def prerelease_manifest(path: Path) -> dict[str, Any]:
     """Read the opt-in prerelease table from a publish artifacts manifest."""
-    value = read_manifest(path).get("prerelease")
+    manifest = read_manifest(path)
+    reader = Path(".github/scripts/release_artifacts.py")
+    if reader.is_file():
+        manifest = manifest_with_release_artifacts(manifest, path, reader)
+    value = manifest.get("prerelease")
     if not isinstance(value, dict):
         raise SystemExit("[prerelease] is not enabled in release/publish-artifacts.toml")
+    value["release_targets"] = manifest.get("release_targets", [])
+    value["python_distributions"] = manifest.get("python_distributions", [])
     return value
+
+
+def manifest_with_release_artifacts(
+    manifest: dict[str, Any], manifest_path: Path, reader: Path
+) -> dict[str, Any]:
+    """Get release target and Python distribution matrices from the shared reader."""
+    def read_matrix(command_name: str) -> dict[str, Any]:
+        result = command(
+            [sys.executable, str(reader), command_name, "--manifest", str(manifest_path)],
+            capture=True,
+        )
+        try:
+            value = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise SystemExit(f"release_artifacts.py returned invalid {command_name} JSON: {error}") from error
+        if not isinstance(value, dict) or not isinstance(value.get("include"), list):
+            raise SystemExit(f"release_artifacts.py returned invalid {command_name} matrix")
+        return value
+
+    targets = read_matrix("release-target-matrix")
+    wheels = read_matrix("python-wheel-matrix")
+    sdists = read_matrix("python-sdist-matrix")
+    wheel_entries: dict[str, list[str]] = {}
+    for wheel in wheels["include"]:
+        if not isinstance(wheel, dict) or not isinstance(wheel.get("name"), str):
+            raise SystemExit("release_artifacts.py returned an invalid wheel entry")
+        runner = wheel.get("id") or wheel.get("os")
+        if not isinstance(runner, str):
+            raise SystemExit("release_artifacts.py returned a wheel without a runner")
+        wheel_entries.setdefault(wheel["name"], []).append(runner)
+    sdist_names = {
+        entry["name"] for entry in sdists["include"]
+        if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+    }
+    manifest["release_targets"] = targets["include"]
+    manifest["python_distributions"] = [
+        {"name": name, "wheels": runners, "sdist": name in sdist_names}
+        for name, runners in wheel_entries.items()
+    ]
+    return manifest
 
 
 def required_string(config: dict[str, Any], name: str) -> str:
@@ -125,23 +171,12 @@ def required_wheel_prefixes(manifest: dict[str, Any]) -> set[str]:
 
 
 def host_target(manifest: dict[str, Any]) -> dict[str, str]:
-    triples = {
-        ("Darwin", "x86_64"): "x86_64-apple-darwin",
-        ("Darwin", "amd64"): "x86_64-apple-darwin",
-        ("Darwin", "arm64"): "aarch64-apple-darwin",
-        ("Darwin", "aarch64"): "aarch64-apple-darwin",
-        ("Linux", "x86_64"): "x86_64-unknown-linux-gnu",
-        ("Linux", "amd64"): "x86_64-unknown-linux-gnu",
-        ("Linux", "arm64"): "aarch64-unknown-linux-gnu",
-        ("Linux", "aarch64"): "aarch64-unknown-linux-gnu",
-        ("Windows", "x86_64"): "x86_64-pc-windows-msvc",
-        ("Windows", "amd64"): "x86_64-pc-windows-msvc",
-    }
     system, machine = platform.system(), platform.machine().lower()
-    try:
-        triple = triples[(system, machine)]
-    except KeyError as error:
-        raise SystemExit(f"unsupported prerelease host: {system} {machine}") from error
+    arch = {"amd64": "x86_64", "x86_64": "x86_64", "arm64": "aarch64", "aarch64": "aarch64"}.get(machine)
+    suffix = {"Darwin": "apple-darwin", "Linux": "unknown-linux-gnu", "Windows": "pc-windows-msvc"}.get(system)
+    if arch is None or suffix is None:
+        raise SystemExit(f"unsupported prerelease host: {system} {machine}")
+    triple = f"{arch}-{suffix}"
     for target in release_targets(manifest):
         if target["target"] == triple:
             return target
@@ -169,12 +204,14 @@ def verify_checksum(path: Path, expected: str) -> None:
 
 def host_wheel_names(
     digests: dict[str, str], manifest: dict[str, Any], *, system: str | None = None,
-    machine: str | None = None, musl: bool = False,
+    machine: str | None = None,
 ) -> list[str]:
     """Select one universal or host-platform wheel per declared distribution."""
     system = platform.system() if system is None else system
     machine = (platform.machine() if machine is None else machine).lower().replace("amd64", "x86_64")
-    hints = {"Linux": (("musllinux" if musl else "manylinux"), machine), "Darwin": ("macosx", machine), "Windows": ("win", "amd64")}
+    if system == "Windows" and machine == "aarch64":
+        machine = "arm64"
+    hints = {"Linux": ("manylinux", machine), "Darwin": ("macosx", machine), "Windows": ("win", "arm64" if machine == "arm64" else "amd64")}
     if system not in hints:
         raise SystemExit(f"unsupported prerelease wheel host: {system} {machine}")
     os_hint, arch_hint = hints[system]
@@ -236,9 +273,26 @@ def require_release_assets(release: dict[str, Any], manifest: dict[str, Any], ve
     missing = expected_assets(manifest, version) - names
     if missing:
         raise SystemExit(f"GitHub prerelease is missing required assets: {', '.join(sorted(missing))}")
-    missing_wheels = [prefix for prefix in required_wheel_prefixes(manifest) if not any(name.startswith(prefix) and name.endswith(".whl") for name in names)]
+    distributions = manifest.get("python_distributions", [])
+    missing_wheels = []
+    for distribution in distributions:
+        prefix = distribution["name"].replace("-", "_") + "-"
+        expected_count = len(distribution.get("wheels", []))
+        actual_count = sum(name.startswith(prefix) and name.endswith(".whl") for name in names)
+        if actual_count != expected_count:
+            missing_wheels.append(f"{prefix.rstrip('-')} ({actual_count}/{expected_count})")
     if missing_wheels:
-        raise SystemExit(f"GitHub prerelease is missing required wheel assets: {', '.join(sorted(missing_wheels))}")
+        raise SystemExit(f"GitHub prerelease has the wrong manifest-declared wheel set: {', '.join(sorted(missing_wheels))}")
+    missing_sdists = []
+    for distribution in distributions:
+        if not distribution.get("sdist"):
+            continue
+        prefix = distribution["name"].replace("-", "_") + "-"
+        actual_count = sum(name.startswith(prefix) and name.endswith(".tar.gz") for name in names)
+        if actual_count != 1:
+            missing_sdists.append(f"{prefix.rstrip('-')} ({actual_count}/1)")
+    if missing_sdists:
+        raise SystemExit(f"GitHub prerelease is missing required source distributions: {', '.join(sorted(missing_sdists))}")
 
 
 def download_asset(tag: str, name: str, destination: Path, *, public_url: str | None = None) -> Path:
@@ -492,6 +546,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     manifest = read_manifest(args.manifest)
     config = prerelease_manifest(args.manifest)
+    manifest["release_targets"] = config["release_targets"]
+    manifest["python_distributions"] = config["python_distributions"]
     if args.publish:
         if args.dry_run:
             plan = command(
