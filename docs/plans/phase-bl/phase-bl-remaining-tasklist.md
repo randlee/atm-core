@@ -11,7 +11,7 @@ It does not replace `phase-bl-plan.md` or `phase-bl.jsonl`.
 - [x] Specify durable delivery identity, due/attempt state, typed send outcome, retry, restart recovery, and acknowledged-success deduplication.
 - [x] Complete the production cutover of `cli.py`, `app.py`, `runner.py`, and `model.py`; installed cron/show/TUI must use the separated pipeline.
 - [x] Complete #347: bl-4 producer metadata, bl-7 two-panel selection/Markdown UI, bl-12 composed feature closure.
-- [ ] Verify `.sprints/BL/structure.ttl` exactly matches the 12 JSONL sprint IDs, docs, branches, and dependencies.
+- [x] Verify `.sprints/BL/structure.ttl` exactly matches the 12 JSONL sprint IDs, docs, branches, and dependencies.
 
 ## Critical review gates
 
