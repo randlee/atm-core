@@ -1433,6 +1433,76 @@ async fn start_during_exact_task_lookup_cancels_stale_stall_escalation() {
 }
 
 #[tokio::test]
+async fn close_during_exact_task_lookup_cancels_stale_stall_escalation() {
+    let (root, runtime, fake, pump, key, tasks, now) =
+        build_real_task_pump(&["LIFE-CLOSE-DURING-LOOKUP"]);
+    for minute in 0..10 {
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        if minute > 0 {
+            queue_idle_result(&fake, &key);
+        }
+        pump.tick_once().await;
+    }
+    let store = runtime.task_store().expect("task store");
+    let pending = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(
+        (pending.reminder_count, pending.lead_notified_count),
+        (10, 0)
+    );
+
+    let root_path = root.path().to_path_buf();
+    let close_runtime = runtime.clone();
+    let close_key = key.clone();
+    let close_task_id = tasks[0].clone();
+    let reader = Arc::new(
+        atm_storage::testing::InMemoryTaskLedgerReader::delegating_with_load_task_hook(
+            runtime.async_task_ledger_reader().expect("task reader"),
+            move || {
+                close_real_task(
+                    &root_path,
+                    &close_runtime,
+                    &close_key,
+                    &close_task_id,
+                    atm_storage::TaskCloseOutcome::Completed,
+                );
+            },
+        ),
+    );
+    let checked_runtime = runtime.clone().with_async_task_ledger_reader(reader);
+    let checked_pump = pump_with_clock(
+        checked_runtime,
+        fake.clone(),
+        RuntimeHealth::default(),
+        Arc::clone(&now),
+    )
+    .with_daemon_home(root.path().join("home"));
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:10:00Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    checked_pump.tick_once().await;
+
+    let closed = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(
+        closed.state,
+        TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
+    );
+    assert_eq!(closed.lead_notified_count, 0);
+    assert!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty()
+    );
+    assert_eq!(prompt_texts(&fake).len(), 10);
+}
+
+#[tokio::test]
 async fn sustained_runtime_activity_does_not_rearm_reported_assignment() {
     let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-STALL-LATCH"]);
     drive_task_to_stall(&pump, &fake, &key, &now).await;
