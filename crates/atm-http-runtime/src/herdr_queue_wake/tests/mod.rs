@@ -6,7 +6,7 @@ mod herdr_nudge_invariant;
 mod herdr_queue_ephemeral;
 mod herdr_queue_no_delivery;
 
-use super::task_pass::runtime_state;
+use super::task_pass::{observe_escalation_episode_if_eligible, runtime_state};
 use super::{
     BoundedBlockingBridge, HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK,
     HERDR_POLL_INTERVAL_MS, HERDR_REQUEST_BUDGET, HerdrQueueWakePump, ReleasePendingOnDrop,
@@ -2749,6 +2749,28 @@ fn herdr_statuses_project_to_runtime_states() {
         runtime_state(Some(HerdrAgentStatus::Unknown)),
         RuntimeMemberState::Unknown
     );
+}
+
+#[test]
+fn dormant_blocked_episode_is_not_consumed_before_a_task_arrives() {
+    let state = crate::herdr_escalation::EscalationState::default();
+    let member = atm_storage::MemberKey::new(
+        "team".parse::<TeamName>().expect("team"),
+        "agent".parse().expect("agent"),
+    );
+
+    assert!(!observe_escalation_episode_if_eligible(
+        &state,
+        &member,
+        RuntimeMemberState::Blocked,
+        false,
+    ));
+    assert!(observe_escalation_episode_if_eligible(
+        &state,
+        &member,
+        RuntimeMemberState::Blocked,
+        true,
+    ));
 }
 
 struct UnusedMailStore;

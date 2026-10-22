@@ -849,3 +849,38 @@ async fn blocked_member_with_open_item_escalates_not_reminded() {
     assert!(pending_state(root.path(), &key, message_id).0.is_none());
     assert_eq!(task_store.row(&key, &task_id).state, TaskState::Assigned);
 }
+
+#[tokio::test]
+async fn recovered_member_is_not_escalated_from_a_stale_episode_observation() {
+    let (_root, runtime, _fake, pump, task_store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    let key = keys[0].clone();
+    add_lead_roster_member(&runtime, key.team(), "sender");
+    let since = *now.lock().expect("clock");
+    runtime.apply_roster_runtime_observations(
+        key.team(),
+        &[
+            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                key.agent().clone(),
+                atm_core::protocol::RuntimeMemberState::Idle,
+                atm_core::protocol::RuntimeObservationSource::HerdrPoll,
+                since,
+                None,
+            ),
+        ],
+    );
+
+    let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
+    let mut stats = crate::herdr_queue_wake::HerdrQueueWakeStats::default();
+    crate::herdr_queue_wake_escalation::escalate_episode(
+        &pump,
+        &task_store,
+        &key,
+        crate::herdr_task_disposition::EpisodeKind::Blocked,
+        since,
+        &mut stats,
+    )
+    .await;
+
+    assert_eq!(stats.blocked_escalations, 0);
+}

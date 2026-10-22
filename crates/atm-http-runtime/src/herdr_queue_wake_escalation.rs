@@ -7,6 +7,7 @@ use atm_core::boundary::{
     AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskEventKind, TaskEventRow,
     TaskRow,
 };
+use atm_core::protocol::RuntimeMemberState;
 use atm_core::types::IsoTimestamp;
 
 use crate::herdr_escalation::{EscalationKind, escalate_mail, escalation_summary};
@@ -170,6 +171,12 @@ pub(crate) async fn escalate_episode(
     since: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
 ) {
+    // The accepted poll observation may be stale by the time this path gets
+    // to its write boundary. Re-read the canonical runtime record and require
+    // both the episode kind and epoch to match before emitting mail.
+    if !episode_is_current(pump, member, kind, since) {
+        return;
+    }
     let body = episode_body(member, kind, since);
     let Ok(outcome) = escalate_mail(
         &pump.blocking_bridge,
@@ -189,6 +196,23 @@ pub(crate) async fn escalate_episode(
     };
     record_escalation_stats(stats, &outcome);
     stats.blocked_escalations += usize::from(outcome.reached_anyone());
+}
+
+fn episode_is_current(
+    pump: &HerdrQueueWakePump,
+    member: &MemberKey,
+    kind: EpisodeKind,
+    since: IsoTimestamp,
+) -> bool {
+    let expected = match kind {
+        EpisodeKind::Blocked => RuntimeMemberState::Blocked,
+        EpisodeKind::Offline => RuntimeMemberState::Offline,
+    };
+    pump.service_runtime
+        .roster_ephemeral_state(member.team(), member.agent())
+        .is_some_and(|record| {
+            record.runtime.state == expected && record.runtime.state_changed_at == Some(since)
+        })
 }
 
 pub(crate) async fn escalate_refusals(

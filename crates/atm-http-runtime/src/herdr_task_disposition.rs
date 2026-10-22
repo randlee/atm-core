@@ -60,20 +60,22 @@ pub(crate) fn dispose(
             D::ResetReminders
         }
         (_, S::Active, _) => D::Hold("active"),
-        (_, S::Blocked, _) => {
+        (_, S::Blocked, Some(_)) => {
             if new_episode {
                 D::EscalateEpisode(EpisodeKind::Blocked)
             } else {
                 D::Hold("episode reported")
             }
         }
-        (_, S::Offline, _) => {
+        (_, S::Blocked, None) => D::Hold("no open task"),
+        (_, S::Offline, Some(_)) => {
             if new_episode {
                 D::EscalateEpisode(EpisodeKind::Offline)
             } else {
                 D::Hold("episode reported")
             }
         }
+        (_, S::Offline, None) => D::Hold("no open task"),
         (_, S::Unknown, _) => D::Hold("unobserved"),
         (_, S::IdentityConflict, _) => D::Hold("identity conflict"),
         (_, S::Idle, Some(_)) if consecutive_refusals >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD => {
@@ -166,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    fn blocked_without_task_still_escalates_once() {
+    fn blocked_without_task_holds_episode() {
         assert_eq!(
             dispose(
                 false,
@@ -177,7 +179,7 @@ mod tests {
                 true,
                 0
             ),
-            TaskDisposition::EscalateEpisode(EpisodeKind::Blocked)
+            TaskDisposition::Hold("no open task")
         );
     }
 
@@ -446,7 +448,7 @@ mod tests {
                 false,
                 0
             ),
-            TaskDisposition::Hold("episode reported")
+            TaskDisposition::Hold("no open task")
         );
         assert_eq!(
             dispose(
@@ -470,7 +472,7 @@ mod tests {
                 false,
                 0
             ),
-            TaskDisposition::Hold("episode reported")
+            TaskDisposition::Hold("no open task")
         );
         assert_eq!(
             dispose(
