@@ -1296,6 +1296,14 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
         next_due: IsoTimestamp,
     ) -> Result<(), AtmError>;
 
+    /// Terminates the queue marker after a successful one-shot handoff while
+    /// leaving the mailbox item visible and unread.
+    fn complete_pending_after_handoff(
+        &self,
+        member: &MemberKey,
+        claim: &NudgeClaim,
+    ) -> Result<(), AtmError>;
+
     /// Enumerates members holding at least one eligible pending marker.
     ///
     /// # Errors
@@ -1346,6 +1354,16 @@ impl PendingNudgeStore for DummyPendingNudgeStore {
         }
         self.inner().map_or(Ok(()), |inner| {
             inner.rearm_pending_after_handoff(member, msg, next_due)
+        })
+    }
+
+    fn complete_pending_after_handoff(
+        &self,
+        member: &MemberKey,
+        claim: &NudgeClaim,
+    ) -> Result<(), AtmError> {
+        self.inner().map_or(Ok(()), |inner| {
+            inner.complete_pending_after_handoff(member, claim)
         })
     }
 

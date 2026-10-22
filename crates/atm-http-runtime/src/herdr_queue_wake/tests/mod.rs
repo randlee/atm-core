@@ -304,6 +304,38 @@ fn queue_message(
     .persisted_message_id()
 }
 
+fn queue_daemon_escalation_message(
+    root: &std::path::Path,
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &str,
+) -> AtmMessageId {
+    let home = root.join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    write_mail_with_runtime(
+        WriteRequest::new(
+            home.clone(),
+            home,
+            atm_core::boundary::DAEMON_ACTOR_NAME
+                .parse()
+                .expect("daemon actor"),
+            &format!("{agent}@{team}"),
+            team.clone(),
+            SendMessageSource::Inline("daemon escalation".to_owned()),
+            Some("escalation:offline_escalated:subject@test-team".to_owned()),
+            false,
+            None,
+            false,
+        )
+        .expect("daemon escalation request")
+        .with_nudge_mode(NudgeMode::Deferred),
+        &NullObservability,
+        runtime,
+    )
+    .expect("queue daemon escalation")
+    .persisted_message_id()
+}
+
 fn queue_task_message(
     root: &std::path::Path,
     runtime: &LocalServiceRuntime,
@@ -2052,6 +2084,58 @@ async fn ac01_fifo_per_member_via_claim() {
             .list_pending_members()
             .expect("pending members")
             .contains(&key)
+    );
+}
+
+#[tokio::test]
+async fn daemon_escalation_burst_is_one_shot_while_ordinary_mail_rearms() {
+    let (root, runtime, fake, pump, _health, key) = build_test_pump();
+    clear_pending_markers(root.path(), &runtime, &key);
+    let first_escalation =
+        queue_daemon_escalation_message(root.path(), &runtime, key.team(), key.agent().as_str());
+    let second_escalation =
+        queue_daemon_escalation_message(root.path(), &runtime, key.team(), key.agent().as_str());
+
+    pump.tick_once().await;
+    assert_eq!(pump.stats().prompted, 1, "escalation is handed off once");
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(
+        pump.stats().prompted,
+        1,
+        "second stored escalation is handed off once"
+    );
+    assert_eq!(
+        pending_state(root.path(), &key, first_escalation).0,
+        None,
+        "accepted daemon escalation clears its marker without a read action"
+    );
+    assert_eq!(pending_state(root.path(), &key, second_escalation).0, None);
+    assert!(
+        !runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .list_pending_members()
+            .expect("pending members")
+            .contains(&key),
+        "no later polling cadence can re-deliver the accepted escalation"
+    );
+
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(
+        pump.stats().prompted,
+        0,
+        "cleared escalation markers do not repeat"
+    );
+
+    let ordinary = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(pump.stats().prompted, 1, "ordinary mail still hands off");
+    assert!(
+        pending_state(root.path(), &key, ordinary).0.is_some(),
+        "ordinary deferred mail retains its normal reminder marker"
     );
 }
 

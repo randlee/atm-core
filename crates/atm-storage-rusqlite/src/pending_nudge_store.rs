@@ -179,6 +179,44 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
         })
     }
 
+    fn complete_pending_after_handoff(
+        &self,
+        member: &MemberKey,
+        claim: &NudgeClaim,
+    ) -> Result<(), AtmError> {
+        // A message key is immutable. Matching the current claim attempt
+        // prevents an old successful handoff from clearing a marker that a
+        // retry/requeue has since replaced for that same message. Duplicate
+        // admissions are classified before the deferred write pipeline, so
+        // they cannot call mark_pending to create another episode for this ID.
+        let message_key = MessageKey::from(claim.msg);
+        let now_raw = IsoTimestamp::now().to_string();
+        self.db.with_transaction(|connection| {
+            connection
+                .execute(
+                    &format!(
+                        "UPDATE mail_message_states
+                     SET nudge_pending_at = NULL, updated_at = ?4
+                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3
+                       AND nudge_pending_at IS NOT NULL AND nudge_attempts = ?5
+                       AND {OPEN_ITEM_SQL};"
+                    ),
+                    params![
+                        member.team().as_str(),
+                        member.agent().as_str(),
+                        message_key.as_str(),
+                        &now_raw,
+                        claim.attempt,
+                    ],
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to complete pending nudge after handoff", error)
+                })?;
+            Ok(())
+        })
+    }
+
     fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
         let db = Arc::clone(&self.db);
         self.db.read(move |connection| {
@@ -522,6 +560,42 @@ mod tests {
         let (_, marker, _, _, attempts) = state_row(&backend, msg);
         assert_eq!(marker, Some(next_due.to_string()));
         assert_eq!(attempts, i64::from(retry.attempt));
+    }
+
+    #[test]
+    fn complete_after_handoff_clears_only_the_matching_claim_marker() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let msg = AtmMessageId::new();
+        seed_message(&backend, msg, false);
+        let store = backend.pending_nudge_store();
+        store
+            .mark_pending(&member, &msg, IsoTimestamp::now())
+            .expect("mark");
+        let claim = store
+            .claim_next_pending(&member)
+            .expect("claim")
+            .expect("claimed");
+
+        store
+            .requeue_pending(&member, &claim)
+            .expect("requeue after a failed first handoff");
+        set_marker(&backend, msg, IsoTimestamp::now());
+        let retry = store
+            .claim_next_pending(&member)
+            .expect("retry claim")
+            .expect("retry claimed");
+        store
+            .complete_pending_after_handoff(&member, &claim)
+            .expect("late completion is safe");
+        assert!(
+            state_row(&backend, msg).1.is_some(),
+            "an old claim cannot clear the retried marker"
+        );
+        store
+            .complete_pending_after_handoff(&member, &retry)
+            .expect("complete retry marker");
+        assert!(state_row(&backend, msg).1.is_none());
     }
 
     #[tokio::test]

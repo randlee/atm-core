@@ -20,7 +20,8 @@ use atm_core::boundary::{
 use atm_core::delivery_channel::{HerdrAgentName, HerdrSession, local_message_received_backend};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::{
-    load_received_hook_dispatch_message, rebuild_received_hook_dispatch,
+    is_terminal_escalation_message, load_received_hook_dispatch_message,
+    rebuild_received_hook_dispatch,
 };
 use atm_core::protocol::{
     RosterRuntimeObservation, RosterRuntimeObservationUpdate, RuntimeMemberState,
@@ -544,22 +545,23 @@ impl HerdrQueueWakePump {
             Arc::clone(&self.release_handles),
             self.blocking_bridge.clone(),
         );
-        let dispatch = match self.rebuild_dispatch(member, claim.msg).await {
-            Ok(Some(dispatch)) => dispatch,
-            Ok(None) | Err(_) => {
-                release.release_without_input().await;
-                stats.released += 1;
-                tracing::info!(
-                    event = "herdr_queue_poll_outcome",
-                    member = %member.key,
-                    msg_id = %claim.msg,
-                    queue_kind = NudgeKind::Queue.as_str(),
-                    outcome = "dispatch_failed_released",
-                    "Herdr queue dispatch could not be rebuilt"
-                );
-                return None;
-            }
-        };
+        let (dispatch, terminal_after_handoff) =
+            match self.rebuild_dispatch(member, claim.msg).await {
+                Ok(Some(dispatch)) => dispatch,
+                Ok(None) | Err(_) => {
+                    release.release_without_input().await;
+                    stats.released += 1;
+                    tracing::info!(
+                        event = "herdr_queue_poll_outcome",
+                        member = %member.key,
+                        msg_id = %claim.msg,
+                        queue_kind = NudgeKind::Queue.as_str(),
+                        outcome = "dispatch_failed_released",
+                        "Herdr queue dispatch could not be rebuilt"
+                    );
+                    return None;
+                }
+            };
         if !still_idle(&self.service_runtime, &member.key) {
             release.release_without_input().await;
             stats.released += 1;
@@ -586,8 +588,16 @@ impl HerdrQueueWakePump {
             );
             return None;
         };
-        self.emit_claim(emitter, dispatch, member, claim, &mut release, stats)
-            .await
+        self.emit_claim(
+            emitter,
+            dispatch,
+            terminal_after_handoff,
+            member,
+            claim,
+            &mut release,
+            stats,
+        )
+        .await
     }
 
     async fn claim_next_pending(
@@ -610,7 +620,7 @@ impl HerdrQueueWakePump {
         &self,
         member: &HerdrCandidate,
         message_id: atm_core::schema::AtmMessageId,
-    ) -> Result<Option<atm_core::boundary::BuiltInPostSendDispatch>, AtmError> {
+    ) -> Result<Option<(atm_core::boundary::BuiltInPostSendDispatch, bool)>, AtmError> {
         let runtime = self.service_runtime.clone();
         let member_key = member.key.clone();
         let message = self
@@ -622,19 +632,21 @@ impl HerdrQueueWakePump {
         let Some(message) = message else {
             return Ok(None);
         };
-        rebuild_received_hook_dispatch(
+        let dispatch = rebuild_received_hook_dispatch(
             &self.service_runtime,
             &member.key,
             message_id,
             NudgeKind::Queue,
             &message,
-        )
+        )?;
+        Ok(dispatch.map(|dispatch| (dispatch, is_terminal_escalation_message(&message))))
     }
 
     async fn emit_claim(
         &self,
         emitter: &dyn atm_core::boundary::AsyncMessageReceivedHookEmitter,
         dispatch: atm_core::boundary::BuiltInPostSendDispatch,
+        terminal_after_handoff: bool,
         member: &HerdrCandidate,
         claim: atm_core::boundary::NudgeClaim,
         release: &mut ReleasePendingOnDrop,
@@ -648,8 +660,14 @@ impl HerdrQueueWakePump {
         {
             Ok(_) => {
                 let message_id = claim.msg;
-                self.complete_successful_claim(member, claim, release, stats)
-                    .await;
+                self.complete_successful_claim(
+                    member,
+                    claim,
+                    terminal_after_handoff,
+                    release,
+                    stats,
+                )
+                .await;
                 Some(message_id)
             }
             Err(error) => {
@@ -693,6 +711,7 @@ impl HerdrQueueWakePump {
         &self,
         member: &HerdrCandidate,
         claim: atm_core::boundary::NudgeClaim,
+        terminal_after_handoff: bool,
         release: &mut ReleasePendingOnDrop,
         stats: &mut HerdrQueueWakeStats,
     ) {
@@ -702,19 +721,29 @@ impl HerdrQueueWakePump {
         let runtime = self.service_runtime.clone();
         let member_key = member.key.clone();
         let message_id = claim.msg;
+        let cleanup_claim = claim.clone();
         let now = (self.clock)();
         let next_due = atm_core::boundary::next_reminder_due(now);
         let health = self.runtime_health.clone();
         let _ = self
             .blocking_bridge
             .run(herdr_request_deadline(), move || {
-                atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
-                    &runtime,
-                    &member_key,
-                    &message_id,
-                    next_due,
-                    || health.record_graft_queue_marker_clear_failure(),
-                );
+                if terminal_after_handoff {
+                    atm_core::nudge_dispatch::complete_queue_marker_after_handoff(
+                        &runtime,
+                        &member_key,
+                        &cleanup_claim,
+                        || health.record_graft_queue_marker_clear_failure(),
+                    );
+                } else {
+                    atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
+                        &runtime,
+                        &member_key,
+                        &message_id,
+                        next_due,
+                        || health.record_graft_queue_marker_clear_failure(),
+                    );
+                }
                 Ok(())
             })
             .await;

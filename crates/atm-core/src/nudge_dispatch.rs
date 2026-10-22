@@ -22,6 +22,18 @@ use crate::service_runtime::LocalServiceRuntime;
 use crate::types::TaskId;
 use atm_storage::TaskRow;
 
+/// Returns whether this is daemon-authored escalation mail, whose successful
+/// queue handoff is terminal even while the recipient keeps it unread.
+#[must_use]
+pub fn is_terminal_escalation_message(message: &Message) -> bool {
+    message.envelope.from.as_str() == crate::boundary::DAEMON_ACTOR_NAME
+        && message
+            .envelope
+            .summary
+            .as_deref()
+            .is_some_and(|summary| summary.starts_with("escalation:"))
+}
+
 const fn task_pass_transition(reminder_count: u32) -> TaskTransition {
     if reminder_count == 0 {
         TaskTransition::Ready
@@ -82,6 +94,44 @@ pub fn rearm_queue_marker_after_handoff(
                 "pending marker clear retry failed after successful queue delivery"
             );
         }
+    }
+}
+
+/// Clears the exact claimed queue marker after a one-shot handoff.
+///
+/// The claim identity prevents a late completion from clearing a marker that
+/// belongs to a later delivery attempt. The unread mailbox row remains intact.
+pub fn complete_queue_marker_after_handoff(
+    service_runtime: &LocalServiceRuntime,
+    member: &MemberKey,
+    claim: &atm_storage::NudgeClaim,
+    mut record_failure: impl FnMut(),
+) {
+    let store = match service_runtime.pending_nudge_store() {
+        Ok(store) => store,
+        Err(error) => {
+            record_failure();
+            tracing::warn!(
+                subsystem = "atm_core.queue",
+                action = "handoff_marker_complete",
+                outcome = "failed",
+                %error,
+                msg_id = %claim.msg,
+                "one-shot queue handoff succeeded but pending marker store was unavailable"
+            );
+            return;
+        }
+    };
+    if let Err(error) = store.complete_pending_after_handoff(member, claim) {
+        record_failure();
+        tracing::warn!(
+            subsystem = "atm_core.queue",
+            action = "handoff_marker_complete",
+            outcome = "failed",
+            %error,
+            msg_id = %claim.msg,
+            "one-shot pending marker completion failed after successful queue delivery"
+        );
     }
 }
 
