@@ -375,6 +375,12 @@ pub fn install_sqlite_prompt_handoff_write_failure(path: impl AsRef<Path>) -> Re
     atm_storage_rusqlite::install_prompt_handoff_write_failure_for_test(path)
 }
 
+/// Configure the isolated SQLite fixture to reject terminal queue-marker
+/// reservation before a one-shot notification is handed off.
+pub fn install_sqlite_terminal_reservation_failure(path: impl AsRef<Path>) -> Result<(), AtmError> {
+    atm_storage_rusqlite::install_terminal_reservation_failure_for_test(path)
+}
+
 /// Configure the isolated SQLite fixture to reject task-row updates.
 pub fn install_sqlite_task_update_failure(path: impl AsRef<Path>) -> Result<(), AtmError> {
     atm_storage_rusqlite::install_task_update_failure_for_test(path)

@@ -651,6 +651,13 @@ impl HerdrQueueWakePump {
             dispatch,
             terminal_after_handoff,
         } = queued_dispatch;
+        if terminal_after_handoff
+            && !self
+                .reserve_terminal_handoff(member, &claim, release, stats)
+                .await
+        {
+            return None;
+        }
         match emitter
             .emit_received_message(dispatch, herdr_request_deadline())
             .await
@@ -668,6 +675,9 @@ impl HerdrQueueWakePump {
                 Some(message_id)
             }
             Err(error) => {
+                if terminal_after_handoff {
+                    self.restore_terminal_handoff(member, &claim).await;
+                }
                 if error.code() == AtmErrorCode::HerdrUnavailable {
                     stats.breaker_open += 1;
                 }
@@ -704,6 +714,79 @@ impl HerdrQueueWakePump {
         }
     }
 
+    async fn reserve_terminal_handoff(
+        &self,
+        member: &HerdrCandidate,
+        claim: &atm_core::boundary::NudgeClaim,
+        release: &mut ReleasePendingOnDrop,
+        stats: &mut HerdrQueueWakeStats,
+    ) -> bool {
+        let runtime = self.service_runtime.clone();
+        let member_key = member.key.clone();
+        let reservation_claim = claim.clone();
+        let result = self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                atm_core::nudge_dispatch::reserve_queue_marker_for_terminal_handoff(
+                    &runtime,
+                    &member_key,
+                    &reservation_claim,
+                )
+            })
+            .await;
+        let Err(error) = result else {
+            return true;
+        };
+
+        self.runtime_health
+            .record_graft_queue_marker_clear_failure();
+        release.release_without_input().await;
+        stats.released += 1;
+        tracing::warn!(
+            subsystem = "herdr_queue_wake",
+            action = "terminal_handoff_reservation",
+            outcome = "failed",
+            member = %member.key,
+            msg_id = %claim.msg,
+            error = %error,
+            "terminal escalation was not prompted because its durable one-shot reservation failed"
+        );
+        false
+    }
+
+    async fn restore_terminal_handoff(
+        &self,
+        member: &HerdrCandidate,
+        claim: &atm_core::boundary::NudgeClaim,
+    ) {
+        let runtime = self.service_runtime.clone();
+        let member_key = member.key.clone();
+        let restore_claim = claim.clone();
+        if let Err(error) = self
+            .blocking_bridge
+            .run(herdr_request_deadline(), move || {
+                atm_core::nudge_dispatch::restore_queue_marker_after_failed_terminal_handoff(
+                    &runtime,
+                    &member_key,
+                    &restore_claim,
+                )
+            })
+            .await
+        {
+            self.runtime_health
+                .record_graft_queue_marker_clear_failure();
+            tracing::warn!(
+                subsystem = "herdr_queue_wake",
+                action = "terminal_handoff_restore",
+                outcome = "failed",
+                member = %member.key,
+                msg_id = %claim.msg,
+                error = %error,
+                "rejected terminal escalation handoff could not restore its queue marker"
+            );
+        }
+    }
+
     async fn complete_successful_claim(
         &self,
         member: &HerdrCandidate,
@@ -718,21 +801,13 @@ impl HerdrQueueWakePump {
         let runtime = self.service_runtime.clone();
         let member_key = member.key.clone();
         let message_id = claim.msg;
-        let cleanup_claim = claim.clone();
         let now = (self.clock)();
         let next_due = atm_core::boundary::next_reminder_due(now);
         let health = self.runtime_health.clone();
         let _ = self
             .blocking_bridge
             .run(herdr_request_deadline(), move || {
-                if terminal_after_handoff {
-                    atm_core::nudge_dispatch::complete_queue_marker_after_handoff(
-                        &runtime,
-                        &member_key,
-                        &cleanup_claim,
-                        || health.record_graft_queue_marker_clear_failure(),
-                    );
-                } else {
+                if !terminal_after_handoff {
                     atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
                         &runtime,
                         &member_key,

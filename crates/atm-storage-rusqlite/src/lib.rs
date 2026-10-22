@@ -196,6 +196,37 @@ pub fn install_prompt_handoff_write_failure_for_test(
         })
 }
 
+/// Installs a deterministic SQLite failure for terminal queue-marker
+/// reservation. Terminal notifications must remain unsent when this write
+/// fails, rather than being accepted and left replayable.
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
+pub fn install_terminal_reservation_failure_for_test(
+    path: impl AsRef<Path>,
+) -> Result<(), AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
+        AtmError::daemon_unavailable("failed to open sqlite terminal-reservation test connection")
+            .with_cause(error)
+    })?;
+    connection
+        .execute_batch(
+            r#"
+            CREATE TRIGGER fail_test_terminal_reservation
+            BEFORE UPDATE OF nudge_pending_at ON mail_message_states
+            WHEN NEW.nudge_pending_at IS NULL
+            BEGIN
+                SELECT RAISE(ABORT, 'intentional terminal nudge reservation failure');
+            END;
+            "#,
+        )
+        .map_err(|error| {
+            AtmError::daemon_unavailable(
+                "failed to install sqlite terminal-reservation test trigger",
+            )
+            .with_cause(error)
+        })
+}
+
 /// Installs a test-only SQLite trigger that rejects task-row updates.
 #[doc(hidden)]
 #[cfg(any(test, feature = "test-support"))]

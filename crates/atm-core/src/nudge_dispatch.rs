@@ -93,41 +93,49 @@ pub fn rearm_queue_marker_after_handoff(
     }
 }
 
-/// Clears the exact claimed queue marker after a one-shot handoff.
+/// Reserves the exact claimed queue item before a one-shot handoff.
 ///
-/// The claim identity prevents a late completion from clearing a marker that
-/// belongs to a later delivery attempt. The unread mailbox row remains intact.
-pub fn complete_queue_marker_after_handoff(
+/// The durable transition happens before external acceptance, so a storage
+/// failure prevents the notification from being sent. The claim identity
+/// prevents a stale reservation from changing a later attempt. If the external
+/// handoff is explicitly rejected, call
+/// [`restore_queue_marker_after_failed_terminal_handoff`].
+pub fn reserve_queue_marker_for_terminal_handoff(
     service_runtime: &LocalServiceRuntime,
     member: &MemberKey,
     claim: &atm_storage::NudgeClaim,
-    mut record_failure: impl FnMut(),
-) {
-    let store = match service_runtime.pending_nudge_store() {
-        Ok(store) => store,
-        Err(error) => {
-            record_failure();
-            tracing::warn!(
-                subsystem = "atm_core.queue",
-                action = "handoff_marker_complete",
-                outcome = "failed",
-                %error,
-                msg_id = %claim.msg,
-                "one-shot queue handoff succeeded but pending marker store was unavailable"
-            );
-            return;
-        }
-    };
-    if let Err(error) = store.complete_pending_after_handoff(member, claim) {
-        record_failure();
-        tracing::warn!(
-            subsystem = "atm_core.queue",
-            action = "handoff_marker_complete",
-            outcome = "failed",
-            %error,
-            msg_id = %claim.msg,
-            "one-shot pending marker completion failed after successful queue delivery"
-        );
+) -> Result<(), AtmError> {
+    let reserved = service_runtime
+        .pending_nudge_store()?
+        .complete_pending_before_terminal_handoff(member, claim)?;
+    if reserved {
+        Ok(())
+    } else {
+        Err(AtmError::new(
+            crate::error::AtmErrorCode::InternalError,
+            "terminal queue claim no longer owns its pending marker",
+        ))
+    }
+}
+
+/// Restores a reserved terminal marker only when the external handoff rejects
+/// the prompt, allowing a later controlled retry without reopening a
+/// successfully accepted terminal notification.
+pub fn restore_queue_marker_after_failed_terminal_handoff(
+    service_runtime: &LocalServiceRuntime,
+    member: &MemberKey,
+    claim: &atm_storage::NudgeClaim,
+) -> Result<(), AtmError> {
+    let restored = service_runtime
+        .pending_nudge_store()?
+        .restore_pending_after_failed_terminal_handoff(member, claim)?;
+    if restored {
+        Ok(())
+    } else {
+        Err(AtmError::new(
+            crate::error::AtmErrorCode::InternalError,
+            "terminal queue claim could not restore its pending marker",
+        ))
     }
 }
 

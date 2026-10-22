@@ -1296,13 +1296,24 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
         next_due: IsoTimestamp,
     ) -> Result<(), AtmError>;
 
-    /// Terminates the queue marker after a successful one-shot handoff while
-    /// leaving the mailbox item visible and unread.
-    fn complete_pending_after_handoff(
+    /// Reserves a terminal queue item before its one-shot handoff by clearing
+    /// its marker while leaving the mailbox item visible and unread. If the
+    /// handoff is rejected, the caller restores the marker with
+    /// `restore_pending_after_failed_terminal_handoff`.
+    fn complete_pending_before_terminal_handoff(
         &self,
         member: &MemberKey,
         claim: &NudgeClaim,
-    ) -> Result<(), AtmError>;
+    ) -> Result<bool, AtmError>;
+
+    /// Restores a terminal queue marker when its external handoff is rejected.
+    /// This is conditional on the marker still being absent and the same
+    /// claim attempt, so a stale failure cannot re-arm a completed item.
+    fn restore_pending_after_failed_terminal_handoff(
+        &self,
+        member: &MemberKey,
+        claim: &NudgeClaim,
+    ) -> Result<bool, AtmError>;
 
     /// Enumerates members holding at least one eligible pending marker.
     ///
@@ -1357,13 +1368,23 @@ impl PendingNudgeStore for DummyPendingNudgeStore {
         })
     }
 
-    fn complete_pending_after_handoff(
+    fn complete_pending_before_terminal_handoff(
         &self,
         member: &MemberKey,
         claim: &NudgeClaim,
-    ) -> Result<(), AtmError> {
-        self.inner().map_or(Ok(()), |inner| {
-            inner.complete_pending_after_handoff(member, claim)
+    ) -> Result<bool, AtmError> {
+        self.inner().map_or(Ok(true), |inner| {
+            inner.complete_pending_before_terminal_handoff(member, claim)
+        })
+    }
+
+    fn restore_pending_after_failed_terminal_handoff(
+        &self,
+        member: &MemberKey,
+        claim: &NudgeClaim,
+    ) -> Result<bool, AtmError> {
+        self.inner().map_or(Ok(true), |inner| {
+            inner.restore_pending_after_failed_terminal_handoff(member, claim)
         })
     }
 

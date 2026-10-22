@@ -973,6 +973,58 @@ async fn escalation_mail_is_deferred_and_sets_a_queue_marker() {
 }
 
 #[tokio::test]
+async fn terminal_escalation_is_not_prompted_when_marker_reservation_fails() {
+    let (root, runtime, fake, pump, store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &[]);
+    pump.tick_once().await;
+
+    let lead = atm_storage::MemberKey::new(
+        keys[0].team().clone(),
+        atm_storage::roles::ROLE_TEAM_LEAD
+            .parse()
+            .expect("lead agent"),
+    );
+    let terminal_message = daemon_mail_for(&runtime, keys[0].team(), lead.agent().as_str())
+        .await
+        .into_iter()
+        .find(|message| {
+            message
+                .envelope
+                .summary
+                .as_deref()
+                .is_some_and(|summary| summary.starts_with("escalation:"))
+        })
+        .expect("daemon escalation to the lead");
+    assert!(atm_core::nudge_dispatch::is_terminal_escalation_message(
+        &terminal_message
+    ));
+
+    atm_runtime_test_support::install_sqlite_terminal_reservation_failure(
+        root.path().join("runtime/mail.sqlite3"),
+    )
+    .expect("install deterministic marker-reservation failure");
+    queue_idle_result(&fake, &lead);
+    pump.tick_once().await;
+
+    assert!(
+        prompt_texts(&fake).is_empty(),
+        "the external one-shot notification must not be accepted when its durable terminal reservation fails"
+    );
+    let (marker, _) = atm_runtime_test_support::inspect_pending_marker_state_for_test(
+        root.path().join("runtime/mail.sqlite3"),
+        lead.team().as_str(),
+        lead.agent().as_str(),
+        terminal_message.message_key.as_str(),
+    )
+    .expect("inspect retryable marker");
+    assert!(
+        marker.is_some(),
+        "the failed reservation leaves the escalation queued for a later attempt"
+    );
+}
+
+#[tokio::test]
 async fn tenth_reminder_escalates_then_keeps_nudging_and_escalates_again() {
     let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-TENTH"]);
     for minute in 0..10 {
