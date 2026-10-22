@@ -14,6 +14,16 @@ listed validation commands run in that repository's worktree. This `atm-core`
 branch (`plan/phase-bl`, PR to `develop`) publishes the contract and dispatch
 plan only; it is handed to the implementation repository before Wave 1.
 
+## Pre-Wave-1 handoff
+
+bl-1 owns the handoff gate. Before its implementation branch opens, copy this
+plan, `design.md`, `phase-bl.jsonl`, all `sprint-bl-*.md` files, and
+`.sprints/BL/structure.ttl` into `randlee/atm-bd-orchestration` at
+`docs/plans/phase-bl/`; record both the atm-core plan SHA and destination SHA
+in `phase-bl-handoff.json`. Dispatch/QA parses the copied JSONL and registry,
+resolves every criteria path, and rejects a mismatch. The gate test is
+`test_phase_bl_handoff_pins_commits_and_resolves_all_sprints`.
+
 ## Boundary and ownership map
 
 | Sprint | Boundary / closure | Exact owned paths (disjoint within wave) |
