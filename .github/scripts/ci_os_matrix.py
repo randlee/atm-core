@@ -22,14 +22,19 @@ def select_matrices(event: str, base: str, ref: str, workflow_call: bool) -> dic
         or (event == "pull_request" and base in {"develop", "main"})
         or (event == "push" and ref in {"refs/heads/develop", "refs/heads/main"})
     )
-    oses = ALL_OS if full_os else ALL_OS[:1]
+    lint_oses = ALL_OS if full_os else ALL_OS[:1]
     return {
         "full_os": str(full_os).lower(),
-        "lint_matrix": json.dumps([{"os": os, "python": PYTHON[os]} for os in oses]),
+        "lint_matrix": json.dumps([{"os": os, "python": PYTHON[os]} for os in lint_oses]),
         "test_matrix": json.dumps(
             [
-                {"os": os, "python": PYTHON[os], "release_artifact": RELEASE_ARTIFACT[os]}
-                for os in oses
+                {
+                    "os": os,
+                    "python": PYTHON[os],
+                    "release_artifact": RELEASE_ARTIFACT[os],
+                    "run_platform": full_os or os == "ubuntu-latest",
+                }
+                for os in ALL_OS
             ]
         ),
     }

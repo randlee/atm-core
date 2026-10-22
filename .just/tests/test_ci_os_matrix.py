@@ -20,16 +20,25 @@ SPEC.loader.exec_module(MODULE)
 class CiOsMatrixTests(unittest.TestCase):
     def test_pr_target_matrix(self) -> None:
         expected = {
-            "integrate/phase-bk": ["ubuntu-latest"],
-            "sprint/bk-1": ["ubuntu-latest"],
-            "develop": ["ubuntu-latest", "macos-latest", "windows-latest"],
-            "main": ["ubuntu-latest", "macos-latest", "windows-latest"],
+            "integrate/phase-bk": False,
+            "sprint/bk-1": False,
+            "develop": True,
+            "main": True,
         }
-        for base, oses in expected.items():
+        all_oses = ["ubuntu-latest", "macos-latest", "windows-latest"]
+        for base, full_os in expected.items():
             with self.subTest(base=base):
                 matrix = MODULE.select_matrices("pull_request", base, "", False)
-                self.assertEqual([row["os"] for row in json.loads(matrix["test_matrix"])], oses)
-                self.assertEqual([row["os"] for row in json.loads(matrix["lint_matrix"])], oses)
+                test_rows = json.loads(matrix["test_matrix"])
+                self.assertEqual([row["os"] for row in test_rows], all_oses)
+                self.assertEqual(
+                    [row["run_platform"] for row in test_rows],
+                    [True, full_os, full_os],
+                )
+                self.assertEqual(
+                    [row["os"] for row in json.loads(matrix["lint_matrix"])],
+                    all_oses if full_os else all_oses[:1],
+                )
 
     def test_push_and_workflow_call(self) -> None:
         for event, ref, workflow_call, full_os in (
@@ -48,7 +57,8 @@ class CiOsMatrixTests(unittest.TestCase):
         self.assertIn("python .github/scripts/ci_os_matrix.py", workflow)
         self.assertIn("include: ${{ fromJSON(needs.ci-scope.outputs.lint_matrix) }}", workflow)
         self.assertIn("include: ${{ fromJSON(needs.ci-scope.outputs.test_matrix) }}", workflow)
-        self.assertEqual(workflow.count("name: Test (${{ matrix.os }})"), 2)
+        self.assertEqual(workflow.count("name: Test (${{ matrix.os }})"), 1)
+        self.assertNotIn("test-platform-checks:", workflow)
 
 
 if __name__ == "__main__":
