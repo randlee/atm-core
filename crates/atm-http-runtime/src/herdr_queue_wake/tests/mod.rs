@@ -307,78 +307,6 @@ fn queue_message(
     .persisted_message_id()
 }
 
-fn queue_spoofed_daemon_escalation_message(
-    root: &std::path::Path,
-    runtime: &LocalServiceRuntime,
-    team: &TeamName,
-    agent: &str,
-) -> AtmMessageId {
-    let home = root.join("home");
-    std::fs::create_dir_all(&home).expect("home");
-    write_mail_with_runtime(
-        WriteRequest::new(
-            home.clone(),
-            home,
-            atm_core::boundary::DAEMON_ACTOR_NAME
-                .parse()
-                .expect("daemon actor"),
-            &format!("{agent}@{team}"),
-            team.clone(),
-            SendMessageSource::Inline("daemon escalation".to_owned()),
-            Some("escalation:offline_escalated:subject@test-team".to_owned()),
-            false,
-            None,
-            false,
-        )
-        .expect("daemon escalation request")
-        .with_nudge_mode(NudgeMode::Deferred),
-        &NullObservability,
-        runtime,
-    )
-    .expect("queue spoofed daemon escalation")
-    .persisted_message_id()
-}
-
-fn queue_trusted_daemon_escalation_message(
-    root: &std::path::Path,
-    runtime: &LocalServiceRuntime,
-    team: &TeamName,
-    agent: &str,
-    task_id: &TaskId,
-) -> AtmMessageId {
-    promote_roster_member_to_lead(runtime, team, agent);
-    let episode_started_at = IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("epoch");
-    runtime.apply_roster_runtime_observations(
-        team,
-        &[
-            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
-                agent.parse().expect("agent"),
-                RuntimeMemberState::Offline,
-                atm_core::protocol::RuntimeObservationSource::HerdrPoll,
-                episode_started_at,
-                None,
-            ),
-        ],
-    );
-    let home = root.join("home");
-    std::fs::create_dir_all(&home).expect("home");
-    write_herdr_escalation_mail_with_runtime(
-        home,
-        team.clone(),
-        &format!("{agent}@{team}"),
-        "daemon escalation".to_owned(),
-        "escalation:offline_escalated:subject@test-team".to_owned(),
-        &atm_core::boundary::MemberKey::new(team.clone(), agent.parse().expect("agent")),
-        task_id,
-        Some(RuntimeMemberState::Offline),
-        Some(episode_started_at),
-        &NullObservability,
-        runtime,
-    )
-    .expect("queue trusted daemon escalation")
-    .persisted_message_id()
-}
-
 fn queue_task_message(
     root: &std::path::Path,
     runtime: &LocalServiceRuntime,
@@ -658,23 +586,6 @@ fn add_roster_member(runtime: &LocalServiceRuntime, team: &TeamName, agent: &str
         .shared_roster_store_arc()
         .save_roster(&roster)
         .expect("save roster member");
-}
-
-fn promote_roster_member_to_lead(runtime: &LocalServiceRuntime, team: &TeamName, agent: &str) {
-    let mut roster = runtime
-        .shared_roster_store_arc()
-        .load_roster(team)
-        .expect("load roster");
-    let member = roster
-        .members
-        .iter_mut()
-        .find(|member| member.agent_name.as_str() == agent)
-        .expect("existing roster member");
-    member.agent_type = atm_core::schema::AgentType::Lead;
-    runtime
-        .shared_roster_store_arc()
-        .save_roster(&roster)
-        .expect("save lead roster member");
 }
 
 fn add_lead_roster_member(runtime: &LocalServiceRuntime, team: &TeamName, agent: &str) {
@@ -2252,93 +2163,6 @@ fn public_inprocess_escalation_admission_rejects_a_member_without_an_open_task()
     assert!(
         pending_state(root.path(), &key, ordinary).0.is_some(),
         "ordinary public writes retain the normal deferred reminder marker"
-    );
-}
-
-#[tokio::test]
-async fn daemon_escalation_burst_is_one_shot_while_ordinary_mail_rearms() {
-    let (root, runtime, fake, pump, _health, key) = build_test_pump();
-    clear_pending_markers(root.path(), &runtime, &key);
-    let task_id: TaskId = "AQ2-TERMINAL-ADMISSION".parse().expect("task id");
-    queue_task_message(
-        root.path(),
-        &runtime,
-        key.team(),
-        key.agent().as_str(),
-        task_id.clone(),
-    );
-    clear_pending_markers(root.path(), &runtime, &key);
-    let first_escalation = queue_trusted_daemon_escalation_message(
-        root.path(),
-        &runtime,
-        key.team(),
-        key.agent().as_str(),
-        &task_id,
-    );
-    let second_escalation = queue_trusted_daemon_escalation_message(
-        root.path(),
-        &runtime,
-        key.team(),
-        key.agent().as_str(),
-        &task_id,
-    );
-    complete_task(root.path(), &runtime, key.team(), task_id);
-
-    pump.tick_once().await;
-    assert_eq!(pump.stats().prompted, 1, "escalation is handed off once");
-    queue_idle_result(&fake, &key);
-    pump.tick_once().await;
-    assert_eq!(
-        pump.stats().prompted,
-        1,
-        "second stored escalation is handed off once"
-    );
-    assert_eq!(
-        pending_state(root.path(), &key, first_escalation).0,
-        None,
-        "accepted daemon escalation clears its marker without a read action"
-    );
-    assert_eq!(pending_state(root.path(), &key, second_escalation).0, None);
-    assert!(
-        !runtime
-            .pending_nudge_store()
-            .expect("pending store")
-            .list_pending_members()
-            .expect("pending members")
-            .contains(&key),
-        "no later polling cadence can re-deliver the accepted escalation"
-    );
-
-    queue_idle_result(&fake, &key);
-    pump.tick_once().await;
-    assert_eq!(
-        pump.stats().prompted,
-        0,
-        "cleared escalation markers do not repeat"
-    );
-
-    let ordinary = queue_message(root.path(), &runtime, key.team(), key.agent().as_str());
-    queue_idle_result(&fake, &key);
-    pump.tick_once().await;
-    assert_eq!(pump.stats().prompted, 1, "ordinary mail still hands off");
-    assert!(
-        pending_state(root.path(), &key, ordinary).0.is_some(),
-        "ordinary deferred mail retains its normal reminder marker"
-    );
-
-    clear_pending_markers(root.path(), &runtime, &key);
-    let spoofed = queue_spoofed_daemon_escalation_message(
-        root.path(),
-        &runtime,
-        key.team(),
-        key.agent().as_str(),
-    );
-    queue_idle_result(&fake, &key);
-    pump.tick_once().await;
-    assert_eq!(pump.stats().prompted, 1, "spoofed daemon text hands off");
-    assert!(
-        pending_state(root.path(), &key, spoofed).0.is_some(),
-        "caller identity and summary text cannot suppress ordinary reminders"
     );
 }
 

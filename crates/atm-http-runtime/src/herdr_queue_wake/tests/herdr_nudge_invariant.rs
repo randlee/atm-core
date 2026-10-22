@@ -215,6 +215,30 @@ fn enable_herdr_for_escalation_lead(runtime: &LocalServiceRuntime, team: &TeamNa
         .expect("Herdr escalation lead");
 }
 
+fn queue_worker_and_lead_statuses(
+    fake: &atm_herdr::testing::FakeHerdrProcessAdapter,
+    worker: &atm_storage::MemberKey,
+    worker_status: HerdrAgentStatus,
+    lead_status: HerdrAgentStatus,
+) {
+    fake.queue_list_result(Ok(HerdrListOutcome {
+        agents: vec![
+            AgentSnapshot {
+                name: Some(worker.agent().to_string()),
+                pane_id: None,
+                status: worker_status,
+                workspace_id: None,
+            },
+            AgentSnapshot {
+                name: Some(atm_storage::roles::ROLE_TEAM_LEAD.to_owned()),
+                pane_id: None,
+                status: lead_status,
+                workspace_id: None,
+            },
+        ],
+    }));
+}
+
 fn install_escalation_targets(
     runtime: &LocalServiceRuntime,
     store: &atm_storage::DummyTaskStore,
@@ -1103,6 +1127,113 @@ async fn uncertain_terminal_handoff_error_keeps_the_marker_reserved() {
         prompt_texts(&fake),
         prompts_after_error,
         "the ambiguous error must not requeue a possibly accepted notification"
+    );
+}
+
+#[tokio::test]
+async fn production_escalation_admission_is_one_shot_and_preserves_task_reminders() {
+    let (root, runtime, fake, pump, store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    let worker = keys[0].clone();
+    let team = worker.team().clone();
+    let lead = atm_storage::MemberKey::new(
+        team.clone(),
+        atm_storage::roles::ROLE_TEAM_LEAD
+            .parse()
+            .expect("lead agent"),
+    );
+    let task_id: atm_core::types::TaskId = "AX5-TASK-00".parse().expect("task id");
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &[]);
+    enable_herdr_for_escalation_lead(&runtime, &team);
+
+    // The first pump tick observes the worker's real blocked state with an
+    // open task; production admission creates the durable terminal mail.
+    pump.tick_once().await;
+    assert_eq!(pump.stats().blocked_escalations, 1);
+    assert_eq!(pump.stats().task_reminders, 0);
+    let first_episode_mail = daemon_mail_for(&runtime, &team, lead.agent().as_str()).await;
+    assert_eq!(
+        first_episode_mail.len(),
+        1,
+        "one admission per blocked episode"
+    );
+    let first_escalation = &first_episode_mail[0];
+    assert!(atm_core::nudge_dispatch::is_terminal_escalation_message(
+        first_escalation
+    ));
+    let first_escalation_id = first_escalation
+        .message_key
+        .as_atm_message_id()
+        .expect("escalation id");
+    let first_escalation_id_text = first_escalation_id.to_string();
+    assert!(
+        super::pending_state(root.path(), &lead, first_escalation_id)
+            .0
+            .is_some(),
+        "production admission stores the terminal message's wake marker"
+    );
+
+    queue_worker_and_lead_statuses(
+        &fake,
+        &worker,
+        HerdrAgentStatus::Blocked,
+        HerdrAgentStatus::Idle,
+    );
+    pump.tick_once().await;
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        1,
+        "the lead receives one handoff"
+    );
+    assert!(prompt_texts(&fake)[0].contains(&first_escalation_id_text));
+    assert_eq!(
+        super::pending_state(root.path(), &lead, first_escalation_id).0,
+        None,
+        "accepted terminal handoff clears the marker"
+    );
+
+    for _ in 0..3 {
+        queue_worker_and_lead_statuses(
+            &fake,
+            &worker,
+            HerdrAgentStatus::Blocked,
+            HerdrAgentStatus::Idle,
+        );
+        pump.tick_once().await;
+    }
+    assert_eq!(prompt_texts(&fake).len(), 1, "the episode is not replayed");
+    assert_eq!(
+        daemon_mail_for(&runtime, &team, lead.agent().as_str())
+            .await
+            .len(),
+        1,
+        "blocked polling does not admit another notification in the same episode"
+    );
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("reminder time");
+    queue_worker_and_lead_statuses(
+        &fake,
+        &worker,
+        HerdrAgentStatus::Idle,
+        HerdrAgentStatus::Idle,
+    );
+    pump.tick_once().await;
+    assert_eq!(
+        pump.stats().task_reminders,
+        1,
+        "recovery resumes task reminders"
+    );
+    let prompts = prompt_texts(&fake);
+    assert_eq!(prompts.len(), 2);
+    assert!(prompts[1].starts_with(&format!("<atm task=\"{}\" open=", task_id.as_str())));
+    assert!(prompts[1].contains(" ready "));
+    assert_eq!(
+        daemon_mail_for(&runtime, &team, lead.agent().as_str())
+            .await
+            .len(),
+        1,
+        "recovery does not duplicate the completed escalation"
     );
 }
 
