@@ -261,6 +261,7 @@ mod tests {
     use atm_storage::types::{AgentName, IsoTimestamp, MemberKey, TeamName};
     use chrono::Utc;
     use serde_json::Map;
+    use std::str::FromStr;
     use std::sync::{Arc, Barrier};
     use std::thread;
 
@@ -567,11 +568,10 @@ mod tests {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let member = member();
         let msg = AtmMessageId::new();
+        let due = IsoTimestamp::from_str("2000-01-01T00:00:00Z").expect("fixed past due time");
         seed_message(&backend, msg, false);
         let store = backend.pending_nudge_store();
-        store
-            .mark_pending(&member, &msg, IsoTimestamp::now())
-            .expect("mark");
+        store.mark_pending(&member, &msg, due).expect("mark");
         let claim = store
             .claim_next_pending(&member)
             .expect("claim")
@@ -580,7 +580,7 @@ mod tests {
         store
             .requeue_pending(&member, &claim)
             .expect("requeue after a failed first handoff");
-        set_marker(&backend, msg, IsoTimestamp::now());
+        set_marker(&backend, msg, due);
         let retry = store
             .claim_next_pending(&member)
             .expect("retry claim")
