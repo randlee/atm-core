@@ -2089,7 +2089,9 @@ class PrereleaseBinaryDirectoryTests(unittest.TestCase):
             ):
                 self.assertEqual(RUNNER.main(), 1)
             probe.assert_not_called()
-            self.assertEqual([call["benchmark_target"] for call in captured], ["uds", "tcp", "tcp-tls"])
+            required = RUNNER.required_targets(RUNNER.benchmark_os())
+            expected_targets = [target for target in ("uds", "tcp", "tcp-tls") if target in required]
+            self.assertEqual([call["benchmark_target"] for call in captured], expected_targets)
             self.assertEqual(RUNNER.release_binary("atm", binaries), binaries / f"atm{suffix}")
             self.assertIn("NOT MEASURED required f8 target sqlite", stdout.getvalue())
             self.assertEqual(atomic.call_count, 2)  # sqlite row plus campaign
@@ -2097,7 +2099,8 @@ class PrereleaseBinaryDirectoryTests(unittest.TestCase):
     def test_release_binary_defaults_to_target_release_without_bin_dir(self):
         with tempfile.TemporaryDirectory() as directory:
             with mock.patch.object(SUPPORT, "ROOT", Path(directory)):
-                expected = Path(directory) / "target" / "release" / "atm"
+                suffix = ".exe" if os.name == "nt" else ""
+                expected = Path(directory) / "target" / "release" / f"atm{suffix}"
                 expected.parent.mkdir(parents=True)
                 expected.write_text("atm", encoding="utf-8")
                 self.assertEqual(SUPPORT.release_binary("atm"), expected)
