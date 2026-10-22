@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import io
-import json
 import re
 import subprocess
 import sys
@@ -197,9 +196,6 @@ class PrereleaseTests(unittest.TestCase):
                 PRERELEASE.install(values, "1.5.11")
                 self.assertEqual((version, installed), ("1.5.11", stage))
                 self.assertTrue((stage / "bin" / "fixture").is_file())
-                provenance = json.loads((stage / PRERELEASE.PROVENANCE_FILENAME).read_text(encoding="utf-8"))
-                self.assertEqual(provenance["tag"], "prerelease/v1.5.11")
-                self.assertEqual(provenance["binary_sha256"]["fixture"], hashlib.sha256(b"fixture").hexdigest())
                 self.assertTrue((root / "selector" / "fixture").is_symlink())
                 download.assert_called_once()
 

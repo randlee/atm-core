@@ -102,7 +102,6 @@ from scripts.smoke.admission_capacity_support import (
     benchmark_runtime_client_environment,
     binary_hashes,
     daemon_switch_result,
-    verified_prerelease_binaries,
     is_ancestor_revision,
     os_account_home,
     release_binary,
@@ -760,13 +759,11 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
             f"{error}"
         ) from error
     binary_dir = args.bin_dir.resolve() if args.bin_dir is not None else None
-    prerelease_tag: str | None = None
-    if binary_dir is None:
-        hashes = binary_hashes()
-        versions = {}
-    else:
-        prerelease_tag, hashes = verified_prerelease_binaries(binary_dir)
-        versions = {}
+    hashes = binary_hashes(binary_dir)
+    versions = (
+        {name: release_version(release_binary(name, binary_dir)) for name in ("atm", "atm-daemon")}
+        if binary_dir is not None else {}
+    )
     print(f"benchmark campaign: {campaign_identifier}")
     published_results: list[BenchmarkRunResult] = []
     for position, (target, (transport, peer_wire_security)) in enumerate(target_matrix, start=1):
@@ -777,15 +774,13 @@ def run_required_f8_suite(args: argparse.Namespace) -> int:
             baseline=target_baselines[target],
             binary_hashes=hashes,
             binary_versions=versions,
-            prerelease_tag=prerelease_tag,
         )
         if target == "sqlite" and binary_dir is not None:
             result = BenchmarkRunResult(
                 campaign_id=campaign_identifier, host_label=host_label, os=os_name, target="sqlite",
                 status="INCOMPLETE", incomplete_reason="not measured: --bin-dir does not ship atm-daemon-benchmark; no local build was run",
                 generated_at=datetime.now(timezone.utc), source_revision=source, binary_hashes=hashes,
-                binary_versions=versions, prerelease_tag=prerelease_tag,
-                frames_per_connection=0, messages_requested=0,
+                binary_versions=versions, frames_per_connection=0, messages_requested=0,
                 messages_admitted=0, messages_durable=0, baseline=BaselineRef(revision=1, p50_floor=target_baselines[target].p50_floor),
             )
             compact_path = args.evidence_dir / f"{campaign_identifier}-{target}.json"

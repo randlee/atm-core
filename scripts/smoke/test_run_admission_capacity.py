@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import hashlib
 import importlib.util
 import inspect
 import io
@@ -2065,25 +2064,13 @@ if __name__ == "__main__":
     unittest.main()
 
 class PrereleaseBinaryDirectoryTests(unittest.TestCase):
-    @staticmethod
-    def installed_pair(root: Path) -> Path:
-        binaries = root / "bin"
-        binaries.mkdir()
-        hashes: dict[str, str] = {}
-        suffix = ".exe" if os.name == "nt" else ""
-        for name in ("atm", "atm-daemon"):
-            path = binaries / f"{name}{suffix}"
-            path.write_text(name, encoding="utf-8")
-            hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
-        (root / SUPPORT.PRERELEASE_PROVENANCE_FILENAME).write_text(
-            json.dumps({"tag": "prerelease/v1.6.5", "binary_sha256": hashes}),
-            encoding="utf-8",
-        )
-        return binaries
-
-    def test_bin_dir_uses_verified_shipped_pair_records_tag_and_skips_sqlite_probe(self):
+    def test_bin_dir_uses_shipped_pair_records_versions_and_skips_sqlite_probe(self):
         with tempfile.TemporaryDirectory() as directory:
-            binaries = self.installed_pair(Path(directory))
+            binaries = Path(directory)
+            suffix = ".exe" if os.name == "nt" else ""
+            for name in ("atm", "atm-daemon"):
+                path = binaries / f"{name}{suffix}"
+                path.write_text(name, encoding="utf-8")
             captured: list[dict[str, object]] = []
             def run_capacity(*_args, **kwargs):
                 captured.append(kwargs)
@@ -2093,6 +2080,7 @@ class PrereleaseBinaryDirectoryTests(unittest.TestCase):
             with (
                 mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--bin-dir", str(binaries)]),
                 mock.patch.object(RUNNER, "load_baselines", return_value=mock.Mock(entry_for=mock.Mock(return_value=mock.Mock(p50_floor=1)))),
+                mock.patch.object(RUNNER, "release_version", side_effect=["atm 1.6.5", "atm-daemon 1.6.5"]),
                 mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
                 mock.patch.object(RUNNER, "sqlite_writer_probe") as probe,
                 mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="INCOMPLETE", model_dump=mock.Mock(return_value={}))),
@@ -2102,36 +2090,9 @@ class PrereleaseBinaryDirectoryTests(unittest.TestCase):
                 self.assertEqual(RUNNER.main(), 1)
             probe.assert_not_called()
             self.assertEqual([call["benchmark_target"] for call in captured], ["uds", "tcp", "tcp-tls"])
-            suffix = ".exe" if os.name == "nt" else ""
             self.assertEqual(RUNNER.release_binary("atm", binaries), binaries / f"atm{suffix}")
-            self.assertTrue(all(call["v4_emission"].prerelease_tag == "prerelease/v1.6.5" for call in captured))
             self.assertIn("NOT MEASURED required f8 target sqlite", stdout.getvalue())
             self.assertEqual(atomic.call_count, 2)  # sqlite row plus campaign
-
-    def test_prerelease_provenance_matching_pair_passes(self):
-        with tempfile.TemporaryDirectory() as directory:
-            binaries = self.installed_pair(Path(directory))
-            tag, hashes = SUPPORT.verified_prerelease_binaries(binaries)
-        self.assertEqual(tag, "prerelease/v1.6.5")
-        self.assertEqual(set(hashes), {"atm", "atm-daemon"})
-
-    def test_prerelease_provenance_tampered_binary_refuses(self):
-        with tempfile.TemporaryDirectory() as directory:
-            binaries = self.installed_pair(Path(directory))
-            suffix = ".exe" if os.name == "nt" else ""
-            (binaries / f"atm{suffix}").write_text("tampered", encoding="utf-8")
-            with self.assertRaisesRegex(SUPPORT.PrereleaseProvenanceError, "digest mismatch"):
-                SUPPORT.verified_prerelease_binaries(binaries)
-
-    def test_prerelease_provenance_missing_file_refuses(self):
-        with tempfile.TemporaryDirectory() as directory:
-            binaries = Path(directory) / "bin"
-            binaries.mkdir()
-            suffix = ".exe" if os.name == "nt" else ""
-            for name in ("atm", "atm-daemon"):
-                (binaries / f"{name}{suffix}").write_text(name, encoding="utf-8")
-            with self.assertRaisesRegex(SUPPORT.PrereleaseProvenanceError, "requires prerelease provenance"):
-                SUPPORT.verified_prerelease_binaries(binaries)
 
     def test_release_binary_defaults_to_target_release_without_bin_dir(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -24,7 +24,6 @@ STABLE_VERSION_PARTS = 3
 ARCHIVE_WORKFLOW = "prerelease-archive.yml"
 ARCHIVE_WAIT_SECONDS = 60 * 60
 ARCHIVE_POLL_SECONDS = 60
-PROVENANCE_FILENAME = "prerelease-provenance.json"
 
 
 def command(args: Sequence[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
@@ -364,16 +363,6 @@ def replace_command(template: str, version: str, stage: Path) -> str:
     return template.replace("{version}", version).replace("{stage_dir}", str(stage))
 
 
-def record_provenance(stage: Path, tag: str, paths: Sequence[Path]) -> None:
-    """Bind installed executable bytes to the prerelease tag that supplied them."""
-    binaries = {path.stem: hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
-    payload = {"tag": tag, "binary_sha256": binaries}
-    destination = stage / PROVENANCE_FILENAME
-    temporary = destination.with_suffix(destination.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    temporary.replace(destination)
-
-
 def verify_install(config: dict[str, Any], version: str, stage: Path) -> None:
     shell(replace_command(required_string(config, "post_install"), version, stage))
     verified = shell(required_string(config, "verify"), capture=True)
@@ -404,8 +393,6 @@ def install(manifest: dict[str, Any], requested: str) -> tuple[str, Path]:
             archive = download_checked_archive(tag, version, manifest, Path(directory), public_url=public_url)
             paths = stage_archive(archive, stage, config)
             stage_wheels(tag, manifest, stage, Path(directory), public_url=public_url)
-    tag = f"{required_string(config, 'tag_prefix')}{version}"
-    record_provenance(stage, tag, paths)
     repoint_selector(paths, config)
     verify_install(config, version, stage)
     return version, stage
