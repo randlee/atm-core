@@ -8,5 +8,4 @@
 {"sprint":"bl-8","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
 {"sprint":"bl-10","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
 {"sprint":"bl-13","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
-{"sprint":"bl-14","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
-{"sprint":"bl-12","wave":3,"depends_on":["bl-2","bl-3","bl-4","bl-5","bl-6","bl-7","bl-8","bl-10","bl-13","bl-14"],"closure_type":"integration"}
+{"sprint":"bl-12","wave":3,"depends_on":["bl-2","bl-3","bl-4","bl-5","bl-6","bl-7","bl-8","bl-10","bl-13"],"closure_type":"integration"}

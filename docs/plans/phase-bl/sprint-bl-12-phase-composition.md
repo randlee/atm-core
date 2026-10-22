@@ -3,7 +3,7 @@ Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR ta
 
 closure_type: integration; target_boundary: PhaseBlComposition; branch: sprint/bl-12-phase-composition; PR target: integrate/phase-bl; wave: 3; external_ref: none; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1, bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13, bl-14; parallel_safe: none.
 
-Own `cli.py`, `app.py`, `runner.py`, `model.py`, `cron_entry.py`, `delivery_entry.py`, `wiring.py`, and `test_phase_bl_composition.py` in the console package. It replaces the legacy bundled `runner.step` entry path: installed cron, show, and TUI call collector/state/event/delivery seams independently.
+Own `cli.py`, `app.py`, `runner.py`, `model.py`, `cron_entry.py`, `delivery_entry.py`, `wiring.py`, `test_phase_bl_composition.py`, and `test_app.py` in the console package. It replaces the legacy bundled `runner.step` entry path: installed cron, show, and TUI call collector/state/event/delivery seams independently.
 
 ## Governing text (verbatim)
 
@@ -18,6 +18,7 @@ Own `cli.py`, `app.py`, `runner.py`, `model.py`, `cron_entry.py`, `delivery_entr
 3. Compose JSONL error state, reviewer metadata, persisted snapshot, Quality presentation, event aggregation, and delivery history using deterministic fakes.
 4. Production wiring injects bl-10 `ProblemDeriver` into bl-8 `build_snapshot` and routes bl-5's JSON/CLI enqueue seam into bl-3.
 5. Cut over installed `cli.py`, `app.py`, `runner.py`, and `model.py`: no collection entrypoint calls sender, and TUI/cron share persisted snapshots without a second source query.
+6. Fold the former ConsoleApp boundary here: one console instance, persisted-state consumption, `r` force request, PR-tab GitHub-only request, and Rich Diagnostics colour.
 
 ## Deterministic acceptance
 
@@ -30,6 +31,11 @@ Own `cli.py`, `app.py`, `runner.py`, `model.py`, `cron_entry.py`, `delivery_entr
 - [ ] `test_installed_cron_show_and_tui_entrypoints_never_send_or_double_query`
 - [ ] `test_composed_quality_two_panel_markdown_selection`
 - [ ] `test_composed_failed_send_retries_after_restart_without_redelivery_after_ack`
+- [ ] `test_second_console_exits`
+- [ ] `test_refresh_key_calls_collector_request_seam_with_force_true_for_every_source`
+- [ ] `test_pr_tab_activation_requests_github_only`
+- [ ] `test_diagnostics_rich_text_colour_is_preserved`
+- [ ] `test_console_never_sends_atm_message`
 - [ ] `test_only_advanced_delivery_clock_sends_request`
 - [ ] `test_cron_and_tui_render_same_persisted_state_without_collection`
 - [ ] `test_failed_source_is_eligible_on_next_controlled_request`

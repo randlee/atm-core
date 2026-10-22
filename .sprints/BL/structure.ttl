@@ -10,5 +10,4 @@ triage:BL7 a triage:Sprint ; triage:branch "sprint/bl-7-quality-tab" ; triage:cr
 triage:BL8 a triage:Sprint ; triage:branch "sprint/bl-8-collector-implementation" ; triage:criteria "docs/plans/phase-bl/sprint-bl-8-collector-implementation.md" ; triage:dependsOn triage:BL1 .
 triage:BL10 a triage:Sprint ; triage:branch "sprint/bl-10-problem-sources" ; triage:criteria "docs/plans/phase-bl/sprint-bl-10-problem-sources.md" ; triage:dependsOn triage:BL1 .
 triage:BL13 a triage:Sprint ; triage:branch "sprint/bl-13-dag-render" ; triage:criteria "docs/plans/phase-bl/sprint-bl-13-dag-render.md" ; triage:dependsOn triage:BL1 .
-triage:BL14 a triage:Sprint ; triage:branch "sprint/bl-14-console-app" ; triage:criteria "docs/plans/phase-bl/sprint-bl-14-console-app.md" ; triage:dependsOn triage:BL1 .
-triage:BL12 a triage:Sprint ; triage:branch "sprint/bl-12-phase-composition" ; triage:criteria "docs/plans/phase-bl/sprint-bl-12-phase-composition.md" ; triage:dependsOn triage:BL2,triage:BL3,triage:BL4,triage:BL5,triage:BL6,triage:BL7,triage:BL8,triage:BL10,triage:BL13,triage:BL14 .
+triage:BL12 a triage:Sprint ; triage:branch "sprint/bl-12-phase-composition" ; triage:criteria "docs/plans/phase-bl/sprint-bl-12-phase-composition.md" ; triage:dependsOn triage:BL2,triage:BL3,triage:BL4,triage:BL5,triage:BL6,triage:BL7,triage:BL8,triage:BL10,triage:BL13 .

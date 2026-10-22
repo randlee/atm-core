@@ -28,18 +28,17 @@ plan only; it is handed to the implementation repository before Wave 1.
 | bl-8 | Collectors / boundary | apps/atm-bd-console/src/atm_bd_console/{refresh,state,adapters/{bd,atm,github}.py,cli.py,command.py}; matching collector tests |
 | bl-10 | ProblemSources / boundary | plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_bd,problem_sources}.py; matching tests |
 | bl-13 | DagRender / boundary | apps/atm-bd-console/src/atm_bd_console/dag.py; apps/atm-bd-console/tests/test_dag.py |
-| bl-14 | ConsoleApp / boundary | apps/atm-bd-console/src/atm_bd_console/app.py; apps/atm-bd-console/tests/test_app.py |
-| bl-12 | PhaseBlComposition / integration | apps/atm-bd-console/src/atm_bd_console/{cli,app,runner,model,cron_entry,delivery_entry,wiring}.py; apps/atm-bd-console/tests/test_phase_bl_composition.py |
+| bl-12 | PhaseBlComposition / integration | apps/atm-bd-console/src/atm_bd_console/{cli,app,runner,model,cron_entry,delivery_entry,wiring}.py; apps/atm-bd-console/tests/{test_phase_bl_composition,test_app}.py |
 
 ## Three waves
 
 | Wave | Sprints | Contract / ordering |
 | --- | --- | --- |
 | 1 | bl-1 | publishes the complete Python/JSON contract and fixtures |
-| 2 | bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13, bl-14 | each consumes only bl-1; paths are disjoint |
+| 2 | bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13 | each consumes only bl-1; paths are disjoint |
 | 3 | bl-12 | composes every wave-2 production boundary |
 
-Sprint count is 12, usable width is 10, and critical path is 3
+Sprint count is 11, usable width is 9, and critical path is 3
 (bl-1 → any wave-2 sprint → bl-12). Every branch is sprint/bl-<id>-<slug>
 and targets integrate/phase-bl. This plan intentionally records no synthetic
 per-sprint layer: all Wave-2 boundaries are siblings cut from the Wave-1
