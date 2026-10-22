@@ -475,8 +475,13 @@ pub fn write_current_herdr_terminal_escalation_with_runtime(
                 Vec::new()
             };
             for recipient in task_store.effective_escalation_recipients(&team)? {
+                let is_current_member = roster
+                    .members
+                    .iter()
+                    .any(|member| member.agent_name == *recipient.agent());
                 if recipient.host().is_none()
                     && recipient.team().is_none_or(|recipient_team| recipient_team == &team)
+                    && is_current_member
                     && !recipients.iter().any(|known| known == &recipient)
                 {
                     recipients.push(recipient);
