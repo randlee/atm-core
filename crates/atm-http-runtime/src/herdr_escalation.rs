@@ -191,6 +191,18 @@ pub(crate) async fn escalate_mail(
     suppress_since: Option<IsoTimestamp>,
 ) -> Result<EscalationOutcome, AtmError> {
     if episode.is_some() {
+        if terminal_recipients_are_suppressed(
+            blocking_bridge,
+            runtime,
+            task_store,
+            team,
+            summary,
+            suppress_since,
+        )
+        .await?
+        {
+            return Ok(EscalationOutcome::default());
+        }
         return write_terminal_episode(blocking_bridge, runtime, source_task, daemon_home).await;
     }
     let targets = load_escalation_targets(blocking_bridge, runtime, task_store, team)
@@ -205,6 +217,41 @@ pub(crate) async fn escalate_mail(
         suppress_since,
     };
     write_to_escalation_recipients(blocking_bridge, runtime, &context, targets).await
+}
+
+async fn terminal_recipients_are_suppressed(
+    blocking_bridge: &BoundedBlockingBridge,
+    runtime: &LocalServiceRuntime,
+    task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
+    team: &TeamName,
+    summary: &str,
+    suppress_since: Option<IsoTimestamp>,
+) -> Result<bool, AtmError> {
+    let targets = load_escalation_targets(blocking_bridge, runtime, task_store, team)
+        .await
+        .inspect_err(|error| log_target_load_error(team, error))?;
+    let leads = if targets.leads.len() == 1 {
+        targets.leads
+    } else {
+        Vec::new()
+    };
+    let recipients = leads
+        .into_iter()
+        .map(|lead| {
+            format!("{lead}@{team}")
+                .parse()
+                .expect("validated lead and team form a valid local address")
+        })
+        .chain(targets.recipients);
+    let reader = escalation_reader(runtime, suppress_since);
+    let mut found_recipient = false;
+    for recipient in recipients {
+        found_recipient = true;
+        if !should_suppress(reader.as_deref(), &recipient, team, summary, suppress_since).await {
+            return Ok(false);
+        }
+    }
+    Ok(found_recipient)
 }
 
 async fn write_terminal_episode(
