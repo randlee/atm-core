@@ -1078,8 +1078,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 4,
-      "status": "locked",
+      "version": 5,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1130,6 +1130,12 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:26:04+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Phase-bl does not edit what this carried phase-bj anchor governs (solar relevance review phase-bl-anchor-relevance-review); it stays in its originating phase. Retired from phase-bl at Rand's approval 2026-10-22."
         }
       ],
       "exclude": [
@@ -2094,8 +2100,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 5,
-      "status": "locked",
+      "version": 6,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2164,6 +2170,12 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:26:04+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Phase-bl does not edit what this carried phase-bj anchor governs (solar relevance review phase-bl-anchor-relevance-review); it stays in its originating phase. Retired from phase-bl at Rand's approval 2026-10-22."
         }
       ],
       "exclude": [
@@ -2386,8 +2398,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2427,6 +2439,12 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:26:04+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Phase-bl does not edit what this carried phase-bj anchor governs (solar relevance review phase-bl-anchor-relevance-review); it stays in its originating phase. Retired from phase-bl at Rand's approval 2026-10-22."
         }
       ],
       "exclude": [
@@ -2466,8 +2484,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2507,6 +2525,12 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:26:04+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Phase-bl does not edit what this carried phase-bj anchor governs (solar relevance review phase-bl-anchor-relevance-review); it stays in its originating phase. Retired from phase-bl at Rand's approval 2026-10-22."
         }
       ],
       "exclude": [
@@ -2546,8 +2570,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2587,6 +2611,12 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:26:04+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Phase-bl does not edit what this carried phase-bj anchor governs (solar relevance review phase-bl-anchor-relevance-review); it stays in its originating phase. Retired from phase-bl at Rand's approval 2026-10-22."
         }
       ],
       "exclude": [
@@ -2853,8 +2883,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "locked",
+      "version": 4,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2901,6 +2931,12 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:26:04+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Phase-bl does not edit what this carried phase-bj anchor governs (solar relevance review phase-bl-anchor-relevance-review); it stays in its originating phase. Retired from phase-bl at Rand's approval 2026-10-22."
         }
       ],
       "exclude": [
@@ -2940,8 +2976,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3002,6 +3038,12 @@
           "item": "bl-12",
           "reason": "The status-table multi-agent state cell is not edited by phase-bl; bl-12 composes the DAG, Quality and Diagnostics views.",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:26:04+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Phase-bl does not edit what this carried phase-bj anchor governs (solar relevance review phase-bl-anchor-relevance-review); it stays in its originating phase. Retired from phase-bl at Rand's approval 2026-10-22."
         }
       ],
       "exclude": [
@@ -3053,8 +3095,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "locked",
+      "version": 4,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3095,6 +3137,12 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:26:04+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Phase-bl does not edit what this carried phase-bj anchor governs (solar relevance review phase-bl-anchor-relevance-review); it stays in its originating phase. Retired from phase-bl at Rand's approval 2026-10-22."
         }
       ],
       "exclude": [
@@ -3898,8 +3946,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3925,6 +3973,12 @@
           "item": "bl-12",
           "reason": "bl-12 composes the app and proves end-to-end behaviour; Diagnostics log content is bl-8",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:26:04+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Phase-bl does not edit what this carried phase-bj anchor governs (solar relevance review phase-bl-anchor-relevance-review); it stays in its originating phase. Retired from phase-bl at Rand's approval 2026-10-22."
         }
       ],
       "exclude": [
@@ -4383,8 +4437,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "locked",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4438,6 +4492,12 @@
           "item": "bl-5",
           "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T15:26:04+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Phase-bl does not edit what this carried phase-bj anchor governs (solar relevance review phase-bl-anchor-relevance-review); it stays in its originating phase. Retired from phase-bl at Rand's approval 2026-10-22."
         }
       ],
       "exclude": [

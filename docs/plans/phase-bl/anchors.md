@@ -23,7 +23,7 @@ Intent: `/Users/randlee/.atm-bd/vars/phase-bl/anchors/intent.md`
 | ANC-015 | retired | claude agents of unknown model get an orange starburst | 2026-10-16 |
 | ANC-016 | retired | codex agents get a glyph per model class | 2026-10-16 |
 | ANC-017 | locked | qa and sanity icons are fixed by agent type | 2026-10-16 |
-| ANC-018 | locked | PR list uses Rand's GH_THEME icons (CI fail moved to ANC-030) | 2026-10-16 |
+| ANC-018 | retired | PR list uses Rand's GH_THEME icons (CI fail moved to ANC-030) | 2026-10-16 |
 | ANC-019 | locked | claude agents get a per-model icon and colour | 2026-10-16 |
 | ANC-020 | locked | codex agents get a celestial icon and colour per model class | 2026-10-16 |
 | ANC-021 | locked | qa agent icon: running blue, pass green, fail red | 2026-10-16 |
@@ -32,17 +32,17 @@ Intent: `/Users/randlee/.atm-bd/vars/phase-bl/anchors/intent.md`
 | ANC-024 | locked | model icon by lower-case contains | 2026-10-16 |
 | ANC-025 | locked | unmatched model: sonnet on claude-code, terra on codex-cli | 2026-10-16 |
 | ANC-026 | locked | sanity agent icon is the Jev icon | 2026-10-16 |
-| ANC-027 | locked | bead statuses use the BEAD_STATUS icons | 2026-10-16 |
+| ANC-027 | retired | bead statuses use the BEAD_STATUS icons | 2026-10-16 |
 | ANC-028 | locked | icons for the remaining states | 2026-10-16 |
 | ANC-029 | retired | merge conflict = merged glyph in red | 2026-10-16 |
-| ANC-030 | locked | CI fail = single failing platform icon in red, else red bug | 2026-10-17 |
-| ANC-031 | locked | merge conflict = source-branch glyph in red | 2026-10-17 |
-| ANC-032 | locked | ci cell on a merged or closed PR = last run on its head | 2026-10-18 |
+| ANC-030 | retired | CI fail = single failing platform icon in red, else red bug | 2026-10-17 |
+| ANC-031 | retired | merge conflict = source-branch glyph in red | 2026-10-17 |
+| ANC-032 | retired | ci cell on a merged or closed PR = last run on its head | 2026-10-18 |
 | ANC-033 | locked | PR link = the fetched PullRequest.url | 2026-10-18 |
 | ANC-034 | locked | unknown = ? in #2D81E0 | 2026-10-18 |
-| ANC-035 | locked | state cell: active agent wins over sprint state | 2026-10-17 |
-| ANC-036 | locked | one icon per active agent, none dropped | 2026-10-17 |
-| ANC-037 | locked | ci cell = exactly one of pass, fail, running, none | 2026-10-17 |
+| ANC-035 | retired | state cell: active agent wins over sprint state | 2026-10-17 |
+| ANC-036 | retired | one icon per active agent, none dropped | 2026-10-17 |
+| ANC-037 | retired | ci cell = exactly one of pass, fail, running, none | 2026-10-17 |
 | ANC-038 | locked | pr cell = state icon then [#n](url), or - with no PR | 2026-10-17 |
 | ANC-039 | locked | atm-bd cron --md-table emits the layout C table | 2026-10-17 |
 | ANC-040 | locked | spec table form: exact header and alignment row | 2026-10-17 |
@@ -51,12 +51,12 @@ Intent: `/Users/randlee/.atm-bd/vars/phase-bl/anchors/intent.md`
 | ANC-042 | retired | ADR-066 D1/D2: constant sender atm-bd@tool, repo-config override only | 2026-10-18 |
 | ANC-043 | retired | ADR-066 D3: env never the sender; ATM_TEAM is the target team at most | 2026-10-18 |
 | ANC-044 | locked | ADR-067 D3: viewer = time + level + message verbatim from the structured log | 2026-10-18 |
-| ANC-045 | locked | ADR-067 D1: no second diagnostics file | 2026-10-18 |
+| ANC-045 | retired | ADR-067 D1: no second diagnostics file | 2026-10-18 |
 | ANC-046 | locked | ADR-067 D2: writer sets level and composes the one-line failure message | 2026-10-18 |
 | ANC-047 | locked | ADR-067 D4: one failure, one entry | 2026-10-18 |
 | ANC-048 | locked | bead .12: configurable poll interval, bulk queries, paging past 100 | 2026-10-18 |
 | ANC-049 | locked | bead .12: live quota guard at 50 percent with a visible pause | 2026-10-18 |
-| ANC-050 | locked | bead .10: agent row = sprint/fix id + bead title, truncated | 2026-10-18 |
+| ANC-050 | retired | bead .10: agent row = sprint/fix id + bead title, truncated | 2026-10-18 |
 | ANC-051 | retired | sanity and qa assignments go out as the phase lead | 2026-10-18 |
 | ANC-052 | retired | sanity assigned mechanically when a dev or fix bead closes | 2026-10-18 |
 | ANC-053 | retired | qa assigned mechanically on sanity PASS | 2026-10-18 |
@@ -416,6 +416,15 @@ Scope: edits how agent names are rendered
 
 Deterministic check to pair with the development gate: render qa and sanity members with differing harness and model and assert the same icon each
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-2`: bl-2 is the Jev client and sc-sanity-jev prompt; console agent icons belong to bl-7
+- `bl-4`: qa/sanity agent icons are console rendering, not reviewer metadata
+- `bl-1`: bl-1 defines contract types only; agent icons are rendered by bl-7
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; fixed qa/sanity agent-type icons are bl-7
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)
+- `bl-6`: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13
+
 Fixtures:
 - pass: A qa agent and a sanity agent each render one fixed icon whatever their harness or model.
 - fail: A qa agent renders a different icon depending on whether its model is sonnet or opus.
@@ -426,13 +435,17 @@ Anchor: The console's pull-request list must show the CI pass, running, merged a
 
 > here are gh icons:
 
-Said by Rand, planning session 2026-10-17: GH_THEME pasted (source-branch green/red, source-merge purple, cancel red, weather-hurricane blue), 2026-10-16. Status: locked. Version 4.
+Said by Rand, planning session 2026-10-17: GH_THEME pasted (source-branch green/red, source-merge purple, cancel red, weather-hurricane blue), 2026-10-16. Status: retired. Version 5.
 
 Summary: PR list uses Rand's GH_THEME icons (CI fail moved to ANC-030)
 
 Scope: edits how pull-request states are rendered
 
 Deterministic check to pair with the development gate: render a PR list with one PR per state and assert each pass, running, merged and closed line contains its GH_THEME code point and colour
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-6`: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: The PR list renders CI pass, running, merged and closed with the GH_THEME glyphs and colours, and CI fail per ANC-030.
@@ -452,6 +465,12 @@ Scope: edits how agent names are rendered
 
 Deterministic check to pair with the development gate: render claude-code members with each model and assert each line has its code point and colour
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-6`: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)
+- `bl-13`: bl-13 only draws the icon icons.py returns; glyph, colour and model mapping are owned by bl-7, and agent task rows are not part of dag.py
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
+- `bl-12`: Claude model icon glyphs and colours are drawn and tested by bl-7 icons.py; bl-12 only composes them.
+
 Fixtures:
 - pass: A claude-code agent with model opus renders U+F06C4 in #FF8C66, and haiku, sonnet and fable render their listed glyphs and colours.
 - fail: A claude-code agent with model opus renders the sonnet glyph in #FF784D.
@@ -470,6 +489,12 @@ Scope: edits how agent names are rendered
 
 Deterministic check to pair with the development gate: render codex-cli members of each model class and assert each line has its code point and colour
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-6`: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)
+- `bl-13`: bl-13 only draws the icon icons.py returns; glyph, colour and model mapping are owned by bl-7, and agent task rows are not part of dag.py
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
+- `bl-12`: Codex class icon glyphs and colours are drawn and tested by bl-7 icons.py; bl-12 only composes them.
+
 Fixtures:
 - pass: A codex-cli agent of class terra renders U+F01E7 in #2DE057, and sol, luna and astra render their listed glyphs and colours.
 - fail: A codex-cli agent of class sol renders U+F01E7 in #2DE057.
@@ -487,6 +512,15 @@ Summary: qa agent icon: running blue, pass green, fail red
 Scope: edits how QA state is rendered
 
 Deterministic check to pair with the development gate: render QA states running, pass and fail and assert U+F029B with each colour
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: bl-1 defines QaState only; QA icon rendering lands in the console render sprints
+- `bl-2`: bl-2 is the Jev client; QA agent icon colours are console work
+- `bl-4`: QA agent icon colours are console rendering owned by bl-7
+- `bl-6`: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; icon definitions are bl-7
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)
 
 Fixtures:
 - pass: A qa agent renders U+F029B in #4A5AF8 while running QA, #2EA043 after a pass and #F85149 after a fail.
@@ -513,6 +547,10 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bi-5.group-anc-f1`: touches no command name, install script or console caller: a two-entry icons.py change under bi-5; the deletion of the ANC-022 sentence was tried first (run 2026-10-18T02:30Z still underspecified at relevant=yes 0.31), per question-tuning-workflow
 - `atm-bj-2`: bj-2 ships the stack bead schema, the pour metadata and validate-plan; it does not name, install, edit the installer for, or run any console command
 - `atm-bj-3`: bj-3 ships agent prompts for sanity-stack and dev-sanity; it does not name, install or run any atm-bd subcommand
+- `bl-2`: bl-2 does not touch the atm-bd-console command or the atm-bd console subcommand
+- `bl-4`: the atm-bd console subcommand is not touched by reviewer metadata
+- `bl-5`: bl-5 neither adds nor invokes an atm-bd subcommand or the old atm-bd-console command
+- `bl-10`: bl-10 derives problem records over codec fixtures and does not touch the atm-bd console command
 
 Fixtures:
 - pass: After the sprint, atm-bd-console is not installed and no script, document, test or workflow in the repository invokes it.
@@ -532,6 +570,12 @@ Scope: edits any render path that prints an agent name
 
 Deterministic check to pair with the development gate: list every render path that emits an agent name and assert the icon is the character cell immediately before the name in each
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-6`: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-4`: bl-4 only writes reviewer metadata on beads; console rendering is bl-7 and DAG cells are bl-13; stage separation is bl-3/bl-8
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)
+
 Fixtures:
 - pass: Every place an agent name is shown renders that agent's icon immediately to the left of the name.
 - fail: The status bar, the DAG and the PR list assignee show the agent name with no icon next to it; only the dashboard rows show icons.
@@ -549,6 +593,12 @@ Summary: model icon by lower-case contains
 Scope: edits how the roster model is mapped to an icon
 
 Deterministic check to pair with the development gate: feed models GPT-5.6-Terra, Claude-Opus-5-5, claude, codex and unknown to icon_for and assert terra, opus, sonnet, terra icons and the unknown fallback
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-13`: bl-13 only draws the icon icons.py returns; glyph, colour and model mapping are owned by bl-7, and agent task rows are not part of dag.py
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)
+- `bl-6`: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13
+- `bl-12`: The lower-cased contains match for model strings is implemented and tested in bl-7 icons.py.
 
 Fixtures:
 - pass: The model icon is chosen by lower-casing the roster model string and testing with contains for sol, luna, terra, astra, haiku, sonnet, opus and fable.
@@ -568,6 +618,11 @@ Scope: edits how the roster model is mapped to an icon
 
 Deterministic check to pair with the development gate: feed models claude and codex to icon_for and assert the sonnet and terra icons
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-6`: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
+- `bl-12`: The fallback icon for unmatched models is implemented and tested in bl-7 icons.py.
+
 Fixtures:
 - pass: A claude-code agent whose model string matches no name renders the sonnet icon, and a codex-cli agent renders the terra icon.
 - fail: An agent whose model string matches no name renders a blank space.
@@ -586,6 +641,13 @@ Scope: edits how agent names are rendered
 
 Deterministic check to pair with the development gate: render sanity members with differing harness and model and assert U+F01A6 in #E551BA each
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-4`: sanity agent icon is console rendering, not reviewer metadata
+- `bl-6`: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)
+- `bl-12`: The sanity icon glyph and colour are implemented and tested in bl-7 icons.py.
+
 Fixtures:
 - pass: Every sanity agent renders U+F01A6 in #E551BA whatever its harness or model.
 - fail: A sanity agent on codex-cli renders the terra icon.
@@ -596,7 +658,7 @@ Anchor: The console must show each bead status in Rand's BEAD_STATUS table with 
 
 > "blocked":     "[#FA8537]\U000f033e[/]",  # lock
 
-Said by Rand, planning session 2026-10-17: BEAD_STATUS pasted; open not chosen yet, 2026-10-16. Status: locked. Version 5.
+Said by Rand, planning session 2026-10-17: BEAD_STATUS pasted; open not chosen yet, 2026-10-16. Status: retired. Version 6.
 
 Summary: bead statuses use the BEAD_STATUS icons
 
@@ -606,6 +668,9 @@ Deterministic check to pair with the development gate: render one bead per statu
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bi-5.group-anc-f1`: two-entry icon fix (conflict, CI fail) under bi-5; it touches no bead-status icon; ANC-027 is judged on bi-5 itself (satisfied 2026-10-18); the plan gate returned an unstable near-threshold verdict on this item
+- `bl-6`: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: Each of the ten bead statuses (blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed, ready) renders the icon and colour listed for it in the BEAD_STATUS table.
@@ -628,6 +693,9 @@ Deterministic check to pair with the development gate: render each of the five s
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
 - `atm-bj-1`: bj-1 edits the close hook script and its templates and renders no bead, sprint, PR or CI state in the console; ANC-028 scope is console rendering (relevance no at 0.56 and 0.79, leaning not_applicable, same applicability-noise class as the other phase-bi exclusions)
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; icon definitions are bl-7
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: Bead open, sprint not_ready, PR open, PR draft and CI none render U+F0766 in #2D81E0, U+F137C in #D97757, U+F04C2 in #2D81E0, U+F0CB6 in #FFA60D and U+F01D8 in #2D81E0 respectively.
@@ -657,13 +725,18 @@ Anchor: The console must show a CI fail as the failing platform's icon in #F8514
 
 > Only one of macOS, Windows or Linux failed: show that platform's icon in red. More than one platform failed: show the red bug. A general CI action failed, one that is not tied to a platform: show the red bug.
 
-Said by Rand, layout C spec, docs/plans/phase-bi/atm-bd cron status table (layout C).md, ci fail rule; ruling relayed by team-lead 2026-10-18 (01M56A77Q0JAB9R9WFBHN67104): the spec wins over ANC-018 for the CI fail glyph because the old source-branch red looked like a closed GitHub PR item, 2026-10-17. Status: locked. Version 2.
+Said by Rand, layout C spec, docs/plans/phase-bi/atm-bd cron status table (layout C).md, ci fail rule; ruling relayed by team-lead 2026-10-18 (01M56A77Q0JAB9R9WFBHN67104): the spec wins over ANC-018 for the CI fail glyph because the old source-branch red looked like a closed GitHub PR item, 2026-10-17. Status: retired. Version 3.
 
 Summary: CI fail = single failing platform icon in red, else red bug
 
 Scope: edits how a CI fail is rendered in the status table, PR list and cron markdown
 
 Deterministic check to pair with the development gate: render CI fails with one failing platform each and assert U+F0035, U+F05B3, U+F033D in #F85149; render a two-platform fail and a general action fail and assert U+F00E4 in #F85149
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-6`: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: A CI fail where only Windows failed renders U+F05B3 in #F85149; a fail where macOS and Linux both failed renders the bug U+F00E4 in #F85149; a failed general action renders U+F00E4 in #F85149.
@@ -675,13 +748,18 @@ Anchor: The console must show a merge check of conflict with the source-branch i
 
 > | merge-check conflict | source-branch | U+F062C | #F85149 |
 
-Said by Rand, layout C spec, docs/plans/phase-bi/atm-bd cron status table (layout C).md, PR states table; ruling relayed by team-lead 2026-10-18 (01M56A77Q0JAB9R9WFBHN67104): the spec wins over ANC-029; Rand moved the glyph off source-merge because it looked like a closed GitHub PR item, 2026-10-17. Status: locked. Version 2.
+Said by Rand, layout C spec, docs/plans/phase-bi/atm-bd cron status table (layout C).md, PR states table; ruling relayed by team-lead 2026-10-18 (01M56A77Q0JAB9R9WFBHN67104): the spec wins over ANC-029; Rand moved the glyph off source-merge because it looked like a closed GitHub PR item, 2026-10-17. Status: retired. Version 3.
 
 Summary: merge conflict = source-branch glyph in red
 
 Scope: edits how the merge check is rendered
 
 Deterministic check to pair with the development gate: render a merge check of conflict and assert U+F062C in #F85149
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-6`: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: A merge check of conflict renders the source-branch glyph U+F062C in #F85149.
@@ -693,13 +771,18 @@ Anchor: The status table's ci cell for a sprint whose shown PR is merged or clos
 
 > I think showing the last ci run is fine for now. IF a pr was merged and ci was red, this is something that might be OK, but I would want to know.
 
-Said by Rand, bi-6 open question B, Rand to fenix 2026-10-18; spec rows bi-1 and bi-19 show pass on merged PRs, 2026-10-18. Status: locked. Version 2.
+Said by Rand, bi-6 open question B, Rand to fenix 2026-10-18; spec rows bi-1 and bi-19 show pass on merged PRs, 2026-10-18. Status: retired. Version 3.
 
 Summary: ci cell on a merged or closed PR = last run on its head
 
 Scope: the ci cell of the status table (status_table.py CI producers) for merged and closed PRs
 
 Deterministic check to pair with the development gate: fixture with a merged PR whose last run failed renders a fail glyph per ANC-030; one whose last run passed renders U+F062C #2EA043; neither renders U+F01D8
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-13`: bl-13 owns only dag.py and test_dag.py; the status table ci cell and the cron table flag are owned by bl-6
+- `bl-6`: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: A sprint whose newest PR is merged and whose last CI run on that head passed renders U+F062C in #2EA043 in the ci cell; a merged PR whose last run failed on Windows only renders U+F05B3 in #F85149.
@@ -721,6 +804,9 @@ Deterministic check to pair with the development gate: markdown row for a PR wit
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-1`: BJ-1 does not own console PR status-table rendering; it changes only the close hook and its templates.
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; status-table cells are bl-6
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: The pr cell renders [#281](https://github.com/randlee/atm-bd-orchestration/pull/281) using the url returned by the GitHub fetch for PR 281, and the test's gh stub records no pr view call.
@@ -742,6 +828,12 @@ Deterministic check to pair with the development gate: icon table test asserts (
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+- `bl-1`: bl-1 ships no status-table rendering
+- `bl-7`: unknown-member glyph belongs to the markdown status table in bl-6
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; unknown-member glyph is bl-6
+- `bl-8`: bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: SprintState.unknown, CiState.unknown and PrState.unknown each map to the glyph ? in #2D81E0, and a snapshot with GitHub data truncated renders ? in the ci and pr cells with a Problems row.
@@ -753,13 +845,18 @@ Anchor: The status table's state cell must show the icon of the agent working th
 
 > If no agent is working the sprint, show the sprint's state icon (closed, blocked, ready, not\_ready, and the rest). Because an agent wins over state, a blocked sprint that has an agent on it shows the agent. The lock appears only when nobody holds the sprint.
 
-Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 3.
+Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: retired. Version 4.
 
 Summary: state cell: active agent wins over sprint state
 
 Scope: the STATE producer order of the shared status table module (agents before sprint status)
 
 Deterministic check to pair with the development gate: fixture: a blocked sprint with an active dev agent renders that agent's glyph, not U+F033E; the same sprint with no agent renders U+F033E #FA8537
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-6`: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: A blocked sprint with fable active renders the fable glyph in its state cell; after fable's task closes and no agent remains, the same sprint renders the lock U+F033E in #FA8537.
@@ -771,7 +868,7 @@ Anchor: When more than one agent is active on a sprint, the state cell must draw
 
 > The state cell shows one icon per active agent (Rand 2026-10-18: every active agent is drawn, the column widens by one cell per extra agent), else one icon picked in this order:
 
-Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 2.
+Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: retired. Version 3.
 
 Summary: one icon per active agent, none dropped
 
@@ -781,6 +878,11 @@ Deterministic check to pair with the development gate: fixture with two active a
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+- `bl-6`: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-7`: the status-table state cell with one icon per active agent is composed in bl-6; bl-7 only supplies icons.py
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
+- `bl-12`: The status-table multi-agent state cell is not edited by phase-bl; bl-12 composes the DAG, Quality and Diagnostics views.
 
 Fixtures:
 - pass: A sprint with fable and quality-mgr both active renders the fable glyph and the gavel side by side in its state cell, two glyph cells wide.
@@ -792,13 +894,17 @@ Anchor: The status table's ci cell must hold exactly one icon for the sprint's s
 
 > | ci | one icon | pass, fail, running, none |
 
-Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: locked. Version 3.
+Said by Rand, bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec "atm-bd cron status table (layout C)" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026, 2026-10-17. Status: retired. Version 4.
 
 Summary: ci cell = exactly one of pass, fail, running, none
 
 Scope: the CI producers of the shared status table module
 
 Deterministic check to pair with the development gate: fixtures: all checks passed renders U+F062C #2EA043; a run in progress renders U+F0898 #58A6FF; no run renders U+F01D8 #2D81E0; every ci cell is one glyph
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-6`: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: A sprint whose PR head's checks all passed renders U+F062C in #2EA043; one with a run still in progress renders U+F0898 in #58A6FF; one with no run on that head renders U+F01D8 in #2D81E0.
@@ -820,6 +926,10 @@ Deterministic check to pair with the development gate: fixture: open PR 118 rend
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; the status-table pr cell is bl-6
+- `bl-8`: bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: A sprint with open PR 118 renders the open glyph then [#118](https://github.com/randlee/atm-bd-orchestration/pull/118); a sprint with no PR renders exactly -.
@@ -838,6 +948,12 @@ Summary: atm-bd cron --md-table emits the layout C table
 Scope: the cron CLI flag and the markdown emitter entry point
 
 Deterministic check to pair with the development gate: CLI test: cron --phase bi --md-table over a fixture snapshot prints to stdout a table whose first line is | sprint | state | ci | pr |
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-13`: bl-13 owns only dag.py and test_dag.py; the status table ci cell and the cron table flag are owned by bl-6
+- `bl-6`: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13
+- `bl-8`: bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: Running atm-bd cron --phase bi --md-table prints the layout C markdown status table to stdout, starting with the line | sprint | state | ci | pr |.
@@ -861,6 +977,10 @@ Deterministic check to pair with the development gate: the first two emitted lin
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-4`: the status table and its markdown export are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+- `bl-7`: status-table header and alignment row belong to bl-6
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; the status markdown table is bl-6
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: The markdown emitter's first two lines are exactly | sprint | state | ci | pr | and |---|:-:|:-:|---|, followed by one row per sprint with a glyph in each icon slot.
@@ -882,6 +1002,10 @@ Deterministic check to pair with the development gate: AC6 byte test: a fixed sn
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+- `bl-7`: markdown status table rendering is owned by bl-6
+- `bl-13`: bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; status-table rendering is bl-6
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)
 
 Fixtures:
 - pass: The AC6 byte test renders a fixed snapshot to the stored expected bytes and a second render of the same snapshot compares equal byte for byte.
@@ -900,6 +1024,10 @@ Summary: ADR-065 applied to atm-bd: local 24h on screen, UTC Z in files
 Scope: every strftime/isoformat call in atm-bd render, app, prs, cli and log paths
 
 Deterministic check to pair with the development gate: no datetime formatting for display outside the one formatter; log and snapshot timestamps end in Z
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-6`: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: The console header, rows, PR sheet and Diagnostics view all call the one local-time formatter; the snapshot and log timestamps are written as 2026-10-18T07:46:21Z.
@@ -965,6 +1093,9 @@ Scope: the Diagnostics tab's data source and rendering
 
 Deterministic check to pair with the development gate: the view's source is the logger query; the render concatenates local time, level and message with no per-kind branching
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-13`: bl-13 renders the DAG and fallback list only and owns no Diagnostics log view (dag.py and test_dag.py only)
+
 Fixtures:
 - pass: The Diagnostics tab queries the sc-observability log for warning and error events and prints 00:10:18 error: followed by the entry's message string unchanged.
 - fail: The Diagnostics tab reads a diagnostics.log text file, or rebuilds the line from the entry's argv, code and stderr fields itself.
@@ -975,13 +1106,16 @@ Anchor: atm-bd keeps no diagnostics or error file outside the sc-observability l
 
 > remove the 'hand-built' test file completely.
 
-Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: locked. Version 2.
+Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: retired. Version 3.
 
 Summary: ADR-067 D1: no second diagnostics file
 
 Scope: every file the console opens for append under .atm-bd other than the sc-observability log and the actions journal
 
 Deterministic check to pair with the development gate: no reference to diagnostics.log or a diagnostics path remains in the package; grep is empty
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; Diagnostics log content is bl-8
 
 Fixtures:
 - pass: The package has no diagnostics.log path, no _record_error, and no open(..., 'a') for a diagnostics file; errors reach the Diagnostics tab only from the sc-observability log.
@@ -1005,6 +1139,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-1`: atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's
 - `atm-bj-3`: atm-bd's log line format is atm-bd tool code; bj-3 edits agent prompts only
 - `atm-bj-2`: BJ-2 plans bead schemas, formula producers and validation; it does not write or change the atm-bd observability event logger.
+- `bl-12`: Failed-command error logging (message format, command words, first stderr line) is implemented and tested by bl-8; bl-12 only composes the Diagnostics view over the unchanged sc-observability log.
 
 Fixtures:
 - pass: A gh failure with exit 1 and stderr 'gh: API rate limit already exceeded for user ID 8083956.' is logged at level error with message `check gh and retry` gh api graphql [1] gh: API rate limit already exceeded for user ID 8083956.
@@ -1028,6 +1163,12 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-3`: atm-bd's sender address and logging are atm-bd tool code; bj-3 edits agent prompts only
 - `atm-bj-4`: atm-bd's sender address and logging are not touched by bj-4
 - `atm-bj-1`: BJ-1 does not own cached console error logging or PR display; its scope is the close hook.
+- `bl-1`: bl-1 ships no logging; failure logging lands in bl-8
+- `bl-2`: bl-2 plans no logging of failures or cached sheet status
+- `bl-5`: bl-5 does not touch per-tick error collection in the model or runner
+- `bl-7`: failure logging is owned by bl-8
+- `bl-6`: failure logging is owned by bl-8
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; failure logging is bl-8
 
 Fixtures:
 - pass: A GitHub refresh fails once at 07:16; the log holds one error entry for it and the PR sheet shows the cached error status on later ticks.
@@ -1046,6 +1187,10 @@ Summary: bead .12: configurable poll interval, bulk queries, paging past 100
 Scope: the GitHub refresh cadence and query shape in atm-bd
 
 Deterministic check to pair with the development gate: default interval 600 s; a repo with 150 PRs yields 150 rows across two pages
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: bl-1 defines contract types only; GitHub poll interval and paging are collector behaviour owned by bl-8
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; GitHub poll behaviour is bl-8
 
 Fixtures:
 - pass: github_poll_s defaults to 600 and a repo value of 300 or --github-poll 300 changes the cycle; a repository with 150 PRs produces 150 PR rows from two GraphQL pages.
@@ -1068,6 +1213,9 @@ Deterministic check to pair with the development gate: a stubbed rate_limit at 4
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-1`: atm-bd's sender address, log format and GitHub quota read are atm-bd tool code that bj-1 does not edit; the hook is a skill script whose identities are ANC-051's
 - `atm-bj-3`: atm-bd's GitHub quota read is atm-bd tool code; bj-3 edits agent prompts only
+- `bl-1`: bl-1 defines contract types only; GitHub quota guard is collector behaviour owned by bl-8
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; GitHub quota guard is bl-8
+- `bl-6`: bl-6 renders persisted state only; the quota check and paused refresh are bl-8
 
 Fixtures:
 - pass: With graphql remaining 2310 of 5000 the refresh is skipped, the PR sheet shows 'GitHub paused: 2310/5000 graphql remaining, below 50 percent, resets 08:14', a forced refresh is refused with the same line, and the first cycle after reset above 50 percent refreshes.
@@ -1079,7 +1227,7 @@ Anchor: Agent task rows in the atm-bd dashboard read <sprint or fix id>: <bead t
 
 > this is a second fix request, related to the first. The first was the description appears to be <phase>: <atm-message> where it shoudl be <sprint/fix>: <bead-title>
 
-Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: locked. Version 2.
+Said by Rand, console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, 2026-10-18. Status: retired. Version 3.
 
 Summary: bead .10: agent row = sprint/fix id + bead title, truncated
 
@@ -1089,6 +1237,9 @@ Deterministic check to pair with the development gate: a row for a fix bead on s
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-4`: the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes
+- `bl-6`: status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)
+- `bl-13`: bl-13 only draws the icon icons.py returns; glyph, colour and model mapping are owned by bl-7, and agent task rows are not part of dag.py
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)
 
 Fixtures:
 - pass: An agent row for a fix bead reads bi-5: console notify send to team-lead fails as self-addressed… cut at the pane width.
@@ -1591,6 +1742,11 @@ Deterministic check to pair with the development gate: the console has a sanity 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bj-3`: the runs pages and the ledger row schema are bj-4; bj-3 adds only the LLM timer and retry wording in dev-sanity.md whose values bj-4's rows carry
 - `atm-bj-2`: the runs pages and the sanity ledger are bj-4; bj-2 ships the stack bead schema and the pour only
+- `bl-4`: console runs pages are bl-7
+- `bl-1`: bl-1 defines contract types only; sanity/quality run pages are bl-5 data and bl-7 rendering
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; run pages are bl-5 data and bl-7 rendering
+- `bl-2`: bl-2 only returns elapsed_s from the Jev client; the sanity ledger row is bl-5 and the runs pages are bl-7
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)
 
 Fixtures:
 - pass: The sanity page lists runs newest first: bj-2 #1904 dev solar (icon) JEV ✅ 41 s LLM ✅ 88 s; dev-sanity's reply carries only the verdict.
@@ -1970,6 +2126,11 @@ Scope: the Jev client used by dev-sanity and its sc-sanity-jev subagent
 
 Deterministic check to pair with the development gate: a controlled call answering API-busy twice then succeeding yields the result and retry count 2; four API-busy answers report API-busy after three retries; an out-of-tokens or context-too-large answer is not retried
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-5`: the Jev busy-retry rule is owned by the Jev client in bl-2
+- `bl-1`: bl-1 defines contract types only; the Jev busy-retry rule is owned by the Jev client in bl-2
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; the Jev retry rule is bl-2
+
 Fixtures:
 - pass: The Jev client retries an API-busy answer up to three times, reports how many retries it made, and returns any other error at once.
 - fail: The Jev client retries an out-of-tokens error, or hides how many retries it made.
@@ -1987,6 +2148,11 @@ Summary: stages separate
 Scope: adds or edits the atm-bd collection, state-evaluation or event-firing code
 
 Deterministic check to pair with the development gate: a test calls each stage alone with files in the state directory and shows no stage reads another stage's in-memory result or performs two stages
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: bl-1 types the persisted artifacts; stage separation behaviour is owned by bl-3, bl-8 and proven in bl-12
+- `bl-5`: bl-5 emits a request through the enqueue seam; stage separation is owned by bl-3 and proven in bl-12
+- `bl-4`: bl-4 only writes reviewer metadata on beads; console rendering is bl-7 and DAG cells are bl-13; stage separation is bl-3/bl-8
 
 Fixtures:
 - pass: A bead splits atm-bd into a collect stage, an evaluate stage and a fire stage that exchange only persisted state.
@@ -2006,6 +2172,12 @@ Scope: adds persistence for collected data, state or event requests in atm-bd
 
 Deterministic check to pair with the development gate: rg finds no sqlite, rusqlite, dolt-write or other database dependency added to the atm-bd manifests; a test shows data, state and requests as JSON files in the state directory
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-4`: bl-4 writes bead metadata via bd update; state-directory JSON persistence is bl-8
+- `bl-10`: bl-10 is pure in-memory derivation over fixtures and persists nothing
+- `bl-7`: bl-7 only presents persisted data; persistence is bl-8
+- `bl-6`: bl-6 only reads persisted state; persistence is bl-8
+
 Fixtures:
 - pass: The bead stores collected data, evaluated state and event requests as JSON files under the state directory.
 - fail: The bead adds a SQLite database to hold atm-bd's collected data and state.
@@ -2023,6 +2195,12 @@ Summary: messages go out on their own schedule
 Scope: adds or edits how atm-bd sends ATM messages or what a cron tick or console refresh does
 
 Deterministic check to pair with the development gate: a test runs a cron tick and a console refresh against a stub ATM sender and asserts zero sends; the delivery stage sends on its own schedule
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: bl-1 only types EventSender; sending on a schedule is bl-3
+- `bl-5`: bl-5 only enqueues an EventRequest via the seam; delivery scheduling is bl-3
+- `bl-10`: bl-10 is pure derivation and has no delivery path; delivery scheduling is owned by bl-3
+- `bl-8`: bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3
 
 Fixtures:
 - pass: ATM messages are sent only by an event-delivery stage with its own schedule; cron and console refresh send nothing.
@@ -2042,6 +2220,10 @@ Scope: adds or edits atm-bd event-request debouncing or aggregation before deliv
 
 Deterministic check to pair with the development gate: a test feeds repeated and related requests to the delivery stage and asserts one message reaches the phase lead
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-5`: debounce and aggregation are owned by bl-3
+- `bl-1`: bl-1 defines contract types only; debounce and aggregation are bl-3
+
 Fixtures:
 - pass: Repeated and related event requests are debounced and aggregated so the phase lead gets one message.
 - fail: Every event request is delivered immediately as its own message.
@@ -2059,6 +2241,9 @@ Summary: requests come from state transitions
 Scope: adds or edits how atm-bd decides to raise an ATM message request
 
 Deterministic check to pair with the development gate: a test shows a request is raised only when persisted state changes between defined states, and none when a collection reads fresh but unchanged data
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: bl-1 defines contract types only; transition-based request raising is bl-3 and bl-10
 
 Fixtures:
 - pass: A request is raised only when evaluation of persisted state shows a defined state transition.
@@ -2078,6 +2263,12 @@ Scope: adds or edits atm-bd collectors for bd, ATM, git or GitHub
 
 Deterministic check to pair with the development gate: a test lists one module per collector, each with its own rate limit, timeout and failure handling
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-3`: bl-3 owns event dispatch and does not implement collectors; bl-8 owns them
+- `bl-10`: collector modules, rate limits and timeouts are owned by bl-8; bl-10 only derives from persisted records
+- `bl-1`: bl-1 defines contract types only; separate collector modules are bl-8
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; separate collector modules are bl-8
+
 Fixtures:
 - pass: The bd, ATM, git and GitHub collectors are separate modules, each with its own rate limit, timeout and failure handling.
 - fail: One shared collector module queries all four sources with a single rate limit and timeout.
@@ -2096,6 +2287,9 @@ Scope: adds or edits atm-bd collector refresh intervals
 
 Deterministic check to pair with the development gate: a test sets different intervals for two collectors and shows each refreshes on its own interval
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; collector behaviour is bl-8
+
 Fixtures:
 - pass: Each collector refreshes at its own interval, independent of the other sources.
 - fail: All collectors refresh together at one global interval.
@@ -2113,6 +2307,9 @@ Summary: same collection from either
 Scope: edits how atm-bd cron or atm-bd console starts a collection
 
 Deterministic check to pair with the development gate: a test starts a collection from cron and from console with the same inputs and compares the collectors run, rules applied and data written
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: bl-1 defines contract types only; cron/console equal collection is composed and proven in bl-12
 
 Fixtures:
 - pass: A cron-started and a console-started collection run the same collectors with the same rules and write the same data.
@@ -2150,6 +2347,11 @@ Scope: edits how atm-bd records a successful refresh or decides a source is due
 
 Deterministic check to pair with the development gate: a test makes a collection fail for one source and asserts the next due check collects it again
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-10`: refresh accounting and last_success belong to bl-8
+- `bl-1`: bl-1 defines contract types only; refresh accounting is bl-8
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; refresh accounting is bl-8
+
 Fixtures:
 - pass: A collection that produced no successful data does not count as a refresh, so the source is collected on the next due check.
 - fail: A failed collection stamps the refresh time so the source is skipped until its interval passes.
@@ -2168,6 +2370,9 @@ Scope: edits what atm-bd cron prints or how it skips collection
 
 Deterministic check to pair with the development gate: a test compares the output of a skipped-collection cron run with a collecting run on the same persisted state and finds the same status information
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: cron status printing is not contract types; it lands in bl-12
+
 Fixtures:
 - pass: atm-bd cron prints the same status information from persisted state whether it collected or skipped.
 - fail: atm-bd cron prints nothing when it skipped collection.
@@ -2185,6 +2390,10 @@ Summary: carried data is not an error
 Scope: edits how atm-bd shows a source that has no new valid data
 
 Deterministic check to pair with the development gate: a test makes a source return no valid data and asserts the output shows the last good data, its age and the typed reason, with no error or blank
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-10`: retaining last-good data and its age is owned by bl-8 and displayed by bl-12
+- `bl-1`: bl-1 defines contract types only; last-good retention is bl-8 and its display is bl-6
 
 Fixtures:
 - pass: A source without new valid data shows its last good data with age and typed reason.
@@ -2222,6 +2431,10 @@ Scope: edits the console Quality tab bottom-left pane
 
 Deterministic check to pair with the development gate: a render test selects a QA run and asserts one row per reviewer with a pass/fail icon and elapsed time
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: bl-1 defines contract types only; reviewer rows are rendered by bl-7
+- `bl-5`: bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)
+
 Fixtures:
 - pass: Selecting a QA run shows one row per reviewer with a pass/fail icon and elapsed time at the bottom left.
 - fail: Selecting a QA run shows only the run's overall status.
@@ -2239,6 +2452,9 @@ Summary: findings by reviewer, shared findings once
 Scope: edits the console Quality tab bottom-right pane or finding rendering
 
 Deterministic check to pair with the development gate: a render test selects a reviewer, asserts formatted findings on the right, and asserts a finding shared by three reviewers appears once listing all three
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: bl-1 defines contract types only; reviewer findings rendering is bl-7
 
 Fixtures:
 - pass: Selecting a reviewer renders its findings as formatted text, with a shared finding shown once listing every contributing reviewer.
@@ -2258,6 +2474,11 @@ Scope: edits how quality-mgr records QA results on beads
 
 Deterministic check to pair with the development gate: a test of the QA bead and a filed finding bead shows reviewer timing, status and finding ids on the QA bead and contributing reviewers on the finding bead
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: bead writing by quality-mgr is outside the contract types; bl-4 owns it
+- `bl-7`: quality-mgr writing reviewer metadata is bl-4; bl-7 only reads it
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; reviewer metadata writing is bl-4
+
 Fixtures:
 - pass: quality-mgr writes each reviewer's timing, status and finding ids on the QA bead and the contributing reviewers on each finding bead.
 - fail: quality-mgr records only an overall pass or fail on the QA bead and no reviewer on the finding beads.
@@ -2275,6 +2496,11 @@ Summary: colour shows
 Scope: edits console, DAG, fallback list, Diagnostics or atm-bd show output colouring
 
 Deterministic check to pair with the development gate: a render test of each surface on a terminal asserts every icon carries its anchored colour, and a piped run asserts no colour codes
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-2`: bl-2 draws nothing in the console, DAG or atm-bd show; icon colouring is bl-6, bl-7 and bl-13
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; icon colours are drawn by bl-6, bl-7 and bl-13
+- `bl-7`: bl-7 renders the Quality/Sanity pages; icon colour in the DAG, fallback list, Diagnostics and atm-bd show is bl-6, bl-12 and bl-13
 
 Fixtures:
 - pass: The DAG, fallback list, Diagnostics agent details and atm-bd show draw each icon in its anchored colour on a terminal.
@@ -2294,6 +2520,11 @@ Scope: edits the console DAG sprint cell content
 
 Deterministic check to pair with the development gate: a render test shows a cell with an active agent drawing one agent icon left of the sprint id with QA over sanity over dev, a CI icon and PR number after QA and fixes are green, and the state icon otherwise
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: bl-1 defines contract types only; DAG cell content is bl-13
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; DAG cell content is bl-13
+- `bl-4`: bl-4 only writes reviewer metadata on beads; console rendering is bl-7 and DAG cells are bl-13; stage separation is bl-3/bl-8
+
 Fixtures:
 - pass: A DAG cell shows the sprint id with one active-agent icon (QA over sanity over dev) left of its name, the CI icon and PR number once QA and fixes are green, else the state icon.
 - fail: A DAG cell lists every agent that ever worked on the sprint instead of one active agent.
@@ -2312,6 +2543,11 @@ Scope: edits the console DAG sprint outline colour
 
 Deterministic check to pair with the development gate: a render test asserts green for complete with all fixes green, red for blocking failures including active fix, sanity or QA, and white for first dev or not started
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: outline colour is DAG rendering, owned by bl-13
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; DAG outline is bl-13
+- `bl-6`: bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13
+
 Fixtures:
 - pass: A sprint outline is green when complete with fixes green, red with blocking failures, white for first dev or not started.
 - fail: A sprint with a fix agent working draws a white outline.
@@ -2329,6 +2565,11 @@ Summary: DAG ready and blocked icons
 Scope: edits the console DAG ready and blocked cell icons
 
 Deterministic check to pair with the development gate: a render test asserts the blue play icon on a ready sprint and the blocked icon on a blocked sprint with no active agent and no green QA
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-1`: bl-1 defines contract types only; DAG ready/blocked icons are bl-13
+- `bl-12`: bl-12 composes the app and proves end-to-end behaviour; DAG icons are bl-13
+- `bl-6`: DAG cell ready/blocked icons are drawn by bl-13; bl-6 renders header, age, unknown-member glyph and show output only
 
 Fixtures:
 - pass: A ready sprint with no active agent shows the blue play icon, and a blocked sprint shows the blocked icon.
@@ -2365,6 +2606,10 @@ Summary: Quality table matches Sanity
 Scope: edits the console Quality tab run list
 
 Deterministic check to pair with the development gate: a render test asserts one line per run in aligned columns with a status and elapsed column per reviewer and the dev checked, and no vertical-bar separators
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `bl-4`: Quality tab rendering is the bl-7 console half; bl-4 only produces metadata.reviewers
+- `bl-1`: bl-1 defines the QaRunInput/QaReviewerInput contract types only; Quality tab rendering is the bl-7 console half
 
 Fixtures:
 - pass: The Quality tab lists each QA run on one line in aligned columns like the Sanity tab, with no vertical-bar separators.
