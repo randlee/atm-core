@@ -5,6 +5,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 
 def load_runner():
@@ -22,6 +23,18 @@ RUNNER = load_runner()
 
 
 class ReplacementRuntimePreflightTests(unittest.TestCase):
+    def test_daemon_startup_failure_includes_child_stderr(self):
+        with patch.object(RUNNER, "require_clean_host_daemon_state"):
+            with self.assertRaisesRegex(RuntimeError, "fixture daemon failure"):
+                RUNNER.start_smoke_daemon(
+                    sys.executable,
+                    {},
+                    daemon_args=(
+                        "-c",
+                        "import sys; print('fixture daemon failure', file=sys.stderr); sys.exit(1)",
+                    ),
+                )
+
     def test_accepts_ready_replacement_runtime_with_owner(self):
         self.assertEqual(
             RUNNER.assert_replacement_runtime_status(

@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading
 import tempfile
+from collections import deque
 from pathlib import Path
 
 CLI_SUBPROCESS_TIMEOUT_SECONDS = 45
@@ -169,40 +170,57 @@ def assert_replacement_runtime_status(payload: dict[str, object], *, label: str)
     return owner_pid
 
 
-def start_smoke_daemon(daemon_binary: str, env: dict[str, str]) -> subprocess.Popen[str]:
+def start_smoke_daemon(
+    daemon_binary: str,
+    env: dict[str, str],
+    *,
+    daemon_args: tuple[str, ...] = (),
+) -> subprocess.Popen[str]:
     """Start the fixture daemon and wait for its explicit post-bind ready signal."""
     require_clean_host_daemon_state(smoke_label="shared-host smoke daemon launch")
     daemon_env = env.copy()
     daemon_env["ATM_DAEMON_READY_STDOUT"] = "1"
     process = subprocess.Popen(
-        [daemon_binary],
+        [daemon_binary, *daemon_args],
         env=daemon_env,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         text=True,
         encoding="utf-8",
         errors="replace",
     )
-    assert process.stdout is not None
+    assert process.stdout is not None and process.stderr is not None
     ready_output: queue.Queue[str] = queue.Queue(maxsize=1)
+    stderr_lines: deque[str] = deque(maxlen=40)
 
     def read_ready_signal() -> None:
+        first_line = True
         try:
-            ready_output.put(process.stdout.readline().strip())
+            for line in process.stdout:
+                if first_line:
+                    ready_output.put(line.strip())
+                    first_line = False
+            if first_line:
+                ready_output.put("")
         except OSError as error:
             ready_output.put(f"<read failed: {error}>")
+        finally:
+            process.stdout.close()
 
-    threading.Thread(target=read_ready_signal, daemon=True).start()
-    try:
-        ready = ready_output.get(timeout=CLI_SUBPROCESS_TIMEOUT_SECONDS)
-        if ready != "ATM_DAEMON_READY":
-            status = process.poll()
-            raise RuntimeError(
-                "shared-host smoke daemon exited before its ready signal "
-                f"(status={status}, output={ready!r})"
-            )
-    except (queue.Empty, RuntimeError):
+    def collect_stderr() -> None:
+        try:
+            for line in process.stderr:
+                stderr_lines.append(line.rstrip())
+        finally:
+            process.stderr.close()
+
+    stdout_reader = threading.Thread(target=read_ready_signal, daemon=True)
+    stderr_reader = threading.Thread(target=collect_stderr, daemon=True)
+    stdout_reader.start()
+    stderr_reader.start()
+
+    def stop_after_startup_failure() -> int | None:
         if process.poll() is None:
             process.terminate()
             try:
@@ -210,8 +228,25 @@ def start_smoke_daemon(daemon_binary: str, env: dict[str, str]) -> subprocess.Po
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
-        raise
-    return process
+        stdout_reader.join(timeout=1)
+        stderr_reader.join(timeout=1)
+        return process.poll()
+
+    try:
+        ready = ready_output.get(timeout=CLI_SUBPROCESS_TIMEOUT_SECONDS)
+        if ready != "ATM_DAEMON_READY":
+            reason = f"exited before its ready signal (output={ready!r})"
+        else:
+            return process
+    except queue.Empty:
+        reason = f"did not emit its ready signal within {CLI_SUBPROCESS_TIMEOUT_SECONDS}s"
+
+    status = stop_after_startup_failure()
+    stderr = "\n".join(stderr_lines).strip()
+    raise RuntimeError(
+        "shared-host smoke daemon "
+        f"{reason} (status={status}, stderr={stderr!r})"
+    )
 
 
 def verify_af1_preflight_contract() -> None:
