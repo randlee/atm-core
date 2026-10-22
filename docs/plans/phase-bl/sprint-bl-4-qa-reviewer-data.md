@@ -1,7 +1,7 @@
 # Sprint bl-4 — QA reviewer data: `metadata.reviewers` on the QA bead and on finding beads
 Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR target: `integrate/phase-bl`.
 
-closure_type: boundary; target_boundary: QaReviewers; branch: sprint/bl-4-qa-reviewer-data; PR target: integrate/phase-bl; wave: 2; external_ref: #347; recommended_agent: arch-ctm; recommended_model: sonnet; must_follow: bl-1 (versioned reviewer metadata fixture); parallel_safe: bl-2, bl-3, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13, bl-14.
+closure_type: boundary; target_boundary: QaReviewers; branch: sprint/bl-4-qa-reviewer-data; PR target: integrate/phase-bl; wave: 2; external_ref: #347; recommended_agent: arch-ctm; recommended_model: sonnet; must_follow: bl-1 (versioned reviewer metadata fixture); parallel_safe: bl-2, bl-3, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13.
 
 Paths under `plugins/atm-bd-orchestration/skills/atm-bd-orchestration/`.
 Line numbers at v0.18.4 (86853d5).
@@ -42,9 +42,9 @@ No new plugin file.
 
 `test_templates.py` and `test_handoff_contracts.py` are bl-5's. Changes here
 are additive (a new metadata key, a new instruction sentence), so their
-existing assertions must stay green; the full plugin suite is the check. If
-an assertion in those files must change, this sprint stacks after bl-5 and
-the plan's wave table is updated.
+existing assertions must stay green; the full plugin suite is the check. An
+assertion that requires changing those files is deferred to bl-5's owner; it
+does not create a conditional stack edge.
 
 ## Public contract
 
@@ -89,3 +89,7 @@ reviewer, which alone verifies the fix):
 ```bash
 cd plugins/atm-bd-orchestration && python3 tests/gen_manifest.py --check && python3 -m pytest -q -rs
 ```
+
+## This sprint does not close
+
+It produces reviewer metadata only; bl-7 renders the persisted quality data and bl-12 owns installed-console composition.

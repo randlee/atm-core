@@ -1,7 +1,7 @@
 # Sprint bl-2 — jev_client: request array in, typed JSONL out, busy-only retry
 Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR target: `integrate/phase-bl`.
 
-closure_type: boundary; target_boundary: JevResult; branch: sprint/bl-2-jev-client; PR target: integrate/phase-bl; wave: 2; external_ref: #379, #164; recommended_agent: arch-ctm; recommended_model: opus; must_follow: bl-1 (versioned JSON codec fixtures); parallel_safe: bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13, bl-14.
+closure_type: boundary; target_boundary: JevResult; branch: sprint/bl-2-jev-client; PR target: integrate/phase-bl; wave: 2; external_ref: #379, #164; recommended_agent: arch-ctm; recommended_model: opus; must_follow: bl-1 (versioned JSON codec fixtures); parallel_safe: bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-10, bl-13.
 
 Code under `plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/`
 unless a path says otherwise. Line numbers are at v0.18.4 (86853d5).
@@ -74,7 +74,7 @@ the enum lives in `jev_client.py`.
 - `scripts/tests/test_jev_client.py`, `scripts/tests/test_wrap_jev_receipt.py`,
   `scripts/tests/test_sanity_split.py`, `scripts/tests/test_jev_client_prompts.py`
 
-bl-5 owns `test_dev_sanity_prompt.py`; the test path sets do not overlap.
+bl-5 owns `test_dev_sanity_prompt.py`, `test_templates.py`, and `test_handoff_contracts.py`; bl-2 exclusively owns `test_sanity_split.py`. The test path sets do not overlap.
 
 ## Public contract
 
@@ -116,14 +116,14 @@ terminated; no surrounding array):
  "retries": 0, "elapsed_s": 0.18}
 {"index": 1, "request_sha256": "...", "success": false,
  "data": null, "receipt": null,
- "error": {"kind": "context_too_large", "size": 131072, "budget": 96000},
+ "error": {"kind": "context_too_large", "status": null, "size": 131072, "budget": 96000},
  "retries": 0, "elapsed_s": 0.0}
 ```
 
 - `index`, `request_sha256`, `success`, `data`, `receipt`, `error`,
   `retries`, and `elapsed_s` are present on every line. `data` is Jev's JSON
   unchanged. The client never reads `choice`.
-- `error.kind` is exactly one `JevErrorKind` stable string. Remaining fields
+- `error.kind` is exactly one `JevErrorKind` stable string. `status` is present and nullable for every error (HTTP status when available; otherwise `null`). Remaining fields
   are machine data for that kind (for example `status`, `size`, `budget`),
   never Python exception classes or message text that directs control flow.
 - Each request has its own busy-only retry budget. `retries` counts only busy
@@ -248,7 +248,7 @@ class ErrorPayload(TypedDict):
     kind: Literal["busy_exhausted", "out_of_tokens", "context_too_large",
                   "transport", "http_rejected", "response_invalid",
                   "key_missing", "key_invalid", "input_invalid"]
-    status: NotRequired[int]
+    status: int | None
     size: NotRequired[int]
     budget: NotRequired[int]
     detail: NotRequired[str]
@@ -266,11 +266,11 @@ class JevLine(TypedDict):
 | --- | --- | --- |
 | `BUSY_EXHAUSTED` | `kind`, `status` (int) | `detail` (str) |
 | `OUT_OF_TOKENS` | `kind`, `status` (int) | `detail` (str) |
-| `CONTEXT_TOO_LARGE` | `kind`, `status` (int), `size` (int), `budget` (int) | `detail` (str) |
-| `TRANSPORT` | `kind` | `detail` (str) |
+| `CONTEXT_TOO_LARGE` | `kind`, `status` (int or `null`), `size` (int), `budget` (int) | `detail` (str) |
+| `TRANSPORT` | `kind`, `status` (`null`) | `detail` (str) |
 | `HTTP_REJECTED` | `kind`, `status` (int) | `detail` (str) |
-| `RESPONSE_INVALID` | `kind` | `detail` (str) |
-| `KEY_MISSING`, `KEY_INVALID`, `INPUT_INVALID` | `kind` | `detail` (str); `INPUT_INVALID` may include `size` and `budget` |
+| `RESPONSE_INVALID` | `kind`, `status` (`null`) | `detail` (str) |
+| `KEY_MISSING`, `KEY_INVALID`, `INPUT_INVALID` | `kind`, `status` (`null`) | `detail` (str); `INPUT_INVALID` may include `size` and `budget` |
 
 Every result line always carries `index` (int), `retries` (int), and
 `elapsed_s` (float); error-specific fields never change their JSON types.

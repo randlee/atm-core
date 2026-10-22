@@ -1,7 +1,7 @@
 # Sprint bl-6 — dashboard render
 Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR target: `integrate/phase-bl`.
 
-closure_type: boundary; target_boundary: DashboardRender; branch: sprint/bl-6-dashboard-render; PR target: integrate/phase-bl; wave: 2; external_ref: none; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (`StateSnapshot` fixture); parallel_safe: bl-2, bl-3, bl-4, bl-5, bl-7, bl-8, bl-10, bl-13, bl-14.
+closure_type: boundary; target_boundary: DashboardRender; branch: sprint/bl-6-dashboard-render; PR target: integrate/phase-bl; wave: 2; external_ref: none; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (`StateSnapshot` fixture); parallel_safe: bl-2, bl-3, bl-4, bl-5, bl-7, bl-8, bl-10, bl-13.
 
 Own `render.py`, `status.py`, `show.py`, their tests, and console README. Render persisted state only; do not collect, build a DAG, or deliver.
 
@@ -28,3 +28,7 @@ Own `render.py`, `status.py`, `show.py`, their tests, and console README. Render
 ```bash
 cd apps/atm-bd-console && uv run --frozen ruff check src tests && uv run --frozen pyright src && uv run --frozen pytest -q tests/test_render.py tests/test_status.py tests/test_show.py
 ```
+
+## This sprint does not close
+
+It renders persisted state only; bl-8 collects, bl-3 delivers, bl-13 renders the DAG, and bl-12 owns installed-console composition.

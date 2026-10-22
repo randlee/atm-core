@@ -7,6 +7,7 @@ EventRequest → debounce/aggregate → separately scheduled delivery. It adds n
 database. design.md holds Rand's verbatim authority. The sole machine-readable
 DAG is docs/plans/phase-bl/phase-bl.jsonl. bl-9 was deleted before planning
 because it duplicated the collector/snapshot seam; its work is now bl-8.
+bl-14 is folded into bl-12 composition; no separate bl-14 deliverable remains.
 
 Implementation lands in the separate `randlee/atm-bd-orchestration` repository:
 all sprint branches target its `integrate/phase-bl` (cut from `main`) and all
@@ -30,13 +31,13 @@ resolves every criteria path, and rejects a mismatch. The gate test is
 | --- | --- | --- |
 | bl-1 | PhaseBlContract / contract | apps/atm-bd-console/src/atm_bd_console/{types,codec,registry}.py; apps/atm-bd-console/tests/{test_types,test_codec,test_registry}.py |
 | bl-2 | JevResult / boundary | plugins/atm-bd-orchestration/{skills/atm-bd-orchestration/scripts/{jev_client.py,wrap_jev_receipt.py,sanity-split},agents/sc-sanity-jev.md,scripts/tests/test_{jev_client,wrap_jev_receipt,sanity_split,jev_client_prompts}.py} |
-| bl-3 | EventDispatch / boundary | apps/atm-bd-console/src/atm_bd_console/{events,delivery}.py; apps/atm-bd-console/tests/{test_events,test_delivery}.py |
+| bl-3 | EventDispatch / boundary | apps/atm-bd-console/src/atm_bd_console/{events,delivery}.py; apps/atm-bd-console/tests/{test_events,test_delivery}.py; sole `enqueue-event` CLI, sender schedule, and recipient tests |
 | bl-4 | QaReviewers / boundary | plugins/atm-bd-orchestration/{roles/quality-mgr.md,templates/qa-template.xml.j2,templates/finding-bead.json.j2,scripts/tests/test_qa_report_contract.py} |
-| bl-5 | SanityState / boundary | plugins/atm-bd-orchestration/{agents/dev-sanity.md,templates/dev-sanity-template.xml.j2,templates/sanity-run-record.json.j2,scripts/{sanity-merge,sanity-run-history,sanity-stack-link,atm-task-close.py},scripts/tests/test_sanity_*.py} |
+| bl-5 | SanityState / boundary | plugins/atm-bd-orchestration/{agents/dev-sanity.md,templates/dev-sanity-template.xml.j2,templates/sanity-run-record.json.j2,scripts/{sanity-merge,sanity-run-history,sanity-stack-link,atm-task-close.py},scripts/tests/{test_sanity_merge,test_sanity_run_history,test_templates,test_handoff_contracts,test_dev_sanity_prompt}.py} |
 | bl-6 | DashboardRender / boundary | apps/atm-bd-console/src/atm_bd_console/{render,status,show}.py; apps/atm-bd-console/tests/test_{render,status,show}.py; apps/atm-bd-console/README.md |
 | bl-7 | QualityTab / boundary | apps/atm-bd-console/src/atm_bd_console/{runs,icons}.py; apps/atm-bd-console/tests/test_{runs,icons}.py |
-| bl-8 | Collectors / boundary | apps/atm-bd-console/src/atm_bd_console/{refresh,state,adapters/{bd,atm,github}.py,cli.py,command.py}; matching collector tests |
-| bl-10 | ProblemSources / boundary | plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_bd,problem_sources}.py; matching tests |
+| bl-8 | Collectors / boundary | apps/atm-bd-console/src/atm_bd_console/{refresh,state,adapters/{__init__,bd,atm,github}.py,cli.py,command.py}; matching collector tests |
+| bl-10 | ProblemSources / boundary | plugins/atm-bd-orchestration/{atm_bd_orchestration/{github_source,atm_bd,problem_sources,__init__}.py,pyproject.toml,uv.lock,manifest.yaml,tests/gen_manifest.py}; matching tests |
 | bl-13 | DagRender / boundary | apps/atm-bd-console/src/atm_bd_console/dag.py; apps/atm-bd-console/tests/test_dag.py |
 | bl-12 | PhaseBlComposition / integration | apps/atm-bd-console/src/atm_bd_console/{cli,app,runner,model,cron_entry,delivery_entry,wiring}.py; apps/atm-bd-console/tests/{test_phase_bl_composition,test_app}.py |
 

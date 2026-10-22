@@ -1,9 +1,9 @@
 # Sprint bl-10 — problem-source derivation
 Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR target: `integrate/phase-bl`.
 
-closure_type: boundary; target_boundary: ProblemSources; branch: sprint/bl-10-problem-sources; PR target: integrate/phase-bl; wave: 2; external_ref: #375, #372; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (versioned collector-record fixtures and `ActionableProblem` codec); parallel_safe: bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-13, bl-14.
+closure_type: boundary; target_boundary: ProblemSources; branch: sprint/bl-10-problem-sources; PR target: integrate/phase-bl; wave: 2; external_ref: #375, #372; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (versioned collector-record fixtures and `ActionableProblem` codec); parallel_safe: bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-13.
 
-Own only `plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_bd,problem_sources}.py` and matching tests. bl-8 is the sole source-read owner; this sprint is pure derivation over persisted codec fixtures and never calls GitHub, BD, ATM, or delivery.
+Own only `plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_bd,problem_sources}.py`, `plugins/atm-bd-orchestration/{pyproject.toml,uv.lock,atm_bd_orchestration/__init__.py,manifest.yaml}`, `tests/gen_manifest.py`, and matching tests. bl-8 is the sole source-read/filter owner; this sprint is pure derivation over persisted codec fixtures and never calls GitHub, BD, ATM, or delivery. `gen_manifest.py --check` is the manifest ownership proof.
 
 ## Governing text (verbatim)
 
@@ -29,7 +29,7 @@ Use fixture JSON and pure functions only; run plugin pytest/lint with no network
 
 ## Validation
 ```bash
-cd plugins/atm-bd-orchestration && python3 -m pytest -q -rs
+cd plugins/atm-bd-orchestration && python3 tests/gen_manifest.py --check && python3 -m pytest -q -rs
 ```
 
 ## This sprint does not close
