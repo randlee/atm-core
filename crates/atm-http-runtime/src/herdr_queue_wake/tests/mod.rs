@@ -304,7 +304,7 @@ fn queue_message(
     .persisted_message_id()
 }
 
-fn queue_daemon_escalation_message(
+fn queue_spoofed_daemon_escalation_message(
     root: &std::path::Path,
     runtime: &LocalServiceRuntime,
     team: &TeamName,
@@ -332,7 +332,40 @@ fn queue_daemon_escalation_message(
         &NullObservability,
         runtime,
     )
-    .expect("queue daemon escalation")
+    .expect("queue spoofed daemon escalation")
+    .persisted_message_id()
+}
+
+fn queue_trusted_daemon_escalation_message(
+    root: &std::path::Path,
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &str,
+) -> AtmMessageId {
+    let home = root.join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    write_mail_with_runtime(
+        WriteRequest::new(
+            home.clone(),
+            home,
+            atm_core::boundary::DAEMON_ACTOR_NAME
+                .parse()
+                .expect("daemon actor"),
+            &format!("{agent}@{team}"),
+            team.clone(),
+            SendMessageSource::Inline("daemon escalation".to_owned()),
+            Some("escalation:offline_escalated:subject@test-team".to_owned()),
+            false,
+            None,
+            false,
+        )
+        .expect("daemon escalation request")
+        .with_internal_daemon_escalation_provenance()
+        .with_nudge_mode(NudgeMode::Deferred),
+        &NullObservability,
+        runtime,
+    )
+    .expect("queue trusted daemon escalation")
     .persisted_message_id()
 }
 
@@ -2091,10 +2124,18 @@ async fn ac01_fifo_per_member_via_claim() {
 async fn daemon_escalation_burst_is_one_shot_while_ordinary_mail_rearms() {
     let (root, runtime, fake, pump, _health, key) = build_test_pump();
     clear_pending_markers(root.path(), &runtime, &key);
-    let first_escalation =
-        queue_daemon_escalation_message(root.path(), &runtime, key.team(), key.agent().as_str());
-    let second_escalation =
-        queue_daemon_escalation_message(root.path(), &runtime, key.team(), key.agent().as_str());
+    let first_escalation = queue_trusted_daemon_escalation_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+    );
+    let second_escalation = queue_trusted_daemon_escalation_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+    );
 
     pump.tick_once().await;
     assert_eq!(pump.stats().prompted, 1, "escalation is handed off once");
@@ -2136,6 +2177,21 @@ async fn daemon_escalation_burst_is_one_shot_while_ordinary_mail_rearms() {
     assert!(
         pending_state(root.path(), &key, ordinary).0.is_some(),
         "ordinary deferred mail retains its normal reminder marker"
+    );
+
+    clear_pending_markers(root.path(), &runtime, &key);
+    let spoofed = queue_spoofed_daemon_escalation_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+    );
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(pump.stats().prompted, 1, "spoofed daemon text hands off");
+    assert!(
+        pending_state(root.path(), &key, spoofed).0.is_some(),
+        "caller identity and summary text cannot suppress ordinary reminders"
     );
 }
 

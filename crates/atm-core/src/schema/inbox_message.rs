@@ -11,6 +11,7 @@ use crate::types::{HostName, IsoTimestamp};
 
 const AUTHENTICATED_SOURCE_HOST_KEY: &str = "sourceHost";
 const PEER_OUTBOUND_KEY: &str = "peerOutbound";
+const DAEMON_ESCALATION_PROVENANCE_KEY: &str = "daemonEscalationProvenance";
 
 /// Removes daemon-local transport bookkeeping that is not part of the
 /// immutable user message. The same origin ULID may carry different local
@@ -66,6 +67,30 @@ pub(crate) fn set_authenticated_source_host(message: &mut InboxMessage, host: Op
         None => {
             message.extra.remove(AUTHENTICATED_SOURCE_HOST_KEY);
         }
+    }
+}
+
+/// Returns whether the canonical local writer stamped this record as a Herdr
+/// daemon escalation. This durable marker is never admitted from a client
+/// write request.
+#[must_use]
+pub fn has_daemon_escalation_provenance(message: &InboxMessage) -> bool {
+    message
+        .extra
+        .get(DAEMON_ESCALATION_PROVENANCE_KEY)
+        .is_some_and(|value| value.as_bool() == Some(true))
+}
+
+/// Applies the daemon-only marker while the canonical writer builds the
+/// durable message envelope.
+pub(crate) fn set_daemon_escalation_provenance(message: &mut InboxMessage, enabled: bool) {
+    if enabled {
+        message.extra.insert(
+            DAEMON_ESCALATION_PROVENANCE_KEY.to_string(),
+            Value::Bool(true),
+        );
+    } else {
+        message.extra.remove(DAEMON_ESCALATION_PROVENANCE_KEY);
     }
 }
 

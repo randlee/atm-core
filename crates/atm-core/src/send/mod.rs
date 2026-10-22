@@ -196,6 +196,15 @@ pub struct WriteRequest {
     /// deferred to durable at-most-once queue delivery.
     #[serde(default)]
     pub nudge_mode: NudgeMode,
+    /// Internal-only provenance set by the daemon escalation admission path.
+    /// This is skipped by serde so a client write payload cannot claim it.
+    #[serde(skip)]
+    pub(crate) daemon_escalation_provenance: bool,
+    /// Transport-only carrier for the marker. The HTTP adapter clears it for
+    /// local and untrusted-socket writes, and promotes it only after an
+    /// authenticated peer admission.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub(crate) peer_daemon_escalation_provenance: bool,
 }
 
 impl WriteRequest {
@@ -259,6 +268,8 @@ impl WriteRequest {
             acknowledges_message_id: None,
             dry_run,
             nudge_mode: NudgeMode::default(),
+            daemon_escalation_provenance: false,
+            peer_daemon_escalation_provenance: false,
         })
     }
 
@@ -293,6 +304,34 @@ impl WriteRequest {
     pub fn with_nudge_mode(mut self, nudge_mode: NudgeMode) -> Self {
         self.nudge_mode = nudge_mode;
         self
+    }
+
+    /// Stamps a write admitted by the internal Herdr escalation path.
+    /// The flag is not represented on the wire; production calls this only
+    /// after Herdr has selected a daemon-owned escalation recipient.
+    #[must_use]
+    pub fn with_internal_daemon_escalation_provenance(mut self) -> Self {
+        self.daemon_escalation_provenance = true;
+        self.peer_daemon_escalation_provenance = true;
+        self
+    }
+
+    /// Removes any wire-carried marker before a local or untrusted admission.
+    pub fn clear_untrusted_daemon_escalation_provenance(&mut self) {
+        self.daemon_escalation_provenance = false;
+        self.peer_daemon_escalation_provenance = false;
+    }
+
+    /// Promotes the transport carrier after authenticated peer admission.
+    pub fn admit_authenticated_peer_daemon_escalation_provenance(&mut self) {
+        self.daemon_escalation_provenance = self.peer_daemon_escalation_provenance;
+    }
+
+    /// Returns whether this request carries provenance admitted by the local
+    /// escalation path or authenticated peer ingress.
+    #[must_use]
+    pub const fn has_daemon_escalation_provenance(&self) -> bool {
+        self.daemon_escalation_provenance
     }
 
     #[must_use]
@@ -339,6 +378,10 @@ impl WriteRequest {
         self.origin_timestamp = Some(timestamp);
         self
     }
+}
+
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Compatibility name for existing callers.  There is one write payload;
@@ -662,6 +705,10 @@ fn build_send_envelope(
     };
     insert_classification_metadata(&mut envelope, &request.classification);
     set_authenticated_source_host(&mut envelope, request.authenticated_source_host.clone());
+    crate::schema::set_daemon_escalation_provenance(
+        &mut envelope,
+        request.daemon_escalation_provenance,
+    );
     envelope
 }
 

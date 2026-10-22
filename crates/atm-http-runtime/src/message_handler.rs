@@ -170,11 +170,13 @@ impl AuthenticatedConnector {
         match self {
             Self::Local => {
                 request.authenticated_source_host = None;
+                request.clear_untrusted_daemon_escalation_provenance();
                 Ok(AuthenticatedIngress::Local)
             }
             Self::Peer { source_host } => {
                 validate_peer_write_version(request.peer_http_api_version.take())?;
                 request.authenticated_source_host = Some(source_host.clone());
+                request.admit_authenticated_peer_daemon_escalation_provenance();
                 if let Some(destination) = request.to.take() {
                     request.to = Some(destination.without_host());
                 }
@@ -199,6 +201,7 @@ impl AuthenticatedConnector {
                 // explicit plaintext test reply to the actual socket peer
                 // without accepting a JSON-forged value.
                 request.authenticated_source_host = Some(source_host.clone());
+                request.clear_untrusted_daemon_escalation_provenance();
                 validate_peer_write_version(request.peer_http_api_version.take())?;
                 if let Some(destination) = request.to.take() {
                     request.to = Some(destination.without_host());
@@ -1404,6 +1407,7 @@ mod tests {
     async fn local_and_peer_use_identical_write_json_and_one_dispatch() {
         let mut request = write_request();
         request.authenticated_source_host = Some("forged.example.test".parse().expect("host"));
+        request = request.with_internal_daemon_escalation_provenance();
         let body = serde_json::to_vec(&request).expect("typed write JSON");
         let response = sent_response();
         let expected = match &response {
@@ -1447,6 +1451,10 @@ mod tests {
         assert_eq!(local_calls.len(), 1, "local request has one core dispatch");
         assert_eq!(peer_calls.len(), 1, "peer request has one core dispatch");
         assert_eq!(local_calls[0].0.authenticated_source_host, None);
+        assert!(
+            !local_calls[0].0.has_daemon_escalation_provenance(),
+            "local JSON cannot forge the daemon escalation marker"
+        );
         assert_eq!(local_calls[0].1, AuthenticatedIngress::Local);
         assert_eq!(
             peer_calls[0].0.authenticated_source_host,
@@ -1463,6 +1471,10 @@ mod tests {
             "the physical peer qualifier is consumed before shared mailbox routing"
         );
         assert_eq!(peer_calls[0].1, AuthenticatedIngress::Peer);
+        assert!(
+            peer_calls[0].0.has_daemon_escalation_provenance(),
+            "the authenticated peer path retains daemon escalation provenance"
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]

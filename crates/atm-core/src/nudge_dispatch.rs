@@ -22,16 +22,12 @@ use crate::service_runtime::LocalServiceRuntime;
 use crate::types::TaskId;
 use atm_storage::TaskRow;
 
-/// Returns whether this is daemon-authored escalation mail, whose successful
-/// queue handoff is terminal even while the recipient keeps it unread.
+/// Returns whether this was admitted by the daemon escalation path, whose
+/// successful queue handoff is terminal even while the recipient keeps it
+/// unread. Sender and summary text are intentionally not provenance.
 #[must_use]
 pub fn is_terminal_escalation_message(message: &Message) -> bool {
-    message.envelope.from.as_str() == crate::boundary::DAEMON_ACTOR_NAME
-        && message
-            .envelope
-            .summary
-            .as_deref()
-            .is_some_and(|summary| summary.starts_with("escalation:"))
+    crate::schema::has_daemon_escalation_provenance(&message.envelope)
 }
 
 const fn task_pass_transition(reminder_count: u32) -> TaskTransition {

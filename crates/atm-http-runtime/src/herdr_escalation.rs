@@ -379,6 +379,10 @@ async fn write_escalation_mail_with_summary(
                 None,
                 false,
             )?
+            // This non-wire marker is set only after Herdr has selected a
+            // daemon-owned escalation recipient. The canonical writer
+            // persists it for queue handoff classification.
+            .with_internal_daemon_escalation_provenance()
             // Immediate delivery only runs the Inline plan, which never
             // emits the herdr received hook (that hook is emitted only by
             // `StorageAndNudgeRouter::emit_received_hook` and by the

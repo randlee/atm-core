@@ -83,6 +83,8 @@ impl AckRequest {
             // Acknowledgements always emit their receiver nudge immediately;
             // deferred (queue) mode is caller-selected only for `atm send`.
             nudge_mode: crate::send::NudgeMode::default(),
+            daemon_escalation_provenance: false,
+            peer_daemon_escalation_provenance: false,
         }
     }
 
