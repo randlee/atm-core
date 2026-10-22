@@ -15,8 +15,8 @@ It does not replace `phase-bl-plan.md` or `phase-bl.jsonl`.
 
 ## Critical review gates
 
-- [ ] Every sprint header names the implementation repository (`randlee/atm-bd-orchestration`), `integrate/phase-bl` target, and validation worktree.
-- [ ] Every listed deliverable has a named deterministic test; no test depends on time, sleeps, races, load, event ordering, or live services.
-- [ ] Every boundary test consumes bl-1 fixtures rather than inventing payload shapes.
-- [ ] Validate JSONL dependencies, registry set/dependencies, header consistency, and `git diff --check`.
-- [ ] Push the complete correction set; send the commit report, then validation report; close only with the required consistency template.
+- [x] Every sprint header names the implementation repository (`randlee/atm-bd-orchestration`), `integrate/phase-bl` target, and validation worktree.
+- [x] Every listed deliverable has a named deterministic test; no test depends on time, sleeps, races, load, event ordering, or live services.
+- [x] Every boundary test consumes bl-1 fixtures rather than inventing payload shapes.
+- [x] Validate JSONL dependencies, registry set/dependencies, header consistency, and `git diff --check`.
+- [x] Push the complete correction set; send the commit report, then validation report; close only with the required consistency template.
