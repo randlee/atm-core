@@ -995,6 +995,34 @@
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; agent icons are rendered by bl-7",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:38+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:28:58+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; fixed qa/sanity agent-type icons are bl-7",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:46+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:56+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1009,6 +1037,22 @@
         {
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; agent icons are rendered by bl-7"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; fixed qa/sanity agent-type icons are bl-7"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)"
+        },
+        {
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
         }
       ]
     },
@@ -1072,6 +1116,30 @@
             "fixtures"
           ],
           "previous_statement": "The console's pull-request list must show the CI pass, CI fail, running, merged and closed states with the glyphs and colours Rand supplied in GH_THEME."
+        },
+        {
+          "at": "2026-10-22T07:30:56+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:42+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -1133,12 +1201,34 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:29:05+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 only draws the icon icons.py returns; glyph, colour and model mapping are owned by bl-7, and agent task rows are not part of dag.py",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:42+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 only draws the icon icons.py returns; glyph, colour and model mapping are owned by bl-7, and agent task rows are not part of dag.py"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -1191,12 +1281,34 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:29:05+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 only draws the icon icons.py returns; glyph, colour and model mapping are owned by bl-7, and agent task rows are not part of dag.py",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:42+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 only draws the icon icons.py returns; glyph, colour and model mapping are owned by bl-7, and agent task rows are not part of dag.py"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -1288,6 +1400,27 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:38+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:45+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; icon definitions are bl-7",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:47+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1306,6 +1439,18 @@
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; icon definitions are bl-7"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)"
         }
       ]
     },
@@ -1567,6 +1712,27 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:38+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:29:39+00:00",
+          "event": "excluded",
+          "item": "bl-4",
+          "reason": "bl-4 only writes reviewer metadata on beads; console rendering is bl-7 and DAG cells are bl-13; stage separation is bl-3/bl-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:47+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1577,6 +1743,18 @@
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-4",
+          "reason": "bl-4 only writes reviewer metadata on beads; console rendering is bl-7 and DAG cells are bl-13; stage separation is bl-3/bl-8"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)"
         }
       ]
     },
@@ -1631,6 +1809,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:29:05+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 only draws the icon icons.py returns; glyph, colour and model mapping are owned by bl-7, and agent task rows are not part of dag.py",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:47+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:56+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-13",
+          "reason": "bl-13 only draws the icon icons.py returns; glyph, colour and model mapping are owned by bl-7, and agent task rows are not part of dag.py"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)"
+        },
+        {
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
         }
       ]
     },
@@ -1685,6 +1898,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:30:56+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:42+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -1744,6 +1981,20 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:38+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:47+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1754,6 +2005,14 @@
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)"
         }
       ]
     },
@@ -1835,6 +2094,20 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:38+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:42+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1845,6 +2118,14 @@
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -1925,6 +2206,27 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:38+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:45+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; icon definitions are bl-7",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:42+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1939,6 +2241,18 @@
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; icon definitions are bl-7"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -2042,12 +2356,34 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:38+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:42+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -2093,6 +2429,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:27:38+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:57+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:42+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -2138,6 +2509,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:29:55+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 owns only dag.py and test_dag.py; the status table ci cell and the cron table flag are owned by bl-6",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:57+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:43+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-13",
+          "reason": "bl-13 owns only dag.py and test_dag.py; the status table ci cell and the cron table flag are owned by bl-6"
+        },
+        {
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -2197,6 +2603,27 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:38+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:45+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; status-table cells are bl-6",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:43+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2207,6 +2634,18 @@
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; status-table cells are bl-6"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -2273,6 +2712,34 @@
           "item": "bl-7",
           "reason": "unknown-member glyph belongs to the markdown status table in bl-6",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:38+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:45+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; unknown-member glyph is bl-6",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:32:47+00:00",
+          "event": "excluded",
+          "item": "bl-8",
+          "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:43+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2287,6 +2754,22 @@
         {
           "item": "bl-7",
           "reason": "unknown-member glyph belongs to the markdown status table in bl-6"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; unknown-member glyph is bl-6"
+        },
+        {
+          "item": "bl-8",
+          "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -2346,12 +2829,34 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:38+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:43+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -2411,6 +2916,27 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:39+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:33:30+00:00",
+          "event": "excluded",
+          "item": "bl-7",
+          "reason": "the status-table state cell with one icon per active agent is composed in bl-6; bl-7 only supplies icons.py",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:43+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2421,6 +2947,18 @@
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-7",
+          "reason": "the status-table state cell with one icon per active agent is composed in bl-6; bl-7 only supplies icons.py"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -2481,12 +3019,23 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:43+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -2539,12 +3088,56 @@
           "item": "atm-bj-4",
           "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:39+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:33+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; the status-table pr cell is bl-6",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:32:47+00:00",
+          "event": "excluded",
+          "item": "bl-8",
+          "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:43+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-4",
           "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; the status-table pr cell is bl-6"
+        },
+        {
+          "item": "bl-8",
+          "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -2607,6 +3200,63 @@
             "fixtures"
           ],
           "previous_statement": "atm-bd cron --phase <x> --md-table must print the layout C markdown status table to stdout: header | sprint | state | ci | pr |, alignment row |---|:-:|:-:|---|, one row per sprint of the phase."
+        },
+        {
+          "at": "2026-10-22T07:27:45+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; Diagnostics rendering is bl-6/bl-7",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:29:55+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 owns only dag.py and test_dag.py; the status table ci cell and the cron table flag are owned by bl-6",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:57+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:32:47+00:00",
+          "event": "excluded",
+          "item": "bl-8",
+          "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:43+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; Diagnostics rendering is bl-6/bl-7"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 owns only dag.py and test_dag.py; the status table ci cell and the cron table flag are owned by bl-6"
+        },
+        {
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
+        },
+        {
+          "item": "bl-8",
+          "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -2692,6 +3342,27 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:39+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:28:58+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; the status markdown table is bl-6",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:43+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2706,6 +3377,18 @@
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; the status markdown table is bl-6"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -2765,6 +3448,27 @@
           "item": "bl-7",
           "reason": "markdown status table rendering is owned by bl-6",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:39+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:45+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; status-table rendering is bl-6",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:47+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2775,6 +3479,18 @@
         {
           "item": "bl-7",
           "reason": "markdown status table rendering is owned by bl-6"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only; status-table cells and icon definitions are unchanged by phase-bl (table is bl-6, icons.py is bl-7)"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; status-table rendering is bl-6"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)"
         }
       ]
     },
@@ -2827,12 +3543,23 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:43+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -3050,6 +3777,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:27:45+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; Diagnostics log content is bl-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:10+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only and owns no Diagnostics log view (dag.py and test_dag.py only)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; Diagnostics log content is bl-8"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 renders the DAG and fallback list only and owns no Diagnostics log view (dag.py and test_dag.py only)"
         }
       ]
     },
@@ -3095,6 +3846,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:27:45+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; Diagnostics log content is bl-8",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; Diagnostics log content is bl-8"
         }
       ]
     },
@@ -3161,6 +3925,13 @@
           "item": "atm-bj-2",
           "reason": "BJ-2 plans bead schemas, formula producers and validation; it does not write or change the atm-bd observability event logger.",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:03+00:00",
+          "event": "excluded",
+          "item": "bl-8",
+          "reason": "bl-8 logs a failed read once through the existing program log writer, whose error line form is unchanged by phase-bl",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -3175,6 +3946,10 @@
         {
           "item": "atm-bj-2",
           "reason": "BJ-2 plans bead schemas, formula producers and validation; it does not write or change the atm-bd observability event logger."
+        },
+        {
+          "item": "bl-8",
+          "reason": "bl-8 logs a failed read once through the existing program log writer, whose error line form is unchanged by phase-bl"
         }
       ]
     },
@@ -3283,6 +4058,13 @@
           "item": "bl-6",
           "reason": "failure logging is owned by bl-8",
           "replaced": true
+        },
+        {
+          "at": "2026-10-22T07:27:46+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; failure logging is bl-8",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -3317,6 +4099,10 @@
         {
           "item": "bl-6",
           "reason": "failure logging is owned by bl-8"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; failure logging is bl-8"
         }
       ]
     },
@@ -3369,12 +4155,23 @@
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; GitHub poll interval and paging are collector behaviour owned by bl-8",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:46+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; GitHub poll behaviour is bl-8",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; GitHub poll interval and paging are collector behaviour owned by bl-8"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; GitHub poll behaviour is bl-8"
         }
       ]
     },
@@ -3441,6 +4238,20 @@
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; GitHub quota guard is collector behaviour owned by bl-8",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:46+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; GitHub quota guard is bl-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:31:45+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "bl-6 renders persisted state only; the quota check and paused refresh are bl-8",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -3455,6 +4266,14 @@
         {
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; GitHub quota guard is collector behaviour owned by bl-8"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; GitHub quota guard is bl-8"
+        },
+        {
+          "item": "bl-6",
+          "reason": "bl-6 renders persisted state only; the quota check and paused refresh are bl-8"
         }
       ]
     },
@@ -3521,6 +4340,20 @@
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
           "replaced": true
+        },
+        {
+          "at": "2026-10-22T07:29:05+00:00",
+          "event": "excluded",
+          "item": "bl-13",
+          "reason": "bl-13 only draws the icon icons.py returns; glyph, colour and model mapping are owned by bl-7, and agent task rows are not part of dag.py",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:35:43+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -3531,6 +4364,14 @@
         {
           "item": "bl-6",
           "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
+        },
+        {
+          "item": "bl-13",
+          "reason": "bl-13 only draws the icon icons.py returns; glyph, colour and model mapping are owned by bl-7, and agent task rows are not part of dag.py"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no state cell, icon, table or PR/CI glyph (bl-6, bl-7, bl-13)"
         }
       ]
     },
@@ -5771,6 +6612,27 @@
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; sanity/quality run pages are bl-5 data and bl-7 rendering",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:46+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; run pages are bl-5 data and bl-7 rendering",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:28:11+00:00",
+          "event": "excluded",
+          "item": "bl-2",
+          "reason": "bl-2 only returns elapsed_s from the Jev client; the sanity ledger row is bl-5 and the runs pages are bl-7",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:47+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -5789,6 +6651,18 @@
         {
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; sanity/quality run pages are bl-5 data and bl-7 rendering"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; run pages are bl-5 data and bl-7 rendering"
+        },
+        {
+          "item": "bl-2",
+          "reason": "bl-2 only returns elapsed_s from the Jev client; the sanity ledger row is bl-5 and the runs pages are bl-7"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)"
         }
       ]
     },
@@ -7516,6 +8390,13 @@
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; the Jev busy-retry rule is owned by the Jev client in bl-2",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:46+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; the Jev retry rule is bl-2",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -7526,6 +8407,10 @@
         {
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; the Jev busy-retry rule is owned by the Jev client in bl-2"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; the Jev retry rule is bl-2"
         }
       ]
     },
@@ -7585,6 +8470,13 @@
           "item": "bl-5",
           "reason": "bl-5 emits a request through the enqueue seam; stage separation is owned by bl-3 and proven in bl-12",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:29:39+00:00",
+          "event": "excluded",
+          "item": "bl-4",
+          "reason": "bl-4 only writes reviewer metadata on beads; console rendering is bl-7 and DAG cells are bl-13; stage separation is bl-3/bl-8",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -7595,6 +8487,10 @@
         {
           "item": "bl-5",
           "reason": "bl-5 emits a request through the enqueue seam; stage separation is owned by bl-3 and proven in bl-12"
+        },
+        {
+          "item": "bl-4",
+          "reason": "bl-4 only writes reviewer metadata on beads; console rendering is bl-7 and DAG cells are bl-13; stage separation is bl-3/bl-8"
         }
       ]
     },
@@ -7752,6 +8648,20 @@
           "item": "bl-5",
           "reason": "bl-5 only enqueues an EventRequest via the seam; delivery scheduling is bl-3",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:32:38+00:00",
+          "event": "excluded",
+          "item": "bl-10",
+          "reason": "bl-10 is pure derivation and has no delivery path; delivery scheduling is owned by bl-3",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:32:47+00:00",
+          "event": "excluded",
+          "item": "bl-8",
+          "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -7762,6 +8672,14 @@
         {
           "item": "bl-5",
           "reason": "bl-5 only enqueues an EventRequest via the seam; delivery scheduling is bl-3"
+        },
+        {
+          "item": "bl-10",
+          "reason": "bl-10 is pure derivation and has no delivery path; delivery scheduling is owned by bl-3"
+        },
+        {
+          "item": "bl-8",
+          "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3"
         }
       ]
     },
@@ -7955,6 +8873,13 @@
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; separate collector modules are bl-8",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:46+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; separate collector modules are bl-8",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -7969,6 +8894,10 @@
         {
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; separate collector modules are bl-8"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; separate collector modules are bl-8"
         }
       ]
     },
@@ -8014,6 +8943,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:27:46+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; collector behaviour is bl-8",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; collector behaviour is bl-8"
         }
       ]
     },
@@ -8176,6 +9118,13 @@
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; refresh accounting is bl-8",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:46+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; refresh accounting is bl-8",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -8186,6 +9135,10 @@
         {
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; refresh accounting is bl-8"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; refresh accounting is bl-8"
         }
       ]
     },
@@ -8410,12 +9363,23 @@
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; reviewer rows are rendered by bl-7",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:47+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; reviewer rows are rendered by bl-7"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 writes sanity records and enqueues events; it renders no icons, pages, Quality pane or status table (bl-6, bl-7)"
         }
       ]
     },
@@ -8533,6 +9497,13 @@
           "item": "bl-7",
           "reason": "quality-mgr writing reviewer metadata is bl-4; bl-7 only reads it",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:46+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; reviewer metadata writing is bl-4",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -8543,6 +9514,10 @@
         {
           "item": "bl-7",
           "reason": "quality-mgr writing reviewer metadata is bl-4; bl-7 only reads it"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; reviewer metadata writing is bl-4"
         }
       ]
     },
@@ -8595,12 +9570,34 @@
           "item": "bl-2",
           "reason": "bl-2 draws nothing in the console, DAG or atm-bd show; icon colouring is bl-6, bl-7 and bl-13",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:45+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; icon colours are drawn by bl-6, bl-7 and bl-13",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:31:25+00:00",
+          "event": "excluded",
+          "item": "bl-7",
+          "reason": "bl-7 renders the Quality/Sanity pages; icon colour in the DAG, fallback list, Diagnostics and atm-bd show is bl-6, bl-12 and bl-13",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-2",
           "reason": "bl-2 draws nothing in the console, DAG or atm-bd show; icon colouring is bl-6, bl-7 and bl-13"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; icon colours are drawn by bl-6, bl-7 and bl-13"
+        },
+        {
+          "item": "bl-7",
+          "reason": "bl-7 renders the Quality/Sanity pages; icon colour in the DAG, fallback list, Diagnostics and atm-bd show is bl-6, bl-12 and bl-13"
         }
       ]
     },
@@ -8653,12 +9650,34 @@
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; DAG cell content is bl-13",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:45+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; DAG cell content is bl-13",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:29:39+00:00",
+          "event": "excluded",
+          "item": "bl-4",
+          "reason": "bl-4 only writes reviewer metadata on beads; console rendering is bl-7 and DAG cells are bl-13; stage separation is bl-3/bl-8",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; DAG cell content is bl-13"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; DAG cell content is bl-13"
+        },
+        {
+          "item": "bl-4",
+          "reason": "bl-4 only writes reviewer metadata on beads; console rendering is bl-7 and DAG cells are bl-13; stage separation is bl-3/bl-8"
         }
       ]
     },
@@ -8711,12 +9730,34 @@
           "item": "bl-1",
           "reason": "outline colour is DAG rendering, owned by bl-13",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:45+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; DAG outline is bl-13",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:30:57+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-1",
           "reason": "outline colour is DAG rendering, owned by bl-13"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; DAG outline is bl-13"
+        },
+        {
+          "item": "bl-6",
+          "reason": "bl-6 renders header, age, unknown-member glyph and show output; icon mappings, PR/CI glyph producers, the cron table flag and DAG outline are bl-7, bl-8 and bl-13"
         }
       ]
     },
@@ -8769,12 +9810,34 @@
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; DAG ready/blocked icons are bl-13",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:46+00:00",
+          "event": "excluded",
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; DAG icons are bl-13",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:34:20+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "DAG cell ready/blocked icons are drawn by bl-13; bl-6 renders header, age, unknown-member glyph and show output only",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-1",
           "reason": "bl-1 defines contract types only; DAG ready/blocked icons are bl-13"
+        },
+        {
+          "item": "bl-12",
+          "reason": "bl-12 composes the app and proves end-to-end behaviour; DAG icons are bl-13"
+        },
+        {
+          "item": "bl-6",
+          "reason": "DAG cell ready/blocked icons are drawn by bl-13; bl-6 renders header, age, unknown-member glyph and show output only"
         }
       ]
     },
@@ -8872,12 +9935,23 @@
           "item": "bl-4",
           "reason": "Quality tab rendering is the bl-7 console half; bl-4 only produces metadata.reviewers",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:27:20+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines the QaRunInput/QaReviewerInput contract types only; Quality tab rendering is the bl-7 console half",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "bl-4",
           "reason": "Quality tab rendering is the bl-7 console half; bl-4 only produces metadata.reviewers"
+        },
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines the QaRunInput/QaReviewerInput contract types only; Quality tab rendering is the bl-7 console half"
         }
       ]
     }

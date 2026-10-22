@@ -17,7 +17,7 @@ Own only `dag.py` and `test_dag.py`. It renders persisted snapshots through the 
 
 1. Pin `mmdflux >= 2.6.1`; consume captured MMDS/ANSI fixtures (not a binary at test time), including rounded-corner glyphs.
 2. Render labels with QA > sanity > dev priority and the status icon to the left of the sprint name. Render ANC-037/038 with CI icon and `#<pr>`.
-3. Render ready, blocked, and not-started icons; use green/red/white strokes, including red while a fix agent is working. Keep fallback list cells and colours identical.
+3. Once QA is green and all fixes are green a cell shows the CI icon and `#<pr>` in place of the sprint state icon; otherwise the state icon shows; the status table keeps its per-agent history. A DAG cell with no active agent and no green QA shows the blue play icon when the sprint is ready and the blocked icon when it is blocked; a cell with an active agent shows that one agent's icon (sanity ahead of dev, QA ahead of sanity) immediately left of the sprint id. Every icon in the DAG, fallback list, Diagnostics agent details and `atm-bd show` is drawn in its anchored colour, only when stdout is a terminal. Render ready, blocked, and not-started icons; use green/red/white strokes, including red while a fix agent is working. Keep fallback list cells and colours identical.
 
 ## Authoritative acceptance criteria
 
@@ -30,6 +30,8 @@ Own only `dag.py` and `test_dag.py`. It renders persisted snapshots through the 
 - [ ] `test_dag_fix_agent_is_red_while_working`
 - [ ] `test_dag_mmdflux_pin_and_rounded_corner_glyph_fixture`
 - [ ] `test_dag_fallback_list_same_cells_and_colours`
+- [ ] `test_dag_ready_blue_play_and_blocked_icon_without_agent`
+- [ ] `test_dag_icons_use_anchored_colours_only_on_tty`
 
 No test launches mmdflux or relies on timing.
 

@@ -9,8 +9,8 @@ Own `agents/dev-sanity.md`, `templates/dev-sanity-template.xml.j2`, `templates/s
 
 ## Authoritative deliverables
 
-1. Pack context for the LLM and write the `JevRequest[]` array into `dev-sanity.md`; persist the exact JSONL/result array in the sanity-run log with typed error context (#365, #497). Each record is a JSON file in the atm-bd state directory (no database) carrying pass/fail, separate Jev and LLM elapsed, and the dev name and icon, so the sanity-runs page can render them.
-2. Select deterministic sanity transitions and emit a contract-codec `EventRequest` through the named `enqueue_event_request` seam; bl-12 proves its arrival in bl-3's durable queue.
+1. Pack context for the LLM and write the `JevRequest[]` array into `dev-sanity.md`; persist the exact JSONL/result array in the sanity-run log with typed error context (#365, #497). Each record is a JSON file in the atm-bd state directory (no database) carrying pass/fail, separate `jev_elapsed_s` and `llm_elapsed_s`, and the dev name and icon, so the sanity-runs page can render them.
+2. Select deterministic sanity transitions and emit a contract-codec `EventRequest` through the named `enqueue_event_request` seam, selecting transitions only by evaluating persisted sanity-run records and iteration state, never because a collection run read fresh data; bl-12 proves its arrival in bl-3's durable queue.
 3. Fold bl-11 mechanics here: `sanity-stack-link` records the stack/rebase link, and `atm-task-close.py` makes a not-reproducible close explicit, auditable, and linked (#498, #126); this sprint consumes only the sole DAG at `docs/plans/phase-bl/phase-bl.jsonl`.
 4. Apply D5 mechanically: `select_iteration(iteration, deliverable_id, jev_lines, llm) -> SelectedEvaluation | IterationFailure | TriageRoute`. Jev unavailable uses LLM; at iteration 1 either negative response fails; later negative routes sanity-agent triage. Records retain ordered arrays, reject unknown error kinds, and sum only numeric elapsed/retry values.
 
@@ -21,6 +21,7 @@ Own `agents/dev-sanity.md`, `templates/dev-sanity-template.xml.j2`, `templates/s
 - [ ] `test_sanity_log_preserves_jev_request_array_and_jsonl`
 - [ ] `test_context_packing_writes_jev_request_array_to_dev_sanity`
 - [ ] `test_sanity_transition_emits_contract_event_request_to_enqueue_seam`
+- [ ] `test_transition_selected_from_persisted_records_not_fresh_collection`
 - [ ] `test_not_reproducible_close_and_rebase_link`
 - [ ] `test_atm_task_close_records_stack_link_before_terminal_close`
 - [ ] `test_jev_unavailable_uses_llm_evaluation`

@@ -6,469 +6,37 @@
     "gate": "plan",
     "item_id": "bl-8",
     "bead_id": null,
-    "run_id": "plan-20261022T072339Z-bl-8",
-    "run_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bl/docs/plans/phase-bl/anchor-runs/plan-20261022T072339Z-bl-8.json",
+    "run_id": "plan-20261022T073524Z-bl-8",
+    "run_path": "docs/plans/phase-bl/anchor-runs/plan-20261022T073524Z-bl-8.json",
     "dry_run": false,
     "reused_run": false,
-    "exit_code": 1,
-    "pass": false,
-    "failing": [
-      "ANC-092",
-      "ANC-048",
-      "ANC-049",
-      "ANC-096",
-      "ANC-102"
-    ],
+    "exit_code": 0,
+    "pass": true,
+    "failing": [],
     "errors": [],
-    "excluded": [],
+    "excluded": [
+      {
+        "anchor_id": "ANC-034",
+        "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3"
+      },
+      {
+        "anchor_id": "ANC-038",
+        "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3"
+      },
+      {
+        "anchor_id": "ANC-039",
+        "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3"
+      },
+      {
+        "anchor_id": "ANC-046",
+        "reason": "bl-8 logs a failed read once through the existing program log writer, whose error line form is unchanged by phase-bl"
+      },
+      {
+        "anchor_id": "ANC-094",
+        "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3"
+      }
+    ],
     "results": [
-      {
-        "anchor_id": "ANC-092",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "atm-bd must run data collection, state evaluation and event firing as three separate stages, each reading its input from and writing its output to persisted state, with no single call performing more than one of them.",
-        "quote": "collect-data (cron and/or tui) and save to db -> process data (determine state) and save to db -> fire events (after debouncing & aggregation)",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-21",
-        "context": "phase-bl planning 2026-10-21",
-        "anchor_version": 2,
-        "deterministic_check": "a test calls each stage alone with files in the state directory and shows no stage reads another stage's in-memory result or performs two stages",
-        "kind": "directive",
-        "leaning": "not_addressed",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_addressed",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "yes",
-            "confidence": 0.92,
-            "probabilities": {
-              "yes": 0.95,
-              "no": 0.05,
-              "unclear": 0.0
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.89,
-            "probabilities": {
-              "yes": 0.02,
-              "no": 0.93,
-              "unclear": 0.05
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.74,
-            "probabilities": {
-              "yes": 0.12,
-              "no": 0.83,
-              "unclear": 0.05
-            }
-          }
-        },
-        "min_confidence": 0.74,
-        "explanation": "This bead does not carry the directive forward.",
-        "usage": {
-          "input_tokens": 1938,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6668,
-        "to_fix": {
-          "where": null,
-          "change": "State that refresh.py collection writes only CollectorRecords, build_snapshot reads only persisted records and writes only the StateSnapshot, and event firing is a separate later stage (bl-3), so no single call performs more than one stage; add a test asserting this."
-        }
-      },
-      {
-        "anchor_id": "ANC-048",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "The GitHub poll interval of atm-bd defaults to 10 minutes and is configurable in the repository configuration and on the command line; one refresh fetches up to 100 PRs per GraphQL page with few fields and pages past 100 rather than dropping PRs.",
-        "quote": "i think a poll interval for gh ~10 minutes would be fine for default as long as we are doing queries that return a lot of info w/ small token cost. remember we get >100 gh stack (> 100 pr) frequently on multiple projects at the same time.",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-18",
-        "context": "console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067",
-        "anchor_version": 2,
-        "deterministic_check": "default interval 600 s; a repo with 150 PRs yields 150 rows across two pages",
-        "kind": "directive",
-        "leaning": "not_addressed",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "near_threshold": true,
-        "unstable": true,
-        "answers_second": {
-          "relevant": {
-            "type": "choice",
-            "choice": "yes",
-            "confidence": 0.97,
-            "probabilities": {
-              "yes": 0.98,
-              "no": 0.02,
-              "unclear": 0.0
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.62,
-            "probabilities": {
-              "yes": 0.05,
-              "no": 0.75,
-              "unclear": 0.2
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.82,
-            "probabilities": {
-              "yes": 0.08,
-              "no": 0.88,
-              "unclear": 0.04
-            }
-          }
-        },
-        "verdict_first": "underspecified",
-        "verdict_second": "not_addressed",
-        "verdict": "underspecified",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "yes",
-            "confidence": 0.98,
-            "probabilities": {
-              "yes": 0.99,
-              "no": 0.01,
-              "unclear": 0.0
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.52,
-            "probabilities": {
-              "yes": 0.09,
-              "no": 0.68,
-              "unclear": 0.23
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.74,
-            "probabilities": {
-              "yes": 0.14,
-              "no": 0.83,
-              "unclear": 0.03
-            }
-          }
-        },
-        "min_confidence": 0.52,
-        "explanation": "Jev was not confident (min confidence 0.52); the anchor or the bead may be underspecified.",
-        "usage": {
-          "input_tokens": 1953,
-          "output_tokens": 117
-        },
-        "low_questions": [
-          {
-            "ask": "first",
-            "role": "compliance",
-            "question_id": "addressed",
-            "choice": "no",
-            "confidence": 0.52
-          }
-        ],
-        "attempts": 2,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6675,
-        "to_fix": {
-          "where": "Due windows are BD/dolt 60 seconds, ATM 60 seconds, GitHub 600 seconds; only successful data advances `last_success`.",
-          "change": "State that the GitHub 600-second default is configurable in repository configuration and on the command line, and that adapters/github.py fetches up to 100 PRs per GraphQL page with few fields and pages past 100 without dropping PRs; add an acceptance test for each."
-        }
-      },
-      {
-        "anchor_id": "ANC-049",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "Before each GitHub refresh atm-bd reads the live remaining quota for the resource its mode uses (graphql or core) via gh api rate_limit; when remaining is below the configured threshold (default 50 percent of the limit) it skips the refresh, keeps cached PR data, shows a paused status with the numbers and the local reset time, and refuses forced refreshes until the quota is back above the threshold.",
-        "quote": "can you file another feature request to add the poll interval AND token budget(s) for gh? it should also stop polling if token drop below a threshold (start w/ 50%)",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-18",
-        "context": "console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067",
-        "anchor_version": 2,
-        "deterministic_check": "a stubbed rate_limit at 49 percent skips the refresh and shows the pause line with a local reset time; at 51 percent after reset the refresh runs",
-        "kind": "directive",
-        "leaning": "not_addressed",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "near_threshold": true,
-        "confirmed": true,
-        "verdict": "underspecified",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "yes",
-            "confidence": 0.55,
-            "probabilities": {
-              "yes": 0.7,
-              "no": 0.29,
-              "unclear": 0.01
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.91,
-            "probabilities": {
-              "yes": 0.01,
-              "no": 0.94,
-              "unclear": 0.05
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.72,
-            "probabilities": {
-              "yes": 0.16,
-              "no": 0.81,
-              "unclear": 0.02
-            }
-          }
-        },
-        "min_confidence": 0.55,
-        "explanation": "Jev was not confident (min confidence 0.55); the anchor or the bead may be underspecified.",
-        "usage": {
-          "input_tokens": 1977,
-          "output_tokens": 117
-        },
-        "low_questions": [
-          {
-            "ask": "first",
-            "role": "relevance",
-            "question_id": "relevant",
-            "choice": "yes",
-            "confidence": 0.55
-          }
-        ],
-        "attempts": 2,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6847,
-        "to_fix": {
-          "where": null,
-          "change": "State in deliverable 1 that adapters/github.py reads live remaining quota via gh api rate_limit before each refresh, skips below the configured threshold (default 50 percent) keeping cached data with a paused status (numbers and local reset time), and refuses forced refreshes until above threshold; or, if another sprint owns it, record exclude --id ANC-049 --item bl-8 --reason \"<one sentence>\"."
-        }
-      },
-      {
-        "anchor_id": "ANC-096",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "atm-bd must raise an ATM message request only when evaluation of the current persisted state shows a defined state transition, never because a particular collection run read fresh data.",
-        "quote": "state evaluation based on current state. specific state transitions would trigger 'atm message request'.",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-21",
-        "context": "phase-bl planning 2026-10-21",
-        "anchor_version": 2,
-        "deterministic_check": "a test shows a request is raised only when persisted state changes between defined states, and none when a collection reads fresh but unchanged data",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "near_threshold": true,
-        "confirmed": true,
-        "verdict": "underspecified",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.55,
-            "probabilities": {
-              "yes": 0.29,
-              "no": 0.7,
-              "unclear": 0.01
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.92,
-            "probabilities": {
-              "yes": 0.01,
-              "no": 0.95,
-              "unclear": 0.04
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.88,
-            "probabilities": {
-              "yes": 0.06,
-              "no": 0.92,
-              "unclear": 0.02
-            }
-          }
-        },
-        "min_confidence": 0.55,
-        "explanation": "Jev was not confident (min confidence 0.55); the anchor or the bead may be underspecified.",
-        "usage": {
-          "input_tokens": 1925,
-          "output_tokens": 117
-        },
-        "low_questions": [
-          {
-            "ask": "first",
-            "role": "relevance",
-            "question_id": "relevant",
-            "choice": "no",
-            "confidence": 0.55
-          }
-        ],
-        "attempts": 2,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6626,
-        "to_fix": {
-          "where": "It does not select checks or derive problems (bl-10), queue/deliver events (bl-3), render UI, or prove end-to-end cron/TUI equality (bl-12).",
-          "change": "State that build_snapshot only carries state and content_at and never raises an event request because a collection run read fresh data (transitions are evaluated from persisted state by bl-3/bl-10); or exclude --id ANC-096 --item bl-8 --reason \"<one sentence>\" if this sprint does not touch it."
-        }
-      },
-      {
-        "anchor_id": "ANC-102",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "atm-bd cron must print the same status information from persisted state when it skipped collection as when it collected.",
-        "quote": "cron needs to return the same info even if it didn't collect the info.",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-21",
-        "context": "phase-bl planning 2026-10-21",
-        "anchor_version": 2,
-        "deterministic_check": "a test compares the output of a skipped-collection cron run with a collecting run on the same persisted state and finds the same status information",
-        "kind": "directive",
-        "leaning": "not_addressed",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "near_threshold": true,
-        "unstable": true,
-        "answers_second": {
-          "relevant": {
-            "type": "choice",
-            "choice": "yes",
-            "confidence": 0.73,
-            "probabilities": {
-              "yes": 0.82,
-              "no": 0.17,
-              "unclear": 0.01
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.52,
-            "probabilities": {
-              "yes": 0.11,
-              "no": 0.68,
-              "unclear": 0.21
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.91,
-            "probabilities": {
-              "yes": 0.04,
-              "no": 0.94,
-              "unclear": 0.02
-            }
-          }
-        },
-        "verdict_first": "not_addressed",
-        "verdict_second": "underspecified",
-        "verdict": "underspecified",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "yes",
-            "confidence": 0.69,
-            "probabilities": {
-              "yes": 0.79,
-              "no": 0.2,
-              "unclear": 0.01
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.64,
-            "probabilities": {
-              "yes": 0.08,
-              "no": 0.76,
-              "unclear": 0.16
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.92,
-            "probabilities": {
-              "yes": 0.03,
-              "no": 0.95,
-              "unclear": 0.02
-            }
-          }
-        },
-        "min_confidence": 0.52,
-        "explanation": "Jev was not confident (min confidence 0.52); the anchor or the bead may be underspecified.",
-        "usage": {
-          "input_tokens": 1913,
-          "output_tokens": 117
-        },
-        "low_questions": [
-          {
-            "ask": "second",
-            "role": "compliance",
-            "question_id": "addressed",
-            "choice": "no",
-            "confidence": 0.52
-          }
-        ],
-        "attempts": 2,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6553,
-        "to_fix": {
-          "where": "Own `refresh.py`, `state.py`, `adapters/{bd,atm,github}.py`, `cli.py`, `command.py`, and matching collector/state tests under `apps/atm-bd-console`.",
-          "change": "State that when cron skips collection because sources are not due, cli.py prints the same status information built from the persisted snapshot as when it collected, and add an acceptance test for the skipped-collection output."
-        }
-      },
       {
         "anchor_id": "ANC-022",
         "source_type": "ANC",
@@ -532,34 +100,34 @@
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.35,
+            "confidence": 0.27,
             "probabilities": {
-              "yes": 0.29,
-              "no": 0.57,
-              "unclear": 0.14
+              "yes": 0.4,
+              "no": 0.51,
+              "unclear": 0.09
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 0.97,
             "probabilities": {
-              "no": 0.99,
+              "no": 0.98,
               "unclear": 0.0,
-              "yes": 0.01
+              "yes": 0.02
             }
           }
         },
-        "min_confidence": 0.98,
+        "min_confidence": 0.97,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 2151,
+          "input_tokens": 2557,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 7353
+        "request_bytes": 9121
       },
       {
         "anchor_id": "ANC-047",
@@ -580,51 +148,238 @@
           "overridden": false
         },
         "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "near_threshold": true,
-        "confirmed": true,
         "verdict": "satisfied",
         "answers": {
           "relevant": {
             "type": "choice",
             "choice": "yes",
-            "confidence": 0.69,
+            "confidence": 1.0,
             "probabilities": {
-              "yes": 0.79,
-              "no": 0.2,
-              "unclear": 0.01
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
-            "choice": "no",
-            "confidence": 0.72,
+            "choice": "yes",
+            "confidence": 1.0,
             "probabilities": {
-              "yes": 0.08,
-              "no": 0.81,
-              "unclear": 0.11
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.97,
+            "confidence": 1.0,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.98,
-              "unclear": 0.01
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
             }
           }
         },
-        "min_confidence": 0.69,
+        "min_confidence": 1.0,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1931,
+          "input_tokens": 2337,
           "output_tokens": 117
         },
-        "attempts": 2,
-        "item_chars_sent": 3531,
+        "attempts": 1,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6613
+        "request_bytes": 8381
+      },
+      {
+        "anchor_id": "ANC-048",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The GitHub poll interval of atm-bd defaults to 10 minutes and is configurable in the repository configuration and on the command line; one refresh fetches up to 100 PRs per GraphQL page with few fields and pages past 100 rather than dropping PRs.",
+        "quote": "i think a poll interval for gh ~10 minutes would be fine for default as long as we are doing queries that return a lot of info w/ small token cost. remember we get >100 gh stack (> 100 pr) frequently on multiple projects at the same time.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-18",
+        "context": "console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067",
+        "anchor_version": 2,
+        "deterministic_check": "default interval 600 s; a repo with 150 PRs yields 150 rows across two pages",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.98,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 2359,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8443
+      },
+      {
+        "anchor_id": "ANC-049",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Before each GitHub refresh atm-bd reads the live remaining quota for the resource its mode uses (graphql or core) via gh api rate_limit; when remaining is below the configured threshold (default 50 percent of the limit) it skips the refresh, keeps cached PR data, shows a paused status with the numbers and the local reset time, and refuses forced refreshes until the quota is back above the threshold.",
+        "quote": "can you file another feature request to add the poll interval AND token budget(s) for gh? it should also stop polling if token drop below a threshold (start w/ 50%)",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-18",
+        "context": "console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067",
+        "anchor_version": 2,
+        "deterministic_check": "a stubbed rate_limit at 49 percent skips the refresh and shows the pause line with a local reset time; at 51 percent after reset the refresh runs",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.98,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 2383,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8615
+      },
+      {
+        "anchor_id": "ANC-092",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd must run data collection, state evaluation and event firing as three separate stages, each reading its input from and writing its output to persisted state, with no single call performing more than one of them.",
+        "quote": "collect-data (cron and/or tui) and save to db -> process data (determine state) and save to db -> fire events (after debouncing & aggregation)",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-21",
+        "context": "phase-bl planning 2026-10-21",
+        "anchor_version": 2,
+        "deterministic_check": "a test calls each stage alone with files in the state directory and shows no stage reads another stage's in-memory result or performs two stages",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.95,
+            "probabilities": {
+              "yes": 0.03,
+              "no": 0.97,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.95,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 2344,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8436
       },
       {
         "anchor_id": "ANC-093",
@@ -660,34 +415,97 @@
           "addressed": {
             "type": "choice",
             "choice": "yes",
-            "confidence": 0.94,
+            "confidence": 0.86,
             "probabilities": {
-              "yes": 0.96,
-              "no": 0.03,
-              "unclear": 0.01
+              "yes": 0.91,
+              "no": 0.06,
+              "unclear": 0.03
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.97,
+            "confidence": 0.95,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.98,
+              "yes": 0.02,
+              "no": 0.97,
               "unclear": 0.01
             }
           }
         },
-        "min_confidence": 0.94,
+        "min_confidence": 0.86,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1919,
+          "input_tokens": 2325,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6583
+        "request_bytes": 8351
+      },
+      {
+        "anchor_id": "ANC-096",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd must raise an ATM message request only when evaluation of the current persisted state shows a defined state transition, never because a particular collection run read fresh data.",
+        "quote": "state evaluation based on current state. specific state transitions would trigger 'atm message request'.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-21",
+        "context": "phase-bl planning 2026-10-21",
+        "anchor_version": 2,
+        "deterministic_check": "a test shows a request is raised only when persisted state changes between defined states, and none when a collection reads fresh but unchanged data",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.95,
+            "probabilities": {
+              "yes": 0.97,
+              "no": 0.03,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.99,
+              "no": 0.01,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.95,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 2331,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8394
       },
       {
         "anchor_id": "ANC-097",
@@ -708,51 +526,49 @@
           "overridden": false
         },
         "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "near_threshold": true,
-        "confirmed": true,
         "verdict": "satisfied",
         "answers": {
           "relevant": {
             "type": "choice",
             "choice": "yes",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 1.0,
-              "no": 0.0,
+              "yes": 0.99,
+              "no": 0.01,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "yes",
-            "confidence": 0.62,
+            "confidence": 0.79,
             "probabilities": {
-              "yes": 0.75,
-              "no": 0.19,
-              "unclear": 0.06
+              "yes": 0.86,
+              "no": 0.11,
+              "unclear": 0.03
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.86,
+            "confidence": 0.76,
             "probabilities": {
-              "yes": 0.08,
-              "no": 0.91,
-              "unclear": 0.01
+              "yes": 0.14,
+              "no": 0.84,
+              "unclear": 0.02
             }
           }
         },
-        "min_confidence": 0.62,
+        "min_confidence": 0.76,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1925,
+          "input_tokens": 2331,
           "output_tokens": 117
         },
-        "attempts": 2,
-        "item_chars_sent": 3531,
+        "attempts": 1,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6580
+        "request_bytes": 8348
       },
       {
         "anchor_id": "ANC-098",
@@ -798,24 +614,24 @@
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.94,
+            "confidence": 0.95,
             "probabilities": {
               "yes": 0.03,
-              "no": 0.96,
-              "unclear": 0.01
+              "no": 0.97,
+              "unclear": 0.0
             }
           }
         },
-        "min_confidence": 0.94,
+        "min_confidence": 0.95,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1911,
+          "input_tokens": 2317,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6533
+        "request_bytes": 8301
       },
       {
         "anchor_id": "ANC-099",
@@ -836,51 +652,49 @@
           "overridden": false
         },
         "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "near_threshold": true,
-        "confirmed": true,
         "verdict": "satisfied",
         "answers": {
           "relevant": {
             "type": "choice",
             "choice": "yes",
-            "confidence": 0.92,
+            "confidence": 0.97,
             "probabilities": {
-              "yes": 0.95,
-              "no": 0.05,
+              "yes": 0.98,
+              "no": 0.02,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "yes",
-            "confidence": 0.66,
+            "confidence": 0.82,
             "probabilities": {
-              "yes": 0.77,
-              "no": 0.18,
-              "unclear": 0.05
+              "yes": 0.88,
+              "no": 0.09,
+              "unclear": 0.03
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.82,
+            "confidence": 0.83,
             "probabilities": {
               "yes": 0.1,
-              "no": 0.88,
-              "unclear": 0.02
+              "no": 0.89,
+              "unclear": 0.01
             }
           }
         },
-        "min_confidence": 0.66,
+        "min_confidence": 0.82,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1925,
+          "input_tokens": 2331,
           "output_tokens": 117
         },
-        "attempts": 2,
-        "item_chars_sent": 3531,
+        "attempts": 1,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6589
+        "request_bytes": 8357
       },
       {
         "anchor_id": "ANC-100",
@@ -926,24 +740,24 @@
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.95,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 0.03,
-              "no": 0.97,
+              "yes": 0.01,
+              "no": 0.99,
               "unclear": 0.0
             }
           }
         },
-        "min_confidence": 0.95,
+        "min_confidence": 0.98,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1924,
+          "input_tokens": 2330,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6580
+        "request_bytes": 8348
       },
       {
         "anchor_id": "ANC-101",
@@ -964,8 +778,6 @@
           "overridden": false
         },
         "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "near_threshold": true,
-        "confirmed": true,
         "verdict": "satisfied",
         "answers": {
           "relevant": {
@@ -981,34 +793,97 @@
           "addressed": {
             "type": "choice",
             "choice": "yes",
-            "confidence": 0.88,
+            "confidence": 0.91,
             "probabilities": {
-              "yes": 0.92,
-              "no": 0.07,
+              "yes": 0.94,
+              "no": 0.05,
               "unclear": 0.01
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.69,
+            "confidence": 0.74,
             "probabilities": {
-              "yes": 0.2,
-              "no": 0.79,
+              "yes": 0.16,
+              "no": 0.83,
               "unclear": 0.01
             }
           }
         },
-        "min_confidence": 0.69,
+        "min_confidence": 0.74,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1921,
+          "input_tokens": 2327,
           "output_tokens": 117
         },
-        "attempts": 2,
-        "item_chars_sent": 3531,
+        "attempts": 1,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6588
+        "request_bytes": 8356
+      },
+      {
+        "anchor_id": "ANC-102",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd cron must print the same status information from persisted state when it skipped collection as when it collected.",
+        "quote": "cron needs to return the same info even if it didn't collect the info.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-21",
+        "context": "phase-bl planning 2026-10-21",
+        "anchor_version": 2,
+        "deterministic_check": "a test compares the output of a skipped-collection cron run with a collecting run on the same persisted state and finds the same status information",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 1.0,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 2319,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8321
       },
       {
         "anchor_id": "ANC-103",
@@ -1044,34 +919,34 @@
           "addressed": {
             "type": "choice",
             "choice": "yes",
-            "confidence": 0.97,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 0.98,
+              "yes": 0.99,
               "no": 0.01,
-              "unclear": 0.01
+              "unclear": 0.0
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.95,
+            "confidence": 0.97,
             "probabilities": {
               "yes": 0.02,
-              "no": 0.97,
-              "unclear": 0.01
+              "no": 0.98,
+              "unclear": 0.0
             }
           }
         },
-        "min_confidence": 0.95,
+        "min_confidence": 0.97,
         "explanation": "The directive is carried forward.",
         "usage": {
-          "input_tokens": 1931,
+          "input_tokens": 2337,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6592
+        "request_bytes": 8360
       },
       {
         "anchor_id": "ANC-017",
@@ -1097,44 +972,44 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 0.97,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
+              "yes": 0.02,
+              "no": 0.98,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
               "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
+              "no": 0.99,
+              "unclear": 0.01
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
+              "yes": 0.01,
+              "no": 0.99,
               "unclear": 0.0
             }
           }
         },
-        "min_confidence": 0.98,
+        "min_confidence": 0.97,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1920,
+          "input_tokens": 2326,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6585
+        "request_bytes": 8353
       },
       {
         "anchor_id": "ANC-018",
@@ -1160,14 +1035,24 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.97,
+            "confidence": 0.88,
             "probabilities": {
-              "yes": 0.02,
-              "no": 0.98,
+              "yes": 0.08,
+              "no": 0.92,
               "unclear": 0.0
             }
           },
           "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.97,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 0.98,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
             "type": "choice",
             "choice": "no",
             "confidence": 1.0,
@@ -1176,28 +1061,18 @@
               "no": 1.0,
               "unclear": 0.0
             }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.98,
-            "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
-              "unclear": 0.0
-            }
           }
         },
-        "min_confidence": 0.97,
+        "min_confidence": 0.88,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1930,
+          "input_tokens": 2336,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6604
+        "request_bytes": 8372
       },
       {
         "anchor_id": "ANC-019",
@@ -1243,10 +1118,10 @@
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
+              "yes": 0.01,
+              "no": 0.99,
               "unclear": 0.0
             }
           }
@@ -1254,13 +1129,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1992,
+          "input_tokens": 2398,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6670
+        "request_bytes": 8438
       },
       {
         "anchor_id": "ANC-020",
@@ -1298,18 +1173,18 @@
             "choice": "no",
             "confidence": 0.98,
             "probabilities": {
-              "yes": 0.01,
+              "yes": 0.0,
               "no": 0.99,
-              "unclear": 0.0
+              "unclear": 0.01
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 1.0,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
+              "yes": 0.0,
+              "no": 1.0,
               "unclear": 0.0
             }
           }
@@ -1317,13 +1192,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1985,
+          "input_tokens": 2391,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6669
+        "request_bytes": 8437
       },
       {
         "anchor_id": "ANC-021",
@@ -1359,11 +1234,11 @@
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
               "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
+              "no": 0.99,
+              "unclear": 0.01
             }
           },
           "contradicted": {
@@ -1380,13 +1255,13 @@
         "min_confidence": 0.97,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1940,
+          "input_tokens": 2346,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6555
+        "request_bytes": 8323
       },
       {
         "anchor_id": "ANC-023",
@@ -1412,10 +1287,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 0.97,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
+              "yes": 0.02,
+              "no": 0.98,
               "unclear": 0.0
             }
           },
@@ -1440,16 +1315,16 @@
             }
           }
         },
-        "min_confidence": 0.98,
+        "min_confidence": 0.97,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1914,
+          "input_tokens": 2320,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6535
+        "request_bytes": 8303
       },
       {
         "anchor_id": "ANC-024",
@@ -1475,10 +1350,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.94,
+            "confidence": 0.95,
             "probabilities": {
-              "yes": 0.04,
-              "no": 0.96,
+              "yes": 0.03,
+              "no": 0.97,
               "unclear": 0.0
             }
           },
@@ -1503,16 +1378,16 @@
             }
           }
         },
-        "min_confidence": 0.94,
+        "min_confidence": 0.95,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1933,
+          "input_tokens": 2339,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6598
+        "request_bytes": 8366
       },
       {
         "anchor_id": "ANC-025",
@@ -1569,13 +1444,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1926,
+          "input_tokens": 2332,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6588
+        "request_bytes": 8356
       },
       {
         "anchor_id": "ANC-026",
@@ -1632,13 +1507,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1916,
+          "input_tokens": 2322,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6516
+        "request_bytes": 8284
       },
       {
         "anchor_id": "ANC-027",
@@ -1664,10 +1539,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 0.94,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
+              "yes": 0.04,
+              "no": 0.96,
               "unclear": 0.0
             }
           },
@@ -1684,24 +1559,24 @@
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
+              "yes": 0.01,
+              "no": 0.99,
               "unclear": 0.0
             }
           }
         },
-        "min_confidence": 0.98,
+        "min_confidence": 0.94,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1931,
+          "input_tokens": 2337,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6619
+        "request_bytes": 8387
       },
       {
         "anchor_id": "ANC-028",
@@ -1727,10 +1602,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.95,
+            "confidence": 0.89,
             "probabilities": {
-              "yes": 0.03,
-              "no": 0.97,
+              "yes": 0.07,
+              "no": 0.93,
               "unclear": 0.0
             }
           },
@@ -1755,16 +1630,16 @@
             }
           }
         },
-        "min_confidence": 0.95,
+        "min_confidence": 0.89,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1988,
+          "input_tokens": 2394,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6630
+        "request_bytes": 8398
       },
       {
         "anchor_id": "ANC-030",
@@ -1790,21 +1665,21 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.97,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 0.02,
-              "no": 0.98,
+              "yes": 0.01,
+              "no": 0.99,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 1.0,
             "probabilities": {
               "yes": 0.0,
-              "no": 0.99,
-              "unclear": 0.01
+              "no": 1.0,
+              "unclear": 0.0
             }
           },
           "contradicted": {
@@ -1818,16 +1693,16 @@
             }
           }
         },
-        "min_confidence": 0.97,
+        "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1988,
+          "input_tokens": 2394,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6733
+        "request_bytes": 8501
       },
       {
         "anchor_id": "ANC-031",
@@ -1853,10 +1728,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
+              "yes": 0.01,
+              "no": 0.99,
               "unclear": 0.0
             }
           },
@@ -1884,13 +1759,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1918,
+          "input_tokens": 2324,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6513
+        "request_bytes": 8281
       },
       {
         "anchor_id": "ANC-032",
@@ -1903,6 +1778,195 @@
         "context": "bi-6 open question B, Rand to fenix 2026-10-18; spec rows bi-1 and bi-19 show pass on merged PRs",
         "anchor_version": 2,
         "deterministic_check": "fixture with a merged PR whose last run failed renders a fail glyph per ANC-030; one whose last run passed renders U+F062C #2EA043; neither renders U+F01D8",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "not_applicable",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.85,
+            "probabilities": {
+              "yes": 0.09,
+              "no": 0.9,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.97,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 0.98,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.85,
+        "explanation": "The anchor does not govern this bead.",
+        "usage": {
+          "input_tokens": 2348,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8400
+      },
+      {
+        "anchor_id": "ANC-033",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The status table's pr cell must link the PR number to the PR url GitHub returned for that PR (PullRequest.url); it must not derive the link from a base URL or call gh pr view per PR.",
+        "quote": "github url should be fine. I assume it would work.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-18",
+        "context": "bi-6 open question C, Rand to fenix 2026-10-18; replaces the spec's base-URL derivation text",
+        "anchor_version": 2,
+        "deterministic_check": "markdown row for a PR with url U renders [#n](U); a PR with empty url renders #n unlinked; the stubbed gh records no pr view call",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "not_applicable",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.85,
+            "probabilities": {
+              "yes": 0.1,
+              "no": 0.9,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.94,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.96,
+              "unclear": 0.03
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.85,
+        "explanation": "The anchor does not govern this bead.",
+        "usage": {
+          "input_tokens": 2342,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8388
+      },
+      {
+        "anchor_id": "ANC-035",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The status table's state cell must show the icon of the agent working the sprint whenever one is active (a dev agent, severity or QA), and the sprint's own state icon only when no agent is on it; a blocked sprint with an active agent must show the agent, never the lock.",
+        "quote": "If no agent is working the sprint, show the sprint's state icon (closed, blocked, ready, not\\_ready, and the rest). Because an agent wins over state, a blocked sprint that has an agent on it shows the agent. The lock appears only when nobody holds the sprint.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-17",
+        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
+        "anchor_version": 3,
+        "deterministic_check": "fixture: a blocked sprint with an active dev agent renders that agent's glyph, not U+F033E; the same sprint with no agent renders U+F033E #FA8537",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "not_applicable",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.95,
+            "probabilities": {
+              "yes": 0.03,
+              "no": 0.97,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.95,
+        "explanation": "The anchor does not govern this bead.",
+        "usage": {
+          "input_tokens": 2360,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8503
+      },
+      {
+        "anchor_id": "ANC-036",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "When more than one agent is active on a sprint, the state cell must draw one icon per active agent, every agent drawn and none collapsed, truncated or dropped, so the cell widens by one glyph per extra agent.",
+        "quote": "The state cell shows one icon per active agent (Rand 2026-10-18: every active agent is drawn, the column widens by one cell per extra agent), else one icon picked in this order:",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-17",
+        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
+        "anchor_version": 2,
+        "deterministic_check": "fixture with two active agents renders both glyphs in the state cell and nothing else; a third active agent adds a third glyph",
         "kind": "directive",
         "leaning": "not_applicable",
         "question_set": {
@@ -1947,25 +2011,214 @@
         "min_confidence": 0.91,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1942,
+          "input_tokens": 2345,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6632
+        "request_bytes": 8424
       },
       {
-        "anchor_id": "ANC-033",
+        "anchor_id": "ANC-037",
         "source_type": "ANC",
         "source_ref": null,
-        "statement": "The status table's pr cell must link the PR number to the PR url GitHub returned for that PR (PullRequest.url); it must not derive the link from a base URL or call gh pr view per PR.",
-        "quote": "github url should be fine. I assume it would work.",
+        "statement": "The status table's ci cell must hold exactly one icon for the sprint's shown PR head: pass U+F062C #2EA043, running U+F0898 #58A6FF, none U+F01D8 #2D81E0 only when no CI run exists for that head, fail per ANC-030, or ? per ANC-034 when the CI state is unknown.",
+        "quote": "| ci | one icon | pass, fail, running, none |",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-17",
+        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
+        "anchor_version": 3,
+        "deterministic_check": "fixtures: all checks passed renders U+F062C #2EA043; a run in progress renders U+F0898 #58A6FF; no run renders U+F01D8 #2D81E0; every ci cell is one glyph",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "not_applicable",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.86,
+            "probabilities": {
+              "yes": 0.08,
+              "no": 0.91,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 0.99,
+              "unclear": 0.01
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.86,
+        "explanation": "The anchor does not govern this bead.",
+        "usage": {
+          "input_tokens": 2390,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8455
+      },
+      {
+        "anchor_id": "ANC-040",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The emitted markdown table must use exactly the spec's header line | sprint | state | ci | pr | and alignment row |---|:-:|:-:|---|, with one row per sprint and a glyph in each icon slot.",
+        "quote": "| sprint | state | ci | pr |\n|---|:-:|:-:|---|\n| bi-1 | <icon> | <icon> | <icon> [#118](https://github.com/<owner>/<repo>/pull/118) |",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-17",
+        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
+        "anchor_version": 4,
+        "deterministic_check": "the first two emitted lines equal the spec's header and alignment row byte for byte; row count equals the sprint count",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "not_applicable",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.88,
+            "probabilities": {
+              "yes": 0.07,
+              "no": 0.92,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.95,
+            "probabilities": {
+              "yes": 0.02,
+              "no": 0.97,
+              "unclear": 0.01
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.88,
+        "explanation": "The anchor does not govern this bead.",
+        "usage": {
+          "input_tokens": 2344,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8390
+      },
+      {
+        "anchor_id": "ANC-041",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Every time atm-bd prints for a person (console header, rows, PR sheet, Diagnostics view, cron digest) is 24-hour local time produced by the program's one display formatter; every time it writes to a file or log is UTC ISO-8601 with a Z suffix.",
+        "quote": "all time 'under the hood' should be utc, displayed times are 24h local format.",
         "stated_by": "Rand",
         "stated_at": "2026-10-18",
-        "context": "bi-6 open question C, Rand to fenix 2026-10-18; replaces the spec's base-URL derivation text",
+        "context": "console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067",
         "anchor_version": 2,
-        "deterministic_check": "markdown row for a PR with url U renders [#n](U); a PR with empty url renders #n unlinked; the stubbed gh records no pr view call",
+        "deterministic_check": "no datetime formatting for display outside the one formatter; log and snapshot timestamps end in Z",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "not_applicable",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.94,
+            "probabilities": {
+              "yes": 0.04,
+              "no": 0.96,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.94,
+        "explanation": "The anchor does not govern this bead.",
+        "usage": {
+          "input_tokens": 2372,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8463
+      },
+      {
+        "anchor_id": "ANC-044",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The atm-bd Diagnostics view reads only the sc-observability log, extracts the timestamp (rendered 24-hour local) and the level, and prints the entry's message unchanged; it parses nothing else from the entry.",
+        "quote": "the <fix> <error kind> <details> should just come from the log entries. i.e. I don't want the diagnostic viewer doing any special processing of structured log message besides time and error level extract.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-18",
+        "context": "console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067",
+        "anchor_version": 2,
+        "deterministic_check": "the view's source is the logger query; the render concatenates local time, level and message with no per-kind branching",
         "kind": "directive",
         "leaning": "not_applicable",
         "question_set": {
@@ -1999,10 +2252,10 @@
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
+              "yes": 0.01,
+              "no": 0.99,
               "unclear": 0.0
             }
           }
@@ -2010,582 +2263,13 @@
         "min_confidence": 0.97,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1936,
+          "input_tokens": 2346,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6620
-      },
-      {
-        "anchor_id": "ANC-034",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "The status table must render an unknown member (unknown sprint, ci or pr state, or GitHub data that is off, rate-limited or truncated) as the glyph ? in #2D81E0, never as the no-PR dash or the ci none glyph.",
-        "quote": "Unknown data the ? you showed would be fine. I would lighten the shade a bit (use same blue we used for the other items in spec)",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-18",
-        "context": "bi-6 open question E, Rand to fenix 2026-10-18; #2D81E0 is the spec's blue for bead open, PR open and ci none",
-        "anchor_version": 2,
-        "deterministic_check": "icon table test asserts ('?', '#2D81E0') for each unknown member; a GhStatus-off fixture renders ? in both ci and pr cells and a Problems row",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "near_threshold": true,
-        "confirmed": true,
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.7,
-            "probabilities": {
-              "yes": 0.19,
-              "no": 0.8,
-              "unclear": 0.01
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.98,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 0.99,
-              "unclear": 0.01
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          }
-        },
-        "min_confidence": 0.7,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1957,
-          "output_tokens": 117
-        },
-        "attempts": 2,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6676
-      },
-      {
-        "anchor_id": "ANC-035",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "The status table's state cell must show the icon of the agent working the sprint whenever one is active (a dev agent, severity or QA), and the sprint's own state icon only when no agent is on it; a blocked sprint with an active agent must show the agent, never the lock.",
-        "quote": "If no agent is working the sprint, show the sprint's state icon (closed, blocked, ready, not\\_ready, and the rest). Because an agent wins over state, a blocked sprint that has an agent on it shows the agent. The lock appears only when nobody holds the sprint.",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-17",
-        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
-        "anchor_version": 3,
-        "deterministic_check": "fixture: a blocked sprint with an active dev agent renders that agent's glyph, not U+F033E; the same sprint with no agent renders U+F033E #FA8537",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.92,
-            "probabilities": {
-              "yes": 0.05,
-              "no": 0.95,
-              "unclear": 0.0
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          }
-        },
-        "min_confidence": 0.92,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1954,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6735
-      },
-      {
-        "anchor_id": "ANC-036",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "When more than one agent is active on a sprint, the state cell must draw one icon per active agent, every agent drawn and none collapsed, truncated or dropped, so the cell widens by one glyph per extra agent.",
-        "quote": "The state cell shows one icon per active agent (Rand 2026-10-18: every active agent is drawn, the column widens by one cell per extra agent), else one icon picked in this order:",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-17",
-        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
-        "anchor_version": 2,
-        "deterministic_check": "fixture with two active agents renders both glyphs in the state cell and nothing else; a third active agent adds a third glyph",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.95,
-            "probabilities": {
-              "yes": 0.03,
-              "no": 0.97,
-              "unclear": 0.0
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          }
-        },
-        "min_confidence": 0.95,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1939,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6656
-      },
-      {
-        "anchor_id": "ANC-037",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "The status table's ci cell must hold exactly one icon for the sprint's shown PR head: pass U+F062C #2EA043, running U+F0898 #58A6FF, none U+F01D8 #2D81E0 only when no CI run exists for that head, fail per ANC-030, or ? per ANC-034 when the CI state is unknown.",
-        "quote": "| ci | one icon | pass, fail, running, none |",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-17",
-        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
-        "anchor_version": 3,
-        "deterministic_check": "fixtures: all checks passed renders U+F062C #2EA043; a run in progress renders U+F0898 #58A6FF; no run renders U+F01D8 #2D81E0; every ci cell is one glyph",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.83,
-            "probabilities": {
-              "yes": 0.1,
-              "no": 0.89,
-              "unclear": 0.01
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          }
-        },
-        "min_confidence": 0.83,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1984,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6687
-      },
-      {
-        "anchor_id": "ANC-038",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "The status table's pr cell must render the PR state icon (open, draft, merged or closed) followed by the PR number linked as [#n](url) per ANC-033, and exactly the dash - when the sprint has no PR.",
-        "quote": "| pr | an icon and the PR number, or `-` when there is no PR | open, draft, merged, closed |",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-17",
-        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
-        "anchor_version": 2,
-        "deterministic_check": "fixture: open PR 118 renders the open glyph then [#118](url); merged PR renders the merged glyph then the link; no PR renders exactly -",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.95,
-            "probabilities": {
-              "yes": 0.03,
-              "no": 0.97,
-              "unclear": 0.0
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.98,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 0.99,
-              "unclear": 0.01
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          }
-        },
-        "min_confidence": 0.95,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1942,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6630
-      },
-      {
-        "anchor_id": "ANC-039",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "atm-bd cron --phase <x> --md-table must print the layout C markdown status table (form per ANC-040) to stdout.",
-        "quote": "Command flag for the table output: `--md-table`, or `--md --table`.",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-17",
-        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
-        "anchor_version": 4,
-        "deterministic_check": "CLI test: cron --phase bi --md-table over a fixture snapshot prints to stdout a table whose first line is | sprint | state | ci | pr |",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.77,
-            "probabilities": {
-              "yes": 0.15,
-              "no": 0.85,
-              "unclear": 0.0
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.94,
-            "probabilities": {
-              "yes": 0.01,
-              "no": 0.96,
-              "unclear": 0.03
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.98,
-            "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
-              "unclear": 0.0
-            }
-          }
-        },
-        "min_confidence": 0.77,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1920,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6541
-      },
-      {
-        "anchor_id": "ANC-040",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "The emitted markdown table must use exactly the spec's header line | sprint | state | ci | pr | and alignment row |---|:-:|:-:|---|, with one row per sprint and a glyph in each icon slot.",
-        "quote": "| sprint | state | ci | pr |\n|---|:-:|:-:|---|\n| bi-1 | <icon> | <icon> | <icon> [#118](https://github.com/<owner>/<repo>/pull/118) |",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-17",
-        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
-        "anchor_version": 4,
-        "deterministic_check": "the first two emitted lines equal the spec's header and alignment row byte for byte; row count equals the sprint count",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.79,
-            "probabilities": {
-              "yes": 0.13,
-              "no": 0.86,
-              "unclear": 0.01
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.98,
-            "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
-              "unclear": 0.0
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.97,
-            "probabilities": {
-              "yes": 0.01,
-              "no": 0.98,
-              "unclear": 0.01
-            }
-          }
-        },
-        "min_confidence": 0.79,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1938,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6622
-      },
-      {
-        "anchor_id": "ANC-041",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "Every time atm-bd prints for a person (console header, rows, PR sheet, Diagnostics view, cron digest) is 24-hour local time produced by the program's one display formatter; every time it writes to a file or log is UTC ISO-8601 with a Z suffix.",
-        "quote": "all time 'under the hood' should be utc, displayed times are 24h local format.",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-18",
-        "context": "console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067",
-        "anchor_version": 2,
-        "deterministic_check": "no datetime formatting for display outside the one formatter; log and snapshot timestamps end in Z",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.98,
-            "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
-              "unclear": 0.0
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          }
-        },
-        "min_confidence": 0.98,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1966,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6695
-      },
-      {
-        "anchor_id": "ANC-044",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "The atm-bd Diagnostics view reads only the sc-observability log, extracts the timestamp (rendered 24-hour local) and the level, and prints the entry's message unchanged; it parses nothing else from the entry.",
-        "quote": "the <fix> <error kind> <details> should just come from the log entries. i.e. I don't want the diagnostic viewer doing any special processing of structured log message besides time and error level extract.",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-18",
-        "context": "console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067",
-        "anchor_version": 2,
-        "deterministic_check": "the view's source is the logger query; the render concatenates local time, level and message with no per-kind branching",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.98,
-            "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
-              "unclear": 0.0
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.98,
-            "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
-              "unclear": 0.0
-            }
-          }
-        },
-        "min_confidence": 0.98,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1940,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6632
+        "request_bytes": 8400
       },
       {
         "anchor_id": "ANC-045",
@@ -2611,24 +2295,14 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.92,
+            "confidence": 0.91,
             "probabilities": {
-              "yes": 0.04,
-              "no": 0.95,
+              "yes": 0.05,
+              "no": 0.94,
               "unclear": 0.01
             }
           },
           "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          },
-          "contradicted": {
             "type": "choice",
             "choice": "no",
             "confidence": 0.97,
@@ -2637,81 +2311,28 @@
               "no": 0.98,
               "unclear": 0.01
             }
-          }
-        },
-        "min_confidence": 0.92,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1936,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6646
-      },
-      {
-        "anchor_id": "ANC-046",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "A failed command is logged at level error with the message <fix in backticks> <command words> [<exit code>] <first stderr line>, composed once by the writer; the command words are the executable and subcommand, not the full argument vector.",
-        "quote": "00:10:18 error: `check gh and retry` gh api graphql [1] gh: API rate limit already exceeded for user ID 8083956.",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-18",
-        "context": "console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067",
-        "anchor_version": 2,
-        "deterministic_check": "an error entry has level error and a non-empty message matching the form; a stubbed gh failure renders the example line",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.8,
-            "probabilities": {
-              "yes": 0.12,
-              "no": 0.87,
-              "unclear": 0.01
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.98,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 0.99,
-              "unclear": 0.01
-            }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.95,
             "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
+              "yes": 0.02,
+              "no": 0.97,
+              "unclear": 0.01
             }
           }
         },
-        "min_confidence": 0.8,
+        "min_confidence": 0.91,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1949,
+          "input_tokens": 2342,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6687
+        "request_bytes": 8414
       },
       {
         "anchor_id": "ANC-050",
@@ -2747,34 +2368,34 @@
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.94,
+            "confidence": 0.95,
             "probabilities": {
-              "yes": 0.03,
-              "no": 0.96,
+              "yes": 0.02,
+              "no": 0.97,
               "unclear": 0.01
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.85,
+            "confidence": 0.86,
             "probabilities": {
-              "yes": 0.09,
-              "no": 0.9,
+              "yes": 0.08,
+              "no": 0.91,
               "unclear": 0.01
             }
           }
         },
-        "min_confidence": 0.85,
+        "min_confidence": 0.86,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1924,
+          "input_tokens": 2330,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6570
+        "request_bytes": 8338
       },
       {
         "anchor_id": "ANC-073",
@@ -2860,13 +2481,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 2115,
+          "input_tokens": 2521,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 7234
+        "request_bytes": 9002
       },
       {
         "anchor_id": "ANC-091",
@@ -2892,107 +2513,44 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.92,
+            "confidence": 0.89,
             "probabilities": {
-              "yes": 0.05,
-              "no": 0.95,
+              "yes": 0.07,
+              "no": 0.93,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
               "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
+              "no": 0.99,
+              "unclear": 0.01
             }
           },
           "contradicted": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.97,
             "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
+              "yes": 0.02,
+              "no": 0.98,
               "unclear": 0.0
             }
           }
         },
-        "min_confidence": 0.92,
+        "min_confidence": 0.89,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1932,
+          "input_tokens": 2338,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6586
-      },
-      {
-        "anchor_id": "ANC-094",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "atm-bd must deliver ATM messages from an event-delivery stage that runs on its own schedule; a cron tick or a TUI refresh must send no ATM message.",
-        "quote": "atm messages occur on a specified schedule based on timing. it has nothing to do with either tui or cron.",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-21",
-        "context": "phase-bl planning 2026-10-21",
-        "anchor_version": 2,
-        "deterministic_check": "a test runs a cron tick and a console refresh against a stub ATM sender and asserts zero sends; the delivery stage sends on its own schedule",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.76,
-            "probabilities": {
-              "yes": 0.16,
-              "no": 0.84,
-              "unclear": 0.0
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.85,
-            "probabilities": {
-              "yes": 0.03,
-              "no": 0.9,
-              "unclear": 0.07
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.88,
-            "probabilities": {
-              "yes": 0.06,
-              "no": 0.92,
-              "unclear": 0.02
-            }
-          }
-        },
-        "min_confidence": 0.76,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1931,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6611
+        "request_bytes": 8354
       },
       {
         "anchor_id": "ANC-095",
@@ -3018,10 +2576,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.92,
+            "confidence": 0.89,
             "probabilities": {
-              "yes": 0.05,
-              "no": 0.95,
+              "yes": 0.07,
+              "no": 0.93,
               "unclear": 0.0
             }
           },
@@ -3046,16 +2604,16 @@
             }
           }
         },
-        "min_confidence": 0.92,
+        "min_confidence": 0.89,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1918,
+          "input_tokens": 2324,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6592
+        "request_bytes": 8360
       },
       {
         "anchor_id": "ANC-104",
@@ -3091,11 +2649,11 @@
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
               "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
+              "no": 0.99,
+              "unclear": 0.01
             }
           },
           "contradicted": {
@@ -3112,13 +2670,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1918,
+          "input_tokens": 2324,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6563
+        "request_bytes": 8331
       },
       {
         "anchor_id": "ANC-105",
@@ -3175,13 +2733,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1919,
+          "input_tokens": 2325,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6558
+        "request_bytes": 8326
       },
       {
         "anchor_id": "ANC-106",
@@ -3207,21 +2765,21 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 0.97,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
+              "yes": 0.02,
+              "no": 0.98,
               "unclear": 0.0
             }
           },
           "addressed": {
             "type": "choice",
             "choice": "no",
-            "confidence": 1.0,
+            "confidence": 0.98,
             "probabilities": {
               "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
+              "no": 0.99,
+              "unclear": 0.01
             }
           },
           "contradicted": {
@@ -3235,16 +2793,16 @@
             }
           }
         },
-        "min_confidence": 0.98,
+        "min_confidence": 0.97,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1926,
+          "input_tokens": 2332,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6631
+        "request_bytes": 8399
       },
       {
         "anchor_id": "ANC-107",
@@ -3270,10 +2828,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.98,
+            "confidence": 1.0,
             "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
+              "yes": 0.0,
+              "no": 1.0,
               "unclear": 0.0
             }
           },
@@ -3298,16 +2856,16 @@
             }
           }
         },
-        "min_confidence": 0.98,
+        "min_confidence": 1.0,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1921,
+          "input_tokens": 2327,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6582
+        "request_bytes": 8350
       },
       {
         "anchor_id": "ANC-108",
@@ -3333,10 +2891,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.92,
+            "confidence": 0.88,
             "probabilities": {
-              "yes": 0.05,
-              "no": 0.95,
+              "yes": 0.08,
+              "no": 0.92,
               "unclear": 0.0
             }
           },
@@ -3361,16 +2919,16 @@
             }
           }
         },
-        "min_confidence": 0.92,
+        "min_confidence": 0.88,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1936,
+          "input_tokens": 2342,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6615
+        "request_bytes": 8383
       },
       {
         "anchor_id": "ANC-109",
@@ -3383,132 +2941,6 @@
         "context": "phase-bl planning 2026-10-21",
         "anchor_version": 2,
         "deterministic_check": "a render test shows a cell with an active agent drawing one agent icon left of the sprint id with QA over sanity over dev, a CI icon and PR number after QA and fixes are green, and the state icon otherwise",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.98,
-            "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
-              "unclear": 0.0
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          }
-        },
-        "min_confidence": 0.98,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1970,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6797
-      },
-      {
-        "anchor_id": "ANC-110",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "the console DAG must draw a sprint's outline green when it is complete with all fixes green, red when it has blocking failures (including while a fix agent, sanity or QA is working on them), and white when its first dev is in progress or it has not started.",
-        "quote": "\"completed sprints (all fixes green) showed up as green outline, sprints w/ blocking failures red, sprints w/ dev in progress or not started white (existing).\" / \"qa fail would show active agent/sanity/qa + red outline (that is how to tell the difference between first dev [white outline] and fix [red outline])\"",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-21",
-        "context": "phase-bl planning 2026-10-21",
-        "anchor_version": 2,
-        "deterministic_check": "a render test asserts green for complete with all fixes green, red for blocking failures including active fix, sanity or QA, and white for first dev or not started",
-        "kind": "directive",
-        "leaning": "not_applicable",
-        "question_set": {
-          "gate": "plan",
-          "version": 1,
-          "overridden": false
-        },
-        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
-        "verdict": "not_applicable",
-        "answers": {
-          "relevant": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.82,
-            "probabilities": {
-              "yes": 0.11,
-              "no": 0.88,
-              "unclear": 0.01
-            }
-          },
-          "addressed": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 1.0,
-            "probabilities": {
-              "yes": 0.0,
-              "no": 1.0,
-              "unclear": 0.0
-            }
-          },
-          "contradicted": {
-            "type": "choice",
-            "choice": "no",
-            "confidence": 0.98,
-            "probabilities": {
-              "yes": 0.01,
-              "no": 0.99,
-              "unclear": 0.0
-            }
-          }
-        },
-        "min_confidence": 0.82,
-        "explanation": "The anchor does not govern this bead.",
-        "usage": {
-          "input_tokens": 1941,
-          "output_tokens": 117
-        },
-        "attempts": 1,
-        "item_chars_sent": 3531,
-        "item_shortened": false,
-        "request_bytes": 6677
-      },
-      {
-        "anchor_id": "ANC-111",
-        "source_type": "ANC",
-        "source_ref": null,
-        "statement": "a DAG cell with no active agent and no green QA must show the blue play icon when the sprint is ready and the blocked icon when it is blocked.",
-        "quote": "other dag cells that are 'ready' would show ready (blue play) icon and blocked cells would show blocked icon.",
-        "stated_by": "Rand",
-        "stated_at": "2026-10-21",
-        "context": "phase-bl planning 2026-10-21",
-        "anchor_version": 2,
-        "deterministic_check": "a render test asserts the blue play icon on a ready sprint and the blocked icon on a blocked sprint with no active agent and no green QA",
         "kind": "directive",
         "leaning": "not_applicable",
         "question_set": {
@@ -3542,6 +2974,132 @@
           "contradicted": {
             "type": "choice",
             "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.97,
+        "explanation": "The anchor does not govern this bead.",
+        "usage": {
+          "input_tokens": 2376,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8565
+      },
+      {
+        "anchor_id": "ANC-110",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "the console DAG must draw a sprint's outline green when it is complete with all fixes green, red when it has blocking failures (including while a fix agent, sanity or QA is working on them), and white when its first dev is in progress or it has not started.",
+        "quote": "\"completed sprints (all fixes green) showed up as green outline, sprints w/ blocking failures red, sprints w/ dev in progress or not started white (existing).\" / \"qa fail would show active agent/sanity/qa + red outline (that is how to tell the difference between first dev [white outline] and fix [red outline])\"",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-21",
+        "context": "phase-bl planning 2026-10-21",
+        "anchor_version": 2,
+        "deterministic_check": "a render test asserts green for complete with all fixes green, red for blocking failures including active fix, sanity or QA, and white for first dev or not started",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "not_applicable",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.88,
+            "probabilities": {
+              "yes": 0.07,
+              "no": 0.92,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.88,
+        "explanation": "The anchor does not govern this bead.",
+        "usage": {
+          "input_tokens": 2347,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 5293,
+        "item_shortened": false,
+        "request_bytes": 8445
+      },
+      {
+        "anchor_id": "ANC-111",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "a DAG cell with no active agent and no green QA must show the blue play icon when the sprint is ready and the blocked icon when it is blocked.",
+        "quote": "other dag cells that are 'ready' would show ready (blue play) icon and blocked cells would show blocked icon.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-21",
+        "context": "phase-bl planning 2026-10-21",
+        "anchor_version": 2,
+        "deterministic_check": "a render test asserts the blue play icon on a ready sprint and the blocked icon on a blocked sprint with no active agent and no green QA",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "not_applicable",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
             "confidence": 1.0,
             "probabilities": {
               "yes": 0.0,
@@ -3550,16 +3108,16 @@
             }
           }
         },
-        "min_confidence": 0.97,
+        "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1919,
+          "input_tokens": 2325,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6569
+        "request_bytes": 8337
       },
       {
         "anchor_id": "ANC-113",
@@ -3616,13 +3174,13 @@
         "min_confidence": 0.98,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1929,
+          "input_tokens": 2335,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6630
+        "request_bytes": 8398
       },
       {
         "anchor_id": "REQ-BI6-AC6",
@@ -3648,10 +3206,10 @@
           "relevant": {
             "type": "choice",
             "choice": "no",
-            "confidence": 0.95,
+            "confidence": 0.91,
             "probabilities": {
-              "yes": 0.03,
-              "no": 0.97,
+              "yes": 0.06,
+              "no": 0.94,
               "unclear": 0.0
             }
           },
@@ -3676,16 +3234,16 @@
             }
           }
         },
-        "min_confidence": 0.95,
+        "min_confidence": 0.91,
         "explanation": "The anchor does not govern this bead.",
         "usage": {
-          "input_tokens": 1922,
+          "input_tokens": 2328,
           "output_tokens": 117
         },
         "attempts": 1,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false,
-        "request_bytes": 6597
+        "request_bytes": 8365
       },
       {
         "anchor_id": "ANC-090",
@@ -3711,20 +3269,138 @@
         "min_confidence": null,
         "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
         "attempts": 0,
-        "item_chars_sent": 3531,
+        "item_chars_sent": 5293,
         "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-034",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The status table must render an unknown member (unknown sprint, ci or pr state, or GitHub data that is off, rate-limited or truncated) as the glyph ? in #2D81E0, never as the no-PR dash or the ci none glyph.",
+        "quote": "Unknown data the ? you showed would be fine. I would lighten the shade a bit (use same blue we used for the other items in spec)",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-18",
+        "context": "bi-6 open question E, Rand to fenix 2026-10-18; #2D81E0 is the spec's blue for bead open, PR open and ci none",
+        "anchor_version": 2,
+        "deterministic_check": "icon table test asserts ('?', '#2D81E0') for each unknown member; a GhStatus-off fixture renders ? in both ci and pr cells and a Problems row",
+        "kind": "directive",
+        "leaning": null,
+        "verdict": "excluded",
+        "answers": null,
+        "min_confidence": null,
+        "exclusion": {
+          "item": "bl-8",
+          "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3"
+        },
+        "explanation": "Excluded from this bead by the anchor's exclude list: bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3.",
+        "attempts": 0
+      },
+      {
+        "anchor_id": "ANC-038",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The status table's pr cell must render the PR state icon (open, draft, merged or closed) followed by the PR number linked as [#n](url) per ANC-033, and exactly the dash - when the sprint has no PR.",
+        "quote": "| pr | an icon and the PR number, or `-` when there is no PR | open, draft, merged, closed |",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-17",
+        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
+        "anchor_version": 2,
+        "deterministic_check": "fixture: open PR 118 renders the open glyph then [#118](url); merged PR renders the merged glyph then the link; no PR renders exactly -",
+        "kind": "directive",
+        "leaning": null,
+        "verdict": "excluded",
+        "answers": null,
+        "min_confidence": null,
+        "exclusion": {
+          "item": "bl-8",
+          "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3"
+        },
+        "explanation": "Excluded from this bead by the anchor's exclude list: bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3.",
+        "attempts": 0
+      },
+      {
+        "anchor_id": "ANC-039",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd cron --phase <x> --md-table must print the layout C markdown status table (form per ANC-040) to stdout.",
+        "quote": "Command flag for the table output: `--md-table`, or `--md --table`.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-17",
+        "context": "bi-6 deliverable 11 (atm-bi-6.group-dev.1): anchor from the spec \"atm-bd cron status table (layout C)\" on develop 914bda28ec5c1515a9b909052c7afab0b14ab1cf, Rand, Oct 17 2026",
+        "anchor_version": 4,
+        "deterministic_check": "CLI test: cron --phase bi --md-table over a fixture snapshot prints to stdout a table whose first line is | sprint | state | ci | pr |",
+        "kind": "directive",
+        "leaning": null,
+        "verdict": "excluded",
+        "answers": null,
+        "min_confidence": null,
+        "exclusion": {
+          "item": "bl-8",
+          "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3"
+        },
+        "explanation": "Excluded from this bead by the anchor's exclude list: bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3.",
+        "attempts": 0
+      },
+      {
+        "anchor_id": "ANC-046",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "A failed command is logged at level error with the message <fix in backticks> <command words> [<exit code>] <first stderr line>, composed once by the writer; the command words are the executable and subcommand, not the full argument vector.",
+        "quote": "00:10:18 error: `check gh and retry` gh api graphql [1] gh: API rate limit already exceeded for user ID 8083956.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-18",
+        "context": "console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067",
+        "anchor_version": 2,
+        "deterministic_check": "an error entry has level error and a non-empty message matching the form; a stubbed gh failure renders the example line",
+        "kind": "directive",
+        "leaning": null,
+        "verdict": "excluded",
+        "answers": null,
+        "min_confidence": null,
+        "exclusion": {
+          "item": "bl-8",
+          "reason": "bl-8 logs a failed read once through the existing program log writer, whose error line form is unchanged by phase-bl"
+        },
+        "explanation": "Excluded from this bead by the anchor's exclude list: bl-8 logs a failed read once through the existing program log writer, whose error line form is unchanged by phase-bl.",
+        "attempts": 0
+      },
+      {
+        "anchor_id": "ANC-094",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd must deliver ATM messages from an event-delivery stage that runs on its own schedule; a cron tick or a TUI refresh must send no ATM message.",
+        "quote": "atm messages occur on a specified schedule based on timing. it has nothing to do with either tui or cron.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-21",
+        "context": "phase-bl planning 2026-10-21",
+        "anchor_version": 2,
+        "deterministic_check": "a test runs a cron tick and a console refresh against a stub ATM sender and asserts zero sends; the delivery stage sends on its own schedule",
+        "kind": "directive",
+        "leaning": null,
+        "verdict": "excluded",
+        "answers": null,
+        "min_confidence": null,
+        "exclusion": {
+          "item": "bl-8",
+          "reason": "bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3"
+        },
+        "explanation": "Excluded from this bead by the anchor's exclude list: bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3.",
+        "attempts": 0
       }
     ],
-    "overrides_applied": [],
+    "overrides_applied": [
+      "ANC-022",
+      "ANC-073"
+    ],
     "item_truncated": false,
     "shortened": [],
-    "report_markdown": "## Anchor gate: plan \u00b7 bl-8 - collector implementation and snapshot builder\n\nRun `plan-20261022T072339Z-bl-8`, model `jev-1.14.0`, threshold 0.6. Counts: not_addressed 1, underspecified 4, satisfied 9, not_applicable 41, deterministic_only 1.\n\n> **bl-8 \u00b7 ANC-092 \u00b7 not addressed** Anchor: atm-bd must run data collection, state evaluation and event firing as three separate stages, each reading its input from and writing its output to persisted state, with no single call performing more than one of them. You said (phase-bl planning 2026-10-21, Oct 21): \"collect-data (cron and/or tui) and save to db -> process data (determine state) and save to db -> fire events (after debouncing & aggregation).\" This bead does not carry the directive forward.\n\n> **bl-8 \u00b7 ANC-048 \u00b7 underspecified** Anchor: The GitHub poll interval of atm-bd defaults to 10 minutes and is configurable in the repository configuration and on the command line; one refresh fetches up to 100 PRs per GraphQL page with few fields and pages past 100 rather than dropping PRs. You said (console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, Oct 18): \"i think a poll interval for gh ~10 minutes would be fine for default as long as we are doing queries that return a lot of info w/ small token cost. remember we get >100 gh stack (> 100 pr) frequently on multiple projects at the same time.\" Jev was not confident (min confidence 0.52); the anchor or the bead may be underspecified. (leaning: not_addressed)\n>   Low: compliance `addressed` answered no at 0.52.\n>   Unstable: two identical requests gave underspecified then not_addressed.\n\n> **bl-8 \u00b7 ANC-049 \u00b7 underspecified** Anchor: Before each GitHub refresh atm-bd reads the live remaining quota for the resource its mode uses (graphql or core) via gh api rate_limit; when remaining is below the configured threshold (default 50 percent of the limit) it skips the refresh, keeps cached PR data, shows a paused status with the numbers and the local reset time, and refuses forced refreshes until the quota is back above the threshold. You said (console lockdown 2026-10-18: Rand's rulings on beads atm-phase-bi.7/.9/.10/.12/.13, ADR-065/066/067, Oct 18): \"can you file another feature request to add the poll interval AND token budget(s) for gh? it should also stop polling if token drop below a threshold (start w/ 50%).\" Jev was not confident (min confidence 0.55); the anchor or the bead may be underspecified. (leaning: not_addressed)\n>   Low: relevance `relevant` answered yes at 0.55.\n\n> **bl-8 \u00b7 ANC-096 \u00b7 underspecified** Anchor: atm-bd must raise an ATM message request only when evaluation of the current persisted state shows a defined state transition, never because a particular collection run read fresh data. You said (phase-bl planning 2026-10-21, Oct 21): \"state evaluation based on current state. specific state transitions would trigger 'atm message request'.\" Jev was not confident (min confidence 0.55); the anchor or the bead may be underspecified. (leaning: not_applicable)\n>   Low: relevance `relevant` answered no at 0.55.\n\n> **bl-8 \u00b7 ANC-102 \u00b7 underspecified** Anchor: atm-bd cron must print the same status information from persisted state when it skipped collection as when it collected. You said (phase-bl planning 2026-10-21, Oct 21): \"cron needs to return the same info even if it didn't collect the info.\" Jev was not confident (min confidence 0.52); the anchor or the bead may be underspecified. (leaning: not_addressed)\n>   Low: compliance `addressed` answered no at 0.52 (second ask).\n>   Unstable: two identical requests gave not_addressed then underspecified.\n\n"
+    "report_markdown": "## Anchor gate: plan · bl-8 - collector implementation and snapshot builder\n\nRun `plan-20261022T073524Z-bl-8`, model `jev-1.14.0`, threshold 0.6. Counts: satisfied 14, not_applicable 36, deterministic_only 1, excluded 5.\n\n> **bl-8 · ANC-034 · excluded** Anchor: The status table must render an unknown member (unknown sprint, ci or pr state, or GitHub data that is off, rate-limited or truncated) as the glyph ? in #2D81E0, never as the no-PR dash or the ci none glyph. Not judged: bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3.\n\n> **bl-8 · ANC-038 · excluded** Anchor: The status table's pr cell must render the PR state icon (open, draft, merged or closed) followed by the PR number linked as [#n](url) per ANC-033, and exactly the dash - when the sprint has no PR. Not judged: bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3.\n\n> **bl-8 · ANC-039 · excluded** Anchor: atm-bd cron --phase <x> --md-table must print the layout C markdown status table (form per ANC-040) to stdout. Not judged: bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3.\n\n> **bl-8 · ANC-046 · excluded** Anchor: A failed command is logged at level error with the message <fix in backticks> <command words> [<exit code>] <first stderr line>, composed once by the writer; the command words are the executable and subcommand, not the full argument vector. Not judged: bl-8 logs a failed read once through the existing program log writer, whose error line form is unchanged by phase-bl.\n\n> **bl-8 · ANC-094 · excluded** Anchor: atm-bd must deliver ATM messages from an event-delivery stage that runs on its own schedule; a cron tick or a TUI refresh must send no ATM message. Not judged: bl-8 collects and builds the snapshot; table cells, the cron table flag and event delivery are bl-6 and bl-3.\n\nAll judged anchors are satisfied or not applicable.\n\n"
   },
   "error": null,
   "metadata": {
     "duration_ms": null,
-    "tool_calls": 8,
-    "retry_count": 9,
+    "tool_calls": 9,
+    "retry_count": 0,
     "correlation_id": "bl-8"
   }
 }
