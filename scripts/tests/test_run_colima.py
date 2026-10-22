@@ -42,10 +42,6 @@ class DriverTests(unittest.TestCase):
         self.assertEqual(log, "out\nerr\nout\nerr\n")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class InstalledVersionTests(unittest.TestCase):
     def test_reads_semver_from_container_binary(self) -> None:
         with mock.patch.object(driver, "command", return_value=mock.Mock(returncode=0, stdout="atm 1.6.5\n", stderr="")) as command:
@@ -56,3 +52,26 @@ class InstalledVersionTests(unittest.TestCase):
         with mock.patch.object(driver, "command", return_value=mock.Mock(returncode=0, stdout="unknown\n", stderr="")):
             with self.assertRaises(driver.ColimaVersionError):
                 driver.installed_atm_version()
+
+    def test_run_reads_version_after_testbed_installs_the_container(self) -> None:
+        order: list[str] = []
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            mock.patch.object(driver, "command") as command,
+            mock.patch.object(driver, "installed_atm_version", side_effect=lambda: order.append("version") or "1.6.5"),
+            mock.patch.object(driver, "run_prompt", return_value={}),
+            mock.patch.object(driver, "write_step"),
+            mock.patch.object(driver.render_colima, "render_run", return_value={}),
+        ):
+            def invoke(argv, *_args, **_kwargs):
+                if argv[-1].endswith("test.sh"):
+                    order.append("test.sh")
+                return mock.Mock(returncode=0, stdout="", stderr="")
+
+            command.side_effect = invoke
+            driver.run(Path(temp), Path(temp))
+        self.assertEqual(order, ["test.sh", "version"])
+
+
+if __name__ == "__main__":
+    unittest.main()

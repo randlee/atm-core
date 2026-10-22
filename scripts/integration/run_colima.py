@@ -82,8 +82,9 @@ def run_prompt(prompt: str, step: str, step_dir: Path, revision: str, atm_versio
 
 def run(run_dir: Path, testbed: Path) -> dict[str, object]:
     revision = command(["git", "rev-parse", "HEAD"], ROOT, 30).stdout.strip()
-    atm_version = installed_atm_version()
     fixture = command([str(testbed / "test.sh")], testbed, 3600)
+    # test.sh installs the prerelease into the container; read its version afterwards.
+    atm_version = installed_atm_version()
     first = run_dir / "steps/01-hermes-skills"
     first.mkdir(parents=True, exist_ok=True)
     (first / "test.sh.log").write_text(fixture.stdout + fixture.stderr, encoding="utf-8")
