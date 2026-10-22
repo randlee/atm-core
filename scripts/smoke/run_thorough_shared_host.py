@@ -24,6 +24,8 @@ from daemon_lifecycle import (
 )
 from fixtures import create_shared_host_fixture_pair, repo_root, smoke_env
 
+DaemonProcess = subprocess.Popen[str]
+
 AF1_REQUIRED_MARKERS = (
     "require_clean_host_daemon_state",
     "count_atm_daemon_processes",
@@ -252,7 +254,7 @@ def start_smoke_daemon(
 def start_shared_host_smoke_daemon(
     daemon_binary: str,
     env: dict[str, str],
-) -> subprocess.Popen[str]:
+) -> DaemonProcess:
     """Run the local-only fixture with its explicit plaintext test profile."""
     return start_smoke_daemon(
         daemon_binary,
