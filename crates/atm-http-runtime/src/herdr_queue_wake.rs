@@ -545,23 +545,22 @@ impl HerdrQueueWakePump {
             Arc::clone(&self.release_handles),
             self.blocking_bridge.clone(),
         );
-        let (dispatch, terminal_after_handoff) =
-            match self.rebuild_dispatch(member, claim.msg).await {
-                Ok(Some(dispatch)) => dispatch,
-                Ok(None) | Err(_) => {
-                    release.release_without_input().await;
-                    stats.released += 1;
-                    tracing::info!(
-                        event = "herdr_queue_poll_outcome",
-                        member = %member.key,
-                        msg_id = %claim.msg,
-                        queue_kind = NudgeKind::Queue.as_str(),
-                        outcome = "dispatch_failed_released",
-                        "Herdr queue dispatch could not be rebuilt"
-                    );
-                    return None;
-                }
-            };
+        let queued_dispatch = match self.rebuild_dispatch(member, claim.msg).await {
+            Ok(Some(dispatch)) => dispatch,
+            Ok(None) | Err(_) => {
+                release.release_without_input().await;
+                stats.released += 1;
+                tracing::info!(
+                    event = "herdr_queue_poll_outcome",
+                    member = %member.key,
+                    msg_id = %claim.msg,
+                    queue_kind = NudgeKind::Queue.as_str(),
+                    outcome = "dispatch_failed_released",
+                    "Herdr queue dispatch could not be rebuilt"
+                );
+                return None;
+            }
+        };
         if !still_idle(&self.service_runtime, &member.key) {
             release.release_without_input().await;
             stats.released += 1;
@@ -575,7 +574,7 @@ impl HerdrQueueWakePump {
             );
             return None;
         }
-        let Some(emitter) = self.selector.select_emitter(&dispatch) else {
+        let Some(emitter) = self.selector.select_emitter(&queued_dispatch.dispatch) else {
             release.release_without_input().await;
             stats.released += 1;
             tracing::info!(
@@ -588,16 +587,8 @@ impl HerdrQueueWakePump {
             );
             return None;
         };
-        self.emit_claim(
-            emitter,
-            dispatch,
-            terminal_after_handoff,
-            member,
-            claim,
-            &mut release,
-            stats,
-        )
-        .await
+        self.emit_claim(emitter, queued_dispatch, member, claim, &mut release, stats)
+            .await
     }
 
     async fn claim_next_pending(
@@ -620,7 +611,7 @@ impl HerdrQueueWakePump {
         &self,
         member: &HerdrCandidate,
         message_id: atm_core::schema::AtmMessageId,
-    ) -> Result<Option<(atm_core::boundary::BuiltInPostSendDispatch, bool)>, AtmError> {
+    ) -> Result<Option<QueuedDispatch>, AtmError> {
         let runtime = self.service_runtime.clone();
         let member_key = member.key.clone();
         let message = self
@@ -639,14 +630,16 @@ impl HerdrQueueWakePump {
             NudgeKind::Queue,
             &message,
         )?;
-        Ok(dispatch.map(|dispatch| (dispatch, is_terminal_escalation_message(&message))))
+        Ok(dispatch.map(|dispatch| QueuedDispatch {
+            dispatch,
+            terminal_after_handoff: is_terminal_escalation_message(&message),
+        }))
     }
 
     async fn emit_claim(
         &self,
         emitter: &dyn atm_core::boundary::AsyncMessageReceivedHookEmitter,
-        dispatch: atm_core::boundary::BuiltInPostSendDispatch,
-        terminal_after_handoff: bool,
+        queued_dispatch: QueuedDispatch,
         member: &HerdrCandidate,
         claim: atm_core::boundary::NudgeClaim,
         release: &mut ReleasePendingOnDrop,
@@ -654,6 +647,10 @@ impl HerdrQueueWakePump {
     ) -> Option<atm_core::schema::AtmMessageId> {
         #[cfg(test)]
         self.notify_prompt_started_test_gate();
+        let QueuedDispatch {
+            dispatch,
+            terminal_after_handoff,
+        } = queued_dispatch;
         match emitter
             .emit_received_message(dispatch, herdr_request_deadline())
             .await
@@ -830,6 +827,11 @@ struct HerdrCandidate {
     key: MemberKey,
     pending: bool,
     target: CandidateTarget,
+}
+
+struct QueuedDispatch {
+    dispatch: atm_core::boundary::BuiltInPostSendDispatch,
+    terminal_after_handoff: bool,
 }
 
 #[derive(Clone)]
