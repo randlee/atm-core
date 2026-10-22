@@ -22,7 +22,7 @@ SPEC.loader.exec_module(PRERELEASE)
 
 def manifest(root: Path) -> dict[str, object]:
     return {
-        "project": {"archive_prefix": "fixture"},
+        "project": {"archive_prefix": "fixture", "homepage": "https://github.com/example/fixture"},
         "release_targets": [
             {"target": "x86_64-unknown-linux-gnu", "archive": "tar.gz"},
         ],
@@ -67,6 +67,29 @@ def fixture_archive() -> bytes:
 
 
 class PrereleaseTests(unittest.TestCase):
+    def test_host_wheel_selection_requires_a_manifest_distribution_wheel(self) -> None:
+        values = manifest(Path("/unused"))
+        values["python_distributions"] = [{"name": "fixture-wheel", "wheels": ["ubuntu-latest"]}]
+        digests = {
+            f"fixture_wheel-1.5.11-cp311-abi3-{tag}.whl": "0" * 64
+            for tag in (
+                "manylinux_2_17_x86_64",
+                "manylinux_2_17_aarch64",
+                "musllinux_1_2_x86_64",
+                "macosx_11_0_arm64",
+                "win_amd64",
+            )
+        }
+        for system, machine, musl, tag in (
+            ("Linux", "x86_64", False, "manylinux_2_17_x86_64"),
+            ("Linux", "aarch64", False, "manylinux_2_17_aarch64"),
+            ("Linux", "x86_64", True, "musllinux_1_2_x86_64"),
+            ("Darwin", "arm64", False, "macosx_11_0_arm64"),
+            ("Windows", "amd64", False, "win_amd64"),
+        ):
+            with self.subTest(tag=tag):
+                name = f"fixture_wheel-1.5.11-cp311-abi3-{tag}.whl"
+                self.assertEqual(PRERELEASE.host_wheel_names(digests, values, system=system, machine=machine, musl=musl), [name])
     def test_publish_dry_run_never_needs_network_or_authorization(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -197,8 +220,8 @@ class PrereleaseTests(unittest.TestCase):
         workflow = (SCRIPT.parents[4] / ".github" / "workflows" / "prerelease-archive.yml").read_text(encoding="utf-8")
         self.assertIn('gh release create "$tag" --prerelease', workflow)
         self.assertIn('gh release view "$tag" --json isDraft,isPrerelease,assets', workflow)
-        self.assertIn('shasum -a 256 "${archives[@]}" > checksums.txt', workflow)
-        self.assertIn('gh release create "$tag" --prerelease --title "$tag" --generate-notes "${archives[@]}" checksums.txt', workflow)
+        self.assertIn('shasum -a 256 "${assets_to_publish[@]}" > checksums.txt', workflow)
+        self.assertIn('gh release create "$tag" --prerelease --title "$tag" --generate-notes "${assets_to_publish[@]}" checksums.txt', workflow)
         self.assertIn('cmp checksums.txt existing-release/checksums.txt', workflow)
         self.assertIn("concurrent run converged", workflow)
         self.assertLess(
@@ -206,6 +229,18 @@ class PrereleaseTests(unittest.TestCase):
             workflow.index('gh release view "$tag" --json isDraft,isPrerelease,assets'),
         )
         self.assertNotIn("gh release upload \"$tag\" --clobber", workflow)
+
+    def test_release_wheel_matrix_builds_native_atm_query_for_each_platform(self) -> None:
+        ci = (SCRIPT.parents[4] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        wheel_job = ci.split("  hermes-atm-release-wheels:\n", 1)[1].split(
+            "\n  hermes-atm-abi3-compat:\n", 1
+        )[0]
+        self.assertIn("uses: PyO3/maturin-action@", wheel_job)
+        self.assertIn("working-directory: crates/atm-query-python", wheel_job)
+        self.assertIn("-i ${{ matrix.interpreter }} --out ../../atm-query-native-dist", wheel_job)
+        self.assertIn("cp atm-query-native-dist/atm_query*.whl dist/", wheel_job)
+        self.assertIn("name: hermes-atm-wheels-${{ matrix.artifact }}", wheel_job)
+        self.assertNotIn("pip wheel --no-deps --wheel-dir dist crates/atm-query-python", wheel_job)
 
     def test_prerelease_workflow_uses_manifest_build_contract(self) -> None:
         workflow = (SCRIPT.parents[4] / ".github" / "workflows" / "prerelease-archive.yml").read_text(encoding="utf-8")
@@ -224,6 +259,9 @@ class PrereleaseTests(unittest.TestCase):
             workflow,
         )
         self.assertIn("timeout-minutes: 45", workflow)
+        self.assertIn("uses: ./.github/workflows/ci.yml", workflow)
+        self.assertIn("build_release_artifacts: true", workflow)
+        self.assertIn("-name '*.whl'", workflow)
         self.assertNotRegex(workflow, r":\s*\{[^\n]*\$\{\{")
 
     def test_prerelease_packager_matches_release_packager(self) -> None:
@@ -301,7 +339,7 @@ class PrereleaseTests(unittest.TestCase):
             ],
         )
 
-    def test_wait_for_archive_times_out_after_twenty_minutes(self) -> None:
+    def test_wait_for_archive_times_out_after_sixty_minutes(self) -> None:
         clock = [0.0]
         sleeps: list[float] = []
 
@@ -317,11 +355,11 @@ class PrereleaseTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 SystemExit,
-                "timed out waiting for prerelease-archive.yml for prerelease/v1.5.11 after 20.0 minutes",
+                "timed out waiting for prerelease-archive.yml for prerelease/v1.5.11 after 60.0 minutes",
             ):
                 PRERELEASE.wait_for_archive("prerelease/v1.5.11", "new-sha")
-        self.assertEqual(clock, [20 * 60])
-        self.assertEqual(sleeps, [60] * 20)
+        self.assertEqual(clock, [60 * 60])
+        self.assertEqual(sleeps, [60] * 60)
 
     def test_wait_for_archive_clamps_the_final_sleep_to_the_remaining_time(self) -> None:
         clock = [0.0]

@@ -44,6 +44,7 @@ pub mod graft;
 pub mod herdr_configured;
 /// Public ATM home and team-path resolution helpers.
 pub mod home;
+pub mod hook;
 /// Internal identity resolution and hook lookup helpers.
 pub(crate) mod identity;
 /// Bounded metadata queue query workflows and output models.

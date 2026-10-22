@@ -3056,21 +3056,28 @@ Required rules:
 Task lifecycle (Phase BA):
 1. A task MUST exist as exactly one row per `(team, task_id)`.
 2. Task state MUST be `assigned` (queued), `active` (working), or closed.
-3. An agent MUST hold at most one `active` task; the database MUST enforce
-   this with a unique index on `(team, assignee)` restricted to
-   `state = 'active'`. The index fires when a task **starts** (the implicit
-   `assigned → active` move; rejected as `ActiveElsewhere`), never at
-   `atm task assign` admission — any number of `assigned` rows may queue
-   behind the active one.
+3. An agent MUST hold at most `max_tasks` `active` tasks. `max_tasks` is the
+   roster `metadata_json` key `max_tasks` for that member, defaulting to 1 when
+   unset; a stored value that is not an integer of at least 1 refuses the start.
+   Set it with `atm teams update-member <team> <member> --max-tasks <N>` (minimum
+   1). The limit is checked when a task **starts** (the implicit
+   `assigned → active` move; rejected as `TaskMaxActiveReached`
+   (`ATM_TASK_MAX_ACTIVE_REACHED`)). Recovery is to complete or cancel an
+   active task, or raise the limit with `atm teams update-member <team>
+   <member> --max-tasks <N>`. The limit is never checked at `atm task assign`
+   admission — any number of `assigned` rows may queue behind the active ones.
 4. Starting a task MUST be `atm task start <id>` by the assignee; it MUST move
-   the task from `assigned` to `active`, MUST move it to the head of the queue,
-   and MUST send the assigner a start message. The daemon MUST NOT start a task.
+   the task from `assigned` to `active`, MUST place it at the end of the started
+   group at the head of the queue (behind the agent's other active tasks), and
+   MUST send the assigner a start message. The daemon MUST NOT start a task.
 5. An agent's queue MUST be ordered by `(position, assigned_at, task_id)`;
    `assigned_at` MUST be the time of the current assignment; it is reset only by reassignment or reopen and never by a queue move; a new task's default position MUST be the
    end of the queue.
 6. `atm task move <id> --before <other> | --head | --end` MUST reposition an
-   `assigned` task only; `--head` MUST place it next up behind the active
-   task, and the active task MUST never be repositioned or preempted.
+   `assigned` task only; `--head` MUST place it next up behind the agent's
+   active tasks, and an active task MUST never be repositioned or preempted.
+   Started (`active`) tasks always sort ahead of `assigned` tasks; each group
+   keeps its order.
 7. Closing a task MUST record one typed outcome from
    `completed | refused | cancelled` with optional reason text,
    MUST remove the task from the queue, and MUST append a timestamped event.
@@ -3101,22 +3108,25 @@ Nudge invariant (Phase BA):
     from the ephemeral roster record; it MUST NOT consume
     `PickerMemberStatus`, a `RuntimeHealth` projection, raw Herdr output, or
     heartbeat DTOs.
-15. `Idle` with an open task MUST be nudged, no more than once per 60 seconds
-    per task. The first prompt is `task_ready`; later prompts are
-    `task_reminder` with a rising attempt. Every assignment produces one
-    `task_queued` line at write time.
+15. `Idle` with one or more open tasks MUST be nudged, no more than once per
+    60 seconds per member. Each nudge MUST list every open task of that
+    member. Reminder and stall/escalation state MUST be tracked once per
+    member on the head task row only. The first prompt is `task_ready`; later
+    prompts are `task_reminder` with a rising attempt. Every assignment
+    produces one `task_queued` line at write time.
 16. `Active` MUST never be nudged or diverted to another task.
 17. `Blocked` or `Offline` MUST escalate once per episode and MUST receive
     zero nudges.
 18. Escalation MUST be one ordinary message to the roster lead (when exactly
     one) and to every configured escalation recipient, resolved
-    independently; a task's reminder count MUST escalate again every time it
-    reaches a `TASK_STALLED_REMINDER_THRESHOLD` (10) budget boundary (10, 20,
-    30, ...), and nudging to the assignee MUST continue in between
-    escalations, with no cap and no terminal hold. Only sustained assignee
-    activity — `Active` observed continuously for at least one
-    `TASK_REMINDER_INTERVAL_MS` — resets the reminder and lead-notification
-    counters; a shorter burst of activity does not.
+    independently; the head task row's reminder count (the member's single
+    reminder count) MUST escalate again every time it reaches a
+    `TASK_STALLED_REMINDER_THRESHOLD` (10) budget boundary (10, 20, 30, ...),
+    and nudging to the assignee MUST continue in between escalations, with no
+    cap and no terminal hold. Only sustained assignee activity — `Active`
+    observed continuously for at least one `TASK_REMINDER_INTERVAL_MS` —
+    resets the member's reminder and lead-notification counters on the head
+    task row; a shorter burst of activity does not.
 
 Task-history amendment (2026-09-26, issue #1599): rule 9's closed subcommand
 set additionally admits `history`, a read-only view over the past N tasks for

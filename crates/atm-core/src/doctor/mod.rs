@@ -1,6 +1,7 @@
 mod ax6;
 pub mod health;
 mod herdr_state;
+pub mod hooks;
 pub mod report;
 mod roster_names;
 mod team_scope;
@@ -452,6 +453,13 @@ fn peer_config_doctor_report_inner(
     let peers = store.list_trusted_peers()?;
     let certificate = store.local_certificate()?;
     let findings = peer_config_doctor_warnings(&interfaces, &peers);
+    let mut enabled_ports = interfaces
+        .iter()
+        .filter(|interface| interface.enabled)
+        .map(|interface| interface.bind_addr.port());
+    let claimed_direct_peer_port = enabled_ports
+        .next()
+        .filter(|port| enabled_ports.all(|next| next == *port));
     Ok((
         PeerConfigDoctorReport {
             configured_interface_count: interfaces.len(),
@@ -459,6 +467,7 @@ fn peer_config_doctor_report_inner(
                 .iter()
                 .filter(|interface| interface.enabled)
                 .count(),
+            claimed_direct_peer_port,
             certificate_fingerprint: certificate
                 .map(|certificate| certificate.fingerprint.to_string()),
             trusted_peer_count: peers.len(),
@@ -634,6 +643,7 @@ fn build_doctor_report(
         drift_findings,
         runtime_status,
         bootstrap_trace,
+        hooks: Vec::new(),
     }
 }
 
@@ -2937,6 +2947,7 @@ mod tests {
         assert!(findings.is_empty());
         assert_eq!(report.configured_interface_count, 1);
         assert_eq!(report.enabled_interface_count, 1);
+        assert_eq!(report.claimed_direct_peer_port, Some(43101));
         assert_eq!(report.trusted_peer_count, 1);
         assert_eq!(report.enabled_trusted_peer_count, 1);
         assert_eq!(
@@ -2947,8 +2958,30 @@ mod tests {
         assert!(report.legacy_literal_ip_peers.is_empty());
 
         let serialized = serde_json::to_string(&report).expect("serialize doctor projection");
+        assert!(serialized.contains("\"claimed_direct_peer_port\":43101"));
         assert!(!serialized.contains("keychain:secret"));
         assert!(!serialized.contains("private_key_ref"));
+    }
+
+    #[test]
+    fn peer_config_doctor_does_not_report_an_ambiguous_listener_port() {
+        let store = StubPeerConfigStore::with_peer_config(
+            vec![
+                HttpsInterface {
+                    bind_addr: "127.0.0.1:43101".parse().expect("first bind"),
+                    advertise_host: "first.example.test".parse().expect("first host"),
+                    enabled: true,
+                },
+                HttpsInterface {
+                    bind_addr: "127.0.0.1:43102".parse().expect("second bind"),
+                    advertise_host: "second.example.test".parse().expect("second host"),
+                    enabled: true,
+                },
+            ],
+            Vec::new(),
+        );
+        let (report, _) = peer_config_doctor_report(&store);
+        assert_eq!(report.claimed_direct_peer_port, None);
     }
 
     #[test]

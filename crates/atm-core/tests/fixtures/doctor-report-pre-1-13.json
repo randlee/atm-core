@@ -1,0 +1,120 @@
+{
+  "summary": {
+    "status": "healthy",
+    "message": "ATM doctor completed with healthy findings only",
+    "info_count": 1,
+    "warning_count": 0,
+    "error_count": 0
+  },
+  "findings": [
+    {
+      "severity": "info",
+      "code": "ATM_OBSERVABILITY_HEALTH_OK",
+      "message": "shared observability active at /tmp/aq1-9-daemon-restart-live-receiver-nuk7r5k6/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+      "remediation": null
+    }
+  ],
+  "recommendations": [],
+  "environment": {
+    "atm_home": "/tmp/aq1-9-daemon-restart-live-receiver-nuk7r5k6/atm-home",
+    "atm_team": "aq1-9-hermes",
+    "atm_identity": "aq1-9-sender",
+    "team_override": null
+  },
+  "client_context": {
+    "team": "aq1-9-hermes",
+    "identity": "aq1-9-sender",
+    "version": "1.4.5",
+    "cli_schema_version": 1,
+    "http_api_version": "1.0.0"
+  },
+  "daemon_context": {
+    "team": "aq1-9-hermes",
+    "identity": "aq1-9-sender",
+    "version": "1.4.5",
+    "cli_schema_version": 1,
+    "http_api_version": "1.0.0",
+    "peer_wire_security": "plaintext-test"
+  },
+  "member_roster": {
+    "team": "aq1-9-hermes",
+    "members": [
+      {
+        "name": "aq1-9-receiver",
+        "agent_id": "aq1-9-receiver@aq1-9-hermes",
+        "agent_type": "general-purpose",
+        "harness": "claude-code",
+        "model": "unknown",
+        "joined_at": 1787971834656,
+        "tmux_pane_id": null,
+        "home_dir": "/tmp/aq1-9-daemon-restart-live-receiver-nuk7r5k6/home",
+        "extra": {}
+      },
+      {
+        "name": "aq1-9-sender",
+        "agent_id": "aq1-9-sender@aq1-9-hermes",
+        "agent_type": "general-purpose",
+        "harness": "claude-code",
+        "model": "unknown",
+        "joined_at": 1787971834648,
+        "tmux_pane_id": null,
+        "home_dir": "/tmp/aq1-9-daemon-restart-live-receiver-nuk7r5k6/home",
+        "live_cwd": "/tmp/aq1-9-daemon-restart-live-receiver-nuk7r5k6/atm-home",
+        "extra": {}
+      }
+    ]
+  },
+  "graft_receivers": {
+    "receivers": []
+  },
+  "observability": {
+    "active_log_path": "/tmp/aq1-9-daemon-restart-live-receiver-nuk7r5k6/logs/atm.log.jsonl",
+    "logging_state": "healthy",
+    "query_state": null,
+    "maintenance": {
+      "state": "running",
+      "rotated_files_total": 0,
+      "pruned_files_total": 0,
+      "last_pass_at": null
+    },
+    "diagnostic": null,
+    "detail": "writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=2 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never"
+  },
+  "herdr_breaker": {
+    "state": "closed"
+  },
+  "herdr_queue_pump": {
+    "last_tick_at": "2026-08-29T02:50:34.666260887Z",
+    "breaker": {
+      "state": "closed"
+    }
+  },
+  "post_send": {
+    "config_root": "",
+    "external_rules": [],
+    "recipient_paths": []
+  },
+  "config": {
+    "findings": []
+  },
+  "mail_store": {
+    "findings": []
+  },
+  "roster_store": {
+    "findings": []
+  },
+  "drift_findings": [],
+  "runtime_status": {
+    "liveness": "running",
+    "readiness": "ready",
+    "singleton_owner_pid": 12303,
+    "degraded_ingest": false,
+    "member_counts": {
+      "active_members": 0,
+      "idle_members": 0,
+      "offline_members": 0,
+      "unknown_members": 0
+    },
+    "herdr_queue_last_tick_at": "2026-08-29T02:50:34.666260887Z"
+  }
+}

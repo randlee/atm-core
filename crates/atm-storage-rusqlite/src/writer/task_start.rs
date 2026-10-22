@@ -4,14 +4,15 @@ use super::task_ops::{
     TaskEventDraft, append_task_event, load_task_row, queue_order, renumber_queue,
 };
 use super::task_rejection::{
-    task_already_active, task_already_closed, task_move_invalid, task_not_counterparty,
+    task_already_active, task_already_closed, task_max_active_reached, task_not_counterparty,
     task_not_found,
 };
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use atm_storage::contract::Message;
 use atm_storage::error::AtmError;
 use atm_storage::task_state::{
-    TaskEvent, TaskEventKind, TaskRow, TaskState, Transition, transition,
+    MAX_TASKS_METADATA_KEY, MaxTasks, TaskEvent, TaskEventKind, TaskRow, TaskState, Transition,
+    transition,
 };
 use atm_storage::types::{AgentName, TaskId};
 use rusqlite::{Connection, OptionalExtension, params};
@@ -37,11 +38,13 @@ pub(super) fn apply_task_start(
         &row.assignee,
     )
     .map_err(|error| error.into_atm_error())?;
-    reject_concurrent_active_task(record, task_id, &row, connection, target)?;
+    let other_active = reject_over_max_tasks(record, task_id, &row, connection, target)?;
 
     let mut order = queue_order(connection, target, &record.team, &row.assignee)?;
     order.retain(|id| id != task_id);
-    order.insert(0, task_id.clone());
+    // The started group leads the queue in start order, so the new start goes
+    // after the member's other active tasks.
+    order.insert(other_active as usize, task_id.clone());
     connection
         .execute(
             "UPDATE tasks SET state=?3, lead_notified_count=0, updated_at=?4
@@ -104,16 +107,18 @@ fn load_startable_task(
     Ok(row)
 }
 
-fn reject_concurrent_active_task(
+/// Refuses the start when the member already holds `max_tasks` active tasks.
+/// Returns how many other tasks the member holds active.
+fn reject_over_max_tasks(
     record: &Message,
     task_id: &TaskId,
     row: &TaskRow,
     connection: &Connection,
     target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let active: Option<String> = connection
+) -> Result<u32, AtmError> {
+    let count: i64 = connection
         .query_row(
-            "SELECT task_id FROM tasks
+            "SELECT COUNT(*) FROM tasks
              WHERE team=?1 AND assignee=?2 AND state='active' AND task_id<>?3",
             params![
                 record.team.as_str(),
@@ -122,13 +127,63 @@ fn reject_concurrent_active_task(
             ],
             |raw| raw.get(0),
         )
-        .optional()
-        .map_err(|error| sqlite_error(target, "failed to check active task", error))?;
-    if active.is_some() {
-        return Err(task_move_invalid(format!(
-            "task {task_id}: {} already has an active task",
-            row.assignee
-        )));
+        .map_err(|error| sqlite_error(target, "failed to count active tasks", error))?;
+    let active = u32::try_from(count).unwrap_or(u32::MAX);
+    let max = member_max_tasks(record, &row.assignee, connection, target)?;
+    if active >= max.get() {
+        return Err(task_max_active_reached(
+            format!(
+                "task {task_id}: {} already has {active} active task(s); max_tasks is {}",
+                row.assignee,
+                max.get()
+            ),
+            format!(
+                "Complete or cancel an active task, or raise the limit with `atm teams update-member {} {} --max-tasks <N>`.",
+                record.team, row.assignee
+            ),
+        ));
     }
-    Ok(())
+    Ok(active)
+}
+
+/// The member's `max_tasks` from its roster `metadata_json`. A missing row or
+/// key means the default; any value other than an integer of at least 1 is an
+/// error, so a bad setting never silently widens or narrows the limit.
+fn member_max_tasks(
+    record: &Message,
+    assignee: &AgentName,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<MaxTasks, AtmError> {
+    let stored: Option<String> = connection
+        .query_row(
+            "SELECT metadata_json
+             FROM team_roster WHERE team_name=?1 AND agent_name=?2",
+            params![record.team.as_str(), assignee.as_str()],
+            |raw| raw.get(0),
+        )
+        .optional()
+        .map_err(|error| sqlite_error(target, "failed to read max_tasks", error))?;
+    let stored_value = stored
+        .map(|value| serde_json::from_str::<serde_json::Value>(&value))
+        .transpose()
+        .map_err(|_| invalid_max_tasks(record, assignee))?;
+    let max_tasks_value = stored_value
+        .as_ref()
+        .and_then(|metadata| metadata.get(MAX_TASKS_METADATA_KEY));
+    MaxTasks::from_metadata_value(max_tasks_value)
+        .ok_or_else(|| invalid_max_tasks(record, assignee))
+}
+
+fn invalid_max_tasks(record: &Message, assignee: &AgentName) -> AtmError {
+    AtmError::validation_with_recovery(
+        format!(
+            "{assignee} in team {} has an invalid {MAX_TASKS_METADATA_KEY}: it must be an integer of at least 1",
+            record.team
+        ),
+        format!(
+            "set it with `atm teams update-member {} {assignee} --max-tasks <N>`",
+            record.team
+        ),
+    )
 }

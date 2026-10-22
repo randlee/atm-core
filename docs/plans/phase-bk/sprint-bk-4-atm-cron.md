@@ -47,8 +47,8 @@ Owned paths (new unless marked edited):
   `crates/atm-cron/Cargo.toml` with `boundary_record_path =
   "boundaries/atm-cron/cron-scheduler.toml"` and `allowed_dependencies =
   ["async-trait", "atm-core", "atm-runtime-test-support", "chrono", "cron",
-  "getrandom", "serde_json", "tokio", "tracing"]` and
-  `tracing-subscriber` in the crate's dev allowlist; the `cron` ownership
+  "getrandom", "serde_json", "syn", "tokio", "tracing"]` and
+  `syn`, `tracing-subscriber` in the crate's dev allowlist; the `cron` ownership
   entry and the `atm-runtime-test-support` section rule are bk-2's);
   `Cargo.lock`. bk-2's core
   manifests already list `atm-cron` as a dependent.
@@ -65,12 +65,12 @@ Owned paths (new unless marked edited):
 #![forbid(unsafe_code)]
 mod clock; mod expr; mod jitter; mod scheduler; mod tick; mod worker;
 pub use clock::{Clock, SystemClock}; pub use jitter::{JitterSource, SystemJitter};
-#[cfg(feature = "test-utils")] pub use {clock::ManualClock, jitter::SeqJitter};
+#[cfg(feature = "test-utils")] pub use {clock::ManualClock, jitter::SeqJitter, scheduler::AtmCronTestAccess}; // test access exposes controlled worker state without widening production API
 pub use scheduler::{AtmCron, AtmCronDeps, CronWorkerHandle};
 
 // crates/atm-cron/src/clock.rs
 #[async_trait]
-pub trait Clock: Send + Sync { fn now(&self) -> DateTime<Utc>; async fn sleep_until(&self, t: DateTime<Utc>); }   // returns once now() >= t
+pub trait Clock: Send + Sync { fn now(&self) -> DateTime<Utc>; fn monotonic_now(&self) -> Instant; async fn sleep_until(&self, t: DateTime<Utc>); }   // monotonic_now bounds elapsed work independently of wall-clock jumps; sleep returns once now() >= t
 pub struct SystemClock;   // Utc::now(); sleep_until loops tokio::time::sleep(system_sleep_step(Utc::now(), t)), so a wall-clock jump is seen within a slice
 pub(crate) const MAX_SLEEP_SLICE: Duration = Duration::from_secs(30);
 pub(crate) fn system_sleep_step(now: DateTime<Utc>, t: DateTime<Utc>) -> Duration;   // min(MAX_SLEEP_SLICE, t - now), zero when t <= now
@@ -125,7 +125,11 @@ impl atm_core::boundary::sealed::Sealed for AtmCron {}
     async fn list(&self, team: Option<&TeamName>, phase: Option<&PhaseId>) -> Result<Vec<CronSchedule>, AtmError>;
 }
 pub struct CronWorkerHandle { shutdown: Mutex<Option<oneshot::Sender<()>>>, worker: Mutex<Option<JoinHandle<()>>> }
-impl CronWorkerHandle { pub async fn shutdown(&self, deadline: tokio::time::Instant); }   // stop scheduling, await in-flight runs until deadline, abort after
+impl CronWorkerHandle {
+    #[cfg(feature = "test-utils")]
+    pub fn with_settled_for_test(settled: watch::Receiver<usize>) -> Self; // builds a handle with a chosen settled watch so shutdown tests can observe the settlement wait
+    pub async fn shutdown(&self, deadline: tokio::time::Instant);
+} // stop scheduling, await in-flight runs until deadline, abort after
 
 // crates/atm-cron/src/worker.rs  (pub(crate))
 struct Slot { schedule: CronSchedule, next: Option<DateTime<Utc>>, in_flight: Option<JoinHandle<CronRunOutcome>> }
@@ -135,21 +139,22 @@ struct Slot { schedule: CronSchedule, next: Option<DateTime<Utc>>, in_flight: Op
 // module_path, cwd, args, timeout_ms, custom; else the slot is dropped, its in_flight aborted and a new slot built. A stale run that
 // outlives the abort (its record in spawn_blocking) writes nothing: record_run/record_stop carry the run's generation (bk-1 WHERE clause).
 // biased order: a reload committed before a clock step is merged first; a due run starts before a shutdown sent after the step.
-// Errors: active_all on reload fails -> log reload_failed, keep the slots, retry at the next wake or bump; record_* fails -> log
+// Errors: active_all on reload fails -> log reload_failed, keep the slots, retry with 1s, 2s, 4s, ... backoff capped at 60s or on a bump; record_* fails -> log
 // record_failed. A finished in_flight: Ok(Stopped) drops the slot; JoinError is_panic -> record_run(id, generation, now, "exit: hook
 // runner panicked: <payload>") and the worker keeps running (Rand panic ruling); is_cancelled -> log cancelled, record nothing.
 // A loaded row with no future occurrence: record_stop(id, generation, now, "no future occurrence").
-pub(crate) struct Step { pub run: Vec<CronScheduleId>, pub skip_in_flight: Vec<CronScheduleId>, pub stop_until: Vec<CronScheduleId>, pub wake: Option<DateTime<Utc>> }
+pub(crate) struct Step { pub run: Vec<CronScheduleId>, pub skip_in_flight: Vec<CronScheduleId>, pub stop_until: Vec<CronScheduleId>, pub invalid_next: Vec<CronScheduleId>, pub wake: Option<DateTime<Utc>> } // invalid_next removes rows whose expression no longer has a future occurrence
 /// Pure: due = next <= now; a due slot with in_flight is skip_in_flight (next recomputed); stop_due(Until) is stop_until; wake = min over
 /// slots of next and until_at. The worker applies a Step and does nothing else on a clock wake.
 pub(crate) fn plan_step(slots: &[SlotView], now: DateTime<Utc>) -> Step;
 
 // crates/atm-cron/src/tick.rs  (pub(crate))
-enum CronRunOutcome { Ok, Refused(String), Actions(usize), SkippedInFlight, Exit(String), Timeout, Malformed, ActionErr(AtmErrorCode), Stopped(String), StopCheckFailed(AtmErrorCode) }
+enum CronRunOutcome { Ok, Refused(String), Actions(usize), SkippedInFlight, Exit(String), Timeout, Malformed, ActionErr(AtmErrorCode), Stopped(String), StopCheckFailed(AtmErrorCode) } // Exit retains a runner failure or panic detail for observability
 // as_str: "ok" | "refused: <msg>" | "actions: <n>" | "skipped_in_flight" | "exit" | "timeout" | "malformed" | "action_err: <code>" | "stopped: <reason>" | "stop_check_failed: <code>"
 pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunOutcome;
 /// The one Until decision, used by start, plan_step and run_one: Until { at } with now >= at.
 pub(crate) fn stop_due(stop: &StopCondition, now: DateTime<Utc>) -> bool;
+// Reaching Until aborts an in-flight run before recording `stopped: until reached`, preventing work beyond the schedule stop boundary.
 ```
 
 `run_one` runs these steps in order.
@@ -229,7 +234,7 @@ io_forbidden = ["sqlite", "process_spawn", "http_server"]
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap"]
 allowed_dependencies = ["async-trait", "atm-core", "chrono", "cron", "getrandom", "serde_json", "tokio", "tracing"]
-allowed_dev_dependencies = ["atm-core", "atm-runtime-test-support", "tokio", "tracing-subscriber"]
+allowed_dev_dependencies = ["atm-core", "atm-runtime-test-support", "syn", "tokio", "tracing-subscriber"]
 forbidden_edges = []   # allowed_dependents and allowed_dependencies are the guard (lint_boundaries.py)
 
 [references]
@@ -306,7 +311,7 @@ notes = ["Phase bk sprint bk-4 (2026-10): first version."]
 - [ ] (store errors) `boundary:BOUNDARY-CronScheduler` `reload_failure_keeps_slots_and_retries` (`fail_active_all` on a bump: `reload_failed`, the old slot fires; cleared, the next bump merges); `record_failure_is_logged` (`fail_writes`: `record_failed`, ticking continues); `stopped_worker_refuses_start_end_and_list` (after shutdown: `cron worker stopped`); `record_run_after_end_mid_run_writes_nothing`; `loaded_row_without_future_occurrence_is_ended`.
 - [ ] (ANC-025) `boundary:BOUNDARY-CronScheduler` `until_reached_ends_the_schedule_without_a_run`: `Until { at: now + 90 s }`, every minute: `plan_step` gives `run` at 60 s, `stop_until` at 90 s, nothing at 120 s; driven by `advance_settled` to 60, 90, 120 s, after shutdown one call, `active == false`, `ended_at == now + 90 s`, `stopped: until reached`; `tick.rs::tests::stop_due_is_the_one_until_rule` (`at - 1 s` false, `at` true).
 - [ ] (ANC-024) `boundary:BOUNDARY-CronScheduler` `stop_hook_true_ends_the_schedule_with_its_reason` (`stopped: phase bead closed`, inactive, one `cron.stop`, no `cron.tick`); `stop_hook_false_runs_the_tick`; `stop_hook_failure_skips_the_tick_and_keeps_the_row_active` (each runner `Err`: active, `stop_check_failed: <code>`, no `cron.tick`).
-- [ ] `boundary:BOUNDARY-CronScheduler` `ticks_fire_only_when_the_manual_clock_reaches_them` (no call before occurrence + `jitter_s`, then one; an ended row's occurrence gives none); `shutdown_joins_within_deadline_with_run_in_flight`; `AtmCron` has no public method besides `new`, `start_worker` and the trait's.
+- [ ] `boundary:BOUNDARY-CronScheduler` `ticks_fire_only_when_the_manual_clock_reaches_them` (no call before occurrence + `jitter_s`, then one; an ended row's occurrence gives none); `shutdown_joins_within_deadline_with_run_in_flight`; `AtmCron` has no public method besides `new`, `start_worker` and the trait's; `atm_cron_public_surface_is_worker_and_scheduler_trait` asserts `AtmCron` is usable through `dyn CronScheduler`, with construction and worker lifecycle on `AtmCron`; `atm_cron_has_no_unapproved_public_inherent_methods` guards the inherent API from new public methods.
 - [ ] (REQ-BK-LOG) `boundary:BOUNDARY-CronScheduler` `tick_and_stop_check_log_entries`: one `atm_cron` `tick` entry per tick and one `stop_check` per `Hook` check, each with `team`, `phase`, `hook`, `schedule`, `outcome`, `elapsed_ms`; action entries come from bk-7's dispatcher, not here.
 - [ ] (REQ-BK-D3) `boundary:BOUNDARY-CronScheduler` `rg -n 'process::Command|HookRunner for' crates/atm-cron/src` is empty.
 - [ ] `boundary:BOUNDARY-CronScheduler` `python3 -m unittest .just/tests/test_release_targets_manifest.py` passes with the renumbered entries.

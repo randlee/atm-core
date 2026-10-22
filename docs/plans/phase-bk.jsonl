@@ -5,3 +5,4 @@
 {"sprint": "bk-7", "depends_on": ["bk-2"]}
 {"sprint": "bk-4", "depends_on": ["bk-2", "bk-3"]}
 {"sprint": "bk-5", "depends_on": ["bk-3", "bk-7", "bk-4", "bk-6"]}
+{"sprint": "bk-8"}

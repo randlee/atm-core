@@ -100,6 +100,35 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-10-20 — Phase BK.8 task active limit rejection:** `HTTP_API_VERSION`
+  moves from `1.13.0` to `1.14.0`. The stable error-code surface gains
+  `ATM_TASK_MAX_ACTIVE_REACHED` for a task start rejected at the member's
+  configured active-task limit. Under the previous one-active-task limit, this
+  over-limit start returned `ATM_TASK_MOVE_INVALID`; it now returns
+  `ATM_TASK_MAX_ACTIVE_REACHED`. The change stays within the same rejection
+  family and exit code 3, so the additive-minor classification covers this
+  changed code as well as the new stable code. A previous consumer identifies
+  `ATM_TASK_MAX_ACTIVE_REACHED` as unknown through `UnknownAtmErrorCode`; the
+  response envelope shape is unchanged.
+
+- **2026-10-19 — Phase BK.7 hook filter and hook/cron routes:** `HTTP_API_VERSION`
+  moves from `1.12.0` to `1.13.0`. 1.12.0 → 1.13.0 (phase bk): six routes, seven responses, `DoctorReport.hooks`, six error codes; a 1.12 consumer ignores `hooks`, and its `AtmErrorCode::from_str` returns `UnknownAtmErrorCode` for the six codes. The additive surface is six POST routes
+  (`/v1/atm/hooks/register`, `/hooks/disable`, `/hooks/list`, `/cron/start`,
+  `/cron/end`, `/cron/list`), their request and response schemas, the
+  `X-ATM-Hook-Actions` response header on a task-command write that a task hook
+  answered through its actions, the `hooks` array on `DoctorReport`, and six
+  error codes (`ATM_HOOK_MODULE_INVALID`, `ATM_CRON_EXPR_INVALID`,
+  `ATM_HOOK_REFUSED`, `ATM_HOOK_EXIT`, `ATM_HOOK_TIMEOUT`,
+  `ATM_HOOK_MALFORMED`). The version check does not fence a pre-1.13 caller
+  off: the compatibility preflight compares only the HTTP API major, which is
+  unchanged, so a 1.12 CLI connects to a 1.13 daemon. Its codec rejects the new
+  routes' request variants, but a task write that a registered task hook
+  answers can return the `HookActions` body `{"dispatched": n}`, which the
+  write decoder rejects with `MessageValidationFailed`, or `ATM_HOOK_REFUSED`,
+  which `from_str` maps to `UnknownAtmErrorCode`. The first is pinned by
+  `pre_1_13_write_decode_fails_typed_on_a_hook_actions_body`
+  (`crates/atm-core/src/api.rs`). This is a minor, backward-compatible bump;
+  the OpenAPI baseline records it as one reviewed `openapi/version` change.
 - **2026-10-13 — Phase E4E template variable resolution:** `HTTP_API_VERSION`
   moves from `1.11.0` to `1.12.0`. The new additive
   `TEMPLATE_VARIABLE_RESOLUTION_FAILED` code identifies template-variable
@@ -191,10 +220,11 @@ migration functions directly.
   `(team, phase, hook)`) and `cron_schedule` (`id` plus
   `UNIQUE (team, phase, name)`) are additive SQLite MINOR schema objects:
   created idempotently from `ensure_schema`, no foreign key, ignored by a
-  pre-bk binary. The D3 previous-consumer proof is sprint bk-1's test that
-  the frozen pre-bk `DB_MIGRATIONS` statements still read and write after
-  both tables exist (pattern
-  `pre_bb_ddl_set_reads_and_writes_after_prompt_handoffs_created`). No
+  pre-bk binary. The D3 previous-consumer proof is sprint bk-6's
+  `crates/atm-storage-rusqlite/tests/hook_schema.rs::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created`
+  test: the frozen pre-bk `DB_MIGRATIONS` statements still read and write
+  after both tables exist. Sprint bk-1 owns the store traits, not this
+  SQLite schema proof. No
   `STORAGE_SCHEMA_VERSION` is added, for the reason given under Phase BB.1.
 - **2026-09-12 — Phase BB.6 (approved):** Fenix, as Phase BB lead, approved
   this additive schema change through ATM on team `atm-dev`. `prompt_handoffs`

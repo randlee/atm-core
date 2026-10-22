@@ -1,9 +1,141 @@
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
 use std::num::NonZeroU16;
+#[cfg(unix)]
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use atm_core::error::AtmError;
 use atm_core::peer_wire::PeerWireMode;
 use atm_http_runtime::PeerPoolConfig;
+use atm_storage::{HttpsInterface, PeerConfigStore};
+
+const FIRST_PEER_PORT: u16 = 43101;
+const LAST_PEER_PORT: u16 = 43199;
+
+fn system_claims_dir() -> Result<PathBuf, AtmError> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(PathBuf::from("/Users/Shared/atm/ports"))
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // A first launch must be able to create the shared claim directory
+        // without an installer or root privileges. /var/tmp is shared across
+        // local accounts and survives reboot; prepare_claims_dir enforces
+        // the sticky mode.
+        Ok(PathBuf::from("/var/tmp/atm-ports"))
+    }
+    #[cfg(windows)]
+    {
+        Ok(
+            PathBuf::from(std::env::var_os("ProgramData").ok_or_else(|| {
+                AtmError::peer_config_validation(
+                    "ProgramData is unset; set it to the Windows shared application-data directory",
+                )
+            })?)
+            .join("ATM")
+            .join("ports"),
+        )
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+    {
+        Err(AtmError::peer_config_validation(
+            "peer port claims are unsupported on this platform",
+        ))
+    }
+}
+
+fn claim_error(dir: &Path, error: impl std::fmt::Display) -> AtmError {
+    AtmError::peer_config_validation(format!(
+        "peer port claims directory {} is unavailable: {error}; create it with mode 1777 and grant this account write access",
+        dir.display()
+    ))
+}
+
+fn prepare_claims_dir(dir: &Path) -> Result<(), AtmError> {
+    fs::create_dir_all(dir).map_err(|error| claim_error(dir, error))?;
+    let metadata = fs::symlink_metadata(dir).map_err(|error| claim_error(dir, error))?;
+    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+        return Err(claim_error(
+            dir,
+            "expected a directory, not a symlink or file",
+        ));
+    }
+    #[cfg(unix)]
+    {
+        let permissions = metadata.permissions();
+        if permissions.mode() & 0o7777 != 0o1777 {
+            fs::set_permissions(dir, fs::Permissions::from_mode(0o1777))
+                .map_err(|error| claim_error(dir, error))?;
+        }
+    }
+    Ok(())
+}
+
+fn write_claim(file: &mut fs::File) -> Result<(), AtmError> {
+    #[cfg(unix)]
+    let uid = {
+        Some(
+            file.metadata()
+                .map_err(|error| {
+                    AtmError::peer_config_validation(format!(
+                        "could not read peer port claim owner: {error}"
+                    ))
+                })?
+                .uid(),
+        )
+    };
+    #[cfg(not(unix))]
+    let uid: Option<u32> = None;
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_default();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| {
+            AtmError::peer_config_validation(format!(
+                "clock error while claiming peer port: {error}"
+            ))
+        })?
+        .as_secs();
+    serde_json::to_writer(
+        &mut *file,
+        &serde_json::json!({
+            "uid": uid, "user": user, "timestamp_unix_seconds": timestamp
+        }),
+    )
+    .map_err(|error| {
+        AtmError::peer_config_validation(format!("could not write peer port claim: {error}"))
+    })?;
+    file.write_all(b"\n").map_err(|error| {
+        AtmError::peer_config_validation(format!("could not finish peer port claim: {error}"))
+    })?;
+    file.sync_all().map_err(|error| {
+        AtmError::peer_config_validation(format!("could not sync peer port claim: {error}"))
+    })
+}
+
+fn claim_file(dir: &Path, port: NonZeroU16) -> Result<bool, AtmError> {
+    let path = dir.join(port.get().to_string());
+    match OpenOptions::new().write(true).create_new(true).open(&path) {
+        Ok(mut file) => {
+            if let Err(error) = write_claim(&mut file) {
+                let _ = fs::remove_file(&path);
+                return Err(error);
+            }
+            Ok(true)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(error) => Err(claim_error(dir, error)),
+    }
+}
+
+fn port_is_free(port: NonZeroU16) -> bool {
+    TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port.get())).is_ok()
+}
 
 /// Extracts the value for a single-value CLI `flag` from one already-dequeued,
 /// UTF-8-validated `argument`, honoring both `--flag value` (space-separated,
@@ -73,42 +205,352 @@ pub fn parse_peer_wire_mode(
     Ok(mode.unwrap_or_default())
 }
 
-/// Selects the direct-peer listener port from the immutable daemon launch.
-pub fn parse_direct_peer_port(
+/// Resolve the account's durable peer-listener port, claiming and persisting a
+/// free system port on first launch. Every enabled interface must advertise
+/// the same port because the direct listener binds all IPv4 addresses on it.
+pub fn configured_direct_peer_port(
+    store: &(dyn PeerConfigStore + Send + Sync),
     arguments: impl IntoIterator<Item = std::ffi::OsString>,
 ) -> Result<NonZeroU16, AtmError> {
-    let mut arguments = arguments.into_iter();
-    let _program = arguments.next();
-    let mut port = None;
-    while let Some(argument) = arguments.next() {
-        let argument = argument
-            .into_string()
-            .map_err(|_| AtmError::config("direct-peer launch arguments must be valid UTF-8"))?;
-        let Some(value) =
-            take_single_flag_value(&mut arguments, &argument, "--direct-peer-port", || {
-                AtmError::config("--direct-peer-port requires a non-zero TCP port")
-            })?
-        else {
-            continue;
-        };
-        let value = value
-            .into_string()
-            .map_err(|_| AtmError::config("direct-peer launch port must be valid UTF-8"))?;
-        let parsed = value
-            .parse::<u16>()
-            .ok()
-            .and_then(NonZeroU16::new)
-            .ok_or_else(|| AtmError::config("--direct-peer-port requires a non-zero TCP port"))?;
-        if port.replace(parsed).is_some() {
+    configured_direct_peer_port_with(store, arguments, &system_claims_dir()?, port_is_free)
+}
+
+fn configured_direct_peer_port_with(
+    store: &(dyn PeerConfigStore + Send + Sync),
+    arguments: impl IntoIterator<Item = std::ffi::OsString>,
+    claims_dir: &Path,
+    is_free: impl Fn(NonZeroU16) -> bool,
+) -> Result<NonZeroU16, AtmError> {
+    for argument in arguments.into_iter().skip(1) {
+        if argument.to_string_lossy().starts_with("--direct-peer-port") {
             return Err(AtmError::config(
-                "--direct-peer-port may be supplied only once",
+                "--direct-peer-port is unsupported; configure `atm peer interface set --bind`",
             ));
         }
     }
-    Ok(port.unwrap_or_else(|| {
-        NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT)
-            .expect("the protocol direct-peer port is non-zero")
-    }))
+    let interfaces = store.list_interfaces()?;
+    let mut selected = None;
+    for interface in interfaces.iter().filter(|item| item.enabled) {
+        let port = NonZeroU16::new(interface.bind_addr.port()).ok_or_else(|| {
+            AtmError::peer_config_validation("enabled peer interface requires a non-zero bind port")
+        })?;
+        if selected.is_some_and(|previous| previous != port) {
+            return Err(AtmError::peer_config_validation(
+                "enabled peer interfaces must use the same bind port",
+            ));
+        }
+        selected = Some(port);
+    }
+    prepare_claims_dir(claims_dir)?;
+    if let Some(port) = selected {
+        let _ = claim_file(claims_dir, port)?;
+        return Ok(port);
+    }
+    if let Some(interface) = interfaces.first() {
+        let port = NonZeroU16::new(interface.bind_addr.port()).ok_or_else(|| {
+            AtmError::peer_config_validation("peer interface requires a non-zero bind port")
+        })?;
+        let _ = claim_file(claims_dir, port)?;
+        return Err(AtmError::peer_config_validation(
+            "peer interfaces exist but none is enabled; enable an existing interface before daemon launch",
+        ));
+    }
+    for raw_port in FIRST_PEER_PORT..=LAST_PEER_PORT {
+        let port = NonZeroU16::new(raw_port).expect("claim range excludes zero");
+        if !claim_file(claims_dir, port)? {
+            continue;
+        }
+        let claim_path = claims_dir.join(raw_port.to_string());
+        if !is_free(port) {
+            fs::remove_file(&claim_path).map_err(|error| claim_error(claims_dir, error))?;
+            continue;
+        }
+        let interface = HttpsInterface {
+            bind_addr: SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, raw_port).into(),
+            advertise_host: "localhost".parse().expect("valid default hostname"),
+            enabled: true,
+        };
+        if let Err(error) = store.save_interface(&interface) {
+            let _ = fs::remove_file(&claim_path);
+            return Err(error);
+        }
+        return Ok(port);
+    }
+    Err(AtmError::peer_config_validation(format!(
+        "peer port range {FIRST_PEER_PORT}-{LAST_PEER_PORT} is exhausted in {}; release an unused claim or configure a peer interface with a free port",
+        claims_dir.display()
+    )))
+}
+
+#[cfg(test)]
+mod direct_peer_port_tests {
+    use std::ffi::OsString;
+    use std::num::NonZeroU16;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+
+    use atm_runtime_test_support::open_sqlite_boundary;
+    use atm_storage::HttpsInterface;
+
+    use super::{FIRST_PEER_PORT, LAST_PEER_PORT, configured_direct_peer_port_with};
+
+    fn args() -> [OsString; 1] {
+        [OsString::from("atm-daemon")]
+    }
+
+    fn resolve(store: &(dyn atm_storage::PeerConfigStore + Send + Sync), claims: &Path) -> u16 {
+        configured_direct_peer_port_with(store, args(), claims, |_| true)
+            .expect("claimed port")
+            .get()
+    }
+
+    #[test]
+    fn listener_port_comes_from_persisted_account_interface() {
+        let root = tempfile::tempdir().expect("test root");
+        let assembly =
+            open_sqlite_boundary(root.path().join("peer.sqlite")).expect("SQLite peer boundary");
+        let store = assembly.peer_config_store();
+        let claims = root.path().join("claims");
+
+        store
+            .save_interface(&HttpsInterface {
+                bind_addr: "127.0.0.1:43201".parse().expect("bind address"),
+                advertise_host: "peer.example.test".parse().expect("host"),
+                enabled: true,
+            })
+            .expect("save account interface");
+        assert_eq!(
+            configured_direct_peer_port_with(store.as_ref(), args(), &claims, |_| false)
+                .expect("configured port"),
+            NonZeroU16::new(43201).expect("non-zero port"),
+        );
+        assert!(claims.join("43201").exists());
+        let reopened =
+            open_sqlite_boundary(root.path().join("peer.sqlite")).expect("reopen account store");
+        assert_eq!(
+            configured_direct_peer_port_with(
+                reopened.peer_config_store().as_ref(),
+                args(),
+                &claims,
+                |_| false
+            )
+            .expect("port survives a new runtime assembly"),
+            NonZeroU16::new(43201).expect("non-zero port"),
+        );
+        assert!(
+            configured_direct_peer_port_with(
+                store.as_ref(),
+                [
+                    OsString::from("atm-daemon"),
+                    OsString::from("--direct-peer-port=43101")
+                ],
+                &claims,
+                |_| true,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn second_account_claims_next_port_and_existing_account_reuses_its_port() {
+        let root = tempfile::tempdir().expect("test root");
+        let claims = root.path().join("claims");
+        let first = open_sqlite_boundary(root.path().join("first.sqlite")).expect("first account");
+        let second =
+            open_sqlite_boundary(root.path().join("second.sqlite")).expect("second account");
+        assert_eq!(
+            resolve(first.peer_config_store().as_ref(), &claims),
+            FIRST_PEER_PORT
+        );
+        assert_eq!(
+            first
+                .peer_config_store()
+                .list_interfaces()
+                .expect("interfaces")[0]
+                .bind_addr
+                .port(),
+            FIRST_PEER_PORT
+        );
+        let claim: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(claims.join(FIRST_PEER_PORT.to_string())).expect("claim file"),
+        )
+        .expect("claim JSON");
+        assert!(claim.get("uid").is_some());
+        assert!(claim.get("user").is_some());
+        assert!(claim.get("timestamp_unix_seconds").is_some());
+        assert_eq!(
+            resolve(second.peer_config_store().as_ref(), &claims),
+            FIRST_PEER_PORT + 1
+        );
+        let restarted = open_sqlite_boundary(root.path().join("first.sqlite")).expect("restart");
+        assert_eq!(
+            resolve(restarted.peer_config_store().as_ref(), &claims),
+            FIRST_PEER_PORT
+        );
+    }
+
+    #[test]
+    fn first_launch_with_clean_account_claims_and_persists_enabled_peer_interface() {
+        let root = tempfile::tempdir().expect("test root");
+        let claims = root.path().join("claims");
+        let account =
+            open_sqlite_boundary(root.path().join("account.sqlite")).expect("clean account");
+        let store = account.peer_config_store();
+        assert!(
+            store
+                .list_interfaces()
+                .expect("clean interfaces")
+                .is_empty()
+        );
+
+        let port = configured_direct_peer_port_with(store.as_ref(), args(), &claims, |_| true)
+            .expect("first launch claims a port");
+        assert_eq!(port.get(), FIRST_PEER_PORT);
+        let interfaces = store.list_interfaces().expect("persisted interfaces");
+        assert_eq!(interfaces.len(), 1);
+        assert!(interfaces[0].enabled);
+        assert_eq!(interfaces[0].bind_addr.port(), port.get());
+        assert_eq!(interfaces[0].advertise_host.to_string(), "localhost");
+        assert!(claims.join(port.get().to_string()).is_file());
+        #[cfg(unix)]
+        assert_eq!(
+            std::fs::metadata(&claims)
+                .expect("claim directory")
+                .permissions()
+                .mode()
+                & 0o7777,
+            0o1777
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_claim_directory_does_not_require_privileged_var_lib_creation() {
+        assert_eq!(
+            super::system_claims_dir().expect("Linux claims path"),
+            std::path::PathBuf::from("/var/tmp/atm-ports")
+        );
+    }
+
+    #[test]
+    fn disabled_existing_interface_does_not_allocate_a_new_port() {
+        let root = tempfile::tempdir().expect("test root");
+        let claims = root.path().join("claims");
+        let account = open_sqlite_boundary(root.path().join("account.sqlite")).expect("account");
+        account
+            .peer_config_store()
+            .save_interface(&HttpsInterface {
+                bind_addr: "127.0.0.1:43201".parse().expect("bind address"),
+                advertise_host: "peer.example.test".parse().expect("host"),
+                enabled: false,
+            })
+            .expect("save disabled interface");
+        let error = configured_direct_peer_port_with(
+            account.peer_config_store().as_ref(),
+            args(),
+            &claims,
+            |_| true,
+        )
+        .expect_err("disabled interface must stay disabled");
+        assert_eq!(
+            error.code(),
+            atm_core::error::AtmErrorCode::PeerConfigValidationFailed
+        );
+        assert!(claims.join("43201").exists());
+    }
+
+    #[test]
+    fn exclusive_claim_file_race_and_bound_port_skip_are_deterministic() {
+        let root = tempfile::tempdir().expect("test root");
+        let claims = root.path().join("claims");
+        std::fs::create_dir_all(&claims).expect("claims directory");
+        std::fs::write(claims.join(FIRST_PEER_PORT.to_string()), "other account")
+            .expect("racing account won exclusive create");
+        let account = open_sqlite_boundary(root.path().join("account.sqlite")).expect("account");
+        let claimed = configured_direct_peer_port_with(
+            account.peer_config_store().as_ref(),
+            args(),
+            &claims,
+            |port| port.get() != FIRST_PEER_PORT + 1,
+        )
+        .expect("claim after occupied and bound ports");
+        assert_eq!(claimed.get(), FIRST_PEER_PORT + 2);
+        assert!(!claims.join((FIRST_PEER_PORT + 1).to_string()).exists());
+        assert_eq!(
+            std::fs::read_to_string(claims.join(FIRST_PEER_PORT.to_string())).expect("other claim"),
+            "other account"
+        );
+    }
+
+    #[test]
+    fn exhausted_claim_range_is_a_typed_error() {
+        let root = tempfile::tempdir().expect("test root");
+        let claims = root.path().join("claims");
+        std::fs::create_dir_all(&claims).expect("claims directory");
+        for port in FIRST_PEER_PORT..=LAST_PEER_PORT {
+            std::fs::write(claims.join(port.to_string()), "occupied").expect("occupy claim");
+        }
+        let account = open_sqlite_boundary(root.path().join("account.sqlite")).expect("account");
+        let error = configured_direct_peer_port_with(
+            account.peer_config_store().as_ref(),
+            args(),
+            &claims,
+            |_| true,
+        )
+        .expect_err("range is exhausted");
+        assert_eq!(
+            error.code(),
+            atm_core::error::AtmErrorCode::PeerConfigValidationFailed
+        );
+        assert!(error.message().contains("43101-43199"));
+    }
+
+    #[test]
+    fn unavailable_claims_directory_names_path_and_repair() {
+        let root = tempfile::tempdir().expect("test root");
+        let claims = root.path().join("claims");
+        std::fs::write(&claims, "a file blocks directory creation").expect("blocking file");
+        let account = open_sqlite_boundary(root.path().join("account.sqlite")).expect("account");
+        let error = configured_direct_peer_port_with(
+            account.peer_config_store().as_ref(),
+            args(),
+            &claims,
+            |_| true,
+        )
+        .expect_err("claim directory unavailable");
+        assert_eq!(
+            error.code(),
+            atm_core::error::AtmErrorCode::PeerConfigValidationFailed
+        );
+        assert!(error.message().contains(&claims.display().to_string()));
+        assert!(error.message().contains("mode 1777"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_claims_directory_is_rejected() {
+        let root = tempfile::tempdir().expect("test root");
+        let real_dir = root.path().join("real");
+        std::fs::create_dir(&real_dir).expect("real directory");
+        let claims = root.path().join("claims");
+        std::os::unix::fs::symlink(&real_dir, &claims).expect("claims symlink");
+        let account = open_sqlite_boundary(root.path().join("account.sqlite")).expect("account");
+        let error = configured_direct_peer_port_with(
+            account.peer_config_store().as_ref(),
+            args(),
+            &claims,
+            |_| true,
+        )
+        .expect_err("symlinked claims directory");
+        assert!(error.message().contains("symlink"));
+        assert!(
+            std::fs::read_dir(real_dir)
+                .expect("real directory entries")
+                .next()
+                .is_none()
+        );
+    }
 }
 
 /// Resolves bounded outbound peer-pool settings before daemon composition.

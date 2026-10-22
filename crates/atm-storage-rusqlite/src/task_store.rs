@@ -67,8 +67,7 @@ CREATE INDEX IF NOT EXISTS prompt_handoffs_task ON prompt_handoffs(team, task_id
 "#;
 
 pub(crate) const TASK_INDEX_DDL: &str = r#"
-CREATE UNIQUE INDEX IF NOT EXISTS one_active_task_per_agent
-    ON tasks(team, assignee) WHERE state = 'active';
+DROP INDEX IF EXISTS one_active_task_per_agent;
 
 CREATE UNIQUE INDEX IF NOT EXISTS tasks_position_per_member
     ON tasks(team, assignee, position) WHERE state <> 'complete';

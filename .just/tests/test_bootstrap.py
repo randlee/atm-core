@@ -316,7 +316,6 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
             mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=True),
             mock.patch.object(bootstrap, "verify_installed_tools"),
-            mock.patch.object(bootstrap, "install_git_hooks"),
             mock.patch.object(bootstrap, "run"),
         ):
             bootstrap.bootstrap(manifest, dry_run=False)
@@ -340,7 +339,6 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
             mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=True),
             mock.patch.object(bootstrap, "verify_installed_tools"),
-            mock.patch.object(bootstrap, "install_git_hooks"),
             mock.patch.object(bootstrap, "run"),
             redirect_stdout(output),
         ):
@@ -371,7 +369,6 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
             mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=True),
             mock.patch.object(bootstrap, "verify_installed_tools"),
-            mock.patch.object(bootstrap, "install_git_hooks"),
             mock.patch.object(bootstrap, "run"),
         ):
             bootstrap.bootstrap(manifest, dry_run=False)
@@ -392,7 +389,6 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
             mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=True),
             mock.patch.object(bootstrap, "verify_installed_tools"),
-            mock.patch.object(bootstrap, "install_git_hooks"),
             mock.patch.object(bootstrap, "run") as run,
             redirect_stdout(output),
         ):
@@ -413,7 +409,6 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
             mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=False),
             mock.patch.object(bootstrap, "verify_installed_tools"),
-            mock.patch.object(bootstrap, "install_git_hooks"),
             mock.patch.object(bootstrap, "run") as run,
         ):
             bootstrap.bootstrap(manifest, dry_run=False)
@@ -541,74 +536,9 @@ class BootstrapTests(IsolatedHomeTests):
         with mock.patch.object(bootstrap.sys, "platform", "linux"):
             self.assertEqual(bootstrap.seed_python_version(manifest), "3.14.7")
 
-class GitHookTests(IsolatedHomeTests):
-    REPO_ROOT = Path(__file__).resolve().parents[2]
-    HOOK = REPO_ROOT / ".githooks" / "pre-push"
-    HOOK_REL = ".githooks/pre-push"
-
-    def test_pre_push_hook_is_tracked_and_executable(self) -> None:
-        self.assertTrue(self.HOOK.is_file())
-        # Windows checkouts do not carry the POSIX executable bit, so the
-        # tracked git index mode is the portable source of truth.
-        entry = subprocess.run(
-            ["git", "-C", str(self.REPO_ROOT), "ls-files", "-s", "--", self.HOOK_REL],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.strip()
-        self.assertTrue(entry, f"{self.HOOK_REL} must be tracked by git")
-        self.assertEqual(entry.split()[0], "100755", "hook must be executable in the git index")
-        text = self.HOOK.read_text(encoding="utf-8")
-        self.assertTrue(text.startswith("#!/bin/sh"))
-        self.assertIn("cargo fmt --all --check", text)
-        self.assertIn("-D warnings", text)
-        self.assertIn("ATM_SKIP_PUSH_GATE", text)
-
-    def test_install_git_hooks_sets_repo_hooks_path(self) -> None:
-        with mock.patch.object(bootstrap, "run") as run:
-            bootstrap.install_git_hooks(dry_run=True)
-        run.assert_called_once_with(["git", "config", "core.hooksPath", ".githooks"], dry_run=True)
-
-    def test_install_git_hooks_skips_outside_a_checkout(self) -> None:
-        with (
-            mock.patch.object(bootstrap, "inside_git_checkout", return_value=False),
-            mock.patch.object(bootstrap, "run") as run,
-        ):
-            bootstrap.install_git_hooks(dry_run=False)
-        run.assert_not_called()
-
-    def test_install_git_hooks_refuses_when_hook_file_is_missing(self) -> None:
-        with (
-            mock.patch.object(bootstrap, "inside_git_checkout", return_value=True),
-            mock.patch.object(bootstrap, "ROOT", Path("/nonexistent-atm-root")),
-            mock.patch.object(bootstrap, "run") as run,
-        ):
-            with self.assertRaises(bootstrap.BootstrapError):
-                bootstrap.install_git_hooks(dry_run=False)
-        run.assert_not_called()
-
-
-
-    def test_hooks_only_installs_hooks_without_bootstrapping_tools(self) -> None:
-        with (
-            mock.patch.object(bootstrap, "install_git_hooks") as install,
-            mock.patch.object(bootstrap, "bootstrap") as full,
-        ):
-            self.assertEqual(bootstrap.main(["bootstrap.py", "--hooks-only"]), 0)
-        install.assert_called_once_with(dry_run=False)
-        full.assert_not_called()
-
-    def test_hooks_only_surfaces_bootstrap_errors(self) -> None:
-        with mock.patch.object(bootstrap, "install_git_hooks", side_effect=bootstrap.BootstrapError("boom")):
-            self.assertEqual(bootstrap.main(["bootstrap.py", "--hooks-only"]), 1)
-
-    def test_hook_is_pinned_to_lf_line_endings(self) -> None:
-        attributes = self.HOOK.parents[1] / ".gitattributes"
-        self.assertIn(".githooks/* text eol=lf", attributes.read_text(encoding="utf-8"))
-        self.assertNotIn(b"\r\n", self.HOOK.read_bytes(), "hook must be LF-only in the tree")
 
     def test_cli_reference_source_assets_are_pinned_to_lf(self) -> None:
-        attributes = self.HOOK.parents[1] / ".gitattributes"
+        attributes = SCRIPT.parents[1] / ".gitattributes"
         self.assertIn(
             "crates/atm/assets/cli-reference/* text eol=lf",
             attributes.read_text(encoding="utf-8"),

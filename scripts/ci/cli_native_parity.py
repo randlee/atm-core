@@ -109,7 +109,11 @@ class _CiParityFixture:
         )
         if not _daemon_ready(self.daemon, _DAEMON_READY_TIMEOUT_SECONDS):
             self.stop_daemon()
-            raise RuntimeError("CI parity daemon did not publish ATM_DAEMON_READY")
+            stderr = self.daemon.stderr.read() if self.daemon.stderr is not None else ""
+            raise RuntimeError(
+                "CI parity daemon did not publish ATM_DAEMON_READY"
+                f" (exit code {self.daemon.returncode}); stderr:\n{stderr}"
+            )
 
     def stop_daemon(self) -> None:
         if self.daemon is None or self.daemon.poll() is not None:

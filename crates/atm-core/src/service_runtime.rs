@@ -18,7 +18,7 @@ use atm_storage::{
     TaskStore, TemplateCatalogStore, WriteThroughRosterStore,
 };
 
-use crate::boundary::TemplateComposer;
+use crate::boundary::{CronScheduleStore, HookRegistrationStore, TemplateComposer};
 use crate::config::AtmConfig;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -323,6 +323,8 @@ pub struct LocalServiceRuntime {
     /// nudge, e.g. plain-text mailbox tests.
     pending_nudge_store: Option<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>>,
     task_store: Option<std::sync::Arc<dyn TaskStore + Send + Sync>>,
+    hook_registration_store: Option<Arc<dyn HookRegistrationStore>>,
+    cron_schedule_store: Option<Arc<dyn CronScheduleStore>>,
     graft_receiver_endpoint_store:
         Option<std::sync::Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>>,
     /// Optional renderer selected by the bootstrap composition root. Core send
@@ -373,6 +375,8 @@ impl LocalServiceRuntime {
             non_claude_outbound,
             pending_nudge_store: None,
             task_store: None,
+            hook_registration_store: None,
+            cron_schedule_store: None,
             graft_receiver_endpoint_store: None,
             template_composer: None,
             template_catalog_store: None,
@@ -515,6 +519,34 @@ impl LocalServiceRuntime {
     pub fn task_store(&self) -> Result<std::sync::Arc<dyn TaskStore + Send + Sync>, AtmError> {
         self.task_store.clone().ok_or_else(|| {
             AtmError::daemon_unavailable("the task store was not installed in this runtime")
+        })
+    }
+
+    #[must_use]
+    pub fn with_hook_registration_store(mut self, store: Arc<dyn HookRegistrationStore>) -> Self {
+        self.hook_registration_store = Some(store);
+        self
+    }
+
+    pub fn hook_registration_store(&self) -> Result<Arc<dyn HookRegistrationStore>, AtmError> {
+        self.hook_registration_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the hook registration store was not installed in this runtime",
+            )
+        })
+    }
+
+    #[must_use]
+    pub fn with_cron_schedule_store(mut self, store: Arc<dyn CronScheduleStore>) -> Self {
+        self.cron_schedule_store = Some(store);
+        self
+    }
+
+    pub fn cron_schedule_store(&self) -> Result<Arc<dyn CronScheduleStore>, AtmError> {
+        self.cron_schedule_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the cron schedule store was not installed in this runtime",
+            )
         })
     }
 
@@ -1284,6 +1316,56 @@ mod tests {
                 .message()
                 .starts_with("the task store was not installed in this runtime")
         );
+    }
+
+    fn hook_store_runtime() -> super::LocalServiceRuntime {
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
+            UnusedRuntimeStore,
+        ))
+        .expect("empty write-through roster fixture");
+        super::LocalServiceRuntime::new_with_delivery_boundaries(
+            Arc::new(UnusedRuntimeStore),
+            roster,
+            Arc::new(UnusedRuntimeStore),
+            Arc::new(super::LocalFileNonClaudeOutbound::new()),
+        )
+    }
+
+    #[test]
+    fn hook_and_cron_stores_report_the_not_installed_error() {
+        let runtime = hook_store_runtime();
+        for (result, name) in [
+            (
+                runtime.hook_registration_store().map(|_| ()),
+                "hook registration",
+            ),
+            (runtime.cron_schedule_store().map(|_| ()), "cron schedule"),
+        ] {
+            let error = result.expect_err("store is not installed");
+            assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+            assert!(error.message().starts_with(&format!(
+                "the {name} store was not installed in this runtime"
+            )));
+        }
+    }
+
+    #[test]
+    fn installed_hook_and_cron_stores_are_returned() {
+        let hooks: Arc<dyn crate::boundary::HookRegistrationStore> =
+            Arc::new(atm_runtime_test_support::InMemoryHookRegistrationStore::default());
+        let schedules: Arc<dyn crate::boundary::CronScheduleStore> =
+            Arc::new(atm_runtime_test_support::InMemoryCronScheduleStore::default());
+        let runtime = hook_store_runtime()
+            .with_hook_registration_store(Arc::clone(&hooks))
+            .with_cron_schedule_store(Arc::clone(&schedules));
+        assert!(Arc::ptr_eq(
+            &hooks,
+            &runtime.hook_registration_store().expect("hook store")
+        ));
+        assert!(Arc::ptr_eq(
+            &schedules,
+            &runtime.cron_schedule_store().expect("cron store")
+        ));
     }
 
     #[test]

@@ -158,6 +158,14 @@ impl LoopbackClientTransport {
             RequestEnvelope::ReloadRuntimeView => Err(AtmError::daemon_unavailable(
                 "runtime reload requires the running daemon control plane",
             )),
+            RequestEnvelope::HookRegister(_)
+            | RequestEnvelope::HookDisable(_)
+            | RequestEnvelope::HookList(_)
+            | RequestEnvelope::CronStart(_)
+            | RequestEnvelope::CronEnd(_)
+            | RequestEnvelope::CronList(_) => Err(AtmError::daemon_unavailable(
+                "loopback hook and cron transport is not wired outside the daemon runtime",
+            )),
         };
         response.map(ApiResponse::new)
     }

@@ -826,7 +826,7 @@ mod tests {
         load_graft_config, read_snapshot, recover_after_poll_accept_error, recover_graft_receiver,
         run_graft_receiver_loop, wait_for_stop_or_delay,
     };
-    use crate::{GraftSessionState, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};
+    use crate::{GraftSessionState, SessionSnapshot};
 
     const DELIVER_CONNECT_DEADLINE: Duration = Duration::from_secs(2);
     const DELIVER_IO_DEADLINE: Duration = Duration::from_secs(3);
@@ -2068,9 +2068,13 @@ mod tests {
     #[test]
     fn rsh001_stalled_daemon_calls_never_delay_stop_past_the_join_deadline() {
         let paths = test_paths();
-        let released = Arc::new(AtomicBool::new(false));
+        let (refresh_started_tx, refresh_started_rx) = mpsc::sync_channel(1);
+        let (refresh_release_tx, refresh_release_rx) = mpsc::channel();
+        let refresh_release_rx = Arc::new(Mutex::new(refresh_release_rx));
+        let (unregister_started_tx, unregister_started_rx) = mpsc::sync_channel(1);
+        let (unregister_release_tx, unregister_release_rx) = mpsc::channel();
+        let unregister_release_rx = Arc::new(Mutex::new(unregister_release_rx));
         let stalled_calls = Arc::new(AtomicUsize::new(0));
-        let handler_released = Arc::clone(&released);
         let handler_calls = Arc::clone(&stalled_calls);
         let client = GraftClient::from_fake_transport_for_test(Arc::new(FakeClientTransport::new(
             move |request| match request {
@@ -2079,16 +2083,24 @@ mod tests {
                 }
                 RequestEnvelope::GraftReceiverRefresh(_) => {
                     handler_calls.fetch_add(1, Ordering::SeqCst);
-                    while !handler_released.load(Ordering::SeqCst) {
-                        std::thread::yield_now();
-                    }
+                    refresh_started_tx.send(()).expect("signal stalled refresh");
+                    refresh_release_rx
+                        .lock()
+                        .expect("refresh release lock")
+                        .recv()
+                        .expect("release stalled refresh");
                     Ok(ResponseEnvelope::GraftReceiverRefresh)
                 }
                 RequestEnvelope::GraftReceiverUnregister(_) => {
                     handler_calls.fetch_add(1, Ordering::SeqCst);
-                    while !handler_released.load(Ordering::SeqCst) {
-                        std::thread::yield_now();
-                    }
+                    unregister_started_tx
+                        .send(())
+                        .expect("signal stalled unregister");
+                    unregister_release_rx
+                        .lock()
+                        .expect("unregister release lock")
+                        .recv()
+                        .expect("release stalled unregister");
                     Ok(ResponseEnvelope::GraftReceiverUnregister)
                 }
                 other => panic!("unexpected request in RSH-001 harness: {other:?}"),
@@ -2100,26 +2112,29 @@ mod tests {
             Arc::new(RecordingInjector::default()),
             Some(client),
         );
-        assert!(
-            wait_until(Duration::from_secs(3), || stalled_calls
-                .load(Ordering::SeqCst)
-                >= 1),
-            "the periodic refresh tick must reach the stalled daemon call"
-        );
+        refresh_started_rx
+            .recv()
+            .expect("the periodic refresh reaches the controlled stalled call");
 
-        let stop_started = Instant::now();
         stop_tx.send(()).expect("stop");
         join_receive_loop_with_deadline(join).expect("join receiver despite stalled lease calls");
-        let elapsed = stop_started.elapsed();
-        assert!(
-            elapsed < RECEIVE_LOOP_JOIN_DEADLINE,
-            "stop must be observed within the outer join deadline even with a stalled \
-             daemon on both the refresh and unregister calls: {elapsed:?}"
+        unregister_started_rx
+            .recv()
+            .expect("shutdown reaches the controlled stalled unregister call");
+        assert_eq!(
+            stalled_calls.load(Ordering::SeqCst),
+            2,
+            "stop completes while both detached lease calls remain stalled"
         );
 
-        // Release the (now detached) stalled helper thread(s) so the process
-        // does not accumulate a permanently blocked thread across tests.
-        released.store(true, Ordering::SeqCst);
+        // Release the detached helpers after observing both controlled stalls,
+        // so this test neither relies on scheduler progress nor leaks workers.
+        refresh_release_tx
+            .send(())
+            .expect("release stalled refresh");
+        unregister_release_tx
+            .send(())
+            .expect("release stalled unregister");
     }
 
     // ATM-QA-006: dropping an already-superseded `RegisteredGraftReceiver`

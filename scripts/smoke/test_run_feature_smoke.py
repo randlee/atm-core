@@ -563,11 +563,12 @@ class FeatureSmokeTests(unittest.TestCase):
                 (2, 1, 6, "", ("192.0.2.10", 43101)),
             ],
         ):
-            self.assertEqual(RUNNER.resolve_dns_addresses("peer.example"), ["192.0.2.10", "2001:db8::10"])
+            self.assertEqual(RUNNER.resolve_dns_addresses("peer.example", 43201), ["192.0.2.10", "2001:db8::10"])
 
-    def test_direct_peer_port_defaults_to_43101(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(RUNNER.direct_peer_port(), 43101)
+    def test_direct_peer_port_comes_from_account_interface(self):
+        result = {"exit_code": 0, "stdout": '[{"enabled": true, "bind_addr": "127.0.0.1:43201"}]', "stderr": ""}
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(RUNNER, "command", return_value=result):
+            self.assertEqual(RUNNER.direct_peer_port("atm"), 43201)
 
     def test_direct_peer_port_override_is_used_by_dns_resolution(self):
         with mock.patch.dict(os.environ, {"ATM_SMOKE_DIRECT_PEER_PORT": "43111"}, clear=False), mock.patch.object(
@@ -575,7 +576,8 @@ class FeatureSmokeTests(unittest.TestCase):
             "getaddrinfo",
             return_value=[(2, 1, 6, "", ("192.0.2.10", 43111))],
         ) as getaddrinfo:
-            self.assertEqual(RUNNER.resolve_dns_addresses("peer.example"), ["192.0.2.10"])
+            port = RUNNER.direct_peer_port("atm")
+            self.assertEqual(RUNNER.resolve_dns_addresses("peer.example", port), ["192.0.2.10"])
         self.assertEqual(getaddrinfo.call_args.args[:2], ("peer.example", 43111))
 
     def test_dns_case_requires_the_advertised_ip(self):
@@ -644,9 +646,13 @@ class FeatureSmokeTests(unittest.TestCase):
         ), mock.patch.object(
             RUNNER,
             "remote_command",
-            return_value={
+            side_effect=lambda _peer, _atm, args: {
                 "exit_code": 0,
-                "stdout": __import__("json").dumps({"private_key_ref": "/tmp/remote-bundle.pem"}),
+                "stdout": __import__("json").dumps(
+                    [{"enabled": True, "bind_addr": "127.0.0.1:43201"}]
+                    if args[:2] == ["peer", "interface"]
+                    else {"private_key_ref": "/tmp/remote-bundle.pem"}
+                ),
                 "stderr": "",
             },
         ), mock.patch.object(
@@ -681,8 +687,8 @@ class FeatureSmokeTests(unittest.TestCase):
         self.assertNotIn("--cert", curl_calls[1])
         self.assertIn("--write-out", curl_calls[1])
         self.assertNotIn("--resolve", curl_calls[2])
-        self.assertIn("https://remote.example.test:43111/v1/atm/doctor", curl_calls[2])
-        self.assertIn("remote.example.test:43111:192.0.2.20", curl_calls[0])
+        self.assertIn("https://remote.example.test:43201/v1/atm/doctor", curl_calls[2])
+        self.assertIn("remote.example.test:43201:192.0.2.20", curl_calls[0])
         local_ca_path = curl_calls[0][curl_calls[0].index("--cacert") + 1]
         self.assertEqual(Path(local_ca_path).name, "remote-public.pem")
         self.assertTrue(any("unauthenticated mTLS" in case["name"] for case in cases))
@@ -697,7 +703,7 @@ class FeatureSmokeTests(unittest.TestCase):
             with self.subTest(value=value), mock.patch.dict(
                 os.environ, {"ATM_SMOKE_DIRECT_PEER_PORT": value}, clear=False
             ), self.assertRaisesRegex(RUNNER.SmokeError, "ATM_SMOKE_DIRECT_PEER_PORT"):
-                RUNNER.direct_peer_port()
+                RUNNER.direct_peer_port("atm")
 
     def test_mtls_rejection_requires_nonzero_curl_exit_and_no_http_status(self):
         self.assertTrue(RUNNER.mtls_rejected_before_http({"exit_code": 35, "stdout": "000", "stderr": ""}))

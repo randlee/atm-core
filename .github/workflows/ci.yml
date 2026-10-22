@@ -215,26 +215,15 @@ jobs:
           toolchain: "1.94.1"
           components: clippy, rustfmt
 
-      - name: Cache cargo registry
+      # Only develop/main save; PRs restore the default branch (develop) cache.
+      # Per-PR saves filled the 10 GB repo limit with identical 3 GB targets.
+      - name: Cache cargo
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: ~/.cargo/registry
-          key: ubuntu-clippy-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ubuntu-clippy-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ubuntu-clippy-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          shared-key: clippy
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main' }}
 
       - name: Run clippy
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
@@ -295,26 +284,15 @@ jobs:
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
 
-      - name: Cache cargo registry
+      # Only develop/main save; PRs restore the default branch (develop) cache.
+      # Per-PR saves filled the 10 GB repo limit with identical 3 GB targets.
+      - name: Cache cargo
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          shared-key: test
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main' }}
 
       - name: Cache bootstrap outputs
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
@@ -602,6 +580,24 @@ jobs:
       - name: Build universal hermes-atm wheel
         run: python -m pip wheel --no-deps --wheel-dir dist crates/hermes-atm
 
+      - name: Build PyPI-compatible atm-query wheel
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          command: build
+          maturin-version: v1.14.1
+          rust-toolchain: "1.94.1"
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          container: ${{ matrix.container }}
+          working-directory: crates/atm-query-python
+          args: --release --locked --compatibility pypi -i ${{ matrix.interpreter }} --out ../../atm-query-native-dist
+
+      - name: Collect native atm-query wheel
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp atm-query-native-dist/atm_query*.whl dist/
+
       - name: Verify abi3 artifact metadata
         shell: bash
         run: |
@@ -614,8 +610,8 @@ jobs:
         shell: bash
         run: |
           python -m pip install --disable-pip-version-check --no-deps --requirement tools/bootstrap-requirements.txt
-          python -m pip install --no-deps dist/atm_graft*.whl dist/hermes_atm*.whl
-          python -c "import atm_graft, hermes_atm"
+          python -m pip install --no-deps dist/atm_graft*.whl dist/atm_query*.whl dist/hermes_atm*.whl
+          python -c "import atm_graft, atm_query, hermes_atm"
 
       - name: Smoke-test musllinux wheel in a clean musl environment
         if: ${{ matrix.smoke == 'musl' }}
@@ -628,8 +624,8 @@ jobs:
             sh -euxc '
               python -m venv /tmp/atm-wheel-smoke
               /tmp/atm-wheel-smoke/bin/pip install --disable-pip-version-check --no-deps --requirement /workspace/tools/bootstrap-requirements.txt
-              /tmp/atm-wheel-smoke/bin/pip install --no-deps dist/atm_graft*.whl dist/hermes_atm*.whl
-              /tmp/atm-wheel-smoke/bin/python -c "import atm_graft, hermes_atm"
+              /tmp/atm-wheel-smoke/bin/pip install --no-deps dist/atm_graft*.whl dist/atm_query*.whl dist/hermes_atm*.whl
+              /tmp/atm-wheel-smoke/bin/python -c "import atm_graft, atm_query, hermes_atm"
             '
 
       - name: Upload release-wheel candidates

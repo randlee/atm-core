@@ -100,7 +100,7 @@ def certificate_authority(pem: Path) -> str:
     return match.group(1)
 
 
-def resolve_dns_addresses(host: str, port: int = 43101) -> list[str]:
+def resolve_dns_addresses(host: str, port: int) -> list[str]:
     """Return every address the local resolver provides for a peer hostname."""
     try:
         records = socket.getaddrinfo(
@@ -111,7 +111,7 @@ def resolve_dns_addresses(host: str, port: int = 43101) -> list[str]:
     return sorted({record[4][0] for record in records})
 
 
-def remote_resolve_dns_addresses(peer: str, host: str, port: int = 43101) -> list[str]:
+def remote_resolve_dns_addresses(peer: str, host: str, port: int) -> list[str]:
     """Resolve a hostname through the remote computer's normal resolver."""
     script = (
         "import json, socket; "

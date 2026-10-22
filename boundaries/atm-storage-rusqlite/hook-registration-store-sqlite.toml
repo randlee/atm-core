@@ -1,0 +1,50 @@
+boundary_id = "BOUNDARY-HookRegistrationStore-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteHookRegistrationStore"
+
+[public]
+trait = "HookRegistrationStore"
+
+[implementation]
+type = "SqliteHookRegistrationStore"
+module = "atm_storage_rusqlite::hook_registration_store"
+visibility = "private"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
+
+[ownership]
+io_owns = ["sqlite"]
+io_forbidden = ["message_delivery", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "rusqlite"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime", "atm-daemon -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqliteHookRegistrationStore", "rusqlite::Connection"]
+
+[contracts]
+request_types = ["HookRegistration", "TeamName", "PhaseId", "HookName", "IsoTimestamp"]
+response_types = ["HookRegistration", "Vec<HookRegistration>"]
+error_types = ["AtmError"]
+notes = [
+  "register is an upsert on (team, phase, hook): an active key keeps its stored registered_at, never INSERT OR REPLACE",
+  "timestamps are fixed-width UTC nanosecond RFC 3339 text so SQL ORDER BY matches chronological order",
+  "a CHECK or NOT NULL violation maps to a validation error naming the table; a stored custom that is not a JSON object is an internal error naming the row",
+]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-HOOK-REGISTRATION-STORE-SQLITE"]
+review_gates = ["private_sqlite_impl", "register_is_upsert"]
+
+[status]
+state = "concrete_landed"

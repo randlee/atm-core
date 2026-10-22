@@ -299,7 +299,13 @@ impl SendCommand {
         if request.task_id.is_some() || request.task_op.is_some() {
             preflight_task_op_compatibility(&composition).await?;
         }
-        let mut outcome = composition.send(request).await?;
+        let mut outcome = match composition.send_hookable(request).await? {
+            crate::composition::HookableOutcome::Normal(outcome) => outcome,
+            crate::composition::HookableOutcome::Actions(response) => {
+                println!("{}", output::print_hook_actions(&response));
+                return Ok(());
+            }
+        };
 
         if let Some(warning) = unrostered_sender_warning(&caller_identity, &caller_team) {
             outcome.warnings.push(warning);

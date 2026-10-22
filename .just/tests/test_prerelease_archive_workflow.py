@@ -8,8 +8,10 @@ import json
 import os
 from pathlib import Path
 from contextlib import redirect_stderr
+import hashlib
 import subprocess
 import sys
+import tarfile
 import tempfile
 import tomllib
 import unittest
@@ -57,6 +59,47 @@ def packaging_script(workflow: str, step_name: str) -> str:
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
     SUBPROCESS_TIMEOUT_SECONDS = 30
+
+    def fixture_public_release_assets(
+        self, prerelease, manifest: dict, version: str
+    ) -> dict[str, bytes]:
+        """Build an in-memory public GitHub-release response map."""
+        target = {
+            "target": "x86_64-unknown-linux-gnu",
+            "archive": "tar.gz",
+        }
+        archive_name = prerelease.archive_name(manifest, version, target)
+        archive = io.BytesIO()
+        with tarfile.open(fileobj=archive, mode="w:gz") as bundle:
+            for name in ("atm", "atm-daemon"):
+                content = f"#!/bin/sh\necho '{name} {version}'\n".encode()
+                member = tarfile.TarInfo(f"atm-{version}/bin/{name}")
+                member.mode = 0o755
+                member.size = len(content)
+                bundle.addfile(member, io.BytesIO(content))
+        assets = {archive_name: archive.getvalue()}
+        for prefix in prerelease.required_wheel_prefixes(manifest):
+            name = f"{prefix}{version}-py3-none-any.whl"
+            assets[name] = f"fixture wheel {name}\n".encode()
+        checksums = "".join(
+            f"{hashlib.sha256(content).hexdigest()}  {name}\n"
+            for name, content in sorted(assets.items())
+        )
+        assets["checksums.txt"] = checksums.encode()
+        return assets
+
+    def fixture_public_urlopen(self, assets: dict[str, bytes], public_url: str):
+        """Return a deterministic `urlopen` fake for versioned public assets."""
+        requested: list[str] = []
+
+        def urlopen_fixture(url: str, *, timeout: int):
+            self.assertEqual(timeout, 30)
+            self.assertTrue(url.startswith(f"{public_url}/"))
+            name = url.removeprefix(f"{public_url}/")
+            requested.append(name)
+            return io.BytesIO(assets[name])
+
+        return urlopen_fixture, requested
 
     def test_wait_for_archive_returns_after_a_successful_run(self) -> None:
         prerelease = prerelease_script()
@@ -109,7 +152,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
 
         sleep.assert_not_called()
 
-    def test_wait_for_archive_raises_after_twenty_minutes_without_real_sleep(self) -> None:
+    def test_wait_for_archive_raises_after_sixty_minutes_without_real_sleep(self) -> None:
         prerelease = prerelease_script()
         clock = [0.0]
         sleeps: list[float] = []
@@ -128,12 +171,12 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 SystemExit,
-                "timed out waiting for prerelease-archive.yml for prerelease/v1.5.17 after 20.0 minutes",
+                "timed out waiting for prerelease-archive.yml for prerelease/v1.5.17 after 60.0 minutes",
             ):
                 prerelease.wait_for_archive("prerelease/v1.5.17", "source-sha")
 
-        self.assertEqual(clock, [20 * 60])
-        self.assertEqual(sleeps, [60] * 20)
+        self.assertEqual(clock, [60 * 60])
+        self.assertEqual(sleeps, [60] * 60)
 
     def test_consumer_input_is_the_prerelease_manifest_source_of_truth(self) -> None:
         root = discover_repo_root()
@@ -177,9 +220,9 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             candidate_bin = stage / "bin"
             path_bin = fixture / "path"
             private_bin = fixture / "private-selectors"
-            for folder in (old_bin, candidate_bin, path_bin):
+            for folder in (old_bin, path_bin):
                 folder.mkdir(parents=True)
-            for folder, version in ((old_bin, "1.5.10"), (candidate_bin, "1.5.11")):
+            for folder, version in ((old_bin, "1.5.10"),):
                 for name in ("atm", "atm-daemon"):
                     binary = folder / name
                     binary.write_text(f"#!/bin/sh\necho '{name} {version}'\n", encoding="utf-8")
@@ -188,11 +231,11 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             active_daemon = path_bin / "atm-daemon"
             active_cli.symlink_to(old_bin / "atm")
             active_daemon.symlink_to(old_bin / "atm-daemon")
-            config = dict(
-                tomllib.loads(
-                    (root / "release" / "publish-artifacts.toml").read_text(encoding="utf-8")
-                )["prerelease"]
+            manifest = tomllib.loads(
+                (root / "release" / "publish-artifacts.toml").read_text(encoding="utf-8")
             )
+            config = dict(manifest["prerelease"])
+            manifest["prerelease"] = config
             config.update({
                 "install_root": str(fixture / "builds"),
                 "selector_dir": {
@@ -201,6 +244,9 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                     "windows": str(private_bin),
                 },
             })
+            public_url = "https://github.com/randlee/atm-core/releases/download/prerelease/v1.5.11"
+            assets = self.fixture_public_release_assets(prerelease, manifest, "1.5.11")
+            urlopen_fixture, requested_assets = self.fixture_public_urlopen(assets, public_url)
             calls: list[str] = []
 
             def run_manifest_command(command_text: str, *, capture: bool = False):
@@ -242,8 +288,9 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 return subprocess.CompletedProcess([], 0, "", "")
 
             with (
-                mock.patch.object(prerelease, "select_release", return_value=("1.5.11", {})),
                 mock.patch.object(prerelease.platform, "system", return_value="Linux"),
+                mock.patch.object(prerelease.platform, "machine", return_value="x86_64"),
+                mock.patch.object(prerelease, "urlopen", side_effect=urlopen_fixture),
                 mock.patch.object(prerelease, "shell", side_effect=run_manifest_command),
                 mock.patch.dict(os.environ, {"PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"}),
                 mock.patch.object(
@@ -267,7 +314,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 ) as live_proof,
                 mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
             ):
-                version, installed = prerelease.install({"prerelease": config}, "1.5.11")
+                version, installed = prerelease.install(manifest, "1.5.11")
 
             self.assertEqual((version, installed), ("1.5.11", stage))
             self.assertEqual((private_bin / "atm").resolve(), (candidate_bin / "atm").resolve())
@@ -285,39 +332,45 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 (candidate_bin / "atm").resolve(), (candidate_bin / "atm-daemon").resolve()
             )
             self.assertEqual(calls, ["atm --version"])
+            self.assertEqual(set(requested_assets), set(assets))
             self.assertNotIn("already selected; service left running", stdout.getvalue())
 
     @unittest.skipUnless(os.name == "posix", "selector composition uses POSIX symlinks")
     def test_failed_activation_keeps_non_transactional_selector_repoint(self) -> None:
         """Consumer contract for sc-publish#112: failed activation keeps repoints."""
         prerelease = prerelease_script()
+        manifest_root = discover_repo_root()
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            stage = root / "builds" / "v1.5.11" / "bin"
+            stage = root / "builds" / "v1.5.11"
             selector = root / "selectors"
-            stage.mkdir(parents=True)
-            for name in ("atm", "atm-daemon"):
-                binary = stage / name
-                binary.write_text("#!/bin/sh\n", encoding="utf-8")
-                binary.chmod(0o755)
-            config = {
-                "binaries": ["atm", "atm-daemon"],
+            manifest = tomllib.loads(
+                (manifest_root / "release" / "publish-artifacts.toml").read_text(encoding="utf-8")
+            )
+            config = dict(manifest["prerelease"])
+            manifest["prerelease"] = config
+            config.update({
                 "install_root": str(root / "builds"),
                 "selector_dir": {"darwin": str(selector), "linux": str(selector), "windows": str(selector)},
                 "post_install": "activate {version}",
                 "verify": "verify {version}",
-            }
+            })
+            public_url = "https://github.com/randlee/atm-core/releases/download/prerelease/v1.5.11"
+            assets = self.fixture_public_release_assets(prerelease, manifest, "1.5.11")
+            urlopen_fixture, requested_assets = self.fixture_public_urlopen(assets, public_url)
             with (
-                mock.patch.object(prerelease, "select_release", return_value=("1.5.11", {})),
                 mock.patch.object(prerelease.platform, "system", return_value="Linux"),
+                mock.patch.object(prerelease.platform, "machine", return_value="x86_64"),
+                mock.patch.object(prerelease, "urlopen", side_effect=urlopen_fixture),
                 mock.patch.object(
                     prerelease, "shell", side_effect=subprocess.CalledProcessError(1, "activate")
                 ),
             ):
                 with self.assertRaises(subprocess.CalledProcessError):
-                    prerelease.install({"prerelease": config}, "1.5.11")
+                    prerelease.install(manifest, "1.5.11")
             self.assertTrue((selector / "atm").is_symlink())
-            self.assertTrue(os.path.samefile(selector / "atm", stage / "atm"))
+            self.assertTrue(os.path.samefile(selector / "atm", stage / "bin" / "atm"))
+            self.assertEqual(set(requested_assets), set(assets))
 
     def test_generic_workflow_preserves_manifest_build_and_plain_artifact_contracts(self) -> None:
         root = discover_repo_root()
@@ -329,13 +382,22 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertIn('for bundled_path in binary.get("bundled_paths", []):', workflow)
         self.assertIn("uses: actions/upload-artifact@v4", workflow)
         self.assertIn("name: ${{ matrix.target }}", workflow)
-        self.assertIn('shasum -a 256 "${archives[@]}" > checksums.txt', workflow)
-        self.assertIn('"${archives[@]}" checksums.txt', workflow)
+        self.assertIn('shasum -a 256 "${assets_to_publish[@]}" > checksums.txt', workflow)
+        self.assertIn('"${assets_to_publish[@]}" checksums.txt', workflow)
+        self.assertIn("uses: ./.github/workflows/ci.yml", workflow)
+        self.assertIn("build_release_artifacts: true", workflow)
         self.assertIn('gh release create "$tag" --prerelease', workflow)
         self.assertIn('cmp checksums.txt existing-release/checksums.txt', workflow)
         self.assertIn("concurrent run converged", workflow)
         self.assertNotIn('gh release upload "$tag" --clobber', workflow)
         self.assertNotIn("randlee/atm-core", workflow)
+        release_step = workflow.split(
+            "      - name: Generate checksums and publish GitHub prerelease assets\n", 1
+        )[1]
+        self.assertRegex(release_step, r"find assets/hermes-atm-wheels-\*.*atm_graft\*\.whl")
+        self.assertRegex(release_step, r"find assets/hermes-atm-wheels-\*.*atm_query\*\.whl")
+        self.assertRegex(release_step, r"find assets/hermes-atm-wheels-linux-x86_64.*hermes_atm\*\.whl")
+        self.assertNotRegex(release_step, r"assets/hermes-atm-wheels-linux-x86_64.*atm_query")
 
     def test_checksums_are_an_explicit_github_release_asset(self) -> None:
         workflow = workflow_text("prerelease-archive.yml")
@@ -344,10 +406,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         )[1]
         release_job = workflow.split("  release:\n", 1)[1]
         self.assertIn("- uses: actions/checkout@v4", release_job)
-        self.assertIn('shasum -a 256 "${archives[@]}" > checksums.txt', release_step)
+        self.assertIn('shasum -a 256 "${assets_to_publish[@]}" > checksums.txt', release_step)
         self.assertIn(
             'gh release create "$tag" --prerelease --title "$tag" --generate-notes '
-            '"${archives[@]}" checksums.txt',
+            '"${assets_to_publish[@]}" checksums.txt',
             release_step,
         )
         self.assertNotIn("provenance.json", workflow)

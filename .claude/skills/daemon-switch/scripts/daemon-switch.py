@@ -1067,9 +1067,9 @@ class HerdrRestartEndpoint:
         return self.entry.name
 
 
-def herdr_restart_endpoints(cli: Path) -> list[HerdrRestartEndpoint]:
+def herdr_restart_endpoints(cli: Path, *, doctor_payload: object | None = None) -> list[HerdrRestartEndpoint]:
     """Validate the AY.3 doctor projection used by the explicit coordinator."""
-    payload = doctor(cli)
+    payload = doctor(cli) if doctor_payload is None else doctor_payload
     if not isinstance(payload, dict) or "error" in payload:
         raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native atm doctor --json could not be read", "Fix native doctor and rerun", 4)
     herdr = payload.get("herdr")
@@ -1209,8 +1209,15 @@ def run_herdr_restart(args: argparse.Namespace) -> None:
 
 
 def herdr_restart_pending_endpoints(cli: Path) -> list[HerdrRestartEndpoint]:
+    payload = doctor(cli)
+    # Ordinary daemon restart intentionally runs before the selected service
+    # starts.  A doctor error payload at this point therefore means no live
+    # Herdr endpoint can be pending; restart proves readiness after start.
+    # Keep malformed readable doctor projections fail-closed below.
+    if isinstance(payload, dict) and "error" in payload:
+        return []
     try:
-        return [endpoint for endpoint in herdr_restart_endpoints(cli) if endpoint.state_kind == "client_server_mismatch"]
+        return [endpoint for endpoint in herdr_restart_endpoints(cli, doctor_payload=payload) if endpoint.state_kind == "client_server_mismatch"]
     except HerdrEntryError as error:
         if error.code == "HERDR_NOT_CONFIGURED":
             return []

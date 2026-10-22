@@ -1,6 +1,7 @@
 plan = "docs/plans/phase-bj.jsonl"
 root = "atm-phase-bj"
 integration_branch = "integrate/phase-bj"
+code_checkout = "../atm-bd-orchestration"
 lead = "team-lead"
 
 [templates]

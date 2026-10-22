@@ -1030,6 +1030,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "command_result", return_value={"exit_code": 0, "stdout": "", "stderr": ""}),
                 mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "local_endpoint", side_effect=RUNNER.SmokeError("benchmark failed")),
@@ -1092,6 +1093,8 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
                 mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(RUNNER, "disposable_peer_host", return_value="capacity-test.example.test"),
+                mock.patch.object(RUNNER, "command_result", return_value={"exit_code": 0, "stdout": "", "stderr": ""}),
                 mock.patch.object(RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("stop after evidence setup")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=Path(directory) / "raw.json"),
                 mock.patch.object(
@@ -1130,9 +1133,11 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
                 mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(RUNNER, "disposable_peer_host", return_value="capacity-test.example.test"),
                 mock.patch.object(
                     RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("setup failed"),
                 ),
+                mock.patch.object(RUNNER, "command_result", return_value={"exit_code": 0, "stdout": "", "stderr": ""}),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
                 mock.patch.object(
                     RUNNER,
@@ -1175,6 +1180,8 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "disposable_peer_host", return_value="capacity-test.example.test"),
+                mock.patch.object(RUNNER, "command_result", return_value={"exit_code": 0, "stdout": "", "stderr": ""}),
                 mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, output)),
                 mock.patch.object(
                     RUNNER,
@@ -1964,7 +1971,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             "fatal config failure",
         )
 
-    def test_capacity_daemon_launches_the_shipped_binary_with_explicit_peer_wire_and_port(self):
+    def test_capacity_daemon_launches_with_explicit_peer_wire_and_persisted_port(self):
         process = mock.Mock()
         process.stdout = mock.Mock()
         process.stderr = mock.Mock()
@@ -1984,7 +1991,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(Path(launched[0]), Path("/release/atm-daemon"))
         self.assertEqual(
             launched[1:],
-            ["--peer-wire-security", "plaintext-test", "--direct-peer-port", "43102"],
+            ["--peer-wire-security", "plaintext-test"],
         )
 
     def test_managed_mode_rejects_a_doctor_that_reports_the_wrong_wire_mode(self):

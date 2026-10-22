@@ -1254,10 +1254,8 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
     // task, not a queue drain of the assignment message
     // (nudge_dispatch.rs:24-31, send/nudge_template.rs:138).
     assert!(prompts.iter().any(|text| {
-        text.starts_with(&format!(
-            "<atm task=\"{}\" ready message=\"{first_message_id}\"",
-            first.as_str()
-        ))
+        text.starts_with(&format!("<atm task=\"{}\" open=\"", first.as_str()))
+            && text.contains(&format!(" ready message=\"{first_message_id}\""))
     }));
     let prompts_after_first = prompts.len();
     assert_eq!(
@@ -1292,10 +1290,8 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
     // first prompt is `task_ready` again because its reminder count is still
     // zero (nudge_dispatch.rs:24-31).
     assert!(prompts[prompts_after_first..].iter().any(|text| {
-        text.starts_with(&format!(
-            "<atm task=\"{}\" ready message=\"{second_message_id}\"",
-            second.as_str()
-        ))
+        text.starts_with(&format!("<atm task=\"{}\" open=\"", second.as_str()))
+            && text.contains(&format!(" ready message=\"{second_message_id}\""))
     }));
     assert_eq!(
         runtime
@@ -1371,11 +1367,10 @@ async fn ax5_02_drain_prompt_consumes_the_shared_reminder_budget() {
     // BB.5: first prompt `task_ready`, later prompts `task_reminder` with a
     // rising attempt; the drain prompt is an ordinary queue nudge that names
     // no task (nudge_dispatch.rs:24-31, send/nudge_template.rs:138-143).
-    assert!(prompts[0].starts_with(&format!("<atm task=\"{}\" ready ", task_id.as_str())));
-    assert!(prompts[1].starts_with(&format!(
-        "<atm task=\"{}\" reminder=\"1\" ",
-        task_id.as_str()
-    )));
+    assert!(prompts[0].starts_with(&format!("<atm task=\"{}\" open=\"", task_id.as_str())));
+    assert!(prompts[0].contains(" ready "));
+    assert!(prompts[1].starts_with(&format!("<atm task=\"{}\" open=\"", task_id.as_str())));
+    assert!(prompts[1].contains(" reminder=\"1\" "));
     assert!(prompts[2].starts_with("<atm from=\""));
     assert!(!prompts[2].contains(task_id.as_str()));
 }
@@ -1668,14 +1663,18 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
     // the newer assigned task is never prompted and never reminded
     // (task_pass.rs:311-343 keeps one head per member).
     assert_eq!(reminders.len(), 3);
-    assert!(
-        reminders
-            .iter()
-            .all(|text| text.contains(first.as_str()) && !text.contains(second.as_str()))
-    );
+    // One nudge per member lists every open task in queue order, so the
+    // newer assigned task is named in `open` but never becomes the head.
+    assert!(reminders.iter().all(|text| text.contains(&format!(
+        "open=\"{} {}\"",
+        first.as_str(),
+        second.as_str()
+    ))));
     assert!(reminders[0].starts_with(&format!(
-        "<atm task=\"{}\" ready message=\"{first_message}\"",
-        first.as_str()
+        "<atm task=\"{}\" open=\"{} {}\" ready message=\"{first_message}\"",
+        first.as_str(),
+        first.as_str(),
+        second.as_str()
     )));
     assert_eq!(active.reminder_count, 3);
     let queued = store
@@ -1955,11 +1954,10 @@ async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
     let prompts = prompt_texts(&fake);
     assert_eq!(prompts.len(), 3, "one drain, then two task-pass prompts");
     assert!(prompts[0].starts_with("<atm from=\"") && !prompts[0].contains(task_id.as_str()));
-    assert!(prompts[1].starts_with(&format!("<atm task=\"{}\" ready ", task_id.as_str())));
-    assert!(prompts[2].starts_with(&format!(
-        "<atm task=\"{}\" reminder=\"1\" ",
-        task_id.as_str()
-    )));
+    assert!(prompts[1].starts_with(&format!("<atm task=\"{}\" open=\"", task_id.as_str())));
+    assert!(prompts[1].contains(" ready "));
+    assert!(prompts[2].starts_with(&format!("<atm task=\"{}\" open=\"", task_id.as_str())));
+    assert!(prompts[2].contains(" reminder=\"1\" "));
 }
 
 #[tokio::test]
@@ -2072,22 +2070,19 @@ async fn ac13_herdr_wake_pending_ephemeral_state_tracks_the_in_flight_claim() {
     );
 
     let prompt_gate = fake.block_next_prompt();
+    let prompt_started = pump.install_prompt_started_test_gate();
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(30), async {
-        loop {
-            if runtime
-                .roster_ephemeral_state(key.team(), key.agent())
-                .expect("member present in RAM roster")
-                .herdr_wake_pending
-            {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("wake-pending ephemeral state must be set while a claim is in flight");
+    tokio::time::timeout(GATE_WAIT_LIMIT, prompt_started.notified())
+        .await
+        .expect("prompt-started gate never fired");
+    assert!(
+        runtime
+            .roster_ephemeral_state(key.team(), key.agent())
+            .expect("member present in RAM roster")
+            .herdr_wake_pending,
+        "wake-pending ephemeral state must be set while a claim is in flight"
+    );
 
     drop(prompt_gate);
     shutdown_tx.send(()).expect("shutdown notification");
