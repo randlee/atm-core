@@ -61,17 +61,22 @@ pub(super) fn observe_escalation_episode_if_eligible(
     escalation_state: &crate::herdr_escalation::EscalationState,
     member: &atm_core::boundary::MemberKey,
     state: RuntimeMemberState,
+    state_changed_at: Option<IsoTimestamp>,
     has_open_task: bool,
 ) -> bool {
     let is_episode_state = matches!(
         state,
         RuntimeMemberState::Blocked | RuntimeMemberState::Offline
     );
-    if has_open_task && is_episode_state || !is_episode_state {
-        escalation_state.observe(member, state)
-    } else {
-        false
+    if is_episode_state && !has_open_task {
+        return false;
     }
+    escalation_state.observe(
+        member,
+        state,
+        state_changed_at,
+        crate::herdr_escalation::EpisodeObservation::Transition,
+    )
 }
 
 pub(super) struct PreparedTaskPass {
@@ -223,6 +228,7 @@ impl HerdrQueueWakePump {
             &self.escalation_state,
             &candidate.member,
             candidate.state,
+            candidate.state_changed_at,
             head.is_some(),
         );
         let provisional = dispose(

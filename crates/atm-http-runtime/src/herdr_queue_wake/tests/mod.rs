@@ -2763,12 +2763,14 @@ fn dormant_blocked_episode_is_not_consumed_before_a_task_arrives() {
         &state,
         &member,
         RuntimeMemberState::Blocked,
+        None,
         false,
     ));
     assert!(observe_escalation_episode_if_eligible(
         &state,
         &member,
         RuntimeMemberState::Blocked,
+        None,
         true,
     ));
 }

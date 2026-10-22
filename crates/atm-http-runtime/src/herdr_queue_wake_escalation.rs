@@ -7,10 +7,11 @@ use atm_core::boundary::{
     AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskEventKind, TaskEventRow,
     TaskRow,
 };
-use atm_core::protocol::RuntimeMemberState;
 use atm_core::types::IsoTimestamp;
 
-use crate::herdr_escalation::{EscalationKind, escalate_mail, escalation_summary};
+use crate::herdr_escalation::{
+    EpisodeObservation, EscalationKind, escalate_mail, escalation_summary,
+};
 use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, herdr_request_deadline};
 use crate::herdr_task_disposition::EpisodeKind;
 
@@ -204,14 +205,15 @@ fn episode_is_current(
     kind: EpisodeKind,
     since: IsoTimestamp,
 ) -> bool {
-    let expected = match kind {
-        EpisodeKind::Blocked => RuntimeMemberState::Blocked,
-        EpisodeKind::Offline => RuntimeMemberState::Offline,
-    };
     pump.service_runtime
         .roster_ephemeral_state(member.team(), member.agent())
         .is_some_and(|record| {
-            record.runtime.state == expected && record.runtime.state_changed_at == Some(since)
+            pump.escalation_state.observe(
+                member,
+                record.runtime.state,
+                record.runtime.state_changed_at,
+                EpisodeObservation::Verify { kind, since },
+            )
         })
 }
 

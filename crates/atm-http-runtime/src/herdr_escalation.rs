@@ -65,29 +65,49 @@ pub(crate) struct EscalationState {
     episodes: Arc<Mutex<HashMap<MemberKey, EpisodeKind>>>,
 }
 
+pub(crate) enum EpisodeObservation {
+    Transition,
+    Verify {
+        kind: EpisodeKind,
+        since: IsoTimestamp,
+    },
+}
+
 impl EscalationState {
-    /// Records an episode transition. Recovery clears the local episode entry.
+    /// Records an episode transition or verifies a fresh observation. Recovery
+    /// clears the local episode entry only on the transition path.
     pub(crate) fn observe(
         &self,
         member: &MemberKey,
         state: atm_core::protocol::RuntimeMemberState,
+        state_changed_at: Option<IsoTimestamp>,
+        observation: EpisodeObservation,
     ) -> bool {
         let episode = match state {
             atm_core::protocol::RuntimeMemberState::Blocked => EpisodeKind::Blocked,
             atm_core::protocol::RuntimeMemberState::Offline => EpisodeKind::Offline,
             _ => {
-                self.episodes
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .remove(member);
+                if matches!(observation, EpisodeObservation::Transition) {
+                    self.episodes
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .remove(member);
+                }
                 return false;
             }
         };
-        let mut episodes = self
-            .episodes
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        episodes.insert(member.clone(), episode) != Some(episode)
+        match observation {
+            EpisodeObservation::Transition => {
+                self.episodes
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .insert(member.clone(), episode)
+                    != Some(episode)
+            }
+            EpisodeObservation::Verify { kind, since } => {
+                episode == kind && state_changed_at == Some(since)
+            }
+        }
     }
 
     pub(crate) fn hold_targets_unavailable(&self, member: &MemberKey) {
@@ -374,9 +394,10 @@ async fn write_escalation_mail_with_summary(
 
 #[cfg(test)]
 mod tests {
-    use super::{EscalationKind, EscalationState, escalation_summary};
+    use super::{EpisodeObservation, EscalationKind, EscalationState, escalation_summary};
     use atm_core::boundary::MemberKey;
     use atm_core::protocol::RuntimeMemberState;
+    use atm_core::types::IsoTimestamp;
 
     fn member() -> MemberKey {
         MemberKey::new(
@@ -389,11 +410,72 @@ mod tests {
     fn episode_map_replaces_kind_on_flip_and_clears_on_recovery() {
         let state = EscalationState::default();
         let member = member();
-        assert!(state.observe(&member, RuntimeMemberState::Blocked));
-        assert!(!state.observe(&member, RuntimeMemberState::Blocked));
-        assert!(state.observe(&member, RuntimeMemberState::Offline));
-        assert!(!state.observe(&member, RuntimeMemberState::Idle));
-        assert!(state.observe(&member, RuntimeMemberState::Blocked));
+        assert!(state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            None,
+            EpisodeObservation::Transition,
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            None,
+            EpisodeObservation::Transition,
+        ));
+        assert!(state.observe(
+            &member,
+            RuntimeMemberState::Offline,
+            None,
+            EpisodeObservation::Transition,
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Idle,
+            None,
+            EpisodeObservation::Transition,
+        ));
+        assert!(state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            None,
+            EpisodeObservation::Transition,
+        ));
+    }
+
+    #[test]
+    fn episode_verification_requires_matching_kind_and_epoch() {
+        let state = EscalationState::default();
+        let member = member();
+        let since: IsoTimestamp = "2030-01-01T00:00:00Z".parse().expect("timestamp");
+        let later: IsoTimestamp = "2030-01-01T00:00:01Z".parse().expect("timestamp");
+
+        assert!(state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(since),
+            EpisodeObservation::Verify {
+                kind: crate::herdr_task_disposition::EpisodeKind::Blocked,
+                since,
+            },
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Offline,
+            Some(since),
+            EpisodeObservation::Verify {
+                kind: crate::herdr_task_disposition::EpisodeKind::Blocked,
+                since,
+            },
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(later),
+            EpisodeObservation::Verify {
+                kind: crate::herdr_task_disposition::EpisodeKind::Blocked,
+                since,
+            },
+        ));
     }
 
     #[test]
