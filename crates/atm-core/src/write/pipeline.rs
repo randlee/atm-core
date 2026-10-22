@@ -439,78 +439,147 @@ pub fn write_current_herdr_terminal_escalation_with_runtime(
         source_member.team(),
         source_member.agent(),
         |current| {
-            let Some(current) = current else {
-                return Err(AtmError::validation(
+            let current = current.ok_or_else(|| {
+                AtmError::validation(
                     "Herdr escalation admission member is absent from the runtime roster",
-                ));
-            };
-            let state = current.runtime.state;
-            let Some(started_at) = current.runtime.state_changed_at else {
-                return Err(AtmError::validation(
-                    "Herdr escalation admission requires a runtime episode epoch",
-                ));
-            };
-            let state_name = match state {
-                crate::protocol::RuntimeMemberState::Blocked => "blocked",
-                crate::protocol::RuntimeMemberState::Offline => "offline",
-                _ => return Err(AtmError::validation(
-                    "Herdr escalation admission requires blocked or offline runtime state",
-                )),
-            };
-            let tasks = task_store.open_tasks(source_member)?;
-            if tasks.is_empty() {
-                return Err(AtmError::validation(
-                    "Herdr escalation admission requires an authoritative open task",
-                ));
-            }
-            let roster = runtime.shared_roster_store_arc().load_roster(&team)?;
-            let leads: Vec<_> = roster.members.iter()
-                .filter(|member| member.agent_type == crate::schema::AgentType::Lead)
-                .map(|member| member.agent_name.clone())
-                .collect();
-            let mut recipients: Vec<crate::address::AgentAddress> = if leads.len() == 1 {
-                leads.into_iter().map(|lead| format!("{lead}@{team}").parse())
-                    .collect::<Result<_, _>>()?
-            } else {
-                Vec::new()
-            };
-            for recipient in task_store.effective_escalation_recipients(&team)? {
-                let is_current_member = roster
-                    .members
-                    .iter()
-                    .any(|member| member.agent_name == *recipient.agent());
-                if recipient.host().is_none()
-                    && recipient.team().is_none_or(|recipient_team| recipient_team == &team)
-                    && is_current_member
-                    && !recipients.iter().any(|known| known == &recipient)
-                {
-                    recipients.push(recipient);
-                }
-            }
-            let task_ids = tasks.iter().map(|task| task.task_id.to_string()).collect::<Vec<_>>().join(", ");
-            let summary = format!("escalation:{state_name}_escalated:{source_member}");
-            let body = format!(
-                "{state_name} member {} has been in this state since {}\nOpen tasks: {}\nRun: atm members --team {}",
-                source_member.agent(), started_at, task_ids, team,
-            );
-            let mut outcome = TerminalHerdrEscalationOutcome::default();
-            for recipient in recipients {
-                let recipient_name = recipient.agent().clone();
-                let request = WriteRequest::new(
-                    daemon_home.clone(), daemon_home.clone(),
-                    AgentName::from_validated(boundary::DAEMON_ACTOR_NAME),
-                    &recipient.to_string(), team.clone(),
-                    SendMessageSource::Inline(body.clone()), Some(summary.clone()),
-                    false, None, false,
-                )?
-                .with_internal_daemon_escalation_provenance()
-                .with_nudge_mode(NudgeMode::Deferred);
-                let written = write_mail_with_runtime(request, observability, runtime)?;
-                outcome.deliveries.push((recipient_name, written.persisted_message_id()));
-            }
-            Ok(outcome)
+                )
+            })?;
+            let (state_name, started_at) = terminal_episode(&current.runtime)?;
+            let (recipients, summary, body) = terminal_escalation_details(
+                runtime,
+                task_store.as_ref(),
+                source_member,
+                &team,
+                state_name,
+                started_at,
+            )?;
+            write_terminal_escalations(
+                daemon_home,
+                recipients,
+                team,
+                body,
+                summary,
+                observability,
+                runtime,
+            )
         },
     )
+}
+
+fn terminal_episode(
+    runtime: &atm_storage::RosterRuntimeObservation,
+) -> Result<(&'static str, IsoTimestamp), AtmError> {
+    let started_at = runtime.state_changed_at.ok_or_else(|| {
+        AtmError::validation("Herdr escalation admission requires a runtime episode epoch")
+    })?;
+    match runtime.state {
+        crate::protocol::RuntimeMemberState::Blocked => Ok(("blocked", started_at)),
+        crate::protocol::RuntimeMemberState::Offline => Ok(("offline", started_at)),
+        _ => Err(AtmError::validation(
+            "Herdr escalation admission requires blocked or offline runtime state",
+        )),
+    }
+}
+
+fn terminal_escalation_details(
+    runtime: &LocalServiceRuntime,
+    task_store: &dyn atm_storage::TaskStore,
+    source_member: &MemberKey,
+    team: &TeamName,
+    state_name: &str,
+    started_at: IsoTimestamp,
+) -> Result<(Vec<crate::address::AgentAddress>, String, String), AtmError> {
+    let tasks = task_store.open_tasks(source_member)?;
+    if tasks.is_empty() {
+        return Err(AtmError::validation(
+            "Herdr escalation admission requires an authoritative open task",
+        ));
+    }
+    let roster = runtime.shared_roster_store_arc().load_roster(team)?;
+    let recipients = terminal_escalation_recipients(task_store, team, &roster)?;
+    let task_ids = tasks
+        .iter()
+        .map(|task| task.task_id.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let summary = format!("escalation:{state_name}_escalated:{source_member}");
+    let body = format!(
+        "{state_name} member {} has been in this state since {}\nOpen tasks: {}\nRun: atm members --team {}",
+        source_member.agent(),
+        started_at,
+        task_ids,
+        team,
+    );
+    Ok((recipients, summary, body))
+}
+
+fn terminal_escalation_recipients(
+    task_store: &dyn atm_storage::TaskStore,
+    team: &TeamName,
+    roster: &atm_storage::RosterSnapshot,
+) -> Result<Vec<crate::address::AgentAddress>, AtmError> {
+    let leads: Vec<_> = roster
+        .members
+        .iter()
+        .filter(|member| member.agent_type == crate::schema::AgentType::Lead)
+        .map(|member| member.agent_name.clone())
+        .collect();
+    let mut recipients = if leads.len() == 1 {
+        leads
+            .into_iter()
+            .map(|lead| format!("{lead}@{team}").parse())
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        Vec::new()
+    };
+    for recipient in task_store.effective_escalation_recipients(team)? {
+        let is_current_member = roster
+            .members
+            .iter()
+            .any(|member| member.agent_name == *recipient.agent());
+        if recipient.host().is_none()
+            && recipient.team().is_none_or(|t| t == team)
+            && is_current_member
+            && !recipients.iter().any(|known| known == &recipient)
+        {
+            recipients.push(recipient);
+        }
+    }
+    Ok(recipients)
+}
+
+fn write_terminal_escalations(
+    daemon_home: std::path::PathBuf,
+    recipients: Vec<crate::address::AgentAddress>,
+    team: TeamName,
+    body: String,
+    summary: String,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<TerminalHerdrEscalationOutcome, AtmError> {
+    let mut outcome = TerminalHerdrEscalationOutcome::default();
+    for recipient in recipients {
+        let recipient_name = recipient.agent().clone();
+        let request = WriteRequest::new(
+            daemon_home.clone(),
+            daemon_home.clone(),
+            AgentName::from_validated(boundary::DAEMON_ACTOR_NAME),
+            &recipient.to_string(),
+            team.clone(),
+            SendMessageSource::Inline(body.clone()),
+            Some(summary.clone()),
+            false,
+            None,
+            false,
+        )?
+        .with_internal_daemon_escalation_provenance()
+        .with_nudge_mode(NudgeMode::Deferred);
+        let written = write_mail_with_runtime(request, observability, runtime)?;
+        outcome
+            .deliveries
+            .push((recipient_name, written.persisted_message_id()));
+    }
+    Ok(outcome)
 }
 
 pub fn send_mail_with_runtime(
