@@ -9,7 +9,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Current — Phase BA |
-| HTTP API SemVer | `1.15.0`; major is `/v1/atm` |
+| HTTP API SemVer | `1.16.0`; major is `/v1/atm` |
 | Authoritative ADR | ADR-033 |
 | Machine-readable publication | checked-in OpenAPI 3.1 and `atm api spec` |
 
@@ -169,10 +169,11 @@ OpenAPI document against route schemas and tests every documented route. The
 embedded document is published by `atm api spec --format json|yaml`; no daemon
 network endpoint is needed merely to retrieve documentation.
 
-The v1 resource paths are durable. The current baseline is `1.15.0`.
+The v1 resource paths are durable. The current baseline is `1.16.0`.
 
 | Version | Phase / date | Additive HTTP surface |
 | --- | --- | --- |
+| `1.16.0` | HTTP compatibility peer-doctor enforcement, 2026-10-22 | Adds optional `DoctorQuery.peer_http_api_version` and `DoctorQuery.peer_wire_security` for authenticated peer doctor ingress. Omitted fields default to the authenticated connector mode; peer doctor rejects a major or mode mismatch before dispatch. |
 | `1.14.0` | Phase BK.8, 2026-10-20 | Adds the stable `ATM_TASK_MAX_ACTIVE_REACHED` code for a task start refused at a member's configured active-task limit, with recovery instructions. The over-limit start formerly returned `ATM_TASK_MOVE_INVALID`; this change stays in the same rejection family and exit code 3 and is covered by the additive-minor classification. See ADR-061. |
 | `1.15.0` | HTTP compatibility peer-security enforcement, 2026-10-22 | Adds optional cross-host `WriteRequest.peer_wire_security`. Omitted values default to the receiver's established connector mode so existing mTLS and explicit plaintext-test peers continue to communicate; peer ingress rejects a mismatched mode before dispatch. |
 | `1.13.0` | Phase BK.7, 2026-10-19 | Six additive hook and cron routes under `/v1/atm`: `/hooks/register`, `/hooks/disable`, `/hooks/list`, `/cron/start`, `/cron/end` and `/cron/list`; a `HookActions` 200 response with `X-ATM-Hook-Actions` on hooked task commands; and optional `DoctorReport.hooks`, absent when the daemon predates it. See ADR-061. |
@@ -187,11 +188,11 @@ The v1 resource paths are durable. The current baseline is `1.15.0`.
 | `1.2.0` | AY.15, 2026-09-07 | Optional `herdr_agent` and `peer_http_api_version`. |
 
 The `1.3.0` baseline added optional Herdr doctor diagnostics, and the `1.2.0`
-baseline added the optional
-`peer_http_api_version` to cross-host write envelopes. Version checks reject
-only a peer major-version mismatch and tolerate minor skew; peer writes also
-carry the optional `peer_wire_security` mode and reject a mode mismatch before
-dispatch. Same-major
+baseline added the optional `peer_http_api_version` to cross-host write
+envelopes. Authenticated peer writes and doctor requests reject only a peer
+major-version mismatch and tolerate minor skew; both carry optional
+`peer_wire_security` and reject an explicit mode mismatch before dispatch.
+Same-major
 additive fields, error details,
 and endpoints require a minor version: servers default omitted additive request
 fields and ignore unknown additive fields; clients tolerate additive response

@@ -100,6 +100,14 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-10-22 — HTTP compatibility peer doctor:** `HTTP_API_VERSION`
+  moves from `1.15.0` to `1.16.0`. `DoctorQuery` gains optional
+  `peer_http_api_version` and `peer_wire_security` for authenticated peer
+  ingress. Omitted values default to the receiver's established connector
+  mode; an authenticated peer doctor rejects a HTTP-major or mode mismatch
+  before dispatch. This is an additive minor change: older same-major peer
+  doctor callers omit the fields and keep communicating unchanged.
+
 - **2026-10-22 — HTTP compatibility peer security:** `HTTP_API_VERSION`
   moves from `1.14.0` to `1.15.0`. Cross-host `WriteRequest` gains optional
   `peer_wire_security`; omitted values default to the receiver's established

@@ -226,11 +226,34 @@ impl AuthenticatedConnector {
     ) -> Result<AuthenticatedIngress, AtmError> {
         match request {
             ApiRequest::Write(write) => self.normalize_write(write, peer_address),
+            ApiRequest::Doctor(query) => self.normalize_doctor(query),
             _ => match self {
                 Self::Local => Ok(AuthenticatedIngress::Local),
                 Self::Peer { .. } => Ok(AuthenticatedIngress::Peer),
                 Self::PeerSocket => Ok(AuthenticatedIngress::AnonymousSmoke),
             },
+        }
+    }
+
+    fn normalize_doctor(&self, query: &mut DoctorQuery) -> Result<AuthenticatedIngress, AtmError> {
+        match self {
+            Self::Local => {
+                query.peer_http_api_version = None;
+                query.peer_wire_security = None;
+                Ok(AuthenticatedIngress::Local)
+            }
+            Self::Peer { .. } => {
+                validate_peer_write_version(query.peer_http_api_version.take())?;
+                validate_peer_write_security(
+                    query.peer_wire_security.take(),
+                    PeerWireSecurity::Mtls,
+                )?;
+                Ok(AuthenticatedIngress::Peer)
+            }
+            // Direct plain-TCP smoke is intentionally anonymous and does not
+            // become a governed authenticated peer merely by sending doctor
+            // metadata.
+            Self::PeerSocket => Ok(AuthenticatedIngress::AnonymousSmoke),
         }
     }
 }
@@ -945,7 +968,8 @@ mod tests {
     use std::sync::{Arc, Condvar, Mutex, MutexGuard};
     use std::time::{Duration, Instant};
 
-    use atm_core::api::HttpRequest;
+    use atm_core::api::{ApiRequest, HttpRequest};
+    use atm_core::doctor::DoctorQuery;
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::peer_wire::PeerWireSecurity;
     use atm_core::protocol::{HttpApiVersion, ResponseEnvelope};
@@ -1925,6 +1949,68 @@ mod tests {
         .expect_err("different peer security modes are incompatible");
         assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
         assert!(error.message().contains("peer wire-security mismatch"));
+    }
+
+    #[test]
+    fn authenticated_peer_doctor_requires_matching_compatibility_metadata() {
+        let connector =
+            AuthenticatedConnector::peer("trusted.example.test".parse().expect("source host"));
+        let mut compatible = ApiRequest::Doctor(DoctorQuery {
+            peer_http_api_version: Some(
+                HttpApiVersion::parse("1.0.0").expect("same-major minor-skew fixture"),
+            ),
+            peer_wire_security: Some(PeerWireSecurity::Mtls),
+            ..DoctorQuery::default()
+        });
+        assert_eq!(
+            connector
+                .normalize_request(&mut compatible, None)
+                .expect("same-major mTLS peer doctor is compatible"),
+            AuthenticatedIngress::Peer
+        );
+
+        let mut major_mismatch = ApiRequest::Doctor(DoctorQuery {
+            peer_http_api_version: Some(
+                HttpApiVersion::parse("2.0.0").expect("major-skew fixture"),
+            ),
+            peer_wire_security: Some(PeerWireSecurity::Mtls),
+            ..DoctorQuery::default()
+        });
+        let error = connector
+            .normalize_request(&mut major_mismatch, None)
+            .expect_err("different-major peer doctor is incompatible");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+
+        let mut security_mismatch = ApiRequest::Doctor(DoctorQuery {
+            peer_wire_security: Some(PeerWireSecurity::PlaintextTest),
+            ..DoctorQuery::default()
+        });
+        let error = connector
+            .normalize_request(&mut security_mismatch, None)
+            .expect_err("different peer doctor security modes are incompatible");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+
+        let mut older_peer = ApiRequest::Doctor(DoctorQuery::default());
+        assert_eq!(
+            connector
+                .normalize_request(&mut older_peer, None)
+                .expect("older peer doctor may omit additive metadata"),
+            AuthenticatedIngress::Peer
+        );
+
+        let mut smoke = ApiRequest::Doctor(DoctorQuery {
+            peer_http_api_version: Some(
+                HttpApiVersion::parse("2.0.0").expect("major-skew fixture"),
+            ),
+            peer_wire_security: Some(PeerWireSecurity::Mtls),
+            ..DoctorQuery::default()
+        });
+        assert_eq!(
+            AuthenticatedConnector::peer_socket()
+                .normalize_request(&mut smoke, None)
+                .expect("untrusted direct smoke stays separate"),
+            AuthenticatedIngress::AnonymousSmoke
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]
