@@ -8,16 +8,23 @@ import json
 import os
 from pathlib import Path
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
 import time
-import tomllib
 from urllib.request import urlopen
 import zipfile
 from typing import Any, Sequence
+
+
+MINIMUM_PYTHON_VERSION = (3, 11)
+try:
+    import tomllib
+except ModuleNotFoundError:  # Keep old interpreters able to report a useful error.
+    tomllib = None  # type: ignore[assignment]
 
 
 STABLE_VERSION_PARTS = 3
@@ -29,6 +36,15 @@ ARCHIVE_POLL_SECONDS = 60
 def command(args: Sequence[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
     """Run one external command with the current repository as its working directory."""
     return subprocess.run(args, check=True, text=True, capture_output=capture)
+
+
+def require_supported_python() -> None:
+    if sys.version_info < MINIMUM_PYTHON_VERSION:
+        raise SystemExit(
+            "PRERELEASE.PYTHON_VERSION_UNSUPPORTED: Python 3.11 or newer is required; "
+            "fix: install Python 3.11+ and run prerelease.py with that interpreter "
+            "(for example, python3.11 .claude/skills/prerelease/scripts/prerelease.py)."
+        )
 
 
 def shell(command_text: str, *, capture: bool = False) -> subprocess.CompletedProcess[str]:
@@ -359,13 +375,40 @@ def repoint_selector(paths: Sequence[Path], config: dict[str, Any]) -> None:
         target.symlink_to(source)
 
 
-def replace_command(template: str, version: str, stage: Path) -> str:
-    return template.replace("{version}", version).replace("{stage_dir}", str(stage))
+def selector_links(config: dict[str, Any]) -> tuple[Path, Path]:
+    binaries = config.get("binaries")
+    if not isinstance(binaries, list) or not all(isinstance(value, str) for value in binaries):
+        raise SystemExit("[prerelease].binaries must be a non-empty string array")
+    names = {value: binary_name(value) for value in binaries}
+    try:
+        cli_name, daemon_name = names["atm"], names["atm-daemon"]
+    except KeyError as error:
+        raise SystemExit("[prerelease].binaries must include atm and atm-daemon") from error
+    selector = selector_directory(config)
+    return selector / cli_name, selector / daemon_name
+
+
+def shell_quote(value: str) -> str:
+    return subprocess.list2cmdline([value]) if os.name == "nt" else shlex.quote(value)
+
+
+def replace_command(template: str, version: str, stage: Path, config: dict[str, Any]) -> str:
+    cli_link, daemon_link = selector_links(config)
+    replacements = {
+        "{version}": version,
+        "{stage_dir}": str(stage),
+        "{python}": shell_quote(sys.executable),
+        "{cli_link}": shell_quote(str(cli_link)),
+        "{daemon_link}": shell_quote(str(daemon_link)),
+    }
+    for placeholder, value in replacements.items():
+        template = template.replace(placeholder, value)
+    return template
 
 
 def verify_install(config: dict[str, Any], version: str, stage: Path) -> None:
-    shell(replace_command(required_string(config, "post_install"), version, stage))
-    verified = shell(required_string(config, "verify"), capture=True)
+    shell(replace_command(required_string(config, "post_install"), version, stage, config))
+    verified = shell(replace_command(required_string(config, "verify"), version, stage, config), capture=True)
     if version not in f"{verified.stdout}\n{verified.stderr}":
         raise SystemExit(f"verify command did not report {version}")
 
@@ -470,6 +513,7 @@ def publish(manifest: dict[str, Any]) -> tuple[str, str]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    require_supported_python()
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
