@@ -1,0 +1,35 @@
+{
+  "schema": "prompt-report-1",
+  "test_id": "AT9-task-start",
+  "agent": "claude-code",
+  "steps": [
+    {
+      "name": "started-line-at-write-time",
+      "status": "pass",
+      "detail": "env ATM_IDENTITY=fx-at9-beta ATM_TEAM=fx-at9 atm task start at9-c1-1792627831 --json -> {\"outcome\":\"sent\",\"message_id\":\"01M5GF43J72R0V2NAWQEJ3DS6B\",\"task_id\":\"at9-c1-1792627831\",\"summary\":\"started at9-c1-1792627831\"}. Then as alpha, before any read: atm list --unread --json -> {\"count\":1,\"rows\":[{\"message_id\":\"01M5GF43J72R0V2NAWQEJ3DS6B\",\"summary\":\"started at9-c1-1792627831\",\"from\":\"fx-at9-beta\",\"read\":false,\"task_id\":\"at9-c1-1792627831\"}]}. atm read --message-id 01M5GF43J72R0V2NAWQEJ3DS6B --json -> \"text\":\"started at9-c1-1792627831\",\"taskId\":\"at9-c1-1792627831\",\"taskOp\":{\"op\":\"start\"}. atm task events: events started (seq 3, to_state active), handoffs kind task_started to fx-at9-alpha. Note: --as flag on 'atm task assign' failed with 'identity is not configured'; env prefix used instead."
+    },
+    {
+      "name": "out-of-order-start-reorders-queue",
+      "status": "pass",
+      "detail": "assigned at9-c2a-1792627831 then at9-c2b-1792627831, started at9-c2b as beta. atm task list --json (beta) -> [{\"task_id\":\"at9-c2b-1792627831\",\"state\":\"active\",\"position\":1},{\"task_id\":\"at9-c2a-1792627831\",\"state\":\"assigned\",\"position\":2}]"
+    },
+    {
+      "name": "unstarted-task-keeps-reminding",
+      "status": "pass",
+      "detail": "assigned at9-c3-1792627831, not started. atm task events at9-c3-1792627831 --json handoffs: {\"at\":\"2026-10-22T00:11:53.313376816Z\",\"attempt\":1,\"kind\":\"task_reminder\",\"task_id\":\"at9-c3-1792627831\"} and {\"at\":\"2026-10-22T00:12:58.309476144Z\",\"attempt\":2,\"kind\":\"task_reminder\",\"task_id\":\"at9-c3-1792627831\"}; atm task list --json (beta) -> {\"task_id\":\"at9-c3-1792627831\",\"state\":\"assigned\",\"reminder_count\":3}. Both reminders appeared within the 150s poll window."
+    },
+    {
+      "name": "cleanup",
+      "status": "pass",
+      "detail": "atm task close <id> <outcome> done --json returned {\"outcome\":\"sent\",\"summary\":\"done\"} rc=0 for at9-c1 (completed), at9-c2b (completed), at9-c2a (cancelled), at9-c3 (cancelled); final atm task list --json as beta -> []"
+    }
+  ],
+  "verdict": "pass",
+  "atm_versions": {
+    "atm": "1.6.4",
+    "hermes_atm": "",
+    "atm_graft": ""
+  },
+  "started_at": "2026-10-22T00:10:33Z",
+  "finished_at": "2026-10-22T00:13:04Z"
+}

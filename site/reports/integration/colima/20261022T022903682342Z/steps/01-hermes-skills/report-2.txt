@@ -1,0 +1,14 @@
+ATM TEST REPORT
+skill: atm-setup-environment
+fixture: hermes-testbed
+agent: hermes@testbed  tools: native+cli
+atm: client 1.6.5 daemon 1.6.5
+result: PASS   (5/5 steps)
+steps:
+  0 PASS Start line — 01M5GQ47FQV7NJMDECDWMTGBYA
+  1 PASS Daemon answers — status healthy, client 1.6.5, daemon 1.6.5
+  2 PASS Roster complete — 0 added, 0 missing; all 5 expected members present
+  3 PASS Doctor passes — error_count 0, warning_count 0
+  4 PASS Self round trip — sent 01M5GQ4C2NMBRSFV1F9JCH1ACX, count 1 mutation_applied true, absent from unread
+  5 SKIP Cross-host peer — no peer host named in request
+elapsed: 30s

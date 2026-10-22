@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>assignment · step 03 · PASS</title>
+<meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
+<meta name="integration-step" content="Step 03 · assignment" /><meta name="integration-generated-at" content="2026-10-22T00:15:30Z" />
+<style type="text/css">body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1b1b1b;margin:1.5rem;line-height:1.45}h1{font-size:1.25rem;margin:0 0 .25rem}h2{font-size:1.05rem;margin:1.5rem 0 .5rem;border-bottom:1px solid #d5d9de;padding-bottom:.2rem}h3{font-size:1rem;margin:1.2rem 0 .3rem}h4{font-size:.85rem;margin:.8rem 0 .2rem;color:#555;text-transform:uppercase;letter-spacing:.03em}p.meta{margin:.2rem 0;color:#555}table{border-collapse:collapse;width:100%;margin:.4rem 0}th,td{border:1px solid #d5d9de;padding:.35rem .5rem;text-align:left;vertical-align:top}th{background:#f3f5f7;font-weight:600;color:#555;font-size:.85em}table.facts{width:auto;min-width:24rem}table.facts th{width:11rem;font-weight:600}pre{margin:0;white-space:pre-wrap;word-break:break-word;font-size:.82em;background:#f7f9fa;padding:.4rem .5rem;border:1px solid #e3e3e3;max-height:24rem;overflow:auto}code{white-space:pre-wrap;word-break:break-all}.verdict{font-weight:700;padding:.1rem .5rem;border-radius:.25rem}.pass{background:#e8f5e9;color:#1a7f37}.fail{background:#ffebee;color:#c62828}a{color:#0b57d0}dl{margin:.5rem 0}dt{color:#555;font-size:.85em}dd{margin:0 0 .4rem}</style>
+</head><body>
+<h1>Step 03 · assignment <span class="verdict pass">PASS</span></h1>
+<p class="meta">Test plan: <a href="../../../../../procedures/colima-assignment/10f80d6e.html">colima-assignment @ 10f80d6e</a></p>
+<p class="meta">Container: <code>hermes-testbed</code> · Image: <code>unknown</code> · atm: <code>1.6.4</code> · Recorded: 2026-10-22T00:15:30Z</p>
+<h2>Cases</h2><h3>1. three-queued-then-one-ready <span class="verdict other">pass</span></h3><p>assigned c1-1792628000-1..3 to fx-at10-beta as alpha. &#x27;atm list --pending-ack --json&#x27; as beta after each assignment: count 0, bucket_counts {unread:1|2|3, pending_ack:0, history:0}. &#x27;atm task events c1-1792628000-N --json&#x27; handoffs[].kind: task-1 task_queued + task_ready (reminded event); task-2 task_queued only; task-3 task_queued only (exactly one task_ready). Events JSON carries no position field; positions from &#x27;atm task list --json&#x27; as beta: c1-1792628000-1 position 1, -2 position 2, -3 position 3, all state assigned.</p><h3>2. close-releases-next <span class="verdict other">pass</span></h3><p>beta ran &#x27;atm task start c1-1792628000-1&#x27; -&gt; &#x27;started c1-1792628000-1&#x27; and &#x27;atm task close c1-1792628000-1 completed done&#x27; -&gt; sent summary done. Task-1 events: started, completed; handoffs task_started, task_complete. After 2 one-second polls &#x27;atm task events c1-1792628000-2 --json&#x27; handoffs contain kind task_ready; atm task list shows c1-1792628000-2 position 1, c1-1792628000-3 position 2.</p><h3>3. reassign-notifies-both <span class="verdict other">pass</span></h3><p>alpha ran &#x27;atm task assign fx-at10-gamma ... --task-id c1-1792628000-3&#x27; (returned {&quot;task_id&quot;:&quot;c1-1792628000-3&quot;}). Events: event reassigned (assignee fx-at10-gamma, actor fx-at10-alpha); handoffs: task_closed agent fx-at10-beta, task_queued agent fx-at10-gamma, then task_ready agent fx-at10-gamma. &#x27;atm read --message-id 01M5GFA0XFKV7A0DS6P4VGNGXN&#x27; as beta: summary &#x27;task_closed:c1-1792628000-3&#x27;, text &#x27;task c1-1792628000-3 was reassigned to fx-at10-gamma&#x27;. gamma &#x27;atm task list --json&#x27;: c1-1792628000-3 assignee fx-at10-gamma position 1.</p><h3>4. move-head-readies-once <span class="verdict other">pass</span></h3><p>assigned c4-1792628047-A then -B to beta; A handoffs showed task_ready after 2 polls. &#x27;atm task move c4-1792628047-B --head --json&#x27; -&gt; {&quot;task_id&quot;:&quot;c4-1792628047-B&quot;,&quot;assignee&quot;:&quot;fx-at10-beta&quot;,&quot;from&quot;:2,&quot;to&quot;:1}. Afterwards B events: assigned, moved (detail 2→1), reminded; handoffs task_queued, task_ready (exactly one). A handoffs: task_queued, task_ready (exactly one; recount before close: A=1, B=1). task list: B position 1, A position 2.</p><h3>5. cancel-notifies-assignee <span class="verdict other">pass</span></h3><p>alpha assigned c5-1792628061-blk then c5-1792628061-t to beta, then &#x27;atm task close c5-1792628061-t cancelled &quot;cancelled by alpha&quot; --json&#x27; -&gt; outcome sent, message_id 01M5GFAZ8PCJ2XCTNPJXS60VPX. As beta &#x27;atm task events c5-1792628061-t --json&#x27;: event cancelled with close_outcome cancelled, to_state complete, detail &#x27;cancelled by alpha&#x27;; handoff kind task_closed agent fx-at10-beta; beta &#x27;atm list --json&#x27; row message_id 01M5GFAZ8PCJ2XCTNPJXS60VPX summary &#x27;cancelled by alpha&#x27;. No task_ready for it.</p><h3>6. busy-assigner-sees-terminal-lines <span class="verdict other">pass</span></h3><p>gamma assigned c6-1792628073-alpha to alpha; alpha ran &#x27;atm task start c6-1792628073-alpha&#x27; -&gt; summary &#x27;started c6-1792628073-alpha&#x27;. Alpha &#x27;atm task list --json&#x27;: task_id c6-1792628073-alpha, assignee fx-at10-alpha, state active, position 1. Then alpha assigned c6-1792628073-beta to beta; beta started (summary &#x27;started c6-1792628073-beta&#x27;) and completed it (summary &#x27;done&#x27;). Alpha &#x27;atm list --json&#x27; contains message 01M5GFCB30XG1AHQN4YR16W9RN &#x27;started c6-1792628073-beta&#x27; timestamp 00:15:08.384823614Z and 01M5GFCB3BD47BET8QTGRJCRZF &#x27;done&#x27; timestamp 00:15:08.395657730Z (started precedes done). Note: the alpha task never showed task_ready within a 30-poll wait, so it was started directly.</p><h3>7. cleanup <span class="verdict other">pass</span></h3><p>Closed every created task with &#x27;atm task close&#x27;. Final &#x27;atm task list --json&#x27; as alpha, beta, gamma: [] , [] , []; &#x27;atm task list --all --json&#x27; as alpha: [].</p><h2>prompt-AT10.json</h2><pre>{
+ &quot;schema&quot;: &quot;prompt-report-1&quot;,
+ &quot;test_id&quot;: &quot;AT10-assignment&quot;,
+ &quot;agent&quot;: &quot;claude-code&quot;,
+ &quot;steps&quot;: [
+  {
+   &quot;name&quot;: &quot;three-queued-then-one-ready&quot;,
+   &quot;status&quot;: &quot;pass&quot;,
+   &quot;detail&quot;: &quot;assigned c1-1792628000-1..3 to fx-at10-beta as alpha. &#x27;atm list --pending-ack --json&#x27; as beta after each assignment: count 0, bucket_counts {unread:1|2|3, pending_ack:0, history:0}. &#x27;atm task events c1-1792628000-N --json&#x27; handoffs[].kind: task-1 task_queued + task_ready (reminded event); task-2 task_queued only; task-3 task_queued only (exactly one task_ready). Events JSON carries no position field; positions from &#x27;atm task list --json&#x27; as beta: c1-1792628000-1 position 1, -2 position 2, -3 position 3, all state assigned.&quot;
+  },
+  {
+   &quot;name&quot;: &quot;close-releases-next&quot;,
+   &quot;status&quot;: &quot;pass&quot;,
+   &quot;detail&quot;: &quot;beta ran &#x27;atm task start c1-1792628000-1&#x27; -&gt; &#x27;started c1-1792628000-1&#x27; and &#x27;atm task close c1-1792628000-1 completed done&#x27; -&gt; sent summary done. Task-1 events: started, completed; handoffs task_started, task_complete. After 2 one-second polls &#x27;atm task events c1-1792628000-2 --json&#x27; handoffs contain kind task_ready; atm task list shows c1-1792628000-2 position 1, c1-1792628000-3 position 2.&quot;
+  },
+  {
+   &quot;name&quot;: &quot;reassign-notifies-both&quot;,
+   &quot;status&quot;: &quot;pass&quot;,
+   &quot;detail&quot;: &quot;alpha ran &#x27;atm task assign fx-at10-gamma ... --task-id c1-1792628000-3&#x27; (returned {\&quot;task_id\&quot;:\&quot;c1-1792628000-3\&quot;}). Events: event reassigned (assignee fx-at10-gamma, actor fx-at10-alpha); handoffs: task_closed agent fx-at10-beta, task_queued agent fx-at10-gamma, then task_ready agent fx-at10-gamma. &#x27;atm read --message-id 01M5GFA0XFKV7A0DS6P4VGNGXN&#x27; as beta: summary &#x27;task_closed:c1-1792628000-3&#x27;, text &#x27;task c1-1792628000-3 was reassigned to fx-at10-gamma&#x27;. gamma &#x27;atm task list --json&#x27;: c1-1792628000-3 assignee fx-at10-gamma position 1.&quot;
+  },
+  {
+   &quot;name&quot;: &quot;move-head-readies-once&quot;,
+   &quot;status&quot;: &quot;pass&quot;,
+   &quot;detail&quot;: &quot;assigned c4-1792628047-A then -B to beta; A handoffs showed task_ready after 2 polls. &#x27;atm task move c4-1792628047-B --head --json&#x27; -&gt; {\&quot;task_id\&quot;:\&quot;c4-1792628047-B\&quot;,\&quot;assignee\&quot;:\&quot;fx-at10-beta\&quot;,\&quot;from\&quot;:2,\&quot;to\&quot;:1}. Afterwards B events: assigned, moved (detail 2\u21921), reminded; handoffs task_queued, task_ready (exactly one). A handoffs: task_queued, task_ready (exactly one; recount before close: A=1, B=1). task list: B position 1, A position 2.&quot;
+  },
+  {
+   &quot;name&quot;: &quot;cancel-notifies-assignee&quot;,
+   &quot;status&quot;: &quot;pass&quot;,
+   &quot;detail&quot;: &quot;alpha assigned c5-1792628061-blk then c5-1792628061-t to beta, then &#x27;atm task close c5-1792628061-t cancelled \&quot;cancelled by alpha\&quot; --json&#x27; -&gt; outcome sent, message_id 01M5GFAZ8PCJ2XCTNPJXS60VPX. As beta &#x27;atm task events c5-1792628061-t --json&#x27;: event cancelled with close_outcome cancelled, to_state complete, detail &#x27;cancelled by alpha&#x27;; handoff kind task_closed agent fx-at10-beta; beta &#x27;atm list --json&#x27; row message_id 01M5GFAZ8PCJ2XCTNPJXS60VPX summary &#x27;cancelled by alpha&#x27;. No task_ready for it.&quot;
+  },
+  {
+   &quot;name&quot;: &quot;busy-assigner-sees-terminal-lines&quot;,
+   &quot;status&quot;: &quot;pass&quot;,
+   &quot;detail&quot;: &quot;gamma assigned c6-1792628073-alpha to alpha; alpha ran &#x27;atm task start c6-1792628073-alpha&#x27; -&gt; summary &#x27;started c6-1792628073-alpha&#x27;. Alpha &#x27;atm task list --json&#x27;: task_id c6-1792628073-alpha, assignee fx-at10-alpha, state active, position 1. Then alpha assigned c6-1792628073-beta to beta; beta started (summary &#x27;started c6-1792628073-beta&#x27;) and completed it (summary &#x27;done&#x27;). Alpha &#x27;atm list --json&#x27; contains message 01M5GFCB30XG1AHQN4YR16W9RN &#x27;started c6-1792628073-beta&#x27; timestamp 00:15:08.384823614Z and 01M5GFCB3BD47BET8QTGRJCRZF &#x27;done&#x27; timestamp 00:15:08.395657730Z (started precedes done). Note: the alpha task never showed task_ready within a 30-poll wait, so it was started directly.&quot;
+  },
+  {
+   &quot;name&quot;: &quot;cleanup&quot;,
+   &quot;status&quot;: &quot;pass&quot;,
+   &quot;detail&quot;: &quot;Closed every created task with &#x27;atm task close&#x27;. Final &#x27;atm task list --json&#x27; as alpha, beta, gamma: [] , [] , []; &#x27;atm task list --all --json&#x27; as alpha: [].&quot;
+  }
+ ],
+ &quot;verdict&quot;: &quot;pass&quot;,
+ &quot;atm_versions&quot;: {
+  &quot;atm&quot;: &quot;1.6.4&quot;,
+  &quot;hermes_atm&quot;: &quot;&quot;,
+  &quot;atm_graft&quot;: &quot;&quot;
+ },
+ &quot;started_at&quot;: &quot;2026-10-22T00:13:16Z&quot;,
+ &quot;finished_at&quot;: &quot;2026-10-22T00:15:30Z&quot;
+}</pre><h2>run-prompts.log</h2><pre>prompt: /opt/testbed/prompts/atm-team/AT10-assignment.md (agent=claude-code model=sonnet timeout=900s)
+SMOKE-REPORT-WRITTEN /opt/testbed/results/prompt-AT10.json
+VERDICT AT10: pass (/opt/testbed/results/prompt-AT10.json)
+</pre></body></html>
