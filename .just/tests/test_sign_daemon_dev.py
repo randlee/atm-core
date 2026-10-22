@@ -149,22 +149,17 @@ class SignDaemonDevTests(unittest.TestCase):
             justfile,
         )
 
-    def test_benchmark_recipe_builds_its_feature_gated_daemon(self) -> None:
+    def test_benchmark_recipe_uses_the_shipped_binary_runner(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
-        self.assertIn(
-            "benchmark *args:\n"
-            "    cargo build --release -p agent-team-mail -p atm-daemon\n"
-            "    {{python_cmd}} .just/sign_daemon_dev.py",
-            justfile,
-        )
-        self.assertNotIn("benchmark-harness", justfile)
-        self.assertNotIn("atm-daemon-benchmark", justfile)
+        recipe = justfile.split("benchmark *args:\n", 1)[1].split("\n# Rebuild immutable", 1)[0]
+        self.assertNotIn("cargo build", recipe)
+        self.assertNotIn("sign_daemon_dev", recipe)
+        self.assertNotIn("atm-daemon-benchmark", recipe)
 
     def test_benchmark_recipe_publishes_the_canonical_report(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn(
-            "    # The wrapper preserves the runner verdict while rebuilding reports on\n"
-            "    # both POSIX shells and PowerShell.\n"
+            "    # The wrapper preserves the runner verdict while rebuilding reports on both shells.\n"
             "    {{python_cmd}} .just/run_benchmark.py {{args}}",
             justfile,
         )

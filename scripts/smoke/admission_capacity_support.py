@@ -89,6 +89,7 @@ TARGET_PROFILE_DURATION_SECONDS = 20.0
 # underdrives every lane and makes the result incomparable with the reviewed
 # f8/512 physical baselines.
 DEFAULT_WORKERS = 512
+PRERELEASE_PROVENANCE_FILENAME = "prerelease-provenance.json"
 # Keep the benchmark's HTTP/1.1 pipeline below the local socket's bidirectional
 # buffer capacity. The sender writes one bounded batch, then the reader drains
 # every matching response before the next batch.
@@ -229,6 +230,11 @@ class V4EmissionContext:
     baseline: BaselineEntry
     binary_hashes: dict[str, str]
     binary_versions: dict[str, str] = field(default_factory=dict)
+    prerelease_tag: str | None = None
+
+
+class PrereleaseProvenanceError(SmokeError):
+    """A supplied prerelease binary directory lacks verified byte provenance."""
 
 
 def benchmark_os() -> str:
@@ -249,6 +255,33 @@ def binary_hashes(binary_dir: Path | None = None) -> dict[str, str]:
         }
     except OSError as error:
         raise SmokeError(f"could not hash benchmark release binaries: {error}") from error
+
+
+def verified_prerelease_binaries(binary_dir: Path) -> tuple[str, dict[str, str]]:
+    """Return a prerelease tag only when its installed executable bytes still match."""
+    provenance_path = binary_dir.parent / PRERELEASE_PROVENANCE_FILENAME
+    try:
+        payload = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as error:
+        raise PrereleaseProvenanceError(
+            f"--bin-dir requires prerelease provenance file: {provenance_path}"
+        ) from error
+    except (OSError, json.JSONDecodeError) as error:
+        raise PrereleaseProvenanceError(
+            f"could not read prerelease provenance file {provenance_path}: {error}"
+        ) from error
+    tag = payload.get("tag") if isinstance(payload, dict) else None
+    expected = payload.get("binary_sha256") if isinstance(payload, dict) else None
+    if not isinstance(tag, str) or not tag or not isinstance(expected, dict):
+        raise PrereleaseProvenanceError(f"invalid prerelease provenance file: {provenance_path}")
+    actual = binary_hashes(binary_dir)
+    for name, digest in actual.items():
+        expected_digest = expected.get(name)
+        if not isinstance(expected_digest, str) or expected_digest != digest:
+            raise PrereleaseProvenanceError(
+                f"prerelease binary digest mismatch for {name}: {provenance_path}"
+            )
+    return tag, actual
 
 
 def atomic_json(path: Path, payload: dict[str, Any]) -> None:
@@ -323,6 +356,7 @@ def v4_result_from_evidence(
         source_revision=str(evidence.get("source_revision") or source_revision()),
         binary_hashes=context.binary_hashes,
         binary_versions=context.binary_versions,
+        prerelease_tag=context.prerelease_tag,
         frames_per_connection=(
             0 if context.target == "sqlite" else int(evidence["frames_per_connection"])
         ),
