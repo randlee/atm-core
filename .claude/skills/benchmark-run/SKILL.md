@@ -67,14 +67,14 @@ The ordinary command runs the complete required matrix: `sqlite`, `uds`,
 macOS M5:
 
 ```sh
-ATM_CAPACITY_HOST_LABEL=rand-m5 just benchmark
+ATM_CAPACITY_HOST_LABEL=rand-m5 just benchmark --bin-dir ~/.atm-builds/v1.6.5/bin
 ```
 
 Windows PowerShell:
 
 ```powershell
 $env:ATM_CAPACITY_HOST_LABEL = 'windows-x64-01'
-just benchmark
+just benchmark --bin-dir ~/.atm-builds/v1.6.5/bin
 ```
 
 The runner writes per-target JSON, envelopes, campaign JSON, and raw local
