@@ -428,8 +428,8 @@ class FeatureSmokeTests(unittest.TestCase):
         doctor = {
             "summary": {"status": "healthy", "error_count": 0},
             "runtime_status": {"readiness": "ready"},
-            "client_context": {"version": "1.4.1-beta-ai-1"},
-            "daemon_context": {"version": "1.4.1-beta-ai-1"},
+            "client_context": {"version": "1.4.1-beta-ai-1", "cli_schema_version": 1, "http_api_version": "1.4.0"},
+            "daemon_context": {"version": "1.4.1-beta-ai-1", "cli_schema_version": 1, "http_api_version": "1.4.0"},
         }
         with mock.patch.object(RUNNER, "require_environment", return_value=("atm", TEST_SENDER, TEST_TEAM)), mock.patch.object(
             RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(doctor), "stderr": ""}
@@ -445,8 +445,8 @@ class FeatureSmokeTests(unittest.TestCase):
         doctor = {
             "summary": {"status": "healthy", "error_count": 0},
             "runtime_status": {"readiness": "ready"},
-            "client_context": {"version": "1.4.1-beta-ai-1"},
-            "daemon_context": {"version": "1.4.1-beta-ai-1"},
+            "client_context": {"version": "1.4.1-beta-ai-1", "cli_schema_version": 1, "http_api_version": "1.4.0"},
+            "daemon_context": {"version": "1.4.1-beta-ai-1", "cli_schema_version": 1, "http_api_version": "1.4.0"},
         }
         with mock.patch.object(RUNNER, "require_environment", return_value=("atm", TEST_SENDER, TEST_TEAM)), mock.patch.object(
             RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(doctor), "stderr": ""}
@@ -479,38 +479,71 @@ class FeatureSmokeTests(unittest.TestCase):
         ):
             self.assertEqual(RUNNER.local_non_loopback_ipv4(), "10.0.0.7")
 
-    def test_doctor_ready_requires_health_readiness_and_matching_pair(self):
+    def test_doctor_ready_requires_health_readiness_and_coherent_local_contract(self):
         report = {
             "summary": {"status": "healthy", "error_count": 0},
             "runtime_status": {"readiness": "ready"},
-            "client_context": {"version": "1.3.2-beta.28"},
-            "daemon_context": {"version": "1.3.2-beta.28"},
+            "client_context": {"version": "1.3.2-beta.28", "cli_schema_version": 1, "http_api_version": "1.4.0"},
+            "daemon_context": {"version": "1.3.2-beta.28", "cli_schema_version": 1, "http_api_version": "1.4.3"},
         }
-        self.assertTrue(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
-        report["daemon_context"]["version"] = "1.3.2-beta.27"
-        self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
-        report["daemon_context"]["version"] = "1.3.2-beta.28"
-        report["client_context"]["version"] = "1.3.2-beta.27"
-        self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
-        report["client_context"]["version"] = "1.3.2-beta.28"
+        self.assertTrue(RUNNER.doctor_ready(report))
+        report["daemon_context"]["cli_schema_version"] = 2
+        self.assertFalse(RUNNER.doctor_ready(report))
+        report["daemon_context"]["cli_schema_version"] = 1
+        report["daemon_context"]["http_api_version"] = "2.0.0"
+        self.assertFalse(RUNNER.doctor_ready(report))
+        report["daemon_context"]["http_api_version"] = "1.4.3"
         report["summary"]["status"] = "error"
-        self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
+        self.assertFalse(RUNNER.doctor_ready(report))
         report["summary"]["status"] = "healthy"
         report["summary"]["error_count"] = 1
-        self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
+        self.assertFalse(RUNNER.doctor_ready(report))
         del report["summary"]["error_count"]
-        self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
+        self.assertFalse(RUNNER.doctor_ready(report))
         report["summary"]["error_count"] = 0
         report["runtime_status"]["readiness"] = "starting"
-        self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
-        self.assertFalse(RUNNER.doctor_ready(["not", "an", "object"], "1.3.2-beta.28"))
+        self.assertFalse(RUNNER.doctor_ready(report))
+        self.assertFalse(RUNNER.doctor_ready(["not", "an", "object"]))
+
+    def test_peer_compatibility_allows_different_release_versions_with_same_api_major(self):
+        local = {
+            "summary": {"status": "healthy", "error_count": 0},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.6.5", "cli_schema_version": 1, "http_api_version": "1.14.0"},
+            "daemon_context": {"version": "1.6.5", "cli_schema_version": 1, "http_api_version": "1.14.0", "peer_wire_security": "mutual-tls"},
+        }
+        peer = {
+            "summary": {"status": "healthy", "error_count": 0},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.6.0", "cli_schema_version": 1, "http_api_version": "1.9.0"},
+            "daemon_context": {"version": "1.6.0", "cli_schema_version": 1, "http_api_version": "1.9.0", "peer_wire_security": "mutual-tls"},
+        }
+        self.assertEqual(RUNNER.peer_compatibility_problems(local, peer), [])
+
+    def test_peer_compatibility_rejects_different_http_api_major(self):
+        local = {
+            "summary": {"status": "healthy", "error_count": 0},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.6.5", "cli_schema_version": 1, "http_api_version": "1.14.0"},
+            "daemon_context": {"version": "1.6.5", "cli_schema_version": 1, "http_api_version": "1.14.0", "peer_wire_security": "mutual-tls"},
+        }
+        peer = {
+            "summary": {"status": "healthy", "error_count": 0},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.6.0", "cli_schema_version": 1, "http_api_version": "2.0.0"},
+            "daemon_context": {"version": "1.6.0", "cli_schema_version": 1, "http_api_version": "2.0.0", "peer_wire_security": "mutual-tls"},
+        }
+        self.assertEqual(
+            RUNNER.peer_compatibility_problems(local, peer),
+            ["HTTP API major 2 != local HTTP API major 1"],
+        )
 
     def test_advisory_warnings_do_not_block_a_matched_ready_pair(self):
         report = {
             "summary": {"status": "warning", "error_count": 0, "warning_count": 3},
             "runtime_status": {"readiness": "ready"},
-            "client_context": {"version": "1.6.2"},
-            "daemon_context": {"version": "1.6.2"},
+            "client_context": {"version": "1.6.2", "cli_schema_version": 1, "http_api_version": "1.4.0"},
+            "daemon_context": {"version": "1.6.2", "cli_schema_version": 1, "http_api_version": "1.4.0"},
             "findings": [
                 {"severity": "warning", "code": "ATM_HERDR_AGENT_NOT_VISIBLE", "message": "cipher2"},
                 {"severity": "warning", "code": "ATM_HERDR_AGENT_NOT_VISIBLE", "message": "dev-fast"},
@@ -518,9 +551,9 @@ class FeatureSmokeTests(unittest.TestCase):
                 {"severity": "info", "code": "ATM_INFO_EXAMPLE", "message": "not counted"},
             ],
         }
-        self.assertTrue(RUNNER.doctor_ready(report, "1.6.2"))
+        self.assertTrue(RUNNER.doctor_ready(report))
         self.assertEqual(
-            RUNNER.doctor_detail(report, "1.6.2"),
+            RUNNER.doctor_detail(report),
             "READY · ATM 1.6.2 · warnings: ATM_HERDR_AGENT_NOT_VISIBLE x3",
         )
 
@@ -528,20 +561,21 @@ class FeatureSmokeTests(unittest.TestCase):
         report = {
             "summary": {"status": "error", "error_count": 2},
             "runtime_status": {"readiness": "starting"},
-            "client_context": {"version": "1.6.2"},
-            "daemon_context": {"version": "1.6.1"},
+            "client_context": {"version": "1.6.2", "cli_schema_version": 1, "http_api_version": "1.4.0"},
+            "daemon_context": {"version": "1.6.1", "cli_schema_version": 2, "http_api_version": "2.0.0"},
         }
-        detail = RUNNER.doctor_detail(report, "1.6.2")
+        detail = RUNNER.doctor_detail(report)
         self.assertEqual(
             detail.split("; "),
             [
                 "summary.status='error'",
                 "readiness='starting'",
                 "error_count=2",
-                "daemon version '1.6.1' != expected '1.6.2'",
+                "cli schema 1 != daemon schema 2",
+                "client HTTP API major 1 != daemon HTTP API major 2",
             ],
         )
-        self.assertEqual(RUNNER.doctor_detail({"summary": {"status": "healthy", "error_count": 0}}, "1.6.2").split("; ")[0], "readiness=None")
+        self.assertEqual(RUNNER.doctor_detail({"summary": {"status": "healthy", "error_count": 0}}).split("; ")[0], "readiness=None")
 
     def test_advertised_host_from_json_requires_enabled_host(self):
         self.assertEqual(
@@ -621,8 +655,8 @@ class FeatureSmokeTests(unittest.TestCase):
         doctor = {
             "summary": {"status": "healthy", "error_count": 0},
             "runtime_status": {"readiness": "ready"},
-            "client_context": {"version": "1.4.0-beta-ai"},
-            "daemon_context": {"version": "1.4.0-beta-ai"},
+            "client_context": {"version": "1.4.0-beta-ai", "cli_schema_version": 1, "http_api_version": "1.4.0"},
+            "daemon_context": {"version": "1.4.0-beta-ai", "cli_schema_version": 1, "http_api_version": "1.4.0"},
         }
         result = {"exit_code": 0, "stdout": __import__("json").dumps(doctor), "stderr": ""}
         rejected = {"exit_code": 35, "stdout": "000", "stderr": "tls alert"}
@@ -676,7 +710,6 @@ class FeatureSmokeTests(unittest.TestCase):
                 "atm",
                 "/opt/homebrew/bin/atm",
                 "192.0.2.20",
-                "1.4.0-beta-ai",
                 plaintext=False,
             )
         self.assertEqual([case["status"] for case in cases], ["PASS"] * 7)

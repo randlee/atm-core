@@ -253,11 +253,22 @@ def local_non_loopback_ipv4() -> str:
     raise SmokeError("could not discover a current non-loopback IPv4 address for local-IP smoke")
 
 
-def doctor_problems(report: Any, expected_version: str) -> list[str]:
-    """Name each condition one doctor response fails; an empty list is a matched ready pair.
+def http_api_major(value: Any) -> int | None:
+    """Return the major from the public HTTP API SemVer, or ``None`` if malformed."""
+    if not isinstance(value, str):
+        return None
+    major, separator, remainder = value.partition(".")
+    if not separator or not major.isdecimal() or not remainder:
+        return None
+    return int(major)
 
-    Advisory warnings never block: summary.status may be healthy or warning, and
-    only readiness, a zero error_count and the matched client/daemon versions decide.
+
+def doctor_problems(report: Any) -> list[str]:
+    """Name conditions that prevent one host's CLI/daemon pair from serving.
+
+    A release version identifies the build and remains diagnostic evidence. Local
+    compatibility instead requires matching CLI schema versions and HTTP API
+    majors. Advisory warnings never block.
     """
     if not isinstance(report, dict):
         return ["doctor response was not a JSON object"]
@@ -265,8 +276,12 @@ def doctor_problems(report: Any, expected_version: str) -> list[str]:
     status = summary.get("status")
     readiness = report.get("runtime_status", {}).get("readiness")
     errors = summary.get("error_count")
-    cli = report.get("client_context", {}).get("version")
-    daemon = report.get("daemon_context", {}).get("version")
+    client = report.get("client_context", {})
+    daemon = report.get("daemon_context", {})
+    cli_schema = client.get("cli_schema_version") if isinstance(client, dict) else None
+    daemon_schema = daemon.get("cli_schema_version") if isinstance(daemon, dict) else None
+    client_api_major = http_api_major(client.get("http_api_version")) if isinstance(client, dict) else None
+    daemon_api_major = http_api_major(daemon.get("http_api_version")) if isinstance(daemon, dict) else None
     problems = []
     if status not in ("healthy", "warning"):
         problems.append(f"summary.status={status!r}")
@@ -274,21 +289,21 @@ def doctor_problems(report: Any, expected_version: str) -> list[str]:
         problems.append(f"readiness={readiness!r}")
     if type(errors) is not int or errors != 0:
         problems.append(f"error_count={errors!r}")
-    if cli != expected_version:
-        problems.append(f"cli version {cli!r} != expected {expected_version!r}")
-    if daemon != expected_version:
-        problems.append(f"daemon version {daemon!r} != expected {expected_version!r}")
+    if not isinstance(cli_schema, int) or cli_schema != daemon_schema:
+        problems.append(f"cli schema {cli_schema!r} != daemon schema {daemon_schema!r}")
+    if client_api_major is None or client_api_major != daemon_api_major:
+        problems.append(f"client HTTP API major {client_api_major!r} != daemon HTTP API major {daemon_api_major!r}")
     return problems
 
 
-def doctor_ready(report: Any, expected_version: str) -> bool:
-    """Return whether one public doctor response proves a matched ready pair."""
-    return not doctor_problems(report, expected_version)
+def doctor_ready(report: Any) -> bool:
+    """Return whether one public doctor response proves a ready local pair."""
+    return not doctor_problems(report)
 
 
-def doctor_detail(report: Any, expected_version: str) -> str:
-    """Name the failed conditions, or the ready version with each advisory warning code counted."""
-    problems = doctor_problems(report, expected_version)
+def doctor_detail(report: Any) -> str:
+    """Name failed conditions, or record a ready build with advisory warnings."""
+    problems = doctor_problems(report)
     if problems:
         return "; ".join(problems)
     warnings = Counter(
@@ -300,6 +315,28 @@ def doctor_detail(report: Any, expected_version: str) -> str:
     if warnings:
         detail += " · warnings: " + ", ".join(f"{code} x{count}" for code, count in warnings.items())
     return detail
+
+
+def peer_compatibility_problems(local_report: Any, remote_report: Any) -> list[str]:
+    """Return cross-host protocol mismatches; release versions are evidence only."""
+    problems = doctor_problems(remote_report)
+    if not isinstance(local_report, dict) or not isinstance(remote_report, dict):
+        return problems
+    local_daemon = local_report.get("daemon_context", {})
+    remote_daemon = remote_report.get("daemon_context", {})
+    if not isinstance(local_daemon, dict) or not isinstance(remote_daemon, dict):
+        return problems
+    local_api_major = http_api_major(local_daemon.get("http_api_version"))
+    remote_api_major = http_api_major(remote_daemon.get("http_api_version"))
+    if local_api_major != remote_api_major:
+        problems.append(
+            f"HTTP API major {remote_api_major!r} != local HTTP API major {local_api_major!r}"
+        )
+    local_wire = local_daemon.get("peer_wire_security")
+    remote_wire = remote_daemon.get("peer_wire_security")
+    if not isinstance(local_wire, str) or local_wire != remote_wire:
+        problems.append(f"peer wire security {remote_wire!r} != local peer wire security {local_wire!r}")
+    return problems
 
 
 
@@ -317,8 +354,7 @@ from scripts.smoke.feature_smoke_network_support import (
     mtls_rejected_before_http,
 )
 def curl_doctor(
-    cases: list[dict[str, Any]], peer: str, atm: str, remote_atm: str, remote_host: str, expected_version: str,
-    *, plaintext: bool,
+    cases: list[dict[str, Any]], peer: str, atm: str, remote_atm: str, remote_host: str, *, plaintext: bool,
 ) -> None:
     """Call the real peer doctor route with curl in both directions.
 
@@ -368,14 +404,14 @@ def curl_doctor(
                 remote_curl.extend(["--resolve", f"{local_authority}:{local_port}:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url])
                 remote_result = remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl))
                 remote_report = parse_json(remote_result, f"{peer} curl doctor to local")
-                add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not a ready matched pair", origin=peer, destination=platform.node())
+                add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report), "HTTP 200 real daemon doctor" if doctor_ready(remote_report) else "doctor response was not a ready local pair", origin=peer, destination=platform.node())
                 local_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
                 if not plaintext:
                     local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
                 local_curl.extend(["--resolve", f"{remote_authority}:{remote_port}:{remote_host}", "--data", DOCTOR_BODY, remote_url])
                 local_result = command(local_curl)
                 local_report = parse_json(local_result, f"curl doctor to {peer}")
-                add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not a ready matched pair", origin=platform.node(), destination=peer)
+                add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report), "HTTP 200 real daemon doctor" if doctor_ready(local_report) else "doctor response was not a ready local pair", origin=platform.node(), destination=peer)
                 if not plaintext:
                     # Deliberately omit --cert but retain the peer CA and the
                     # exact target address. --write-out emits 000 only when
@@ -447,8 +483,8 @@ def curl_doctor(
             add_case(
                 cases,
                 f"local DNS curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor",
-                doctor_ready(dns_report, expected_version),
-                "HTTP 200 real daemon doctor via DNS" if doctor_ready(dns_report, expected_version) else "doctor response was not a ready matched pair",
+                doctor_ready(dns_report),
+                "HTTP 200 real daemon doctor via DNS" if doctor_ready(dns_report) else "doctor response was not a ready local pair",
                 origin=platform.node(),
                 destination=peer,
             )
@@ -464,7 +500,7 @@ def curl_doctor(
 
 
 def remote_preflight(
-    cases: list[dict[str, Any]], peer: str, remote_atm: str, expected_version: str
+    cases: list[dict[str, Any]], peer: str, remote_atm: str, local_report: dict[str, Any]
 ) -> str | None:
     """Fail fast when a peer is not already running and reachable.
 
@@ -474,13 +510,18 @@ def remote_preflight(
     """
     try:
         doctor = parse_json(remote_command(peer, remote_atm, ["doctor", "--json"]), f"{peer} doctor")
-        ready = doctor_ready(doctor, expected_version)
+        problems = peer_compatibility_problems(local_report, doctor)
+        ready = not problems
         detail = (
             f"client={doctor.get('client_context', {}).get('version')}, "
-            f"daemon={doctor.get('daemon_context', {}).get('version')}"
+            f"daemon={doctor.get('daemon_context', {}).get('version')}, "
+            f"http_api={doctor.get('daemon_context', {}).get('http_api_version')}, "
+            f"peer_wire_security={doctor.get('daemon_context', {}).get('peer_wire_security')}"
             if isinstance(doctor, dict)
             else "doctor response was not an object"
         )
+        if problems:
+            detail += "; " + "; ".join(problems)
         add_case(cases, f"{peer} doctor/version", ready, detail, origin=peer, destination=peer)
         if not ready:
             return None
@@ -865,8 +906,7 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
     doctor = command([atm, "doctor", "--json"])
     try:
         report = parse_json(doctor, "doctor")
-        expected_version = branch_version()
-        add_case(cases, "doctor", doctor_ready(report, expected_version), doctor_detail(report, expected_version))
+        add_case(cases, "doctor", doctor_ready(report), doctor_detail(report))
     except SmokeError as error:
         add_case(cases, "doctor", False, str(error))
     if not all(case["status"] == "PASS" for case in cases):
@@ -892,7 +932,6 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
             physical_host = ""
         send_read_ack(cases, atm, identity, team, LOOPBACK_IP, stage="loopback-IP")
         remote_atm = os.environ.get("ATM_SMOKE_REMOTE_ATM", "atm")
-        expected_version = branch_version()
         try:
             remote_identity, remote_team = remote_context()
         except SmokeError as error:
@@ -904,14 +943,14 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
         for peer in peers:
             if not remote_identity or not remote_team:
                 continue
-            remote_host = remote_preflight(cases, peer, remote_atm, expected_version)
+            remote_host = remote_preflight(cases, peer, remote_atm, report)
             if remote_host is None or not physical_host or feature == PEER_PREFLIGHT:
                 continue
             if feature == CROSSHOST_CURL_PLAINTEXT:
-                curl_doctor(cases, peer, atm, remote_atm, remote_host, expected_version, plaintext=True)
+                curl_doctor(cases, peer, atm, remote_atm, remote_host, plaintext=True)
                 continue
             if feature == CROSSHOST_CURL_MTLS:
-                curl_doctor(cases, peer, atm, remote_atm, remote_host, expected_version, plaintext=False)
+                curl_doctor(cases, peer, atm, remote_atm, remote_host, plaintext=False)
                 continue
             crosshost_send(
                 cases,

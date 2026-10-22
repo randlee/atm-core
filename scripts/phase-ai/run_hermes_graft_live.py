@@ -37,13 +37,12 @@ def parse_args() -> list[str]:
 
 
 def doctor_case(cases: list[dict[str, Any]]) -> bool:
-    """Require the already-selected, matched runtime pair before graft I/O."""
+    """Require the already-selected, schema-compatible runtime pair before graft I/O."""
     try:
         atm, _identity, _team = feature_smoke.require_environment()
         report = feature_smoke.parse_json(feature_smoke.command([atm, "doctor", "--json"]), "doctor")
-        expected_version = feature_smoke.branch_version()
-        ready = feature_smoke.doctor_ready(report, expected_version)
-        feature_smoke.add_case(cases, "doctor", ready, feature_smoke.doctor_detail(report, expected_version))
+        ready = feature_smoke.doctor_ready(report)
+        feature_smoke.add_case(cases, "doctor", ready, feature_smoke.doctor_detail(report))
         return ready
     except feature_smoke.SmokeError as error:
         feature_smoke.add_case(cases, "doctor", False, str(error))
