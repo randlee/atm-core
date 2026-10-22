@@ -13,7 +13,7 @@ Own `apps/atm-bd-console/src/atm_bd_console/{types,codec,registry}.py`, versione
 
 ## Deliverables
 
-1. Publish the importable cross-package contract at `apps.atm_bd_console.types`; plugin code consumes its versioned JSON fixtures through `apps.atm_bd_console.codec`, never a console implementation import. The registry exports a fixture-reading `CollectorRequestDouble` for every layer test.
+1. Publish the importable cross-package contract at `atm_bd_console.types`; plugin code consumes versioned JSON fixtures/CLI responses only, never a console implementation import. The registry exports fixture-reading doubles for every layer boundary.
 2. Define the complete frozen-data contract and source error kinds. Windows are contractual: BD/dolt 60 seconds, ATM 60 seconds, GitHub 600 seconds. Lock, timer, and force behaviour are implementation work owned by bl-8.
 
 ```python
@@ -47,10 +47,14 @@ class Transition: name: TransitionName; from_state: str; to_state: str; previous
 class EventRequest: request_id: str; transition: Transition; recipients: tuple[str, ...]; payload: Mapping[str, Any]; created_at: float; due_at: float; debounce_key: str; attempt_state: RequestState
 @dataclass(frozen=True)
 class DeliveryHistoryEntry: request_id: str; outcome: DeliveryOutcome; attempt_state: RequestState; at: float; error: str | None
+@dataclass(frozen=True)
+class CollectorInProgress: source: str; record: CollectorRecord | None
 class CollectorRequest(Protocol):
-    def request(self, source: str, *, force: bool, clock: float) -> CollectorRecord: ...
+    def request(self, source: str, *, force: bool, clock: float) -> CollectorRecord | CollectorInProgress: ...
+@dataclass(frozen=True)
+class EnqueueAck: version: int; status: RequestState; request_id: str; error: SourceErrorKind | None
 class EventEnqueue(Protocol):
-    def enqueue_event_request(self, request: EventRequest) -> Mapping[str, Any]: ...
+    def enqueue_event_request(self, request: EventRequest) -> EnqueueAck: ...
 class EventSender(Protocol):
     def send(self, request: EventRequest) -> DeliveryOutcome: ...
 class ProblemDeriver(Protocol):
@@ -67,6 +71,8 @@ BD_WINDOW_S = 60; ATM_WINDOW_S = 60; GITHUB_WINDOW_S = 600
 - [ ] `test_contract_codec_round_trips_versioned_json_fixtures`
 - [ ] `test_plugin_fixture_decodes_without_console_implementation_import`
 - [ ] `test_contract_registry_exports_collector_request_double`
+- [ ] `test_contract_registry_exports_enqueue_sender_and_deriver_doubles`
+- [ ] `test_plugin_cli_fixture_receives_typed_enqueue_ack_or_rejection`
 - [ ] `test_contract_windows_and_source_error_kinds_are_stable`
 - [ ] `test_public_types_construct_without_delivery_import`
 

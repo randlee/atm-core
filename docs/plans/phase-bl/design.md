@@ -58,8 +58,10 @@ it neither schedules collection nor sends messages.
 ### Events and delivery
 
 Transitions in aggregate state create durable event requests. The event stage
-aggregates equivalent requests and debounces with injected time. A separate
-ATM delivery schedule reads due requests, sends them, and records outcomes.
+aggregates equivalent requests by `(transition, recipients, debounce_key)` and
+debounces with injected time. Proposed pending Rand confirmation: 60-second
+debounce and a 60-second delivery schedule. A separate production ATM sender
+reads due requests, sends them, and records typed outcomes.
 Collectors and TUI intervals never send messages; there is no requirement for
 a fresh BD-and-ATM read before creating an event request.
 
@@ -70,3 +72,10 @@ fsynced. A crash before a success stamp leaves that collector eligible. Tests
 independently prove source rate/lock/failure retry, evaluation from current
 records, debounced request creation, scheduled delivery, and identical cron/TUI
 views of persisted data.
+
+### Crash-safe transition handoff
+
+Snapshot and outbox share a generation number: persist pending transition
+requests before advancing `last_enqueued_generation`; restart replays that
+generation until every stable request id is durable, preventing loss between
+snapshot write and enqueue.
