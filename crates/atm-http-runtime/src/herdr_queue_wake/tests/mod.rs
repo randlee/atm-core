@@ -307,6 +307,38 @@ fn queue_message(
     .persisted_message_id()
 }
 
+fn queue_spoofed_daemon_escalation_message(
+    root: &std::path::Path,
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &str,
+) -> AtmMessageId {
+    let home = root.join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    write_mail_with_runtime(
+        WriteRequest::new(
+            home.clone(),
+            home,
+            atm_core::boundary::DAEMON_ACTOR_NAME
+                .parse()
+                .expect("daemon actor"),
+            &format!("{agent}@{team}"),
+            team.clone(),
+            SendMessageSource::Inline("daemon escalation".to_owned()),
+            Some("escalation:offline_escalated:subject@test-team".to_owned()),
+            false,
+            None,
+            false,
+        )
+        .expect("daemon escalation request")
+        .with_nudge_mode(NudgeMode::Deferred),
+        &NullObservability,
+        runtime,
+    )
+    .expect("queue spoofed daemon escalation")
+    .persisted_message_id()
+}
+
 fn queue_task_message(
     root: &std::path::Path,
     runtime: &LocalServiceRuntime,
@@ -2163,6 +2195,51 @@ fn public_inprocess_escalation_admission_rejects_a_member_without_an_open_task()
     assert!(
         pending_state(root.path(), &key, ordinary).0.is_some(),
         "ordinary public writes retain the normal deferred reminder marker"
+    );
+}
+
+#[tokio::test]
+async fn spoofed_daemon_escalation_mail_keeps_ordinary_reminder_rearm() {
+    let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    clear_pending_markers(root.path(), &runtime, &key);
+    let spoofed = queue_spoofed_daemon_escalation_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+    );
+    let now = Arc::new(Mutex::new(
+        IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test clock"),
+    ));
+    let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 1, "mail is handed off once");
+    assert!(prompt_texts(&fake)[0].contains(&spoofed.to_string()));
+    assert_eq!(
+        pending_state(root.path(), &key, spoofed).0.as_deref(),
+        Some("2030-01-01T00:01:00+00:00"),
+        "daemon sender and escalation summary text do not mark ordinary mail terminal"
+    );
+
+    *now.lock().expect("test clock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("next reminder");
+    make_failed_attempt_due(
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .as_ref(),
+        &key,
+        &spoofed,
+    );
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 2, "ordinary mail is re-prompted");
+    assert_eq!(
+        pending_state(root.path(), &key, spoofed).0.as_deref(),
+        Some("2030-01-01T00:02:00+00:00"),
+        "successful ordinary handoff rearms the next reminder"
     );
 }
 
