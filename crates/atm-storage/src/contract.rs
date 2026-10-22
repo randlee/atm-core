@@ -1297,18 +1297,16 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
     ) -> Result<(), AtmError>;
 
     /// Reserves a terminal queue item before its one-shot handoff by clearing
-    /// its marker while leaving the mailbox item visible and unread. If the
-    /// handoff is rejected, the caller restores the marker with
-    /// `restore_pending_after_failed_terminal_handoff`.
+    /// its marker while leaving the mailbox item visible and unread. The
+    /// caller must not hand off when this returns `false`.
     fn complete_pending_before_terminal_handoff(
         &self,
         member: &MemberKey,
         claim: &NudgeClaim,
     ) -> Result<bool, AtmError>;
 
-    /// Restores a terminal queue marker when its external handoff is rejected.
-    /// This is conditional on the marker still being absent and the same
-    /// claim attempt, so a stale failure cannot re-arm a completed item.
+    /// Restores a terminal queue item's marker after the handoff reports a
+    /// failure whose contract guarantees that no input was accepted.
     fn restore_pending_after_failed_terminal_handoff(
         &self,
         member: &MemberKey,

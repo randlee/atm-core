@@ -196,6 +196,25 @@ fn bare_member(team: &TeamName, agent: &str) -> RosterEntry {
     member
 }
 
+fn enable_herdr_for_escalation_lead(runtime: &LocalServiceRuntime, team: &TeamName) {
+    let mut roster = runtime
+        .shared_roster_store_arc()
+        .load_roster(team)
+        .expect("roster with escalation lead");
+    let mut lead = herdr_member(team, atm_storage::roles::ROLE_TEAM_LEAD);
+    lead.agent_type = atm_storage::AgentType::Lead;
+    let lead_index = roster
+        .members
+        .iter()
+        .position(|member| member.agent_name.as_str() == atm_storage::roles::ROLE_TEAM_LEAD)
+        .expect("escalation lead");
+    roster.members[lead_index] = lead;
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&roster)
+        .expect("Herdr escalation lead");
+}
+
 fn install_escalation_targets(
     runtime: &LocalServiceRuntime,
     store: &atm_storage::DummyTaskStore,
@@ -977,6 +996,7 @@ async fn terminal_escalation_is_not_prompted_when_marker_reservation_fails() {
     let (root, runtime, fake, pump, store, keys, _now) =
         build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
     install_escalation_targets(&runtime, store.as_ref(), &keys, &[]);
+    enable_herdr_for_escalation_lead(&runtime, keys[0].team());
     pump.tick_once().await;
 
     let lead = atm_storage::MemberKey::new(
@@ -1021,6 +1041,68 @@ async fn terminal_escalation_is_not_prompted_when_marker_reservation_fails() {
     assert!(
         marker.is_some(),
         "the failed reservation leaves the escalation queued for a later attempt"
+    );
+}
+
+#[tokio::test]
+async fn uncertain_terminal_handoff_error_keeps_the_marker_reserved() {
+    let (root, runtime, fake, pump, store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &[]);
+    enable_herdr_for_escalation_lead(&runtime, keys[0].team());
+    pump.tick_once().await;
+
+    let lead = atm_storage::MemberKey::new(
+        keys[0].team().clone(),
+        atm_storage::roles::ROLE_TEAM_LEAD
+            .parse()
+            .expect("lead agent"),
+    );
+    let terminal_message = daemon_mail_for(&runtime, keys[0].team(), lead.agent().as_str())
+        .await
+        .into_iter()
+        .find(|message| {
+            message
+                .envelope
+                .summary
+                .as_deref()
+                .is_some_and(|summary| summary.starts_with("escalation:"))
+        })
+        .expect("daemon escalation to the lead");
+    assert!(atm_core::nudge_dispatch::is_terminal_escalation_message(
+        &terminal_message
+    ));
+
+    fake.queue_prompt_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+        message: "response lost after handoff".to_owned(),
+        retry_after: None,
+        io_error_kind: None,
+    }));
+    queue_idle_result(&fake, &lead);
+    pump.tick_once().await;
+
+    let (marker, _) = atm_runtime_test_support::inspect_pending_marker_state_for_test(
+        root.path().join("runtime/mail.sqlite3"),
+        lead.team().as_str(),
+        lead.agent().as_str(),
+        terminal_message.message_key.as_str(),
+    )
+    .expect("inspect reserved marker");
+    assert!(
+        marker.is_none(),
+        "uncertain delivery must remain terminal; marker={marker:?}, prompts={:?}, stats={:?}",
+        prompt_texts(&fake),
+        pump.stats()
+    );
+    let prompts_after_error = prompt_texts(&fake);
+    assert_eq!(prompts_after_error.len(), 1, "one handoff attempt was made");
+
+    queue_idle_result(&fake, &lead);
+    pump.tick_once().await;
+    assert_eq!(
+        prompt_texts(&fake),
+        prompts_after_error,
+        "the ambiguous error must not requeue a possibly accepted notification"
     );
 }
 

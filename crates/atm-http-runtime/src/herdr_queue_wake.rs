@@ -675,7 +675,7 @@ impl HerdrQueueWakePump {
                 Some(message_id)
             }
             Err(error) => {
-                if terminal_after_handoff {
+                if terminal_after_handoff && terminal_handoff_rejected_before_input(&error) {
                     self.restore_terminal_handoff(member, &claim).await;
                 }
                 if error.code() == AtmErrorCode::HerdrUnavailable {
@@ -735,6 +735,9 @@ impl HerdrQueueWakePump {
             })
             .await;
         let Err(error) = result else {
+            // The reservation is now the durable terminal state. Disarm the
+            // claim guard so an ambiguous emitter error cannot requeue it.
+            release.disarm();
             return true;
         };
 
@@ -875,6 +878,12 @@ impl HerdrQueueWakePump {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(member);
     }
+}
+
+/// Only this error code is emitted for Herdr's explicit blocked-before-input
+/// result. All other errors leave delivery uncertain after the reservation.
+fn terminal_handoff_rejected_before_input(error: &AtmError) -> bool {
+    error.code() == AtmErrorCode::PostSendHerdrPromptFailed
 }
 
 fn log_herdr_list_failure(session: &Option<HerdrSession>, error: &atm_herdr::HerdrError) {
