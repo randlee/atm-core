@@ -58,11 +58,17 @@ impl From<EpisodeKind> for EscalationKind {
 
 /// Pump-owned blocked episode state. Keeping this state with the escalation
 /// policy prevents the queue-wake file from becoming the owner of D6 data.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Episode {
+    kind: EpisodeKind,
+    since: Option<IsoTimestamp>,
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct EscalationState {
     /// The process-local view of currently-open Blocked/Offline episodes.
     /// Durable duplicate suppression lives in each escalation target's mailbox.
-    episodes: Arc<Mutex<HashMap<MemberKey, EpisodeKind>>>,
+    episodes: Arc<Mutex<HashMap<MemberKey, Episode>>>,
 }
 
 pub(crate) enum EpisodeObservation {
@@ -101,8 +107,17 @@ impl EscalationState {
                 self.episodes
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .insert(member.clone(), episode)
-                    != Some(episode)
+                    .insert(
+                        member.clone(),
+                        Episode {
+                            kind: episode,
+                            since: state_changed_at,
+                        },
+                    )
+                    != Some(Episode {
+                        kind: episode,
+                        since: state_changed_at,
+                    })
             }
             EpisodeObservation::Verify { kind, since } => {
                 episode == kind && state_changed_at == Some(since)
@@ -464,6 +479,48 @@ mod tests {
                 kind: crate::herdr_task_disposition::EpisodeKind::Blocked,
                 since,
             },
+        ));
+    }
+
+    #[test]
+    fn same_kind_episode_with_new_epoch_is_a_new_transition() {
+        let state = EscalationState::default();
+        let member = member();
+        let first: IsoTimestamp = "2030-01-01T00:00:00Z".parse().expect("timestamp");
+        let later: IsoTimestamp = "2030-01-01T00:00:01Z".parse().expect("timestamp");
+
+        assert!(state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(first),
+            EpisodeObservation::Transition,
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(first),
+            EpisodeObservation::Transition,
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(later),
+            EpisodeObservation::Verify {
+                kind: crate::herdr_task_disposition::EpisodeKind::Blocked,
+                since: first,
+            },
+        ));
+        assert!(state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(later),
+            EpisodeObservation::Transition,
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(later),
+            EpisodeObservation::Transition,
         ));
     }
 
