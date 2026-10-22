@@ -1,0 +1,3 @@
+prompt: /opt/testbed/prompts/atm-team/AT11-prompt-handoffs.md (agent=claude-code model=sonnet timeout=900s)
+SMOKE-REPORT-WRITTEN /opt/testbed/results/prompt-AT11.json
+VERDICT AT11: pass (/opt/testbed/results/prompt-AT11.json)

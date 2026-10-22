@@ -1,0 +1,14 @@
+ATM TEST REPORT
+skill: atm-setup-environment
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.6.5 daemon 1.6.5
+result: PASS   (5/5 steps)
+steps:
+  0 PASS Start line — 01M5GQ3A1V27JD3WVJJFZEP79G
+  1 PASS Daemon answers — doctor exit 0; summary.status healthy; client 1.6.5 = daemon 1.6.5
+  2 PASS Roster complete — testbed: hermes, oversight, stub-alpha, stub-beta, tester all listed; members added: none; still missing: none
+  3 PASS Doctor passes — error_count 0; warning_count 0; info codes: ATM_OBSERVABILITY_HEALTH_OK x2, ATM_RETAINED_DIAGNOSTICS_HEALTH_OK x1
+  4 PASS Self round trip — message_id 01M5GQ3BDHKREQTEFK1Q9K5E43; count 1; mutation_applied true; unread 0 after read (history 1)
+  5 SKIP Cross-host peer — request names no peer host
+elapsed: 62s
