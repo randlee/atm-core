@@ -23,6 +23,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shlex
 import socket
 import subprocess
@@ -68,6 +69,13 @@ LOOPBACK_IP = "127.0.0.1"
 CROSSHOST = "crosshost"
 PEER_PREFLIGHT = "peer-preflight"
 CROSSHOST_SEND = "crosshost-send"
+
+SEMVER = re.compile(
+    r"^(?P<major>0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+    r"(?:-(?:(?:0|[1-9][0-9]*)|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:(?:0|[1-9][0-9]*)|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 CROSSHOST_ACK = "crosshost-ack"
 CROSSHOST_CURL_PLAINTEXT = "crosshost-curl-plain"
 CROSSHOST_CURL_MTLS = "crosshost-curl-tls"
@@ -255,12 +263,9 @@ def local_non_loopback_ipv4() -> str:
 
 def http_api_major(value: Any) -> int | None:
     """Return the major from the public HTTP API SemVer, or ``None`` if malformed."""
-    if not isinstance(value, str):
+    if not isinstance(value, str) or (match := SEMVER.fullmatch(value)) is None:
         return None
-    major, separator, remainder = value.partition(".")
-    if not separator or not major.isdecimal() or not remainder:
-        return None
-    return int(major)
+    return int(match.group("major"))
 
 
 def doctor_problems(report: Any) -> list[str]:

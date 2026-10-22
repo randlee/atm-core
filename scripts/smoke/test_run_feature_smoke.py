@@ -505,6 +505,12 @@ class FeatureSmokeTests(unittest.TestCase):
         self.assertFalse(RUNNER.doctor_ready(report))
         self.assertFalse(RUNNER.doctor_ready(["not", "an", "object"]))
 
+    def test_http_api_major_requires_full_semver(self):
+        self.assertEqual(RUNNER.http_api_major("1.4.0-rc.1+build.7"), 1)
+        for malformed in ("1.invalid", "1.4", "01.4.0", "1.04.0", "1.4.0-01", "1.4.0+", "v1.4.0", "1.4.0-"):
+            with self.subTest(malformed=malformed):
+                self.assertIsNone(RUNNER.http_api_major(malformed))
+
     def test_peer_compatibility_allows_different_release_versions_with_same_api_major(self):
         local = {
             "summary": {"status": "healthy", "error_count": 0},
