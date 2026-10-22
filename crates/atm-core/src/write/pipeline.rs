@@ -411,6 +411,7 @@ pub fn write_mail_with_runtime(
 #[derive(Debug, Clone, Default)]
 pub struct TerminalHerdrEscalationOutcome {
     pub deliveries: Vec<(AgentName, AtmMessageId)>,
+    pub recipients_failed: u32,
 }
 
 impl TerminalHerdrEscalationOutcome {
@@ -574,10 +575,15 @@ fn write_terminal_escalations(
         )?
         .with_internal_daemon_escalation_provenance()
         .with_nudge_mode(NudgeMode::Deferred);
-        let written = write_mail_with_runtime(request, observability, runtime)?;
-        outcome
-            .deliveries
-            .push((recipient_name, written.persisted_message_id()));
+        match write_mail_with_runtime(request, observability, runtime) {
+            Ok(written) => outcome
+                .deliveries
+                .push((recipient_name, written.persisted_message_id())),
+            Err(error) => {
+                outcome.recipients_failed = outcome.recipients_failed.saturating_add(1);
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "terminal_escalation_mail_write", outcome = "failed", recipient = %recipient, error = %error, "Terminal escalation recipient write failed");
+            }
+        }
     }
     Ok(outcome)
 }

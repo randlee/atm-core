@@ -230,7 +230,7 @@ async fn write_terminal_episode(
     Ok(EscalationOutcome {
         audit_delivery: admitted.deliveries.into_iter().next(),
         recipients_written,
-        recipients_failed: 0,
+        recipients_failed: admitted.recipients_failed,
     })
 }
 
